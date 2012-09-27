@@ -8,6 +8,10 @@ Compatible with Apache Kafka 0.7x.
 
 Copyright 2012, David Arthur under Apache License, v2.0. See `LICENSE`
 
+# Status
+
+This project is very much alpha. The API is in flux and not all the features are fully implemented.
+
 # Usage
 
 ## Send a message to a topic
