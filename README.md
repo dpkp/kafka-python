@@ -14,6 +14,12 @@ This project is very much alpha. The API is in flux and not all the features are
 
 # Usage
 
+## Run the tests
+
+```shell
+python -m unittest -v test
+```
+
 ## Send a message to a topic
 
 You need to specify the topic and partition
