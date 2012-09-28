@@ -3,7 +3,7 @@ import random
 import struct
 import unittest
 
-from kafka import KafkaClient
+from kafka import KafkaClient, ProduceRequest, FetchRequest
 from kafka import gzip_encode, gzip_decode, length_prefix_message
 
 ITERATIONS = 1000
@@ -101,6 +101,19 @@ class TestMessage(unittest.TestCase):
             self.assertEquals(len(messages), n)
             for j in range(n):
                 self.assertEquals(messages[j].payload, strings[j])
+
+class TestRequests(unittest.TestCase):
+    def test_produce_request(self):
+        req = ProduceRequest("my-topic", 0, [KafkaClient.create_message("testing")])
+        enc = KafkaClient.encode_produce_request(req)
+        expect = "\x00\x00\x00\x08my-topic\x00\x00\x00\x00\x00\x00\x00\x11\x00\x00\x00\r\x01\x00\xe8\xf3Z\x06testing"
+        self.assertEquals(enc, expect)
+
+    def test_fetch_request(self):
+        req = FetchRequest("my-topic", 0, 0, 1024)
+        enc = KafkaClient.encode_fetch_request(req)
+        expect = "\x00\x01\x00\x08my-topic\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00"
+        self.assertEquals(enc, expect)
 
 if __name__ == '__main__':
     unittest.main()

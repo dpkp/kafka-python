@@ -201,7 +201,7 @@ class KafkaClient(object):
         The request-key (0) is encoded as a short (int16). len is the length of the proceeding MessageSet
         """
         (topic, partition, messages) = produceRequest
-        message_set = self.encode_message_set(messages)
+        message_set = cls.encode_message_set(messages)
         log.debug("Sending MessageSet: %r" % message_set)
         req = struct.pack('>HH%dsii%ds' % (len(topic), len(message_set)), 
                 KafkaClient.PRODUCE_KEY, len(topic), topic, partition, len(message_set), message_set)
