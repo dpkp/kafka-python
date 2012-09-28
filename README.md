@@ -12,13 +12,33 @@ Copyright 2012, David Arthur under Apache License, v2.0. See `LICENSE`
 
 This project is very much alpha. The API is in flux and not all the features are fully implemented.
 
-# Usage
+# Tests
 
-## Run the tests
+## Run the unit tests
 
 ```shell
-python -m unittest -v test
+python -m test.unit
 ```
+
+## Run the integration tests
+
+First, checkout the Kafka source
+
+```shell
+git submodule init
+git submodule update
+cd kafka-src
+./sbt update
+./sbt package
+```
+
+Then from the root directory, run the integration tests
+
+```shell
+python -m test.integration
+```
+
+# Usage
 
 ## Send a message to a topic
 
