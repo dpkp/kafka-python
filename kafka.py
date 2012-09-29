@@ -584,18 +584,17 @@ class KafkaClient(object):
     #   Simple User API   #
     #######################
 
-    def send_messages_simple(self, topic, partition, *payloads):
+    def send_messages_simple(self, topic, *payloads):
         """
         Send one or more strings to Kafka
 
         Params
         ======
         topic: string
-        partition: int
         payloads: strings
         """
         messages = tuple([create_message(payload) for payload in payloads])
-        self.send_message_set(ProduceRequest(topic, partition, messages))
+        self.send_message_set(ProduceRequest(topic, -1, messages))
 
     def iter_messages(self, topic, partition, offset, size, auto=True):
         """

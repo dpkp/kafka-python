@@ -4,7 +4,7 @@ from kafka import KafkaClient, FetchRequest, ProduceRequest
 
 def produce_example(kafka):
     message = kafka.create_message("testing")
-    request = ProduceRequest("my-topic", 0, [message])
+    request = ProduceRequest("my-topic", -1, [message])
     kafka.send_message_set(request)
 
 def consume_example(kafka):
