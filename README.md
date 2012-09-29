@@ -42,11 +42,9 @@ python -m test.integration
 
 ## Send a message to a topic
 
-You need to specify the topic and partition
-
 ```python
     kafka = KafkaClient("localhost", 9092)
-    kafka.send_messages_simple("my-topic", 0, "some message")
+    kafka.send_messages_simple("my-topic", "some message")
     kafka.close()
 ```
 
@@ -56,7 +54,7 @@ Same as before, just add more arguments to `send_simple`
 
 ```python
     kafka = KafkaClient("localhost", 9092)
-    kafka.send_messages_simple("my-topic", 0, "some message", "another message", "and another")
+    kafka.send_messages_simple("my-topic", "some message", "another message", "and another")
     kafka.close()
 ```
 
