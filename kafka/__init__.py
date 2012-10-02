@@ -1,1 +1,1 @@
-__all__ = ["kafka"]
+__all__ = ["kafka","codec"]

@@ -3,8 +3,8 @@ import random
 import struct
 import unittest
 
-from kafka.kafka import KafkaClient, ProduceRequest, FetchRequest
-from kafka.kafka import gzip_encode, gzip_decode, length_prefix_message
+from kafka.kafka import KafkaClient, ProduceRequest, FetchRequest, length_prefix_message
+from kafka.codec import gzip_encode, gzip_decode
 
 ITERATIONS = 1000
 STRLEN = 100
