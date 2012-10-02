@@ -11,7 +11,7 @@ from threading import Thread, Event
 import time
 import unittest
 
-from kafka.kafka import KafkaClient, ProduceRequest, FetchRequest
+from kafka.client import KafkaClient, ProduceRequest, FetchRequest
 
 def get_open_port():
     sock = socket.socket()

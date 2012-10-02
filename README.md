@@ -12,6 +12,10 @@ Copyright 2012, David Arthur under Apache License, v2.0. See `LICENSE`
 
 This project is very much alpha. The API is in flux and not all the features are fully implemented.
 
+# Install
+
+Install with your favorite package manager
+
 # Tests
 
 ## Run the unit tests
@@ -43,6 +47,7 @@ python -m test.integration
 ## Send a message to a topic
 
 ```python
+    from kafka.client import KafkaClient
     kafka = KafkaClient("localhost", 9092)
     kafka.send_messages_simple("my-topic", "some message")
     kafka.close()

@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name="Kafka Python Client",
+    name="kafka-python",
     version="0.1-alpha",
     author="David Arthur",
     author_email="mumrah@gmail.com",
