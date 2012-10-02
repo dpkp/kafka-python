@@ -66,10 +66,10 @@ python -m test.integration
 ## Send a message to a topic
 
 ```python
-    from kafka.client import KafkaClient
-    kafka = KafkaClient("localhost", 9092)
-    kafka.send_messages_simple("my-topic", "some message")
-    kafka.close()
+from kafka.client import KafkaClient
+kafka = KafkaClient("localhost", 9092)
+kafka.send_messages_simple("my-topic", "some message")
+kafka.close()
 ```
 
 ## Send several messages to a topic
@@ -77,9 +77,9 @@ python -m test.integration
 Same as before, just add more arguments to `send\_simple`
 
 ```python
-    kafka = KafkaClient("localhost", 9092)
-    kafka.send_messages_simple("my-topic", "some message", "another message", "and another")
-    kafka.close()
+kafka = KafkaClient("localhost", 9092)
+kafka.send_messages_simple("my-topic", "some message", "another message", "and another")
+kafka.close()
 ```
 
 ## Recieve some messages from a topic
@@ -87,10 +87,10 @@ Same as before, just add more arguments to `send\_simple`
 Supply `get\_message\_set` with a `FetchRequest`, get back the messages and new `FetchRequest`
 
 ```python
-    kafka = KafkaClient("localhost", 9092)
-    req = FetchRequest("my-topic", 0, 0, 1024*1024)
-    (messages, req1) = kafka.get_message_set(req)
-    kafka.close()
+kafka = KafkaClient("localhost", 9092)
+req = FetchRequest("my-topic", 0, 0, 1024*1024)
+(messages, req1) = kafka.get_message_set(req)
+kafka.close()
 ```
 
 The returned `FetchRequest` includes the offset of the next message. This makes 
@@ -101,17 +101,17 @@ paging through the queue very simple.
 For this we use the `send\_multi\_message\_set` method along with `ProduceRequest` objects.
 
 ```python
-    kafka = KafkaClient("localhost", 9092)
-    req1 = ProduceRequest("my-topic-1", 0, [
-        create_message_from_string("message one"),
-        create_message_from_string("message two")
-    ])
-    req2 = ProduceRequest("my-topic-2", 0, [
-        create_message_from_string("nachricht ein"),
-        create_message_from_string("nachricht zwei")
-    ])
-    kafka.sent_multi_message_set([req1, req1])
-    kafka.close()
+kafka = KafkaClient("localhost", 9092)
+req1 = ProduceRequest("my-topic-1", 0, [
+    create_message_from_string("message one"),
+    create_message_from_string("message two")
+])
+req2 = ProduceRequest("my-topic-2", 0, [
+    create_message_from_string("nachricht ein"),
+    create_message_from_string("nachricht zwei")
+])
+kafka.sent_multi_message_set([req1, req1])
+kafka.close()
 ```
 
 ## Iterate through all messages from an offset
@@ -120,19 +120,19 @@ The `iter\_messages` method will make the underlying calls to `get\_message\_set
 to provide a generator that returns every message available.
 
 ```python
-    kafka = KafkaClient("localhost", 9092)
-    for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024)):
-        print(msg.payload)
-    kafka.close()
+kafka = KafkaClient("localhost", 9092)
+for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024)):
+    print(msg.payload)
+kafka.close()
 ```
 
 An optional `auto` argument will control auto-paging through results
 
 ```python
-    kafka = KafkaClient("localhost", 9092)
-    for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024), False):
-        print(msg.payload)
-    kafka.close()
+kafka = KafkaClient("localhost", 9092)
+for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024), False):
+    print(msg.payload)
+kafka.close()
 ```
 
 This will only iterate through messages in the byte range of (0, 1024\*1024)
