@@ -16,6 +16,25 @@ This project is very much alpha. The API is in flux and not all the features are
 
 Install with your favorite package manager
 
+Pip:
+
+```shell
+git clone https://github.com/mumrah/kafka-python
+pip install kafka-python
+```
+
+Setuptools:
+```shell
+git clone https://github.com/mumrah/kafka-python
+easy_install kafka-python
+```
+
+Using `setup.py` directly:
+```shell
+git clone https://github.com/mumrah/kafka-python
+python setup.py install
+```
+
 # Tests
 
 ## Run the unit tests
@@ -55,7 +74,7 @@ python -m test.integration
 
 ## Send several messages to a topic
 
-Same as before, just add more arguments to `send_simple`
+Same as before, just add more arguments to `send\_simple`
 
 ```python
     kafka = KafkaClient("localhost", 9092)
@@ -65,7 +84,7 @@ Same as before, just add more arguments to `send_simple`
 
 ## Recieve some messages from a topic
 
-Supply `get_message_set` with a `FetchRequest`, get back the messages and new `FetchRequest`
+Supply `get\_message\_set` with a `FetchRequest`, get back the messages and new `FetchRequest`
 
 ```python
     kafka = KafkaClient("localhost", 9092)
@@ -79,7 +98,7 @@ paging through the queue very simple.
 
 ## Send multiple messages to multiple topics
 
-For this we use the `send_multi_message_set` method along with `ProduceRequest` objects.
+For this we use the `send\_multi\_message\_set` method along with `ProduceRequest` objects.
 
 ```python
     kafka = KafkaClient("localhost", 9092)
@@ -97,7 +116,7 @@ For this we use the `send_multi_message_set` method along with `ProduceRequest` 
 
 ## Iterate through all messages from an offset
 
-The `iter_messages` method will make the underlying calls to `get_message_set`
+The `iter\_messages` method will make the underlying calls to `get\_message\_set`
 to provide a generator that returns every message available.
 
 ```python
@@ -116,5 +135,4 @@ An optional `auto` argument will control auto-paging through results
     kafka.close()
 ```
 
-This will only iterate through messages in the byte range of 
-(0, 1024\*1024)
+This will only iterate through messages in the byte range of (0, 1024\*1024)

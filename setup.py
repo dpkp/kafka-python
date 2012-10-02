@@ -8,5 +8,6 @@ setup(
     url="https://github.com/mumrah/kafka-python",
     packages=["kafka"],
     license="Copyright 2012, David Arthur under Apache License, v2.0",
+    description="Pure Python client for Apache Kafka",
     long_description=open("README.md").read(),
 )
