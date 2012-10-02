@@ -74,7 +74,7 @@ kafka.close()
 
 ## Send several messages to a topic
 
-Same as before, just add more arguments to `send\_simple`
+Same as before, just add more arguments to `send_simple`
 
 ```python
 kafka = KafkaClient("localhost", 9092)
@@ -84,7 +84,7 @@ kafka.close()
 
 ## Recieve some messages from a topic
 
-Supply `get\_message\_set` with a `FetchRequest`, get back the messages and new `FetchRequest`
+Supply `get_message_set` with a `FetchRequest`, get back the messages and new `FetchRequest`
 
 ```python
 kafka = KafkaClient("localhost", 9092)
@@ -98,7 +98,7 @@ paging through the queue very simple.
 
 ## Send multiple messages to multiple topics
 
-For this we use the `send\_multi\_message\_set` method along with `ProduceRequest` objects.
+For this we use the `send_multi_message_set` method along with `ProduceRequest` objects.
 
 ```python
 kafka = KafkaClient("localhost", 9092)
@@ -116,7 +116,7 @@ kafka.close()
 
 ## Iterate through all messages from an offset
 
-The `iter\_messages` method will make the underlying calls to `get\_message\_set`
+The `iter_messages` method will make the underlying calls to `get_message_set`
 to provide a generator that returns every message available.
 
 ```python
