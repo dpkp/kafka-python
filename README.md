@@ -22,18 +22,19 @@ Pip:
 
 ```shell
 git clone https://github.com/mumrah/kafka-python
-pip install kafka-python
+pip install ./kafka-python
 ```
 
 Setuptools:
 ```shell
 git clone https://github.com/mumrah/kafka-python
-easy_install kafka-python
+easy_install ./kafka-python
 ```
 
 Using `setup.py` directly:
 ```shell
 git clone https://github.com/mumrah/kafka-python
+cd kafka-python
 python setup.py install
 ```
 
