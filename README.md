@@ -4,6 +4,8 @@ This module provides low-level protocol support Apache Kafka. It implements the 
 
 Compatible with Apache Kafka 0.7x. Tested against 0.7.0, 0.7.1, and 0.7.2
 
+http://incubator.apache.org/kafka/
+
 # License
 
 Copyright 2012, David Arthur under Apache License, v2.0. See `LICENSE`
