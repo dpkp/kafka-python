@@ -2,7 +2,7 @@
 
 This module provides low-level protocol support Apache Kafka. It implements the five basic request types (and their responses): Produce, Fetch, MultiFetch, MultiProduce, and Offsets. 
 
-Compatible with Apache Kafka 0.7x.
+Compatible with Apache Kafka 0.7x. Tested against 0.7.0, 0.7.1, and 0.7.2
 
 # License
 
