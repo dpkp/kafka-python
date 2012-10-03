@@ -454,7 +454,6 @@ class KafkaClient(object):
         if sent == 0:
             raise RuntimeError("Kafka went away")
 
-
     def send_multi_message_set(self, produceRequests):
         """
         Send a MultiProduceRequest
@@ -550,8 +549,8 @@ class KafkaClient(object):
         <offset>         ::= <int64>
 
         """
-        req = length_prefix_message(encode_offset_request(offsetRequest))
-        log.debug("Sending %d bytes to Kafka", len(req))
+        req = length_prefix_message(self.encode_offset_request(offsetRequest))
+        log.debug("Sending OffsetRequest of %d bytes to Kafka", len(req))
         sent = self._sock.send(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
@@ -574,7 +573,7 @@ class KafkaClient(object):
         topic: string
         payloads: strings
         """
-        messages = tuple([create_message(payload) for payload in payloads])
+        messages = tuple([self.create_message(payload) for payload in payloads])
         self.send_message_set(ProduceRequest(topic, -1, messages))
 
     def iter_messages(self, topic, partition, offset, size, auto=True):
