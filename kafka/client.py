@@ -24,7 +24,7 @@ class KafkaException(Exception):
     def __init__(self, errorType):
         self.errorType = errorType
     def __str__(self):
-        return str(errorType)
+        return str(self.errorType)
 
 Message = namedtuple("Message", ["magic", "attributes", "crc", "payload"])
 FetchRequest = namedtuple("FetchRequest", ["topic", "partition", "offset", "size"])
