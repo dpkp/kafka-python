@@ -450,7 +450,7 @@ class KafkaClient(object):
         """
         req = length_prefix_message(self.encode_produce_request(produceRequest))
         log.debug("Sending %d bytes to Kafka: %r", len(req), req)
-        sent = self._sock.send(req) 
+        sent = self._sock.sendall(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
 
@@ -464,7 +464,7 @@ class KafkaClient(object):
         """
         req = length_prefix_message(self.encode_multi_produce_request(produceRequests))
         log.debug("Sending %d bytes to Kafka", len(req))
-        sent = self._sock.send(req) 
+        sent = self._sock.sendall(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
 
@@ -484,7 +484,7 @@ class KafkaClient(object):
 
         req = length_prefix_message(self.encode_fetch_request(fetchRequest))
         log.debug("Sending %d bytes to Kafka", len(req))
-        sent = self._sock.send(req) 
+        sent = self._sock.sendall(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
         data = self._consume_response()
@@ -515,7 +515,7 @@ class KafkaClient(object):
         """
         req = length_prefix_message(self.encode_multi_fetch_request(fetchRequests))
         log.debug("Sending %d bytes to Kafka", len(req))
-        sent = self._sock.send(req) 
+        sent = self._sock.sendall(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
         data = self._consume_response()
@@ -551,7 +551,7 @@ class KafkaClient(object):
         """
         req = length_prefix_message(self.encode_offset_request(offsetRequest))
         log.debug("Sending OffsetRequest of %d bytes to Kafka", len(req))
-        sent = self._sock.send(req) 
+        sent = self._sock.sendall(req) 
         if sent == 0:
             raise RuntimeError("Kafka went away")
 
