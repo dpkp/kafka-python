@@ -6,7 +6,6 @@ import shlex
 import shutil
 import socket
 import subprocess
-import sys
 import tempfile
 from threading import Thread, Event
 import time
@@ -44,6 +43,7 @@ class KafkaFixture(Thread):
         # Create the log directory
         logDir = os.path.join(self.tmpDir, 'logs')
         os.mkdir(logDir)
+        stdout = open(os.path.join(logDir, 'stdout'), 'w')
 
         # Create the config file
         logConfig = "test/resources/log4j.properties"
@@ -63,7 +63,7 @@ class KafkaFixture(Thread):
             (rlist, wlist, xlist) = select.select([proc.stdout], [], [], 1)
             if proc.stdout in rlist:
                 read = proc.stdout.readline()
-                sys.stdout.write(read)
+                stdout.write(read)
                 self.capture += read
 
             if self.shouldDie.is_set():
@@ -71,7 +71,7 @@ class KafkaFixture(Thread):
                 killed = True
 
             if proc.poll() is not None:
-                shutil.rmtree(self.tmpDir)
+                #shutil.rmtree(self.tmpDir)
                 if killed:
                     break
                 else:
@@ -206,13 +206,14 @@ class IntegrationTest(unittest.TestCase):
         t1 = int(time.time()*1000) # now
         t2 = t1 + 60000 # one minute from now
         req = OffsetRequest("test-offset-request", 0, t1, 1024)
-        print self.kafka.get_offsets(req)
+        self.kafka.get_offsets(req)
 
         req = OffsetRequest("test-offset-request", 0, t2, 1024)
-        print self.kafka.get_offsets(req)
+        self.kafka.get_offsets(req)
 
     def test_10k_messages(self):
         msg_tmpl = "this is a test message with a few bytes in it. this is message number %d"
+        # TODO 10k actually fails, why?
         msg = KafkaClient.create_gzip_message(*[msg_tmpl % i for i in range(1000)])
         req = ProduceRequest("test-10k", 0, [msg])
         self.kafka.send_message_set(req)
