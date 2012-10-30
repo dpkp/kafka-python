@@ -211,5 +211,15 @@ class IntegrationTest(unittest.TestCase):
         req = OffsetRequest("test-offset-request", 0, t2, 1024)
         print self.kafka.get_offsets(req)
 
+    def test_10k_messages(self):
+        msg_tmpl = "this is a test message with a few bytes in it. this is message number %d"
+        msg = KafkaClient.create_gzip_message(*[msg_tmpl % i for i in range(1000)])
+        req = ProduceRequest("test-10k", 0, [msg])
+        self.kafka.send_message_set(req)
+        self.assertTrue(self.server.wait_for("Created log for 'test-10k'-0"))
+        self.assertTrue(self.server.wait_for("Flushing log 'test-10k-0'"))
+        #self.assertTrue(self.server.wait_for("Created log for 'test-10k'-1"))
+        #self.assertTrue(self.server.wait_for("Flushing log 'test-10k-1'"))
+
 if __name__ == "__main__":
     unittest.main() 
