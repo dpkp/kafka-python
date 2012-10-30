@@ -1,8 +1,5 @@
 from collections import namedtuple
-from cStringIO import StringIO
 import logging
-import gzip
-import select
 import socket
 import struct
 import zlib
