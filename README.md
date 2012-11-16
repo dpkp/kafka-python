@@ -1,6 +1,8 @@
 # Kakfa Python client
 
-This module provides low-level protocol support Apache Kafka. It implements the five basic request types (and their responses): Produce, Fetch, MultiFetch, MultiProduce, and Offsets. 
+This module provides low-level protocol support Apache Kafka. It implements the five basic request types 
+(and their responses): Produce, Fetch, MultiFetch, MultiProduce, and Offsets. Gzip and Snappy compression
+is also supported.
 
 Compatible with Apache Kafka 0.7x. Tested against 0.7.0, 0.7.1, and 0.7.2
 
@@ -12,7 +14,7 @@ Copyright 2012, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-This project is very much alpha. The API is in flux and not all the features are fully implemented.
+Current version is 0.1-alpha. The current API should be pretty stable.
 
 # Install
 
