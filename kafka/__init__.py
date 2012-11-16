@@ -9,3 +9,4 @@ from .client import (
     Message, ProduceRequest, FetchRequest, OffsetRequest
 )
 from .codec import gzip_encode, gzip_decode
+from .codec import snappy_encode, snappy_decode

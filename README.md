@@ -38,7 +38,28 @@ cd kafka-python
 python setup.py install
 ```
 
+## Optional Snappy install
+
+Download and build Snappy from http://code.google.com/p/snappy/downloads/list
+
+```shell
+wget http://snappy.googlecode.com/files/snappy-1.0.5.tar.gz
+tar xzvf snappy-1.0.5.tar.gz
+cd snappy-1.0.5
+./configure
+make
+sudo make install
+```
+
+Install the `python-snappy` module
+```shell
+pip install python-snappy
+```
+
 # Tests
+
+Some of the tests will fail if Snappy is not installed. These tests will throw NotImplementedError. If you see other failures,
+they might be bugs - so please report them!
 
 ## Run the unit tests
 
@@ -137,5 +158,15 @@ for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024), False)
     print(msg.payload)
 kafka.close()
 ```
-
 This will only iterate through messages in the byte range of (0, 1024\*1024)
+
+## Create some compressed messages
+
+```python
+kafka = KafkaClient("localhost", 9092)
+messages = [kafka.create_snappy_message("testing 1"),
+            kafka.create_snappy_message("testing 2")]
+req = ProduceRequest(topic, 1, messages)
+kafka.send_message_set(req)
+kafka.close()
+```

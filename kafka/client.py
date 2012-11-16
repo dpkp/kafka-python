@@ -5,6 +5,7 @@ import struct
 import zlib
 
 from .codec import gzip_encode, gzip_decode
+from .codec import snappy_encode, snappy_decode
 
 log = logging.getLogger("kafka")
 
@@ -340,7 +341,10 @@ class KafkaClient(object):
                     yield msg
             elif att & KafkaClient.ATTRIBUTE_CODEC_MASK == 2:
                 # Snappy encoded Message
-                raise NotImplementedError("Snappy codec is not yet supported")
+                snp = snappy_decode(payload)
+                (msgs, _) = cls.read_message_set(snp)
+                for msg in msgs:
+                    yield msg
             else:
                 raise RuntimeError("Unsupported compression type: %d" % (att & KafkaClient.ATTRIBUTE_CODEC_MASK))
 
@@ -436,6 +440,24 @@ class KafkaClient(object):
         message_set = cls.encode_message_set(messages)
         gzipped = gzip_encode(message_set) 
         return Message(1, 0x00 | (KafkaClient.ATTRIBUTE_CODEC_MASK & 0x01), zlib.crc32(gzipped), gzipped)
+
+    @classmethod
+    def create_snappy_message(cls, *payloads):
+        """
+        Create a Snappy encoded Message
+
+        Params
+        ======
+        payloads, list of messages (bytes) to be encoded
+
+        Returns
+        =======
+        A Message tuple
+        """
+        messages = [cls.create_message(payload) for payload in payloads]
+        message_set = cls.encode_message_set(messages)
+        snapped = snappy_encode(message_set)
+        return Message(1, 0x00 | (KafkaClient.ATTRIBUTE_CODEC_MASK & 0x02), zlib.crc32(snapped), snapped)
 
     def send_message_set(self, produceRequest):
         """
