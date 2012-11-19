@@ -73,6 +73,9 @@ class KafkaClient(object):
         self._sock.settimeout(10)
         log.debug("Connected to %s on %d", host, port)
 
+    def __copy__(self):
+        return KafkaClient(self.host, self.port, self.bufsize)
+
     ######################
     #   Protocol Stuff   #
     ######################
