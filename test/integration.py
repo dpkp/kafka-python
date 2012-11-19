@@ -258,4 +258,5 @@ class IntegrationTest(unittest.TestCase):
         q.close()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     unittest.main() 
