@@ -172,3 +172,26 @@ req = ProduceRequest(topic, 1, messages)
 kafka.send_message_set(req)
 kafka.close()
 ```
+
+## Use Kafka like a FIFO queue
+
+Simple API: `get`, `put`, `close`.
+
+```python
+kafka = KafkaClient("localhost", 9092)
+q = KafkaQueue(kafka, "my-topic", [0,1])
+q.put("first")
+q.put("second")
+q.get() # first
+q.get() # second
+q.close()
+kafka.close()
+```
+
+Since the producer and consumers are backed by actual `multiprocessing.Queue`, you can 
+do blocking or non-blocking puts and gets.
+
+```python
+q.put("first", block=False)
+q.get(block=True, timeout=10)
+```
