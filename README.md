@@ -147,7 +147,7 @@ to provide a generator that returns every message available.
 
 ```python
 kafka = KafkaClient("localhost", 9092)
-for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024)):
+for msg in kafka.iter_messages("my-topic", 0, 0, 1024*1024):
     print(msg.payload)
 kafka.close()
 ```
@@ -156,7 +156,7 @@ An optional `auto` argument will control auto-paging through results
 
 ```python
 kafka = KafkaClient("localhost", 9092)
-for msg in kafka.iter_messages(FetchRequest("my-topic", 0, 0, 1024*1024), False):
+for msg in kafka.iter_messages("my-topic", 0, 0, 1024*1024, False):
     print(msg.payload)
 kafka.close()
 ```
