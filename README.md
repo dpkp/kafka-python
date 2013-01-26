@@ -1,4 +1,4 @@
-# Kakfa Python client
+# Kafka Python client
 
 This module provides low-level protocol support Apache Kafka. It implements the five basic request types 
 (and their responses): Produce, Fetch, MultiFetch, MultiProduce, and Offsets. Gzip and Snappy compression
@@ -136,7 +136,7 @@ req2 = ProduceRequest("my-topic-2", 0, [
     create_message_from_string("nachricht ein"),
     create_message_from_string("nachricht zwei")
 ])
-kafka.sent_multi_message_set([req1, req1])
+kafka.send_multi_message_set([req1, req1])
 kafka.close()
 ```
 
