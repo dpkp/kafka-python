@@ -44,9 +44,12 @@ def relative_unpack(fmt, data, cur):
     out = struct.unpack(fmt, data[cur:cur+size])
     return (out, cur+size)
 
-def group_list_by_key(l, key):
-    sorted_l = sorted(l, key=key)
-    return list(groupby(sorted_l, key=key))
+def group_list_by_key(it, key):
+    sorted_it = sorted(it, key=key)
+    out = {}
+    for k, group in groupby(sorted_it, key=key):
+        out[k] = list(group)
+    return out
 
 class BufferUnderflowError(Exception):
     pass
