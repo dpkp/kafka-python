@@ -1,15 +1,16 @@
+from collections import defaultdict
 from itertools import groupby
 import struct
 
 def write_int_string(s):
     if s is None:
-        return struct.pack('>i', -1)
+        return struct.pack('>i', 0) # TODO change this to -1 when KAFKA-771 is accepted
     else:
         return struct.pack('>i%ds' % len(s), len(s), s)
 
 def write_short_string(s):
     if s is None:
-        return struct.pack('>h', -1)
+        return struct.pack('>h', 0) # TODO change this to -1 when KAFKA-771 is accepted
     else:
         return struct.pack('>h%ds' % len(s), len(s), s)
 
@@ -44,12 +45,11 @@ def relative_unpack(fmt, data, cur):
     out = struct.unpack(fmt, data[cur:cur+size])
     return (out, cur+size)
 
-def group_list_by_key(it, key):
-    sorted_it = sorted(it, key=key)
-    out = {}
-    for k, group in groupby(sorted_it, key=key):
-        out[k] = list(group)
-    return out
+def group_by_topic_and_partition(tuples):
+    out = defaultdict(dict)
+    for t in tuples:
+        out[t.topic][t.partition] = t
+    return out 
 
 class BufferUnderflowError(Exception):
     pass
