@@ -4,13 +4,13 @@ import struct
 
 def write_int_string(s):
     if s is None:
-        return struct.pack('>i', 0) # TODO change this to -1 when KAFKA-771 is accepted
+        return struct.pack('>i', -1)
     else:
         return struct.pack('>i%ds' % len(s), len(s), s)
 
 def write_short_string(s):
     if s is None:
-        return struct.pack('>h', 0) # TODO change this to -1 when KAFKA-771 is accepted
+        return struct.pack('>h', -1)
     else:
         return struct.pack('>h%ds' % len(s), len(s), s)
 

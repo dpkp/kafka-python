@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name="kafka-python",
-    version="0.1-alpha",
+    version="0.2-alpha",
     author="David Arthur",
     author_email="mumrah@gmail.com",
     url="https://github.com/mumrah/kafka-python",
