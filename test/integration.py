@@ -310,7 +310,6 @@ class TestKafkaClient(unittest.TestCase):
         for resp in self.client.send_produce_request([produce1, produce2]):
             self.assertEquals(resp.error, 0)
             self.assertEquals(resp.offset, 0)
-        return
 
         fetch1 = FetchRequest("test_produce_consume_two_partitions", 0, 0, 1024)
         fetch2 = FetchRequest("test_produce_consume_two_partitions", 1, 0, 1024)
@@ -346,6 +345,32 @@ class TestKafkaClient(unittest.TestCase):
         self.assertEquals(resp.error, 0)
         self.assertEquals(resp.offset, 42)
         self.assertEquals(resp.metadata, "") # Metadata isn't stored for now
+
+    # Producer Tests
+
+    def test_simple_producer(self):
+        producer = SimpleProducer(self.client, "test_simple_producer")
+        producer.send_message("one")
+        producer.send_message("two")
+
+        fetch1 = FetchRequest("test_simple_producer", 0, 0, 1024)
+        fetch2 = FetchRequest("test_simple_producer", 1, 0, 1024)
+        fetch_resp1, fetch_resp2 = self.client.send_fetch_request([fetch1, fetch2])
+        self.assertEquals(fetch_resp1.error, 0)
+        self.assertEquals(fetch_resp1.highwaterMark, 1)
+        messages = list(fetch_resp1.messages)
+        self.assertEquals(len(messages), 1)
+        self.assertEquals(messages[0].message.value, "one")
+        self.assertEquals(fetch_resp2.error, 0)
+        self.assertEquals(fetch_resp2.highwaterMark, 1)
+        messages = list(fetch_resp2.messages)
+        self.assertEquals(len(messages), 1)
+        self.assertEquals(messages[0].message.value, "two")
+
+    # Consumer Tests
+
+    def test_consumer(self):
+        consumer = SimpleConsumer(self.client, "group1", "test_consumer")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
