@@ -685,7 +685,7 @@ class KafkaClient(object):
             for produce_response in KafkaProtocol.decode_produce_response(response):
                 # Check for errors
                 if fail_on_error == True and produce_response.error != ErrorMapping.NO_ERROR:
-                    raise Exception("ProduceRequest for %s failed with errorcode=%d", 
+                    raise Exception("ProduceRequest for %s failed with errorcode=%d" % 
                             (TopicAndPartition(produce_response.topic, produce_response.partition), produce_response.error))
                 # Run the callback
                 if callback is not None:
@@ -825,6 +825,9 @@ class SimpleProducer(object):
         resp = self.client.send_produce_request([req]).next()
 
 class SimpleConsumer(object):
+    """
+    A simple consumer implementation that consumes all partitions for a topic
+    """
     def __init__(self, client, group, topic):
         self.client = client
         self.topic = topic
@@ -832,7 +835,7 @@ class SimpleConsumer(object):
         self.client.load_metadata_for_topics(topic)
         self.offsets = {}
 
-        def get_or_init_offset(resp):
+        def get_or_init_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
                 return resp.offset
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
@@ -843,8 +846,33 @@ class SimpleConsumer(object):
 
         for partition in self.client.topic_partitions[topic]:
             req = OffsetFetchRequest(topic, partition)
-            (offset,) = self.client.send_offset_fetch_request(group, [req], callback=get_or_init_offset, fail_on_error=False)
+            (offset,) = self.client.send_offset_fetch_request(group, [req],
+                          callback=get_or_init_offset_callback, fail_on_error=False)
             self.offsets[partition] = offset
 
-        print self.offsets
+    def __iter__(self):
+        iters = {}
+        for partition, offset in self.offsets.items():
+            iters[partition] = self.__iter_partition__(partition, offset)
+
+        while True:
+            for it in iters.values():
+                yield it.next()
+
+    def __iter_partition__(self, partition, offset):
+        while True:
+            req = FetchRequest(self.topic, partition, offset, 1024) 
+            (resp,) = self.client.send_fetch_request([req])
+            assert resp.topic == self.topic
+            assert resp.partition == partition
+            next_offset = None
+            for message in resp.messages:
+                next_offset = message.offset
+                yield message
+            if next_offset is None:
+                raise StopIteration("No more messages")
+            else:
+                offset = next_offset + 1
+            # Commit offset here?
+
 
