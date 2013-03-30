@@ -1,6 +1,7 @@
 import logging
 
 from kafka.client import KafkaClient, FetchRequest, ProduceRequest
+from kafka.consumer import SimpleConsumer
 
 def produce_example(kafka):
     message = kafka.create_message("testing")
@@ -20,11 +21,8 @@ def produce_gz_example(kafka):
     kafka.send_message_set(request)
 
 def main():
-    kafka = KafkaClient("localhost", 9092)
-    produce_example(kafka)
-    produce_gz_example(kafka)
-    consume_example(kafka)
-    kafka.close()
+    client = KafkaClient("localhost", 9092)
+    consumer = SimpleConsumer(client, "test-group", "my-topic")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

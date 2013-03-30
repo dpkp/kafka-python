@@ -1,6 +1,7 @@
 from collections import defaultdict
 from itertools import groupby
 import struct
+from threading import Timer
 
 def write_int_string(s):
     if s is None:
@@ -56,3 +57,27 @@ class BufferUnderflowError(Exception):
 
 class ChecksumError(Exception):
     pass
+
+class ReentrantTimer(object):
+    """
+    A timer that can be restarted, unlike threading.Timer (although this uses threading.Timer)
+
+    t: timer interval in milliseconds
+    fn: a callable to invoke
+    """
+    def __init__(self, t, fn):
+        self.timer = None
+        self.t = t
+        self.fn = fn
+
+    def start(self):
+        if self.timer is None:
+            self.timer = Timer(self.t / 1000., self.fn)
+            self.timer.start()
+        else:
+            self.timer.cancel()
+            self.timer = Timer(self.t / 1000., self.fn)
+            self.timer.start()
+
+    def stop(self):
+        self.timer.cancel()
