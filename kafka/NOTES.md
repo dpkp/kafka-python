@@ -15,3 +15,18 @@ There are a few levels of abstraction:
 * Partitioned (run each message through a partitioning function)
 ** HashPartitioned
 ** FunctionPartition
+
+# Possible API
+
+    client = KafkaClient("localhost", 9092)
+
+    producer = KafkaProducer(client, "topic")
+    producer.send_string("hello")
+
+    consumer = KafkaConsumer(client, "group", "topic")
+    consumer.seek(10, 2) # seek to beginning (lowest offset)
+    consumer.commit() # commit it
+    for msg in consumer.iter_messages():
+        print msg
+
+
