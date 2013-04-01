@@ -217,7 +217,7 @@ class KafkaProtocol(object):
         return struct.pack('>i%ds' % len(message), len(message), message)
 
     @classmethod
-    def decode_fetch_response_iter(cls, data):
+    def decode_fetch_response(cls, data):
         """
         Decode bytes to a FetchResponse
 

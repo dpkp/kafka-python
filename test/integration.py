@@ -243,7 +243,7 @@ class TestKafkaClient(unittest.TestCase):
     def test_consume_none(self):
         fetch = FetchRequest("test_consume_none", 0, 0, 1024)
 
-        fetch_resp = self.client.send_fetch_request([fetch]).next()
+        fetch_resp = self.client.send_fetch_request([fetch])[0]
         self.assertEquals(fetch_resp.error, 0)
         self.assertEquals(fetch_resp.topic, "test_consume_none")
         self.assertEquals(fetch_resp.partition, 0)
@@ -263,7 +263,7 @@ class TestKafkaClient(unittest.TestCase):
 
         fetch = FetchRequest("test_produce_consume", 0, 0, 1024)
 
-        fetch_resp = self.client.send_fetch_request([fetch]).next()
+        fetch_resp = self.client.send_fetch_request([fetch])[0]
         self.assertEquals(fetch_resp.error, 0)
 
         messages = list(fetch_resp.messages)
@@ -343,6 +343,7 @@ class TestKafkaClient(unittest.TestCase):
     #   Offset Tests   #
     ####################
 
+    @unittest.skip("No supported until 0.8.1")
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest("test_commit_fetch_offsets", 0, 42, "metadata")
         (resp,) = self.client.send_offset_commit_request("group", [req])
@@ -428,22 +429,20 @@ class TestConsumer(unittest.TestCase):
         self.assertEquals(len(all_messages), 200)
         self.assertEquals(len(all_messages), len(set(all_messages))) # make sure there are no dupes
 
-        # Produce more messages
-        produce3 = ProduceRequest("test_consumer", 1, messages=[
-            create_message("Test message 3 %d" % i) for i in range(10)
-        ])
-
-        for resp in self.client.send_produce_request([produce3]):
-            self.assertEquals(resp.error, 0)
-            self.assertEquals(resp.offset, 100)
-
-        # Start a new consumer, make sure we only get the newly produced messages
-        consumer = SimpleConsumer(self.client, "group1", "test_consumer")
-
+        consumer.seek(-10, 2)
         all_messages = []
         for message in consumer:
             all_messages.append(message)
+
         self.assertEquals(len(all_messages), 10)
+
+        consumer.seek(-13, 2)
+        all_messages = []
+        for message in consumer:
+            all_messages.append(message)
+
+        self.assertEquals(len(all_messages), 13)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
