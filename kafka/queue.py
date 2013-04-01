@@ -8,6 +8,8 @@ from .client import KafkaClient, FetchRequest, ProduceRequest
 
 log = logging.getLogger("kafka")
 
+raise NotImplementedError("Still need to refactor this class")
+
 class KafkaConsumerProcess(Process):
     def __init__(self, client, topic, partition, out_queue, barrier, consumer_fetch_size=1024, consumer_sleep=200):
         self.client = copy(client)
