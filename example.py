@@ -6,7 +6,7 @@ from kafka.producer import SimpleProducer
 
 def produce_example(client):
     producer = SimpleProducer(client, "my-topic")
-    producer.send_message("test")
+    producer.send_messages("test")
 
 def consume_example(client):
     consumer = SimpleConsumer(client, "test-group", "my-topic")
