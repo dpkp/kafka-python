@@ -116,7 +116,7 @@ class KafkaClient(object):
         for payload in payloads:
             payloads_by_broker[self._get_leader_for_partition(payload.topic, payload.partition)].append(payload)
             original_keys.append((payload.topic, payload.partition))
-        
+
         # Accumulate the responses in a dictionary
         acc = {}
 

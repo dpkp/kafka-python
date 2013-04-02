@@ -225,13 +225,24 @@ class TestKafkaClient(unittest.TestCase):
 
 
     def test_produce_100k_gzipped(self):
-        produce = ProduceRequest("test_produce_100k_gzipped", 0, messages=[
-            create_gzip_message(["Gzipped %d" % i for i in range(100000)])
+        req1 = ProduceRequest("test_produce_100k_gzipped", 0, messages=[
+            create_gzip_message(["Gzipped batch 1, message %d" % i for i in range(50000)])
         ])
 
-        for resp in self.client.send_produce_request([produce]):
+        for resp in self.client.send_produce_request([req1]):
             self.assertEquals(resp.error, 0)
             self.assertEquals(resp.offset, 0)
+
+        (offset, ) = self.client.send_offset_request([OffsetRequest("test_produce_100k_gzipped", 0, -1, 1)])
+        self.assertEquals(offset.offsets[0], 50000)
+
+        req2 = ProduceRequest("test_produce_100k_gzipped", 0, messages=[
+            create_gzip_message(["Gzipped batch 2, message %d" % i for i in range(50000)])
+        ])
+
+        for resp in self.client.send_produce_request([req2]):
+            self.assertEquals(resp.error, 0)
+            self.assertEquals(resp.offset, 50000)
 
         (offset, ) = self.client.send_offset_request([OffsetRequest("test_produce_100k_gzipped", 0, -1, 1)])
         self.assertEquals(offset.offsets[0], 100000)
