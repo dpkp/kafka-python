@@ -216,7 +216,6 @@ class KafkaClient(object):
         return out
 
     def send_offset_commit_request(self, group, payloads=[], fail_on_error=True, callback=None):
-        raise NotImplementedError("Broker-managed offsets not supported in 0.8")
         resps = self._send_broker_aware_request(payloads,
                                    partial(KafkaProtocol.encode_offset_commit_request, group=group),
                                    KafkaProtocol.decode_offset_commit_response)
@@ -231,7 +230,6 @@ class KafkaClient(object):
         return out
 
     def send_offset_fetch_request(self, group, payloads=[], fail_on_error=True, callback=None):
-        raise NotImplementedError("Broker-managed offsets not supported in 0.8")
         resps = self._send_broker_aware_request(payloads,
                                    partial(KafkaProtocol.encode_offset_commit_fetch, group=group),
                                    KafkaProtocol.decode_offset_fetch_response)

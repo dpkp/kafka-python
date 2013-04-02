@@ -108,7 +108,6 @@ class SimpleConsumer(object):
         partitions: list of partitions to commit, default is to commit all of them
         """
 
-        raise NotImplementedError("Broker-managed offsets not supported in 0.8")
 
         # short circuit if nothing happened
         if self.count_since_commit == 0:
