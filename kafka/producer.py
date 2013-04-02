@@ -16,8 +16,8 @@ class SimpleProducer(object):
         self.client._load_metadata_for_topics(topic)
         self.next_partition = cycle(self.client.topic_partitions[topic])
 
-    def send_message(self, msg):
+    def send_messages(self, *msg):
         req = ProduceRequest(self.topic, self.next_partition.next(),
-            messages=[create_message(msg)])
+            messages=[create_message(m) for m in msg])
         resp = self.client.send_produce_request([req])[0]
         assert resp.error == 0

@@ -359,22 +359,23 @@ class TestKafkaClient(unittest.TestCase):
 
     def test_simple_producer(self):
         producer = SimpleProducer(self.client, "test_simple_producer")
-        producer.send_message("one")
-        producer.send_message("two")
+        producer.send_messages("one", "two")
+        producer.send_messages("three")
 
         fetch1 = FetchRequest("test_simple_producer", 0, 0, 1024)
         fetch2 = FetchRequest("test_simple_producer", 1, 0, 1024)
         fetch_resp1, fetch_resp2 = self.client.send_fetch_request([fetch1, fetch2])
         self.assertEquals(fetch_resp1.error, 0)
-        self.assertEquals(fetch_resp1.highwaterMark, 1)
+        self.assertEquals(fetch_resp1.highwaterMark, 2)
         messages = list(fetch_resp1.messages)
-        self.assertEquals(len(messages), 1)
+        self.assertEquals(len(messages), 2)
         self.assertEquals(messages[0].message.value, "one")
+        self.assertEquals(messages[1].message.value, "two")
         self.assertEquals(fetch_resp2.error, 0)
         self.assertEquals(fetch_resp2.highwaterMark, 1)
         messages = list(fetch_resp2.messages)
         self.assertEquals(len(messages), 1)
-        self.assertEquals(messages[0].message.value, "two")
+        self.assertEquals(messages[0].message.value, "three")
 
 class TestConsumer(unittest.TestCase):
     @classmethod
