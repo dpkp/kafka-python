@@ -143,7 +143,7 @@ class KafkaClient(object):
         for conn in self.conns.values():
             conn.close()
 
-    def send_produce_request(self, payloads=[], fail_on_error=True, callback=None):
+    def send_produce_request(self, payloads=[], acks=1, timeout=1000, fail_on_error=True, callback=None):
         """
         Encode and send some ProduceRequests
 
@@ -162,8 +162,8 @@ class KafkaClient(object):
         list of ProduceResponse or callback(ProduceResponse), in the order of input payloads
         """
         resps = self._send_broker_aware_request(payloads,
-                                   KafkaProtocol.encode_produce_request,
-                                   KafkaProtocol.decode_produce_response)
+                    partial(KafkaProtocol.encode_produce_request, acks=acks, timeout=timeout),
+                    KafkaProtocol.decode_produce_response)
         out = []
         for resp in resps:
             # Check for errors
