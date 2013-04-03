@@ -6,6 +6,7 @@ import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 from threading import Thread, Event
 import time
@@ -73,7 +74,8 @@ class KafkaFixture(Thread):
         args = shlex.split("java -cp %s org.apache.zookeeper.ZooKeeperMain create /%s kafka-python" % (cp, self.zk_chroot))
         proc = subprocess.Popen(args)
         ret = proc.wait()
-        assert ret == 0
+        if ret != 0:
+            sys.exit(1)
 
 
         # Start Kafka

@@ -354,7 +354,6 @@ class KafkaProtocol(object):
         ======
         data: bytes to decode
         """
-        data = data[2:] # TODO remove me when versionId is removed
         ((correlation_id,), cur) = relative_unpack('>i', data, 0)
         (client_id, cur) = read_short_string(data, cur)
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
@@ -398,7 +397,6 @@ class KafkaProtocol(object):
         data: bytes to decode
         """
 
-        data = data[2:] # TODO remove me when versionId is removed
         ((correlation_id,), cur) = relative_unpack('>i', data, 0)
         (client_id, cur) = read_short_string(data, cur)
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
