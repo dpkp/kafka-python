@@ -78,7 +78,7 @@ class SimpleConsumer(object):
         """
         if whence == 1: # relative to current position
             for partition, _offset in self.offsets.items():
-                self.offset[partition] = _offset + offset
+                self.offsets[partition] = _offset + offset
         elif whence in (0, 2): # relative to beginning or end
             # divide the request offset by number of partitions, distribute the remained evenly
             (delta, rem) = divmod(offset, len(self.offsets))
