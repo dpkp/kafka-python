@@ -71,7 +71,7 @@ class KafkaConnection(object):
 
     def send(self, requestId, payload):
         "Send a request to Kafka"
-        log.debug("About to send %d bytes to Kafka" % len(payload))
+        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), requestId))
         sent = self._sock.sendall(payload)
         if sent != None:
             raise RuntimeError("Kafka went away")
@@ -79,6 +79,7 @@ class KafkaConnection(object):
 
     def recv(self, requestId):
         "Get a response from Kafka"
+        log.debug("Reading response %d from Kafka" % requestId)
         return self.data
 
     def close(self):
