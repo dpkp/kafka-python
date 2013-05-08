@@ -131,5 +131,9 @@ Next start up a ZooKeeper server on localhost:2181
 /opt/zookeeper/bin/zkServer.sh start
 ```
 
-This will actually start up real Kafka brokers and send messages in using the
+And finally run the tests. This will actually start up real Kafka brokers and send messages in using the
 client.
+
+```shell
+python -m test.integration
+```
