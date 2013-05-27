@@ -101,6 +101,30 @@ class SimpleConsumer(object):
         else:
             raise ValueError("Unexpected value for `whence`, %d" % whence)
 
+    def pending(self, partitions=[]):
+        """
+        Gets the pending message count
+
+        partitions: list of partitions to check for, default is to check all
+        """
+        if len(partitions) == 0:
+            partitions = self.offsets.keys()
+
+        total = 0
+        reqs = []
+
+        for partition in partitions:
+            reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+
+        resps = self.client.send_offset_request(reqs)
+        for resp in resps:
+            partition = resp.partition
+            pending = resp.offsets[0]
+            offset = self.offsets[partition]
+            total += pending - offset - (1 if offset > 0 else 0)
+
+        return total
+
     def commit(self, partitions=[]):
         """
         Commit offsets for this consumer
@@ -130,6 +154,26 @@ class SimpleConsumer(object):
             for resp in resps:
                 assert resp.error == 0
             self.count_since_commit = 0
+
+    def get_messages(self, count=1):
+        """
+        Get the specified number of messages
+
+        count: maximum number of messages to be fetched
+        """
+        if not hasattr(self, '_iterator'):
+            self._iterator = iter(self)
+
+        msgs = []
+        while count > 0:
+            try:
+                msgs.append(self._iterator.next())
+                count -= 1
+            except StopIteration:
+                delattr(self, '_iterator')
+                break
+
+        return msgs
 
     def __iter__(self):
         """
