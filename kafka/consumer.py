@@ -7,6 +7,10 @@ from kafka.common import (
     OffsetRequest, OffsetFetchRequest, OffsetCommitRequest
 )
 
+from kafka.util import (
+    ReentrantTimer
+)
+
 log = logging.getLogger("kafka")
 
 AUTO_COMMIT_MSG_COUNT = 100
@@ -42,7 +46,8 @@ class SimpleConsumer(object):
         # Set up the auto-commit timer
         if auto_commit is True:
             if auto_commit_every_t is not None:
-                self.commit_timer = ReentrantTimer(auto_commit_every_t, self.commit)
+                self.commit_timer = ReentrantTimer(auto_commit_every_t,
+                                                   self.commit)
                 self.commit_timer.start()
 
         self.commit_lock = Lock()
@@ -121,19 +126,21 @@ class SimpleConsumer(object):
         with self.commit_lock:
             reqs = []
             if len(partitions) == 0: # commit all partitions
-                for partition, offset in self.offsets.items():
-                    log.debug("Commit offset %d in SimpleConsumer: group=%s, topic=%s, partition=%s" % (
-                        offset, self.group, self.topic, partition))
-                    reqs.append(OffsetCommitRequest(self.topic, partition, offset, None))
-            else:
-                for partition in partitions:
-                    offset = self.offsets[partition]
-                    log.debug("Commit offset %d in SimpleConsumer: group=%s, topic=%s, partition=%s" % (
-                        offset, self.group, self.topic, partition))
-                    reqs.append(OffsetCommitRequest(self.topic, partition, offset, None))
+                partitions = self.offsets.keys()
+
+            for partition in partitions:
+                offset = self.offsets[partition]
+                log.debug("Commit offset %d in SimpleConsumer: "
+                          "group=%s, topic=%s, partition=%s" %
+                           (offset, self.group, self.topic, partition))
+
+                reqs.append(OffsetCommitRequest(self.topic, partition,
+                                                offset, None))
+
             resps = self.client.send_offset_commit_request(self.group, reqs)
             for resp in resps:
                 assert resp.error == 0
+
             self.count_since_commit = 0
 
     def __iter__(self):
@@ -177,6 +184,12 @@ class SimpleConsumer(object):
         a batch of messages, yield them one at a time. After a batch is exhausted,
         start a new batch unless we've reached the end of ths partition.
         """
+
+        # Unless it is the first message in the queue, we have to fetch
+        # the next one
+        if offset != 0:
+            offset += 1
+
         while True:
             req = FetchRequest(self.topic, partition, offset, 1024) # TODO configure fetch size
             (resp,) = self.client.send_fetch_request([req])
@@ -187,7 +200,7 @@ class SimpleConsumer(object):
                 next_offset = message.offset
                 yield message
                 # update the internal state _after_ we yield the message
-                self.offsets[partition] = message.offset + 1
+                self.offsets[partition] = message.offset
             if next_offset is None:
                 break
             else:
