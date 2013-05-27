@@ -9,6 +9,9 @@ from kafka.common import (
 
 log = logging.getLogger("kafka")
 
+AUTO_COMMIT_MSG_COUNT = 100
+AUTO_COMMIT_INTERVAL = 5000
+
 class SimpleConsumer(object):
     """
     A simple consumer implementation that consumes all partitions for a topic
@@ -27,7 +30,9 @@ class SimpleConsumer(object):
     manual call to commit will also reset these triggers
 
     """
-    def __init__(self, client, group, topic, auto_commit=False, auto_commit_every_n=None, auto_commit_every_t=None):
+    def __init__(self, client, group, topic, auto_commit=True,
+                 auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
         self.client = client
         self.topic = topic
         self.group = group
@@ -126,7 +131,7 @@ class SimpleConsumer(object):
                     log.debug("Commit offset %d in SimpleConsumer: group=%s, topic=%s, partition=%s" % (
                         offset, self.group, self.topic, partition))
                     reqs.append(OffsetCommitRequest(self.topic, partition, offset, None))
-            resps = self.send_offset_commit_request(self.group, reqs)
+            resps = self.client.send_offset_commit_request(self.group, reqs)
             for resp in resps:
                 assert resp.error == 0
             self.count_since_commit = 0
@@ -182,7 +187,7 @@ class SimpleConsumer(object):
                 next_offset = message.offset
                 yield message
                 # update the internal state _after_ we yield the message
-                self.offsets[partition] = message.offset
+                self.offsets[partition] = message.offset + 1
             if next_offset is None:
                 break
             else:
