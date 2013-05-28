@@ -155,26 +155,6 @@ class SimpleConsumer(object):
                 assert resp.error == 0
             self.count_since_commit = 0
 
-    def get_messages(self, count=1):
-        """
-        Get the specified number of messages
-
-        count: maximum number of messages to be fetched
-        """
-        if not hasattr(self, '_iterator'):
-            self._iterator = iter(self)
-
-        msgs = []
-        while count > 0:
-            try:
-                msgs.append(self._iterator.next())
-                count -= 1
-            except StopIteration:
-                delattr(self, '_iterator')
-                break
-
-        return msgs
-
     def __iter__(self):
         """
         Create an iterate per partition. Iterate through them calling next() until they are
