@@ -456,6 +456,27 @@ class TestConsumer(unittest.TestCase):
 
         self.assertEquals(len(all_messages), 13)
 
+    def test_pending(self):
+        # Produce 10 messages to partition 0 and 1
+
+        produce1 = ProduceRequest("test_pending", 0, messages=[
+            create_message("Test message 0 %d" % i) for i in range(10)
+        ])
+        for resp in self.client.send_produce_request([produce1]):
+            self.assertEquals(resp.error, 0)
+            self.assertEquals(resp.offset, 0)
+
+        produce2 = ProduceRequest("test_pending", 1, messages=[
+            create_message("Test message 1 %d" % i) for i in range(10)
+        ])
+        for resp in self.client.send_produce_request([produce2]):
+            self.assertEquals(resp.error, 0)
+            self.assertEquals(resp.offset, 0)
+
+        consumer = SimpleConsumer(self.client, "group1", "test_pending")
+        self.assertEquals(consumer.pending(), 20)
+        self.assertEquals(consumer.pending(partitions=[0]), 10)
+        self.assertEquals(consumer.pending(partitions=[1]), 10)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

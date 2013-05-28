@@ -103,6 +103,30 @@ class SimpleConsumer(object):
         else:
             raise ValueError("Unexpected value for `whence`, %d" % whence)
 
+    def pending(self, partitions=[]):
+        """
+        Gets the pending message count
+
+        partitions: list of partitions to check for, default is to check all
+        """
+        if len(partitions) == 0:
+            partitions = self.offsets.keys()
+
+        total = 0
+        reqs = []
+
+        for partition in partitions:
+            reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+
+        resps = self.client.send_offset_request(reqs)
+        for resp in resps:
+            partition = resp.partition
+            pending = resp.offsets[0]
+            offset = self.offsets[partition]
+            total += pending - offset - (1 if offset > 0 else 0)
+
+        return total
+
     def _timed_commit(self):
         """
         Commit offsets as part of timer
