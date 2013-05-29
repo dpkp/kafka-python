@@ -65,6 +65,12 @@ class KafkaClient(object):
         self.brokers.update(brokers)
         self.topics_to_brokers = {}
         for topic, partitions in topics.items():
+            if not partitions:
+                log.info("Partition is unassigned, delay for 1s and retry")
+                time.sleep(1)
+                self._load_metadata_for_topics(topic)
+                break
+
             for partition, meta in partitions.items():
                 if meta.leader == -1:
                     log.info("Partition is unassigned, delay for 1s and retry")
