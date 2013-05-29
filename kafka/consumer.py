@@ -43,19 +43,20 @@ class SimpleConsumer(object):
         self.client._load_metadata_for_topics(topic)
         self.offsets = {}
 
-        # Set up the auto-commit timer
-        if auto_commit is True:
-            if auto_commit_every_t is not None:
-                self.commit_timer = ReentrantTimer(auto_commit_every_t,
-                                                   self.commit)
-                self.commit_timer.start()
-
+        # Variables for handling offset commits
         self.commit_lock = Lock()
+        self.commit_timer = None
         self.count_since_commit = 0
         self.auto_commit = auto_commit
         self.auto_commit_every_n = auto_commit_every_n
         self.auto_commit_every_t = auto_commit_every_t
-            
+
+        # Set up the auto-commit timer
+        if auto_commit is True and auto_commit_every_t is not None:
+            self.commit_timer = ReentrantTimer(auto_commit_every_t,
+                                               self._timed_commit)
+            self.commit_timer.start()
+
         def get_or_init_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
                 return resp.offset
@@ -110,6 +111,39 @@ class SimpleConsumer(object):
                 self.offsets[resp.partition] = resp.offsets[0] + deltas[resp.partition] 
         else:
             raise ValueError("Unexpected value for `whence`, %d" % whence)
+
+    def pending(self, partitions=[]):
+        """
+        Gets the pending message count
+
+        partitions: list of partitions to check for, default is to check all
+        """
+        if len(partitions) == 0:
+            partitions = self.offsets.keys()
+
+        total = 0
+        reqs = []
+
+        for partition in partitions:
+            reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+
+        resps = self.client.send_offset_request(reqs)
+        for resp in resps:
+            partition = resp.partition
+            pending = resp.offsets[0]
+            offset = self.offsets[partition]
+            total += pending - offset - (1 if offset > 0 else 0)
+
+        return total
+
+    def _timed_commit(self):
+        """
+        Commit offsets as part of timer
+        """
+        self.commit()
+
+        # Once the commit is done, start the timer again
+        self.commit_timer.start()
 
     def commit(self, partitions=[]):
         """
