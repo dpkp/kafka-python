@@ -6,10 +6,11 @@ log = logging.getLogger("kafka.codec")
 
 try:
     import snappy
-    hasSnappy=True
+    hasSnappy = True
 except ImportError:
     log.warn("Snappy codec not available")
-    hasSnappy=False
+    hasSnappy = False
+
 
 def gzip_encode(payload):
     buf = StringIO()
@@ -21,6 +22,7 @@ def gzip_encode(payload):
     buf.close()
     return out
 
+
 def gzip_decode(payload):
     buf = StringIO(payload)
     f = gzip.GzipFile(fileobj=buf, mode='r')
@@ -29,10 +31,12 @@ def gzip_decode(payload):
     buf.close()
     return out
 
+
 def snappy_encode(payload):
     if not hasSnappy:
         raise NotImplementedError("Snappy codec not available")
     return snappy.compress(payload)
+
 
 def snappy_decode(payload):
     if not hasSnappy:
