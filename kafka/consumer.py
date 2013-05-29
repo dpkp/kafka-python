@@ -219,11 +219,6 @@ class SimpleConsumer(object):
         start a new batch unless we've reached the end of ths partition.
         """
 
-        # Unless it is the first message in the queue, we have to fetch
-        # the next one
-        if offset != 0:
-            offset += 1
-
         while True:
             req = FetchRequest(self.topic, partition, offset, 1024) # TODO configure fetch size
             (resp,) = self.client.send_fetch_request([req])
