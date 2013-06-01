@@ -77,6 +77,11 @@ class SimpleConsumer(object):
         for partition in self.client.topic_partitions[topic]:
             self.offsets[partition] = 0
 
+    def stop(self):
+        if self.commit_timer is not None:
+            self.commit_timer.stop()
+            self.commit()
+
     def seek(self, offset, whence):
         """
         Alter the current offset in the consumer, similar to fseek
