@@ -3,7 +3,7 @@ import random
 import struct
 import unittest
 
-from kafka.client import KafkaClient, ProduceRequest, FetchRequest, length_prefix_message
+from kafka.client import KafkaClient, ProduceRequest, FetchRequest
 from kafka.codec import gzip_encode, gzip_decode
 from kafka.codec import snappy_encode, snappy_decode
 
