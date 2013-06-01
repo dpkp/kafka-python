@@ -2,9 +2,9 @@
 
 Ordered by contribution
 
-* David Arthur, @mumrah
-* Mahendra M, @mahendra
-* @anentropic
-* Ben Frederickson, @benfred
+* David Arthur, [@mumrah](https://github.com/mumrah)
+* Mahendra M, [@mahendra](https://github.com/mahendra)
+* [@anentropic](https://github.com/anentropic)
+* Ben Frederickson, [@benfred](https://github.com/benfred)
 
 Thanks, everyone!
