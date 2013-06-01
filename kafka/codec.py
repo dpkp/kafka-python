@@ -11,6 +11,13 @@ except ImportError:
     log.warn("Snappy codec not available")
     hasSnappy = False
 
+def has_gzip():
+    return True
+
+
+def has_snappy():
+    return hasSnappy
+
 
 def gzip_encode(payload):
     buf = StringIO()
