@@ -255,7 +255,7 @@ class KafkaFixture(object):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("localhost", get_open_port())
+            (host, port) = ("127.0.0.1", get_open_port())
             fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot)
             fixture.open()
         return fixture
