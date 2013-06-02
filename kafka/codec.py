@@ -12,7 +12,7 @@ def has_gzip():
     return True
 
 
-def _has_snappy():
+def has_snappy():
     return _has_snappy
 
 
@@ -38,11 +38,11 @@ def gzip_decode(payload):
 
 def snappy_encode(payload):
     if not _has_snappy:
-        raise NotImplementedError("Snappy codec not available")
+        raise NotImplementedError("Snappy codec is not available")
     return snappy.compress(payload)
 
 
 def snappy_decode(payload):
     if not _has_snappy:
-        raise NotImplementedError("Snappy codec not available")
+        raise NotImplementedError("Snappy codec is not available")
     return snappy.decompress(payload)
