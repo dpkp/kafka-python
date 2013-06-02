@@ -14,26 +14,35 @@ import uuid
 from urlparse import urlparse
 
 
-def kafka_log4j():
-    return os.path.abspath("./test/resources/log4j.properties")
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+KAFKA_ROOT = os.path.join(PROJECT_ROOT, "kafka-src")
+IVY_ROOT = os.path.expanduser("~/.ivy2/cache")
+
+if "PROJECT_ROOT" in os.environ:
+    PROJECT_ROOT = os.environ["PROJECT_ROOT"]
+if "KAFKA_ROOT" in os.environ:
+    KAFKA_ROOT = os.environ["KAFKA_ROOT"]
+if "IVY_ROOT" in os.environ:
+    IVY_ROOT = os.environ["IVY_ROOT"]
 
 
-def kafka_classpath():
+def test_resource(file):
+    return os.path.join(PROJECT_ROOT, "test", "resources", file)
+
+
+def test_classpath():
     # ./kafka-src/bin/kafka-run-class.sh is the authority.
-    ivy = os.path.expanduser("~/.ivy2/cache")
-    base = os.path.abspath("./kafka-src/")
-
     jars = ["."]
-    jars.append(ivy + "/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar")
-    jars.append(ivy + "/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar")
-    jars.append(ivy + "/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar")
-    jars.append(ivy + "/log4j/log4j/jars/log4j-1.2.15.jar")
-    jars.append(ivy + "/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar")
-    jars.append(ivy + "/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar")
-    jars.append(ivy + "/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar")
-    jars.extend(glob.glob(base + "/core/target/scala-2.8.0/*.jar"))
-    jars.extend(glob.glob(base + "/core/lib/*.jar"))
-    jars.extend(glob.glob(base + "/perf/target/scala-2.8.0/kafka*.jar"))
+    jars.append(IVY_ROOT + "/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar")
+    jars.append(IVY_ROOT + "/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar")
+    jars.append(IVY_ROOT + "/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar")
+    jars.append(IVY_ROOT + "/log4j/log4j/jars/log4j-1.2.15.jar")
+    jars.append(IVY_ROOT + "/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar")
+    jars.append(IVY_ROOT + "/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar")
+    jars.append(IVY_ROOT + "/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar")
+    jars.extend(glob.glob(KAFKA_ROOT + "/core/target/scala-2.8.0/*.jar"))
+    jars.extend(glob.glob(KAFKA_ROOT + "/core/lib/*.jar"))
+    jars.extend(glob.glob(KAFKA_ROOT + "/perf/target/scala-2.8.0/kafka*.jar"))
 
     jars = filter(os.path.exists, map(os.path.abspath, jars))
     return ":".join(jars)
@@ -42,12 +51,12 @@ def kafka_classpath():
 def kafka_run_class_args(*args):
     # ./kafka-src/bin/kafka-run-class.sh is the authority.
     result = ["java", "-Xmx512M", "-server"]
-    result.append("-Dlog4j.configuration=file:%s" % kafka_log4j())
+    result.append("-Dlog4j.configuration=file:%s" % test_resource("log4j.properties"))
     result.append("-Dcom.sun.management.jmxremote")
     result.append("-Dcom.sun.management.jmxremote.authenticate=false")
     result.append("-Dcom.sun.management.jmxremote.ssl=false")
     result.append("-cp")
-    result.append(kafka_classpath())
+    result.append(test_classpath())
     result.extend(args)
     return result
 
@@ -210,8 +219,9 @@ class ZookeeperFixture(object):
         print("  tmp_dir = %s" % self.tmp_dir)
 
         # Generate configs
+        template = test_resource("zookeeper.properties")
         properties = os.path.join(self.tmp_dir, "zookeeper.properties")
-        render_template("./test/resources/zookeeper.properties", properties, vars(self))
+        render_template(template, properties, vars(self))
 
         # Configure Zookeeper child process
         self.child = SpawnedService(kafka_run_class_args(
@@ -279,8 +289,9 @@ class KafkaFixture(object):
         os.mkdir(os.path.join(self.tmp_dir, "data"))
 
         # Generate configs
+        template = test_resource("kafka.properties")
         properties = os.path.join(self.tmp_dir, "kafka.properties")
-        render_template("./test/resources/kafka.properties", properties, vars(self))
+        render_template(template, properties, vars(self))
 
         # Configure Kafka child process
         self.child = SpawnedService(kafka_run_class_args(
