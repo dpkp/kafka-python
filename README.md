@@ -101,16 +101,12 @@ pip install python-snappy
 
 # Tests
 
-Some of the tests will fail if Snappy is not installed. These tests will throw
-NotImplementedError. If you see other failures, they might be bugs - so please
-report them!
-
 ## Run the unit tests
 
 _These are broken at the moment_
 
 ```shell
-python -m test.unit
+tox ./test/test_unit.py
 ```
 
 ## Run the integration tests
@@ -125,15 +121,9 @@ cd kafka-src
 ./sbt package
 ```
 
-Next start up a ZooKeeper server on localhost:2181
+And then run the tests. This will actually start up real local Zookeeper
+instance and Kafka brokers, and send messages in using the client.
 
 ```shell
-/opt/zookeeper/bin/zkServer.sh start
-```
-
-And finally run the tests. This will actually start up real Kafka brokers and send messages in using the
-client.
-
-```shell
-python -m test.integration
+tox ./test/test_integration.py
 ```
