@@ -1,7 +1,7 @@
 import os.path
 import sys
 
-from distutils.core import setup, Command
+from setuptools import setup, Command
 
 
 class Tox(Command):
@@ -21,7 +21,7 @@ setup(
     name="kafka-python",
     version="0.8.1-1",
 
-    install_requires=["distribute"],
+    install_requires=["distribute", "tox"],
     tests_require=["tox"],
     cmdclass={"test": Tox},
 
