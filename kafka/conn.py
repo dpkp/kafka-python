@@ -1,10 +1,11 @@
 import logging
 import socket
 import struct
+from threading import local
 
 log = logging.getLogger("kafka")
 
-class KafkaConnection(object):
+class KafkaConnection(local):
     """
     A socket connection to a single Kafka broker
 
