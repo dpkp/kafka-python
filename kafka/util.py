@@ -86,14 +86,17 @@ class ReentrantTimer(object):
         self.timer = None
         self.t = t
         self.fn = fn
+        self.is_active = False
 
     def start(self):
         if self.timer is not None:
             self.timer.cancel()
 
         self.timer = Timer(self.t / 1000., self.fn)
+        self.is_active = True
         self.timer.start()
 
     def stop(self):
         self.timer.cancel()
         self.timer = None
+        self.is_active = False
