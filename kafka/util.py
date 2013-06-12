@@ -108,7 +108,7 @@ class ReentrantTimer(object):
             self.stop()
 
         self.active = Event()
-        self.thread = Thread(target=self._timer, args=(self.active))
+        self.thread = Thread(target=self._timer, args=(self.active,))
         self.thread.daemon = True  # So the app exits when main thread exits
         self.thread.start()
 
