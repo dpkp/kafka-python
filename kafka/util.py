@@ -1,7 +1,7 @@
 from collections import defaultdict
 from itertools import groupby
 import struct
-from threading import Timer
+from threading import Thread, Event
 
 
 def write_int_string(s):
@@ -81,22 +81,41 @@ class ReentrantTimer(object):
 
     t: timer interval in milliseconds
     fn: a callable to invoke
+    args: tuple of args to be passed to function
+    kwargs: keyword arguments to be passed to function
     """
-    def __init__(self, t, fn):
-        self.timer = None
-        self.t = t
+    def __init__(self, t, fn, *args, **kwargs):
+
+        if t <= 0:
+            raise ValueError('Invalid timeout value')
+
+        if not callable(fn):
+            raise ValueError('fn must be callable')
+
+        self.thread = None
+        self.t = t / 1000.0
         self.fn = fn
-        self.is_active = False
+        self.args = args
+        self.kwargs = kwargs
+        self.active = None
+
+    def _timer(self, active):
+        while not active.wait(self.t):
+            self.fn(*self.args, **self.kwargs)
 
     def start(self):
-        if self.timer is not None:
-            self.timer.cancel()
+        if self.thread is not None:
+            self.stop()
 
-        self.timer = Timer(self.t / 1000., self.fn)
-        self.is_active = True
-        self.timer.start()
+        self.active = Event()
+        self.thread = Thread(target=self._timer, args=(self.active))
+        self.thread.daemon = True  # So the app exits when main thread exits
+        self.thread.start()
 
     def stop(self):
-        self.timer.cancel()
+        if self.thread is None:
+            return
+
+        self.active.set()
+        self.thread.join(self.t + 1)
         self.timer = None
-        self.is_active = False

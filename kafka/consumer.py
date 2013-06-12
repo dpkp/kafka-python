@@ -58,7 +58,8 @@ class SimpleConsumer(object):
         # Set up the auto-commit timer
         if auto_commit is True and auto_commit_every_t is not None:
             self.commit_timer = ReentrantTimer(auto_commit_every_t,
-                                               self._timed_commit)
+                                               self.commit)
+            self.commit_timer.start()
 
         def get_or_init_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
@@ -149,15 +150,6 @@ class SimpleConsumer(object):
 
         return total
 
-    def _timed_commit(self):
-        """
-        Commit offsets as part of timer
-        """
-        self.commit()
-
-        # Once the commit is done, start the timer again
-        # self.commit_timer.start()
-
     def commit(self, partitions=[]):
         """
         Commit offsets for this consumer
@@ -166,11 +158,17 @@ class SimpleConsumer(object):
                     all of them
         """
 
-        # short circuit if nothing happened
+        # short circuit if nothing happened. This check is kept outside
+        # to prevent un-necessarily acquiring a lock for checking the state
         if self.count_since_commit == 0:
             return
 
         with self.commit_lock:
+            # Do this check again, just in case the state has changed
+            # during the lock acquiring timeout
+            if self.count_since_commit == 0:
+                return
+
             reqs = []
             if len(partitions) == 0:  # commit all partitions
                 partitions = self.offsets.keys()
@@ -200,12 +198,7 @@ class SimpleConsumer(object):
             return
 
         if self.count_since_commit > self.auto_commit_every_n:
-            if self.commit_timer is not None:
-                self.commit_timer.stop()
-                self.commit()
-                self.commit_timer.start()
-            else:
-                self.commit()
+            self.commit()
 
     def __iter__(self):
         """
@@ -222,10 +215,6 @@ class SimpleConsumer(object):
         while True:
             if len(iters) == 0:
                 break
-
-            # Now that we are consuming data, start the commit thread
-            if self.commit_timer and not self.commit_timer.is_active:
-                self.commit_timer.start()
 
             for partition, it in iters.items():
                 try:
