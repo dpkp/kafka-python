@@ -4,6 +4,7 @@ import logging
 
 from kafka.common import ProduceRequest
 from kafka.protocol import create_message
+from kafka.partitioner import HashedPartitioner
 
 log = logging.getLogger("kafka")
 
@@ -71,4 +72,37 @@ class SimpleProducer(Producer):
     def send_messages(self, *msg):
         req = ProduceRequest(self.topic, self.next_partition.next(),
                              messages=[create_message(m) for m in msg])
+        self.send_request(req)
+
+
+class KeyedProducer(Producer):
+    """
+    A producer which distributes messages to partitions based on the key
+
+    Args:
+    client - The kafka client instance
+    topic - The kafka topic to send messages to
+    partitioner - A partitioner class that will be used to get the partition
+        to send the message to. Must be derived from Partitioner
+    async - If True, the messages are sent asynchronously via another
+            thread (process). We will not wait for a response to these
+    """
+    def __init__(self, client, topic, partitioner=None, async=False):
+        self.topic = topic
+        client._load_metadata_for_topics(topic)
+
+        if not partitioner:
+            partitioner = HashedPartitioner
+
+        self.partitioner = partitioner(client.topic_partitions[topic])
+
+        super(KeyedProducer, self).__init__(client, async)
+
+    def send(self, key, msg):
+        partitions = self.client.topic_partitions[self.topic]
+        partition = self.partitioner.partition(key, partitions)
+
+        req = ProduceRequest(self.topic, partition,
+                             messages=[create_message(msg)])
+
         self.send_request(req)
