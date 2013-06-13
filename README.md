@@ -30,10 +30,16 @@ from kafka.producer import SimpleProducer
 
 kafka = KafkaClient("localhost", 9092)
 
+# To send messages synchronously
 producer = SimpleProducer(kafka, "my-topic")
 producer.send_messages("some message")
 producer.send_messages("this method", "is variadic")
 
+# To send messages asynchronously
+producer = SimpleProducer(kafka, "my-topic", async=True)
+producer.send_messages("async message")
+
+# To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
     print(message)
