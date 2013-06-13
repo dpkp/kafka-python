@@ -41,6 +41,18 @@ for message in consumer:
 kafka.close()
 ```
 
+## Keyed messages
+from kafka.client import KafkaClient
+from kafka.producer import KeyedProducer
+from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
+
+kafka = KafkaClient("localhost", 9092)
+
+producer = KeyedProducer(kafka, "my-topic", partitioner=HashedPartitioner)
+producer.send("key1", "some message")
+producer.send("key2", "this methode")
+
+
 ## Low level
 
 ```python
