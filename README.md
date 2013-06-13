@@ -49,9 +49,12 @@ from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
 
 kafka = KafkaClient("localhost", 9092)
 
-producer = KeyedProducer(kafka, "my-topic", partitioner=HashedPartitioner)
+# HashedPartitioner is default
+producer = KeyedProducer(kafka, "my-topic")
 producer.send("key1", "some message")
 producer.send("key2", "this methode")
+
+producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
 ```
 
 ## Low level
