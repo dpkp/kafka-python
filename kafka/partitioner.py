@@ -31,14 +31,18 @@ class RoundRobinPartitioner(Partitioner):
     in a round robin fashion
     """
     def __init__(self, partitions):
-        self.partitions = cycle(partitions)
+        self._set_partitions(partitions)
+
+    def _set_partitions(self, partitions):
+        self.partitions = partitions
+        self.iterpart = cycle(partitions)
 
     def partition(self, key, partitions):
         # Refresh the partition list if necessary
         if self.partitions != partitions:
-            self.partitions = cycle(partitions)
+            self._set_partitions(partitions)
 
-        return self.partitions.next()
+        return self.iterpart.next()
 
 
 class HashedPartitioner(Partitioner):

@@ -46,8 +46,8 @@ class KeyedProducer(object):
 
         self.partitioner = partitioner(self.client.topic_partitions[topic])
 
-    def send(self, client, key, msg):
-        partitions = self.client.topic_partitions[topic]
+    def send(self, key, msg):
+        partitions = self.client.topic_partitions[self.topic]
         partition = self.partitioner.partition(key, partitions)
 
         req = ProduceRequest(self.topic, partition,
