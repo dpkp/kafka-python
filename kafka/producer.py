@@ -85,8 +85,9 @@ class SimpleProducer(Producer):
     ack_timeout - Value (in milliseconds) indicating a timeout for waiting
                   for an acknowledgement
     """
-    def __init__(self, client, topic, async=False, req_acks=ACK_NOT_REQUIRED,
-                 ack_timeout=DEFAULT_ACK_TIMEOUT):
+    def __init__(self, client, topic, async=False,
+                 req_acks=Producer.ACK_NOT_REQUIRED,
+                 ack_timeout=Producer.DEFAULT_ACK_TIMEOUT):
         self.topic = topic
         client._load_metadata_for_topics(topic)
         self.next_partition = cycle(client.topic_partitions[topic])
@@ -115,7 +116,8 @@ class KeyedProducer(Producer):
                   for an acknowledgement
     """
     def __init__(self, client, topic, partitioner=None, async=False,
-                 req_acks=ACK_NOT_REQUIRED, ack_timeout=DEFAULT_ACK_TIMEOUT):
+                 req_acks=Producer.ACK_NOT_REQUIRED,
+                 ack_timeout=Producer.DEFAULT_ACK_TIMEOUT):
         self.topic = topic
         client._load_metadata_for_topics(topic)
 
