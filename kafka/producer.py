@@ -30,7 +30,7 @@ class Producer(object):
 
     DEFAULT_ACK_TIMEOUT = 1000
 
-    def __init__(self, client, async=False, req_acks=ACK_NOT_REQUIRED,
+    def __init__(self, client, async=False, req_acks=ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=DEFAULT_ACK_TIMEOUT):
         self.client = client
         self.async = async
@@ -86,7 +86,7 @@ class SimpleProducer(Producer):
                   for an acknowledgement
     """
     def __init__(self, client, topic, async=False,
-                 req_acks=Producer.ACK_NOT_REQUIRED,
+                 req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT):
         self.topic = topic
         client._load_metadata_for_topics(topic)
@@ -116,7 +116,7 @@ class KeyedProducer(Producer):
                   for an acknowledgement
     """
     def __init__(self, client, topic, partitioner=None, async=False,
-                 req_acks=Producer.ACK_NOT_REQUIRED,
+                 req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT):
         self.topic = topic
         client._load_metadata_for_topics(topic)
