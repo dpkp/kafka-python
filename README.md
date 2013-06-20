@@ -39,6 +39,21 @@ producer.send_messages("this method", "is variadic")
 producer = SimpleProducer(kafka, "my-topic", async=True)
 producer.send_messages("async message")
 
+# To wait for acknowledgements
+# ACK_AFTER_LOCAL_WRITE : server will wait till the data is written to
+#                         a local log before sending response
+# ACK_AFTER_CLUSTER_COMMIT : server will block until the message is committed
+#                            by all in sync replicas before sending a response
+producer = SimpleProducer(kafka, "my-topic", async=False,
+                          req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
+                          acks_timeout=2000)
+
+response = producer.send_messages("async message")
+
+if response:
+    print(response[0].error)
+    print(response[0].offset)
+
 # To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
