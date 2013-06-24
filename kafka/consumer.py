@@ -384,9 +384,10 @@ class MultiProcessConsumer(Consumer):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(client, group, topic,
-                                                   auto_commit, partitions,
+                                                   auto_commit,
                                                    auto_commit_every_n,
-                                                   auto_commit_every_t)
+                                                   auto_commit_every_t,
+                                                   partitions=None)
 
         # Variables for managing and controlling the data flow from
         # consumer child process to master
