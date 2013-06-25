@@ -38,7 +38,7 @@ class SimpleConsumer(object):
     these triggers
 
     """
-    def __init__(self, client, group, topic, auto_commit=True,
+    def __init__(self, client, group, topic, auto_commit=False,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
         self.client = client
