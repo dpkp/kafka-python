@@ -10,9 +10,10 @@ from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message
 )
 from kafka.producer import SimpleProducer
-from kafka.consumer import SimpleConsumer
+from kafka.consumer import SimpleConsumer, MultiProcessConsumer
 
 __all__ = [
-    'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'SimpleConsumer',
+    'KafkaClient', 'KafkaConnection', 'SimpleProducer',
+    'SimpleConsumer', 'MultiProcessConsumer',
     'create_message', 'create_gzip_message', 'create_snappy_message'
 ]
