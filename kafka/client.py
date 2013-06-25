@@ -73,7 +73,12 @@ class KafkaClient(object):
 
         self.brokers.update(brokers)
         self.topics_to_brokers = {}
+
         for topic, partitions in topics.items():
+            # Clear the list once before we add it. This removes stale entries
+            # and avoids duplicates
+            self.topic_partitions.pop(topic, None)
+
             if not partitions:
                 log.info("Partition is unassigned, delay for 1s and retry")
                 time.sleep(1)
