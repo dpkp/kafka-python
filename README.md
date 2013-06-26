@@ -26,7 +26,7 @@ development, APIs are subject to change.
 ```python
 from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer
+from kafka.producer import SimpleProducer, KeyedProducer
 
 kafka = KafkaClient("localhost", 9092)
 
