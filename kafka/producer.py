@@ -152,7 +152,7 @@ class Producer(object):
             self.queue.put(STOP_ASYNC_PRODUCER)
             self.proc.join(timeout)
 
-            if self.proc.is_alive()
+            if self.proc.is_alive():
                 self.proc.terminate()
 
 
