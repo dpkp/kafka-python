@@ -445,7 +445,6 @@ class MultiProcessConsumer(Consumer):
             proc = Process(target=self._consume, args=(chunk,))
             proc.daemon = True
             proc.start()
-            time.sleep(0.2)
             self.procs.append(proc)
 
     def _consume(self, partitions):
@@ -453,6 +452,9 @@ class MultiProcessConsumer(Consumer):
         A child process worker which consumes messages based on the
         notifications given by the controller process
         """
+
+        # Make the child processes open separate socket connections
+        self.client.reinit()
 
         # We will start consumers without auto-commit. Auto-commit will be
         # done by the master controller process.

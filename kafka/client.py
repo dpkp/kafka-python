@@ -176,6 +176,10 @@ class KafkaClient(object):
         for conn in self.conns.values():
             conn.close()
 
+    def reinit(self):
+        for conn in self.conns.values():
+            conn.reinit()
+
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
         """
