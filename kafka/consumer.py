@@ -259,6 +259,12 @@ class SimpleConsumer(Consumer):
                     reqs.append(OffsetRequest(self.topic, partition, -2, 1))
                 elif whence == 2:
                     reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+
+                    # The API returns back the next available offset
+                    # For eg: if the current offset is 18, the API will return
+                    # back 19. So, if we have to seek 5 points before, we will
+                    # end up going back to 14, instead of 13. Adjust this
+                    deltas[partition] -= 1
                 else:
                     pass
 
