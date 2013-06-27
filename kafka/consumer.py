@@ -523,6 +523,8 @@ class MultiProcessConsumer(Consumer):
             try:
                 # We will block for a small while so that the consumers get
                 # a chance to run and put some messages in the queue
+                # TODO: This is a hack and will make the consumer block for
+                # at least one second. Need to find a better way of doing this
                 partition, message = self.queue.get(block=True, timeout=1)
             except Empty:
                 break
