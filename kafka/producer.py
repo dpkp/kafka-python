@@ -177,7 +177,7 @@ class SimpleProducer(Producer):
 
     def send_messages(self, *msg):
         partition = self.next_partition.next()
-        super(SimpleProducer, self).send_messages(partition, *msg)
+        return super(SimpleProducer, self).send_messages(partition, *msg)
 
 
 class KeyedProducer(Producer):
