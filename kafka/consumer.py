@@ -159,6 +159,11 @@ class Consumer(object):
         if self.count_since_commit > self.auto_commit_every_n:
             self.commit()
 
+    def stop(self):
+        if self.commit_timer is not None:
+            self.commit_timer.stop()
+            self.commit()
+
     def pending(self, partitions=None):
         """
         Gets the pending message count
@@ -225,11 +230,6 @@ class SimpleConsumer(Consumer):
         Indicates that partition info must be returned by the consumer
         """
         self.partition_info = True
-
-    def stop(self):
-        if self.commit_timer is not None:
-            self.commit_timer.stop()
-            self.commit()
 
     def seek(self, offset, whence):
         """
@@ -509,6 +509,8 @@ class MultiProcessConsumer(Consumer):
         for proc in self.procs:
             proc.join()
             proc.terminate()
+
+        super(MultiProcessConsumer, self).stop()
 
     def __iter__(self):
         """
