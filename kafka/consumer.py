@@ -437,11 +437,12 @@ class MultiProcessConsumer(Consumer):
                 partitions_per_proc += 1
 
         # The final set of chunks
-        chunks = map(None, *[iter(partitions)] * int(partitions_per_proc))
+        chunker = lambda *x: [] + list(x)
+        chunks = map(chunker, *[iter(partitions)] * int(partitions_per_proc))
 
         self.procs = []
         for chunk in chunks:
-            chunk = filter(lambda x: x is not None, list(chunk))
+            chunk = filter(lambda x: x is not None, chunk)
             proc = Process(target=self._consume, args=(chunk,))
             proc.daemon = True
             proc.start()
