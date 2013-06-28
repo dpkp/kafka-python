@@ -57,7 +57,7 @@ producer.send("key2", "this methode")
 producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
 ```
 
-# Multiprocess consumer
+## Multiprocess consumer
 ```python
 # This will split the number of partitions among two processes
 consumer = MultiProcessConsumer(kafka, "my-topic", "my-group", num_procs=2)
