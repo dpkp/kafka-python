@@ -38,6 +38,16 @@ consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
     print(message)
 
+# Gevent based consumer
+from kafka import KAFKA_GEVENT_DRIVER
+consumer = SimpleConsumer(kafka, "my-group", "my-topic",
+                          driver_type=KAFKA_GEVENT_DRIVER)
+
+# Threaded consumer
+from kafka import KAFKA_THREAD_DRIVER
+consumer = SimpleConsumer(kafka, "my-group", "my-topic",
+                          driver_type=KAFKA_THREAD_DRIVER)
+
 kafka.close()
 ```
 
@@ -59,14 +69,14 @@ producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
 
 ## Multiprocess consumer
 ```python
-from kafka.consume import MultiProcessConsumer
+from kafka.consume import MultiConsumer
 
-# This will split the number of partitions among two processes
-consumer = MultiProcessConsumer(kafka, "my-topic", "my-group", num_procs=2)
+# This will split the number of partitions among two processes (drivers)
+consumer = MultiConsumer(kafka, "my-topic", "my-group", num_drivers=2)
 
 # This will spawn processes such that each handles 2 partitions max
-consumer = MultiProcessConsumer(kafka, "my-topic", "my-group",
-                                partitions_per_proc=2)
+consumer = MultiConsumer(kafka, "my-topic", "my-group",
+                         partitions_per_driver=2)
 
 for message in consumer:
     print(message)
@@ -74,6 +84,17 @@ for message in consumer:
 for message in consumer.get_messages(count=5, block=True, timeout=4):
     print(message)
 ```
+
+# Gevent based consumer
+from kafka import KAFKA_GEVENT_DRIVER
+consumer = MultiConsumer(kafka, "my-group", "my-topic", num_drivers=2,
+                         driver_type=KAFKA_GEVENT_DRIVER)
+
+# Threaded consumer
+from kafka import KAFKA_THREAD_DRIVER
+consumer = MultiConsumer(kafka, "my-group", "my-topic",
+                         partitions_per_driver=2,
+                         driver_type=KAFKA_THREAD_DRIVER)
 
 ## Low level
 

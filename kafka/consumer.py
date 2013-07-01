@@ -3,12 +3,14 @@ from itertools import izip_longest, repeat
 import logging
 import time
 from Queue import Empty
-from multiprocessing import Process, Queue, Event, Value, Array, \
-                            current_process
+from multiprocessing import Array, Value
+from collections import defaultdict
 
 from kafka.common import (
     ErrorMapping, FetchRequest,
-    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest
+    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest,
+    KAFKA_PROCESS_DRIVER, KAFKA_THREAD_DRIVER, KAFKA_GEVENT_DRIVER,
+    KafkaDriver
 )
 
 log = logging.getLogger("kafka")
@@ -91,11 +93,17 @@ class Consumer(object):
     * Auto-commit logic
     * APIs for fetching pending message count
     """
-    def __init__(self, client, group, topic, partitions=None, auto_commit=True,
+    def __init__(self, client, group, topic, partitions=None,
+                 driver_type=KAFKA_PROCESS_DRIVER,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 slave=False):
 
-        self.client = client
+        # Find out the driver that we are supposed to use and prepare the
+        # connection socket accordingly
+        self.driver = KafkaDriver(driver_type)
+        self.client = client.dup(module=self.driver.socket)
         self.topic = topic
         self.group = group
         self.client._load_metadata_for_topics(topic)
@@ -105,8 +113,8 @@ class Consumer(object):
             partitions = self.client.topic_partitions[topic]
 
         # Variables for handling offset commits
-        self.commit_queue = Queue()
-        self.commit_event = Event()
+        self.commit_queue = self.driver.Queue()
+        self.commit_event = self.driver.Event()
         self.commit_timer = None
         self.count_since_commit = Value('i', 0)
         self.auto_commit = auto_commit
@@ -139,9 +147,9 @@ class Consumer(object):
         self.offsets = Offsets(offsets)
 
         # Start committer only in the master/controller
-        if not current_process().daemon:
-            self.commit_timer = Process(target=self._committer,
-                                        args=(self.offsets,))
+        if not slave:
+            self.commit_timer = self.driver.Proc(target=self._committer,
+                                                 args=(self.offsets,))
             self.commit_timer.daemon = True
             self.commit_timer.start()
 
@@ -149,7 +157,9 @@ class Consumer(object):
         """
         The process thread which takes care of committing
         """
-        self.client.reinit()
+
+        # Prepare an alternate connection socket for use
+        client = self.client.dup()
         self.offsets = offsets
         timeout = self.auto_commit_every_t
 
@@ -167,10 +177,13 @@ class Consumer(object):
                 partitions = None
                 notify = False
 
-            self._commit(partitions)
+            self._commit(partitions, client)
 
             if notify:
                 self.commit_event.set()
+
+        # Cleanup the client instance
+        client.close()
 
     def commit(self, partitions=None, block=True, timeout=None):
         """
@@ -187,7 +200,7 @@ class Consumer(object):
         if block:
             self.commit_event.wait(timeout)
 
-    def _commit(self, partitions=None):
+    def _commit(self, partitions=None, client=None):
         """
         Commit offsets for this consumer
 
@@ -208,7 +221,7 @@ class Consumer(object):
             reqs.append(OffsetCommitRequest(self.topic, partition,
                                             offset, None))
 
-        resps = self.client.send_offset_commit_request(self.group, reqs)
+        resps = client.send_offset_commit_request(self.group, reqs)
         for resp in resps:
             assert resp.error == 0
 
@@ -231,6 +244,8 @@ class Consumer(object):
             self.commit()
             self.commit_queue.put(-1)
             self.commit_timer.join()
+
+        self.client.close()
 
     def pending(self, partitions=None):
         """
@@ -266,6 +281,7 @@ class SimpleConsumer(Consumer):
     group: a name for this consumer, used for offset storage and must be unique
     topic: the topic to consume
     partitions: An optional list of partitions to consume the data from
+    driver_type: The driver type to use for the consumer
 
     auto_commit: default True. Whether or not to auto commit the offsets
     auto_commit_every_n: default 100. How many messages to consume
@@ -279,9 +295,12 @@ class SimpleConsumer(Consumer):
     commit method on this class. A manual call to commit will also reset
     these triggers
     """
-    def __init__(self, client, group, topic, auto_commit=True, partitions=None,
+    def __init__(self, client, group, topic, partitions=None,
+                 driver_type=KAFKA_PROCESS_DRIVER,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 slave=False):
 
         self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
@@ -290,6 +309,7 @@ class SimpleConsumer(Consumer):
 
         super(SimpleConsumer, self).__init__(client, group, topic,
                                     partitions=partitions,
+                                    driver_type=driver_type, slave=slave,
                                     auto_commit=auto_commit,
                                     auto_commit_every_n=auto_commit_every_n,
                                     auto_commit_every_t=auto_commit_every_t)
@@ -450,24 +470,25 @@ class SimpleConsumer(Consumer):
                 offset = next_offset + 1
 
 
-class MultiProcessConsumer(Consumer):
+class MultiConsumer(Consumer):
     """
     A consumer implementation that consumes partitions for a topic in
-    parallel using multiple processes
+    parallel using multiple driver instances (process, threads or gevent)
 
     client: a connected KafkaClient
     group: a name for this consumer, used for offset storage and must be unique
     topic: the topic to consume
+    driver_type: The driver type to use for the consumer
 
     auto_commit: default True. Whether or not to auto commit the offsets
     auto_commit_every_n: default 100. How many messages to consume
                          before a commit
     auto_commit_every_t: default 5000. How much time (in milliseconds) to
                          wait before commit
-    num_procs: Number of processes to start for consuming messages.
-               The available partitions will be divided among these processes
-    partitions_per_proc: Number of partitions to be allocated per process
-               (overrides num_procs)
+    num_drivers: Number of driver instances to start for consuming messages.
+               The available partitions will be divided among these instances
+    partitions_per_driver: Number of partitions to be allocated per driver
+               (overrides num_drivers)
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
@@ -475,45 +496,57 @@ class MultiProcessConsumer(Consumer):
     commit method on this class. A manual call to commit will also reset
     these triggers
     """
-    def __init__(self, client, group, topic, auto_commit=True,
+    def __init__(self, client, group, topic,
+                 driver_type=KAFKA_PROCESS_DRIVER,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_drivers=1, partitions_per_driver=0):
 
         # Initiate the base consumer class
-        super(MultiProcessConsumer, self).__init__(client, group, topic,
-                                    partitions=None,
+        super(MultiConsumer, self).__init__(client, group, topic,
+                                    partitions=None, driver_type=driver_type,
                                     auto_commit=auto_commit,
                                     auto_commit_every_n=auto_commit_every_n,
                                     auto_commit_every_t=auto_commit_every_t)
 
         # Variables for managing and controlling the data flow from
         # consumer child process to master
-        self.queue = Queue(1024)    # Child consumers dump messages into this
-        self.start = Event()        # Indicates the consumers to start fetch
-        self.exit = Event()         # Requests the consumers to shutdown
-        self.pause = Event()        # Requests the consumers to pause fetch
-        self.size = Value('i', 0)   # Indicator of number of messages to fetch
+
+        # Child consumers dump messages into this
+        self.queue = self.driver.Queue(1024)
+
+        # Indicates the consumers to start fetch
+        self.start = self.driver.Event()
+
+        # Requests the consumers to shutdown
+        self.exit = self.driver.Event()
+
+        # Requests the consumers to pause fetch
+        self.pause = self.driver.Event()
+
+        # Indicator of number of messages to fetch
+        self.size = Value('i', 0)
 
         partitions = self.offsets.keys()
 
         # If unspecified, start one consumer per partition
         # The logic below ensures that
-        # * we do not cross the num_procs limit
+        # * we do not cross the num_drivers limit
         # * we have an even distribution of partitions among processes
-        if not partitions_per_proc:
-            partitions_per_proc = round(len(partitions) * 1.0 / num_procs)
-            if partitions_per_proc < num_procs * 0.5:
-                partitions_per_proc += 1
+        if not partitions_per_driver:
+            partitions_per_driver = round(len(partitions) * 1.0 / num_drivers)
+            if partitions_per_driver < num_drivers * 0.5:
+                partitions_per_driver += 1
 
         # The final set of chunks
         chunker = lambda *x: [] + list(x)
-        chunks = map(chunker, *[iter(partitions)] * int(partitions_per_proc))
+        chunks = map(chunker, *[iter(partitions)] * int(partitions_per_driver))
 
         self.procs = []
         for chunk in chunks:
             chunk = filter(lambda x: x is not None, chunk)
-            proc = Process(target=self._consume, args=(chunk,))
+            proc = self.driver.Proc(target=self._consume, args=(chunk,))
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
@@ -524,16 +557,15 @@ class MultiProcessConsumer(Consumer):
         notifications given by the controller process
         """
 
-        # Make the child processes open separate socket connections
-        self.client.reinit()
-
         # We will start consumers without auto-commit. Auto-commit will be
         # done by the master controller process.
         consumer = SimpleConsumer(self.client, self.group, self.topic,
                                   partitions=partitions,
                                   auto_commit=False,
                                   auto_commit_every_n=None,
-                                  auto_commit_every_t=None)
+                                  auto_commit_every_t=None,
+                                  driver_type=self.driver.driver_type,
+                                  slave=True)
 
         # Ensure that the consumer provides the partition information
         consumer.provide_partition_info()
@@ -566,7 +598,7 @@ class MultiProcessConsumer(Consumer):
             # In case we did not receive any message, give up the CPU for
             # a while before we try again
             if count == 0:
-                time.sleep(0.1)
+                self.driver.sleep(0.1)
 
         consumer.stop()
 
@@ -578,9 +610,8 @@ class MultiProcessConsumer(Consumer):
 
         for proc in self.procs:
             proc.join()
-            proc.terminate()
 
-        super(MultiProcessConsumer, self).stop()
+        super(MultiConsumer, self).stop()
 
     def __iter__(self):
         """
@@ -598,6 +629,7 @@ class MultiProcessConsumer(Consumer):
                 # a chance to run and put some messages in the queue
                 # TODO: This is a hack and will make the consumer block for
                 # at least one second. Need to find a better way of doing this
+                self.driver.sleep(0)
                 partition, message = self.queue.get(block=True, timeout=1)
             except Empty:
                 break

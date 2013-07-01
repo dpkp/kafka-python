@@ -1,5 +1,16 @@
 from collections import namedtuple
 
+import Queue
+import multiprocessing
+import threading
+import socket
+import gevent
+import gevent.event
+import gevent.queue
+import gevent.pool
+import gevent.socket
+import time
+
 ###############
 #   Structs   #
 ###############
@@ -46,6 +57,39 @@ PartitionMetadata = namedtuple("PartitionMetadata",
 OffsetAndMessage = namedtuple("OffsetAndMessage", ["offset", "message"])
 Message = namedtuple("Message", ["magic", "attributes", "key", "value"])
 TopicAndPartition = namedtuple("TopicAndPartition", ["topic", "partition"])
+
+
+KAFKA_THREAD_DRIVER = 'thread'
+KAFKA_PROCESS_DRIVER = 'process'
+KAFKA_GEVENT_DRIVER = 'gevent'
+
+
+class KafkaDriver(object):
+    def __init__(self, driver_type):
+        self.socket = socket
+        self.sleep = time.sleep
+        self.driver_type = driver_type
+
+        if driver_type == KAFKA_THREAD_DRIVER:
+            self.Queue = Queue.Queue
+            self.Event = threading.Event
+            self.Proc = threading.Thread
+
+        elif driver_type == KAFKA_PROCESS_DRIVER:
+            self.Queue = multiprocessing.Queue
+            self.Event = multiprocessing.Event
+            self.Proc = multiprocessing.Process
+
+        elif driver_type == KAFKA_GEVENT_DRIVER:
+            self.Queue = gevent.queue.Queue
+            self.Event = gevent.event.Event
+            self.socket = gevent.socket
+            self.Proc = self.gevent_proc
+            self.sleep = gevent.sleep
+
+    def gevent_proc(self, target=None, args=(), kwargs=None):
+        kwargs = {} if kwargs is None else kwargs
+        return gevent.Greenlet(target, *args, **kwargs)
 
 
 class ErrorMapping(object):
