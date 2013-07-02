@@ -96,6 +96,39 @@ consumer = MultiConsumer(kafka, "my-group", "my-topic",
                          driver_type=KAFKA_THREAD_DRIVER)
 ```
 
+## Zookeeper support
+The Zookeeper supports creating a producer and SimpleConsumer.
+The Zookeeper consumer takes care of rebalancing partitions for a topic
+among a consumer-group.
+
+NOTE: This will work only with other kafka-python clients and will not
+work with Java/Scala clients (this is a TODO)
+```python
+from kafka.zookeeper import ZSimpleProducer, ZKeyedProducer
+from kafka.zookeeper import ZSimpleConsumer
+from kafka.partitioner import HashedPartitioner
+
+# Zookeeper SimpleProducer
+# Takes all arguments similar to SimpleProducer
+producer = ZSimpleProducer("127.0.0.1:2181", "my-topic")
+producer.send_messages("msg1", "msg2")
+
+# Zookeeper KeyedProducer
+# Takes all arguments similar to KeyedProducer
+producer = ZKeyedProducer("127.0.0.1:2181,127.0.0.1:2182", "my-topic",
+                          partitioner=HashedPartitioner)
+producer.send("key1", "msg1")
+
+# Zookeeper consumer.
+# Takes all arguments similar to SimpleConsumer
+consumer = ZSimpleConsumer("127.0.0.1:2181", "my-group", "my-topic")
+
+for msg in consumer:
+    print msg
+
+consumer.get_messages(block=True, timeout=10)
+```
+
 ## Low level
 
 ```python

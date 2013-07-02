@@ -71,3 +71,7 @@ class BufferUnderflowError(Exception):
 
 class ChecksumError(Exception):
     pass
+
+
+class KafkaConnectionError(Exception):
+    pass

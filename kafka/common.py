@@ -1,6 +1,8 @@
 from collections import namedtuple
 
 import Queue
+from kazoo.handlers.threading import SequentialThreadingHandler
+from kazoo.handlers.gevent import SequentialGeventHandler
 import multiprocessing
 import threading
 import socket
@@ -74,11 +76,13 @@ class KafkaDriver(object):
             self.Queue = Queue.Queue
             self.Event = threading.Event
             self.Proc = threading.Thread
+            self.kazoo_handler = SequentialThreadingHandler
 
         elif driver_type == KAFKA_PROCESS_DRIVER:
             self.Queue = multiprocessing.Queue
             self.Event = multiprocessing.Event
             self.Proc = multiprocessing.Process
+            self.kazoo_handler = SequentialThreadingHandler
 
         elif driver_type == KAFKA_GEVENT_DRIVER:
             self.Queue = gevent.queue.Queue
@@ -86,6 +90,7 @@ class KafkaDriver(object):
             self.socket = gevent.socket
             self.Proc = self.gevent_proc
             self.sleep = gevent.sleep
+            self.kazoo_handler = SequentialGeventHandler
 
     def gevent_proc(self, target=None, args=(), kwargs=None):
         kwargs = {} if kwargs is None else kwargs

@@ -7,6 +7,7 @@ from operator import attrgetter
 import os
 import socket
 import struct
+import sys
 import time
 import zlib
 
@@ -167,8 +168,15 @@ class KafkaClient(object):
                                  correlation_id=requestId, payloads=payloads)
 
             # Send the request, recv the response
-            conn.send(requestId, request)
-            response = conn.recv(requestId)
+            try:
+                conn.send(requestId, request)
+                response = conn.recv(requestId)
+            except (socket.error, KafkaConnectionError) as exp:
+                log.error("Error in broker", exc_info=sys.exc_info())
+                # Remove this broker information from the connection pool
+                self.conns.pop(broker, None)
+                raise
+
             for response in decoder_fn(response):
                 acc[(response.topic, response.partition)] = response
 

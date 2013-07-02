@@ -2,7 +2,10 @@ import logging
 import socket
 import struct
 
+from kafka.util import KafkaConnectionError, BufferUnderflowError
+
 log = logging.getLogger("kafka")
+
 
 class KafkaConnection(object):
     """
@@ -47,7 +50,7 @@ class KafkaConnection(object):
         # Read the size off of the header
         resp = self._sock.recv(4)
         if resp == "":
-            raise Exception("Got no response from Kafka")
+            raise KafkaConnectionError("Got no response from Kafka")
         (size,) = struct.unpack('>i', resp)
 
         messageSize = size - 4
@@ -75,8 +78,9 @@ class KafkaConnection(object):
         log.debug("About to send %d bytes to Kafka, request %d" %
                   (len(payload), requestId))
         sent = self._sock.sendall(payload)
+
         if sent != None:
-            raise RuntimeError("Kafka went away")
+            raise KafkaConnectionError("Kafka went away")
         self.data = self._consume_response()
 
     def recv(self, requestId):
