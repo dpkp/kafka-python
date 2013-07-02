@@ -83,7 +83,6 @@ for message in consumer:
 
 for message in consumer.get_messages(count=5, block=True, timeout=4):
     print(message)
-```
 
 # Gevent based consumer
 from kafka import KAFKA_GEVENT_DRIVER
@@ -95,6 +94,7 @@ from kafka import KAFKA_THREAD_DRIVER
 consumer = MultiConsumer(kafka, "my-group", "my-topic",
                          partitions_per_driver=2,
                          driver_type=KAFKA_THREAD_DRIVER)
+```
 
 ## Low level
 
