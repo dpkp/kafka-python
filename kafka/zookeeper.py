@@ -25,6 +25,7 @@ ALLOCATION_FAILED = -2
 
 
 log = logging.getLogger("kafka")
+random.seed()
 
 
 def _get_brokers(zkclient):
@@ -65,6 +66,11 @@ def get_client(zkclient):
 class ZProducer(Producer):
     """
     A base Zookeeper producer to be used by other producer classes
+
+    Args
+    hosts: Comma-separated list of hosts to connect to
+           (e.g. 127.0.0.1:2181,127.0.0.1:2182)
+    topic - The kafka topic to send messages to
     """
     producer_kls = None
 
@@ -89,26 +95,6 @@ class ZProducer(Producer):
         self.producer.stop()
         self.client.close()
 
-    @staticmethod
-    def retry(fnc, retries=2, retry_after=2):
-        """
-        A decorator for attemtping retries in sending messages
-
-        retries - Number of times we must attempt a retry
-        retry_after - Delay in between retries
-        """
-        def retry_send(self, *args, **kwargs):
-            count = retries
-            while count > 0:
-                try:
-                    return fnc(self, *args, **kwargs)
-                except Exception as exp:
-                    log.error("Error in callback", exc_info=sys.exc_info())
-                    self.producer.driver.sleep(retry_after)
-                    count -= 1
-
-        return retry_send
-
 
 class ZSimpleProducer(ZProducer):
     """
@@ -121,7 +107,6 @@ class ZSimpleProducer(ZProducer):
     """
     producer_kls = SimpleProducer
 
-    @ZProducer.retry
     def send_messages(self, *msg):
         self.producer.send_messages(*msg)
 
@@ -139,7 +124,6 @@ class ZKeyedProducer(Producer):
     """
     producer_kls = KeyedProducer
 
-    @ZProducer.retry
     def send(self, key, msg):
         self.producer.send(key, msg)
 
@@ -147,19 +131,21 @@ class ZKeyedProducer(Producer):
 class ZSimpleConsumer(object):
     """
     A consumer that uses Zookeeper to co-ordinate and share the partitions
-    of a queue with other consumers
+    of a topic with other consumers
 
     hosts: Comma-separated list of hosts to connect to
            (e.g. 127.0.0.1:2181,127.0.0.1:2182)
     group: a name for this consumer, used for offset storage and must be unique
     topic: the topic to consume
     driver_type: The driver type to use for the consumer
-    time_boundary: The time interval to wait out before deciding on consumer
-        changes in zookeeper
+    time_boundary: The time interval, in seconds, to wait out before deciding
+        on consumer changes in zookeeper. A higher value will ensure that a
+        consumer restart will not cause two re-balances.
+        (Default 10s)
     ignore_non_allocation: If set to True, the consumer will ignore the
         case where no partitions were allocated to it.
         This can be used to keep consumers in stand-by. They will take over
-        when another consumer fails
+        when another consumer fails. (Default False)
 
     auto_commit: default True. Whether or not to auto commit the offsets
     auto_commit_every_n: default 100. How many messages to consume
@@ -206,6 +192,9 @@ class ZSimpleConsumer(object):
         hostname = self.driver.socket.gethostname()
         consumer_id = "%s-%s-%s-%d" % (topic, group, hostname, os.getpid())
         path = os.path.join(PARTITIONER_PATH, topic, group)
+
+        log.debug("Consumer id set to: %s" % consumer_id)
+        log.debug("Using path %s for co-ordination" % path)
 
         self.partitioner = self.zkclient.SetPartitioner(
                                             path=path,
@@ -357,8 +346,10 @@ class ZSimpleConsumer(object):
     def seek(self, *args, **kwargs):
         self._set_consumer()
 
-        if not self.consumer:
-            raise RuntimeError("Error in partition allocation")
+        if self.consumer is None:
+            raise RuntimeError("Partition allocation failed")
+        elif not self.consumer:
+            raise RuntimeError("Waiting for partition allocation")
 
         return self.consumer.seek(*args, **kwargs)
 
@@ -366,6 +357,7 @@ class ZSimpleConsumer(object):
         if self.consumer is None:
             raise RuntimeError("Error in partition allocation")
         elif not self.consumer:
+            # We are in a transition/suspended state
             return 0
 
         return self.consumer.pending()
