@@ -11,6 +11,7 @@ import gevent.event
 import gevent.queue
 import gevent.pool
 import gevent.socket
+import gevent.coros
 import time
 
 ###############
@@ -77,12 +78,14 @@ class KafkaDriver(object):
             self.Event = threading.Event
             self.Proc = threading.Thread
             self.kazoo_handler = SequentialThreadingHandler
+            self.Lock = threading.Lock
 
         elif driver_type == KAFKA_PROCESS_DRIVER:
             self.Queue = multiprocessing.Queue
             self.Event = multiprocessing.Event
             self.Proc = multiprocessing.Process
             self.kazoo_handler = SequentialThreadingHandler
+            self.Lock = multiprocessing.Lock
 
         elif driver_type == KAFKA_GEVENT_DRIVER:
             self.Queue = gevent.queue.Queue
@@ -91,6 +94,7 @@ class KafkaDriver(object):
             self.Proc = self.gevent_proc
             self.sleep = gevent.sleep
             self.kazoo_handler = SequentialGeventHandler
+            self.Lock = gevent.coros.Semaphore
 
     def gevent_proc(self, target=None, args=(), kwargs=None):
         kwargs = {} if kwargs is None else kwargs
