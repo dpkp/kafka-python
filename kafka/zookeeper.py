@@ -247,6 +247,11 @@ class ZSimpleConsumer(object):
         # Do the setup once and block till we get an allocation
         self._set_consumer(block=True, timeout=None)
 
+    def __repr__(self):
+        partitions = filter(lambda x: x>=0, self.allocated)
+        partitions = ','.join([str(i) for i in partitions])
+        return u'ZSimpleConsumer<%s>' % partitions
+
     def _set_partitions(self, array, partitions, filler=ALLOCATION_CHANGING):
         """
         Update partition info in the shared memory array
@@ -312,7 +317,7 @@ class ZSimpleConsumer(object):
         allocated for the consumer
         """
 
-        old = []
+        old = None
 
         # Start zookeeper connection again
         zkclient = KazooClient(hosts, handler=self.driver.kazoo_handler())
@@ -366,6 +371,11 @@ class ZSimpleConsumer(object):
 
         # Clean up
         partitioner.finish()
+
+        with self.lock:
+            self._set_partitions(array, [])
+            self.changed.set()
+
         zkclient.stop()
         zkclient.close()
 
@@ -394,8 +404,10 @@ class ZSimpleConsumer(object):
         """
         self._set_consumer(block, timeout)
 
-        if not self.consumer:
+        if self.consumer is None:
             raise RuntimeError("Error in partition allocation")
+        elif not self.consumer:
+            return []
 
         return self.consumer.get_messages(count, block, timeout)
 
@@ -417,7 +429,7 @@ class ZSimpleConsumer(object):
         self._set_consumer()
 
         if self.consumer is None:
-            raise RuntimeError("Partition allocation failed")
+            raise RuntimeError("Error in partition allocation")
         elif not self.consumer:
             raise RuntimeError("Waiting for partition allocation")
 
