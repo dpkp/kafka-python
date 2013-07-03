@@ -16,10 +16,13 @@ from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
 
 
-BROKER_IDS_PATH = '/brokers/ids/'
-PARTITIONER_PATH = '/python/kafka/'
+BROKER_IDS_PATH = '/brokers/ids/'      # Path where kafka stores broker info
+PARTITIONER_PATH = '/python/kafka/'    # Path to use for consumer co-ordination
 DEFAULT_TIME_BOUNDARY = 5
 CHECK_INTERVAL = 30
+ALLOCATION_CHANGING = -1
+ALLOCATION_FAILED = -2
+
 
 log = logging.getLogger("kafka")
 
@@ -42,7 +45,7 @@ def _get_brokers(zkclient):
     return brokers
 
 
-def _get_client(zkclient):
+def get_client(zkclient):
     """
     Given a zookeeper client, return a KafkaClient instance for use
     """
@@ -74,13 +77,17 @@ class ZProducer(Producer):
         self.zkclient.start()
 
         # Start the producer instance
-        client = _get_client(self.zkclient)
-        self.producer = self.producer_kls(client, topic, **kwargs)
+        self.client = get_client(self.zkclient)
+        self.producer = self.producer_kls(self.client, topic, **kwargs)
 
         # Stop Zookeeper
         self.zkclient.stop()
         self.zkclient.close()
         self.zkclient = None
+
+    def stop():
+        self.producer.stop()
+        self.client.close()
 
     @staticmethod
     def retry(fnc, retries=2, retry_after=2):
@@ -150,7 +157,9 @@ class ZSimpleConsumer(object):
     time_boundary: The time interval to wait out before deciding on consumer
         changes in zookeeper
     ignore_non_allocation: If set to True, the consumer will ignore the
-        case where no partitions were allocated to it
+        case where no partitions were allocated to it.
+        This can be used to keep consumers in stand-by. They will take over
+        when another consumer fails
 
     auto_commit: default True. Whether or not to auto commit the offsets
     auto_commit_every_n: default 100. How many messages to consume
@@ -163,6 +172,15 @@ class ZSimpleConsumer(object):
     reset one another when one is triggered. These triggers simply call the
     commit method on this class. A manual call to commit will also reset
     these triggers
+
+    Partition allocation details
+    * When the consumer is initialized, it blocks till it gets an allocation
+    * If ignore_non_allocation is False, the consumer will throw an error
+      in init or during other operations
+    * During re-balancing of partitions, the consumer will not return any
+      messages (iteration or get_messages)
+    * After re-balancing, if the consumer does not get any partitions,
+      ignore_non_allocation will control it's behaviour
     """
     def __init__(self, hosts, group, topic,
                  driver_type=KAFKA_PROCESS_DRIVER,
@@ -170,6 +188,7 @@ class ZSimpleConsumer(object):
                  ignore_non_allocation=False,
                  **kwargs):
 
+        # User is not allowed to specify partitions
         if 'partitions' in kwargs:
             raise ValueError("Partitions cannot be specified")
 
@@ -179,7 +198,7 @@ class ZSimpleConsumer(object):
         self.zkclient = KazooClient(hosts, handler=self.driver.kazoo_handler())
         self.zkclient.start()
 
-        self.client = _get_client(self.zkclient)
+        self.client = get_client(self.zkclient)
         self.client._load_metadata_for_topics(topic)
         self.partitions = set(self.client.topic_partitions[topic])
 
@@ -194,21 +213,21 @@ class ZSimpleConsumer(object):
                                             identifier=consumer_id,
                                             time_boundary=time_boundary)
 
-        self.consumer = None
+        # Create a function which can be used for creating consumers
         self.consumer_fact = partial(SimpleConsumer,
                                      client, group, topic,
                                      driver_type=driver_type, **kwargs)
 
         # Keep monitoring for changes
-        self.exit = self.driver.Event()
-        self.changed = self.driver.Event()
+        self.exit = self.driver.Event()         # Notify worker to exit
+        self.changed = self.driver.Event()      # Notify of partition changes
 
         self.proc = self.driver.Proc(target=_check_and_allocate,
-                            args=(CHECK_INTERVAL, self.exit, self.changed))
+                                     args=(CHECK_INTERVAL,))
         self.proc.daemon = True
         self.proc.start()
 
-        # Do the setup once
+        # Do the setup once and block till we get an allocation
         self._set_consumer(block=True, timeout=None)
 
     def _set_consumer(self, block=False, timeout=0):
@@ -220,48 +239,67 @@ class ZSimpleConsumer(object):
         except Empty:
             return
 
-        # Reset the consumer
+        # If we have a consumer clean it up
+        if self.consumer:
+            self.consumer.close()
+
         self.consumer = None
 
-        if partitions == -1:
+        if partitions == ALLOCATION_FAILED:
+            # Allocation has failed. Nothing we can do about it
             raise RuntimeError("Error in partition allocation")
 
-        # Check if we must change the consumer
-        if not partitions:
+        elif partitions == ALLOCATION_CHANGING:
+            # Allocation is changing because of consumer changes
+            self.consumer = []
+            log.info("Partitions are being reassigned")
+            return
+
+        elif not partitions:
+            # Check if we must change the consumer
             if not self.ignore_non_allocation:
                 raise RuntimeError("Did not get any partition allocation")
             else:
                 log.info("No partitions allocated. Ignoring")
+                self.consumer = []
         else:
+            # Create a new consumer
             self.consumer = self.consumer_fact(partitions=partitions)
 
-    def _check_and_allocate(self, sleep_time, exit, changed):
+    def _check_and_allocate(self, sleep_time):
         """
         Checks if a new allocation is needed for the partitions.
         If so, co-ordinates with Zookeeper to get a set of partitions
         allocated for the consumer
+
+        sleep_time: Time interval between each check after getting allocation
         """
         old = []
 
-        while not exit.is_set():
+        while not self.exit.is_set():
             if self.partitioner.acquired:
+                # A new set of partitions has been acquired
                 new = list(self.partitioner)
 
+                # If there is a change, notify for a consumer change
                 if new != old:
+                    log.info("Acquired partitions: %s", new)
                     old = new
-                    changed.put(new)
+                    self.changed.put(new)
 
-                log.info("Acquired partitions: %s", new)
-                exit.wait(sleep_time)
+                # Wait for a while before checking again. In the meantime
+                # wake up if the user calls for exit
+                self.exit.wait(sleep_time)
 
             elif self.partitioner.release:
                 log.info("Releasing partitions for reallocation")
+                self.change.put(ALLOCATION_CHANGING)
                 self.partitioner.release_set()
                 old = []
 
             elif self.partitioner.failed:
+                self.change.put(ALLOCATION_FAILED)
                 raise RuntimeError("Error in partition allocation")
-                change.put(-1)
 
             elif self.partitioner.allocating:
                 log.info("Waiting for partition allocation")
@@ -272,13 +310,16 @@ class ZSimpleConsumer(object):
         Iterate through data available in partitions allocated to this
         instance
         """
-        self._set_consumer()
+        self._set_consumer(block=False)
+
+        if self.consumer is None:
+            raise RuntimeError("Error in partition allocation")
 
         for msg in self.consumer:
             yield msg
 
             if not self.change.empty():
-                self._set_consumer()
+                self._set_consumer(block=False)
                 break
 
     def get_messages(self, count=1, block=True, timeout=0.1):
@@ -291,12 +332,40 @@ class ZSimpleConsumer(object):
                  If >0, API will block for specified time (in seconds)
         """
         self._set_consumer(block, timeout=0.1)
+
+        if not self.consumer:
+            raise RuntimeError("Error in partition allocation")
+
         return self.consumer.get_messages(count, block, timeout)
 
     def stop():
         self.exit.set()
         self.proc.join()
-        self.consumer.stop()
+
+        if self.consumer:
+            self.consumer.stop()
+
         self.client.stop()
         self.partitioner.finish()
         self.zkclient.close()
+
+    def commit(self):
+        if self.consumer:
+            self.consumer.commit()
+        self._set_consumer(block=False)
+
+    def seek(self, *args, **kwargs):
+        self._set_consumer()
+
+        if not self.consumer:
+            raise RuntimeError("Error in partition allocation")
+
+        return self.consumer.seek(*args, **kwargs)
+
+    def pending(self):
+        if self.consumer is None:
+            raise RuntimeError("Error in partition allocation")
+        elif not self.consumer:
+            return 0
+
+        return self.consumer.pending()
