@@ -15,11 +15,13 @@ from kafka.protocol import (
 )
 from kafka.producer import SimpleProducer
 from kafka.consumer import SimpleConsumer, MultiConsumer
+from kafka.zookeeper import ZSimpleProducer, ZKeyedProducer, ZSimpleConsumer
 
 __all__ = [
     'KAFKA_THREAD_DRIVER', 'KAFKA_GEVENT_DRIVER', 'KAFKA_PROCESS_DRIVER',
     'KafkaClient', 'KafkaConnection', 'SimpleProducer',
     'SimpleConsumer', 'MultiConsumer',
+    'ZSimpleProducer', 'ZKeyedProducer', 'ZSimpleConsumer',
     'create_message', 'create_gzip_message', 'create_snappy_message'
 ]
 

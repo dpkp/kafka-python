@@ -5,15 +5,19 @@ import os
 import random
 import sys
 import time
+import simplejson
 
 from functools import partial
 from Queue import Empty
 
 from kafka.client import KafkaClient
-from kafka.common import KafkaDriver
-from kafka.producer import Producer, SimpleProducer, KeyedProducer
+from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
+from kafka.common import (
+    KAFKA_PROCESS_DRIVER, KAFKA_THREAD_DRIVER, KAFKA_GEVENT_DRIVER,
+    KafkaDriver
+)
 
 
 BROKER_IDS_PATH = '/brokers/ids/'      # Path where kafka stores broker info
@@ -63,7 +67,8 @@ def get_client(zkclient):
     raise exp
 
 
-class ZProducer(Producer):
+# TODO: Make this a subclass of Producer later
+class ZProducer(object):
     """
     A base Zookeeper producer to be used by other producer classes
 
@@ -111,7 +116,7 @@ class ZSimpleProducer(ZProducer):
         self.producer.send_messages(*msg)
 
 
-class ZKeyedProducer(Producer):
+class ZKeyedProducer(ZProducer):
     """
     A producer which distributes messages to partitions based on a
     partitioner function (class) and the key
