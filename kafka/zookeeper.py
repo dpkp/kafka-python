@@ -144,6 +144,9 @@ class ZSimpleConsumer(object):
     group: a name for this consumer, used for offset storage and must be unique
     topic: the topic to consume
     driver_type: The driver type to use for the consumer
+    block_init: If True, the init method will block till the allocation is
+        completed. If not, it will return immediately and user can invoke
+        consumer.status() to check the status. Default True.
     time_boundary: The time interval, in seconds, to wait out before deciding
         on consumer changes in zookeeper. A higher value will ensure that a
         consumer restart will not cause two re-balances.
@@ -176,6 +179,7 @@ class ZSimpleConsumer(object):
     """
     def __init__(self, hosts, group, topic,
                  driver_type=KAFKA_PROCESS_DRIVER,
+                 block_init=True,
                  time_boundary=DEFAULT_TIME_BOUNDARY,
                  ignore_non_allocation=False,
                  **kwargs):
@@ -205,7 +209,7 @@ class ZSimpleConsumer(object):
         log.debug("Using path %s for co-ordination" % path)
 
         # Create a function which can be used for creating consumers
-        self.consumer = None
+        self.consumer = []
         self.consumer_fact = partial(SimpleConsumer,
                                      self.client, group, topic,
                                      driver_type=driver_type, **kwargs)
@@ -245,12 +249,30 @@ class ZSimpleConsumer(object):
         zkclient.close()
 
         # Do the setup once and block till we get an allocation
-        self._set_consumer(block=True, timeout=None)
+        self._set_consumer(block=block_init, timeout=None)
 
     def __repr__(self):
+        """
+        Give a string representation of the consumer
+        """
         partitions = filter(lambda x: x>=0, self.allocated)
-        partitions = ','.join([str(i) for i in partitions])
-        return u'ZSimpleConsumer<%s>' % partitions
+        message = ','.join([str(i) for i in partitions])
+
+        if not message:
+            message = str(self.consumer_status)
+
+        return u'ZSimpleConsumer<%s>' % message
+
+    def status(self):
+        """
+        Returns the status of the consumer
+        """
+        if self.consumer is None:
+            return 'FAILED'
+        elif self.consumer is []:
+            return 'ALLOCATING'
+        else:
+            return 'ALLOCATED'
 
     def _set_partitions(self, array, partitions, filler=ALLOCATION_CHANGING):
         """
