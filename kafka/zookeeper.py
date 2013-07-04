@@ -25,8 +25,13 @@ BROKER_IDS_PATH = '/brokers/ids/'      # Path where kafka stores broker info
 PARTITIONER_PATH = '/python/kafka/'    # Path to use for consumer co-ordination
 DEFAULT_TIME_BOUNDARY = 5
 CHECK_INTERVAL = 30
-ALLOCATION_CHANGING = -1
-ALLOCATION_FAILED = -2
+
+# Allocation states
+ALLOCATION_COMPLETED = -1
+ALLOCATION_CHANGING = -2
+ALLOCATION_FAILED = -3
+ALLOCATION_MISSED = -4
+ALLOCATION_INACTIVE = -5
 
 
 log = logging.getLogger("kafka")
@@ -235,7 +240,8 @@ class ZSimpleConsumer(object):
         self.allocated = multiprocessing.Array('i', len(partitions))
 
         # Initialize the array
-        self._set_partitions(self.allocated, [], filler=ALLOCATION_CHANGING)
+        self._set_partitions(self.allocated, [], ALLOCATION_CHANGING)
+        self.consumer_state = ALLOCATION_CHANGING
 
         # Start the worker
         self.proc = self.driver.Proc(target=self._check_and_allocate,
@@ -259,7 +265,7 @@ class ZSimpleConsumer(object):
         message = ','.join([str(i) for i in partitions])
 
         if not message:
-            message = str(self.consumer_status)
+            message = self.status()
 
         return u'ZSimpleConsumer<%s>' % message
 
@@ -267,14 +273,20 @@ class ZSimpleConsumer(object):
         """
         Returns the status of the consumer
         """
-        if self.consumer is None:
-            return 'FAILED'
-        elif self.consumer is []:
-            return 'ALLOCATING'
-        else:
-            return 'ALLOCATED'
+        self._set_consumer(block=False)
 
-    def _set_partitions(self, array, partitions, filler=ALLOCATION_CHANGING):
+        if self.consumer_state == ALLOCATION_COMPLETED:
+            return 'ALLOCATED'
+        elif self.consumer_state == ALLOCATION_CHANGING:
+            return 'ALLOCATING'
+        elif self.consumer_state == ALLOCATION_FAILED:
+            return 'FAILED'
+        elif self.consumer_state == ALLOCATION_MISSED:
+            return 'MISSED'
+        elif self.consumer_state == ALLOCATION_INACTIVE:
+            return 'INACTIVE'
+
+    def _set_partitions(self, array, partitions, filler):
         """
         Update partition info in the shared memory array
         """
@@ -307,8 +319,9 @@ class ZSimpleConsumer(object):
             self.consumer.stop()
 
         self.consumer = None
+        self.consumer_state = partitions[0]
 
-        if not partitions:
+        if self.consumer_state == ALLOCATION_MISSED:
             # Check if we must change the consumer
             if not self.ignore_non_allocation:
                 raise RuntimeError("Did not get any partition allocation")
@@ -316,20 +329,23 @@ class ZSimpleConsumer(object):
                 log.info("No partitions allocated. Ignoring")
                 self.consumer = []
 
-        elif partitions[0] == ALLOCATION_FAILED:
+        elif self.consumer_state == ALLOCATION_FAILED:
             # Allocation has failed. Nothing we can do about it
             raise RuntimeError("Error in partition allocation")
 
-        elif partitions[0] == ALLOCATION_CHANGING:
+        elif self.consumer_state == ALLOCATION_CHANGING:
             # Allocation is changing because of consumer changes
             self.consumer = []
             log.info("Partitions are being reassigned")
             return
 
+        elif self.consumer_state == ALLOCATION_INACTIVE:
+            log.info("Consumer is inactive")
         else:
             # Create a new consumer
             partitions = filter(lambda x: x >= 0, partitions)
             self.consumer = self.consumer_fact(partitions=partitions)
+            self.consumer_state = ALLOCATION_COMPLETED
             log.info("Reinitialized consumer with %s" % partitions)
 
     def _check_and_allocate(self, hosts, path, partitions, array, sleep_time):
@@ -361,7 +377,7 @@ class ZSimpleConsumer(object):
                     log.info("Acquired partitions: %s", new)
                     old = new
                     with self.lock:
-                        self._set_partitions(array, new)
+                        self._set_partitions(array, new, ALLOCATION_MISSED)
                         self.changed.set()
 
                 # Wait for a while before checking again. In the meantime
@@ -373,7 +389,7 @@ class ZSimpleConsumer(object):
                 log.info("Releasing partitions for reallocation")
                 old = []
                 with self.lock:
-                    self._set_partitions(array, old)
+                    self._set_partitions(array, old, ALLOCATION_CHANGING)
                     self.changed.set()
 
                 partitioner.release_set()
@@ -382,7 +398,7 @@ class ZSimpleConsumer(object):
                 # Partition allocation failed
                 old = []
                 with self.lock:
-                    self._set_partitions(array, old, filler=ALLOCATION_FAILED)
+                    self._set_partitions(array, old, ALLOCATION_FAILED)
                     self.changed.set()
                 break
 
@@ -395,7 +411,7 @@ class ZSimpleConsumer(object):
         partitioner.finish()
 
         with self.lock:
-            self._set_partitions(array, [])
+            self._set_partitions(array, [], ALLOCATION_INACTIVE)
             self.changed.set()
 
         zkclient.stop()
@@ -436,10 +452,7 @@ class ZSimpleConsumer(object):
     def stop(self):
         self.exit.set()
         self.proc.join()
-
-        if self.consumer:
-            self.consumer.stop()
-
+        self._set_consumer(block=True)
         self.client.close()
 
     def commit(self):
