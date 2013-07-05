@@ -15,6 +15,7 @@ from kafka.client import KafkaClient
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
+from kazoo.exceptions import NoNodeError
 from kafka.common import (
     KAFKA_PROCESS_DRIVER, KAFKA_THREAD_DRIVER, KAFKA_GEVENT_DRIVER,
     KafkaDriver
@@ -139,6 +140,85 @@ class ZKeyedProducer(ZProducer):
         self.producer.send(key, msg)
 
 
+class ZOffsetManagingConsumer(SimpleConsumer):
+    """
+    A SimpleConsumer instance that stores/retrieves the offset in Zookeeper
+    itself. This is useful for clients using older version of Kafka which
+    do not support the offset fetch API
+
+    Args:
+    hosts: Comma-separated list of hosts to connect to
+           (e.g. 127.0.0.1:2181,127.0.0.1:2182)
+    offset_path: The zookeeper path where offsets must be stored
+    """
+    def __init__(self, hosts, offset_path, *args, **kwargs):
+        driver = KafkaDriver(kwargs['driver_type'])
+        self.offset_path = offset_path
+        self.hosts = hosts
+        self.zkclient = None    # Will be initialized later in commit thread
+
+        zkclient = KazooClient(hosts, handler=driver.kazoo_handler())
+        zkclient.start()
+        zkclient.ensure_path(offset_path)
+
+        super(ZOffsetManagingConsumer, self).__init__(*args, **kwargs)
+
+        # Fetch the offsets for Zookeeper and store it
+        for partition in self.offsets.keys():
+            try:
+                self.offsets[partition] = self._get_offset(zkclient, partition)
+
+                # The partition has been iterated before.
+                self.fetch_started[partition] = True
+            except NoNodeError:
+                pass
+
+        zkclient.stop()
+        zkclient.close()
+
+    def close(self):
+        super(ZOffsetManagingConsumer, self).close()
+
+        if self.zkclient:
+            self.zkclient.stop()
+            self.zkclient.close()
+
+    def _get_offset(self, zkclient, partition):
+        """
+        Get the stored offset for the partition
+        """
+        path = os.path.join(self.offset_path, str(partition))
+
+        try:
+            val, info = zkclient.get(path)
+            return int(val) if val else 0
+        except NoNodeError:
+            zkclient.create(path)
+            raise
+
+    def _commit(self, partitions=None, client=None):
+        """
+        Commit the data to Zookeeper
+        """
+
+        # Initialize the zookeeper client once. If the committer is
+        # running in a different process, this is required for it to work
+        if not self.zkclient:
+            self.zkclient = KazooClient(self.hosts,
+                                        handler=self.driver.kazoo_handler())
+            self.zkclient.start()
+
+        # short circuit if nothing happened.
+        if self.count_since_commit.value == 0:
+            return
+
+        for partition, offset in self.offsets.shareditems(keys=partitions):
+            path = os.path.join(self.offset_path, str(partition))
+            self.zkclient.set(path, b'%s' % str(offset))
+
+        self.count_since_commit.value = 0
+
+
 class ZSimpleConsumer(object):
     """
     A consumer that uses Zookeeper to co-ordinate and share the partitions
@@ -187,6 +267,7 @@ class ZSimpleConsumer(object):
                  block_init=True,
                  time_boundary=DEFAULT_TIME_BOUNDARY,
                  ignore_non_allocation=False,
+                 manage_offsets=False,
                  **kwargs):
 
         # User is not allowed to specify partitions
@@ -207,17 +288,24 @@ class ZSimpleConsumer(object):
         # create consumer id
         hostname = self.driver.socket.gethostname()
         self.identifier = "%s-%s-%s-%d" % (topic, group, hostname, os.getpid())
-
-        path = os.path.join(PARTITIONER_PATH, topic, group)
-
         log.debug("Consumer id set to: %s" % self.identifier)
-        log.debug("Using path %s for co-ordination" % path)
+
+        base_path = os.path.join(PARTITIONER_PATH, topic, group)
 
         # Create a function which can be used for creating consumers
         self.consumer = []
-        self.consumer_fact = partial(SimpleConsumer,
-                                     self.client, group, topic,
-                                     driver_type=driver_type, **kwargs)
+        if manage_offsets:
+            offset_path = os.path.join(base_path, "offsets")
+            self.consumer_fact = partial(ZOffsetManagingConsumer,
+                                         hosts, offset_path,
+                                         self.client, group, topic,
+                                         driver_type=driver_type,
+                                         **kwargs)
+        else:
+            self.consumer_fact = partial(SimpleConsumer,
+                                         self.client, group, topic,
+                                         driver_type=driver_type,
+                                         **kwargs)
 
         # Keep monitoring for changes
 
@@ -244,6 +332,9 @@ class ZSimpleConsumer(object):
         self.consumer_state = ALLOCATION_CHANGING
 
         # Start the worker
+        path = os.path.join(base_path, "partitions")
+        log.debug("Using path %s for co-ordination" % path)
+
         self.proc = self.driver.Proc(target=self._check_and_allocate,
                                      args=(hosts, path, partitions,
                                            self.allocated, CHECK_INTERVAL))
@@ -261,7 +352,7 @@ class ZSimpleConsumer(object):
         """
         Give a string representation of the consumer
         """
-        partitions = filter(lambda x: x>=0, self.allocated)
+        partitions = filter(lambda x: x >= 0, self.allocated)
         message = ','.join([str(i) for i in partitions])
 
         if not message:

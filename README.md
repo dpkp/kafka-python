@@ -127,6 +127,14 @@ for msg in consumer:
     print msg
 
 consumer.get_messages(block=True, timeout=10)
+
+# Zookeeper consumer managing offsets
+# Older kafka brokers do not support a proper offset fetch/commit
+# By enabling the manage_offsets=True option, ZSimpleConsumer will
+# do this job. It does the job by storing and retrieving offsets
+# in Zookeeper
+consumer = ZSimpleConsumer("127.0.0.1:2181", "my-group", "my-topic",
+                           manage_offsets=True)
 ```
 
 ## Low level
