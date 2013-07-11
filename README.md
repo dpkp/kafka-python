@@ -26,14 +26,46 @@ development, APIs are subject to change.
 ```python
 from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer
+from kafka.producer import SimpleProducer, KeyedProducer
 
 kafka = KafkaClient("localhost", 9092)
 
+# To send messages synchronously
 producer = SimpleProducer(kafka, "my-topic")
 producer.send_messages("some message")
 producer.send_messages("this method", "is variadic")
 
+# To send messages asynchronously
+producer = SimpleProducer(kafka, "my-topic", async=True)
+producer.send_messages("async message")
+
+# To wait for acknowledgements
+# ACK_AFTER_LOCAL_WRITE : server will wait till the data is written to
+#                         a local log before sending response
+# ACK_AFTER_CLUSTER_COMMIT : server will block until the message is committed
+#                            by all in sync replicas before sending a response
+producer = SimpleProducer(kafka, "my-topic", async=False,
+                          req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
+                          acks_timeout=2000)
+
+response = producer.send_messages("async message")
+
+if response:
+    print(response[0].error)
+    print(response[0].offset)
+
+# To send messages in batch. You can use any of the available
+# producers for doing this. The following producer will collect
+# messages in batch and send them to Kafka after 20 messages are
+# collected or every 60 seconds
+# Notes:
+# * If the producer dies before the messages are sent, there will be losses
+# * Call producer.stop() to send the messages and cleanup
+producer = SimpleProducer(kafka, "my-topic", batch_send=True,
+                          batch_send_every_n=20,
+                          batch_send_every_t=60)
+
+# To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
     print(message)
