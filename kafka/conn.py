@@ -86,3 +86,12 @@ class KafkaConnection(local):
     def close(self):
         "Close this connection"
         self._sock.close()
+
+    def reinit(self):
+        """
+        Re-initialize the socket connection
+        """
+        self._sock.close()
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.connect((self.host, self.port))
+        self._sock.settimeout(10)

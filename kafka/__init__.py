@@ -11,10 +11,11 @@ from kafka.protocol import (
 )
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
-from kafka.consumer import SimpleConsumer
+from kafka.consumer import SimpleConsumer, MultiProcessConsumer
 
 __all__ = [
     'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner', 'SimpleConsumer',
-    'create_message', 'create_gzip_message', 'create_snappy_message'
+    'MultiProcessConsumer', 'create_message', 'create_gzip_message',
+    'create_snappy_message'
 ]
