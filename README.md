@@ -175,6 +175,12 @@ _These are broken at the moment_
 tox ./test/test_unit.py
 ```
 
+or
+
+```shell
+python -m test.test_unit
+```
+
 ## Run the integration tests
 
 First, checkout the Kafka source
@@ -192,4 +198,10 @@ instance and Kafka brokers, and send messages in using the client.
 
 ```shell
 tox ./test/test_integration.py
+```
+
+or
+
+```shell
+python -m test.test_integration
 ```
