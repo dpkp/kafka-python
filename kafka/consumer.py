@@ -12,7 +12,7 @@ from kafka.common import (
 )
 
 from kafka.util import (
-    ReentrantTimer
+    ReentrantTimer, ConsumerFetchSizeTooSmall
 )
 
 log = logging.getLogger("kafka")
@@ -357,29 +357,39 @@ class SimpleConsumer(Consumer):
         if self.fetch_started[partition]:
             offset += 1
 
+        fetch_size = self.fetch_min_bytes
+
         while True:
-            req = FetchRequest(self.topic, partition, offset, self.fetch_min_bytes)
+            req = FetchRequest(self.topic, partition, offset, fetch_size)
 
             (resp,) = self.client.send_fetch_request([req],
                                     max_wait_time=self.fetch_max_wait_time,
-                                    min_bytes=self.fetch_min_bytes)
+                                    min_bytes=fetch_size)
 
             assert resp.topic == self.topic
             assert resp.partition == partition
 
             next_offset = None
-            for message in resp.messages:
-                next_offset = message.offset
+            try:
+                for message in resp.messages:
+                    next_offset = message.offset
 
-                # update the offset before the message is yielded. This is
-                # so that the consumer state is not lost in certain cases.
-                # For eg: the message is yielded and consumed by the caller,
-                # but the caller does not come back into the generator again.
-                # The message will be consumed but the status will not be
-                # updated in the consumer
-                self.fetch_started[partition] = True
-                self.offsets[partition] = message.offset
-                yield message
+                    # update the offset before the message is yielded. This is
+                    # so that the consumer state is not lost in certain cases.
+                    # For eg: the message is yielded and consumed by the caller,
+                    # but the caller does not come back into the generator again.
+                    # The message will be consumed but the status will not be
+                    # updated in the consumer
+                    self.fetch_started[partition] = True
+                    self.offsets[partition] = message.offset
+                    yield message
+            except ConsumerFetchSizeTooSmall, e:
+                log.warn("Fetch size is too small, increasing by 1.5x and retrying")
+                fetch_size *= 1.5
+                continue
+            except ConsumerNoMoreData, e:
+                log.debug("Iteration was ended by %r", e)
+
             if next_offset is None:
                 break
             else:

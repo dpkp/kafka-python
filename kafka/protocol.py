@@ -13,7 +13,7 @@ from kafka.common import (
 from kafka.util import (
     read_short_string, read_int_string, relative_unpack,
     write_short_string, write_int_string, group_by_topic_and_partition,
-    BufferUnderflowError, ChecksumError
+    BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall
 )
 
 log = logging.getLogger("kafka")
@@ -110,17 +110,21 @@ class KafkaProtocol(object):
         recurse easily.
         """
         cur = 0
+        read_message = False
         while cur < len(data):
             try:
                 ((offset, ), cur) = relative_unpack('>q', data, cur)
                 (msg, cur) = read_int_string(data, cur)
-                for (offset, message) in KafkaProtocol._decode_message(msg,
-                                                                       offset):
+                for (offset, message) in KafkaProtocol._decode_message(msg, offset):
+                    read_message = True
                     yield OffsetAndMessage(offset, message)
-
             except BufferUnderflowError:
-                # If we get a partial read of a message, stop
-                raise StopIteration()
+                if read_message is False:
+                    # If we get a partial read of a message, but haven't yielded anyhting
+                    # there's a problem
+                    raise ConsumerFetchSizeTooSmall()
+                else:
+                    raise StopIteration()
 
     @classmethod
     def _decode_message(cls, data, offset):

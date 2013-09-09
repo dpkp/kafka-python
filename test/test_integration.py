@@ -8,7 +8,6 @@ import random
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.codec import has_gzip, has_snappy
-
 from .fixtures import ZookeeperFixture, KafkaFixture
 
 
@@ -757,20 +756,15 @@ class TestConsumer(unittest.TestCase):
             self.assertEquals(resp.error, 0)
             self.assertEquals(resp.offset, 10)
 
+        # Consumer should still get all of them
         consumer = SimpleConsumer(self.client, "group1", "test_large_messages")
-        it = consumer.__iter__()
-        for i in range(10):
-            self.assertEquals(messages1[i], it.next().message)
-
-        consumer = SimpleConsumer(self.client, "group2", "test_large_messages", fetch_size_bytes=5120)
-        it = consumer.__iter__()
-        for i in range(10):
-            self.assertEquals(messages1[i], it.next().message)
-        for i in range(10):
-            self.assertEquals(messages2[i], it.next().message)
+        all_messages = messages1 + messages2
+        for i, message in enumerate(consumer):
+            self.assertEquals(all_messages[i], message.message)
+        self.assertEquals(i, 19)
 
 def random_string(l):
-    s = "".join(random.choice(string.printable) for i in xrange(l))
+    s = "".join(random.choice(string.letters) for i in xrange(l))
     return s
 
 if __name__ == "__main__":

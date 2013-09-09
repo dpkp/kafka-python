@@ -73,6 +73,8 @@ class BufferUnderflowError(Exception):
 class ChecksumError(Exception):
     pass
 
+class ConsumerFetchSizeTooSmall(Exception):
+    pass
 
 class ReentrantTimer(object):
     """
