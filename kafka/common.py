@@ -64,3 +64,19 @@ class ErrorMapping(object):
     MESSAGE_SIZE_TO_LARGE     = 10
     STALE_CONTROLLER_EPOCH    = 11
     OFFSET_METADATA_TOO_LARGE = 12
+
+#################
+#   Exceptions  #
+#################
+
+class BufferUnderflowError(Exception):
+    pass
+
+class ChecksumError(Exception):
+    pass
+
+class ConsumerFetchSizeTooSmall(Exception):
+    pass
+
+class ConsumerNoMoreData(Exception):
+    pass

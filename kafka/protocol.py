@@ -8,12 +8,12 @@ from kafka.codec import (
 from kafka.common import (
     BrokerMetadata, PartitionMetadata, Message, OffsetAndMessage,
     ProduceResponse, FetchResponse, OffsetResponse,
-    OffsetCommitResponse, OffsetFetchResponse
+    OffsetCommitResponse, OffsetFetchResponse,
+    BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall
 )
 from kafka.util import (
     read_short_string, read_int_string, relative_unpack,
-    write_short_string, write_int_string, group_by_topic_and_partition,
-    BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall
+    write_short_string, write_int_string, group_by_topic_and_partition
 )
 
 log = logging.getLogger("kafka")

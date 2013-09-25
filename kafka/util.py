@@ -66,15 +66,6 @@ def group_by_topic_and_partition(tuples):
     return out
 
 
-class BufferUnderflowError(Exception):
-    pass
-
-
-class ChecksumError(Exception):
-    pass
-
-class ConsumerFetchSizeTooSmall(Exception):
-    pass
 
 class ReentrantTimer(object):
     """

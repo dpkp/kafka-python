@@ -8,12 +8,11 @@ from Queue import Empty
 
 from kafka.common import (
     ErrorMapping, FetchRequest,
-    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest
+    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest,
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
 )
 
-from kafka.util import (
-    ReentrantTimer, ConsumerFetchSizeTooSmall
-)
+from kafka.util import ReentrantTimer
 
 log = logging.getLogger("kafka")
 
