@@ -91,7 +91,7 @@ producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
 
 ## Multiprocess consumer
 ```python
-from kafka.consume import MultiProcessConsumer
+from kafka.consumer import MultiProcessConsumer
 
 # This will split the number of partitions among two processes
 consumer = MultiProcessConsumer(kafka, "my-topic", "my-group", num_procs=2)
