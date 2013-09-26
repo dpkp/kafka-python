@@ -8,7 +8,8 @@ from multiprocessing import Process, Queue, Event, Value, Array, \
 
 from kafka.common import (
     ErrorMapping, FetchRequest,
-    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest
+    OffsetRequest, OffsetFetchRequest, OffsetCommitRequest,
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
 )
 
 log = logging.getLogger("kafka")
@@ -273,6 +274,8 @@ class SimpleConsumer(Consumer):
     auto_commit_every_t: default 5000. How much time (in milliseconds) to
                          wait before commit
 
+    fetch_size_bytes:    number of bytes to request in a FetchRequest
+
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
     reset one another when one is triggered. These triggers simply call the
@@ -281,11 +284,12 @@ class SimpleConsumer(Consumer):
     """
     def __init__(self, client, group, topic, auto_commit=True, partitions=None,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 fetch_size_bytes=FETCH_MIN_BYTES):
 
         self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
-        self.fetch_min_bytes = FETCH_MIN_BYTES
+        self.fetch_min_bytes = fetch_size_bytes
         self.fetch_started = defaultdict(bool)  # defaults to false
 
         super(SimpleConsumer, self).__init__(client, group, topic,
@@ -310,6 +314,7 @@ class SimpleConsumer(Consumer):
                 1 is relative to the current offset
                 2 is relative to the latest known offset (tail)
         """
+
         if whence == 1:  # relative to current position
             for partition, _offset in self.offsets.items():
                 self.offsets[partition] = _offset + offset
@@ -420,30 +425,39 @@ class SimpleConsumer(Consumer):
         if self.fetch_started[partition]:
             offset += 1
 
+        fetch_size = self.fetch_min_bytes
+
         while True:
-            # TODO: configure fetch size
-            req = FetchRequest(self.topic, partition, offset, 1024)
+            req = FetchRequest(self.topic, partition, offset, fetch_size)
 
             (resp,) = self.client.send_fetch_request([req],
                                     max_wait_time=self.fetch_max_wait_time,
-                                    min_bytes=self.fetch_min_bytes)
+                                    min_bytes=fetch_size)
 
             assert resp.topic == self.topic
             assert resp.partition == partition
 
             next_offset = None
-            for message in resp.messages:
-                next_offset = message.offset
+            try:
+                for message in resp.messages:
+                    next_offset = message.offset
 
-                # update the offset before the message is yielded. This is
-                # so that the consumer state is not lost in certain cases.
-                # For eg: the message is yielded and consumed by the caller,
-                # but the caller does not come back into the generator again.
-                # The message will be consumed but the status will not be
-                # updated in the consumer
-                self.fetch_started[partition] = True
-                self.offsets[partition] = message.offset
-                yield message
+                    # update the offset before the message is yielded. This is
+                    # so that the consumer state is not lost in certain cases.
+                    # For eg: the message is yielded and consumed by the caller,
+                    # but the caller does not come back into the generator again.
+                    # The message will be consumed but the status will not be
+                    # updated in the consumer
+                    self.fetch_started[partition] = True
+                    self.offsets[partition] = message.offset
+                    yield message
+            except ConsumerFetchSizeTooSmall, e:
+                log.warn("Fetch size is too small, increasing by 1.5x and retrying")
+                fetch_size *= 1.5
+                continue
+            except ConsumerNoMoreData, e:
+                log.debug("Iteration was ended by %r", e)
+
             if next_offset is None:
                 break
             else:

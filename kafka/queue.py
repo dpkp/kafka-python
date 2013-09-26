@@ -4,7 +4,7 @@ from multiprocessing import Process, Queue, Event
 from Queue import Empty
 import time
 
-from .client import KafkaClient, FetchRequest, ProduceRequest
+from kafka.client import KafkaClient, FetchRequest, ProduceRequest
 
 log = logging.getLogger("kafka")
 

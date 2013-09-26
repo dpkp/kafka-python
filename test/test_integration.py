@@ -2,11 +2,12 @@ import logging
 import unittest
 import time
 from datetime import datetime
+import string
+import random
 
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.codec import has_gzip, has_snappy
-
 from .fixtures import ZookeeperFixture, KafkaFixture
 
 
@@ -738,6 +739,33 @@ class TestConsumer(unittest.TestCase):
 
         consumer.stop()
 
+    def test_large_messages(self):
+        # Produce 10 "normal" size messages
+        messages1 = [create_message(random_string(1024)) for i in range(10)]
+        produce1 = ProduceRequest("test_large_messages", 0, messages1)
+
+        for resp in self.client.send_produce_request([produce1]):
+            self.assertEquals(resp.error, 0)
+            self.assertEquals(resp.offset, 0)
+
+        # Produce 10 messages that are too large (bigger than default fetch size)
+        messages2=[create_message(random_string(5000)) for i in range(10)]
+        produce2 = ProduceRequest("test_large_messages", 0, messages2)
+
+        for resp in self.client.send_produce_request([produce2]):
+            self.assertEquals(resp.error, 0)
+            self.assertEquals(resp.offset, 10)
+
+        # Consumer should still get all of them
+        consumer = SimpleConsumer(self.client, "group1", "test_large_messages")
+        all_messages = messages1 + messages2
+        for i, message in enumerate(consumer):
+            self.assertEquals(all_messages[i], message.message)
+        self.assertEquals(i, 19)
+
+def random_string(l):
+    s = "".join(random.choice(string.letters) for i in xrange(l))
+    return s
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
