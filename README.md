@@ -26,19 +26,88 @@ development, APIs are subject to change.
 ```python
 from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer
+from kafka.producer import SimpleProducer, KeyedProducer
 
 kafka = KafkaClient("localhost", 9092)
 
+# To send messages synchronously
 producer = SimpleProducer(kafka, "my-topic")
 producer.send_messages("some message")
 producer.send_messages("this method", "is variadic")
 
+# To send messages asynchronously
+producer = SimpleProducer(kafka, "my-topic", async=True)
+producer.send_messages("async message")
+
+# To wait for acknowledgements
+# ACK_AFTER_LOCAL_WRITE : server will wait till the data is written to
+#                         a local log before sending response
+# ACK_AFTER_CLUSTER_COMMIT : server will block until the message is committed
+#                            by all in sync replicas before sending a response
+producer = SimpleProducer(kafka, "my-topic", async=False,
+                          req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
+                          acks_timeout=2000)
+
+response = producer.send_messages("async message")
+
+if response:
+    print(response[0].error)
+    print(response[0].offset)
+
+# To send messages in batch. You can use any of the available
+# producers for doing this. The following producer will collect
+# messages in batch and send them to Kafka after 20 messages are
+# collected or every 60 seconds
+# Notes:
+# * If the producer dies before the messages are sent, there will be losses
+# * Call producer.stop() to send the messages and cleanup
+producer = SimpleProducer(kafka, "my-topic", batch_send=True,
+                          batch_send_every_n=20,
+                          batch_send_every_t=60)
+
+# To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
     print(message)
 
 kafka.close()
+```
+
+## Keyed messages
+```python
+from kafka.client import KafkaClient
+from kafka.producer import KeyedProducer
+from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
+
+kafka = KafkaClient("localhost", 9092)
+
+# HashedPartitioner is default
+producer = KeyedProducer(kafka, "my-topic")
+producer.send("key1", "some message")
+producer.send("key2", "this methode")
+
+producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
+```
+
+## Multiprocess consumer
+```python
+from kafka.client import KafkaClient
+from kafka.consumer import MultiProcessConsumer
+
+kafka = KafkaClient("localhost", 9092)
+
+# This will split the number of partitions among two processes
+consumer = MultiProcessConsumer(kafka, "my-group", "my-topic", num_procs=2)
+
+# This will spawn processes such that each handles 2 partitions max
+consumer = MultiProcessConsumer(kafka, "my-group", "my-topic",
+                                partitions_per_proc=2)
+
+for message in consumer:
+    print(message)
+
+for message in consumer.get_messages(count=5, block=True, timeout=4):
+    print(message)
 ```
 
 ## Low level
@@ -101,16 +170,18 @@ pip install python-snappy
 
 # Tests
 
-Some of the tests will fail if Snappy is not installed. These tests will throw
-NotImplementedError. If you see other failures, they might be bugs - so please
-report them!
-
 ## Run the unit tests
 
 _These are broken at the moment_
 
 ```shell
-python -m test.unit
+tox ./test/test_unit.py
+```
+
+or
+
+```shell
+python -m test.test_unit
 ```
 
 ## Run the integration tests
@@ -125,11 +196,15 @@ cd kafka-src
 ./sbt package
 ```
 
-Next start up a ZooKeeper server on localhost:2181
+And then run the tests. This will actually start up real local Zookeeper
+instance and Kafka brokers, and send messages in using the client.
 
 ```shell
-/opt/zookeeper/bin/zkServer.sh start
+tox ./test/test_integration.py
 ```
 
-This will actually start up real Kafka brokers and send messages in using the
-client.
+or
+
+```shell
+python -m test.test_integration
+```
