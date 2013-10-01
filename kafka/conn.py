@@ -1,10 +1,11 @@
 import logging
 import socket
 import struct
+from threading import local
 
 log = logging.getLogger("kafka")
 
-class KafkaConnection(object):
+class KafkaConnection(local):
     """
     A socket connection to a single Kafka broker
 
@@ -71,16 +72,26 @@ class KafkaConnection(object):
 
     def send(self, requestId, payload):
         "Send a request to Kafka"
-        log.debug("About to send %d bytes to Kafka" % len(payload))
+        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), requestId))
         sent = self._sock.sendall(payload)
         if sent != None:
             raise RuntimeError("Kafka went away")
-        self.data = self._consume_response()
 
     def recv(self, requestId):
         "Get a response from Kafka"
+        log.debug("Reading response %d from Kafka" % requestId)
+        self.data = self._consume_response()
         return self.data
 
     def close(self):
         "Close this connection"
         self._sock.close()
+
+    def reinit(self):
+        """
+        Re-initialize the socket connection
+        """
+        self._sock.close()
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.connect((self.host, self.port))
+        self._sock.settimeout(10)
