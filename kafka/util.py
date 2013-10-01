@@ -38,7 +38,8 @@ def read_short_string(data, cur):
 
 def read_int_string(data, cur):
     if len(data) < cur + 4:
-        raise BufferUnderflowError("Not enough data left")
+        raise BufferUnderflowError(
+            "Not enough data left to read string len (%d < %d)" % (len(data), cur + 4))
 
     (strLen,) = struct.unpack('>i', data[cur:cur + 4])
     if strLen == -1:
@@ -46,7 +47,8 @@ def read_int_string(data, cur):
 
     cur += 4
     if len(data) < cur + strLen:
-        raise BufferUnderflowError("Not enough data left")
+        raise BufferUnderflowError(
+            "Not enough data left to read string (%d < %d)" % (len(data), cur + strLen))
 
     out = data[cur:cur + strLen]
     return (out, cur + strLen)
@@ -66,7 +68,6 @@ def group_by_topic_and_partition(tuples):
     for t in tuples:
         out[t.topic][t.partition] = t
     return out
-
 
 
 class ReentrantTimer(object):
