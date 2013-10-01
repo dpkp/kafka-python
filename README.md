@@ -15,7 +15,7 @@ Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-I'm following the version numbers of Kafka, plus one number to indicate the 
+I'm following the version numbers of Kafka, plus one number to indicate the
 version of this project. The current version is 0.8.0-1. This version is under
 development, APIs are subject to change.
 
@@ -194,6 +194,7 @@ git submodule update
 cd kafka-src
 ./sbt update
 ./sbt package
+./sbt assembly-package-dependency
 ```
 
 And then run the tests. This will actually start up real local Zookeeper

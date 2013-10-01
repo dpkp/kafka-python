@@ -17,6 +17,7 @@ from urlparse import urlparse
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 KAFKA_ROOT = os.path.join(PROJECT_ROOT, "kafka-src")
 IVY_ROOT = os.path.expanduser("~/.ivy2/cache")
+SCALA_VERSION = '2.8.0'
 
 if "PROJECT_ROOT" in os.environ:
     PROJECT_ROOT = os.environ["PROJECT_ROOT"]
@@ -24,6 +25,8 @@ if "KAFKA_ROOT" in os.environ:
     KAFKA_ROOT = os.environ["KAFKA_ROOT"]
 if "IVY_ROOT" in os.environ:
     IVY_ROOT = os.environ["IVY_ROOT"]
+if "SCALA_VERSION" in os.environ:
+    SCALA_VERSION = os.environ["SCALA_VERSION"]
 
 
 def test_resource(file):
@@ -33,16 +36,8 @@ def test_resource(file):
 def test_classpath():
     # ./kafka-src/bin/kafka-run-class.sh is the authority.
     jars = ["."]
-    jars.append(IVY_ROOT + "/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar")
-    jars.append(IVY_ROOT + "/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar")
-    jars.append(IVY_ROOT + "/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar")
-    jars.append(IVY_ROOT + "/log4j/log4j/jars/log4j-1.2.15.jar")
-    jars.append(IVY_ROOT + "/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar")
-    jars.append(IVY_ROOT + "/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar")
-    jars.append(IVY_ROOT + "/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar")
-    jars.extend(glob.glob(KAFKA_ROOT + "/core/target/scala-2.8.0/*.jar"))
-    jars.extend(glob.glob(KAFKA_ROOT + "/core/lib/*.jar"))
-    jars.extend(glob.glob(KAFKA_ROOT + "/perf/target/scala-2.8.0/kafka*.jar"))
+    # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
+    jars.extend(glob.glob(KAFKA_ROOT + "/core/target/scala-%s/*.jar" % SCALA_VERSION))
 
     jars = filter(os.path.exists, map(os.path.abspath, jars))
     return ":".join(jars)
@@ -314,7 +309,7 @@ class KafkaFixture(object):
 
         print("*** Starting Kafka...")
         self.child.start()
-        self.child.wait_for(r"\[Kafka Server \d+\], started")
+        self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id)
         print("*** Done!")
 
     def close(self):
