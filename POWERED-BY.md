@@ -3,4 +3,4 @@
 If you're using this library and care to give us a shout out, please fork the project,
 add yourself here, and submit a pull request. Thanks!
 
-* @mumrah, adding myself as an example
+* [@mumrah](https://github.com/mumrah), adding myself as an example
