@@ -1,5 +1,7 @@
 # Kafka Python client
 
+![travis](https://travis-ci.org/mumrah/kafka-python.png)
+
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
@@ -15,7 +17,7 @@ Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-I'm following the version numbers of Kafka, plus one number to indicate the 
+I'm following the version numbers of Kafka, plus one number to indicate the
 version of this project. The current version is 0.8.1-1. This version is under
 development, APIs are subject to change.
 
