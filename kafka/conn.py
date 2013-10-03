@@ -53,12 +53,12 @@ class KafkaConnection(local):
             raise Exception("Got no response from Kafka")
         (size,) = struct.unpack('>i', resp)
 
-        messageSize = size - 4
-        log.debug("About to read %d bytes from Kafka", messageSize)
+        messagesize = size - 4
+        log.debug("About to read %d bytes from Kafka", messagesize)
 
         # Read the remainder of the response 
         total = 0
-        while total < messageSize:
+        while total < messagesize:
             resp = self._sock.recv(self.bufsize)
             log.debug("Read %d bytes from Kafka", len(resp))
             if resp == "":
