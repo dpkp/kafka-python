@@ -17,6 +17,7 @@ class KafkaConnection(local):
     since the Kafka API includes a correlation id.
     """
     def __init__(self, host, port, bufsize=4096):
+        super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
         self.bufsize = bufsize
