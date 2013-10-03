@@ -1,12 +1,8 @@
-import base64
 from collections import defaultdict
 from functools import partial
-from itertools import count, cycle
+from itertools import count
 import logging
-from operator import attrgetter
-import struct
 import time
-import zlib
 
 from kafka.common import *
 from kafka.conn import KafkaConnection
@@ -22,7 +18,7 @@ class KafkaClient(object):
 
     def __init__(self, host, port, bufsize=4096, client_id=CLIENT_ID):
         # We need one connection to bootstrap
-        self.bufsize   = bufsize
+        self.bufsize = bufsize
         self.client_id = client_id
         self.conns = {               # (host, port) -> KafkaConnection
             (host, port): KafkaConnection(host, port, bufsize)
@@ -37,7 +33,9 @@ class KafkaClient(object):
     ##################
 
     def _get_conn_for_broker(self, broker):
-        "Get or create a connection to a broker"
+        """
+        Get or create a connection to a broker
+        """
         if (broker.host, broker.port) not in self.conns:
             self.conns[(broker.host, broker.port)] = \
                 KafkaConnection(broker.host, broker.port, self.bufsize)
@@ -59,11 +57,11 @@ class KafkaClient(object):
         Discover brokers and metadata for a set of topics. This method will
         recurse in the event of a retry.
         """
-        requestId = self._next_id()
+        request_id = self._next_id()
         request = KafkaProtocol.encode_metadata_request(self.client_id,
-                                                        requestId, topics)
+                                                        request_id, topics)
 
-        response = self._send_broker_unaware_request(requestId, request)
+        response = self._send_broker_unaware_request(request_id, request)
         if response is None:
             raise Exception("All servers failed to process request")
 
@@ -97,7 +95,9 @@ class KafkaClient(object):
                     self.topic_partitions[topic].append(partition)
 
     def _next_id(self):
-        "Generate a new correlation id"
+        """
+        Generate a new correlation id
+        """
         return KafkaClient.ID_GEN.next()
 
     def _send_broker_unaware_request(self, requestId, request):
