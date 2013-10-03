@@ -33,7 +33,9 @@ class KafkaClient(object):
     ##################
 
     def _get_conn_for_broker(self, broker):
-        "Get or create a connection to a broker"
+        """
+        Get or create a connection to a broker
+        """
         if (broker.host, broker.port) not in self.conns:
             self.conns[(broker.host, broker.port)] = \
                 KafkaConnection(broker.host, broker.port, self.bufsize)
@@ -93,7 +95,9 @@ class KafkaClient(object):
                     self.topic_partitions[topic].append(partition)
 
     def _next_id(self):
-        "Generate a new correlation id"
+        """
+        Generate a new correlation id
+        """
         return KafkaClient.ID_GEN.next()
 
     def _send_broker_unaware_request(self, requestId, request):
