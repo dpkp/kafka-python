@@ -61,11 +61,11 @@ class KafkaClient(object):
         Discover brokers and metadata for a set of topics. This method will
         recurse in the event of a retry.
         """
-        requestId = self._next_id()
+        request_id = self._next_id()
         request = KafkaProtocol.encode_metadata_request(self.client_id,
-                                                        requestId, topics)
+                                                        request_id, topics)
 
-        response = self._send_broker_unaware_request(requestId, request)
+        response = self._send_broker_unaware_request(request_id, request)
         if response is None:
             raise Exception("All servers failed to process request")
 
