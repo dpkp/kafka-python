@@ -1,12 +1,8 @@
-import base64
 from collections import defaultdict
 from functools import partial
-from itertools import count, cycle
+from itertools import count
 import logging
-from operator import attrgetter
-import struct
 import time
-import zlib
 
 from kafka.common import *
 from kafka.conn import KafkaConnection
