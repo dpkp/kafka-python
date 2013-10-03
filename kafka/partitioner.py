@@ -31,7 +31,8 @@ class RoundRobinPartitioner(Partitioner):
     in a round robin fashion
     """
     def __init__(self, partitions):
-        self._set_partitions(partitions)
+        super(RoundRobinPartitioner, self).__init__(partitions)
+        self.iterpart = cycle(partitions)
 
     def _set_partitions(self, partitions):
         self.partitions = partitions
