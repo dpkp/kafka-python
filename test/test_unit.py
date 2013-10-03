@@ -1,7 +1,6 @@
 import os
 import random
 import struct
-import sys
 import unittest
 
 from kafka.client import KafkaClient, ProduceRequest, FetchRequest
@@ -14,10 +13,6 @@ from kafka.codec import (
 ITERATIONS = 1000
 STRLEN = 100
 
-# TODO remove this and fix unit tests
-if sys.version_info < (2,7):
-    print("Skipping unit tests for Python <2.7")
-    exit(0)
 
 def random_string():
     return os.urandom(random.randint(1, STRLEN))

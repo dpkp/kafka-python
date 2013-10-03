@@ -7,7 +7,7 @@ high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 
-Compatible with Python 2.6+ and Apache Kafka 0.8.1
+Compatible with Apache Kafka 0.8.1
 
 http://kafka.apache.org/
 
