@@ -22,7 +22,7 @@ class Partitioner(object):
                      may look like an overhead, but it will be useful
                      (in future) when we handle cases like rebalancing
         """
-        raise NotImplemented('partition function has to be implemented')
+        raise NotImplementedError('partition function has to be implemented')
 
 
 class RoundRobinPartitioner(Partitioner):
