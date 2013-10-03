@@ -397,7 +397,7 @@ class KafkaProtocol(object):
 
             topic_metadata[topic_name] = partition_metadata
 
-        return (brokers, topic_metadata)
+        return brokers, topic_metadata
 
     @classmethod
     def encode_offset_commit_request(cls, client_id, correlation_id,
