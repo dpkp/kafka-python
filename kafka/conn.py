@@ -79,11 +79,11 @@ class KafkaConnection(local):
         if sent != None:
             raise RuntimeError("Kafka went away")
 
-    def recv(self, requestId):
+    def recv(self, request_id):
         """
         Get a response from Kafka
         """
-        log.debug("Reading response %d from Kafka" % requestId)
+        log.debug("Reading response %d from Kafka" % request_id)
         self.data = self._consume_response()
         return self.data
 
