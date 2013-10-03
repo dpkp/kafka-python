@@ -72,9 +72,9 @@ class KafkaConnection(local):
 
     # TODO multiplex socket communication to allow for multi-threaded clients
 
-    def send(self, requestId, payload):
+    def send(self, request_id, payload):
         "Send a request to Kafka"
-        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), requestId))
+        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), request_id))
         sent = self._sock.sendall(payload)
         if sent != None:
             raise RuntimeError("Kafka went away")
