@@ -299,7 +299,7 @@ class SimpleConsumer(Consumer):
             while count > 0:
                 try:
                     messages.append(next(iterator))
-                except StopIteration as exp:
+                except StopIteration:
                     break
                 count -= 1
 
