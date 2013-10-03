@@ -22,7 +22,7 @@ class KafkaClient(object):
 
     def __init__(self, host, port, bufsize=4096, client_id=CLIENT_ID):
         # We need one connection to bootstrap
-        self.bufsize   = bufsize
+        self.bufsize = bufsize
         self.client_id = client_id
         self.conns = {               # (host, port) -> KafkaConnection
             (host, port): KafkaConnection(host, port, bufsize)
