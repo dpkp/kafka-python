@@ -3,7 +3,9 @@ import socket
 import struct
 from threading import local
 
+
 log = logging.getLogger("kafka")
+
 
 class KafkaConnection(local):
     """
