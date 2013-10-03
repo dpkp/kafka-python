@@ -1,5 +1,4 @@
 from collections import defaultdict
-from itertools import groupby
 import struct
 from threading import Thread, Event
 
