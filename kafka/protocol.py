@@ -361,11 +361,11 @@ class KafkaProtocol(object):
         ======
         data: bytes to decode
         """
-        ((correlation_id, numBrokers), cur) = relative_unpack('>ii', data, 0)
+        ((correlation_id, numbrokers), cur) = relative_unpack('>ii', data, 0)
 
         # Broker info
         brokers = {}
-        for i in range(numBrokers):
+        for i in range(numbrokers):
             ((nodeId, ), cur) = relative_unpack('>i', data, cur)
             (host, cur) = read_short_string(data, cur)
             ((port,), cur) = relative_unpack('>i', data, cur)
@@ -373,31 +373,31 @@ class KafkaProtocol(object):
 
         # Topic info
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
-        topicMetadata = {}
+        topic_metadata = {}
 
         for i in range(num_topics):
-            ((topicError,), cur) = relative_unpack('>h', data, cur)
-            (topicName, cur) = read_short_string(data, cur)
+            ((topic_error,), cur) = relative_unpack('>h', data, cur)
+            (topic_name, cur) = read_short_string(data, cur)
             ((num_partitions,), cur) = relative_unpack('>i', data, cur)
-            partitionMetadata = {}
+            partition_metadata = {}
 
             for j in range(num_partitions):
-                ((partitionErrorCode, partition, leader, numReplicas), cur) = \
+                ((partition_error_code, partition, leader, numReplicas), cur) = \
                                            relative_unpack('>hiii', data, cur)
 
                 (replicas, cur) = relative_unpack('>%di' % numReplicas,
                                                   data, cur)
 
-                ((numIsr,), cur) = relative_unpack('>i', data, cur)
-                (isr, cur) = relative_unpack('>%di' % numIsr, data, cur)
+                ((num_isr,), cur) = relative_unpack('>i', data, cur)
+                (isr, cur) = relative_unpack('>%di' % num_isr, data, cur)
 
-                partitionMetadata[partition] = \
-                        PartitionMetadata(topicName, partition, leader,
+                partition_metadata[partition] = \
+                        PartitionMetadata(topic_name, partition, leader,
                                           replicas, isr)
 
-            topicMetadata[topicName] = partitionMetadata
+            topic_metadata[topic_name] = partition_metadata
 
-        return (brokers, topicMetadata)
+        return (brokers, topic_metadata)
 
     @classmethod
     def encode_offset_commit_request(cls, client_id, correlation_id,
