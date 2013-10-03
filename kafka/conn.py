@@ -80,13 +80,17 @@ class KafkaConnection(local):
             raise RuntimeError("Kafka went away")
 
     def recv(self, requestId):
-        "Get a response from Kafka"
+        """
+        Get a response from Kafka
+        """
         log.debug("Reading response %d from Kafka" % requestId)
         self.data = self._consume_response()
         return self.data
 
     def close(self):
-        "Close this connection"
+        """
+        Close this connection
+        """
         self._sock.close()
 
     def reinit(self):
