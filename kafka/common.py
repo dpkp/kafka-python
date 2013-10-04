@@ -69,6 +69,11 @@ class ErrorMapping(object):
 #   Exceptions  #
 #################
 
+class FailedPayloadsException(Exception):
+    pass
+
+class ConnectionError(Exception):
+    pass
 
 class BufferUnderflowError(Exception):
     pass
