@@ -1,9 +1,8 @@
 from collections import defaultdict
-from itertools import groupby
 import struct
 from threading import Thread, Event
 
-from common import *
+from kafka.common import BufferUnderflowError
 
 
 def write_int_string(s):
@@ -39,7 +38,8 @@ def read_short_string(data, cur):
 def read_int_string(data, cur):
     if len(data) < cur + 4:
         raise BufferUnderflowError(
-            "Not enough data left to read string len (%d < %d)" % (len(data), cur + 4))
+            "Not enough data left to read string len (%d < %d)" %
+            (len(data), cur + 4))
 
     (strlen,) = struct.unpack('>i', data[cur:cur + 4])
     if strlen == -1:
