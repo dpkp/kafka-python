@@ -2,7 +2,10 @@ import logging
 import socket
 import struct
 
+from common import *
+
 log = logging.getLogger("kafka")
+
 
 class KafkaConnection(object):
     """
@@ -14,6 +17,7 @@ class KafkaConnection(object):
     since the Kafka API includes a correlation id.
     """
     def __init__(self, host, port, bufsize=4096):
+        super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
         self.bufsize = bufsize
@@ -50,12 +54,12 @@ class KafkaConnection(object):
             raise Exception("Got no response from Kafka")
         (size,) = struct.unpack('>i', resp)
 
-        messageSize = size - 4
-        log.debug("About to read %d bytes from Kafka", messageSize)
+        messagesize = size - 4
+        log.debug("About to read %d bytes from Kafka", messagesize)
 
         # Read the remainder of the response 
         total = 0
-        while total < messageSize:
+        while total < messagesize:
             resp = self._sock.recv(self.bufsize)
             log.debug("Read %d bytes from Kafka", len(resp))
             if resp == "":
@@ -69,21 +73,25 @@ class KafkaConnection(object):
 
     # TODO multiplex socket communication to allow for multi-threaded clients
 
-    def send(self, requestId, payload):
+    def send(self, request_id, payload):
         "Send a request to Kafka"
-        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), requestId))
+        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), request_id))
         sent = self._sock.sendall(payload)
         if sent != None:
             raise RuntimeError("Kafka went away")
 
-    def recv(self, requestId):
-        "Get a response from Kafka"
-        log.debug("Reading response %d from Kafka" % requestId)
+    def recv(self, request_id):
+        """
+        Get a response from Kafka
+        """
+        log.debug("Reading response %d from Kafka" % request_id)
         self.data = self._consume_response()
         return self.data
 
     def close(self):
-        "Close this connection"
+        """
+        Close this connection
+        """
         self._sock.close()
 
     def reinit(self):

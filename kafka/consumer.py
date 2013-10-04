@@ -368,7 +368,7 @@ class SimpleConsumer(Consumer):
             while count > 0:
                 try:
                     messages.append(next(iterator))
-                except StopIteration as exp:
+                except StopIteration:
                     break
                 count -= 1
 
@@ -428,7 +428,10 @@ class SimpleConsumer(Consumer):
         fetch_size = self.fetch_min_bytes
 
         while True:
-            req = FetchRequest(self.topic, partition, offset, fetch_size)
+            # use MaxBytes = client's bufsize since we're only
+            # fetching one topic + partition
+            req = FetchRequest(
+                self.topic, partition, offset, self.client.bufsize)
 
             (resp,) = self.client.send_fetch_request([req],
                                     max_wait_time=self.fetch_max_wait_time,

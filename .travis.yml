@@ -1,0 +1,20 @@
+language: python
+
+python:
+  - 2.7
+
+before_install:
+  - git submodule update --init --recursive
+  - cd kafka-src
+  - ./sbt clean update package assembly-package-dependency
+  - cd -
+
+install:
+  - pip install .
+  # Deal with issue on Travis builders re: multiprocessing.Queue :(
+  # See https://github.com/travis-ci/travis-cookbooks/issues/155
+  - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
+
+script:
+  - python -m test.test_unit
+  - python -m test.test_integration

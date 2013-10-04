@@ -112,7 +112,7 @@ class Producer(object):
             try:
                 self.client.send_produce_request(reqs, acks=self.req_acks,
                                                  timeout=self.ack_timeout)
-            except Exception as exp:
+            except Exception:
                 log.error("Error sending message", exc_info=sys.exc_info())
 
     def send_messages(self, partition, *msg):

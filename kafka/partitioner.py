@@ -22,7 +22,7 @@ class Partitioner(object):
                      may look like an overhead, but it will be useful
                      (in future) when we handle cases like rebalancing
         """
-        raise NotImplemented('partition function has to be implemented')
+        raise NotImplementedError('partition function has to be implemented')
 
 
 class RoundRobinPartitioner(Partitioner):
@@ -31,7 +31,8 @@ class RoundRobinPartitioner(Partitioner):
     in a round robin fashion
     """
     def __init__(self, partitions):
-        self._set_partitions(partitions)
+        super(RoundRobinPartitioner, self).__init__(partitions)
+        self.iterpart = cycle(partitions)
 
     def _set_partitions(self, partitions):
         self.partitions = partitions

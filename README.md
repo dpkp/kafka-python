@@ -1,5 +1,7 @@
 # Kafka Python client
 
+[![Build Status](https://travis-ci.org/mumrah/kafka-python.png)](https://travis-ci.org/mumrah/kafka-python)
+
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
@@ -15,8 +17,8 @@ Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-I'm following the version numbers of Kafka, plus one number to indicate the 
-version of this project. The current version is 0.8.1-1. This version is under
+I'm following the version numbers of Kafka, plus one number to indicate the
+version of this project. The current version is 0.8.0-1. This version is under
 development, APIs are subject to change.
 
 # Usage
@@ -91,13 +93,16 @@ producer = KeyedProducer(kafka, "my-topic", partitioner=RoundRobinPartitioner)
 
 ## Multiprocess consumer
 ```python
+from kafka.client import KafkaClient
 from kafka.consumer import MultiProcessConsumer
 
+kafka = KafkaClient("localhost", 9092)
+
 # This will split the number of partitions among two processes
-consumer = MultiProcessConsumer(kafka, "my-topic", "my-group", num_procs=2)
+consumer = MultiProcessConsumer(kafka, "my-group", "my-topic", num_procs=2)
 
 # This will spawn processes such that each handles 2 partitions max
-consumer = MultiProcessConsumer(kafka, "my-topic", "my-group",
+consumer = MultiProcessConsumer(kafka, "my-group", "my-topic",
                                 partitions_per_proc=2)
 
 for message in consumer:
@@ -191,6 +196,7 @@ git submodule update
 cd kafka-src
 ./sbt update
 ./sbt package
+./sbt assembly-package-dependency
 ```
 
 And then run the tests. This will actually start up real local Zookeeper
