@@ -1,9 +1,10 @@
 from collections import defaultdict
 from functools import partial
+from itertools import count
 import logging
 import time
 
-from kafka.common import count, ErrorMapping, TopicAndPartition
+from kafka.common import ErrorMapping, TopicAndPartition
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
