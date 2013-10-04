@@ -16,7 +16,7 @@ class TestKafkaClient(unittest.TestCase):
     def setUpClass(cls):  # noqa
         cls.zk = ZookeeperFixture.instance()
         cls.server = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
-        cls.client = KafkaClient(cls.server.host, cls.server.port)
+        cls.client = KafkaClient('%s:%d' % (cls.server.host, cls.server.port))
 
     @classmethod
     def tearDownClass(cls):  # noqa
@@ -554,7 +554,7 @@ class TestConsumer(unittest.TestCase):
         cls.zk = ZookeeperFixture.instance()
         cls.server1 = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
         cls.server2 = KafkaFixture.instance(1, cls.zk.host, cls.zk.port)
-        cls.client = KafkaClient(cls.server2.host, cls.server2.port, bufsize=8192)
+        cls.client = KafkaClient('%s:%d' % (cls.server2.host, cls.server2.port), bufsize=8192)
 
     @classmethod
     def tearDownClass(cls):  # noqa
