@@ -9,7 +9,7 @@ import time
 import zlib
 
 from kafka.common import *
-from kafka.conn import KafkaConnection
+from kafka.conn import collect_hosts, KafkaConnection
 from kafka.protocol import KafkaProtocol
 
 log = logging.getLogger("kafka")
@@ -20,13 +20,15 @@ class KafkaClient(object):
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
 
-    def __init__(self, host, port, bufsize=4096, client_id=CLIENT_ID):
+    def __init__(self, hosts, bufsize=4096, client_id=CLIENT_ID):
         # We need one connection to bootstrap
         self.bufsize = bufsize
         self.client_id = client_id
-        self.conns = {               # (host, port) -> KafkaConnection
-            (host, port): KafkaConnection(host, port, bufsize)
-        }
+
+        self.hosts = collect_hosts(hosts)
+
+        # create connections only when we need them
+        self.conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
         self.topic_partitions = defaultdict(list)  # topic_id -> [0, 1, 2, ...]
@@ -36,15 +38,20 @@ class KafkaClient(object):
     #   Private API  #
     ##################
 
-    def _get_conn_for_broker(self, broker):
-        """
-        Get or create a connection to a broker
-        """
-        if (broker.host, broker.port) not in self.conns:
-            self.conns[(broker.host, broker.port)] = \
-                KafkaConnection(broker.host, broker.port, self.bufsize)
+    def _get_conn(self, host, port):
+        "Get or create a connection to a broker using host and port"
 
-        return self.conns[(broker.host, broker.port)]
+        host_key = (host, port)
+        if host_key not in self.conns:
+            self.conns[host_key] = KafkaConnection(host, port, self.bufsize)
+
+        print '*** conn:', host_key
+        return self.conns[host_key]
+
+    def _get_conn_for_broker(self, broker):
+        "Get or create a connection to a broker"
+
+        return self._get_conn(broker.host, broker.port)
 
     def _get_leader_for_partition(self, topic, partition):
         key = TopicAndPartition(topic, partition)
@@ -109,7 +116,8 @@ class KafkaClient(object):
         Attempt to send a broker-agnostic request to one of the available
         brokers. Keep trying until you succeed.
         """
-        for conn in self.conns.values():
+        for (host, port) in self.hosts:
+            conn = self._get_conn(host, port)
             try:
                 conn.send(requestId, request)
                 response = conn.recv(requestId)
