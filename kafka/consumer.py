@@ -229,7 +229,12 @@ class Consumer(object):
 
     def stop(self):
         if self.commit_timer is not None:
-            self.commit()
+            # We will do an auto commit only if configured to do so
+            # Else, it is the responsibility of the caller to commit before
+            # stopping
+            if self.auto_commit:
+                self.commit()
+
             self.commit_queue.put(-1)
             self.commit_timer.join()
 
