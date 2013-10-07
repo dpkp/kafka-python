@@ -7,6 +7,7 @@ import logging
 import sys
 
 from kafka.common import ProduceRequest
+from kafka.common import FailedPayloadsException
 from kafka.protocol import create_message
 from kafka.partitioner import HashedPartitioner
 
@@ -113,7 +114,7 @@ class Producer(object):
                 self.client.send_produce_request(reqs, acks=self.req_acks,
                                                  timeout=self.ack_timeout)
             except Exception:
-                log.error("Error sending message", exc_info=sys.exc_info())
+                log.exception("Unable to send message")
 
     def send_messages(self, partition, *msg):
         """
@@ -126,8 +127,12 @@ class Producer(object):
         else:
             messages = [create_message(m) for m in msg]
             req = ProduceRequest(self.topic, partition, messages)
-            resp = self.client.send_produce_request([req], acks=self.req_acks,
-                                                    timeout=self.ack_timeout)
+            try:
+                resp = self.client.send_produce_request([req], acks=self.req_acks,
+                                                        timeout=self.ack_timeout)
+            except Exception as e:
+                log.exception("Unable to send messages")
+                raise e
         return resp
 
     def stop(self, timeout=1):
