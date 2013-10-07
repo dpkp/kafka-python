@@ -3,7 +3,8 @@ import random
 import struct
 import unittest
 
-from kafka.client import KafkaClient, ProduceRequest, FetchRequest
+from kafka.client import KafkaClient
+from kafka.common import ProduceRequest, FetchRequest
 from kafka.codec import (
     has_gzip, has_snappy,
     gzip_encode, gzip_decode,
@@ -59,7 +60,6 @@ class TestMisc(unittest.TestCase):
     def test_length_prefix(self):
         for i in xrange(ITERATIONS):
             s1 = random_string()
-            s2 = length_prefix_message(s1)
             self.assertEquals(struct.unpack('>i', s2[0:4])[0], len(s1))
 
 

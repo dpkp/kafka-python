@@ -1,14 +1,10 @@
-import base64
 from collections import defaultdict
 from functools import partial
-from itertools import count, cycle
+from itertools import count
 import logging
-from operator import attrgetter
-import struct
 import time
-import zlib
 
-from kafka.common import *
+from kafka.common import ErrorMapping, TopicAndPartition
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
@@ -212,8 +208,10 @@ class KafkaClient(object):
         order of input payloads
         """
 
-        encoder = partial(KafkaProtocol.encode_produce_request,
-                          acks=acks, timeout=timeout)
+        encoder = partial(
+            KafkaProtocol.encode_produce_request,
+            acks=acks,
+            timeout=timeout)
 
         if acks == 0:
             decoder = None
@@ -226,10 +224,10 @@ class KafkaClient(object):
         for resp in resps:
             # Check for errors
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception("ProduceRequest for %s failed with "
-                                "errorcode=%d" % (
-                                TopicAndPartition(resp.topic, resp.partition),
-                                resp.error))
+                raise Exception(
+                    "ProduceRequest for %s failed with errorcode=%d" %
+                    (TopicAndPartition(resp.topic, resp.partition),
+                        resp.error))
 
             # Run the callback
             if callback is not None:
@@ -251,17 +249,18 @@ class KafkaClient(object):
                           max_wait_time=max_wait_time,
                           min_bytes=min_bytes)
 
-        resps = self._send_broker_aware_request(payloads, encoder,
-                                   KafkaProtocol.decode_fetch_response)
+        resps = self._send_broker_aware_request(
+            payloads, encoder,
+            KafkaProtocol.decode_fetch_response)
 
         out = []
         for resp in resps:
             # Check for errors
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception("FetchRequest for %s failed with "
-                                "errorcode=%d" % (
-                                TopicAndPartition(resp.topic, resp.partition),
-                                resp.error))
+                raise Exception(
+                    "FetchRequest for %s failed with errorcode=%d" %
+                    (TopicAndPartition(resp.topic, resp.partition),
+                        resp.error))
 
             # Run the callback
             if callback is not None:
@@ -272,9 +271,10 @@ class KafkaClient(object):
 
     def send_offset_request(self, payloads=[], fail_on_error=True,
                             callback=None):
-        resps = self._send_broker_aware_request(payloads,
-                                   KafkaProtocol.encode_offset_request,
-                                   KafkaProtocol.decode_offset_response)
+        resps = self._send_broker_aware_request(
+            payloads,
+            KafkaProtocol.encode_offset_request,
+            KafkaProtocol.decode_offset_response)
 
         out = []
         for resp in resps:

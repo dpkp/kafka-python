@@ -2,7 +2,8 @@ import logging
 import socket
 import struct
 
-from common import *
+from kafka.common import BufferUnderflowError
+
 
 log = logging.getLogger("kafka")
 
@@ -12,7 +13,7 @@ class KafkaConnection(object):
     A socket connection to a single Kafka broker
 
     This class is _not_ thread safe. Each call to `send` must be followed
-    by a call to `recv` in order to get the correct response. Eventually, 
+    by a call to `recv` in order to get the correct response. Eventually,
     we can do something in here to facilitate multiplexed requests/responses
     since the Kafka API includes a correlation id.
     """
@@ -43,7 +44,7 @@ class KafkaConnection(object):
 
     def _consume_response_iter(self):
         """
-        This method handles the response header and error messages. It 
+        This method handles the response header and error messages. It
         then returns an iterator for the chunks of the response
         """
         log.debug("Handling response from Kafka")
@@ -57,13 +58,15 @@ class KafkaConnection(object):
         messagesize = size - 4
         log.debug("About to read %d bytes from Kafka", messagesize)
 
-        # Read the remainder of the response 
+        # Read the remainder of the response
         total = 0
         while total < messagesize:
             resp = self._sock.recv(self.bufsize)
             log.debug("Read %d bytes from Kafka", len(resp))
             if resp == "":
-                raise BufferUnderflowError("Not enough data to read this response")
+                raise BufferUnderflowError(
+                    "Not enough data to read this response")
+
             total += len(resp)
             yield resp
 
@@ -75,9 +78,13 @@ class KafkaConnection(object):
 
     def send(self, request_id, payload):
         "Send a request to Kafka"
-        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), request_id))
+
+        log.debug(
+            "About to send %d bytes to Kafka, request %d" %
+            (len(payload), request_id))
+
         sent = self._sock.sendall(payload)
-        if sent != None:
+        if sent is not None:
             raise RuntimeError("Kafka went away")
 
     def recv(self, request_id):
