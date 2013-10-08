@@ -205,7 +205,7 @@ class Consumer(object):
         # Start committer only in the master/controller
         if not current_process().daemon:
             args = (client.copy(), group, topic,
-                    auto_commit_every_t,
+                    self.auto_commit_every_t,
                     self.commit_queue,
                     self.commit_event,
                     self.count_since_commit,
