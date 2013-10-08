@@ -1,3 +1,4 @@
+import copy
 import logging
 import socket
 import struct
@@ -103,17 +104,27 @@ class KafkaConnection(local):
         self.data = self._consume_response()
         return self.data
 
+    def copy(self):
+        """
+        Create an inactive copy of the connection object
+        A reinit() has to be done on the copy before it can be used again
+        """
+        c = copy.deepcopy(self)
+        c._sock = None
+        return c
+
     def close(self):
         """
         Close this connection
         """
-        self._sock.close()
+        if self._sock:
+            self._sock.close()
 
     def reinit(self):
         """
         Re-initialize the socket connection
         """
-        self._sock.close()
+        self.close()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((self.host, self.port))
         self._sock.settimeout(10)
