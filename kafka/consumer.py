@@ -169,8 +169,13 @@ class Consumer(object):
         self.commit_timer = None
         self.count_since_commit = Value('i', 0)
         self.auto_commit = auto_commit
-        self.auto_commit_every_n = auto_commit_every_n
-        self.auto_commit_every_t = auto_commit_every_t
+
+        if auto_commit:
+            self.auto_commit_every_n = auto_commit_every_n
+            self.auto_commit_every_t = auto_commit_every_t
+        else:
+            self.auto_commit_every_n = None
+            self.auto_commit_every_t = None
 
         def get_or_init_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
