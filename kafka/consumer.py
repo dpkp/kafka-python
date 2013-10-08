@@ -83,6 +83,64 @@ class Offsets(dict):
                     yield k, self.array[i]
 
 
+def _commit(client, group, topic, count, offsets, partitions=None):
+    """
+    Commit offsets for this consumer
+
+    partitions: list of partitions to commit, default is to commit
+                all of them
+    """
+
+    # short circuit if nothing happened.
+    if count.value == 0:
+        return
+
+    reqs = []
+    for partition, offset in offsets.shareditems(keys=partitions):
+        log.debug("Commit offset %d in SimpleConsumer: "
+                  "group=%s, topic=%s, partition=%s" %
+                  (offset, group, topic, partition))
+
+        reqs.append(OffsetCommitRequest(topic, partition, offset, None))
+
+    resps = client.send_offset_commit_request(group, reqs)
+    for resp in resps:
+        assert resp.error == 0
+
+    count.value = 0
+
+
+def _committer(client, group, topic, timeout, queue, event, count, offsets):
+    """
+    The process thread which takes care of committing
+
+    NOTE: Ideally, this should have been a method inside the Consumer
+    class. However, multiprocessing module has issues in windows. The
+    functionality breaks unless this function is kept outside of a class
+    """
+    client.reinit()
+
+    if timeout is not None:
+        timeout /= 1000.0
+
+    while True:
+        try:
+            partitions = queue.get(timeout=timeout)
+            if partitions == -1:
+                break
+            notify = True
+        except Empty:
+            # A timeout has happened. Do a commit
+            partitions = None
+            notify = False
+
+        # Try and commit the offsets
+        _commit(client, group, topic, count, offsets, partitions)
+
+        if notify:
+            event.set()
+
+
 class Consumer(object):
     """
     Base class to be used by other consumers. Not to be used directly
@@ -141,37 +199,16 @@ class Consumer(object):
 
         # Start committer only in the master/controller
         if not current_process().daemon:
-            self.commit_timer = Process(target=self._committer,
-                                        args=(self.offsets,))
+            args = (client.copy(), group, topic,
+                    auto_commit_every_t,
+                    self.commit_queue,
+                    self.commit_event,
+                    self.count_since_commit,
+                    self.offsets)
+
+            self.commit_timer = Process(target=_committer, args=args)
             self.commit_timer.daemon = True
             self.commit_timer.start()
-
-    def _committer(self, offsets):
-        """
-        The process thread which takes care of committing
-        """
-        self.client.reinit()
-        self.offsets = offsets
-        timeout = self.auto_commit_every_t
-
-        if timeout is not None:
-            timeout /= 1000.0
-
-        while True:
-            try:
-                partitions = self.commit_queue.get(timeout=timeout)
-                if partitions == -1:
-                    break
-                notify = True
-            except Empty:
-                # A timeout has happened. Do a commit
-                partitions = None
-                notify = False
-
-            self._commit(partitions)
-
-            if notify:
-                self.commit_event.set()
 
     def commit(self, partitions=None, block=True, timeout=None):
         """
@@ -187,33 +224,6 @@ class Consumer(object):
 
         if block:
             self.commit_event.wait(timeout)
-
-    def _commit(self, partitions=None):
-        """
-        Commit offsets for this consumer
-
-        partitions: list of partitions to commit, default is to commit
-                    all of them
-        """
-
-        # short circuit if nothing happened.
-        if self.count_since_commit.value == 0:
-            return
-
-        reqs = []
-        for partition, offset in self.offsets.shareditems(keys=partitions):
-            log.debug("Commit offset %d in SimpleConsumer: "
-                      "group=%s, topic=%s, partition=%s" %
-                      (offset, self.group, self.topic, partition))
-
-            reqs.append(OffsetCommitRequest(self.topic, partition,
-                                            offset, None))
-
-        resps = self.client.send_offset_commit_request(self.group, reqs)
-        for resp in resps:
-            assert resp.error == 0
-
-        self.count_since_commit.value = 0
 
     def _auto_commit(self):
         """
