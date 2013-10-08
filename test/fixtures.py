@@ -242,7 +242,7 @@ class ZookeeperFixture(object):
 
 class KafkaFixture(object):
     @staticmethod
-    def instance(broker_id, zk_host, zk_port, zk_chroot=None):
+    def instance(broker_id, zk_host, zk_port, zk_chroot=None, replicas=1, partitions=2):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
         if "KAFKA_URI" in os.environ:
@@ -251,11 +251,11 @@ class KafkaFixture(object):
             fixture = ExternalService(host, port)
         else:
             (host, port) = ("127.0.0.1", get_open_port())
-            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot)
+            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot, replicas, partitions)
             fixture.open()
         return fixture
 
-    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot):
+    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot, replicas=1, partitions=2):
         self.host = host
         self.port = port
 
@@ -265,19 +265,24 @@ class KafkaFixture(object):
         self.zk_port = zk_port
         self.zk_chroot = zk_chroot
 
+        self.replicas   = replicas
+        self.partitions = partitions
+
         self.tmp_dir = None
         self.child = None
 
     def open(self):
         self.tmp_dir = tempfile.mkdtemp()
         print("*** Running local Kafka instance")
-        print("  host      = %s" % self.host)
-        print("  port      = %s" % self.port)
-        print("  broker_id = %s" % self.broker_id)
-        print("  zk_host   = %s" % self.zk_host)
-        print("  zk_port   = %s" % self.zk_port)
-        print("  zk_chroot = %s" % self.zk_chroot)
-        print("  tmp_dir   = %s" % self.tmp_dir)
+        print("  host       = %s" % self.host)
+        print("  port       = %s" % self.port)
+        print("  broker_id  = %s" % self.broker_id)
+        print("  zk_host    = %s" % self.zk_host)
+        print("  zk_port    = %s" % self.zk_port)
+        print("  zk_chroot  = %s" % self.zk_chroot)
+        print("  replicas   = %s" % self.replicas)
+        print("  partitions = %s" % self.partitions)
+        print("  tmp_dir    = %s" % self.tmp_dir)
 
         # Create directories
         os.mkdir(os.path.join(self.tmp_dir, "logs"))

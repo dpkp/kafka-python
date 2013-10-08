@@ -1,9 +1,10 @@
+import copy
 import logging
 import socket
 import struct
 
 from kafka.common import BufferUnderflowError
-
+from kafka.common import ConnectionError
 
 log = logging.getLogger("kafka")
 
@@ -25,6 +26,7 @@ class KafkaConnection(object):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((host, port))
         self._sock.settimeout(10)
+        self._dirty = False
 
     def __str__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
@@ -52,7 +54,7 @@ class KafkaConnection(object):
         # Read the size off of the header
         resp = self._sock.recv(4)
         if resp == "":
-            raise Exception("Got no response from Kafka")
+            self._raise_connection_error()
         (size,) = struct.unpack('>i', resp)
 
         messagesize = size - 4
@@ -70,6 +72,10 @@ class KafkaConnection(object):
             total += len(resp)
             yield resp
 
+    def _raise_connection_error(self):
+        self._dirty = True
+        raise ConnectionError("Kafka @ {}:{} went away".format(self.host, self.port))
+
     ##################
     #   Public API   #
     ##################
@@ -78,14 +84,16 @@ class KafkaConnection(object):
 
     def send(self, request_id, payload):
         "Send a request to Kafka"
-
-        log.debug(
-            "About to send %d bytes to Kafka, request %d" %
-            (len(payload), request_id))
-
-        sent = self._sock.sendall(payload)
-        if sent is not None:
-            raise RuntimeError("Kafka went away")
+        log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), request_id))
+        try:
+            if self._dirty:
+                self.reinit()
+            sent = self._sock.sendall(payload)
+            if sent is not None:
+                self._raise_connection_error()
+        except socket.error:
+            log.exception('Unable to send payload to Kafka')
+            self._raise_connection_error()
 
     def recv(self, request_id):
         """
@@ -95,17 +103,28 @@ class KafkaConnection(object):
         self.data = self._consume_response()
         return self.data
 
+    def copy(self):
+        """
+        Create an inactive copy of the connection object
+        A reinit() has to be done on the copy before it can be used again
+        """
+        c = copy.deepcopy(self)
+        c._sock = None
+        return c
+
     def close(self):
         """
         Close this connection
         """
-        self._sock.close()
+        if self._sock:
+            self._sock.close()
 
     def reinit(self):
         """
         Re-initialize the socket connection
         """
-        self._sock.close()
+        self.close()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((self.host, self.port))
         self._sock.settimeout(10)
+        self._dirty = False

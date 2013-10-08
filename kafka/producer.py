@@ -7,6 +7,7 @@ import logging
 import sys
 
 from kafka.common import ProduceRequest
+from kafka.common import FailedPayloadsException
 from kafka.protocol import create_message
 from kafka.partitioner import HashedPartitioner
 
@@ -16,6 +17,58 @@ BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
 
 STOP_ASYNC_PRODUCER = -1
+
+
+def _send_upstream(topic, queue, client, batch_time, batch_size,
+                   req_acks, ack_timeout):
+    """
+    Listen on the queue for a specified number of messages or till
+    a specified timeout and send them upstream to the brokers in one
+    request
+
+    NOTE: Ideally, this should have been a method inside the Producer
+    class. However, multiprocessing module has issues in windows. The
+    functionality breaks unless this function is kept outside of a class
+    """
+    stop = False
+    client.reinit()
+
+    while not stop:
+        timeout = batch_time
+        count = batch_size
+        send_at = datetime.now() + timedelta(seconds=timeout)
+        msgset = defaultdict(list)
+
+        # Keep fetching till we gather enough messages or a
+        # timeout is reached
+        while count > 0 and timeout >= 0:
+            try:
+                partition, msg = queue.get(timeout=timeout)
+            except Empty:
+                break
+
+            # Check if the controller has requested us to stop
+            if partition == STOP_ASYNC_PRODUCER:
+                stop = True
+                break
+
+            # Adjust the timeout to match the remaining period
+            count -= 1
+            timeout = (send_at - datetime.now()).total_seconds()
+            msgset[partition].append(msg)
+
+        # Send collected requests upstream
+        reqs = []
+        for partition, messages in msgset.items():
+            req = ProduceRequest(topic, partition, messages)
+            reqs.append(req)
+
+        try:
+            client.send_produce_request(reqs,
+                                        acks=req_acks,
+                                        timeout=ack_timeout)
+        except Exception as exp:
+            log.exception("Unable to send message")
 
 
 class Producer(object):
@@ -61,59 +114,21 @@ class Producer(object):
         self.async = async
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
-        self.batch_send = batch_send
-        self.batch_size = batch_send_every_n
-        self.batch_time = batch_send_every_t
 
         if self.async:
             self.queue = Queue()  # Messages are sent through this queue
-            self.proc = Process(target=self._send_upstream, args=(self.queue,))
-            self.proc.daemon = True   # Process will die if main thread exits
+            self.proc = Process(target=_send_upstream,
+                                args=(self.topic,
+                                      self.queue,
+                                      self.client.copy(),
+                                      batch_send_every_t,
+                                      batch_send_every_n,
+                                      self.req_acks,
+                                      self.ack_timeout))
+
+            # Process will die if main thread exits
+            self.proc.daemon = True
             self.proc.start()
-
-    def _send_upstream(self, queue):
-        """
-        Listen on the queue for a specified number of messages or till
-        a specified timeout and send them upstream to the brokers in one
-        request
-        """
-        stop = False
-
-        while not stop:
-            timeout = self.batch_time
-            send_at = datetime.now() + timedelta(seconds=timeout)
-            count = self.batch_size
-            msgset = defaultdict(list)
-
-            # Keep fetching till we gather enough messages or a
-            # timeout is reached
-            while count > 0 and timeout >= 0:
-                try:
-                    partition, msg = queue.get(timeout=timeout)
-                except Empty:
-                    break
-
-                # Check if the controller has requested us to stop
-                if partition == STOP_ASYNC_PRODUCER:
-                    stop = True
-                    break
-
-                # Adjust the timeout to match the remaining period
-                count -= 1
-                timeout = (send_at - datetime.now()).total_seconds()
-                msgset[partition].append(msg)
-
-            # Send collected requests upstream
-            reqs = []
-            for partition, messages in msgset.items():
-                req = ProduceRequest(self.topic, partition, messages)
-                reqs.append(req)
-
-            try:
-                self.client.send_produce_request(reqs, acks=self.req_acks,
-                                                 timeout=self.ack_timeout)
-            except Exception:
-                log.error("Error sending message", exc_info=sys.exc_info())
 
     def send_messages(self, partition, *msg):
         """
@@ -126,8 +141,12 @@ class Producer(object):
         else:
             messages = [create_message(m) for m in msg]
             req = ProduceRequest(self.topic, partition, messages)
-            resp = self.client.send_produce_request([req], acks=self.req_acks,
-                                                    timeout=self.ack_timeout)
+            try:
+                resp = self.client.send_produce_request([req], acks=self.req_acks,
+                                                        timeout=self.ack_timeout)
+            except Exception as e:
+                log.exception("Unable to send messages")
+                raise e
         return resp
 
     def stop(self, timeout=1):
