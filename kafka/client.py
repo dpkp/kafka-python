@@ -1,3 +1,4 @@
+import copy
 from collections import defaultdict
 from functools import partial
 from itertools import count
@@ -192,6 +193,16 @@ class KafkaClient(object):
     def close(self):
         for conn in self.conns.values():
             conn.close()
+
+    def copy(self):
+        """
+        Create an inactive copy of the client object
+        A reinit() has to be done on the copy before it can be used again
+        """
+        c = copy.deepcopy(self)
+        for k, v in c.conns.items():
+            c.conns[k] = v.copy()
+        return c
 
     def reinit(self):
         for conn in self.conns.values():
