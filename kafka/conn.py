@@ -29,7 +29,7 @@ class KafkaConnection(local):
         self._sock.settimeout(10)
         self._dirty = False
 
-    def __str__(self):
+    def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
 
     ###################

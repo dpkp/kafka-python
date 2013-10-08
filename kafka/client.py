@@ -174,7 +174,7 @@ class KafkaClient(object):
             except ConnectionError, e:  # ignore BufferUnderflow for now
                 log.warning("Could not send request [%s] to server %s: %s" % (request, conn, e))
                 failed_payloads += payloads
-                self.topics_to_brokers = {} # reset metadata
+                self.topics_to_brokers = {}  # reset metadata
                 continue
 
             for response in decoder_fn(response):
@@ -185,6 +185,9 @@ class KafkaClient(object):
 
         # Order the accumulated responses by the original key order
         return (acc[k] for k in original_keys) if acc else ()
+
+    def __repr__(self):
+        return '<KafkaClient client_id=%s>' % (self.client_id)
 
     #################
     #   Public API  #
