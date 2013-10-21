@@ -1,7 +1,10 @@
+from __future__ import absolute_import
+
 import logging
 import time
 
 from Queue import Empty
+
 from collections import defaultdict
 from itertools import cycle
 from multiprocessing import Queue, Process
@@ -66,7 +69,7 @@ def _send_upstream(topic, queue, client, batch_time, batch_size,
             client.send_produce_request(reqs,
                                         acks=req_acks,
                                         timeout=ack_timeout)
-        except Exception as exp:
+        except Exception:
             log.exception("Unable to send message")
 
 
