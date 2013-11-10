@@ -3,7 +3,6 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 import logging
-import socket
 import time
 
 from kafka.common import ErrorMapping, TopicAndPartition
@@ -44,7 +43,6 @@ class KafkaClient(object):
         if host_key not in self.conns:
             self.conns[host_key] = KafkaConnection(host, port, self.bufsize)
 
-        print '*** conn:', host_key
         return self.conns[host_key]
 
     def _get_conn_for_broker(self, broker):
@@ -182,7 +180,7 @@ class KafkaClient(object):
             except ConnectionError, e:  # ignore BufferUnderflow for now
                 log.warning("Could not send request [%s] to server %s: %s" % (request, conn, e))
                 failed_payloads += payloads
-                self.topics_to_brokers = {} # reset metadata
+                self.topics_to_brokers = {}  # reset metadata
                 continue
 
             for response in decoder_fn(response):
