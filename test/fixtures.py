@@ -74,6 +74,8 @@ def render_template(source_file, target_file, binding):
 class ExternalService(object):
     def __init__(self, host, port):
         print("Using already running service at %s:%d" % (host, port))
+        self.host = host
+        self.port = port
 
     def open(self):
         pass
