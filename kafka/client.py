@@ -3,7 +3,6 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 import logging
-import time
 
 from kafka.common import ErrorMapping, TopicAndPartition
 from kafka.common import ConnectionError, FailedPayloadsException
@@ -87,16 +86,12 @@ class KafkaClient(object):
             self.topic_partitions.pop(topic, None)
 
             if not partitions:
-                log.info("Partition is unassigned, delay for 1s and retry")
-                time.sleep(1)
-                self._load_metadata_for_topics(topic)
+                log.info("%s has no partition", topic)
                 break
 
             for partition, meta in partitions.items():
                 if meta.leader == -1:
-                    log.info("Partition is unassigned, delay for 1s and retry")
-                    time.sleep(1)
-                    self._load_metadata_for_topics(topic)
+                    log.info("%s partition %s is unassigned", topic, str(partition))
                 else:
                     topic_part = TopicAndPartition(topic, partition)
                     self.topics_to_brokers[topic_part] = brokers[meta.leader]

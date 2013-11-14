@@ -314,7 +314,6 @@ class TestKafkaClient(unittest.TestCase):
             },
             client.topics_to_brokers)
 
-    @unittest.skip('requires disabling recursion on _load_metadata_for_topics')
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_client_load_metadata_unassigned_partitions(self, protocol, conn):
@@ -353,7 +352,6 @@ class TestKafkaClient(unittest.TestCase):
             },
             client.topics_to_brokers)
 
-    @unittest.skip('requires disabling recursion on _load_metadata_for_topics')
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_client_load_metadata_noleader_partitions(self, protocol, conn):
