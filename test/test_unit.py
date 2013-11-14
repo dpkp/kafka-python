@@ -3,12 +3,17 @@ import random
 import struct
 import unittest
 
+from mock import patch
+
 from kafka.client import KafkaClient
-from kafka.common import ProduceRequest, FetchRequest
 from kafka.codec import (
     has_gzip, has_snappy,
     gzip_encode, gzip_decode,
     snappy_encode, snappy_decode
+)
+from kafka.common import (
+    ProduceRequest, FetchRequest,
+    BrokerMetadata, PartitionMetadata, TopicAndPartition
 )
 
 ITERATIONS = 1000
@@ -216,6 +221,184 @@ class TestRequests(unittest.TestCase):
         expect = "\x00\x01\x00\x08my-topic\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00"
         self.assertEquals(enc, expect)
 
+
+class TestKafkaClient(unittest.TestCase):
+
+    def test_send_broker_unaware_request_fail(self):
+        'Tests that call fails when all hosts are unavailable'
+
+        from mock import MagicMock
+
+        mocked_conns = {
+            ('kafka01', 9092): MagicMock(),
+            ('kafka02', 9092): MagicMock()
+        }
+        # inject conns
+        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
+        mocked_conns[('kafka02', 9092)].send.side_effect = RuntimeError("Kafka02 went away (unittest)")
+
+        def mock_get_conn(host, port):
+            print 'mock_get_conn: %s:%d=%s' % (host, port, mocked_conns[(host, port)])
+            return mocked_conns[(host, port)]
+
+        # patch to avoid making requests before we want it
+        with patch.object(KafkaClient, '_load_metadata_for_topics'), \
+                patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+
+            client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
+
+            resp = client._send_broker_unaware_request(1, 'fake request')
+
+            self.assertIsNone(resp)
+
+            for key, conn in mocked_conns.iteritems():
+                conn.send.assert_called_with(1, 'fake request')
+
+    def test_send_broker_unaware_request(self):
+        'Tests that call fails when one of the host is available'
+
+        from mock import MagicMock
+
+        mocked_conns = {
+            ('kafka01', 9092): MagicMock(),
+            ('kafka02', 9092): MagicMock(),
+            ('kafka03', 9092): MagicMock()
+        }
+        # inject conns
+        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
+        mocked_conns[('kafka02', 9092)].recv.return_value = 'valid response'
+        mocked_conns[('kafka03', 9092)].send.side_effect = RuntimeError("kafka03 went away (unittest)")
+
+        def mock_get_conn(host, port):
+            print 'mock_get_conn: %s:%d=%s' % (host, port, mocked_conns[(host, port)])
+            return mocked_conns[(host, port)]
+
+        # patch to avoid making requests before we want it
+        with patch.object(KafkaClient, '_load_metadata_for_topics'), \
+                patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+
+            client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
+
+            resp = client._send_broker_unaware_request(1, 'fake request')
+
+            self.assertEqual('valid response', resp)
+            mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
+
+    @unittest.skip('requires disabling recursion on _load_metadata_for_topics')
+    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.KafkaProtocol')
+    def test_client_load_metadata(self, protocol, conn):
+
+        conn.recv.return_value = 'response'  # anything but None
+
+        brokers = {}
+        brokers[0] = BrokerMetadata(1, 'broker_1', 4567)
+        brokers[1] = BrokerMetadata(2, 'broker_2', 5678)
+
+        topics = {}
+        topics['topic_1'] = {
+            0: PartitionMetadata('topic_1', 0, 1, [1, 2], [1, 2])
+        }
+        topics['topic_2'] = {
+            0: PartitionMetadata('topic_2', 0, 0, [0, 1], [0, 1]),
+            1: PartitionMetadata('topic_2', 1, 1, [1, 0], [1, 0])
+        }
+        protocol.decode_metadata_response.return_value = (brokers, topics)
+
+        client = KafkaClient(hosts='broker_1:4567')
+        self.assertItemsEqual(
+            {
+                TopicAndPartition('topic_1', 0): brokers[0],
+                TopicAndPartition('topic_2', 0): brokers[0],
+                TopicAndPartition('topic_2', 1): brokers[1]
+            },
+            client.topics_to_brokers)
+
+    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.KafkaProtocol')
+    def test_client_load_metadata_unassigned_partitions(self, protocol, conn):
+
+        conn.recv.return_value = 'response'  # anything but None
+
+        brokers = {}
+        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
+        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
+
+        topics = {}
+        topics['topic_1'] = {
+            0: PartitionMetadata('topic_1', 0, -1, [], [])
+        }
+        protocol.decode_metadata_response.return_value = (brokers, topics)
+
+        client = KafkaClient(hosts='broker_1:4567')
+
+        self.assertItemsEqual({}, client.topics_to_brokers)
+        self.assertRaises(
+            Exception,
+            client._get_leader_for_partition,
+            'topic_1', 0)
+
+        # calling _get_leader_for_partition (from any broker aware request)
+        # will try loading metadata again for the same topic
+        topics['topic_1'] = {
+            0: PartitionMetadata('topic_1', 0, 0, [0, 1], [0, 1])
+        }
+        leader = client._get_leader_for_partition('topic_1', 0)
+
+        self.assertEqual(brokers[0], leader)
+        self.assertItemsEqual(
+            {
+                TopicAndPartition('topic_1', 0): brokers[0],
+            },
+            client.topics_to_brokers)
+
+    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.KafkaProtocol')
+    def test_client_load_metadata_noleader_partitions(self, protocol, conn):
+
+        conn.recv.return_value = 'response'  # anything but None
+
+        brokers = {}
+        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
+        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
+
+        topics = {}
+        topics['topic_1'] = {
+            0: PartitionMetadata('topic_1', 0, -1, [], [])
+        }
+        topics['topic_2'] = {
+            0: PartitionMetadata('topic_2', 0, 0, [0, 1], []),
+            1: PartitionMetadata('topic_2', 1, 1, [1, 0], [1, 0])
+        }
+        protocol.decode_metadata_response.return_value = (brokers, topics)
+
+        client = KafkaClient(hosts='broker_1:4567')
+        self.assertItemsEqual(
+            {
+                TopicAndPartition('topic_2', 0): brokers[0],
+                TopicAndPartition('topic_2', 1): brokers[1]
+            },
+            client.topics_to_brokers)
+        self.assertRaises(
+            Exception,
+            client._get_leader_for_partition,
+            'topic_1', 0)
+
+        # calling _get_leader_for_partition (from any broker aware request)
+        # will try loading metadata again for the same topic
+        topics['topic_1'] = {
+            0: PartitionMetadata('topic_1', 0, 0, [0, 1], [0, 1])
+        }
+        leader = client._get_leader_for_partition('topic_1', 0)
+
+        self.assertEqual(brokers[0], leader)
+        self.assertItemsEqual(
+            {
+                TopicAndPartition('topic_1', 0): brokers[0],
+                TopicAndPartition('topic_2', 0): brokers[0],
+                TopicAndPartition('topic_2', 1): brokers[1]
+            },
+            client.topics_to_brokers)
 
 if __name__ == '__main__':
     unittest.main()
