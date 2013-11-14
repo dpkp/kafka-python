@@ -1,11 +1,12 @@
-import os.path
 import sys
 
 from setuptools import setup, Command
 
 
 class Tox(Command):
+
     user_options = []
+
     def initialize_options(self):
         pass
 
@@ -21,7 +22,7 @@ setup(
     name="kafka-python",
     version="0.8.1-1",
 
-    install_requires=["distribute", "tox"],
+    install_requires=["distribute", "tox", "mock"],
     tests_require=["tox"],
     cmdclass={"test": Tox},
 
