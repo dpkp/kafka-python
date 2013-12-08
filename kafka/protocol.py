@@ -29,8 +29,8 @@ class KafkaProtocol(object):
     FETCH_KEY = 1
     OFFSET_KEY = 2
     METADATA_KEY = 3
-    OFFSET_COMMIT_KEY = 6
-    OFFSET_FETCH_KEY = 7
+    OFFSET_COMMIT_KEY = 8
+    OFFSET_FETCH_KEY = 9
 
     ATTRIBUTE_CODEC_MASK = 0x03
     CODEC_NONE = 0x00
@@ -439,7 +439,7 @@ class KafkaProtocol(object):
         data: bytes to decode
         """
         ((correlation_id,), cur) = relative_unpack('>i', data, 0)
-        (client_id, cur) = read_short_string(data, cur)
+        
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
 
         for i in xrange(num_topics):
@@ -490,7 +490,6 @@ class KafkaProtocol(object):
         """
 
         ((correlation_id,), cur) = relative_unpack('>i', data, 0)
-        (client_id, cur) = read_short_string(data, cur)
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
 
         for i in range(num_topics):
