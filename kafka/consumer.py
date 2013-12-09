@@ -220,7 +220,6 @@ class SimpleConsumer(Consumer):
         self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
-        self.fetch_started = defaultdict(bool)  # defaults to false
 
         super(SimpleConsumer, self).__init__(
             client, group, topic,
@@ -353,7 +352,7 @@ class SimpleConsumer(Consumer):
         # An OffsetFetchRequest to Kafka gives 0 for a new queue. This is
         # problematic, since 0 is offset of a message which we have not yet
         # consumed.
-        if self.fetch_started[partition]:
+        if offset > 0:
             offset += 1
 
         fetch_size = self.fetch_min_bytes
@@ -385,7 +384,6 @@ class SimpleConsumer(Consumer):
                     # caller, but the caller does not come back into the
                     # generator again. The message will be consumed but the
                     # status will not be updated in the consumer
-                    self.fetch_started[partition] = True
                     self.offsets[partition] = message.offset
                     yield message
             except ConsumerFetchSizeTooSmall, e:
