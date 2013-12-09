@@ -1,0 +1,3 @@
+[submodule "kafka-src"]
+	path = kafka-src
+	url = http://git-wip-us.apache.org/repos/asf/kafka.git
