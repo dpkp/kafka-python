@@ -48,7 +48,7 @@ producer.send_messages("async message")
 #                            by all in sync replicas before sending a response
 producer = SimpleProducer(kafka, "my-topic", async=False,
                           req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
-                          acks_timeout=2000)
+                          ack_timeout=2000)
 
 response = producer.send_messages("async message")
 
