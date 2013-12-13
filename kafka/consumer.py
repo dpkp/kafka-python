@@ -294,7 +294,8 @@ class SimpleConsumer(Consumer):
         iterator = self.__iter__()
 
         # HACK: This splits the timeout between available partitions
-        timeout = timeout * 1.0 / len(self.offsets)
+        if timeout:
+            timeout = timeout * 1.0 / len(self.offsets)
 
         with FetchContext(self, block, timeout):
             while count > 0:
