@@ -9,7 +9,8 @@ from Queue import Empty
 from kafka.common import (
     ErrorMapping, FetchRequest,
     OffsetRequest, OffsetCommitRequest,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
+    OffsetFetchRequest
 )
 
 from kafka.util import ReentrantTimer
@@ -65,6 +66,7 @@ class Consumer(object):
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
 
         self.client = client
+        self.currentbuffersize = client.bufsize
         self.topic = topic
         self.group = group
         self.client._load_metadata_for_topics(topic)
@@ -99,15 +101,13 @@ class Consumer(object):
 
         # Uncomment for 0.8.1
         #
-        #for partition in partitions:
-        #    req = OffsetFetchRequest(topic, partition)
-        #    (offset,) = self.client.send_offset_fetch_request(group, [req],
-        #                  callback=get_or_init_offset_callback,
-        #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
-
         for partition in partitions:
-            self.offsets[partition] = 0
+            req = OffsetFetchRequest(topic, partition)
+            (offset,) = self.client.send_offset_fetch_request(group, [req],
+                          callback=get_or_init_offset_callback,
+                          fail_on_error=False)
+            self.offsets[partition] = offset
+
 
     def commit(self, partitions=None):
         """
@@ -221,7 +221,6 @@ class SimpleConsumer(Consumer):
         self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
-        self.fetch_started = defaultdict(bool)  # defaults to false
 
         super(SimpleConsumer, self).__init__(
             client, group, topic,
@@ -355,7 +354,7 @@ class SimpleConsumer(Consumer):
         # An OffsetFetchRequest to Kafka gives 0 for a new queue. This is
         # problematic, since 0 is offset of a message which we have not yet
         # consumed.
-        if self.fetch_started[partition]:
+        if offset > 0:
             offset += 1
 
         fetch_size = self.fetch_min_bytes
@@ -363,8 +362,9 @@ class SimpleConsumer(Consumer):
         while True:
             # use MaxBytes = client's bufsize since we're only
             # fetching one topic + partition
+
             req = FetchRequest(
-                self.topic, partition, offset, self.client.bufsize)
+                self.topic, partition, offset, self.currentbuffersize)
 
             (resp,) = self.client.send_fetch_request(
                 [req],
@@ -377,6 +377,7 @@ class SimpleConsumer(Consumer):
             next_offset = None
             try:
                 for message in resp.messages:
+                    self.currentbuffersize = self.client.bufsize
                     next_offset = message.offset
 
                     # update the offset before the message is yielded. This
@@ -387,14 +388,13 @@ class SimpleConsumer(Consumer):
                     # caller, but the caller does not come back into the
                     # generator again. The message will be consumed but the
                     # status will not be updated in the consumer
-                    self.fetch_started[partition] = True
                     self.offsets[partition] = message.offset
                     yield message
             except ConsumerFetchSizeTooSmall, e:
-                fetch_size *= 1.5
+                self.currentbuffersize *= 2
                 log.warn(
-                    "Fetch size too small, increasing to %d (1.5x) and retry",
-                    fetch_size)
+                    "Fetch size too small, increasing to %d (2x) and retry",
+                    self.currentbuffersize)
                 continue
             except ConsumerNoMoreData, e:
                 log.debug("Iteration was ended by %r", e)
