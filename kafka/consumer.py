@@ -42,6 +42,8 @@ class FetchContext(object):
 
     def __enter__(self):
         """Set fetch values based on blocking status"""
+        self.orig_fetch_max_wait_time = self.consumer.fetch_max_wait_time
+        self.orig_fetch_min_bytes = self.consumer.fetch_min_bytes
         if self.block:
             self.consumer.fetch_max_wait_time = self.timeout
             self.consumer.fetch_min_bytes = 1
@@ -49,9 +51,9 @@ class FetchContext(object):
             self.consumer.fetch_min_bytes = 0
 
     def __exit__(self, type, value, traceback):
-        """Reset values to default"""
-        self.consumer.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
-        self.consumer.fetch_min_bytes = FETCH_MIN_BYTES
+        """Reset values"""
+        self.consumer.fetch_max_wait_time = self.orig_fetch_max_wait_time
+        self.consumer.fetch_min_bytes = self.orig_fetch_min_bytes
 
 
 class Consumer(object):
