@@ -19,11 +19,10 @@ class KafkaConnection(local):
     we can do something in here to facilitate multiplexed requests/responses
     since the Kafka API includes a correlation id.
     """
-    def __init__(self, host, port, bufsize=4098, timeout=10):
+    def __init__(self, host, port, timeout=10):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
-        self.bufsize = bufsize
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((host, port))
         self._sock.settimeout(timeout)
@@ -36,38 +35,35 @@ class KafkaConnection(local):
     #   Private API   #
     ###################
 
+    def _read_bytes(self, num_bytes):
+        bytes_left = num_bytes
+        resp = ''
+        log.debug("About to read %d bytes from Kafka", num_bytes)
+
+        while bytes_left:
+            data = self._sock.recv(bytes_left)
+            if data == '':
+                raise BufferUnderflowError("Not enough data to read this response")
+            bytes_left -= len(data)
+            log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
+            resp += data
+
+        return resp
+
     def _consume_response(self):
         """
-        Fully consume the response iterator
-        """
-        return "".join(self._consume_response_iter())
-
-    def _consume_response_iter(self):
-        """
         This method handles the response header and error messages. It
-        then returns an iterator for the chunks of the response
+        then returns the response
         """
-        log.debug("Handling response from Kafka")
-
+        log.debug("Expecting response from Kafka")
         # Read the size off of the header
-        resp = self._sock.recv(4)
-        if resp == "":
-            self._raise_connection_error()
+        resp = self._read_bytes(4)
+
         (size,) = struct.unpack('>i', resp)
 
-        log.debug("About to read %d bytes from Kafka", size)
-
         # Read the remainder of the response
-        total = 0
-        while total < size:
-            resp = self._sock.recv(self.bufsize)
-            log.debug("Read %d bytes from Kafka", len(resp))
-            if resp == "":
-                raise BufferUnderflowError(
-                    "Not enough data to read this response")
-
-            total += len(resp)
-            yield resp
+        resp = self._read_bytes(size)
+        return str(resp)
 
     def _raise_connection_error(self):
         self._dirty = True
