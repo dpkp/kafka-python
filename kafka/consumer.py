@@ -209,8 +209,9 @@ class SimpleConsumer(Consumer):
                          before a commit
     auto_commit_every_t: default 5000. How much time (in milliseconds) to
                          wait before commit
-
     fetch_size_bytes:    number of bytes to request in a FetchRequest
+    buffer_size:         initial number of bytes to tell kafka we have
+                         available. This will double every time it's not enough
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
