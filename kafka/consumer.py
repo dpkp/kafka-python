@@ -227,7 +227,7 @@ class SimpleConsumer(Consumer):
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_started = defaultdict(bool)  # defaults to false
-        self.queue = Queue(buffer_size)
+        self.queue = Queue()
 
         super(SimpleConsumer, self).__init__(
             client, group, topic,
