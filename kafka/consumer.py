@@ -35,10 +35,10 @@ class FetchContext(object):
         self.consumer = consumer
         self.block = block
 
-        if block and not timeout:
-            timeout = FETCH_DEFAULT_BLOCK_TIMEOUT
-
-        self.timeout = timeout * 1000
+        if block:
+            if not timeout:
+                timeout = FETCH_DEFAULT_BLOCK_TIMEOUT
+            self.timeout = timeout * 1000
 
     def __enter__(self):
         """Set fetch values based on blocking status"""
