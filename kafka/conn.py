@@ -19,14 +19,14 @@ class KafkaConnection(local):
     we can do something in here to facilitate multiplexed requests/responses
     since the Kafka API includes a correlation id.
     """
-    def __init__(self, host, port, bufsize=4096):
+    def __init__(self, host, port, bufsize=4098, timeout=10):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
         self.bufsize = bufsize
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((host, port))
-        self._sock.settimeout(10)
+        self._sock.settimeout(timeout)
         self._dirty = False
 
     def __str__(self):
