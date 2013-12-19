@@ -55,12 +55,11 @@ class KafkaConnection(local):
             self._raise_connection_error()
         (size,) = struct.unpack('>i', resp)
 
-        messagesize = size - 4
-        log.debug("About to read %d bytes from Kafka", messagesize)
+        log.debug("About to read %d bytes from Kafka", size)
 
         # Read the remainder of the response
         total = 0
-        while total < messagesize:
+        while total < size:
             resp = self._sock.recv(self.bufsize)
             log.debug("Read %d bytes from Kafka", len(resp))
             if resp == "":
