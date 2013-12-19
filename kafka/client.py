@@ -19,13 +19,12 @@ class KafkaClient(object):
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
 
-    def __init__(self, host, port, bufsize=4098, client_id=CLIENT_ID, timeout=10):
+    def __init__(self, host, port, client_id=CLIENT_ID, timeout=10):
         # We need one connection to bootstrap
-        self.bufsize = bufsize
         self.client_id = client_id
         self.timeout = timeout
         self.conns = {               # (host, port) -> KafkaConnection
-            (host, port): KafkaConnection(host, port, bufsize, timeout=timeout)
+            (host, port): KafkaConnection(host, port, timeout=timeout)
         }
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
@@ -42,7 +41,7 @@ class KafkaClient(object):
         """
         if (broker.host, broker.port) not in self.conns:
             self.conns[(broker.host, broker.port)] = \
-                KafkaConnection(broker.host, broker.port, self.bufsize, timeout=self.timeout)
+                KafkaConnection(broker.host, broker.port, timeout=self.timeout)
 
         return self.conns[(broker.host, broker.port)]
 
