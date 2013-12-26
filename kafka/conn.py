@@ -38,12 +38,9 @@ class KafkaConnection(local):
 
     def _consume_response(self):
         """
-        Fully consumer the response iterator
+        Fully consume the response iterator
         """
-        data = ""
-        for chunk in self._consume_response_iter():
-            data += chunk
-        return data
+        return "".join(self._consume_response_iter())
 
     def _consume_response_iter(self):
         """
