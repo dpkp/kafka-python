@@ -1,10 +1,10 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
 from itertools import cycle
 from multiprocessing import Queue, Process
 from Queue import Empty
 import logging
 import sys
+import time
 
 from kafka.common import ProduceRequest
 from kafka.common import FailedPayloadsException
@@ -36,7 +36,7 @@ def _send_upstream(topic, queue, client, batch_time, batch_size,
     while not stop:
         timeout = batch_time
         count = batch_size
-        send_at = datetime.now() + timedelta(seconds=timeout)
+        send_at = time.time() + timeout
         msgset = defaultdict(list)
 
         # Keep fetching till we gather enough messages or a
@@ -54,7 +54,7 @@ def _send_upstream(topic, queue, client, batch_time, batch_size,
 
             # Adjust the timeout to match the remaining period
             count -= 1
-            timeout = (send_at - datetime.now()).total_seconds()
+            timeout = send_at - time.time()
             msgset[partition].append(msg)
 
         # Send collected requests upstream
