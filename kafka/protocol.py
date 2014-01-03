@@ -119,6 +119,14 @@ class KafkaProtocol(object):
                     read_message = True
                     yield OffsetAndMessage(offset, message)
             except BufferUnderflowError:
+                # NOTE: Not sure this is correct error handling:
+                # Is it possible to get a BUE if the message set is somewhere
+                # in the middle of the fetch response? If so, we probably have
+                # an issue that's not fetch size too small.
+                # Aren't we ignoring errors if we fail to unpack data by
+                # raising StopIteration()?
+                # If _decode_message() raises a ChecksumError, couldn't that
+                # also be due to the fetch size being too small?
                 if read_message is False:
                     # If we get a partial read of a message, but haven't
                     # yielded anything there's a problem
