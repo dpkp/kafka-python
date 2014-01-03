@@ -35,13 +35,21 @@ class KafkaConnection(local):
     #   Private API   #
     ###################
 
+    def _raise_connection_error(self):
+        self._dirty = True
+        raise ConnectionError("Kafka @ {}:{} went away".format(self.host, self.port))
+
     def _read_bytes(self, num_bytes):
         bytes_left = num_bytes
         resp = ''
         log.debug("About to read %d bytes from Kafka", num_bytes)
 
         while bytes_left:
-            data = self._sock.recv(bytes_left)
+            try:
+                data = self._sock.recv(bytes_left)
+            except socket.error, e:
+                log.error('Unable to receive data from Kafka: %s', e)
+                self._raise_connection_error()
             if data == '':
                 raise BufferUnderflowError("Not enough data to read this response")
             bytes_left -= len(data)
@@ -65,10 +73,6 @@ class KafkaConnection(local):
         resp = self._read_bytes(size)
         return str(resp)
 
-    def _raise_connection_error(self):
-        self._dirty = True
-        raise ConnectionError("Kafka @ {}:{} went away".format(self.host, self.port))
-
     ##################
     #   Public API   #
     ##################
@@ -84,8 +88,8 @@ class KafkaConnection(local):
             sent = self._sock.sendall(payload)
             if sent is not None:
                 self._raise_connection_error()
-        except socket.error:
-            log.exception('Unable to send payload to Kafka')
+        except socket.error, e:
+            log.error('Unable to send payload to Kafka: %s', e)
             self._raise_connection_error()
 
     def recv(self, request_id):
