@@ -25,6 +25,7 @@ FETCH_DEFAULT_BLOCK_TIMEOUT = 1
 FETCH_MAX_WAIT_TIME = 100
 FETCH_MIN_BYTES = 4096
 FETCH_BUFFER_SIZE_BYTES = 4096
+MAX_FETCH_BUFFER_SIZE_BYTES = FETCH_BUFFER_SIZE_BYTES * 8
 
 ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
@@ -213,8 +214,10 @@ class SimpleConsumer(Consumer):
     auto_commit_every_t: default 5000. How much time (in milliseconds) to
                          wait before commit
     fetch_size_bytes:    number of bytes to request in a FetchRequest
-    buffer_size:         initial number of bytes to tell kafka we have
-                         available. This will double every time it's not enough
+    buffer_size:         default 4K. Initial number of bytes to tell kafka we
+                         have available. This will double as needed.
+    max_buffer_size:     default 16K. Max number of bytes to tell kafka we have
+                         available. None means no limit.
     iter_timeout:        default None. How much time (in seconds) to wait for a
                          message in the iterator before exiting. None means no
                          timeout, so it will wait forever.
@@ -230,9 +233,15 @@ class SimpleConsumer(Consumer):
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
                  fetch_size_bytes=FETCH_MIN_BYTES,
                  buffer_size=FETCH_BUFFER_SIZE_BYTES,
+                 max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
                  iter_timeout=None):
 
+        if max_buffer_size is not None and buffer_size > max_buffer_size:
+            raise ValueError("buffer_size (%d) is greater than "
+                             "max_buffer_size (%d)" %
+                             (buffer_size, max_buffer_size))
         self.buffer_size = buffer_size
+        self.max_buffer_size = max_buffer_size
         self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
@@ -355,42 +364,54 @@ class SimpleConsumer(Consumer):
         # Create fetch request payloads for all the partitions
         requests = []
         partitions = self.offsets.keys()
-        for partition in partitions:
-            requests.append(FetchRequest(self.topic, partition,
-                                         self.offsets[partition],
-                                         self.buffer_size))
-        # Send request
-        responses = self.client.send_fetch_request(
-            requests,
-            max_wait_time=int(self.fetch_max_wait_time),
-            min_bytes=self.fetch_min_bytes)
+        while partitions:
+            for partition in partitions:
+                requests.append(FetchRequest(self.topic, partition,
+                                             self.offsets[partition],
+                                             self.buffer_size))
+            # Send request
+            responses = self.client.send_fetch_request(
+                requests,
+                max_wait_time=int(self.fetch_max_wait_time),
+                min_bytes=self.fetch_min_bytes)
 
-        for resp in responses:
-            partition = resp.partition
-            try:
-                for message in resp.messages:
-                    # Update partition offset
-                    self.offsets[partition] = message.offset + 1
+            retry_partitions = set()
+            for resp in responses:
+                partition = resp.partition
+                try:
+                    for message in resp.messages:
+                        # Update partition offset
+                        self.offsets[partition] = message.offset + 1
 
-                    # Count, check and commit messages if necessary
-                    self.count_since_commit += 1
-                    self._auto_commit()
+                        # Count, check and commit messages if necessary
+                        self.count_since_commit += 1
+                        self._auto_commit()
 
-                    # Put the message in our queue
-                    if self.partition_info:
-                        self.queue.put((partition, message))
+                        # Put the message in our queue
+                        if self.partition_info:
+                            self.queue.put((partition, message))
+                        else:
+                            self.queue.put(message)
+                except ConsumerFetchSizeTooSmall, e:
+                    if (self.max_buffer_size is not None and
+                            self.buffer_size == self.max_buffer_size):
+                        log.error("Max fetch size %d too small",
+                                  self.max_buffer_size)
+                        raise e
+                    if self.max_buffer_size is None:
+                        self.buffer_size *= 2
                     else:
-                        self.queue.put(message)
-            except ConsumerFetchSizeTooSmall, e:
-                self.buffer_size *= 2
-                log.warn("Fetch size too small, increase to %d (2x) and retry",
-                         self.buffer_size)
-            except ConsumerNoMoreData, e:
-                log.debug("Iteration was ended by %r", e)
-            except StopIteration:
-                # Stop iterating through this partition
-                log.debug("Done iterating over partition %s" % partition)
-
+                        self.buffer_size = max([self.buffer_size * 2,
+                                                self.max_buffer_size])
+                    log.warn("Fetch size too small, increase to %d (2x) "
+                             "and retry", self.buffer_size)
+                    retry_partitions.add(partition)
+                except ConsumerNoMoreData, e:
+                    log.debug("Iteration was ended by %r", e)
+                except StopIteration:
+                    # Stop iterating through this partition
+                    log.debug("Done iterating over partition %s" % partition)
+                partitions = retry_partitions
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
     """
