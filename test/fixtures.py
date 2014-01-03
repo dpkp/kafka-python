@@ -272,8 +272,13 @@ class KafkaFixture(object):
 
         self.tmp_dir = None
         self.child = None
+        self.running = False
 
     def open(self):
+        if self.running:
+            print("*** Kafka instance already running")
+            return
+
         self.tmp_dir = tempfile.mkdtemp()
         print("*** Running local Kafka instance")
         print("  host       = %s" % self.host)
@@ -318,10 +323,16 @@ class KafkaFixture(object):
         self.child.start()
         self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id)
         print("*** Done!")
+        self.running = True
 
     def close(self):
+        if not self.running:
+            print("*** Kafka instance already stopped")
+            return
+
         print("*** Stopping Kafka...")
         self.child.stop()
         self.child = None
         print("*** Done!")
         shutil.rmtree(self.tmp_dir)
+        self.running = False
