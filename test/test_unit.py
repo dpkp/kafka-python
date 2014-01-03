@@ -9,15 +9,11 @@ from kafka.common import (
     OffsetAndMessage, BrokerMetadata, PartitionMetadata
 )
 from kafka.codec import (
-    has_gzip, has_snappy,
-    gzip_encode, gzip_decode,
+    has_gzip, has_snappy, gzip_encode, gzip_decode,
     snappy_encode, snappy_decode
 )
 from kafka.protocol import (
-    create_gzip_message,
-    create_message,
-    create_snappy_message,
-    KafkaProtocol
+    create_gzip_message, create_message, create_snappy_message, KafkaProtocol
 )
 
 ITERATIONS = 1000
