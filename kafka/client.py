@@ -8,7 +8,7 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          KafkaRequestError)
+                          BufferUnderflowError, KafkaRequestError)
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
@@ -126,14 +126,24 @@ class KafkaClient(object):
             request = encoder_fn(client_id=self.client_id,
                                  correlation_id=requestId, payloads=payloads)
 
+            failed = False
             # Send the request, recv the response
             try:
                 conn.send(requestId, request)
                 if decoder_fn is None:
                     continue
-                response = conn.recv(requestId)
-            except ConnectionError, e:  # ignore BufferUnderflow for now
-                log.warning("Could not send request [%s] to server %s: %s" % (request, conn, e))
+                try:
+                    response = conn.recv(requestId)
+                except (ConnectionError, BufferUnderflowError), e:
+                    log.warning("Could not receive response to request [%s] "
+                                "from server %s: %s", request, conn, e)
+                    failed = True
+            except ConnectionError, e:
+                log.warning("Could not send request [%s] to server %s: %s",
+                            request, conn, e)
+                failed = True
+
+            if failed:
                 failed_payloads += payloads
                 self.reset_all_metadata()
                 continue
