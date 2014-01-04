@@ -399,8 +399,8 @@ class SimpleConsumer(Consumer):
                     if self.max_buffer_size is None:
                         self.buffer_size *= 2
                     else:
-                        self.buffer_size = max([self.buffer_size * 2,
-                                                self.max_buffer_size])
+                        self.buffer_size = max(self.buffer_size * 2,
+                                               self.max_buffer_size)
                     log.warn("Fetch size too small, increase to %d (2x) "
                              "and retry", self.buffer_size)
                     retry_partitions.add(partition)
