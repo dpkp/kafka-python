@@ -802,25 +802,23 @@ class TestConsumer(unittest.TestCase):
 
 class TestFailover(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
 
-        zk_chroot = random_string(10)
+        zk_chroot  = random_string(10)
         replicas   = 2
         partitions = 2
 
         # mini zookeeper, 2 kafka brokers
-        cls.zk      = ZookeeperFixture.instance()
-        kk_args     = [cls.zk.host, cls.zk.port, zk_chroot, replicas, partitions]
-        cls.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
-        cls.client  = KafkaClient(cls.brokers[0].host, cls.brokers[0].port)
+        self.zk      = ZookeeperFixture.instance()
+        kk_args      = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
+        self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
+        self.client  = KafkaClient(self.brokers[0].host, self.brokers[0].port)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.client.close()
-        for broker in cls.brokers:
+    def tearDown(self):
+        self.client.close()
+        for broker in self.brokers:
             broker.close()
-        cls.zk.close()
+        self.zk.close()
 
     def test_switch_leader(self):
 
