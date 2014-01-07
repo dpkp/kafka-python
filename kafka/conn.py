@@ -83,6 +83,7 @@ class KafkaConnection(local):
         """
         Get a response from Kafka
         """
+        log.debug("Reading response %d from Kafka" % request_id)
         # Read the size off of the header
         resp = self._read_bytes(4)
 
