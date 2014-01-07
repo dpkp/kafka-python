@@ -98,9 +98,10 @@ class KafkaConnection(local):
         Get a response from Kafka
         """
         log.debug("Reading response %d from Kafka" % request_id)
+        if self._dirty:
+            self._raise_connection_error()
+
         try:
-            if self._dirty:
-                self.reinit()
             return self._consume_response()
         except socket.error:
             log.exception('Unable to read response from Kafka')
