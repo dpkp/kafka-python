@@ -98,8 +98,13 @@ class KafkaConnection(local):
         Get a response from Kafka
         """
         log.debug("Reading response %d from Kafka" % request_id)
-        self.data = self._consume_response()
-        return self.data
+        try:
+            if self._dirty:
+                self.reinit()
+            return self._consume_response()
+        except socket.error:
+            log.exception('Unable to read response from Kafka')
+            self._raise_connection_error()
 
     def copy(self):
         """
