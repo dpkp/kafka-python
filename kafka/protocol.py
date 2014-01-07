@@ -29,8 +29,8 @@ class KafkaProtocol(object):
     FETCH_KEY = 1
     OFFSET_KEY = 2
     METADATA_KEY = 3
-    OFFSET_COMMIT_KEY = 6
-    OFFSET_FETCH_KEY = 7
+    OFFSET_COMMIT_KEY = 8
+    OFFSET_FETCH_KEY = 9
 
     ATTRIBUTE_CODEC_MASK = 0x03
     CODEC_NONE = 0x00
