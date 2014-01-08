@@ -55,17 +55,16 @@ class TestPackage(unittest.TestCase):
 
 
 class TestCodec(unittest.TestCase):
+
+    @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_gzip(self):
-        if not has_gzip():
-            return
         for i in xrange(ITERATIONS):
             s1 = random_string()
             s2 = gzip_decode(gzip_encode(s1))
             self.assertEquals(s1, s2)
 
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy(self):
-        if not has_snappy():
-            return
         for i in xrange(ITERATIONS):
             s1 = random_string()
             s2 = snappy_decode(snappy_encode(s1))
@@ -83,6 +82,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.key, key)
         self.assertEqual(msg.value, payload)
 
+    @unittest.skipUnless(has_gzip(), "Snappy not available")
     def test_create_gzip(self):
         payloads = ["v1", "v2"]
         msg = create_gzip_message(payloads)
@@ -98,6 +98,7 @@ class TestProtocol(unittest.TestCase):
                   "\xff\xff\x00\x00\x00\x02v2")
         self.assertEqual(decoded, expect)
 
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_create_snappy(self):
         payloads = ["v1", "v2"]
         msg = create_snappy_message(payloads)
@@ -157,6 +158,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(returned_offset2, 0)
         self.assertEqual(decoded_message2, create_message("v2"))
 
+    @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_decode_message_gzip(self):
         gzip_encoded = ('\xc0\x11\xb2\xf0\x00\x01\xff\xff\xff\xff\x00\x00\x000'
                         '\x1f\x8b\x08\x00\xa1\xc1\xc5R\x02\xffc`\x80\x03\x01'
@@ -173,6 +175,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(returned_offset2, 0)
         self.assertEqual(decoded_message2, create_message("v2"))
 
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_decode_message_snappy(self):
         snappy_encoded = ('\xec\x80\xa1\x95\x00\x02\xff\xff\xff\xff\x00\x00'
                           '\x00,8\x00\x00\x19\x01@\x10L\x9f[\xc2\x00\x00\xff'
