@@ -366,7 +366,7 @@ class SimpleConsumer(Consumer):
             # use MaxBytes = client's bufsize since we're only
             # fetching one topic + partition
             req = FetchRequest(
-                self.topic, partition, offset, self.client.bufsize)
+                self.topic, partition, offset, fetch_size)
 
             (resp,) = self.client.send_fetch_request(
                 [req],
