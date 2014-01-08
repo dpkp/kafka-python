@@ -48,8 +48,8 @@ class KafkaConnection(local):
         while bytes_left:
             try:
                 data = self._sock.recv(bytes_left)
-            except socket.error, e:
-                log.error('Unable to receive data from Kafka: %s', e)
+            except socket.error:
+                log.exception('Unable to receive data from Kafka')
                 self._raise_connection_error()
             if data == '':
                 log.error("Not enough data to read this response")
@@ -76,7 +76,7 @@ class KafkaConnection(local):
             if sent is not None:
                 self._raise_connection_error()
         except socket.error:
-            log.error('Unable to send payload to Kafka: %s', e)
+            log.exception('Unable to send payload to Kafka')
             self._raise_connection_error()
 
     def recv(self, request_id):
