@@ -4,7 +4,6 @@ import logging
 import time
 
 from Queue import Empty
-
 from collections import defaultdict
 from itertools import cycle
 from multiprocessing import Queue, Process

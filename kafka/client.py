@@ -8,7 +8,7 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          KafkaRequestError)
+                          KafkaError)
 
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
@@ -57,40 +57,6 @@ class KafkaClient(object):
 
         return self.topics_to_brokers[key]
 
-    def _load_metadata_for_topics(self, *topics):
-        """
-        Discover brokers and metadata for a set of topics. This method will
-        recurse in the event of a retry.
-        """
-        request_id = self._next_id()
-        request = KafkaProtocol.encode_metadata_request(self.client_id,
-                                                        request_id, topics)
-
-        response = self._send_broker_unaware_request(request_id, request)
-        if response is None:
-            raise Exception("All servers failed to process request")
-
-        (brokers, topics) = KafkaProtocol.decode_metadata_response(response)
-
-        log.debug("Broker metadata: %s", brokers)
-        log.debug("Topic metadata: %s", topics)
-
-        self.brokers = brokers
-        self.topics_to_brokers = {}
-
-        for topic, partitions in topics.items():
-            # Clear the list once before we add it. This removes stale entries
-            # and avoids duplicates
-            self.topic_partitions.pop(topic, None)
-
-            if not partitions:
-                raise PartitionUnavailableError("Partitions for %s are unassigned!" % topic)
-
-            for partition, meta in partitions.items():
-                topic_part = TopicAndPartition(topic, partition)
-                self.topics_to_brokers[topic_part] = brokers[meta.leader]
-                self.topic_partitions[topic].append(partition)
-
     def _next_id(self):
         """
         Generate a new correlation id
@@ -112,7 +78,7 @@ class KafkaClient(object):
                             "trying next server: %s" % (request, conn, e))
                 continue
 
-        raise BrokerResponseError("All servers failed to process request")
+        raise KafkaError("All servers failed to process request")
 
     def _send_broker_aware_request(self, payloads, encoder_fn, decoder_fn):
         """
@@ -226,9 +192,6 @@ class KafkaClient(object):
     def has_metadata_for_topic(self, topic):
         return topic in self.topic_partitions
 
-    def reset_metadata(self):
-        self.topics_to_brokers = {}
-
     def close(self):
         for conn in self.conns.values():
             conn.close()
@@ -269,9 +232,8 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
-                continue
+                raise PartitionUnavailableError("Partitions for %s are unassigned!" % topic)
 
-            self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
                 topic_part = TopicAndPartition(topic, partition)
                 self.topics_to_brokers[topic_part] = brokers[meta.leader]
@@ -317,7 +279,6 @@ class KafkaClient(object):
             if fail_on_error is True:
                 self._raise_on_response_error(resp)
 
-            # Run the callback
             if callback is not None:
                 out.append(callback(resp))
             else:
@@ -346,7 +307,6 @@ class KafkaClient(object):
             if fail_on_error is True:
                 self._raise_on_response_error(resp)
 
-            # Run the callback
             if callback is not None:
                 out.append(callback(resp))
             else:
