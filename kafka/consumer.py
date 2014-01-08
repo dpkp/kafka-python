@@ -106,6 +106,12 @@ class Consumer(object):
         #    (offset,) = self.client.send_offset_fetch_request(group, [req],
         #                  callback=get_or_init_offset_callback,
         #                  fail_on_error=False)
+        #
+        #    #Increment the offset with 1 so that message corresponding to last
+        #    #committed offset doesn't get replayed
+        #    if offset != 0:
+        #       offset +=1
+        #
         #    self.offsets[partition] = offset
 
         for partition in partitions:
@@ -400,6 +406,18 @@ class SimpleConsumer(Consumer):
                 continue
             except ConsumerNoMoreData, e:
                 log.debug("Iteration was ended by %r", e)
+
+            # Uncomment for 0.8.1
+            #
+            # Decrement the value of offset for the partition from where
+            # no messages have been consumed. We initially incremented the offset value
+            # before making fetch request so that message corresponding to the
+            # last committed offset doesn't get replayed.
+            # This step ensures that correct value of offset per partition get
+            # committed if user decides to make an explicit call to commit method.
+            #
+            #if self.offsets[partition] == offset and offset != 0:
+            #    self.offsets[partition] -= 1
 
             if next_offset is None:
                 break
