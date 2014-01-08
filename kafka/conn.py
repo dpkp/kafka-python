@@ -61,21 +61,6 @@ class KafkaConnection(local):
 
         return resp
 
-    def _consume_response(self):
-        """
-        This method handles the response header and error messages. It
-        then returns the response
-        """
-        log.debug("Expecting response from Kafka")
-        # Read the size off of the header
-        resp = self._read_bytes(4)
-
-        (size,) = struct.unpack('>i', resp)
-
-        # Read the remainder of the response
-        resp = self._read_bytes(size)
-        return str(resp)
-
     ##################
     #   Public API   #
     ##################
@@ -100,8 +85,14 @@ class KafkaConnection(local):
         Get a response from Kafka
         """
         log.debug("Reading response %d from Kafka" % request_id)
-        self.data = self._consume_response()
-        return self.data
+        # Read the size off of the header
+        resp = self._read_bytes(4)
+
+        (size,) = struct.unpack('>i', resp)
+
+        # Read the remainder of the response
+        resp = self._read_bytes(size)
+        return str(resp)
 
     def copy(self):
         """
