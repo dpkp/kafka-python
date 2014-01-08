@@ -25,7 +25,8 @@ class KafkaConnection(local):
         self.port = port
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((host, port))
-        self._sock.settimeout(timeout)
+        self.timeout = timeout
+        self._sock.settimeout(self.timeout)
         self._dirty = False
 
     def __str__(self):
@@ -123,5 +124,5 @@ class KafkaConnection(local):
         self.close()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((self.host, self.port))
-        self._sock.settimeout(10)
+        self._sock.settimeout(self.timeout)
         self._dirty = False
