@@ -44,7 +44,8 @@ class KafkaConnection(local):
         bytes_left = num_bytes
         resp = ''
         log.debug("About to read %d bytes from Kafka", num_bytes)
-
+        if self._dirty:
+            self.reinit()
         while bytes_left:
             try:
                 data = self._sock.recv(bytes_left)
@@ -52,6 +53,7 @@ class KafkaConnection(local):
                 log.error('Unable to receive data from Kafka: %s', e)
                 self._raise_connection_error()
             if data == '':
+                self._dirty = True
                 raise BufferUnderflowError("Not enough data to read this response")
             bytes_left -= len(data)
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
