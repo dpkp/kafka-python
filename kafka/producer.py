@@ -146,9 +146,9 @@ class Producer(object):
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
                                                         timeout=self.ack_timeout)
-            except Exception as e:
-                log.error("Unable to send messages: %s", e)
-                raise e
+            except Exception:
+                log.exception("Unable to send messages")
+                raise
         return resp
 
     def stop(self, timeout=1):
