@@ -61,21 +61,6 @@ class KafkaConnection(local):
 
         return resp
 
-    def _consume_response(self):
-        """
-        This method handles the response header and error messages. It
-        then returns the response
-        """
-        log.debug("Expecting response from Kafka")
-        # Read the size off of the header
-        resp = self._read_bytes(4)
-
-        (size,) = struct.unpack('>i', resp)
-
-        # Read the remainder of the response
-        resp = self._read_bytes(size)
-        return str(resp)
-
     ##################
     #   Public API   #
     ##################
@@ -91,7 +76,7 @@ class KafkaConnection(local):
             sent = self._sock.sendall(payload)
             if sent is not None:
                 self._raise_connection_error()
-        except socket.error, e:
+        except socket.error:
             log.error('Unable to send payload to Kafka: %s', e)
             self._raise_connection_error()
 
@@ -100,14 +85,14 @@ class KafkaConnection(local):
         Get a response from Kafka
         """
         log.debug("Reading response %d from Kafka" % request_id)
-        if self._dirty:
-            self._raise_connection_error()
+        # Read the size off of the header
+        resp = self._read_bytes(4)
 
-        try:
-            return self._consume_response()
-        except socket.error:
-            log.exception('Unable to read response from Kafka')
-            self._raise_connection_error()
+        (size,) = struct.unpack('>i', resp)
+
+        # Read the remainder of the response
+        resp = self._read_bytes(size)
+        return str(resp)
 
     def copy(self):
         """
