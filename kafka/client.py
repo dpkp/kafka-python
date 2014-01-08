@@ -3,11 +3,10 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 import logging
-import socket
 import time
 
 from kafka.common import (
-    ErrorMapping, TopicAndPartition, BufferUnderflowError, ConnectionError,
+    ErrorMapping, TopicAndPartition, ConnectionError,
     FailedPayloadsException
 )
 from kafka.conn import KafkaConnection
@@ -175,7 +174,7 @@ class KafkaClient(object):
                     continue
                 try:
                     response = conn.recv(requestId)
-                except (ConnectionError, BufferUnderflowError), e:
+                except ConnectionError, e:
                     log.warning("Could not receive response to request [%s] "
                                 "from server %s: %s", request, conn, e)
                     failed = True
