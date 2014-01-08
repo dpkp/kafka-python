@@ -4,7 +4,6 @@ import socket
 import struct
 from threading import local
 
-from kafka.common import BufferUnderflowError
 from kafka.common import ConnectionError
 
 log = logging.getLogger("kafka")
@@ -53,8 +52,8 @@ class KafkaConnection(local):
                 log.error('Unable to receive data from Kafka: %s', e)
                 self._raise_connection_error()
             if data == '':
-                self._dirty = True
-                raise BufferUnderflowError("Not enough data to read this response")
+                log.error("Not enough data to read this response")
+                self._raise_connection_error()
             bytes_left -= len(data)
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
             resp += data
