@@ -8,7 +8,8 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          BufferUnderflowError, KafkaRequestError)
+                          KafkaRequestError)
+
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
@@ -134,7 +135,7 @@ class KafkaClient(object):
                     continue
                 try:
                     response = conn.recv(requestId)
-                except (ConnectionError, BufferUnderflowError), e:
+                except ConnectionError, e:
                     log.warning("Could not receive response to request [%s] "
                                 "from server %s: %s", request, conn, e)
                     failed = True
