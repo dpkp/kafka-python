@@ -6,8 +6,10 @@ import logging
 import socket
 import time
 
-from kafka.common import ErrorMapping, TopicAndPartition
-from kafka.common import ConnectionError, FailedPayloadsException
+from kafka.common import ErrorMapping, TopicAndPartition, \
+        ConnectionError, FailedPayloadsException, BrokerErrorResponse, \
+        PartitionUnavailableError
+
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
@@ -29,7 +31,6 @@ class KafkaClient(object):
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
         self.topic_partitions = defaultdict(list)  # topic_id -> [0, 1, 2, ...]
-        self._load_metadata_for_topics()
 
     ##################
     #   Private API  #
@@ -51,7 +52,7 @@ class KafkaClient(object):
             self._load_metadata_for_topics(topic)
 
         if key not in self.topics_to_brokers:
-            raise Exception("Partition does not exist: %s" % str(key))
+            raise BrokerErrorResponse("Partition does not exist: %s" % str(key))
 
         return self.topics_to_brokers[key]
 
@@ -82,20 +83,12 @@ class KafkaClient(object):
             self.topic_partitions.pop(topic, None)
 
             if not partitions:
-                log.info("Partition is unassigned, delay for 1s and retry")
-                time.sleep(1)
-                self._load_metadata_for_topics(topic)
-                break
+                raise PartitionUnavailableError("Partitions for %s are unassigned!" % topic)
 
             for partition, meta in partitions.items():
-                if meta.leader == -1:
-                    log.info("Partition is unassigned, delay for 1s and retry")
-                    time.sleep(1)
-                    self._load_metadata_for_topics(topic)
-                else:
-                    topic_part = TopicAndPartition(topic, partition)
-                    self.topics_to_brokers[topic_part] = brokers[meta.leader]
-                    self.topic_partitions[topic].append(partition)
+                topic_part = TopicAndPartition(topic, partition)
+                self.topics_to_brokers[topic_part] = brokers[meta.leader]
+                self.topic_partitions[topic].append(partition)
 
     def _next_id(self):
         """
@@ -149,6 +142,8 @@ class KafkaClient(object):
         for payload in payloads:
             leader = self._get_leader_for_partition(payload.topic,
                                                     payload.partition)
+            if leader == -1:
+                raise PartitionUnavailableError("Leader is unassigned for %s-%s" % payload.topic, payload.partition)
             payloads_by_broker[leader].append(payload)
             original_keys.append((payload.topic, payload.partition))
 
@@ -174,7 +169,7 @@ class KafkaClient(object):
             except ConnectionError, e:  # ignore BufferUnderflow for now
                 log.warning("Could not send request [%s] to server %s: %s" % (request, conn, e))
                 failed_payloads += payloads
-                self.topics_to_brokers = {} # reset metadata
+                self.reset_metadata()
                 continue
 
             for response in decoder_fn(response):
@@ -189,6 +184,9 @@ class KafkaClient(object):
     #################
     #   Public API  #
     #################
+
+    def reset_metadata(self):
+        self.topics_to_brokers = {}
 
     def close(self):
         for conn in self.conns.values():
@@ -247,7 +245,7 @@ class KafkaClient(object):
         for resp in resps:
             # Check for errors
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception(
+                raise BrokerErrorResponse(
                     "ProduceRequest for %s failed with errorcode=%d" %
                     (TopicAndPartition(resp.topic, resp.partition),
                         resp.error))
@@ -280,7 +278,7 @@ class KafkaClient(object):
         for resp in resps:
             # Check for errors
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception(
+                raise BrokerErrorResponse(
                     "FetchRequest for %s failed with errorcode=%d" %
                     (TopicAndPartition(resp.topic, resp.partition),
                         resp.error))
@@ -302,7 +300,7 @@ class KafkaClient(object):
         out = []
         for resp in resps:
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception("OffsetRequest failed with errorcode=%s",
+                raise BrokerErrorResponse("OffsetRequest failed with errorcode=%s",
                                 resp.error)
             if callback is not None:
                 out.append(callback(resp))
@@ -320,7 +318,7 @@ class KafkaClient(object):
         out = []
         for resp in resps:
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception("OffsetCommitRequest failed with "
+                raise BrokerErrorResponse("OffsetCommitRequest failed with "
                                 "errorcode=%s", resp.error)
 
             if callback is not None:
@@ -340,7 +338,7 @@ class KafkaClient(object):
         out = []
         for resp in resps:
             if fail_on_error is True and resp.error != ErrorMapping.NO_ERROR:
-                raise Exception("OffsetCommitRequest failed with errorcode=%s",
+                raise BrokerErrorResponse("OffsetCommitRequest failed with errorcode=%s",
                                 resp.error)
             if callback is not None:
                 out.append(callback(resp))
