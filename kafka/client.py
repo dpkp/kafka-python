@@ -29,6 +29,7 @@ class KafkaClient(object):
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
         self.topic_partitions = defaultdict(list)  # topic_id -> [0, 1, 2, ...]
+        self.load_metadata_for_topics()  # bootstrap with all metadata
 
     ##################
     #   Private API  #
