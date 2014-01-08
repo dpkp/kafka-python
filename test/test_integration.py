@@ -41,7 +41,6 @@ class TestKafkaClient(KafkaTestCase):
         cls.server.close()
         cls.zk.close()
 
-
     #####################
     #   Produce Tests   #
     #####################
