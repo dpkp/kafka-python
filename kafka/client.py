@@ -232,8 +232,9 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
-                raise PartitionUnavailableError("Partitions for %s are unassigned!" % topic)
+                continue
 
+            self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
                 topic_part = TopicAndPartition(topic, partition)
                 self.topics_to_brokers[topic_part] = brokers[meta.leader]
