@@ -8,7 +8,7 @@ import random
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.codec import has_gzip, has_snappy
-from kafka.consumer import FETCH_BUFFER_SIZE_BYTES, MAX_FETCH_BUFFER_SIZE_BYTES
+from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
 from .fixtures import ZookeeperFixture, KafkaFixture
 
 
