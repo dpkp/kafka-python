@@ -69,20 +69,26 @@ class ErrorMapping(object):
 #   Exceptions  #
 #################
 
+
 class KafkaException(RuntimeError):
     pass
+
 
 class BrokerErrorResponse(KafkaException):
     pass
 
+
 class PartitionUnavailableError(KafkaException):
     pass
+
 
 class FailedPayloadsException(KafkaException):
     pass
 
+
 class ConnectionError(KafkaException):
     pass
+
 
 class BufferUnderflowError(KafkaException):
     pass

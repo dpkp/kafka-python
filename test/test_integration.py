@@ -17,7 +17,7 @@ class KafkaTestCase(unittest.TestCase):
         while True:
             times += 1
             try:
-                self.client._load_metadata_for_topics(partition_name)
+                self.client.load_metadata_for_topics(partition_name)
                 break
             except PartitionUnavailableError:
                 print "Waiting for %s partition to be created" % partition_name
