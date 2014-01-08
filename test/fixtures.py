@@ -209,11 +209,11 @@ class ZookeeperFixture(object):
         self.child = None
 
     def out(self, message):
-        print("*** Zookeeper[%s]: %s" % (id(self), message))
+        print("*** Zookeeper [%s:%d]: %s" % (self.host, self.port, message))
 
     def open(self):
         self.tmp_dir = tempfile.mkdtemp()
-        print("*** [%s] Running local Zookeeper instance..." % id(self))
+        self.out("Running local instance...")
         print("  host    = %s" % self.host)
         print("  port    = %s" % self.port)
         print("  tmp_dir = %s" % self.tmp_dir)
@@ -278,7 +278,7 @@ class KafkaFixture(object):
         self.running = False
 
     def out(self, message):
-        print("*** Kafka[%s]: %s" % (id(self), message))
+        print("*** Kafka [%s:%d]: %s" % (self.host, self.port, message))
 
     def open(self):
         if self.running:
@@ -286,7 +286,7 @@ class KafkaFixture(object):
             return
 
         self.tmp_dir = tempfile.mkdtemp()
-        self.out("Running local instance")
+        self.out("Running local instance...")
         print("  host       = %s" % self.host)
         print("  port       = %s" % self.port)
         print("  broker_id  = %s" % self.broker_id)
