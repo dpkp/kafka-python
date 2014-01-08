@@ -28,7 +28,7 @@ class KafkaClient(object):
         }
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
-        self.topic_partitions = defaultdict(list)  # topic_id -> [0, 1, 2, ...]
+        self.topic_partitions = {}   # topic_id -> [0, 1, 2, ...]
         self.load_metadata_for_topics()  # bootstrap with all metadata
 
     ##################
@@ -163,10 +163,22 @@ class KafkaClient(object):
     #################
     def reset_topic_metadata(self, *topics):
         for topic in topics:
-            del self.topics_to_brokers[topic]
+            try:
+                partitions = self.topic_partitions[topic]
+            except KeyError:
+                continue
+
+            for partition in partitions:
+                self.topics_to_brokers.pop(TopicAndPartition(topic, partition), None)
+
+            del self.topic_partitions[topic]
 
     def reset_all_metadata(self):
-        self.topics_to_brokers = {}
+        self.topics_to_brokers.clear()
+        self.topic_partitions.clear()
+
+    def has_metadata_for_topic(self, topic):
+        return topic in self.topic_partitions
 
     def close(self):
         for conn in self.conns.values():
@@ -203,16 +215,14 @@ class KafkaClient(object):
         log.debug("Topic metadata: %s", topics)
 
         self.brokers = brokers
-        self.topics_to_brokers = {}
 
         for topic, partitions in topics.items():
-            # Clear the list once before we add it. This removes stale entries
-            # and avoids duplicates
-            self.topic_partitions.pop(topic, None)
+            self.reset_topic_metadata(topic)
 
             if not partitions:
-                raise PartitionUnavailableError("Partitions for %s are unassigned!" % topic)
+                continue
 
+            self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
                 topic_part = TopicAndPartition(topic, partition)
                 self.topics_to_brokers[topic_part] = brokers[meta.leader]

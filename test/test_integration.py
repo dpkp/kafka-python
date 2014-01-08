@@ -10,21 +10,21 @@ from kafka.common import *  # noqa
 from kafka.codec import has_gzip, has_snappy
 from .fixtures import ZookeeperFixture, KafkaFixture
 
+
 class KafkaTestCase(unittest.TestCase):
     def setUp(self):
-        partition_name = self.id()[self.id().rindex(".")+1:]
+        topic_name = self.id()[self.id().rindex(".")+1:]
         times = 0
         while True:
             times += 1
-            try:
-                self.client.load_metadata_for_topics(partition_name)
+            self.client.load_metadata_for_topics(topic_name)
+            if self.client.has_metadata_for_topic(topic_name):
                 break
-            except PartitionUnavailableError:
-                print "Waiting for %s partition to be created" % partition_name
-                time.sleep(1)
+            print "Waiting for %s topic to be created" % topic_name
+            time.sleep(1)
 
             if times > 30:
-                raise Exception("Unable to create partition %s" % partition_name)
+                raise Exception("Unable to create topic %s" % topic_name)
 
 
 class TestKafkaClient(KafkaTestCase):
