@@ -5,9 +5,10 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 
-from kafka.common import ErrorMapping, TopicAndPartition, \
-    ConnectionError, FailedPayloadsException, BrokerErrorResponse, \
-    PartitionUnavailableError, KafkaException
+from kafka.common import (ErrorMapping, TopicAndPartition,
+                          ConnectionError, FailedPayloadsError,
+                          BrokerResponseError, PartitionUnavailableError,
+                          KafkaRequestError)
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
 
@@ -51,7 +52,7 @@ class KafkaClient(object):
             self.load_metadata_for_topics(topic)
 
         if key not in self.topics_to_brokers:
-            raise BrokerErrorResponse("Partition does not exist: %s" % str(key))
+            raise KafkaRequestError("Partition does not exist: %s" % str(key))
 
         return self.topics_to_brokers[key]
 
@@ -76,7 +77,7 @@ class KafkaClient(object):
                             "trying next server: %s" % (request, conn, e))
                 continue
 
-        raise KafkaException("All servers failed to process request")
+        raise BrokerResponseError("All servers failed to process request")
 
     def _send_broker_aware_request(self, payloads, encoder_fn, decoder_fn):
         """
@@ -141,7 +142,7 @@ class KafkaClient(object):
                 acc[(response.topic, response.partition)] = response
 
         if failed_payloads:
-            raise FailedPayloadsException(failed_payloads)
+            raise FailedPayloadsError(failed_payloads)
 
         # Order the accumulated responses by the original key order
         return (acc[k] for k in original_keys) if acc else ()
@@ -154,7 +155,7 @@ class KafkaClient(object):
                           ErrorMapping.NOT_LEADER_FOR_PARTITION):
             self.reset_topic_metadata(resp.topic)
 
-        raise BrokerErrorResponse(
+        raise BrokerResponseError(
             "Request for %s failed with errorcode=%d" %
             (TopicAndPartition(resp.topic, resp.partition), resp.error))
 

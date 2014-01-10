@@ -825,7 +825,7 @@ class TestFailover(KafkaTestCase):
             broker = self._kill_leader(topic, partition)
 
             # expect failure, reload meta data
-            with self.assertRaises(FailedPayloadsException):
+            with self.assertRaises(FailedPayloadsError):
                 producer.send_messages('part 1')
                 producer.send_messages('part 2')
             time.sleep(1)

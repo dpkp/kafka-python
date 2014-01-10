@@ -70,37 +70,41 @@ class ErrorMapping(object):
 #################
 
 
-class KafkaException(RuntimeError):
+class KafkaError(RuntimeError):
     pass
 
 
-class BrokerErrorResponse(KafkaException):
+class KafkaRequestError(KafkaError):
     pass
 
 
-class PartitionUnavailableError(KafkaException):
+class BrokerResponseError(KafkaError):
     pass
 
 
-class FailedPayloadsException(KafkaException):
+class PartitionUnavailableError(KafkaError):
     pass
 
 
-class ConnectionError(KafkaException):
+class FailedPayloadsError(KafkaError):
     pass
 
 
-class BufferUnderflowError(KafkaException):
+class ConnectionError(KafkaError):
     pass
 
 
-class ChecksumError(KafkaException):
+class BufferUnderflowError(KafkaError):
     pass
 
 
-class ConsumerFetchSizeTooSmall(KafkaException):
+class ChecksumError(KafkaError):
     pass
 
 
-class ConsumerNoMoreData(KafkaException):
+class ConsumerFetchSizeTooSmall(KafkaError):
+    pass
+
+
+class ConsumerNoMoreData(KafkaError):
     pass
