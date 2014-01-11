@@ -2,7 +2,6 @@ import copy
 import logging
 import socket
 import struct
-from threading import local
 
 from kafka.common import BufferUnderflowError
 from kafka.common import ConnectionError
@@ -10,7 +9,7 @@ from kafka.common import ConnectionError
 log = logging.getLogger("kafka")
 
 
-class KafkaConnection(local):
+class KafkaConnection(object):
     """
     A socket connection to a single Kafka broker
 

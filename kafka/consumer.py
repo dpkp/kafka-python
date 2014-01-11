@@ -4,17 +4,15 @@ from collections import defaultdict
 from itertools import izip_longest, repeat
 import logging
 import time
-from threading import Lock
-from multiprocessing import Process, Queue, Event, Value
 from Queue import Empty
+from multiprocessing import Process, Queue, Event, Value, Array, \
+                            current_process
 
 from kafka.common import (
     ErrorMapping, FetchRequest,
     OffsetRequest, OffsetCommitRequest,
     ConsumerFetchSizeTooSmall, ConsumerNoMoreData
 )
-
-from kafka.util import ReentrantTimer
 
 log = logging.getLogger("kafka")
 
@@ -53,6 +51,98 @@ class FetchContext(object):
         self.consumer.fetch_min_bytes = FETCH_MIN_BYTES
 
 
+class Offsets(dict):
+    """
+    A dictionary of partitions=>offsets. The dict is such that the entries
+    are shared over multiprocessing
+    """
+    def __init__(self, *args, **kwargs):
+        super(Offsets, self).__init__(*args, **kwargs)
+        self.length = len(self) * 2
+        self.array = Array('i', self.length)
+        self.__syncup()
+
+    def __syncup(self):
+        i = 0
+        for k, v in self.items():
+            self.array[i] = k
+            self.array[i+1] = v
+            i += 2
+
+    def __setitem__(self, key, value):
+        super(Offsets, self).__setitem__(key, value)
+        self.__syncup()
+
+    def shareditems(self, keys=None):
+        if keys is None:
+            keys = self.keys()
+
+        for i in range(self.length):
+            if i % 2 == 0:
+                k = self.array[i]
+            else:
+                if k in keys:
+                    yield k, self.array[i]
+
+
+def _commit(client, group, topic, count, offsets, partitions=None):
+    """
+    Commit offsets for this consumer
+
+    partitions: list of partitions to commit, default is to commit
+                all of them
+    """
+
+    # short circuit if nothing happened.
+    if count.value == 0:
+        return
+
+    reqs = []
+    for partition, offset in offsets.shareditems(keys=partitions):
+        log.debug("Commit offset %d in SimpleConsumer: "
+                  "group=%s, topic=%s, partition=%s" %
+                  (offset, group, topic, partition))
+
+        reqs.append(OffsetCommitRequest(topic, partition, offset, None))
+
+    resps = client.send_offset_commit_request(group, reqs)
+    for resp in resps:
+        assert resp.error == 0
+
+    count.value = 0
+
+
+def _committer(client, group, topic, timeout, queue, event, count, offsets):
+    """
+    The process thread which takes care of committing
+
+    NOTE: Ideally, this should have been a method inside the Consumer
+    class. However, multiprocessing module has issues in windows. The
+    functionality breaks unless this function is kept outside of a class
+    """
+    client.reinit()
+
+    if timeout is not None:
+        timeout /= 1000.0
+
+    while True:
+        try:
+            partitions = queue.get(timeout=timeout)
+            if partitions == -1:
+                break
+            notify = True
+        except Empty:
+            # A timeout has happened. Do a commit
+            partitions = None
+            notify = False
+
+        # Try and commit the offsets
+        _commit(client, group, topic, count, offsets, partitions)
+
+        if notify:
+            event.set()
+
+
 class Consumer(object):
     """
     Base class to be used by other consumers. Not to be used directly
@@ -70,24 +160,24 @@ class Consumer(object):
         self.topic = topic
         self.group = group
         self.client._load_metadata_for_topics(topic)
-        self.offsets = {}
+        offsets = {}
 
         if not partitions:
             partitions = self.client.topic_partitions[topic]
 
         # Variables for handling offset commits
-        self.commit_lock = Lock()
+        self.commit_queue = Queue()
+        self.commit_event = Event()
         self.commit_timer = None
-        self.count_since_commit = 0
+        self.count_since_commit = Value('i', 0)
         self.auto_commit = auto_commit
-        self.auto_commit_every_n = auto_commit_every_n
-        self.auto_commit_every_t = auto_commit_every_t
 
-        # Set up the auto-commit timer
-        if auto_commit is True and auto_commit_every_t is not None:
-            self.commit_timer = ReentrantTimer(auto_commit_every_t,
-                                               self.commit)
-            self.commit_timer.start()
+        if auto_commit:
+            self.auto_commit_every_n = auto_commit_every_n
+            self.auto_commit_every_t = auto_commit_every_t
+        else:
+            self.auto_commit_every_n = None
+            self.auto_commit_every_t = None
 
         def get_or_init_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
@@ -106,48 +196,41 @@ class Consumer(object):
         #    (offset,) = self.client.send_offset_fetch_request(group, [req],
         #                  callback=get_or_init_offset_callback,
         #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
+        #    offsets[partition] = offset
 
         for partition in partitions:
-            self.offsets[partition] = 0
+            offsets[partition] = 0
 
-    def commit(self, partitions=None):
+        # Set this as a shared object
+        self.offsets = Offsets(offsets)
+
+        # Start committer only in the master/controller
+        if not current_process().daemon:
+            args = (client.copy(), group, topic,
+                    self.auto_commit_every_t,
+                    self.commit_queue,
+                    self.commit_event,
+                    self.count_since_commit,
+                    self.offsets)
+
+            self.commit_timer = Process(target=_committer, args=args)
+            self.commit_timer.daemon = True
+            self.commit_timer.start()
+
+    def commit(self, partitions=None, block=True, timeout=None):
         """
         Commit offsets for this consumer
 
         partitions: list of partitions to commit, default is to commit
                     all of them
+        block: If set, the API will block for commit to happen
+        timeout: The time in seconds for the API to block
         """
+        self.commit_event.clear()
+        self.commit_queue.put(partitions)
 
-        # short circuit if nothing happened. This check is kept outside
-        # to prevent un-necessarily acquiring a lock for checking the state
-        if self.count_since_commit == 0:
-            return
-
-        with self.commit_lock:
-            # Do this check again, just in case the state has changed
-            # during the lock acquiring timeout
-            if self.count_since_commit == 0:
-                return
-
-            reqs = []
-            if not partitions:  # commit all partitions
-                partitions = self.offsets.keys()
-
-            for partition in partitions:
-                offset = self.offsets[partition]
-                log.debug("Commit offset %d in SimpleConsumer: "
-                          "group=%s, topic=%s, partition=%s" %
-                          (offset, self.group, self.topic, partition))
-
-                reqs.append(OffsetCommitRequest(self.topic, partition,
-                                                offset, None))
-
-            resps = self.client.send_offset_commit_request(self.group, reqs)
-            for resp in resps:
-                assert resp.error == 0
-
-            self.count_since_commit = 0
+        if block:
+            self.commit_event.wait(timeout)
 
     def _auto_commit(self):
         """
@@ -158,13 +241,19 @@ class Consumer(object):
         if not self.auto_commit or self.auto_commit_every_n is None:
             return
 
-        if self.count_since_commit > self.auto_commit_every_n:
+        if self.count_since_commit.value >= self.auto_commit_every_n:
             self.commit()
 
     def stop(self):
         if self.commit_timer is not None:
-            self.commit_timer.stop()
-            self.commit()
+            # We will do an auto commit only if configured to do so
+            # Else, it is the responsibility of the caller to commit before
+            # stopping
+            if self.auto_commit:
+                self.commit()
+
+            self.commit_queue.put(-1)
+            self.commit_timer.join()
 
     def pending(self, partitions=None):
         """
@@ -339,7 +428,7 @@ class SimpleConsumer(Consumer):
                     continue
 
                 # Count, check and commit messages if necessary
-                self.count_since_commit += 1
+                self.count_since_commit.value += 1
                 self._auto_commit()
 
     def __iter_partition__(self, partition, offset):
@@ -575,7 +664,7 @@ class MultiProcessConsumer(Consumer):
             self.start.clear()
             yield message
 
-            self.count_since_commit += 1
+            self.count_since_commit.value += 1
             self._auto_commit()
 
         self.start.clear()
@@ -615,7 +704,7 @@ class MultiProcessConsumer(Consumer):
 
             # Count, check and commit messages if necessary
             self.offsets[partition] = message.offset
-            self.count_since_commit += 1
+            self.count_since_commit.value += 1
             self._auto_commit()
             count -= 1
 
