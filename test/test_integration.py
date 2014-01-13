@@ -719,7 +719,7 @@ class TestConsumer(KafkaTestCase):
         start = datetime.now()
         messages = consumer.get_messages(block=True, timeout=5)
         diff = (datetime.now() - start).total_seconds()
-        self.assertGreaterEqual(diff, 5)
+        self.assertGreaterEqual(diff, 4.9)
         self.assertEqual(len(messages), 0)
 
         # Send 10 messages
@@ -821,16 +821,16 @@ class TestConsumer(KafkaTestCase):
 class TestFailover(KafkaTestCase):
 
     def setUp(self):
-
-        zk_chroot  = random_string(10)
-        replicas   = 2
+        zk_chroot = random_string(10)
+        replicas = 2
         partitions = 2
 
         # mini zookeeper, 2 kafka brokers
-        self.zk      = ZookeeperFixture.instance()
-        kk_args      = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
+        self.zk = ZookeeperFixture.instance()
+        kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
         self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
-        self.client  = KafkaClient(self.brokers[0].host, self.brokers[0].port)
+        self.client = KafkaClient(self.brokers[0].host, self.brokers[0].port)
+        KafkaTestCase.setUp(self)
 
     def tearDown(self):
         self.client.close()
@@ -904,17 +904,17 @@ class TestFailover(KafkaTestCase):
             resp = producer.send_messages(random_string(10))
             if len(resp) > 0:
                 self.assertEquals(resp[0].error, 0)
-        time.sleep(1) # give it some time
+        time.sleep(1)  # give it some time
 
     def _kill_leader(self, topic, partition):
         leader = self.client.topics_to_brokers[TopicAndPartition(topic, partition)]
         broker = self.brokers[leader.nodeId]
         broker.close()
-        time.sleep(1) # give it some time
+        time.sleep(1)  # give it some time
         return broker
 
     def _count_messages(self, group, topic):
-        client   = KafkaClient(self.brokers[0].host, self.brokers[0].port)
+        client = KafkaClient(self.brokers[0].host, self.brokers[0].port)
         consumer = SimpleConsumer(client, group, topic, auto_commit=False, iter_timeout=0)
         all_messages = []
         for message in consumer:
