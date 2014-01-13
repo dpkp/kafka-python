@@ -69,7 +69,7 @@ def _send_upstream(topic, queue, client, batch_time, batch_size,
             client.send_produce_request(reqs,
                                         acks=req_acks,
                                         timeout=ack_timeout)
-        except Exception as exp:
+        except Exception:
             log.exception("Unable to send message")
 
 
@@ -146,9 +146,9 @@ class Producer(object):
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
                                                         timeout=self.ack_timeout)
-            except Exception as e:
+            except Exception:
                 log.exception("Unable to send messages")
-                raise e
+                raise
         return resp
 
     def stop(self, timeout=1):
