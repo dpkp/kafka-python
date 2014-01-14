@@ -8,7 +8,7 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          KafkaRequestError)
+                          KafkaUnavailableError, KafkaRequestError)
 
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol
@@ -78,7 +78,7 @@ class KafkaClient(object):
                             "trying next server: %s" % (request, conn, e))
                 continue
 
-        raise BrokerResponseError("All servers failed to process request")
+        raise KafkaUnavailableError("All servers failed to process request")
 
     def _send_broker_aware_request(self, payloads, encoder_fn, decoder_fn):
         """
