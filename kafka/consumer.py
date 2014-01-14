@@ -76,7 +76,7 @@ class Consumer(object):
         self.client = client
         self.topic = topic
         self.group = group
-        self.client._load_metadata_for_topics(topic)
+        self.client.load_metadata_for_topics(topic)
         self.offsets = {}
 
         if not partitions:
