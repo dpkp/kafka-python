@@ -37,7 +37,7 @@ class KafkaConnection(local):
 
     def _raise_connection_error(self):
         self._dirty = True
-        raise ConnectionError("Kafka @ {}:{} went away".format(self.host, self.port))
+        raise ConnectionError("Kafka @ {0}:{1} went away".format(self.host, self.port))
 
     def _read_bytes(self, num_bytes):
         bytes_left = num_bytes
