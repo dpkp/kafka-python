@@ -60,6 +60,27 @@ class KafkaConnection(local):
 
         return resp
 
+    def _read_bytes(self, num_bytes):
+        bytes_left = num_bytes
+        resp = ''
+        log.debug("About to read %d bytes from Kafka", num_bytes)
+        if self._dirty:
+            self.reinit()
+        while bytes_left:
+            try:
+                data = self._sock.recv(bytes_left)
+            except socket.error:
+                log.exception('Unable to receive data from Kafka')
+                self._raise_connection_error()
+            if data == '':
+                log.error("Not enough data to read this response")
+                self._raise_connection_error()
+            bytes_left -= len(data)
+            log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
+            resp += data
+
+        return resp
+
     ##################
     #   Public API   #
     ##################
