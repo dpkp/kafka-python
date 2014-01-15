@@ -199,6 +199,9 @@ class SimpleProducer(Producer):
         partition = self.next_partition.next()
         return super(SimpleProducer, self).send_messages(partition, *msg)
 
+    def __repr__(self):
+        return '<SimpleProducer topic=%s, batch=%s>' % (self.topic, self.async)
+
 
 class KeyedProducer(Producer):
     """
@@ -240,3 +243,6 @@ class KeyedProducer(Producer):
         partitions = self.client.topic_partitions[self.topic]
         partition = self.partitioner.partition(key, partitions)
         return self.send_messages(partition, msg)
+
+    def __repr__(self):
+        return '<KeyedProducer topic=%s, batch=%s>' % (self.topic, self.async)

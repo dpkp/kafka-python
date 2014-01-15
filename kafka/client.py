@@ -158,6 +158,9 @@ class KafkaClient(object):
         # Order the accumulated responses by the original key order
         return (acc[k] for k in original_keys) if acc else ()
 
+    def __repr__(self):
+        return '<KafkaClient client_id=%s>' % (self.client_id)
+
     def _raise_on_response_error(self, resp):
         if resp.error == ErrorMapping.NO_ERROR:
             return
