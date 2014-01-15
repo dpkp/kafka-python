@@ -315,7 +315,7 @@ class SimpleConsumer(Consumer):
                  it will block forever.
         """
         messages = []
-        if timeout:
+        if timeout is not None:
             max_time = time.time() + timeout
 
         while count > 0 and (timeout is None or timeout > 0):
@@ -328,7 +328,7 @@ class SimpleConsumer(Consumer):
                 if not block:
                     # If we're not blocking, break.
                     break
-                if timeout:
+                if timeout is not None:
                     # If we're blocking and have a timeout, reduce it to the
                     # appropriate value
                     timeout = max_time - time.time()
@@ -610,7 +610,7 @@ class MultiProcessConsumer(Consumer):
         self.size.value = count
         self.pause.clear()
 
-        if timeout:
+        if timeout is not None:
             max_time = time.time() + timeout
 
         while count > 0 and (timeout is None or timeout > 0):
@@ -633,7 +633,8 @@ class MultiProcessConsumer(Consumer):
             self.count_since_commit += 1
             self._auto_commit()
             count -= 1
-            timeout = max_time - time.time()
+            if timeout is not None:
+                timeout = max_time - time.time()
 
         self.size.value = 0
         self.start.clear()
