@@ -8,6 +8,7 @@ from kafka.common import ConnectionError
 
 log = logging.getLogger("kafka")
 
+DEFAULT_SOCKET_TIMEOUT_SECONDS = 120
 
 class KafkaConnection(local):
     """
@@ -20,10 +21,10 @@ class KafkaConnection(local):
 
     host:    the host name or IP address of a kafka broker
     port:    the port number the kafka broker is listening on
-    timeout: default None. The socket timeout for sending and receiving data.
-             None means no timeout, so a request can block forever.
+    timeout: default 120. The socket timeout for sending and receiving data
+             in seconds. None means no timeout, so a request can block forever.
     """
-    def __init__(self, host, port, timeout=None):
+    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port

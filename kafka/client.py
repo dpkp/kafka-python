@@ -10,7 +10,7 @@ from kafka.common import (ErrorMapping, TopicAndPartition,
                           BrokerResponseError, PartitionUnavailableError,
                           KafkaUnavailableError, KafkaRequestError)
 
-from kafka.conn import KafkaConnection
+from kafka.conn import KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
 
 log = logging.getLogger("kafka")
@@ -21,7 +21,11 @@ class KafkaClient(object):
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
 
-    def __init__(self, host, port, client_id=CLIENT_ID, timeout=10):
+    # NOTE: The timeout given to the client should always be greater than the
+    # one passed to SimpleConsumer.get_message(), otherwise you can get a
+    # socket timeout.
+    def __init__(self, host, port, client_id=CLIENT_ID,
+                 timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
