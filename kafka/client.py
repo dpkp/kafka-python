@@ -38,6 +38,9 @@ class KafkaClient(object):
         self.topic_partitions = {}   # topic_id -> [0, 1, 2, ...]
         self.load_metadata_for_topics()  # bootstrap with all metadata
 
+    def create_connection(self, host, port):
+        return KafkaConnection(host, port, timeout=self.timeout)
+
     ##################
     #   Private API  #
     ##################
@@ -56,8 +59,7 @@ class KafkaClient(object):
         Get or create a connection to a broker
         """
         if (broker.host, broker.port) not in self.conns:
-            self.conns[(broker.host, broker.port)] = \
-                KafkaConnection(broker.host, broker.port, timeout=self.timeout)
+            self.conns[(broker.host, broker.port)] = self.create_connection(broker.host, broker.port)
 
         return self._get_conn(broker.host, broker.port)
 
