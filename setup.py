@@ -6,6 +6,7 @@ from setuptools import setup, Command
 
 class Tox(Command):
     user_options = []
+
     def initialize_options(self):
         pass
 
@@ -19,7 +20,7 @@ class Tox(Command):
 
 setup(
     name="kafka-python",
-    version="0.8.1-1",
+    version="0.9.0",
 
     install_requires=["distribute"],
     tests_require=["tox"],
