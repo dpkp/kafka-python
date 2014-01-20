@@ -350,6 +350,12 @@ class SimpleConsumer(Consumer):
 
     def _get_message(self, block=True, timeout=0.1, get_partition_info=None,
                      update_offset=True):
+        """
+        If no messages can be fetched, returns None.
+        If get_partition_info is None, it defaults to self.partition_info
+        If get_partition_info is True, returns (partition, message)
+        If get_partition_info is False, returns message
+        """
         if self.queue.empty():
             # We're out of messages, go grab some more.
             with FetchContext(self, block, timeout):
