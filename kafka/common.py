@@ -74,10 +74,6 @@ class KafkaError(RuntimeError):
     pass
 
 
-class KafkaRequestError(KafkaError):
-    pass
-
-
 class KafkaUnavailableError(KafkaError):
     pass
 

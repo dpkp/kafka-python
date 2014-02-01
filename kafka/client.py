@@ -8,7 +8,7 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          KafkaUnavailableError, KafkaRequestError)
+                          KafkaUnavailableError)
 
 from kafka.conn import KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
@@ -53,11 +53,13 @@ class KafkaClient(object):
 
     def _get_leader_for_partition(self, topic, partition):
         key = TopicAndPartition(topic, partition)
-        if key not in self.topics_to_brokers:
+        # reload metadata whether the partition is not available
+        # or has not leader (broker is None)
+        if self.topics_to_brokers.get(key) is None:
             self.load_metadata_for_topics(topic)
 
         if key not in self.topics_to_brokers:
-            raise KafkaRequestError("Partition does not exist: %s" % str(key))
+            raise PartitionUnavailableError("No leader for %s" % str(key))
 
         return self.topics_to_brokers[key]
 
@@ -239,14 +241,18 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
+                log.info('No partitions for %s', topic)
                 continue
 
             self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
-                if meta.leader != -1:
-                    topic_part = TopicAndPartition(topic, partition)
+                self.topic_partitions[topic].append(partition)
+                topic_part = TopicAndPartition(topic, partition)
+                if meta.leader == -1:
+                    log.info('No leader for topic %s partition %d', topic, partition)
+                    self.topics_to_brokers[topic_part] = None
+                else:
                     self.topics_to_brokers[topic_part] = brokers[meta.leader]
-                    self.topic_partitions[topic].append(partition)
 
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
