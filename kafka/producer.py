@@ -1,15 +1,16 @@
+from __future__ import absolute_import
+
+import logging
+import time
+
+from Queue import Empty
 from collections import defaultdict
-from datetime import datetime, timedelta
 from itertools import cycle
 from multiprocessing import Queue, Process
-from Queue import Empty
-import logging
-import sys
 
-from kafka.common import ProduceRequest
-from kafka.common import FailedPayloadsException
-from kafka.protocol import create_message
+from kafka.common import ProduceRequest, TopicAndPartition
 from kafka.partitioner import HashedPartitioner
+from kafka.protocol import create_message
 
 log = logging.getLogger("kafka")
 
@@ -19,7 +20,7 @@ BATCH_SEND_MSG_COUNT = 20
 STOP_ASYNC_PRODUCER = -1
 
 
-def _send_upstream(topic, queue, client, batch_time, batch_size,
+def _send_upstream(queue, client, batch_time, batch_size,
                    req_acks, ack_timeout):
     """
     Listen on the queue for a specified number of messages or till
@@ -36,38 +37,41 @@ def _send_upstream(topic, queue, client, batch_time, batch_size,
     while not stop:
         timeout = batch_time
         count = batch_size
-        send_at = datetime.now() + timedelta(seconds=timeout)
+        send_at = time.time() + timeout
         msgset = defaultdict(list)
 
         # Keep fetching till we gather enough messages or a
         # timeout is reached
         while count > 0 and timeout >= 0:
             try:
-                partition, msg = queue.get(timeout=timeout)
+                topic_partition, msg = queue.get(timeout=timeout)
+
             except Empty:
                 break
 
             # Check if the controller has requested us to stop
-            if partition == STOP_ASYNC_PRODUCER:
+            if topic_partition == STOP_ASYNC_PRODUCER:
                 stop = True
                 break
 
             # Adjust the timeout to match the remaining period
             count -= 1
-            timeout = (send_at - datetime.now()).total_seconds()
-            msgset[partition].append(msg)
+            timeout = send_at - time.time()
+            msgset[topic_partition].append(msg)
 
         # Send collected requests upstream
         reqs = []
-        for partition, messages in msgset.items():
-            req = ProduceRequest(topic, partition, messages)
+        for topic_partition, messages in msgset.items():
+            req = ProduceRequest(topic_partition.topic,
+                                 topic_partition.partition,
+                                 messages)
             reqs.append(req)
 
         try:
             client.send_produce_request(reqs,
                                         acks=req_acks,
                                         timeout=ack_timeout)
-        except Exception as exp:
+        except Exception:
             log.exception("Unable to send message")
 
 
@@ -77,7 +81,6 @@ class Producer(object):
 
     Params:
     client - The Kafka client instance to use
-    topic - The topic for sending messages to
     async - If set to true, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
     req_acks - A value indicating the acknowledgements that the server must
@@ -118,8 +121,7 @@ class Producer(object):
         if self.async:
             self.queue = Queue()  # Messages are sent through this queue
             self.proc = Process(target=_send_upstream,
-                                args=(self.topic,
-                                      self.queue,
+                                args=(self.queue,
                                       self.client.copy(),
                                       batch_send_every_t,
                                       batch_send_every_n,
@@ -130,23 +132,24 @@ class Producer(object):
             self.proc.daemon = True
             self.proc.start()
 
-    def send_messages(self, partition, *msg):
+    def send_messages(self, topic, partition, *msg):
         """
         Helper method to send produce requests
         """
         if self.async:
             for m in msg:
-                self.queue.put((partition, create_message(m)))
+                self.queue.put((TopicAndPartition(topic, partition),
+                                create_message(m)))
             resp = []
         else:
             messages = [create_message(m) for m in msg]
-            req = ProduceRequest(self.topic, partition, messages)
+            req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
                                                         timeout=self.ack_timeout)
-            except Exception as e:
+            except Exception:
                 log.exception("Unable to send messages")
-                raise e
+                raise
         return resp
 
     def stop(self, timeout=1):
@@ -168,7 +171,6 @@ class SimpleProducer(Producer):
 
     Params:
     client - The Kafka client instance to use
-    topic - The topic for sending messages to
     async - If True, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
     req_acks - A value indicating the acknowledgements that the server must
@@ -179,24 +181,31 @@ class SimpleProducer(Producer):
     batch_send_every_n - If set, messages are send in batches of this size
     batch_send_every_t - If set, messages are send after this timeout
     """
-    def __init__(self, client, topic, async=False,
+    def __init__(self, client, async=False,
                  req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
-        self.topic = topic
-        client._load_metadata_for_topics(topic)
-        self.next_partition = cycle(client.topic_partitions[topic])
-
+        self.partition_cycles = {}
         super(SimpleProducer, self).__init__(client, async, req_acks,
                                              ack_timeout, batch_send,
                                              batch_send_every_n,
                                              batch_send_every_t)
 
-    def send_messages(self, *msg):
-        partition = self.next_partition.next()
-        return super(SimpleProducer, self).send_messages(partition, *msg)
+    def _next_partition(self, topic):
+        if topic not in self.partition_cycles:
+            if topic not in self.client.topic_partitions:
+                self.client.load_metadata_for_topics(topic)
+            self.partition_cycles[topic] = cycle(self.client.topic_partitions[topic])
+        return self.partition_cycles[topic].next()
+
+    def send_messages(self, topic, *msg):
+        partition = self._next_partition(topic)
+        return super(SimpleProducer, self).send_messages(topic, partition, *msg)
+
+    def __repr__(self):
+        return '<SimpleProducer batch=%s>' % self.async
 
 
 class KeyedProducer(Producer):
@@ -205,7 +214,6 @@ class KeyedProducer(Producer):
 
     Args:
     client - The kafka client instance
-    topic - The kafka topic to send messages to
     partitioner - A partitioner class that will be used to get the partition
         to send the message to. Must be derived from Partitioner
     async - If True, the messages are sent asynchronously via another
@@ -216,26 +224,34 @@ class KeyedProducer(Producer):
     batch_send_every_n - If set, messages are send in batches of this size
     batch_send_every_t - If set, messages are send after this timeout
     """
-    def __init__(self, client, topic, partitioner=None, async=False,
+    def __init__(self, client, partitioner=None, async=False,
                  req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
-        self.topic = topic
-        client._load_metadata_for_topics(topic)
-
         if not partitioner:
             partitioner = HashedPartitioner
-
-        self.partitioner = partitioner(client.topic_partitions[topic])
+        self.partitioner_class = partitioner
+        self.partitioners = {}
 
         super(KeyedProducer, self).__init__(client, async, req_acks,
                                             ack_timeout, batch_send,
                                             batch_send_every_n,
                                             batch_send_every_t)
 
-    def send(self, key, msg):
-        partitions = self.client.topic_partitions[self.topic]
-        partition = self.partitioner.partition(key, partitions)
-        return self.send_messages(partition, msg)
+    def _next_partition(self, topic, key):
+        if topic not in self.partitioners:
+            if topic not in self.client.topic_partitions:
+                self.client.load_metadata_for_topics(topic)
+            self.partitioners[topic] = \
+                self.partitioner_class(self.client.topic_partitions[topic])
+        partitioner = self.partitioners[topic]
+        return partitioner.partition(key, self.client.topic_partitions[topic])
+
+    def send(self, topic, key, msg):
+        partition = self._next_partition(topic, key)
+        return self.send_messages(topic, partition, msg)
+
+    def __repr__(self):
+        return '<KeyedProducer batch=%s>' % self.async
