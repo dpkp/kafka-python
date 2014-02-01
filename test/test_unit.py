@@ -517,5 +517,33 @@ class TestClient(unittest.TestCase):
         self.assertEqual(brokers[0], client._get_leader_for_partition('topic_noleader', 0))
         self.assertEqual(brokers[1], client._get_leader_for_partition('topic_noleader', 1))
 
+    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.KafkaProtocol')
+    def test_send_produce_request_raises_when_noleader(self, protocol, conn):
+        "Getting leader for partitions returns None when the partiion has no leader"
+
+        conn.recv.return_value = 'response'  # anything but None
+
+        brokers = {}
+        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
+        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
+
+        topics = {}
+        topics['topic_noleader'] = {
+            0: PartitionMetadata('topic_noleader', 0, -1, [], []),
+            1: PartitionMetadata('topic_noleader', 1, -1, [], [])
+        }
+        protocol.decode_metadata_response.return_value = (brokers, topics)
+
+        client = KafkaClient(host='broker_1', port=4567)
+
+        requests = [ProduceRequest(
+            "topic_noleader", 0,
+            [create_message("a"), create_message("b")])]
+
+        self.assertRaises(
+            PartitionUnavailableError,
+            client.send_produce_request, requests)
+
 if __name__ == '__main__':
     unittest.main()

@@ -52,14 +52,22 @@ class KafkaClient(object):
         return self.conns[(broker.host, broker.port)]
 
     def _get_leader_for_partition(self, topic, partition):
+        """
+        Returns the leader for a partition or None if the partition exists
+        but has no leader.
+
+        PartitionUnavailableError will be raised if the topic or partition
+        is not part of the metadata.
+        """
+
         key = TopicAndPartition(topic, partition)
         # reload metadata whether the partition is not available
-        # or has not leader (broker is None)
+        # or has no leader (broker is None)
         if self.topics_to_brokers.get(key) is None:
             self.load_metadata_for_topics(topic)
 
         if key not in self.topics_to_brokers:
-            raise PartitionUnavailableError("No leader for %s" % str(key))
+            raise PartitionUnavailableError("%s not available" % str(key))
 
         return self.topics_to_brokers[key]
 
@@ -115,8 +123,9 @@ class KafkaClient(object):
         for payload in payloads:
             leader = self._get_leader_for_partition(payload.topic,
                                                     payload.partition)
-            if leader == -1:
-                raise PartitionUnavailableError("Leader is unassigned for %s-%s" % payload.topic, payload.partition)
+            if leader is None:
+                raise PartitionUnavailableError(
+                    "No leader for topic %s partition %s" % (payload.topic, payload.partition))
             payloads_by_broker[leader].append(payload)
             original_keys.append((payload.topic, payload.partition))
 
@@ -249,7 +258,7 @@ class KafkaClient(object):
                 self.topic_partitions[topic].append(partition)
                 topic_part = TopicAndPartition(topic, partition)
                 if meta.leader == -1:
-                    log.info('No leader for topic %s partition %d', topic, partition)
+                    log.info('No leader for topic %s partition %s', topic, partition)
                     self.topics_to_brokers[topic_part] = None
                 else:
                     self.topics_to_brokers[topic_part] = brokers[meta.leader]
