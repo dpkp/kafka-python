@@ -28,6 +28,7 @@ Kafka brokers running version **0.8.1**.
 from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer, KeyedProducer
+from kafka.common import FailedPayloadsError
 
 kafka = KafkaClient("localhost", 9092)
 
@@ -68,8 +69,11 @@ producer = SimpleProducer(kafka, batch_send=True,
 
 # To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
-for message in consumer:
-    print(message)
+try:
+    for message in consumer:
+        print(message)
+except FailedPayloadsError, err:
+    print "Failed to consume payloads : %s" % err
 
 kafka.close()
 ```
