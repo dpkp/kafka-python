@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+
+from optparse import Option
+import sys
+
+from kafka import ConsoleConsumer
+from kafka._command_utils import parse_options, get_client
+
+GROUP_OPTION = Option("-g", "--group", dest="group", help="The consumer group")
+CLIENT_ID = "kp_consumer"
+
+def main():
+    options = parse_options(GROUP_OPTION)
+    client = get_client(options.broker, CLIENT_ID)
+    consumer = ConsoleConsumer(client, options.group, options.topic,
+                               auto_commit=False)
+    try:
+        consumer.run()
+    except KeyboardInterrupt:
+        consumer.stop()
+    finally:
+        client.close()
+    print "Done!"
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

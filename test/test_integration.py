@@ -9,26 +9,13 @@ from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.codec import has_gzip, has_snappy
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
+from kafka.util import ensure_topic_creation
 from .fixtures import ZookeeperFixture, KafkaFixture
 
 
 def random_string(l):
     s = "".join(random.choice(string.letters) for i in xrange(l))
     return s
-
-
-def ensure_topic_creation(client, topic_name):
-    times = 0
-    while True:
-        times += 1
-        client.load_metadata_for_topics(topic_name)
-        if client.has_metadata_for_topic(topic_name):
-            break
-        print "Waiting for %s topic to be created" % topic_name
-        time.sleep(1)
-
-        if times > 30:
-            raise Exception("Unable to create topic %s" % topic_name)
 
 
 class KafkaTestCase(unittest.TestCase):

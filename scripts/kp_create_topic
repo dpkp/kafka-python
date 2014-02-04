@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+
+import sys
+
+from kafka.util import ensure_topic_creation
+from kafka._command_utils import parse_options, get_client
+
+CLIENT_ID = "kp_create_topic"
+
+def main():
+    options = parse_options()
+    client = get_client(options.broker, CLIENT_ID)
+    try:
+        print "Creating topic %s..." % options.topic
+        ensure_topic_creation(client, options.topic)
+    finally:
+        client.close()
+    print "Done!"
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

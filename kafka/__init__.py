@@ -9,13 +9,13 @@ from kafka.conn import KafkaConnection
 from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message
 )
-from kafka.producer import SimpleProducer, KeyedProducer
-from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
-from kafka.consumer import SimpleConsumer, MultiProcessConsumer
+from kafka.producer import ConsoleProducer, KeyedProducer, SimpleProducer
+from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
+from kafka.consumer import ConsoleConsumer, MultiProcessConsumer, SimpleConsumer
 
 __all__ = [
     'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
-    'RoundRobinPartitioner', 'HashedPartitioner', 'SimpleConsumer',
-    'MultiProcessConsumer', 'create_message', 'create_gzip_message',
-    'create_snappy_message'
+    'ConsoleProducer', 'RoundRobinPartitioner', 'HashedPartitioner',
+    'ConsoleConsumer', 'SimpleConsumer', 'MultiProcessConsumer',
+    'create_message', 'create_gzip_message', 'create_snappy_message'
 ]

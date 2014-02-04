@@ -27,6 +27,7 @@ setup(
     cmdclass={"test": Tox},
 
     packages=["kafka"],
+    scripts=["scripts/kp_consumer", "scripts/kp_producer", "scripts/kp_create_topic"],
 
     author="David Arthur",
     author_email="mumrah@gmail.com",

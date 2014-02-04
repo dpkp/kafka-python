@@ -255,3 +255,13 @@ class KeyedProducer(Producer):
 
     def __repr__(self):
         return '<KeyedProducer batch=%s>' % self.async
+
+
+class ConsoleProducer(SimpleProducer):
+    def run(self, topic):
+        import readline
+        while True:
+            try:
+                self.send_messages(topic, raw_input())
+            except EOFError:
+                break

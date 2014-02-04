@@ -674,3 +674,9 @@ class MultiProcessConsumer(Consumer):
         self._auto_commit()
 
         return messages
+
+
+class ConsoleConsumer(SimpleConsumer):
+    def run(self):
+        for message in self:
+            print message.message.value
