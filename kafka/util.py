@@ -1,7 +1,7 @@
 from collections import defaultdict
 import struct
 from threading import Thread, Event
-from time import sleep
+from time import sleep, time
 
 from kafka.common import BufferUnderflowError
 
@@ -116,14 +116,22 @@ class ReentrantTimer(object):
         self.thread.join(self.t + 1)
         self.timer = None
 
+DEFAULT_TOPIC_CREATION_TIMEOUT_SECONDS = 30
+def ensure_topic_creation(client, topic,
+                          timeout=DEFAULT_TOPIC_CREATION_TIMEOUT_SECONDS):
+    if timeout is not None:
+        max_time = time() + timeout
 
-def ensure_topic_creation(client, topic):
-    times = 0
-    while True:
-        times += 1
+    while timeout is None or timeout > 0:
         client.load_metadata_for_topics(topic)
         if client.has_metadata_for_topic(topic):
-            break
-        if times > 30:
-            raise RuntimeError("Unable to create topic %s" % topic)
+            return
+
+        if timeout is not None:
+            # If we have a timeout, reduce it to the appropriate value
+            timeout = max_time - time()
+
         sleep(1)
+
+    raise RuntimeError("Unable to create topic %s" % topic)
+
