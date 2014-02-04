@@ -8,6 +8,7 @@ from kafka.common import ConnectionError
 
 log = logging.getLogger("kafka")
 
+DEFAULT_SOCKET_TIMEOUT_SECONDS = 120
 
 class KafkaConnection(local):
     """
@@ -17,8 +18,13 @@ class KafkaConnection(local):
     by a call to `recv` in order to get the correct response. Eventually,
     we can do something in here to facilitate multiplexed requests/responses
     since the Kafka API includes a correlation id.
+
+    host:    the host name or IP address of a kafka broker
+    port:    the port number the kafka broker is listening on
+    timeout: default 120. The socket timeout for sending and receiving data
+             in seconds. None means no timeout, so a request can block forever.
     """
-    def __init__(self, host, port, timeout=10):
+    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
