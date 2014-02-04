@@ -15,7 +15,7 @@ def main():
         ensure_topic_creation(client, options.topic)
     finally:
         client.close()
-    print "Done!"
+    print("Done!")
     return 0
 
 if __name__ == '__main__':

@@ -18,7 +18,7 @@ def main():
         producer.stop()
     finally:
         client.close()
-    print "Done!"
+    print("Done!")
     return 0
 
 if __name__ == '__main__':

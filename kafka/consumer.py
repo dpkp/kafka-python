@@ -679,4 +679,4 @@ class MultiProcessConsumer(Consumer):
 class ConsoleConsumer(SimpleConsumer):
     def run(self):
         for message in self:
-            print message.message.value
+            print(message.message.value)
