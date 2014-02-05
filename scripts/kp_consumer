@@ -4,9 +4,10 @@ from optparse import Option
 import sys
 
 from kafka import ConsoleConsumer
-from kafka._command_utils import parse_options, get_client
+from kafka._script_utils import parse_options, get_client
 
-GROUP_OPTION = Option("-g", "--group", dest="group", help="The consumer group")
+GROUP_OPTION = Option("-g", "--group", dest="group", required=True,
+                      help="Required: The consumer group")
 CLIENT_ID = "kp_consumer"
 
 def main():

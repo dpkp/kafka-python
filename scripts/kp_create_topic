@@ -3,7 +3,7 @@
 import sys
 
 from kafka.util import ensure_topic_creation
-from kafka._command_utils import parse_options, get_client
+from kafka._script_utils import parse_options, get_client
 
 CLIENT_ID = "kp_create_topic"
 

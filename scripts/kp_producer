@@ -3,7 +3,7 @@
 import sys
 
 from kafka import ConsoleProducer
-from kafka._command_utils import parse_options, get_client
+from kafka._script_utils import parse_options, get_client
 
 CLIENT_ID = "kp_producer"
 
