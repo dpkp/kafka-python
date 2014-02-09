@@ -17,8 +17,11 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
+    if isinstance(hosts, str):
+        hosts = hosts.split(',')
+
     result = []
-    for host_port in hosts.split(","):
+    for host_port in hosts:
 
         res = host_port.split(':')
         host = res[0]
