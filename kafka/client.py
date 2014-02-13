@@ -1,7 +1,8 @@
 import copy
 import logging
+import time
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from functools import partial
 from itertools import count
 
@@ -20,6 +21,7 @@ class KafkaClient(object):
 
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
+    MAX_TOPIC_METADATA_RETRIES = 10
 
     # NOTE: The timeout given to the client should always be greater than the
     # one passed to SimpleConsumer.get_message(), otherwise you can get a
@@ -29,13 +31,17 @@ class KafkaClient(object):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
-        self.conns = {               # (host, port) -> KafkaConnection
-            (host, port): KafkaConnection(host, port, timeout=timeout)
-        }
+        self.conns = {}
+        self.create_connection(host, port)
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
         self.topic_partitions = {}   # topic_id -> [0, 1, 2, ...]
         self.load_metadata_for_topics()  # bootstrap with all metadata
+
+    def create_connection(self, host, port):
+        self.conns = {               # (host, port) -> KafkaConnection
+            (host, port): KafkaConnection(host, port, timeout=self.timeout)
+        }
 
     ##################
     #   Private API  #
@@ -222,9 +228,12 @@ class KafkaClient(object):
         Discover brokers and metadata for a set of topics. This function is called
         lazily whenever metadata is unavailable.
         """
+        self._load_metadata_for_topics(Counter({ topic : self.MAX_TOPIC_METADATA_RETRIES for topic in topics }))
+
+    def _load_metadata_for_topics(self, topics_requested):
         request_id = self._next_id()
         request = KafkaProtocol.encode_metadata_request(self.client_id,
-                                                        request_id, topics)
+                                                        request_id, topics_requested.keys())
 
         response = self._send_broker_unaware_request(request_id, request)
 
@@ -239,13 +248,21 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
+                topics_requested[topic] -= 1
                 continue
+
+            del topics_requested[topic]
 
             self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
                 topic_part = TopicAndPartition(topic, partition)
                 self.topics_to_brokers[topic_part] = brokers[meta.leader]
                 self.topic_partitions[topic].append(partition)
+
+        topics_requested += Counter()
+        if topics_requested:
+            time.sleep(0.1)
+            self._load_metadata_for_topics(topics_requested)
 
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
