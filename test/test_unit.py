@@ -7,7 +7,7 @@ from kafka.common import (
     ProduceRequest, FetchRequest, Message, ChecksumError,
     ConsumerFetchSizeTooSmall, ProduceResponse, FetchResponse,
     OffsetAndMessage, BrokerMetadata, PartitionMetadata,
-    TopicAndPartition, PartitionUnavailableError
+    TopicAndPartition, LeaderUnavailableError, PartitionUnavailableError
 )
 from kafka.codec import (
     has_gzip, has_snappy, gzip_encode, gzip_decode,
@@ -386,7 +386,7 @@ class TestProtocol(unittest.TestCase):
         pass
 
 
-class TestClient(unittest.TestCase):
+class TestKafkaClient(unittest.TestCase):
 
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
@@ -520,7 +520,7 @@ class TestClient(unittest.TestCase):
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_send_produce_request_raises_when_noleader(self, protocol, conn):
-        "Getting leader for partitions returns None when the partiion has no leader"
+        "Send producer request raises LeaderUnavailableError if leader is not available"
 
         conn.recv.return_value = 'response'  # anything but None
 
@@ -542,7 +542,7 @@ class TestClient(unittest.TestCase):
             [create_message("a"), create_message("b")])]
 
         self.assertRaises(
-            PartitionUnavailableError,
+            LeaderUnavailableError,
             client.send_produce_request, requests)
 
 if __name__ == '__main__':

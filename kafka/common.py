@@ -82,6 +82,10 @@ class BrokerResponseError(KafkaError):
     pass
 
 
+class LeaderUnavailableError(KafkaError):
+    pass
+
+
 class PartitionUnavailableError(KafkaError):
     pass
 

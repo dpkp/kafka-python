@@ -8,6 +8,7 @@ from itertools import count
 from kafka.common import (ErrorMapping, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
+                          LeaderUnavailableError,
                           KafkaUnavailableError)
 
 from kafka.conn import KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
@@ -124,8 +125,10 @@ class KafkaClient(object):
             leader = self._get_leader_for_partition(payload.topic,
                                                     payload.partition)
             if leader is None:
-                raise PartitionUnavailableError(
-                    "No leader for topic %s partition %s" % (payload.topic, payload.partition))
+                raise LeaderUnavailableError(
+                    "Leader not available for topic %s partition %s" %
+                    (payload.topic, payload.partition))
+
             payloads_by_broker[leader].append(payload)
             original_keys.append((payload.topic, payload.partition))
 
@@ -250,7 +253,7 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
-                log.info('No partitions for %s', topic)
+                log.warning('No partitions for %s', topic)
                 continue
 
             self.topic_partitions[topic] = []
@@ -258,7 +261,7 @@ class KafkaClient(object):
                 self.topic_partitions[topic].append(partition)
                 topic_part = TopicAndPartition(topic, partition)
                 if meta.leader == -1:
-                    log.info('No leader for topic %s partition %s', topic, partition)
+                    log.warning('No leader for topic %s partition %s', topic, partition)
                     self.topics_to_brokers[topic_part] = None
                 else:
                     self.topics_to_brokers[topic_part] = brokers[meta.leader]
