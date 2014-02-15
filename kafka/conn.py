@@ -10,6 +10,8 @@ from kafka.common import ConnectionError
 log = logging.getLogger("kafka")
 
 DEFAULT_SOCKET_TIMEOUT_SECONDS = 120
+DEFAULT_KAFKA_PORT = 9092
+
 
 def collect_hosts(hosts, randomize=True):
     """
@@ -18,14 +20,14 @@ def collect_hosts(hosts, randomize=True):
     """
 
     if isinstance(hosts, str):
-        hosts = hosts.split(',')
+        hosts = hosts.strip().split(',')
 
     result = []
     for host_port in hosts:
 
         res = host_port.split(':')
         host = res[0]
-        port = int(res[1]) if len(res) > 1 else 9092
+        port = int(res[1]) if len(res) > 1 else DEFAULT_KAFKA_PORT
         result.append((host.strip(), port))
 
     if randomize:
@@ -105,7 +107,7 @@ class KafkaConnection(local):
             sent = self._sock.sendall(payload)
             if sent is not None:
                 self._raise_connection_error()
-        except socket.error, e:
+        except socket.error:
             log.exception('Unable to send payload to Kafka')
             self._raise_connection_error()
 
