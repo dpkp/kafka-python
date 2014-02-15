@@ -33,7 +33,7 @@ def ensure_topic_creation(client, topic_name):
 
 class KafkaTestCase(unittest.TestCase):
     def setUp(self):
-        self.topic = "%s-%s" % (self.id()[self.id().rindex(".")+1:], random_string(10))
+        self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
         ensure_topic_creation(self.client, self.topic)
 
 
@@ -387,6 +387,41 @@ class TestKafkaClient(KafkaTestCase):
         self.assertEquals(len(messages), 2)
         self.assertEquals(messages[0].message.value, "one")
         self.assertEquals(messages[1].message.value, "three")
+
+        producer.stop()
+
+    def test_keyed_producer_send_messages(self):
+        producer = KeyedProducer(self.client)
+        producer.send_messages(self.topic, 1, "one", "another one")
+        producer.send_messages(self.topic, 2, "two", "another two")
+        producer.send_messages(self.topic, 3, "three")
+        producer.send_messages(self.topic, 4, "four")
+
+        fetch1 = FetchRequest(self.topic, 0, 0, 1024)
+        fetch2 = FetchRequest(self.topic, 1, 0, 1024)
+
+        fetch_resp1, fetch_resp2 = self.client.send_fetch_request([fetch1,
+                                                                   fetch2])
+
+        self.assertEquals(fetch_resp1.error, 0)
+        self.assertEquals(fetch_resp1.highwaterMark, 3)
+        self.assertEquals(fetch_resp1.partition, 0)
+
+        messages = list(fetch_resp1.messages)
+        self.assertEquals(len(messages), 3)
+        self.assertEquals(messages[0].message.value, "two")
+        self.assertEquals(messages[1].message.value, "another two")
+        self.assertEquals(messages[2].message.value, "four")
+
+        self.assertEquals(fetch_resp2.error, 0)
+        self.assertEquals(fetch_resp2.highwaterMark, 3)
+        self.assertEquals(fetch_resp2.partition, 1)
+
+        messages = list(fetch_resp2.messages)
+        self.assertEquals(len(messages), 3)
+        self.assertEquals(messages[0].message.value, "one")
+        self.assertEquals(messages[1].message.value, "another one")
+        self.assertEquals(messages[2].message.value, "three")
 
         producer.stop()
 
