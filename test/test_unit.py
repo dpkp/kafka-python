@@ -417,8 +417,8 @@ class TestKafkaClient(unittest.TestCase):
 
         # client loads metadata at init
         client = KafkaClient(host='broker_1', port=4567)
-        self.assertItemsEqual({
-            TopicAndPartition('topic_1', 0): brokers[0],
+        self.assertDictEqual({
+            TopicAndPartition('topic_1', 0): brokers[1],
             TopicAndPartition('topic_noleader', 0): None,
             TopicAndPartition('topic_noleader', 1): None,
             TopicAndPartition('topic_3', 0): brokers[0],
@@ -443,7 +443,7 @@ class TestKafkaClient(unittest.TestCase):
         client = KafkaClient(host='broker_1', port=4567)
 
         # topic metadata is loaded but empty
-        self.assertItemsEqual({}, client.topics_to_brokers)
+        self.assertDictEqual({}, client.topics_to_brokers)
 
         topics['topic_no_partitions'] = {
             0: PartitionMetadata('topic_no_partitions', 0, 0, [0, 1], [0, 1])
@@ -455,7 +455,7 @@ class TestKafkaClient(unittest.TestCase):
         leader = client._get_leader_for_partition('topic_no_partitions', 0)
 
         self.assertEqual(brokers[0], leader)
-        self.assertItemsEqual({
+        self.assertDictEqual({
             TopicAndPartition('topic_no_partitions', 0): brokers[0]},
             client.topics_to_brokers)
 
@@ -475,7 +475,7 @@ class TestKafkaClient(unittest.TestCase):
 
         client = KafkaClient(host='broker_1', port=4567)
 
-        self.assertItemsEqual({}, client.topics_to_brokers)
+        self.assertDictEqual({}, client.topics_to_brokers)
         self.assertRaises(
             PartitionUnavailableError,
             client._get_leader_for_partition,
@@ -500,7 +500,7 @@ class TestKafkaClient(unittest.TestCase):
         protocol.decode_metadata_response.return_value = (brokers, topics)
 
         client = KafkaClient(host='broker_1', port=4567)
-        self.assertItemsEqual(
+        self.assertDictEqual(
             {
                 TopicAndPartition('topic_noleader', 0): None,
                 TopicAndPartition('topic_noleader', 1): None
