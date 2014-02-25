@@ -53,5 +53,5 @@ def main():
     print 'Messages invalid: %d' % threads[1].invalid
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARN)
     main()
