@@ -205,7 +205,7 @@ class SimpleProducer(Producer):
         return super(SimpleProducer, self).send_messages(topic, partition, *msg)
 
     def __repr__(self):
-        return '<SimpleProducer batch=%s>' % self.async
+        return '<SimpleProducer version=%s, batch=%s>' % (self.client.server_version, self.async)
 
 
 class KeyedProducer(Producer):
@@ -254,4 +254,4 @@ class KeyedProducer(Producer):
         return self.send_messages(topic, partition, msg)
 
     def __repr__(self):
-        return '<KeyedProducer batch=%s>' % self.async
+        return '<KeyedProducer version=%s batch=%s>' % (self.client.server_version, self.async)

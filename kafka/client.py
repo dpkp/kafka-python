@@ -15,9 +15,9 @@ from kafka.protocol import KafkaProtocol
 
 log = logging.getLogger("kafka")
 
-
 class KafkaClient(object):
 
+    server_version = "unknown"
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
 
@@ -163,7 +163,7 @@ class KafkaClient(object):
         return (acc[k] for k in original_keys) if acc else ()
 
     def __repr__(self):
-        return '<KafkaClient client_id=%s>' % (self.client_id)
+        return '<KafkaClient version=%s, client_id=%s>' % (self.server_version, self.client_id)
 
     def _raise_on_response_error(self, resp):
         if resp.error == ErrorMapping.NO_ERROR:
@@ -180,6 +180,23 @@ class KafkaClient(object):
     #################
     #   Public API  #
     #################
+
+    def keyed_producer(self, **kwargs):
+        import kafka
+        return kafka.producer.KeyedProducer(self, **kwargs)
+
+    def simple_producer(self, **kwargs):
+        import kafka
+        return kafka.producer.SimpleProducer(self, **kwargs)
+
+    def simple_consumer(self, group, topic, **kwargs):
+        import kafka
+        return kafka.consumer.SimpleConsumer(self, group, topic, **kwargs)
+
+    def multiprocess_consumer(self, group, topic, **kwargs):
+        import kafka
+        return kafka.consumer.MultiProcessConsumer(self, group, topic, **kwargs)
+
     def reset_topic_metadata(self, *topics):
         for topic in topics:
             try:

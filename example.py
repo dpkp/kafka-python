@@ -1,23 +1,22 @@
 import logging
 
-from kafka.client import KafkaClient, FetchRequest, ProduceRequest
-from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer
+from kafka import Kafka081Client
 
 def produce_example(client):
-    producer = SimpleProducer(client, "my-topic")
-    producer.send_messages("test")
+    producer = client.simple_producer()
+    producer.send_messages('my-topic', "test")
 
 def consume_example(client):
-    consumer = SimpleConsumer(client, "test-group", "my-topic")
+    consumer = client.simple_consumer("test-group", "my-topic")
     for message in consumer:
         print(message)
 
 def main():
-    client = KafkaClient("localhost", 9092)
+    client = Kafka081Client("localhost", 9092)
     produce_example(client)
     consume_example(client)
 
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARN)
     main()

@@ -12,9 +12,28 @@ from kafka.protocol import (
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
 from kafka.consumer import SimpleConsumer, MultiProcessConsumer
+from kafka.util import set_defaults
+
+class Kafka081Client(KafkaClient):
+    server_version = "0.8.1"
+
+class Kafka080Client(KafkaClient):
+    server_version = "0.8.0"
+
+    def simple_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        return super(Kafka080Client, self).simple_consumer(group, topic, **kwargs)
+
+    def multiprocess_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        return super(Kafka080Client, self).multiprocess_consumer(group, topic, **kwargs)
 
 __all__ = [
-    'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
+    'KafkaClient', 'Kafka080Client', 'Kafka081Client', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner', 'SimpleConsumer',
     'MultiProcessConsumer', 'create_message', 'create_gzip_message',
     'create_snappy_message'
