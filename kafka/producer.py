@@ -198,6 +198,9 @@ class SimpleProducer(Producer):
         partition = self.next_partition.next()
         return super(SimpleProducer, self).send_messages(partition, *msg)
 
+    def __repr__(self):
+        return '<SimpleProducer batch=%s, topic=%s>' % self.async, self.topic
+
 
 class KeyedProducer(Producer):
     """
