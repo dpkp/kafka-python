@@ -12,7 +12,6 @@ from kafka.protocol import (
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
 from kafka.consumer import SimpleConsumer, MultiProcessConsumer
-from kafka.util import set_defaults
 
 class Kafka081Client(KafkaClient):
     server_version = "0.8.1"
