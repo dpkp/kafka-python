@@ -28,11 +28,10 @@ class KafkaConnection(local):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.connect((host, port))
         self.timeout = timeout
-        self._sock.settimeout(self.timeout)
-        self._dirty = False
+        self._sock = None
+
+        self.reinit()
 
     def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
@@ -47,24 +46,28 @@ class KafkaConnection(local):
 
     def _read_bytes(self, num_bytes):
         bytes_left = num_bytes
-        resp = ''
+        responses = []
+
         log.debug("About to read %d bytes from Kafka", num_bytes)
         if self._dirty:
             self.reinit()
+
         while bytes_left:
             try:
-                data = self._sock.recv(bytes_left)
+                data = self._sock.recv(min(bytes_left, 4096))
             except socket.error:
                 log.exception('Unable to receive data from Kafka')
                 self._raise_connection_error()
+
             if data == '':
                 log.error("Not enough data to read this response")
                 self._raise_connection_error()
+
             bytes_left -= len(data)
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
-            resp += data
+            responses.append(data)
 
-        return resp
+        return ''.join(responses)
 
     ##################
     #   Public API   #
