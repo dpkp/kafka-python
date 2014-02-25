@@ -230,6 +230,10 @@ class SimpleConsumer(Consumer):
             auto_commit_every_n=auto_commit_every_n,
             auto_commit_every_t=auto_commit_every_t)
 
+    def __repr__(self):
+        return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
+            (self.group, self.topic, str(self.offsets.keys()))
+
     def provide_partition_info(self):
         """
         Indicates that partition info must be returned by the consumer
@@ -534,6 +538,10 @@ class MultiProcessConsumer(Consumer):
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
+
+    def __repr__(self):
+        return '<MultiProcessConsumer group=%s, topic=%s, consumers=%d>' % \
+            (self.group, self.topic, len(self.procs))
 
     def stop(self):
         # Set exit and start off all waiting consumers
