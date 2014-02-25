@@ -255,8 +255,8 @@ class SimpleConsumer(Consumer):
         self.queue = Queue()
 
     def __repr__(self):
-        return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
-            (self.group, self.topic, str(self.offsets.keys()))
+        return '<SimpleConsumer version=%s, group=%s, topic=%s, partitions=%s>' % \
+            (self.client.server_version, self.group, self.topic, str(self.offsets.keys()))
 
     def provide_partition_info(self):
         """
@@ -578,8 +578,8 @@ class MultiProcessConsumer(Consumer):
             self.procs.append(proc)
 
     def __repr__(self):
-        return '<MultiProcessConsumer group=%s, topic=%s, consumers=%d>' % \
-            (self.group, self.topic, len(self.procs))
+        return '<MultiProcessConsumer version=%s, group=%s, topic=%s, consumers=%d>' % \
+            (self.client.server_version, self.group, self.topic, len(self.procs))
 
     def stop(self):
         # Set exit and start off all waiting consumers
