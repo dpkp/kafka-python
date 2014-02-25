@@ -1,23 +1,45 @@
-import logging
+#!/usr/bin/env python
+import threading, logging, time
 
-from kafka.client import KafkaClient, FetchRequest, ProduceRequest
+from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer
 
-def produce_example(client):
-    producer = SimpleProducer(client, "my-topic")
-    producer.send_messages("test")
+class Producer(threading.Thread):
+    daemon = True
 
-def consume_example(client):
-    consumer = SimpleConsumer(client, "test-group", "my-topic")
-    for message in consumer:
-        print(message)
+    def run(self):
+        client = KafkaClient("localhost", 9092)
+        producer = SimpleProducer(client)
+
+        while True:
+            producer.send_messages('my-topic', "test")
+            producer.send_messages('my-topic', "\xc2Hola, mundo!")
+
+            time.sleep(1)
+
+
+class Consumer(threading.Thread):
+    daemon = True
+
+    def run(self):
+        client = KafkaClient("localhost", 9092)
+        consumer = SimpleConsumer(client, "test-group", "my-topic")
+
+        for message in consumer:
+            print(message)
 
 def main():
-    client = KafkaClient("localhost", 9092)
-    produce_example(client)
-    consume_example(client)
+    threads = [
+        Producer(),
+        Consumer()
+    ]
+
+    for t in threads:
+        t.start()
+
+    time.sleep(5)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARN)
     main()
