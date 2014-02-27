@@ -9,7 +9,7 @@ class Producer(threading.Thread):
     daemon = True
 
     def run(self):
-        client = KafkaClient("localhost", 9092)
+        client = KafkaClient("localhost:9092")
         producer = SimpleProducer(client)
 
         while True:
@@ -23,7 +23,7 @@ class Consumer(threading.Thread):
     daemon = True
 
     def run(self):
-        client = KafkaClient("localhost", 9092)
+        client = KafkaClient("localhost:9092")
         consumer = SimpleConsumer(client, "test-group", "my-topic")
 
         for message in consumer:
