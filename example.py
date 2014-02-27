@@ -12,7 +12,7 @@ def consume_example(client):
         print(message)
 
 def main():
-    client = Kafka081Client("localhost", 9092)
+    client = Kafka081Client("localhost:9092")
     produce_example(client)
     consume_example(client)
 

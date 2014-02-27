@@ -33,7 +33,7 @@ def ensure_topic_creation(client, topic_name):
 
 class KafkaTestCase(unittest.TestCase):
     def setUp(self):
-        self.topic = "%s-%s" % (self.id()[self.id().rindex(".")+1:], random_string(10))
+        self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
         ensure_topic_creation(self.client, self.topic)
 
 
@@ -42,7 +42,7 @@ class TestKafkaClient(KafkaTestCase):
     def setUpClass(cls):  # noqa
         cls.zk = ZookeeperFixture.instance()
         cls.server = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
-        cls.client = KafkaClient(cls.server.host, cls.server.port)
+        cls.client = KafkaClient('%s:%d' % (cls.server.host, cls.server.port))
 
     @classmethod
     def tearDownClass(cls):  # noqa
@@ -578,7 +578,7 @@ class TestConsumer(KafkaTestCase):
         cls.zk = ZookeeperFixture.instance()
         cls.server1 = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
         cls.server2 = KafkaFixture.instance(1, cls.zk.host, cls.zk.port)
-        cls.client = KafkaClient(cls.server2.host, cls.server2.port)
+        cls.client = KafkaClient('%s:%d' % (cls.server2.host, cls.server2.port))
 
     @classmethod
     def tearDownClass(cls):  # noqa
@@ -826,23 +826,26 @@ class TestConsumer(KafkaTestCase):
 
 class TestFailover(KafkaTestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):  # noqa
         zk_chroot = random_string(10)
         replicas = 2
         partitions = 2
 
         # mini zookeeper, 2 kafka brokers
-        self.zk = ZookeeperFixture.instance()
-        kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
-        self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
-        self.client = KafkaClient(self.brokers[0].host, self.brokers[0].port)
-        super(TestFailover, self).setUp()
+        cls.zk = ZookeeperFixture.instance()
+        kk_args = [cls.zk.host, cls.zk.port, zk_chroot, replicas, partitions]
+        cls.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
 
-    def tearDown(self):
-        self.client.close()
-        for broker in self.brokers:
+        hosts = ['%s:%d' % (b.host, b.port) for b in cls.brokers]
+        cls.client = KafkaClient(hosts)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.close()
+        for broker in cls.brokers:
             broker.close()
-        self.zk.close()
+        cls.zk.close()
 
     def test_switch_leader(self):
         key, topic, partition = random_string(5), self.topic, 0
@@ -918,7 +921,8 @@ class TestFailover(KafkaTestCase):
         return broker
 
     def _count_messages(self, group, topic):
-        client = KafkaClient(self.brokers[0].host, self.brokers[0].port)
+        hosts = '%s:%d' % (self.brokers[0].host, self.brokers[0].port)
+        client = KafkaClient(hosts)
         consumer = SimpleConsumer(client, group, topic, auto_commit=False, iter_timeout=0)
         all_messages = []
         for message in consumer:
