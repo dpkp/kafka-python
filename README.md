@@ -29,7 +29,7 @@ from kafka.client import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.producer import SimpleProducer, KeyedProducer
 
-kafka = KafkaClient("localhost", 9092)
+kafka = KafkaClient("localhost:9092")
 
 # To send messages synchronously
 producer = SimpleProducer(kafka)
@@ -80,7 +80,7 @@ from kafka.client import KafkaClient
 from kafka.producer import KeyedProducer
 from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
 
-kafka = KafkaClient("localhost", 9092)
+kafka = KafkaClient("localhost:9092")
 
 # HashedPartitioner is default
 producer = KeyedProducer(kafka)
@@ -95,7 +95,7 @@ producer = KeyedProducer(kafka, partitioner=RoundRobinPartitioner)
 from kafka.client import KafkaClient
 from kafka.consumer import MultiProcessConsumer
 
-kafka = KafkaClient("localhost", 9092)
+kafka = KafkaClient("localhost:9092")
 
 # This will split the number of partitions among two processes
 consumer = MultiProcessConsumer(kafka, "my-group", "my-topic", num_procs=2)
@@ -115,7 +115,7 @@ for message in consumer.get_messages(count=5, block=True, timeout=4):
 
 ```python
 from kafka.client import KafkaClient
-kafka = KafkaClient("localhost", 9092)
+kafka = KafkaClient("localhost:9092")
 req = ProduceRequest(topic="my-topic", partition=1,
     messages=[KafkaProdocol.encode_message("some message")])
 resps = kafka.send_produce_request(payloads=[req], fail_on_error=True)
