@@ -12,7 +12,7 @@ class Producer(threading.Thread):
     big_msg = "1" * msg_size
 
     def run(self):
-        client = KafkaClient("localhost", 9092)
+        client = KafkaClient("localhost:9092")
         producer = SimpleProducer(client)
         self.sent = 0
 
@@ -25,7 +25,7 @@ class Consumer(threading.Thread):
     daemon = True
 
     def run(self):
-        client = KafkaClient("localhost", 9092)
+        client = KafkaClient("localhost:9092")
         consumer = SimpleConsumer(client, "test-group", "my-topic",
             max_buffer_size = None,
         )
