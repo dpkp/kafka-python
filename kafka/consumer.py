@@ -404,22 +404,24 @@ class SimpleConsumer(Consumer):
 
     def _fetch(self):
         # Create fetch request payloads for all the partitions
-        requests = []
-        partitions = self.fetch_offsets.keys()
+        partitions = dict((p, self.buffer_size)
+                      for p in self.fetch_offsets.keys())
         while partitions:
-            for partition in partitions:
+            requests = []
+            for partition, buffer_size in partitions.iteritems():
                 requests.append(FetchRequest(self.topic, partition,
                                              self.fetch_offsets[partition],
-                                             self.buffer_size))
+                                             buffer_size))
             # Send request
             responses = self.client.send_fetch_request(
                 requests,
                 max_wait_time=int(self.fetch_max_wait_time),
                 min_bytes=self.fetch_min_bytes)
 
-            retry_partitions = set()
+            retry_partitions = {}
             for resp in responses:
                 partition = resp.partition
+                buffer_size = partitions[partition]
                 try:
                     for message in resp.messages:
                         # Put the message in our queue
@@ -427,24 +429,24 @@ class SimpleConsumer(Consumer):
                         self.fetch_offsets[partition] = message.offset + 1
                 except ConsumerFetchSizeTooSmall, e:
                     if (self.max_buffer_size is not None and
-                            self.buffer_size == self.max_buffer_size):
+                            buffer_size == self.max_buffer_size):
                         log.error("Max fetch size %d too small",
                                   self.max_buffer_size)
                         raise e
                     if self.max_buffer_size is None:
-                        self.buffer_size *= 2
+                        buffer_size *= 2
                     else:
-                        self.buffer_size = max(self.buffer_size * 2,
-                                               self.max_buffer_size)
+                        buffer_size = max(buffer_size * 2,
+                                          self.max_buffer_size)
                     log.warn("Fetch size too small, increase to %d (2x) "
-                             "and retry", self.buffer_size)
-                    retry_partitions.add(partition)
+                             "and retry", buffer_size)
+                    retry_partitions[partition] = buffer_size
                 except ConsumerNoMoreData, e:
                     log.debug("Iteration was ended by %r", e)
                 except StopIteration:
                     # Stop iterating through this partition
                     log.debug("Done iterating over partition %s" % partition)
-                partitions = retry_partitions
+            partitions = retry_partitions
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
     """
