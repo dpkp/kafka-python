@@ -15,7 +15,7 @@ DEFAULT_KAFKA_PORT = 9092
 
 def collect_hosts(hosts, randomize=True):
     """
-    Collects a comma-separated set of hosts (host:port) and optionnaly
+    Collects a comma-separated set of hosts (host:port) and optionally
     randomize the returned list.
     """
 
