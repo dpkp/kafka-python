@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import time
+import random
 
 from Queue import Empty
 from collections import defaultdict
@@ -197,7 +198,9 @@ class SimpleProducer(Producer):
         if topic not in self.partition_cycles:
             if topic not in self.client.topic_partitions:
                 self.client.load_metadata_for_topics(topic)
-            self.partition_cycles[topic] = cycle(self.client.topic_partitions[topic])
+            randomly_ordered_partitions = self.client.topic_partitions[topic][:]
+            random.shuffle(randomly_ordered_partitions)
+            self.partition_cycles[topic] = cycle(randomly_ordered_partitions)
         return self.partition_cycles[topic].next()
 
     def send_messages(self, topic, *msg):
