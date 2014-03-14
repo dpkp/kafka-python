@@ -70,7 +70,7 @@ class Consumer(object):
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL, if_0_8_1 = True):
 
         self.client = client
         self.topic = topic
@@ -105,17 +105,19 @@ class Consumer(object):
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
-        # Uncomment for 0.8.1
-        #
-        #for partition in partitions:
-        #    req = OffsetFetchRequest(topic, partition)
-        #    (offset,) = self.client.send_offset_fetch_request(group, [req],
-        #                  callback=get_or_init_offset_callback,
-        #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
+        # TODO add in check for testing which version kafka from the broker
+        
+        if if_0_8_1:
+            for partition in partitions:
+                req = OffsetFetchRequest(topic, partition)
+                (offset,) = self.client.send_offset_fetch_request(group, [req],
+                              callback=get_or_init_offset_callback,
+                              fail_on_error=False)
+                self.offsets[partition] = offset
+        else:
 
-        for partition in partitions:
-            self.offsets[partition] = 0
+            for partition in partitions:
+                self.offsets[partition] = 0
 
     def commit(self, partitions=None):
         """
