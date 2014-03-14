@@ -107,15 +107,14 @@ class Consumer(object):
 
         # TODO add in check for testing which version kafka from the broker
         
-        if if_0_8_1:
+        try:
             for partition in partitions:
                 req = OffsetFetchRequest(topic, partition)
                 (offset,) = self.client.send_offset_fetch_request(group, [req],
                               callback=get_or_init_offset_callback,
                               fail_on_error=False)
                 self.offsets[partition] = offset
-        else:
-
+        except:
             for partition in partitions:
                 self.offsets[partition] = 0
 
