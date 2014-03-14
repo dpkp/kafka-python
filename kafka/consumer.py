@@ -70,7 +70,7 @@ class Consumer(object):
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL, if_0_8_1 = True):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
 
         self.client = client
         self.topic = topic
