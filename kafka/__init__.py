@@ -1,5 +1,5 @@
 __title__ = 'kafka'
-__version__ = '0.2-alpha'
+__version__ = '0.9.0'
 __author__ = 'David Arthur'
 __license__ = 'Apache License 2.0'
 __copyright__ = 'Copyright 2012, David Arthur under Apache License, v2.0'
