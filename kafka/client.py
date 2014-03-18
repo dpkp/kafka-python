@@ -255,6 +255,8 @@ class KafkaClient(object):
             self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
                 topic_part = TopicAndPartition(topic, partition)
+                if meta.leader == -1:
+                    raise PartitionUnavailableError("Leader is unassigned for %s-%s" % (topic, partition))
                 self.topics_to_brokers[topic_part] = brokers[meta.leader]
                 self.topic_partitions[topic].append(partition)
 
