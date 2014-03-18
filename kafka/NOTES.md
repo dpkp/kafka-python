@@ -18,7 +18,7 @@ There are a few levels of abstraction:
 
 # Possible API
 
-    client = KafkaClient("localhost", 9092)
+    client = KafkaClient("localhost:9092")
 
     producer = KafkaProducer(client, "topic")
     producer.send_string("hello")

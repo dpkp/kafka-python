@@ -1,10 +1,10 @@
-import os.path
 import sys
 
 from setuptools import setup, Command
 
 
 class Tox(Command):
+
     user_options = []
 
     def initialize_options(self):
