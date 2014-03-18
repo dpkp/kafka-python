@@ -54,11 +54,9 @@ class KafkaConnection(local):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.connect((host, port))
+        self._sock = None
         self.timeout = timeout
-        self._sock.settimeout(self.timeout)
-        self._dirty = False
+        self.reinit()
 
     def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)

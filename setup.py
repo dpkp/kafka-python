@@ -26,7 +26,7 @@ setup(
     tests_require=["tox"],
     cmdclass={"test": Tox},
 
-    packages=["kafka"],
+    packages=["kafka", "kafka.green"],
 
     author="David Arthur",
     author_email="mumrah@gmail.com",

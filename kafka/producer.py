@@ -117,7 +117,9 @@ class Producer(object):
         self.async = async
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
+        self._setup_async(batch_send_every_n, batch_send_every_t)
 
+    def _setup_async(self, batch_send_every_n, batch_send_every_t):
         if self.async:
             self.queue = Queue()  # Messages are sent through this queue
             self.proc = Process(target=_send_upstream,
