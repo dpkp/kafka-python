@@ -19,7 +19,7 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
-    if isinstance(hosts, str):
+    if isinstance(hosts, basestring):
         hosts = hosts.strip().split(',')
 
     result = []
