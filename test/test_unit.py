@@ -449,6 +449,16 @@ class TestKafkaClient(unittest.TestCase):
             [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
             client.hosts)
 
+    def test_init_with_unicode_csv(self):
+
+        with patch.object(KafkaClient, 'load_metadata_for_topics'):
+            client = KafkaClient(
+                hosts=u'kafka01:9092,kafka02:9092,kafka03:9092')
+
+        self.assertItemsEqual(
+            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
+            client.hosts)
+
     def test_send_broker_unaware_request_fail(self):
         'Tests that call fails when all hosts are unavailable'
 
