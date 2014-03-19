@@ -23,7 +23,10 @@ class Kafka080Client(KafkaClient):
         assert not kwargs.get('auto_commit')
         kwargs['auto_commit'] = False
 
-        return super(Kafka080Client, self).simple_consumer(group, topic, **kwargs)
+        consumer = super(Kafka080Client, self).simple_consumer(group, topic, **kwargs)
+        consumer.seek(0, 2)
+
+        return consumer
 
     def multiprocess_consumer(self, group, topic, **kwargs):
         assert not kwargs.get('auto_commit')
