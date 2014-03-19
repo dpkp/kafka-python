@@ -465,18 +465,17 @@ class TestKafkaClient(unittest.TestCase):
             return mocked_conns[(host, port)]
 
         # patch to avoid making requests before we want it
-        with patch.object(KafkaClient, 'load_metadata_for_topics'), \
-                patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+        with patch.object(KafkaClient, 'load_metadata_for_topics'):
+            with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+                client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
 
-            client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
+                self.assertRaises(
+                    KafkaUnavailableError,
+                    client._send_broker_unaware_request,
+                    1, 'fake request')
 
-            self.assertRaises(
-                KafkaUnavailableError,
-                client._send_broker_unaware_request,
-                1, 'fake request')
-
-            for key, conn in mocked_conns.iteritems():
-                conn.send.assert_called_with(1, 'fake request')
+                for key, conn in mocked_conns.iteritems():
+                    conn.send.assert_called_with(1, 'fake request')
 
     def test_send_broker_unaware_request(self):
         'Tests that call works when at least one of the host is available'
@@ -495,15 +494,14 @@ class TestKafkaClient(unittest.TestCase):
             return mocked_conns[(host, port)]
 
         # patch to avoid making requests before we want it
-        with patch.object(KafkaClient, 'load_metadata_for_topics'), \
-                patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+        with patch.object(KafkaClient, 'load_metadata_for_topics'):
+            with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
+                client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
 
-            client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
+                resp = client._send_broker_unaware_request(1, 'fake request')
 
-            resp = client._send_broker_unaware_request(1, 'fake request')
-
-            self.assertEqual('valid response', resp)
-            mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
+                self.assertEqual('valid response', resp)
+                mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
 
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
