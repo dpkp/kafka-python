@@ -5,7 +5,7 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 
-from kafka.common import (ErrorMapping, TopicAndPartition,
+from kafka.common import (ErrorMapping, ErrorStrings, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
                           LeaderUnavailableError,
@@ -199,8 +199,8 @@ class KafkaClient(object):
             self.reset_topic_metadata(resp.topic)
 
         raise BrokerResponseError(
-            "Request for %s failed with errorcode=%d" %
-            (TopicAndPartition(resp.topic, resp.partition), resp.error))
+            "Request for %s failed with errorcode=%d (%s)" %
+            (TopicAndPartition(resp.topic, resp.partition), resp.error, ErrorStrings[resp.error]))
 
     #################
     #   Public API  #
