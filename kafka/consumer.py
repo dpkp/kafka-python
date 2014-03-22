@@ -105,17 +105,18 @@ class Consumer(object):
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
-        # Uncomment for 0.8.1
-        #
-        #for partition in partitions:
-        #    req = OffsetFetchRequest(topic, partition)
-        #    (offset,) = self.client.send_offset_fetch_request(group, [req],
-        #                  callback=get_or_init_offset_callback,
-        #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
-
-        for partition in partitions:
-            self.offsets[partition] = 0
+        # TODO add in check for testing which version kafka from the broker
+        
+        try:
+            for partition in partitions:
+                req = OffsetFetchRequest(topic, partition)
+                (offset,) = self.client.send_offset_fetch_request(group, [req],
+                              callback=get_or_init_offset_callback,
+                              fail_on_error=False)
+                self.offsets[partition] = offset
+        except:
+            for partition in partitions:
+                self.offsets[partition] = 0
 
     def commit(self, partitions=None):
         """
