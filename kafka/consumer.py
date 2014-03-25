@@ -275,6 +275,7 @@ class SimpleConsumer(Consumer):
                 2 is relative to the latest known offset (tail)
         """
 
+        self.count_since_commit += 1
         if whence == 1:  # relative to current position
             for partition, _offset in self.offsets.items():
                 self.offsets[partition] = _offset + offset
