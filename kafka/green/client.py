@@ -11,7 +11,7 @@ class _KafkaClient(KafkaClient):
     def copy(self):
         # have to override this since copy.deepcopy cannot serialize
         # a gevent.socket
-        return _KafkaClient(self.hosts, self.client_id, self.timeout)
+        return _KafkaClient(['{}:{}'.format(entry[0], entry[1]) for entry in self.hosts], self.client_id, self.timeout)
 
     def create_connection(self, host, port):
         return _KafkaConnection(host, port, timeout=self.timeout)
