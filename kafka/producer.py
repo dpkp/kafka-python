@@ -198,9 +198,13 @@ class SimpleProducer(Producer):
         if topic not in self.partition_cycles:
             if topic not in self.client.topic_partitions:
                 self.client.load_metadata_for_topics(topic)
-            randomly_ordered_partitions = self.client.topic_partitions[topic][:]
-            random.shuffle(randomly_ordered_partitions)
-            self.partition_cycles[topic] = cycle(randomly_ordered_partitions)
+            self.partition_cycles[topic] = cycle(self.client.topic_partitions[topic])
+
+            # Randomize the initial partition that is returned
+            num_partitions = len(self.client.topic_partitions[topic])
+            for _ in xrange(random.randint(0, num_partitions-1)):
+                self.partition_cycles[topic].next()
+
         return self.partition_cycles[topic].next()
 
     def send_messages(self, topic, *msg):
