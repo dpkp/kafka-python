@@ -29,6 +29,13 @@ if "SCALA_VERSION" in os.environ:
     SCALA_VERSION = os.environ["SCALA_VERSION"]
 
 
+def base_scala_version():
+    # See scala.gradle in kafka-src
+    if SCALA_VERSION.startswith('2.10'):
+        return '2.10'
+    return SCALA_VERSION
+
+
 def test_resource(file):
     return os.path.join(PROJECT_ROOT, "test", "resources", file)
 
@@ -36,8 +43,8 @@ def test_resource(file):
 def test_classpath():
     # ./kafka-src/bin/kafka-run-class.sh is the authority.
     jars = ["."]
-    # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
-    jars.extend(glob.glob(KAFKA_ROOT + "/core/target/scala-%s/*.jar" % SCALA_VERSION))
+    jars.extend(glob.glob(KAFKA_ROOT + "/core/build/dependant-libs-%s/*.jar" % SCALA_VERSION))
+    jars.extend(glob.glob(KAFKA_ROOT + "/core/build/libs/kafka_%s-*.jar" % base_scala_version()))
 
     jars = filter(os.path.exists, map(os.path.abspath, jars))
     return ":".join(jars)
@@ -327,7 +334,7 @@ class KafkaFixture(object):
 
         self.out("Starting...")
         self.child.start()
-        self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id)
+        self.child.wait_for(r"\[Kafka Server %d\], started" % self.broker_id)
         self.out("Done!")
         self.running = True
 
