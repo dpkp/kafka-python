@@ -59,6 +59,9 @@ class KafkaConnection(local):
 
         self.reinit()
 
+    def __getnewargs__(self):
+        return (self.host, self.port, self.timeout)
+
     def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
 
@@ -135,6 +138,7 @@ class KafkaConnection(local):
         """
         c = copy.deepcopy(self)
         c._sock = None
+        c._dirty = True
         return c
 
     def close(self):
