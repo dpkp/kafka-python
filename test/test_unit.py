@@ -6,6 +6,7 @@ import unittest
 from mock import MagicMock, patch
 
 from kafka import KafkaClient
+from kafka.conn import KafkaConnection
 from kafka.common import (
     ProduceRequest, FetchRequest, Message, ChecksumError,
     ConsumerFetchSizeTooSmall, ProduceResponse, FetchResponse,
@@ -669,6 +670,50 @@ class TestKafkaClient(unittest.TestCase):
         self.assertRaises(
             LeaderUnavailableError,
             client.send_produce_request, requests)
+
+class TestKafkaConnection(unittest.TestCase):
+    @patch('socket.socket')
+    def test_copy(self, socket):
+        """KafkaConnection copies work as expected"""
+
+        conn = KafkaConnection('kafka', 9092)
+        self.assertEqual(socket.call_count, 1)
+
+        copy = conn.copy()
+        self.assertEqual(socket.call_count, 1)
+        self.assertEqual(copy.host, 'kafka')
+        self.assertEqual(copy.port, 9092)
+        self.assertEqual(copy._sock, None)
+        self.assertEqual(copy._dirty, True)
+
+        copy.reinit()
+        self.assertEqual(socket.call_count, 2)
+        self.assertNotEqual(copy._sock, None)
+        self.assertNotEqual(copy._dirty, True)
+
+    @patch('socket.socket')
+    def test_copy_thread(self, socket):
+        """KafkaConnection copies work in other threads"""
+
+        err = []
+        copy = KafkaConnection('kafka', 9092).copy()
+
+        from threading import Thread
+        def thread_func(err, copy):
+            try:
+                self.assertEqual(copy.host, 'kafka')
+                self.assertEqual(copy.port, 9092)
+                self.assertNotEqual(copy._sock, None)
+            except Exception, e:
+                err.append(e)
+            else:
+                err.append(None)
+        thread = Thread(target=thread_func, args=(err, copy))
+        thread.start()
+        thread.join()
+
+        self.assertEqual(err, [None])
+        self.assertEqual(socket.call_count, 2)
 
 if __name__ == '__main__':
     unittest.main()
