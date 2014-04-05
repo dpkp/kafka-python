@@ -48,22 +48,28 @@ Message = namedtuple("Message", ["magic", "attributes", "key", "value"])
 TopicAndPartition = namedtuple("TopicAndPartition", ["topic", "partition"])
 
 
+ErrorStrings = {
+    -1 : 'UNKNOWN',
+    0 : 'NO_ERROR',
+    1 : 'OFFSET_OUT_OF_RANGE',
+    2 : 'INVALID_MESSAGE',
+    3 : 'UNKNOWN_TOPIC_OR_PARTITON',
+    4 : 'INVALID_FETCH_SIZE',
+    5 : 'LEADER_NOT_AVAILABLE',
+    6 : 'NOT_LEADER_FOR_PARTITION',
+    7 : 'REQUEST_TIMED_OUT',
+    8 : 'BROKER_NOT_AVAILABLE',
+    9 : 'REPLICA_NOT_AVAILABLE',
+    10 : 'MESSAGE_SIZE_TOO_LARGE',
+    11 : 'STALE_CONTROLLER_EPOCH',
+    12 : 'OFFSET_METADATA_TOO_LARGE',
+}
+
 class ErrorMapping(object):
-    # Many of these are not actually used by the client
-    UNKNOWN                   = -1
-    NO_ERROR                  = 0
-    OFFSET_OUT_OF_RANGE       = 1
-    INVALID_MESSAGE           = 2
-    UNKNOWN_TOPIC_OR_PARTITON = 3
-    INVALID_FETCH_SIZE        = 4
-    LEADER_NOT_AVAILABLE      = 5
-    NOT_LEADER_FOR_PARTITION  = 6
-    REQUEST_TIMED_OUT         = 7
-    BROKER_NOT_AVAILABLE      = 8
-    REPLICA_NOT_AVAILABLE     = 9
-    MESSAGE_SIZE_TO_LARGE     = 10
-    STALE_CONTROLLER_EPOCH    = 11
-    OFFSET_METADATA_TOO_LARGE = 12
+    pass
+
+for k, v in ErrorStrings.items():
+    setattr(ErrorMapping, v, k)
 
 #################
 #   Exceptions  #
@@ -74,15 +80,15 @@ class KafkaError(RuntimeError):
     pass
 
 
-class KafkaRequestError(KafkaError):
-    pass
-
-
 class KafkaUnavailableError(KafkaError):
     pass
 
 
 class BrokerResponseError(KafkaError):
+    pass
+
+
+class LeaderUnavailableError(KafkaError):
     pass
 
 

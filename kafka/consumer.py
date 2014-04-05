@@ -305,6 +305,10 @@ class SimpleConsumer(Consumer):
 
         # Reset queue and fetch offsets since they are invalid
         self.fetch_offsets = self.offsets.copy()
+        if self.auto_commit:
+            self.count_since_commit += 1
+            self.commit()
+
         self.queue = Queue()
 
     def get_messages(self, count=1, block=True, timeout=0.1):

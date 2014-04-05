@@ -5,10 +5,11 @@ from collections import defaultdict
 from functools import partial
 from itertools import count
 
-from kafka.common import (ErrorMapping, TopicAndPartition,
+from kafka.common import (ErrorMapping, ErrorStrings, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          KafkaUnavailableError, KafkaRequestError)
+                          LeaderUnavailableError,
+                          KafkaUnavailableError)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
@@ -62,12 +63,22 @@ class KafkaClient(object):
         return self._get_conn(broker.host, broker.port)
 
     def _get_leader_for_partition(self, topic, partition):
+        """
+        Returns the leader for a partition or None if the partition exists
+        but has no leader.
+
+        PartitionUnavailableError will be raised if the topic or partition
+        is not part of the metadata.
+        """
+
         key = TopicAndPartition(topic, partition)
-        if key not in self.topics_to_brokers:
+        # reload metadata whether the partition is not available
+        # or has no leader (broker is None)
+        if self.topics_to_brokers.get(key) is None:
             self.load_metadata_for_topics(topic)
 
         if key not in self.topics_to_brokers:
-            raise KafkaRequestError("Partition does not exist: %s" % str(key))
+            raise PartitionUnavailableError("%s not available" % str(key))
 
         return self.topics_to_brokers[key]
 
@@ -124,8 +135,11 @@ class KafkaClient(object):
         for payload in payloads:
             leader = self._get_leader_for_partition(payload.topic,
                                                     payload.partition)
-            if leader == -1:
-                raise PartitionUnavailableError("Leader is unassigned for %s-%s" % payload.topic, payload.partition)
+            if leader is None:
+                raise LeaderUnavailableError(
+                    "Leader not available for topic %s partition %s" %
+                    (payload.topic, payload.partition))
+
             payloads_by_broker[leader].append(payload)
             original_keys.append((payload.topic, payload.partition))
 
@@ -185,8 +199,8 @@ class KafkaClient(object):
             self.reset_topic_metadata(resp.topic)
 
         raise BrokerResponseError(
-            "Request for %s failed with errorcode=%d" %
-            (TopicAndPartition(resp.topic, resp.partition), resp.error))
+            "Request for %s failed with errorcode=%d (%s)" %
+            (TopicAndPartition(resp.topic, resp.partition), resp.error, ErrorStrings[resp.error]))
 
     #################
     #   Public API  #
@@ -267,13 +281,18 @@ class KafkaClient(object):
             self.reset_topic_metadata(topic)
 
             if not partitions:
+                log.warning('No partitions for %s', topic)
                 continue
 
             self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
-                topic_part = TopicAndPartition(topic, partition)
-                self.topics_to_brokers[topic_part] = brokers[meta.leader]
                 self.topic_partitions[topic].append(partition)
+                topic_part = TopicAndPartition(topic, partition)
+                if meta.leader == -1:
+                    log.warning('No leader for topic %s partition %s', topic, partition)
+                    self.topics_to_brokers[topic_part] = None
+                else:
+                    self.topics_to_brokers[topic_part] = brokers[meta.leader]
 
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
