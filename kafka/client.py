@@ -420,3 +420,31 @@ class KafkaClient(object):
             else:
                 out.append(resp)
         return out
+
+
+class Kafka082Client(KafkaClient):
+    server_version = "0.8.2"
+
+
+class Kafka081Client(KafkaClient):
+    server_version = "0.8.1"
+
+
+class Kafka080Client(KafkaClient):
+    server_version = "0.8.0"
+
+    def simple_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        consumer = super(Kafka080Client, self).simple_consumer(group, topic, **kwargs)
+        consumer.seek(0, 2)
+
+        return consumer
+
+    def multiprocess_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        return super(Kafka080Client, self).multiprocess_consumer(group, topic, **kwargs)
+
