@@ -26,7 +26,8 @@ class KafkaClient(object):
     # one passed to SimpleConsumer.get_message(), otherwise you can get a
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
-                 timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
+                 timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
+                 activate=True):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
@@ -37,7 +38,8 @@ class KafkaClient(object):
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # topic_id -> broker_id
         self.topic_partitions = {}   # topic_id -> [0, 1, 2, ...]
-        self.load_metadata_for_topics()  # bootstrap with all metadata
+        if activate is True:
+            self.load_metadata_for_topics()  # bootstrap with all metadata
 
     ##################
     #   Private API  #
@@ -233,8 +235,11 @@ class KafkaClient(object):
         Create an inactive copy of the client object
         A reinit() has to be done on the copy before it can be used again
         """
-        c = copy.deepcopy(self)
-        for k, v in c.conns.items():
+        c = KafkaClient(hosts=['{}:{}'.format(entry[0], entry[1]) for entry in self.hosts],
+                        client_id=self.client_id,
+                        timeout=self.timeout,
+                        activate=False)
+        for k, v in self.conns.iteritems():
             c.conns[k] = v.copy()
         return c
 
