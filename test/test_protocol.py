@@ -1,9 +1,5 @@
-import os
-import random
 import struct
 import unittest
-
-from mock import MagicMock, patch
 
 from kafka import KafkaClient
 from kafka.common import (
@@ -21,106 +17,7 @@ from kafka.protocol import (
     create_gzip_message, create_message, create_snappy_message, KafkaProtocol
 )
 
-ITERATIONS = 1000
-STRLEN = 100
-
-
-def random_string():
-    return os.urandom(random.randint(1, STRLEN))
-
-
-class TestPackage(unittest.TestCase):
-
-    def test_top_level_namespace(self):
-        import kafka as kafka1
-        self.assertEquals(kafka1.KafkaClient.__name__, "KafkaClient")
-        self.assertEquals(kafka1.client.__name__, "kafka.client")
-        self.assertEquals(kafka1.codec.__name__, "kafka.codec")
-
-    def test_submodule_namespace(self):
-        import kafka.client as client1
-        self.assertEquals(client1.__name__, "kafka.client")
-        self.assertEquals(client1.KafkaClient.__name__, "KafkaClient")
-
-        from kafka import client as client2
-        self.assertEquals(client2.__name__, "kafka.client")
-        self.assertEquals(client2.KafkaClient.__name__, "KafkaClient")
-
-        from kafka.client import KafkaClient as KafkaClient1
-        self.assertEquals(KafkaClient1.__name__, "KafkaClient")
-
-        from kafka.codec import gzip_encode as gzip_encode1
-        self.assertEquals(gzip_encode1.__name__, "gzip_encode")
-
-        from kafka import KafkaClient as KafkaClient2
-        self.assertEquals(KafkaClient2.__name__, "KafkaClient")
-
-        from kafka.codec import snappy_encode
-        self.assertEquals(snappy_encode.__name__, "snappy_encode")
-
-
-class TestCodec(unittest.TestCase):
-
-    @unittest.skipUnless(has_gzip(), "Gzip not available")
-    def test_gzip(self):
-        for i in xrange(ITERATIONS):
-            s1 = random_string()
-            s2 = gzip_decode(gzip_encode(s1))
-            self.assertEquals(s1, s2)
-
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
-    def test_snappy(self):
-        for i in xrange(ITERATIONS):
-            s1 = random_string()
-            s2 = snappy_decode(snappy_encode(s1))
-            self.assertEquals(s1, s2)
-
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
-    def test_snappy_detect_xerial(self):
-        import kafka as kafka1
-        _detect_xerial_stream = kafka1.codec._detect_xerial_stream
-
-        header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01Some extra bytes'
-        false_header = b'\x01SNAPPY\x00\x00\x00\x01\x00\x00\x00\x01'
-        random_snappy = snappy_encode('SNAPPY' * 50)
-        short_data = b'\x01\x02\x03\x04'
-
-        self.assertTrue(_detect_xerial_stream(header))
-        self.assertFalse(_detect_xerial_stream(b''))
-        self.assertFalse(_detect_xerial_stream(b'\x00'))
-        self.assertFalse(_detect_xerial_stream(false_header))
-        self.assertFalse(_detect_xerial_stream(random_snappy))
-        self.assertFalse(_detect_xerial_stream(short_data))
-
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
-    def test_snappy_decode_xerial(self):
-        header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01'
-        random_snappy = snappy_encode('SNAPPY' * 50)
-        block_len = len(random_snappy)
-        random_snappy2 = snappy_encode('XERIAL' * 50)
-        block_len2 = len(random_snappy2)
-
-        to_test = header \
-            + struct.pack('!i', block_len) + random_snappy \
-            + struct.pack('!i', block_len2) + random_snappy2 \
-
-        self.assertEquals(snappy_decode(to_test), ('SNAPPY' * 50) + ('XERIAL' * 50))
-
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
-    def test_snappy_encode_xerial(self):
-        to_ensure = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01' + \
-            '\x00\x00\x00\x18' + \
-            '\xac\x02\x14SNAPPY\xfe\x06\x00\xfe\x06\x00\xfe\x06\x00\xfe\x06\x00\x96\x06\x00' + \
-            '\x00\x00\x00\x18' + \
-            '\xac\x02\x14XERIAL\xfe\x06\x00\xfe\x06\x00\xfe\x06\x00\xfe\x06\x00\x96\x06\x00'
-
-        to_test = ('SNAPPY' * 50) + ('XERIAL' * 50)
-
-        compressed = snappy_encode(to_test, xerial_compatible=True, xerial_blocksize=300)
-        self.assertEquals(compressed, to_ensure)
-
 class TestProtocol(unittest.TestCase):
-
     def test_create_message(self):
         payload = "test"
         key = "key"
@@ -130,7 +27,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.key, key)
         self.assertEqual(msg.value, payload)
 
-    @unittest.skipUnless(has_gzip(), "Snappy not available")
+    @unittest.skipUnless(has_gzip(), "gzip not available")
     def test_create_gzip(self):
         payloads = ["v1", "v2"]
         msg = create_gzip_message(payloads)
@@ -140,10 +37,24 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.key, None)
         # Need to decode to check since gzipped payload is non-deterministic
         decoded = gzip_decode(msg.value)
-        expect = ("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10L\x9f[\xc2"
-                  "\x00\x00\xff\xff\xff\xff\x00\x00\x00\x02v1\x00\x00\x00\x00"
-                  "\x00\x00\x00\x00\x00\x00\x00\x10\xd5\x96\nx\x00\x00\xff\xff"
-                  "\xff\xff\x00\x00\x00\x02v2")
+        expect = (
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # MsgSet1 Offset
+            "\x00\x00\x00\x10"                 # MsgSet1 Size
+            "\x4c\x9f\x5b\xc2"                 # Msg1 CRC
+            "\x00"                             # Msg1 Magic
+            "\x00"                             # Msg1 Flags
+            "\xff\xff\xff\xff"                 # Msg1, null key
+            "\x00\x00\x00\x02"                 # Msg1, msg Size
+            "v1"                               # Msg1, contents
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # MsgSet2 Offset
+            "\x00\x00\x00\x10"                 # MsgSet2 Size
+            "\xd5\x96\x0a\x78"                 # Msg2, CRC
+            "\x00"                             # Msg2, magic
+            "\x00"                             # Msg2, flags
+            "\xff\xff\xff\xff"                 # Msg2, null key
+            "\x00\x00\x00\x02"                 # Msg2, msg size
+            "v2"                               # Msg2, contents
+        )
         self.assertEqual(decoded, expect)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
@@ -154,9 +65,24 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.attributes, KafkaProtocol.ATTRIBUTE_CODEC_MASK &
                                          KafkaProtocol.CODEC_SNAPPY)
         self.assertEqual(msg.key, None)
-        expect = ("8\x00\x00\x19\x01@\x10L\x9f[\xc2\x00\x00\xff\xff\xff\xff"
-                  "\x00\x00\x00\x02v1\x19\x1bD\x00\x10\xd5\x96\nx\x00\x00\xff"
-                  "\xff\xff\xff\x00\x00\x00\x02v2")
+        expect = (
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # MsgSet1 Offset
+            "\x00\x00\x00\x10"                 # MsgSet1 Size
+            "\x4c\x9f\x5b\xc2"                 # Msg1 CRC
+            "\x00"                             # Msg1 Magic
+            "\x00"                             # Msg1 Flags
+            "\xff\xff\xff\xff"                 # Msg1, null key
+            "\x00\x00\x00\x02"                 # Msg1, msg Size
+            "v1"                               # Msg1, contents
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # MsgSet2 Offset
+            "\x00\x00\x00\x10"                 # MsgSet2 Size
+            "\xd5\x96\x0a\x78"                 # Msg2, CRC
+            "\x00"                             # Msg2, magic
+            "\x00"                             # Msg2, flags
+            "\xff\xff\xff\xff"                 # Msg2, null key
+            "\x00\x00\x00\x02"                 # Msg2, msg size
+            "v2"                               # Msg2, contents
+        )
         self.assertEqual(msg.value, expect)
 
     def test_encode_message_header(self):
@@ -426,249 +352,3 @@ class TestProtocol(unittest.TestCase):
     @unittest.skip("Not Implemented")
     def test_decode_offset_fetch_response(self):
         pass
-
-
-class TestKafkaClient(unittest.TestCase):
-
-    def test_init_with_list(self):
-
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            client = KafkaClient(
-                hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])
-
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
-
-    def test_init_with_csv(self):
-
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            client = KafkaClient(
-                hosts='kafka01:9092,kafka02:9092,kafka03:9092')
-
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
-
-    def test_init_with_unicode_csv(self):
-
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            client = KafkaClient(
-                hosts=u'kafka01:9092,kafka02:9092,kafka03:9092')
-
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
-
-    def test_send_broker_unaware_request_fail(self):
-        'Tests that call fails when all hosts are unavailable'
-
-        mocked_conns = {
-            ('kafka01', 9092): MagicMock(),
-            ('kafka02', 9092): MagicMock()
-        }
-        # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
-        mocked_conns[('kafka02', 9092)].send.side_effect = RuntimeError("Kafka02 went away (unittest)")
-
-        def mock_get_conn(host, port):
-            return mocked_conns[(host, port)]
-
-        # patch to avoid making requests before we want it
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
-                client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
-
-                self.assertRaises(
-                    KafkaUnavailableError,
-                    client._send_broker_unaware_request,
-                    1, 'fake request')
-
-                for key, conn in mocked_conns.iteritems():
-                    conn.send.assert_called_with(1, 'fake request')
-
-    def test_send_broker_unaware_request(self):
-        'Tests that call works when at least one of the host is available'
-
-        mocked_conns = {
-            ('kafka01', 9092): MagicMock(),
-            ('kafka02', 9092): MagicMock(),
-            ('kafka03', 9092): MagicMock()
-        }
-        # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
-        mocked_conns[('kafka02', 9092)].recv.return_value = 'valid response'
-        mocked_conns[('kafka03', 9092)].send.side_effect = RuntimeError("kafka03 went away (unittest)")
-
-        def mock_get_conn(host, port):
-            return mocked_conns[(host, port)]
-
-        # patch to avoid making requests before we want it
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
-                client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
-
-                resp = client._send_broker_unaware_request(1, 'fake request')
-
-                self.assertEqual('valid response', resp)
-                mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
-
-    @patch('kafka.client.KafkaConnection')
-    @patch('kafka.client.KafkaProtocol')
-    def test_load_metadata(self, protocol, conn):
-        "Load metadata for all topics"
-
-        conn.recv.return_value = 'response'  # anything but None
-
-        brokers = {}
-        brokers[0] = BrokerMetadata(1, 'broker_1', 4567)
-        brokers[1] = BrokerMetadata(2, 'broker_2', 5678)
-
-        topics = {}
-        topics['topic_1'] = {
-            0: PartitionMetadata('topic_1', 0, 1, [1, 2], [1, 2])
-        }
-        topics['topic_noleader'] = {
-            0: PartitionMetadata('topic_noleader', 0, -1, [], []),
-            1: PartitionMetadata('topic_noleader', 1, -1, [], [])
-        }
-        topics['topic_no_partitions'] = {}
-        topics['topic_3'] = {
-            0: PartitionMetadata('topic_3', 0, 0, [0, 1], [0, 1]),
-            1: PartitionMetadata('topic_3', 1, 1, [1, 0], [1, 0]),
-            2: PartitionMetadata('topic_3', 2, 0, [0, 1], [0, 1])
-        }
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        # client loads metadata at init
-        client = KafkaClient(hosts=['broker_1:4567'])
-        self.assertDictEqual({
-            TopicAndPartition('topic_1', 0): brokers[1],
-            TopicAndPartition('topic_noleader', 0): None,
-            TopicAndPartition('topic_noleader', 1): None,
-            TopicAndPartition('topic_3', 0): brokers[0],
-            TopicAndPartition('topic_3', 1): brokers[1],
-            TopicAndPartition('topic_3', 2): brokers[0]},
-            client.topics_to_brokers)
-
-    @patch('kafka.client.KafkaConnection')
-    @patch('kafka.client.KafkaProtocol')
-    def test_get_leader_for_partitions_reloads_metadata(self, protocol, conn):
-        "Get leader for partitions reload metadata if it is not available"
-
-        conn.recv.return_value = 'response'  # anything but None
-
-        brokers = {}
-        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
-        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
-
-        topics = {'topic_no_partitions': {}}
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        client = KafkaClient(hosts=['broker_1:4567'])
-
-        # topic metadata is loaded but empty
-        self.assertDictEqual({}, client.topics_to_brokers)
-
-        topics['topic_no_partitions'] = {
-            0: PartitionMetadata('topic_no_partitions', 0, 0, [0, 1], [0, 1])
-        }
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        # calling _get_leader_for_partition (from any broker aware request)
-        # will try loading metadata again for the same topic
-        leader = client._get_leader_for_partition('topic_no_partitions', 0)
-
-        self.assertEqual(brokers[0], leader)
-        self.assertDictEqual({
-            TopicAndPartition('topic_no_partitions', 0): brokers[0]},
-            client.topics_to_brokers)
-
-    @patch('kafka.client.KafkaConnection')
-    @patch('kafka.client.KafkaProtocol')
-    def test_get_leader_for_unassigned_partitions(self, protocol, conn):
-        "Get leader raises if no partitions is defined for a topic"
-
-        conn.recv.return_value = 'response'  # anything but None
-
-        brokers = {}
-        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
-        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
-
-        topics = {'topic_no_partitions': {}}
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        client = KafkaClient(hosts=['broker_1:4567'])
-
-        self.assertDictEqual({}, client.topics_to_brokers)
-        self.assertRaises(
-            PartitionUnavailableError,
-            client._get_leader_for_partition,
-            'topic_no_partitions', 0)
-
-    @patch('kafka.client.KafkaConnection')
-    @patch('kafka.client.KafkaProtocol')
-    def test_get_leader_returns_none_when_noleader(self, protocol, conn):
-        "Getting leader for partitions returns None when the partiion has no leader"
-
-        conn.recv.return_value = 'response'  # anything but None
-
-        brokers = {}
-        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
-        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
-
-        topics = {}
-        topics['topic_noleader'] = {
-            0: PartitionMetadata('topic_noleader', 0, -1, [], []),
-            1: PartitionMetadata('topic_noleader', 1, -1, [], [])
-        }
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        client = KafkaClient(hosts=['broker_1:4567'])
-        self.assertDictEqual(
-            {
-                TopicAndPartition('topic_noleader', 0): None,
-                TopicAndPartition('topic_noleader', 1): None
-            },
-            client.topics_to_brokers)
-        self.assertIsNone(client._get_leader_for_partition('topic_noleader', 0))
-        self.assertIsNone(client._get_leader_for_partition('topic_noleader', 1))
-
-        topics['topic_noleader'] = {
-            0: PartitionMetadata('topic_noleader', 0, 0, [0, 1], [0, 1]),
-            1: PartitionMetadata('topic_noleader', 1, 1, [1, 0], [1, 0])
-        }
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-        self.assertEqual(brokers[0], client._get_leader_for_partition('topic_noleader', 0))
-        self.assertEqual(brokers[1], client._get_leader_for_partition('topic_noleader', 1))
-
-    @patch('kafka.client.KafkaConnection')
-    @patch('kafka.client.KafkaProtocol')
-    def test_send_produce_request_raises_when_noleader(self, protocol, conn):
-        "Send producer request raises LeaderUnavailableError if leader is not available"
-
-        conn.recv.return_value = 'response'  # anything but None
-
-        brokers = {}
-        brokers[0] = BrokerMetadata(0, 'broker_1', 4567)
-        brokers[1] = BrokerMetadata(1, 'broker_2', 5678)
-
-        topics = {}
-        topics['topic_noleader'] = {
-            0: PartitionMetadata('topic_noleader', 0, -1, [], []),
-            1: PartitionMetadata('topic_noleader', 1, -1, [], [])
-        }
-        protocol.decode_metadata_response.return_value = (brokers, topics)
-
-        client = KafkaClient(hosts=['broker_1:4567'])
-
-        requests = [ProduceRequest(
-            "topic_noleader", 0,
-            [create_message("a"), create_message("b")])]
-
-        self.assertRaises(
-            LeaderUnavailableError,
-            client.send_produce_request, requests)
-
-if __name__ == '__main__':
-    unittest.main()

@@ -67,7 +67,3 @@ class ConnTest(unittest.TestCase):
     @unittest.skip("Not Implemented")
     def test_close__object_is_reusable(self):
         pass
-
-
-if __name__ == '__main__':
-    unittest.main()
