@@ -8,7 +8,7 @@ from kafka.codec import (
 from kafka.common import (
     BrokerMetadata, PartitionMetadata, Message, OffsetAndMessage,
     ProduceResponse, FetchResponse, OffsetResponse,
-    OffsetCommitResponse, OffsetFetchResponse,
+    OffsetCommitResponse, OffsetFetchResponse, ProtocolError,
     BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall
 )
 from kafka.util import (
@@ -68,8 +68,7 @@ class KafkaProtocol(object):
         message_set = ""
         for message in messages:
             encoded_message = KafkaProtocol._encode_message(message)
-            message_set += struct.pack('>qi%ds' % len(encoded_message), 0,
-                                       len(encoded_message), encoded_message)
+            message_set += struct.pack('>qi%ds' % len(encoded_message), 0, len(encoded_message), encoded_message)
         return message_set
 
     @classmethod
@@ -96,7 +95,7 @@ class KafkaProtocol(object):
             crc = zlib.crc32(msg)
             msg = struct.pack('>i%ds' % len(msg), crc, msg)
         else:
-            raise Exception("Unexpected magic number: %d" % message.magic)
+            raise ProtocolError("Unexpected magic number: %d" % message.magic)
         return msg
 
     @classmethod

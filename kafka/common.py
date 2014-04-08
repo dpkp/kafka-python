@@ -118,3 +118,7 @@ class ConsumerFetchSizeTooSmall(KafkaError):
 
 class ConsumerNoMoreData(KafkaError):
     pass
+
+
+class ProtocolError(KafkaError):
+    pass

@@ -6,7 +6,7 @@ from kafka.common import (
     ProduceRequest, FetchRequest, Message, ChecksumError,
     ConsumerFetchSizeTooSmall, ProduceResponse, FetchResponse,
     OffsetAndMessage, BrokerMetadata, PartitionMetadata,
-    TopicAndPartition, KafkaUnavailableError, 
+    TopicAndPartition, KafkaUnavailableError, ProtocolError,
     LeaderUnavailableError, PartitionUnavailableError
 )
 from kafka.codec import (
@@ -93,12 +93,20 @@ class TestProtocol(unittest.TestCase):
     def test_encode_message(self):
         message = create_message("test", "key")
         encoded = KafkaProtocol._encode_message(message)
-        expect = "\xaa\xf1\x8f[\x00\x00\x00\x00\x00\x03key\x00\x00\x00\x04test"
+        expect = (
+            "\xaa\xf1\x8f\x5b" # CRC
+            "\x00"             # Magic
+            "\x00"             # Flags
+            "\x00\x00\x00\x03" # Key Length
+            "key"              # Key contents
+            "\x00\x00\x00\x04" # Msg Length
+            "test"             # Msg contents
+        )
         self.assertEqual(encoded, expect)
 
     def test_encode_message_failure(self):
-        self.assertRaises(Exception, KafkaProtocol._encode_message,
-                          Message(1, 0, "key", "test"))
+        with self.assertRaises(ProtocolError):
+            KafkaProtocol._encode_message(Message(1, 0, "key", "test"))
 
     def test_encode_message_set(self):
         message_set = [create_message("v1", "k1"), create_message("v2", "k2")]
@@ -224,15 +232,28 @@ class TestProtocol(unittest.TestCase):
     def test_encode_fetch_request(self):
         requests = [FetchRequest("topic1", 0, 10, 1024),
                     FetchRequest("topic2", 1, 20, 100)]
-        expect = ('\x00\x00\x00Y\x00\x01\x00\x00\x00\x00\x00\x03\x00\x07'
-                  'client1\xff\xff\xff\xff\x00\x00\x00\x02\x00\x00\x00d\x00'
-                  '\x00\x00\x02\x00\x06topic1\x00\x00\x00\x01\x00\x00\x00\x00'
-                  '\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x04\x00\x00\x06'
-                  'topic2\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00'
-                  '\x00\x00\x14\x00\x00\x00d')
-        encoded = KafkaProtocol.encode_fetch_request("client1", 3, requests, 2,
-                                                     100)
-        self.assertEqual(encoded, expect)
+
+        possibility1 = (
+            '\x00\x00\x00Y\x00\x01\x00\x00\x00\x00\x00\x03\x00\x07'
+            'client1\xff\xff\xff\xff\x00\x00\x00\x02\x00\x00\x00d\x00'
+            '\x00\x00\x02\x00\x06topic1\x00\x00\x00\x01\x00\x00\x00\x00'
+            '\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x04\x00\x00\x06'
+            'topic2\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00'
+            '\x00\x00\x14\x00\x00\x00d'
+        )
+
+        # Todo, this isn't currently different
+        possibility2 = (
+            '\x00\x00\x00Y\x00\x01\x00\x00\x00\x00\x00\x03\x00\x07'
+            'client1\xff\xff\xff\xff\x00\x00\x00\x02\x00\x00\x00d\x00'
+            '\x00\x00\x02\x00\x06topic1\x00\x00\x00\x01\x00\x00\x00\x00'
+            '\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x04\x00\x00\x06'
+            'topic2\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00'
+            '\x00\x00\x14\x00\x00\x00d'
+        )
+
+        encoded = KafkaProtocol.encode_fetch_request("client1", 3, requests, 2, 100)
+        self.assertIn(encoded, [ possibility1, possibility2 ])
 
     def test_decode_fetch_response(self):
         t1 = "topic1"
