@@ -50,7 +50,7 @@ class KafkaProtocol(object):
                            request_key,          # ApiKey
                            0,                    # ApiVersion
                            correlation_id,       # CorrelationId
-                           len(client_id),
+                           len(client_id),       # ClientId size
                            client_id)            # ClientId
 
     @classmethod

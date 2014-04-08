@@ -86,7 +86,13 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.value, expect)
 
     def test_encode_message_header(self):
-        expect = '\x00\n\x00\x00\x00\x00\x00\x04\x00\x07client3'
+        expect = (
+            "\x00\n"           # API Key
+            "\x00\x00"         # API Version
+            "\x00\x00\x00\x04" # CorrelationId
+            "\x00\x07"         # Client length
+            "client3"          # Client Id
+        )
         encoded = KafkaProtocol._encode_message_header("client3", 4, 10)
         self.assertEqual(encoded, expect)
 
@@ -111,10 +117,27 @@ class TestProtocol(unittest.TestCase):
     def test_encode_message_set(self):
         message_set = [create_message("v1", "k1"), create_message("v2", "k2")]
         encoded = KafkaProtocol._encode_message_set(message_set)
-        expect = ("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12W\xe7In\x00"
-                  "\x00\x00\x00\x00\x02k1\x00\x00\x00\x02v1\x00\x00\x00\x00"
-                  "\x00\x00\x00\x00\x00\x00\x00\x12\xff\x06\x02I\x00\x00\x00"
-                  "\x00\x00\x02k2\x00\x00\x00\x02v2")
+        expect = (
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # Msgset1, Offset (Meaningless)
+            "\x00\x00\x00\x12"                 # Msgset1, Msg Size
+            "\x57\xe7\x49\x6e"                 # Msg1, CRC
+            "\x00"                             # Msg1, Magic
+            "\x00"                             # Msg1, Flags
+            "\x00\x00\x00\x02"                 # Msg1, key size
+            "k1"                               # Msg1, key
+            "\x00\x00\x00\x02"                 # Msg1, value size
+            "v1"                               # Msg1, value
+            "\x00\x00\x00\x00\x00\x00\x00\x00" # Msgset2, Offset (Meaningless)
+            "\x00\x00\x00\x12"                 # Msgset2, Msg Size
+            "\xff\x06\x02\x49"                 # Msg2, CRC
+            "\x00"                             # Msg2, Magic
+            "\x00"                             # Msg2, flags
+            "\x00\x00\x00\x02"                 # Msg2, key size
+            "k2"                               # Msg2, key
+            "\x00\x00\x00\x02"                 # Msg2, value size
+            "v2"                               # MSg2, value
+        )
+
         self.assertEqual(encoded, expect)
 
     def test_decode_message(self):

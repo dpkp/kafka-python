@@ -20,27 +20,20 @@ from kafka.codec import (
 from kafka.protocol import (
     create_gzip_message, create_message, create_snappy_message, KafkaProtocol
 )
-
-ITERATIONS = 1000
-STRLEN = 100
-
-
-def random_string():
-    return os.urandom(random.randint(1, STRLEN))
-
+from .testutil import *
 
 class TestCodec(unittest.TestCase):
     @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_gzip(self):
-        for i in xrange(ITERATIONS):
-            s1 = random_string()
+        for i in xrange(1000):
+            s1 = random_string(100)
             s2 = gzip_decode(gzip_encode(s1))
             self.assertEquals(s1, s2)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy(self):
-        for i in xrange(ITERATIONS):
-            s1 = random_string()
+        for i in xrange(1000):
+            s1 = random_string(100)
             s2 = snappy_decode(snappy_encode(s1))
             self.assertEquals(s1, s2)
 
