@@ -161,19 +161,38 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(encoded, expect)
 
     def test_decode_message_set(self):
-        encoded = ('\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10L\x9f[\xc2'
-                   '\x00\x00\xff\xff\xff\xff\x00\x00\x00\x02v1\x00\x00\x00\x00'
-                   '\x00\x00\x00\x00\x00\x00\x00\x10\xd5\x96\nx\x00\x00\xff'
-                   '\xff\xff\xff\x00\x00\x00\x02v2')
-        iter = KafkaProtocol._decode_message_set_iter(encoded)
-        decoded = list(iter)
-        self.assertEqual(len(decoded), 2)
-        (returned_offset1, decoded_message1) = decoded[0]
+        encoded = "".join([
+            struct.pack(">q", 0),          # MsgSet Offset
+            struct.pack(">i", 18),         # Msg Size
+            struct.pack(">i", 1474775406), # CRC
+            struct.pack(">bb", 0, 0),      # Magic, flags
+            struct.pack(">i", 2),          # Length of key
+            "k1",                          # Key
+            struct.pack(">i", 2),          # Length of value
+            "v1",                          # Value
+
+            struct.pack(">q", 1),          # MsgSet Offset
+            struct.pack(">i", 18),         # Msg Size
+            struct.pack(">i", -16383415),  # CRC
+            struct.pack(">bb", 0, 0),      # Magic, flags
+            struct.pack(">i", 2),          # Length of key
+            "k2",                          # Key
+            struct.pack(">i", 2),          # Length of value
+            "v2",                          # Value
+        ])
+
+        msgs = list(KafkaProtocol._decode_message_set_iter(encoded))
+        self.assertEqual(len(msgs), 2)
+        msg1, msg2 = msgs
+
+        returned_offset1, decoded_message1 = msg1
+        returned_offset2, decoded_message2 = msg2
+
         self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message("v1"))
-        (returned_offset2, decoded_message2) = decoded[1]
-        self.assertEqual(returned_offset2, 0)
-        self.assertEqual(decoded_message2, create_message("v2"))
+        self.assertEqual(decoded_message1, create_message("v1", "k1"))
+
+        self.assertEqual(returned_offset2, 1)
+        self.assertEqual(decoded_message2, create_message("v2", "k2"))
 
     @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_decode_message_gzip(self):
@@ -216,28 +235,55 @@ class TestProtocol(unittest.TestCase):
     # NOTE: The error handling in _decode_message_set_iter() is questionable.
     # If it's modified, the next two tests might need to be fixed.
     def test_decode_message_set_fetch_size_too_small(self):
-        iter = KafkaProtocol._decode_message_set_iter('a')
-        self.assertRaises(ConsumerFetchSizeTooSmall, list, iter)
+        with self.assertRaises(ConsumerFetchSizeTooSmall):
+            list(KafkaProtocol._decode_message_set_iter('a'))
 
     def test_decode_message_set_stop_iteration(self):
-        encoded = ('\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10L\x9f[\xc2'
-                   '\x00\x00\xff\xff\xff\xff\x00\x00\x00\x02v1\x00\x00\x00\x00'
-                   '\x00\x00\x00\x00\x00\x00\x00\x10\xd5\x96\nx\x00\x00\xff'
-                   '\xff\xff\xff\x00\x00\x00\x02v2')
-        iter = KafkaProtocol._decode_message_set_iter(encoded + "@#$%(Y!")
-        decoded = list(iter)
-        self.assertEqual(len(decoded), 2)
-        (returned_offset1, decoded_message1) = decoded[0]
+        encoded = "".join([
+            struct.pack(">q", 0),          # MsgSet Offset
+            struct.pack(">i", 18),         # Msg Size
+            struct.pack(">i", 1474775406), # CRC
+            struct.pack(">bb", 0, 0),      # Magic, flags
+            struct.pack(">i", 2),          # Length of key
+            "k1",                          # Key
+            struct.pack(">i", 2),          # Length of value
+            "v1",                          # Value
+
+            struct.pack(">q", 1),         # MsgSet Offset
+            struct.pack(">i", 18),        # Msg Size
+            struct.pack(">i", -16383415), # CRC
+            struct.pack(">bb", 0, 0),     # Magic, flags
+            struct.pack(">i", 2),         # Length of key
+            "k2",                         # Key
+            struct.pack(">i", 2),         # Length of value
+            "v2",                         # Value
+            "@1$%(Y!",                    # Random padding
+        ])
+
+        msgs = list(KafkaProtocol._decode_message_set_iter(encoded))
+        self.assertEqual(len(msgs), 2)
+        msg1, msg2 = msgs
+
+        returned_offset1, decoded_message1 = msg1
+        returned_offset2, decoded_message2 = msg2
+
         self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message("v1"))
-        (returned_offset2, decoded_message2) = decoded[1]
-        self.assertEqual(returned_offset2, 0)
-        self.assertEqual(decoded_message2, create_message("v2"))
+        self.assertEqual(decoded_message1, create_message("v1", "k1"))
+
+        self.assertEqual(returned_offset2, 1)
+        self.assertEqual(decoded_message2, create_message("v2", "k2"))
 
     def test_encode_produce_request(self):
-        requests = [ProduceRequest("topic1", 0, [create_message("a"),
-                                                 create_message("b")]),
-                    ProduceRequest("topic2", 1, [create_message("c")])]
+        requests = [
+            ProduceRequest("topic1", 0, [
+                create_message("a"),
+                create_message("b")
+            ]),
+            ProduceRequest("topic2", 1, [
+                create_message("c")
+            ])
+        ]
+
         expect = ('\x00\x00\x00\x94\x00\x00\x00\x00\x00\x00\x00\x02\x00\x07'
                   'client1\x00\x02\x00\x00\x00d\x00\x00\x00\x02\x00\x06topic1'
                   '\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x006\x00\x00\x00'
