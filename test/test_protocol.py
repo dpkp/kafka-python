@@ -351,20 +351,53 @@ class TestProtocol(unittest.TestCase):
                           ProduceResponse(t2, 0, 0, 30L)])
 
     def test_encode_fetch_request(self):
-        requests = [FetchRequest("topic1", 0, 10, 1024),
-                    FetchRequest("topic2", 1, 20, 100)]
+        requests = [
+            FetchRequest("topic1", 0, 10, 1024),
+            FetchRequest("topic2", 1, 20, 100),
+        ]
 
-        expected = (
-            '\x00\x00\x00Y\x00\x01\x00\x00\x00\x00\x00\x03\x00\x07'
-            'client1\xff\xff\xff\xff\x00\x00\x00\x02\x00\x00\x00d\x00'
-            '\x00\x00\x02\x00\x06topic1\x00\x00\x00\x01\x00\x00\x00\x00'
-            '\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x04\x00\x00\x06'
-            'topic2\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00'
-            '\x00\x00\x14\x00\x00\x00d'
-        )
+        header = "".join([
+            struct.pack('>i', 89),             # The length of the message overall
+            struct.pack('>h', 1),              # Msg Header, Message type = Fetch
+            struct.pack('>h', 0),              # Msg Header, API version
+            struct.pack('>i', 3),              # Msg Header, Correlation ID
+            struct.pack('>h7s', 7, "client1"), # Msg Header, The client ID
+            struct.pack('>i', -1),             # Replica Id
+            struct.pack('>i', 2),              # Max wait time
+            struct.pack('>i', 100),            # Min bytes
+            struct.pack('>i', 2),              # Num requests
+        ])
+
+        topic1 = "".join([
+            struct.pack('>h6s', 6, 'topic1'), # Topic
+            struct.pack('>i', 1),             # Num Payloads
+            struct.pack('>i', 0),             # Partition 0
+            struct.pack('>q', 10),            # Offset
+            struct.pack('>i', 1024),          # Max Bytes
+        ])
+
+        topic2 = "".join([
+            struct.pack('>h6s', 6, 'topic2'), # Topic
+            struct.pack('>i', 1),             # Num Payloads
+            struct.pack('>i', 1),             # Partition 0
+            struct.pack('>q', 20),            # Offset
+            struct.pack('>i', 100),           # Max Bytes
+        ])
+
+        expected1 = "".join([
+            header,
+            topic1,
+            topic2,
+        ])
+
+        expected2 = "".join([
+            header,
+            topic2,
+            topic1,
+        ])
 
         encoded = KafkaProtocol.encode_fetch_request("client1", 3, requests, 2, 100)
-        self.assertEqual(encoded, expected) 
+        self.assertIn(encoded, [ expected1, expected2 ])
 
     def test_decode_fetch_response(self):
         t1 = "topic1"
