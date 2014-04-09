@@ -8,7 +8,7 @@ from mock import MagicMock, patch
 from kafka import KafkaClient
 from kafka.common import (
     ProduceRequest, BrokerMetadata, PartitionMetadata,
-    TopicAndPartition, KafkaUnavailableError, 
+    TopicAndPartition, KafkaUnavailableError,
     LeaderUnavailableError, PartitionUnavailableError
 )
 from kafka.protocol import (
