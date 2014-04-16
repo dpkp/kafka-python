@@ -48,7 +48,7 @@ class KafkaClient(object):
 
         host_key = (host, port)
         if host_key not in self.conns:
-            self.conns[host_key] = KafkaConnection(host, port)
+            self.conns[host_key] = KafkaConnection(host, port, timeout=self.timeout)
 
         return self.conns[host_key]
 
