@@ -101,7 +101,7 @@ class Consumer(object):
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
                 return 0
             else:
-                raise Exception("OffsetFetchRequest for topic=%s, "
+                raise ProtocolError("OffsetFetchRequest for topic=%s, "
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
