@@ -1,9 +1,10 @@
 import unittest
 import time
+import socket
+import random
 
-from kafka import *  # noqa
-from kafka.common import *  # noqa
-from kafka.codec import has_gzip, has_snappy
+import kafka
+from kafka.common import *
 from .fixtures import ZookeeperFixture, KafkaFixture
 from .testutil import *
 
@@ -18,6 +19,15 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     def tearDownClass(cls):  # noqa
         cls.server.close()
         cls.zk.close()
+
+    def test_timeout(self):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.bind(('localhost', 14567))
+
+        with Timer() as t:
+            with self.assertRaises((socket.timeout, socket.error)):
+                conn = kafka.conn.KafkaConnection("localhost", 14567, 1.0)
+        self.assertGreaterEqual(t.interval, 1.0)
 
     def test_consume_none(self):
         fetch = FetchRequest(self.topic, 0, 0, 1024)
