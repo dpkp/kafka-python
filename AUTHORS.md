@@ -4,7 +4,7 @@ Ordered by contribution
 
 * David Arthur, [@mumrah](https://github.com/mumrah)
 * Mahendra M, [@mahendra](https://github.com/mahendra)
-* Omar, [@rdiomar](https://github.com/rdiomar)
+* Omar, [@rdiomar](https://github.com/rdiomar) - RIP, Omar. 2014
 * Marc Labbé, [@mrtheb](https://github.com/mrtheb)
 * Ivan Pouzyrevsky, [@sandello](https://github.com/sandello)
 * Thomas Dimson, [@cosbynator](https://github.com/cosbynator)
