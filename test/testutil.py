@@ -1,12 +1,23 @@
-import uuid
-import time
-import unittest
+import logging
 import os
 import random
+import socket
 import string
-import logging
+import time
+import unittest
+import uuid
+
 from kafka.common import OffsetRequest
 from kafka import KafkaClient
+
+__all__ = [
+    'random_string',
+    'skip_integration',
+    'ensure_topic_creation',
+    'get_open_port',
+    'KafkaIntegrationTestCase',
+    'Timer',
+]
 
 def random_string(l):
     s = "".join(random.choice(string.letters) for i in xrange(l))
@@ -24,6 +35,13 @@ def ensure_topic_creation(client, topic_name, timeout = 30):
             raise Exception("Unable to create topic %s" % topic_name)
         client.load_metadata_for_topics(topic_name)
         time.sleep(1)
+
+def get_open_port():
+    sock = socket.socket()
+    sock.bind(("", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
