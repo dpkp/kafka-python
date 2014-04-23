@@ -10,6 +10,7 @@ from Queue import Empty, Queue
 from kafka.common import (
     ErrorMapping, FetchRequest,
     OffsetRequest, OffsetCommitRequest,
+    OffsetFetchRequest,
     ConsumerFetchSizeTooSmall, ConsumerNoMoreData
 )
 
@@ -101,21 +102,20 @@ class Consumer(object):
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
                 return 0
             else:
-                raise Exception("OffsetFetchRequest for topic=%s, "
+                raise ProtocolError("OffsetFetchRequest for topic=%s, "
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
-        # Uncomment for 0.8.1
-        #
-        #for partition in partitions:
-        #    req = OffsetFetchRequest(topic, partition)
-        #    (offset,) = self.client.send_offset_fetch_request(group, [req],
-        #                  callback=get_or_init_offset_callback,
-        #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
-
-        for partition in partitions:
-            self.offsets[partition] = 0
+        if auto_commit:
+            for partition in partitions:
+                req = OffsetFetchRequest(topic, partition)
+                (offset,) = self.client.send_offset_fetch_request(group, [req],
+                              callback=get_or_init_offset_callback,
+                              fail_on_error=False)
+                self.offsets[partition] = offset
+        else:
+            for partition in partitions:
+                self.offsets[partition] = 0
 
     def commit(self, partitions=None):
         """
@@ -255,8 +255,8 @@ class SimpleConsumer(Consumer):
         self.queue = Queue()
 
     def __repr__(self):
-        return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
-            (self.group, self.topic, str(self.offsets.keys()))
+        return '<SimpleConsumer version=%s, group=%s, topic=%s, partitions=%s>' % \
+            (self.client.server_version, self.group, self.topic, str(self.offsets.keys()))
 
     def provide_partition_info(self):
         """
@@ -582,8 +582,8 @@ class MultiProcessConsumer(Consumer):
             self.procs.append(proc)
 
     def __repr__(self):
-        return '<MultiProcessConsumer group=%s, topic=%s, consumers=%d>' % \
-            (self.group, self.topic, len(self.procs))
+        return '<MultiProcessConsumer version=%s, group=%s, topic=%s, consumers=%d>' % \
+            (self.client.server_version, self.group, self.topic, len(self.procs))
 
     def stop(self):
         # Set exit and start off all waiting consumers

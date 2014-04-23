@@ -16,9 +16,9 @@ from kafka.protocol import KafkaProtocol
 
 log = logging.getLogger("kafka")
 
-
 class KafkaClient(object):
 
+    server_version = "unknown"
     CLIENT_ID = "kafka-python"
     ID_GEN = count()
 
@@ -45,22 +45,15 @@ class KafkaClient(object):
 
     def _get_conn(self, host, port):
         "Get or create a connection to a broker using host and port"
-
         host_key = (host, port)
         if host_key not in self.conns:
-            self.conns[host_key] = KafkaConnection(host, port)
+            self.conns[host_key] = KafkaConnection(
+                host,
+                port,
+                timeout=self.timeout
+            )
 
         return self.conns[host_key]
-
-    def _get_conn_for_broker(self, broker):
-        """
-        Get or create a connection to a broker
-        """
-        if (broker.host, broker.port) not in self.conns:
-            self.conns[(broker.host, broker.port)] = \
-                KafkaConnection(broker.host, broker.port, timeout=self.timeout)
-
-        return self._get_conn(broker.host, broker.port)
 
     def _get_leader_for_partition(self, topic, partition):
         """
@@ -151,7 +144,7 @@ class KafkaClient(object):
 
         # For each broker, send the list of request payloads
         for broker, payloads in payloads_by_broker.items():
-            conn = self._get_conn_for_broker(broker)
+            conn = self._get_conn(broker.host, broker.port)
             requestId = self._next_id()
             request = encoder_fn(client_id=self.client_id,
                                  correlation_id=requestId, payloads=payloads)
@@ -188,7 +181,7 @@ class KafkaClient(object):
         return (acc[k] for k in original_keys) if acc else ()
 
     def __repr__(self):
-        return '<KafkaClient client_id=%s>' % (self.client_id)
+        return '<KafkaClient version=%s, client_id=%s>' % (self.server_version, self.client_id)
 
     def _raise_on_response_error(self, resp):
         if resp.error == ErrorMapping.NO_ERROR:
@@ -205,6 +198,23 @@ class KafkaClient(object):
     #################
     #   Public API  #
     #################
+
+    def keyed_producer(self, **kwargs):
+        import kafka
+        return kafka.producer.KeyedProducer(self, **kwargs)
+
+    def simple_producer(self, **kwargs):
+        import kafka
+        return kafka.producer.SimpleProducer(self, **kwargs)
+
+    def simple_consumer(self, group, topic, **kwargs):
+        import kafka
+        return kafka.consumer.SimpleConsumer(self, group, topic, **kwargs)
+
+    def multiprocess_consumer(self, group, topic, **kwargs):
+        import kafka
+        return kafka.consumer.MultiProcessConsumer(self, group, topic, **kwargs)
+
     def reset_topic_metadata(self, *topics):
         for topic in topics:
             try:
@@ -403,3 +413,31 @@ class KafkaClient(object):
             else:
                 out.append(resp)
         return out
+
+
+class Kafka082Client(KafkaClient):
+    server_version = "0.8.2"
+
+
+class Kafka081Client(KafkaClient):
+    server_version = "0.8.1"
+
+
+class Kafka080Client(KafkaClient):
+    server_version = "0.8.0"
+
+    def simple_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        consumer = super(Kafka080Client, self).simple_consumer(group, topic, **kwargs)
+        consumer.seek(0, 2)
+
+        return consumer
+
+    def multiprocess_consumer(self, group, topic, **kwargs):
+        assert not kwargs.get('auto_commit')
+        kwargs['auto_commit'] = False
+
+        return super(Kafka080Client, self).multiprocess_consumer(group, topic, **kwargs)
+
