@@ -12,7 +12,7 @@ from kafka.common import (
     LeaderUnavailableError, PartitionUnavailableError
 )
 from kafka.codec import (
-    has_gzip, has_snappy, gzip_encode, gzip_decode,
+    has_snappy, gzip_encode, gzip_decode,
     snappy_encode, snappy_decode
 )
 from kafka.protocol import (
@@ -29,7 +29,6 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(msg.key, key)
         self.assertEqual(msg.value, payload)
 
-    @unittest.skipUnless(has_gzip(), "gzip not available")
     def test_create_gzip(self):
         payloads = ["v1", "v2"]
         msg = create_gzip_message(payloads)
@@ -197,7 +196,6 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(returned_offset2, 1)
         self.assertEqual(decoded_message2, create_message("v2", "k2"))
 
-    @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_decode_message_gzip(self):
         gzip_encoded = ('\xc0\x11\xb2\xf0\x00\x01\xff\xff\xff\xff\x00\x00\x000'
                         '\x1f\x8b\x08\x00\xa1\xc1\xc5R\x02\xffc`\x80\x03\x01'

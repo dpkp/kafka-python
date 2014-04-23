@@ -14,7 +14,7 @@ from kafka.common import (
     LeaderUnavailableError, PartitionUnavailableError
 )
 from kafka.codec import (
-    has_gzip, has_snappy, gzip_encode, gzip_decode,
+    has_snappy, gzip_encode, gzip_decode,
     snappy_encode, snappy_decode
 )
 from kafka.protocol import (
@@ -23,7 +23,6 @@ from kafka.protocol import (
 from testutil import *
 
 class TestCodec(unittest.TestCase):
-    @unittest.skipUnless(has_gzip(), "Gzip not available")
     def test_gzip(self):
         for i in xrange(1000):
             s1 = random_string(100)

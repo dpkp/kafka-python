@@ -13,7 +13,6 @@ from kafka import KafkaClient
 
 __all__ = [
     'random_string',
-    'skip_integration',
     'ensure_topic_creation',
     'get_open_port',
     'kafka_versions',
@@ -25,15 +24,17 @@ def random_string(l):
     s = "".join(random.choice(string.letters) for i in xrange(l))
     return s
 
-def skip_integration():
-    return os.environ.get('SKIP_INTEGRATION')
-
 def kafka_versions(*versions):
     def kafka_versions(func):
         @functools.wraps(func)
         def wrapper(self):
-            if os.environ.get('KAFKA_VERSION', None) not in versions:
+            kafka_version = os.environ.get('KAFKA_VERSION')
+
+            if not kafka_version:
+                self.skipTest("no kafka version specified")
+            elif 'all' not in versions and kafka_version not in versions:
                 self.skipTest("unsupported kafka version")
+
             return func(self)
         return wrapper
     return kafka_versions
@@ -61,6 +62,9 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
     def setUp(self):
         super(KafkaIntegrationTestCase, self).setUp()
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         if not self.topic:
             self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
 
@@ -73,6 +77,9 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
     def tearDown(self):
         super(KafkaIntegrationTestCase, self).tearDown()
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         if self.create_client:
             self.client.close()
 

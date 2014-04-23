@@ -1,17 +1,20 @@
-import unittest
+import os
 import time
+import unittest
 
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from fixtures import ZookeeperFixture, KafkaFixture
 from testutil import *
 
-@unittest.skipIf(skip_integration(), 'Skipping Integration')
 class TestFailover(KafkaIntegrationTestCase):
     create_client = False
 
     @classmethod
     def setUpClass(cls):  # noqa
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         zk_chroot = random_string(10)
         replicas = 2
         partitions = 2
@@ -26,11 +29,15 @@ class TestFailover(KafkaIntegrationTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         cls.client.close()
         for broker in cls.brokers:
             broker.close()
         cls.zk.close()
 
+    @kafka_versions("all")
     def test_switch_leader(self):
         key, topic, partition = random_string(5), self.topic, 0
         producer = SimpleProducer(self.client)
@@ -62,6 +69,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @kafka_versions("all")
     def test_switch_leader_async(self):
         key, topic, partition = random_string(5), self.topic, 0
         producer = SimpleProducer(self.client, async=True)

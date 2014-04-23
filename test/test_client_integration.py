@@ -1,25 +1,32 @@
-import unittest
-import time
-import socket
+import os
 import random
+import socket
+import time
+import unittest
 
 import kafka
 from kafka.common import *
 from fixtures import ZookeeperFixture, KafkaFixture
 from testutil import *
 
-@unittest.skipIf(skip_integration(), 'Skipping Integration')
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod
     def setUpClass(cls):  # noqa
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         cls.zk = ZookeeperFixture.instance()
         cls.server = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
 
     @classmethod
     def tearDownClass(cls):  # noqa
+        if not os.environ.get('KAFKA_VERSION'):
+            return
+
         cls.server.close()
         cls.zk.close()
 
+    @kafka_versions("all")
     def test_timeout(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_port = get_open_port()
@@ -30,6 +37,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
                 conn = kafka.conn.KafkaConnection("localhost", server_port, 1.0)
         self.assertGreaterEqual(t.interval, 1.0)
 
+    @kafka_versions("all")
     def test_consume_none(self):
         fetch = FetchRequest(self.topic, 0, 0, 1024)
 
