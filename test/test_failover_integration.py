@@ -3,8 +3,8 @@ import time
 
 from kafka import *  # noqa
 from kafka.common import *  # noqa
-from .fixtures import ZookeeperFixture, KafkaFixture
-from .testutil import *
+from fixtures import ZookeeperFixture, KafkaFixture
+from testutil import *
 
 @unittest.skipIf(skip_integration(), 'Skipping Integration')
 class TestFailover(KafkaIntegrationTestCase):

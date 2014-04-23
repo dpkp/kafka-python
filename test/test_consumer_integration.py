@@ -4,8 +4,8 @@ from datetime import datetime
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
-from .fixtures import ZookeeperFixture, KafkaFixture
-from .testutil import *
+from fixtures import ZookeeperFixture, KafkaFixture
+from testutil import *
 
 @unittest.skipIf(skip_integration(), 'Skipping Integration')
 class TestConsumerIntegration(KafkaIntegrationTestCase):
@@ -206,3 +206,30 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEquals(message.message.value, huge_message)
 
         big_consumer.stop()
+
+    @kafka_versions("0.8.1")
+    def test_offset_behavior__resuming_behavior(self):
+        msgs1 = self.send_messages(0, range(0, 100))
+        msgs2 = self.send_messages(1, range(100, 200))
+
+        # Start a consumer
+        consumer = SimpleConsumer(self.client, "group1",
+                                  self.topic, auto_commit=True,
+                                  auto_commit_every_n=20,
+                                  iter_timeout=0)
+
+        # Grab the first 195 messages
+        output_msgs1 = [ consumer.get_message().message.value for _ in xrange(195) ]
+        self.assert_message_count(output_msgs1, 195)
+        consumer.stop()
+
+        # The offset should be at 180
+        consumer = SimpleConsumer(self.client, "group1",
+                                  self.topic, auto_commit=True,
+                                  auto_commit_every_n=20,
+                                  iter_timeout=0)
+
+        # 180-200
+        self.assert_message_count([ message for message in consumer ], 20)
+
+        consumer.stop()

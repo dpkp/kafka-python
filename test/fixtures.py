@@ -7,8 +7,8 @@ import tempfile
 import uuid
 
 from urlparse import urlparse
-from .service import ExternalService, SpawnedService
-from .testutil import get_open_port
+from service import ExternalService, SpawnedService
+from testutil import get_open_port
 
 class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.8.0')

@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import random
@@ -15,6 +16,7 @@ __all__ = [
     'skip_integration',
     'ensure_topic_creation',
     'get_open_port',
+    'kafka_versions',
     'KafkaIntegrationTestCase',
     'Timer',
 ]
@@ -25,6 +27,16 @@ def random_string(l):
 
 def skip_integration():
     return os.environ.get('SKIP_INTEGRATION')
+
+def kafka_versions(*versions):
+    def kafka_versions(func):
+        @functools.wraps(func)
+        def wrapper(self):
+            if os.environ.get('KAFKA_VERSION', None) not in versions:
+                self.skipTest("unsupported kafka version")
+            return func(self)
+        return wrapper
+    return kafka_versions
 
 def ensure_topic_creation(client, topic_name, timeout = 30):
     start_time = time.time()

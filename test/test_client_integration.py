@@ -5,8 +5,8 @@ import random
 
 import kafka
 from kafka.common import *
-from .fixtures import ZookeeperFixture, KafkaFixture
-from .testutil import *
+from fixtures import ZookeeperFixture, KafkaFixture
+from testutil import *
 
 @unittest.skipIf(skip_integration(), 'Skipping Integration')
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
@@ -45,7 +45,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     #   Offset Tests   #
     ####################
 
-    @unittest.skip('commit offset not supported in this version')
+    @kafka_versions("0.8.1")
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest(self.topic, 0, 42, "metadata")
         (resp,) = self.client.send_offset_commit_request("group", [req])

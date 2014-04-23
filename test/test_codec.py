@@ -20,7 +20,7 @@ from kafka.codec import (
 from kafka.protocol import (
     create_gzip_message, create_message, create_snappy_message, KafkaProtocol
 )
-from .testutil import *
+from testutil import *
 
 class TestCodec(unittest.TestCase):
     @unittest.skipUnless(has_gzip(), "Gzip not available")
