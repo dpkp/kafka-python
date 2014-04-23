@@ -1,7 +1,7 @@
 import os
 import random
 import struct
-import unittest
+import unittest2
 
 from mock import MagicMock, patch
 
@@ -15,7 +15,7 @@ from kafka.protocol import (
     create_message, KafkaProtocol
 )
 
-class TestKafkaClient(unittest.TestCase):
+class TestKafkaClient(unittest2.TestCase):
     def test_init_with_list(self):
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])

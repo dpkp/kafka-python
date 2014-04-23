@@ -5,7 +5,7 @@ import random
 import socket
 import string
 import time
-import unittest
+import unittest2
 import uuid
 
 from kafka.common import OffsetRequest
@@ -56,7 +56,7 @@ def get_open_port():
     sock.close()
     return port
 
-class KafkaIntegrationTestCase(unittest.TestCase):
+class KafkaIntegrationTestCase(unittest2.TestCase):
     create_client = True
     topic = None
 

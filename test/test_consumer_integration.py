@@ -1,5 +1,4 @@
 import os
-import unittest
 from datetime import datetime
 
 from kafka import *  # noqa

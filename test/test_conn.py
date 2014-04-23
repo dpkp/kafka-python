@@ -1,10 +1,10 @@
 import os
 import random
 import struct
-import unittest
+import unittest2
 import kafka.conn
 
-class ConnTest(unittest.TestCase):
+class ConnTest(unittest2.TestCase):
     def test_collect_hosts__happy_path(self):
         hosts = "localhost:1234,localhost"
         results = kafka.conn.collect_hosts(hosts)
@@ -36,34 +36,34 @@ class ConnTest(unittest.TestCase):
             ('localhost', 9092),
         ]))
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_send(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_send__reconnects_on_dirty_conn(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_send__failure_sets_dirty_connection(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_recv(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_recv__reconnects_on_dirty_conn(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_recv__failure_sets_dirty_connection(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_recv__doesnt_consume_extra_data_in_stream(self):
         pass
 
-    @unittest.skip("Not Implemented")
+    @unittest2.skip("Not Implemented")
     def test_close__object_is_reusable(self):
         pass

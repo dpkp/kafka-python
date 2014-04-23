@@ -1,5 +1,5 @@
 import struct
-import unittest
+import unittest2
 
 from kafka import KafkaClient
 from kafka.common import (
@@ -19,7 +19,7 @@ from kafka.protocol import (
     create_gzip_message, create_message, create_snappy_message, KafkaProtocol
 )
 
-class TestProtocol(unittest.TestCase):
+class TestProtocol(unittest2.TestCase):
     def test_create_message(self):
         payload = "test"
         key = "key"
@@ -58,7 +58,7 @@ class TestProtocol(unittest.TestCase):
 
         self.assertEqual(decoded, expect)
 
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
+    @unittest2.skipUnless(has_snappy(), "Snappy not available")
     def test_create_snappy(self):
         payloads = ["v1", "v2"]
         msg = create_snappy_message(payloads)
@@ -216,7 +216,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(returned_offset2, 0)
         self.assertEqual(decoded_message2, create_message("v2"))
 
-    @unittest.skipUnless(has_snappy(), "Snappy not available")
+    @unittest2.skipUnless(has_snappy(), "Snappy not available")
     def test_decode_message_snappy(self):
         snappy_encoded = ('\xec\x80\xa1\x95\x00\x02\xff\xff\xff\xff\x00\x00'
                           '\x00,8\x00\x00\x19\x01@\x10L\x9f[\xc2\x00\x00\xff'
@@ -567,10 +567,10 @@ class TestProtocol(unittest.TestCase):
         ])
 
         results = KafkaProtocol.decode_offset_response(encoded)
-        self.assertEqual(set(results), {
+        self.assertEqual(set(results), set([
             OffsetResponse(topic = 'topic1', partition = 2, error = 0, offsets=(4,)),
             OffsetResponse(topic = 'topic1', partition = 4, error = 0, offsets=(8,)),
-        })
+        ]))
 
     def test_encode_offset_commit_request(self):
         header = "".join([
@@ -629,10 +629,10 @@ class TestProtocol(unittest.TestCase):
         ])
 
         results = KafkaProtocol.decode_offset_commit_response(encoded)
-        self.assertEqual(set(results), {
+        self.assertEqual(set(results), set([
             OffsetCommitResponse(topic = 'topic1', partition = 2, error = 0),
             OffsetCommitResponse(topic = 'topic1', partition = 4, error = 0),
-        })
+        ]))
 
     def test_encode_offset_fetch_request(self):
         header = "".join([
@@ -688,7 +688,7 @@ class TestProtocol(unittest.TestCase):
         ])
 
         results = KafkaProtocol.decode_offset_fetch_response(encoded)
-        self.assertEqual(set(results), {
+        self.assertEqual(set(results), set([
             OffsetFetchResponse(topic = 'topic1', partition = 2, offset = 4, error = 0, metadata = "meta"),
             OffsetFetchResponse(topic = 'topic1', partition = 4, offset = 8, error = 0, metadata = "meta"),
-        })
+        ]))

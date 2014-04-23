@@ -1,6 +1,5 @@
 import os
 import time
-import unittest
 import uuid
 
 from kafka import *  # noqa

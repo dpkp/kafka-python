@@ -1,6 +1,5 @@
 import os
 import time
-import unittest
 
 from kafka import *  # noqa
 from kafka.common import *  # noqa
