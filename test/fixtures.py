@@ -26,8 +26,12 @@ class Fixture(object):
         # ./kafka-src/bin/kafka-run-class.sh is the authority.
         jars = ["."]
 
-        # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
+        # 0.8.0 build path, should contain the core jar and a deps jar
         jars.extend(glob.glob(cls.kafka_root + "/core/target/scala-%s/*.jar" % cls.scala_version))
+
+        # 0.8.1 build path, should contain the core jar and several dep jars
+        jars.extend(glob.glob(cls.kafka_root + "/core/build/libs/*.jar"))
+        jars.extend(glob.glob(cls.kafka_root + "/core/build/dependant-libs-%s/*.jar" % cls.scala_version))
 
         jars = filter(os.path.exists, map(os.path.abspath, jars))
         return ":".join(jars)

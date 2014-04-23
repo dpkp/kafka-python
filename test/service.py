@@ -45,7 +45,7 @@ class SpawnedService(threading.Thread):
         self.capture_stdout = capture
         self.show_stdout = show
 
-    def configure_stderr(self, file=None, capture=False, show=True):
+    def configure_stderr(self, file=None, capture=False, show=False):
         self.stderr_file = file
         self.capture_stderr = capture
         self.show_stderr = show
@@ -114,9 +114,10 @@ class SpawnedService(threading.Thread):
             t2 = time.time()
             if t2 - t1 >= timeout:
                 raise RuntimeError("Waiting for %r timed out" % pattern)
-            if re.search(pattern, self.captured_stdout) is not None:
+
+            if re.search(pattern, self.captured_stdout, re.IGNORECASE) is not None:
                 return
-            if re.search(pattern, self.captured_stderr) is not None:
+            if re.search(pattern, self.captured_stderr, re.IGNORECASE) is not None:
                 return
             time.sleep(0.1)
 
