@@ -164,7 +164,7 @@ class Consumer(object):
         if not self.auto_commit or self.auto_commit_every_n is None:
             return
 
-        if self.count_since_commit > self.auto_commit_every_n:
+        if self.count_since_commit >= self.auto_commit_every_n:
             self.commit()
 
     def stop(self):

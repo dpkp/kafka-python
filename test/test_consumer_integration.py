@@ -228,13 +228,13 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         output_msgs1 = [ consumer1.get_message().message.value for _ in xrange(195) ]
         self.assert_message_count(output_msgs1, 195)
 
-        # The offset should be at 180
+        # The total offset across both partitions should be at 180
         consumer2 = self.consumer(
             auto_commit_every_t = 600,
             auto_commit_every_n = 20,
         )
 
-        # 180-200
+        # 181-200
         self.assert_message_count([ message for message in consumer2 ], 20)
 
         consumer1.stop()
