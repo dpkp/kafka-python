@@ -7,8 +7,6 @@ high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 
-Compatible with Apache Kafka 0.8.1
-
 http://kafka.apache.org/
 
 # License
@@ -17,8 +15,17 @@ Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-The current version of this package is **0.9.0** and is compatible with
-Kafka brokers running version **0.8.1**.
+The current version of this package is **0.9.1** and is compatible with
+
+Kafka broker versions
+- 0.8.0
+- 0.8.1
+- 0.8.1.1
+
+Python versions
+- 2.6.9
+- 2.7.6
+- pypy 2.2.1
 
 # Usage
 
@@ -209,6 +216,6 @@ git submodule update --init
 
 Then run the tests against supported Kafka versions:
 ```shell
-    KAFKA_VERSION=0.8.0 tox
-    KAFKA_VERSION=0.8.1 tox
+KAFKA_VERSION=0.8.0 tox
+KAFKA_VERSION=0.8.1 tox
 ```

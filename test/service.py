@@ -66,7 +66,7 @@ class SpawnedService(threading.Thread):
                 stderr_handle.close()
 
     def run_with_handles(self, stdout_handle, stderr_handle):
-        child = subprocess.Popen(
+        self.child = subprocess.Popen(
             self.args,
             bufsize=1,
             stdout=subprocess.PIPE,
@@ -74,10 +74,10 @@ class SpawnedService(threading.Thread):
         alive = True
 
         while True:
-            (rds, wds, xds) = select.select([child.stdout, child.stderr], [], [], 1)
+            (rds, wds, xds) = select.select([self.child.stdout, self.child.stderr], [], [], 1)
 
-            if child.stdout in rds:
-                line = child.stdout.readline()
+            if self.child.stdout in rds:
+                line = self.child.stdout.readline()
                 if stdout_handle:
                     stdout_handle.write(line)
                     stdout_handle.flush()
@@ -87,8 +87,8 @@ class SpawnedService(threading.Thread):
                     sys.stdout.write(line)
                     sys.stdout.flush()
 
-            if child.stderr in rds:
-                line = child.stderr.readline()
+            if self.child.stderr in rds:
+                line = self.child.stderr.readline()
                 if stderr_handle:
                     stderr_handle.write(line)
                     stderr_handle.flush()
@@ -99,10 +99,10 @@ class SpawnedService(threading.Thread):
                     sys.stderr.flush()
 
             if self.should_die.is_set():
-                child.terminate()
+                self.child.terminate()
                 alive = False
 
-            if child.poll() is not None:
+            if self.child.poll() is not None:
                 if not alive:
                     break
                 else:
@@ -113,6 +113,10 @@ class SpawnedService(threading.Thread):
         while True:
             t2 = time.time()
             if t2 - t1 >= timeout:
+                try:
+                    self.child.kill()
+                except:
+                    logging.exception("Received exception when killing child process")
                 raise RuntimeError("Waiting for %r timed out" % pattern)
 
             if re.search(pattern, self.captured_stdout, re.IGNORECASE) is not None:
