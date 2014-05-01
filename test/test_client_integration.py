@@ -2,6 +2,7 @@ import os
 import random
 import socket
 import time
+import unittest2
 
 import kafka
 from kafka.common import *
