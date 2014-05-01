@@ -1,9 +1,6 @@
 language: python
 
-python:
-  - 2.6
-  - 2.7
-  - pypy
+python: 2.7
 
 before_install:
   - git submodule update --init --recursive
@@ -17,7 +14,12 @@ install:
   # See https://github.com/travis-ci/travis-cookbooks/issues/155
   - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
+env:
+    - TOX_ENV=py26
+    - TOX_ENV=py27
+    - TOX_ENV=pypy
+
 script:
-  - tox
-  - KAFKA_VERSION=0.8.0 tox
-  - KAFKA_VERSION=0.8.1 tox
+    - tox -e $TOX_ENV
+    - KAFKA_VERSION=0.8.0 tox -e $TOX_ENV
+    - KAFKA_VERSION=0.8.1 tox -e $TOX_ENV
