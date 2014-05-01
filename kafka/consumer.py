@@ -152,7 +152,7 @@ class Consumer(object):
 
             resps = self.client.send_offset_commit_request(self.group, reqs)
             for resp in resps:
-                assert resp.error == 0
+                kafka.common.check_error(resp)
 
             self.count_since_commit = 0
 
