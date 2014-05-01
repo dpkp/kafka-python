@@ -1,12 +1,14 @@
 language: python
 
 python:
-  - 2.7
+    - 2.6
+    - 2.7
+    - pypy
 
 before_install:
-  - git submodule update --init --recursive
-  - sudo apt-get install libsnappy-dev
-  - ./build_integration.sh
+    - git submodule update --init --recursive
+    - sudo apt-get install libsnappy-dev
+    - ./build_integration.sh
 
 install:
     - pip install tox
@@ -16,6 +18,6 @@ install:
     - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
 script:
-    - tox -e py27
-    - KAFKA_VERSION=0.8.0 tox -e py27
-    - KAFKA_VERSION=0.8.1 tox -e py27
+    - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+    - KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+    - KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
