@@ -8,8 +8,9 @@ from threading import Lock
 from multiprocessing import Process, Queue as MPQueue, Event, Value
 from Queue import Empty, Queue
 
+import kafka
 from kafka.common import (
-    ErrorMapping, FetchRequest,
+    FetchRequest,
     OffsetRequest, OffsetCommitRequest,
     OffsetFetchRequest,
     ConsumerFetchSizeTooSmall, ConsumerNoMoreData
@@ -100,14 +101,11 @@ class Consumer(object):
             self.commit_timer.start()
 
         def get_or_init_offset_callback(resp):
-            if resp.error == ErrorMapping.NO_ERROR:
+            try:
+                kafka.common.check_error(resp)
                 return resp.offset
-            elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
+            except kafka.common.UnknownTopicOrPartitionError:
                 return 0
-            else:
-                raise ProtocolError("OffsetFetchRequest for topic=%s, "
-                                "partition=%d failed with errorcode=%s" % (
-                                    resp.topic, resp.partition, resp.error))
 
         if auto_commit:
             for partition in partitions:
@@ -432,7 +430,7 @@ class SimpleConsumer(Consumer):
                         # Put the message in our queue
                         self.queue.put((partition, message))
                         self.fetch_offsets[partition] = message.offset + 1
-                except ConsumerFetchSizeTooSmall, e:
+                except ConsumerFetchSizeTooSmall as e:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
                         log.error("Max fetch size %d too small",
@@ -446,7 +444,7 @@ class SimpleConsumer(Consumer):
                     log.warn("Fetch size too small, increase to %d (2x) "
                              "and retry", self.buffer_size)
                     retry_partitions.add(partition)
-                except ConsumerNoMoreData, e:
+                except ConsumerNoMoreData as e:
                     log.debug("Iteration was ended by %r", e)
                 except StopIteration:
                     # Stop iterating through this partition
