@@ -250,8 +250,12 @@ class KeyedProducer(Producer):
         return partitioner.partition(key, self.client.topic_partitions[topic])
 
     def send(self, topic, key, msg):
+        # todo: remove this, it was retained only for backward compatibility
+        return self.send_messages(topic, key, msg)
+
+    def send_messages(self, topic, key, *msg):
         partition = self._next_partition(topic, key)
-        return self.send_messages(topic, partition, msg)
+        return super(KeyedProducer, self).send_messages(topic, partition, *msg)
 
     def __repr__(self):
         return '<KeyedProducer batch=%s>' % self.async
