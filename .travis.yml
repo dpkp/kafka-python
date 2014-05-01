@@ -10,6 +10,7 @@ before_install:
   - ./build_integration.sh
 
 install:
+  - pip install tox
   - pip install .
   # Deal with issue on Travis builders re: multiprocessing.Queue :(
   # See https://github.com/travis-ci/travis-cookbooks/issues/155
