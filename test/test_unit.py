@@ -135,8 +135,8 @@ class TestProtocol(unittest.TestCase):
         payloads = ["v1", "v2"]
         msg = create_gzip_message(payloads)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, KafkaProtocol.ATTRIBUTE_CODEC_MASK &
-                                         KafkaProtocol.CODEC_GZIP)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK &
+                                         CODEC_GZIP)
         self.assertEqual(msg.key, None)
         # Need to decode to check since gzipped payload is non-deterministic
         decoded = gzip_decode(msg.value)
@@ -151,8 +151,8 @@ class TestProtocol(unittest.TestCase):
         payloads = ["v1", "v2"]
         msg = create_snappy_message(payloads)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, KafkaProtocol.ATTRIBUTE_CODEC_MASK &
-                                         KafkaProtocol.CODEC_SNAPPY)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK &
+                                         CODEC_SNAPPY)
         self.assertEqual(msg.key, None)
         expect = ("8\x00\x00\x19\x01@\x10L\x9f[\xc2\x00\x00\xff\xff\xff\xff"
                   "\x00\x00\x00\x02v1\x19\x1bD\x00\x10\xd5\x96\nx\x00\x00\xff"
