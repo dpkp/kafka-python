@@ -63,6 +63,7 @@ ErrorStrings = {
     10 : 'MESSAGE_SIZE_TOO_LARGE',
     11 : 'STALE_CONTROLLER_EPOCH',
     12 : 'OFFSET_METADATA_TOO_LARGE',
+    16 : 'NOT_COORDINATOR_FOR_CONSUMER',
 }
 
 class ErrorMapping(object):
@@ -89,6 +90,10 @@ class BrokerResponseError(KafkaError):
 
 
 class LeaderUnavailableError(KafkaError):
+    pass
+
+
+class CoordinatorUnavailableError(KafkaError):
     pass
 
 
