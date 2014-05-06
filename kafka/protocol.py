@@ -10,6 +10,7 @@ from kafka.common import (
     ProduceResponse, FetchResponse, OffsetResponse,
     OffsetCommitResponse, OffsetFetchResponse,
     BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall,
+    OffsetLoadInProgressError, CoordinatorUnavailableError,
     ErrorMapping
 )
 from kafka.util import (
@@ -448,8 +449,10 @@ class KafkaProtocol(object):
             (host, cur) = read_short_string(data, cur)
             ((port,), cur) = relative_unpack('>i', data, cur)
             return BrokerMetadata(nodeId, host, port)
-        else:
-            return None
+        elif error_code == ErrorMapping.OFFSET_LOAD_IN_PROGRESS:
+            raise OffsetLoadInProgressError("Offset load in progress. Try again.")
+        elif error_code == ErrorMapping.CONSUMER_COORDINATOR_NOT_AVAILABLE:
+            raise CoordinatorUnavailableError("Consumer coordinator not available")
 
     @classmethod
     def encode_offset_commit_request(cls, client_id, correlation_id,
