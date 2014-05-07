@@ -9,8 +9,9 @@ from Queue import Empty, Queue
 
 from kafka.common import (
     ErrorMapping, FetchRequest,
-    OffsetRequest, OffsetCommitRequest,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
+    OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
+    ClientOffset, BrokerResponseError
 )
 
 from kafka.util import ReentrantTimer
@@ -67,8 +68,17 @@ class Consumer(object):
     * initialization and fetching metadata of partitions
     * Auto-commit logic
     * APIs for fetching pending message count
+    Offset:
+        #ClientOffset.Zero or 0;
+        ClientOffset.Previous or -1;
+        ClientOffset.CurrentBeginning or -2;
+        ClientOffset.PreviousOrCurrentBeginning or -3; Default.
+        ClientOffset.Latest or -4;
+        Other value >= 0;
     """
-    def __init__(self, client, group, topic, partitions=None, auto_commit=True,
+    def __init__(self, client, group, topic, partitions=None,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
 
@@ -95,27 +105,64 @@ class Consumer(object):
                                                self.commit)
             self.commit_timer.start()
 
-        def get_or_init_offset_callback(resp):
+        def get_current_offsets_callback(resp):
+            if resp.error == ErrorMapping.NO_ERROR:
+                return resp.offsets
+            elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
+                return 0
+            else:
+                raise BrokerResponseError("OffsetRequest for topic=%s, "
+                                "partition=%d failed with errorcode=%s" % (
+                                    resp.topic, resp.partition, resp.error))
+
+
+        # callback for fetching on zookeeper
+        def get_or_init_previous_offset_callback(resp):
             if resp.error == ErrorMapping.NO_ERROR:
                 return resp.offset
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
                 return 0
             else:
-                raise Exception("OffsetFetchRequest for topic=%s, "
+                raise BrokerResponseError("OffsetFetchRequest for topic=%s, "
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
-        # Uncomment for 0.8.1
-        #
-        #for partition in partitions:
-        #    req = OffsetFetchRequest(topic, partition)
-        #    (offset,) = self.client.send_offset_fetch_request(group, [req],
-        #                  callback=get_or_init_offset_callback,
-        #                  fail_on_error=False)
-        #    self.offsets[partition] = offset
-
+        currTimeMs = int(time.time()*1000)
+        PAYLOAD_MAX_OFFSET = 2147483647
         for partition in partitions:
-            self.offsets[partition] = 0
+            # current stream
+            req = OffsetRequest(topic, partition,currTimeMs,PAYLOAD_MAX_OFFSET)
+            (raw_offsets,) = self.client.send_offset_request([req],
+                          fail_on_error=False,
+                          callback=get_current_offsets_callback)
+            offset_start = raw_offsets[-1]
+            offset_end   =   raw_offsets[0]
+
+            # zookeeper
+            req = OffsetFetchRequest(topic, partition)
+            (last_offset,) = self.client.send_offset_fetch_request(group, [req],
+                          callback=get_or_init_previous_offset_callback,
+                          fail_on_error=False)
+
+            if offset == ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING:
+                if offset_start <= last_offset <= offset_end:
+                    self.offsets[partition] = last_offset
+                else:
+                    self.offsets[partition] = offset_start
+            elif offset == ClientOffset.PREVIOUS:
+                self.offsets[partition] = last_offset
+            elif offset == ClientOffset.CURRENT_BEGINNING:
+                self.offsets[partition] = offset_start
+            elif offset == ClientOffset.LATEST:
+                self.offsets[partition] = offset_end
+            elif offset >=0:
+                if offset_start <= offset <= offset_end:
+                    for partition in partitions:
+                        self.offsets[partition] = offset
+                else:
+                    raise ValueError("Invalid parameter value offset=%d,"
+                                    "allowed range %d to %d"
+                                    % (offset,offset_start,offset_end))
 
     def commit(self, partitions=None):
         """
@@ -205,6 +252,7 @@ class SimpleConsumer(Consumer):
     client: a connected KafkaClient
     group: a name for this consumer, used for offset storage and must be unique
     topic: the topic to consume
+    offset: default to previous position if available, or the current beginning
     partitions: An optional list of partitions to consume the data from
 
     auto_commit: default True. Whether or not to auto commit the offsets
@@ -227,7 +275,9 @@ class SimpleConsumer(Consumer):
     commit method on this class. A manual call to commit will also reset
     these triggers
     """
-    def __init__(self, client, group, topic, auto_commit=True, partitions=None,
+    def __init__(self, client, group, topic,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
+                 auto_commit=True, partitions=None,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
                  fetch_size_bytes=FETCH_MIN_BYTES,
@@ -236,6 +286,7 @@ class SimpleConsumer(Consumer):
                  iter_timeout=None):
         super(SimpleConsumer, self).__init__(
             client, group, topic,
+            offset=offset,
             partitions=partitions,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
@@ -450,7 +501,7 @@ class SimpleConsumer(Consumer):
                     log.debug("Done iterating over partition %s" % partition)
                 partitions = retry_partitions
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, offset, chunk, queue, start, exit, pause, size):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -467,6 +518,7 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
     # done by the master controller process.
     consumer = SimpleConsumer(client, group, topic,
                               partitions=chunk,
+                              offset = offset,
                               auto_commit=False,
                               auto_commit_every_n=None,
                               auto_commit_every_t=None)
@@ -532,7 +584,9 @@ class MultiProcessConsumer(Consumer):
     commit method on this class. A manual call to commit will also reset
     these triggers
     """
-    def __init__(self, client, group, topic, auto_commit=True,
+    def __init__(self, client, group, topic,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
                  num_procs=1, partitions_per_proc=0):
@@ -540,6 +594,7 @@ class MultiProcessConsumer(Consumer):
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
             client, group, topic,
+            offset=offset,
             partitions=None,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
@@ -572,7 +627,7 @@ class MultiProcessConsumer(Consumer):
         for chunk in chunks:
             chunk = filter(lambda x: x is not None, chunk)
             args = (client.copy(),
-                    group, topic, chunk,
+                    group, topic, offset, chunk,
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 

@@ -118,3 +118,11 @@ class ConsumerFetchSizeTooSmall(KafkaError):
 
 class ConsumerNoMoreData(KafkaError):
     pass
+
+class ClientOffset:
+    PREVIOUS = -1                     # position stores in zookeeper last time
+    CURRENT_BEGINNING = -2            # current beginning offset (may not be 0)
+    PREVIOUS_OR_CURRENT_BEGINNING = -3  # Get previous offset firstly, if not
+                                      # available, use current beginning
+    LATEST = -4                       # Start from latest, like tail
+
