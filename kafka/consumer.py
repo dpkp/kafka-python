@@ -11,7 +11,7 @@ from kafka.common import (
     ErrorMapping, FetchRequest,
     OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
     ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
-    ClientOffset
+    ClientOffset, BrokerResponseError
 )
 
 from kafka.util import ReentrantTimer
@@ -77,7 +77,7 @@ class Consumer(object):
         Other value >= 0;
     """
     def __init__(self, client, group, topic, partitions=None,
-                 offset = ClientOffset.PreviousOrCurrentBeginning,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
                  auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
@@ -111,7 +111,7 @@ class Consumer(object):
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
                 return 0
             else:
-                raise Exception("OffsetRequest for topic=%s, "
+                raise BrokerResponseError("OffsetRequest for topic=%s, "
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
@@ -123,7 +123,7 @@ class Consumer(object):
             elif resp.error == ErrorMapping.UNKNOWN_TOPIC_OR_PARTITON:
                 return 0
             else:
-                raise Exception("OffsetFetchRequest for topic=%s, "
+                raise BrokerResponseError("OffsetFetchRequest for topic=%s, "
                                 "partition=%d failed with errorcode=%s" % (
                                     resp.topic, resp.partition, resp.error))
 
@@ -144,23 +144,23 @@ class Consumer(object):
                           callback=get_or_init_previous_offset_callback,
                           fail_on_error=False)
 
-            if offset == ClientOffset.PreviousOrCurrentBeginning:
+            if offset == ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING:
                 if offset_start <= last_offset <= offset_end:
                     self.offsets[partition] = last_offset
                 else:
                     self.offsets[partition] = offset_start
-            elif offset == ClientOffset.Previous:
+            elif offset == ClientOffset.PREVIOUS:
                 self.offsets[partition] = last_offset
-            elif offset == ClientOffset.CurrentBeginning:
+            elif offset == ClientOffset.CURRENT_BEGINNING:
                 self.offsets[partition] = offset_start
-            elif offset == ClientOffset.Latest:
+            elif offset == ClientOffset.LATEST:
                 self.offsets[partition] = offset_end
             elif offset >=0:
                 if offset_start <= offset <= offset_end:
                     for partition in partitions:
                         self.offsets[partition] = offset
                 else:
-                    raise Exception("Invalid parameter value offset=%d,"
+                    raise ValueError("Invalid parameter value offset=%d,"
                                     "allowed range %d to %d"
                                     % (offset,offset_start,offset_end))
 
@@ -276,7 +276,7 @@ class SimpleConsumer(Consumer):
     these triggers
     """
     def __init__(self, client, group, topic,
-                 offset = ClientOffset.PreviousOrCurrentBeginning,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
                  auto_commit=True, partitions=None,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
@@ -286,6 +286,7 @@ class SimpleConsumer(Consumer):
                  iter_timeout=None):
         super(SimpleConsumer, self).__init__(
             client, group, topic,
+            offset=offset,
             partitions=partitions,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
@@ -584,7 +585,7 @@ class MultiProcessConsumer(Consumer):
     these triggers
     """
     def __init__(self, client, group, topic,
-                 offset = ClientOffset.PreviousOrCurrentBeginning,
+                 offset = ClientOffset.PREVIOUS_OR_CURRENT_BEGINNING,
                  auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,

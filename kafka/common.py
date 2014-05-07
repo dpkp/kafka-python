@@ -120,15 +120,9 @@ class ConsumerNoMoreData(KafkaError):
     pass
 
 class ClientOffset:
-    #Zero = 0                         # start from 0, may not be available due
-                                     # to ttl
-
-    Previous = -1                    # position stores in zookeeper last time
-
-    CurrentBeginning = -2            # current beginning offset (may not be 0)
-
-    PreviousOrCurrentBeginning = -3  # Get previous offset firstly, if not
-                                     # available, use current beginning
-
-    Latest = -4                      # Start from latest, like tail
+    PREVIOUS = -1                     # position stores in zookeeper last time
+    CURRENT_BEGINNING = -2            # current beginning offset (may not be 0)
+    PREVIOUS_OR_CURRENT_BEGINNING = -3  # Get previous offset firstly, if not
+                                      # available, use current beginning
+    LATEST = -4                       # Start from latest, like tail
 
