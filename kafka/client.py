@@ -9,7 +9,7 @@ from kafka.common import (ErrorMapping, ErrorStrings, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
                           LeaderUnavailableError, CoordinatorUnavailableError,
-                          KafkaUnavailableError)
+                          KafkaUnavailableError, ConsumerMetadataNotSupportedError)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
@@ -70,8 +70,11 @@ class KafkaClient(object):
         request = KafkaProtocol.encode_consumer_metadata_request(self.client_id,
                                                                  request_id, consumer)
 
-        response = self._send_broker_unaware_request(request_id, request)
-        broker = KafkaProtocol.decode_consumer_metadata_response(response)
+        try:
+            response = self._send_broker_unaware_request(request_id, request)
+            broker = KafkaProtocol.decode_consumer_metadata_response(response)
+        except KafkaUnavailableError:
+            raise ConsumerMetadataNotSupportedError("Brokers do not support ConsumerMetadataRequest")
 
         log.debug("Broker metadata: %s", broker)
         return broker
@@ -441,7 +444,10 @@ class KafkaClient(object):
         encoder = partial(KafkaProtocol.encode_offset_commit_request,
                           group=group)
         decoder = KafkaProtocol.decode_offset_commit_response
-        resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        try:
+            resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        except ConsumerMetadataNotSupportedError:
+            resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
         for resp in resps:
@@ -460,7 +466,10 @@ class KafkaClient(object):
         encoder = partial(KafkaProtocol.encode_offset_fetch_request,
                           group=group)
         decoder = KafkaProtocol.decode_offset_fetch_response
-        resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        try:
+            resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        except ConsumerMetadataNotSupportedError:
+            resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
         for resp in resps:
