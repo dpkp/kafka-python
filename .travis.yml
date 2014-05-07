@@ -1,20 +1,23 @@
 language: python
 
 python:
-  - 2.7
+    - 2.6
+    - 2.7
+    - pypy
 
 before_install:
-  - git submodule update --init --recursive
-  - cd kafka-src
-  - ./sbt clean update package assembly-package-dependency
-  - cd -
+    - git submodule update --init --recursive
+    - sudo apt-get install libsnappy-dev
+    - ./build_integration.sh
 
 install:
-  - pip install .
-  # Deal with issue on Travis builders re: multiprocessing.Queue :(
-  # See https://github.com/travis-ci/travis-cookbooks/issues/155
-  - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
+    - pip install tox
+    - pip install .
+    # Deal with issue on Travis builders re: multiprocessing.Queue :(
+    # See https://github.com/travis-ci/travis-cookbooks/issues/155
+    - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
 script:
-  - python -m test.test_unit
-  - python -m test.test_integration
+    - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+    - KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+    - KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`

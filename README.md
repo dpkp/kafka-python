@@ -7,8 +7,6 @@ high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 
-Compatible with Apache Kafka 0.8.1
-
 http://kafka.apache.org/
 
 # License
@@ -17,8 +15,17 @@ Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-The current version of this package is **0.9.0** and is compatible with
-Kafka brokers running version **0.8.1**.
+The current version of this package is **0.9.1** and is compatible with
+
+Kafka broker versions
+- 0.8.0
+- 0.8.1
+- 0.8.1.1
+
+Python versions
+- 2.6.9
+- 2.7.6
+- pypy 2.2.1
 
 # Usage
 
@@ -155,6 +162,7 @@ python setup.py install
 
 Download and build Snappy from http://code.google.com/p/snappy/downloads/list
 
+Linux:
 ```shell
 wget http://snappy.googlecode.com/files/snappy-1.0.5.tar.gz
 tar xzvf snappy-1.0.5.tar.gz
@@ -162,6 +170,11 @@ cd snappy-1.0.5
 ./configure
 make
 sudo make install
+```
+
+OSX:
+```shell
+brew install snappy
 ```
 
 Install the `python-snappy` module
@@ -173,40 +186,36 @@ pip install python-snappy
 
 ## Run the unit tests
 
-_These are broken at the moment_
-
 ```shell
-tox ./test/test_unit.py
-```
-
-or
-
-```shell
-python -m test.test_unit
+tox
 ```
 
 ## Run the integration tests
 
-First, checkout the Kafka source
-
-```shell
-git submodule init
-git submodule update
-cd kafka-src
-./sbt update
-./sbt package
-./sbt assembly-package-dependency
-```
-
-And then run the tests. This will actually start up real local Zookeeper
+The integration tests will actually start up real local Zookeeper
 instance and Kafka brokers, and send messages in using the client.
 
+Note that you may want to add this to your global gitignore:
 ```shell
-tox ./test/test_integration.py
+.gradle/
+clients/build/
+contrib/build/
+contrib/hadoop-consumer/build/
+contrib/hadoop-producer/build/
+core/build/
+core/data/
+examples/build/
+perf/build/
 ```
 
-or
-
+First, check out and the Kafka source:
 ```shell
-python -m test.test_integration
+git submodule update --init
+./build_integration.sh
+```
+
+Then run the tests against supported Kafka versions:
+```shell
+KAFKA_VERSION=0.8.0 tox
+KAFKA_VERSION=0.8.1 tox
 ```

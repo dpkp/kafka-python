@@ -54,4 +54,5 @@ class HashedPartitioner(Partitioner):
     def partition(self, key, partitions):
         size = len(partitions)
         idx = hash(key) % size
+
         return partitions[idx]
