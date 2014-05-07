@@ -124,19 +124,18 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offset1 = self.current_offset(self.topic, 1)
         producer = SimpleProducer(self.client)
 
-        # Will go to partition 0
-        msg1, msg2, msg3, msg4, msg5 = [ str(uuid.uuid4()) for x in xrange(5)  ]
+        # Goes to first partition, randomly.
         resp = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
         self.assert_produce_response(resp, start_offset0)
 
-        # Will go to partition 1
+        # Goes to the next partition, randomly.
         resp = producer.send_messages(self.topic, self.msg("three"))
         self.assert_produce_response(resp, start_offset1)
 
         self.assert_fetch_offset(0, start_offset0, [ self.msg("one"), self.msg("two") ])
         self.assert_fetch_offset(1, start_offset1, [ self.msg("three") ])
 
-        # Will go to partition 0
+        # Goes back to the first partition because there's only two partitions
         resp = producer.send_messages(self.topic, self.msg("four"), self.msg("five"))
         self.assert_produce_response(resp, start_offset0+2)
         self.assert_fetch_offset(0, start_offset0, [ self.msg("one"), self.msg("two"), self.msg("four"), self.msg("five") ])
@@ -144,9 +143,28 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         producer.stop()
 
     @kafka_versions("all")
-    def test_round_robin_partitioner(self):
-        msg1, msg2, msg3, msg4 = [ str(uuid.uuid4()) for _ in range(4) ]
+    def test_producer_random_order(self):
+        producer = SimpleProducer(self.client, random_start = True)
+        resp1 = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
+        resp2 = producer.send_messages(self.topic, self.msg("three"))
+        resp3 = producer.send_messages(self.topic, self.msg("four"), self.msg("five"))
 
+        self.assertEqual(resp1[0].partition, resp3[0].partition)
+        self.assertNotEqual(resp1[0].partition, resp2[0].partition)
+
+    @kafka_versions("all")
+    def test_producer_ordered_start(self):
+        producer = SimpleProducer(self.client, random_start = False)
+        resp1 = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
+        resp2 = producer.send_messages(self.topic, self.msg("three"))
+        resp3 = producer.send_messages(self.topic, self.msg("four"), self.msg("five"))
+
+        self.assertEqual(resp1[0].partition, 0)
+        self.assertEqual(resp2[0].partition, 1)
+        self.assertEqual(resp3[0].partition, 0)
+
+    @kafka_versions("all")
+    def test_round_robin_partitioner(self):
         start_offset0 = self.current_offset(self.topic, 0)
         start_offset1 = self.current_offset(self.topic, 1)
 
