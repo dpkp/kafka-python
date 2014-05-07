@@ -8,8 +8,8 @@ from itertools import count
 from kafka.common import (ErrorMapping, ErrorStrings, TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           BrokerResponseError, PartitionUnavailableError,
-                          LeaderUnavailableError,
-                          KafkaUnavailableError)
+                          LeaderUnavailableError, CoordinatorUnavailableError,
+                          KafkaUnavailableError, ConsumerMetadataNotSupportedError)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
@@ -61,6 +61,23 @@ class KafkaClient(object):
                 KafkaConnection(broker.host, broker.port, timeout=self.timeout)
 
         return self._get_conn(broker.host, broker.port)
+
+    def _get_coordinator_for_consumer(self, consumer):
+        """
+        Returns the coordinator for a consumer group as BrokerMetadata
+        """
+        request_id = self._next_id()
+        request = KafkaProtocol.encode_consumer_metadata_request(self.client_id,
+                                                                 request_id, consumer)
+
+        try:
+            response = self._send_broker_unaware_request(request_id, request)
+            broker = KafkaProtocol.decode_consumer_metadata_response(response)
+        except KafkaUnavailableError:
+            raise ConsumerMetadataNotSupportedError("Brokers do not support ConsumerMetadataRequest")
+
+        log.debug("Broker metadata: %s", broker)
+        return broker
 
     def _get_leader_for_partition(self, topic, partition):
         """
@@ -186,6 +203,60 @@ class KafkaClient(object):
 
         # Order the accumulated responses by the original key order
         return (acc[k] for k in original_keys) if acc else ()
+
+    def _send_consumer_aware_request(self, group, payloads, encoder_fn, decoder_fn):
+        """
+        Send requests to the coordinator for the specified consumer group
+
+        Params
+        ======
+        group: the consumer group string for the request
+        payloads: list of object-like entities with a topic and
+                  partition attribute
+        encode_fn: a method to encode the list of payloads to a request body,
+                   must accept client_id, correlation_id, and payloads as
+                   keyword arguments
+        decode_fn: a method to decode a response body into response objects.
+                   The response objects must be object-like and have topic
+                   and partition attributes
+
+        Return
+        ======
+        List of response objects in the same order as the supplied payloads
+        """
+        # Get the coordinator for the consumer
+        broker = self._get_coordinator_for_consumer(group)
+        if broker is None:
+            raise CoordinatorUnavailableError(
+                "Coordinator not available for group %s" % group)
+
+        # Send the list of request payloads
+        conn = self._get_conn_for_broker(broker)
+        requestId = self._next_id()
+        request = encoder_fn(client_id=self.client_id,
+                             correlation_id=requestId, payloads=payloads)
+
+        # Send the request, recv the response
+        try:
+            conn.send(requestId, request)
+            if decoder_fn is not None:
+                try:
+                    response = conn.recv(requestId)
+                except ConnectionError, e:
+                    log.warning("Could not receive response to request [%s] "
+                                "from server %s: %s", request, conn, e)
+                    raise FailedPayloadsError(payloads)
+        except ConnectionError, e:
+            log.warning("Could not send request [%s] to server %s: %s",
+                        request, conn, e)
+            raise FailedPayloadsError(payloads)
+
+        resp = []
+        if decoder_fn is not None:
+            for response in decoder_fn(response):
+                resp.append(response)
+
+        return resp
 
     def __repr__(self):
         return '<KafkaClient client_id=%s>' % (self.client_id)
@@ -373,7 +444,10 @@ class KafkaClient(object):
         encoder = partial(KafkaProtocol.encode_offset_commit_request,
                           group=group)
         decoder = KafkaProtocol.decode_offset_commit_response
-        resps = self._send_broker_aware_request(payloads, encoder, decoder)
+        try:
+            resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        except ConsumerMetadataNotSupportedError:
+            resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
         for resp in resps:
@@ -392,7 +466,10 @@ class KafkaClient(object):
         encoder = partial(KafkaProtocol.encode_offset_fetch_request,
                           group=group)
         decoder = KafkaProtocol.decode_offset_fetch_response
-        resps = self._send_broker_aware_request(payloads, encoder, decoder)
+        try:
+            resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        except ConsumerMetadataNotSupportedError:
+            resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
         for resp in resps:

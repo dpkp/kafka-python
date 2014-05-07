@@ -63,6 +63,9 @@ ErrorStrings = {
     10 : 'MESSAGE_SIZE_TOO_LARGE',
     11 : 'STALE_CONTROLLER_EPOCH',
     12 : 'OFFSET_METADATA_TOO_LARGE',
+    14 : 'OFFSETS_LOAD_IN_PROGRESS',
+    15 : 'CONSUMER_COORDINATOR_NOT_AVAILABLE',
+    16 : 'NOT_COORDINATOR_FOR_CONSUMER',
 }
 
 class ErrorMapping(object):
@@ -89,6 +92,18 @@ class BrokerResponseError(KafkaError):
 
 
 class LeaderUnavailableError(KafkaError):
+    pass
+
+
+class OffsetLoadInProgressError(KafkaError):
+    pass
+
+
+class CoordinatorUnavailableError(KafkaError):
+    pass
+
+
+class ConsumerMetadataNotSupportedError(KafkaError):
     pass
 
 
