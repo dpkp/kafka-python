@@ -6,8 +6,6 @@ import kafka.common
 
 from functools import partial
 from itertools import count
-from kafka.common import *
-
 from kafka.common import (TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           PartitionUnavailableError,

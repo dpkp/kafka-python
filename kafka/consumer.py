@@ -430,12 +430,12 @@ class SimpleConsumer(Consumer):
                         # Put the message in our queue
                         self.queue.put((partition, message))
                         self.fetch_offsets[partition] = message.offset + 1
-                except ConsumerFetchSizeTooSmall as e:
+                except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
                         log.error("Max fetch size %d too small",
                                   self.max_buffer_size)
-                        raise e
+                        raise
                     if self.max_buffer_size is None:
                         self.buffer_size *= 2
                     else:

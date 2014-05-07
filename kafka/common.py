@@ -121,9 +121,14 @@ class StaleControllerEpochError(BrokerResponseError):
     message = 'STALE_CONTROLLER_EPOCH'
 
 
-class OffsetMetadataTooLarge(BrokerResponseError):
+class OffsetMetadataTooLargeError(BrokerResponseError):
     errno = 12
     message = 'OFFSET_METADATA_TOO_LARGE'
+
+
+class StaleLeaderEpochCodeError(BrokerResponseError):
+    errno = 13
+    message = 'STALE_LEADER_EPOCH_CODE'
 
 
 class KafkaUnavailableError(KafkaError):
@@ -178,7 +183,8 @@ kafka_errors = {
     9  : ReplicaNotAvailableError,
     10 : MessageSizeTooLargeError,
     11 : StaleControllerEpochError,
-    12 : OffsetMetadataTooLarge,
+    12 : OffsetMetadataTooLargeError,
+    13 : StaleLeaderEpochCodeError,
 }
 
 def check_error(response):

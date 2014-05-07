@@ -1,6 +1,6 @@
-import sys
-import struct
 import collections
+import struct
+import sys
 from threading import Thread, Event
 
 from kafka.common import BufferUnderflowError

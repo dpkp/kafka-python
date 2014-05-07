@@ -98,8 +98,6 @@ class ZookeeperFixture(Fixture):
             "org.apache.zookeeper.server.quorum.QuorumPeerMain",
             properties
         ))
-        self.child.configure_stdout(os.path.join(self.tmp_dir, "stdout.txt"))
-        self.child.configure_stderr(os.path.join(self.tmp_dir, "stderr.txt"))
 
         # Party!
         self.out("Starting...")
@@ -180,8 +178,6 @@ class KafkaFixture(Fixture):
         self.child = SpawnedService(self.kafka_run_class_args(
             "kafka.Kafka", properties
         ))
-        self.child.configure_stdout(os.path.join(self.tmp_dir, "stdout.txt"))
-        self.child.configure_stderr(os.path.join(self.tmp_dir, "stderr.txt"))
 
         # Party!
         self.out("Creating Zookeeper chroot node...")

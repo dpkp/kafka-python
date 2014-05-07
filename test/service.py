@@ -1,3 +1,4 @@
+import logging
 import re
 import select
 import subprocess
@@ -29,43 +30,15 @@ class SpawnedService(threading.Thread):
         threading.Thread.__init__(self)
 
         self.args = args
-        self.captured_stdout = ""
-        self.captured_stderr = ""
-        self.stdout_file = None
-        self.stderr_file = None
-        self.capture_stdout = True
-        self.capture_stderr = True
-        self.show_stdout = True
-        self.show_stderr = True
+        self.captured_stdout = []
+        self.captured_stderr = []
 
         self.should_die = threading.Event()
 
-    def configure_stdout(self, file=None, capture=True, show=False):
-        self.stdout_file = file
-        self.capture_stdout = capture
-        self.show_stdout = show
-
-    def configure_stderr(self, file=None, capture=False, show=False):
-        self.stderr_file = file
-        self.capture_stderr = capture
-        self.show_stderr = show
-
     def run(self):
-        stdout_handle = None
-        stderr_handle = None
-        try:
-            if self.stdout_file:
-                stdout_handle = open(self.stdout_file, "w")
-            if self.stderr_file:
-                stderr_handle = open(self.stderr_file, "w")
-            self.run_with_handles(stdout_handle, stderr_handle)
-        finally:
-            if stdout_handle:
-                stdout_handle.close()
-            if stderr_handle:
-                stderr_handle.close()
+        self.run_with_handles()
 
-    def run_with_handles(self, stdout_handle, stderr_handle):
+    def run_with_handles(self):
         self.child = subprocess.Popen(
             self.args,
             bufsize=1,
@@ -78,35 +51,32 @@ class SpawnedService(threading.Thread):
 
             if self.child.stdout in rds:
                 line = self.child.stdout.readline()
-                if stdout_handle:
-                    stdout_handle.write(line)
-                    stdout_handle.flush()
-                if self.capture_stdout:
-                    self.captured_stdout += line
-                if self.show_stdout:
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
+                self.captured_stdout.append(line)
 
             if self.child.stderr in rds:
                 line = self.child.stderr.readline()
-                if stderr_handle:
-                    stderr_handle.write(line)
-                    stderr_handle.flush()
-                if self.capture_stderr:
-                    self.captured_stderr += line
-                if self.show_stderr:
-                    sys.stderr.write(line)
-                    sys.stderr.flush()
+                self.captured_stderr.append(line)
 
             if self.should_die.is_set():
                 self.child.terminate()
                 alive = False
 
-            if self.child.poll() is not None:
+            poll_results = self.child.poll()
+            if poll_results is not None:
                 if not alive:
                     break
                 else:
-                    raise RuntimeError("Subprocess has died. Aborting.")
+                    self.dump_logs()
+                    raise RuntimeError("Subprocess has died. Aborting. (args=%s)" % ' '.join(str(x) for x in self.args))
+
+    def dump_logs(self):
+        logging.critical('stderr')
+        for line in self.captured_stderr:
+            logging.critical(line.rstrip())
+
+        logging.critical('stdout')
+        for line in self.captured_stdout:
+            logging.critical(line.rstrip())
 
     def wait_for(self, pattern, timeout=10):
         t1 = time.time()
@@ -117,11 +87,13 @@ class SpawnedService(threading.Thread):
                     self.child.kill()
                 except:
                     logging.exception("Received exception when killing child process")
+                self.dump_logs()
+
                 raise RuntimeError("Waiting for %r timed out" % pattern)
 
-            if re.search(pattern, self.captured_stdout, re.IGNORECASE) is not None:
+            if re.search(pattern, '\n'.join(self.captured_stdout), re.IGNORECASE) is not None:
                 return
-            if re.search(pattern, self.captured_stderr, re.IGNORECASE) is not None:
+            if re.search(pattern, '\n'.join(self.captured_stderr), re.IGNORECASE) is not None:
                 return
             time.sleep(0.1)
 

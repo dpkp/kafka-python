@@ -20,7 +20,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         cls.server = cls.server1 # Bootstrapping server
 
     @classmethod
-    def tearDownClass(cls):  # noqa
+    def tearDownClass(cls):
         if not os.environ.get('KAFKA_VERSION'):
             return
 
