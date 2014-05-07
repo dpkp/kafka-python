@@ -16,7 +16,8 @@ from kafka.codec import (
     snappy_encode, snappy_decode
 )
 from kafka.protocol import (
-    create_gzip_message, create_message, create_snappy_message, KafkaProtocol
+    create_gzip_message, create_message, create_snappy_message, KafkaProtocol,
+    ATTRIBUTE_CODEC_MASK, CODEC_GZIP, CODEC_SNAPPY
 )
 
 class TestProtocol(unittest2.TestCase):
@@ -33,8 +34,7 @@ class TestProtocol(unittest2.TestCase):
         payloads = ["v1", "v2"]
         msg = create_gzip_message(payloads)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, KafkaProtocol.ATTRIBUTE_CODEC_MASK &
-                                         KafkaProtocol.CODEC_GZIP)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_GZIP)
         self.assertEqual(msg.key, None)
         # Need to decode to check since gzipped payload is non-deterministic
         decoded = gzip_decode(msg.value)
@@ -63,8 +63,7 @@ class TestProtocol(unittest2.TestCase):
         payloads = ["v1", "v2"]
         msg = create_snappy_message(payloads)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, KafkaProtocol.ATTRIBUTE_CODEC_MASK &
-                                         KafkaProtocol.CODEC_SNAPPY)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_SNAPPY)
         self.assertEqual(msg.key, None)
         decoded = snappy_decode(msg.value)
         expect = "".join([
