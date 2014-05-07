@@ -103,6 +103,10 @@ class CoordinatorUnavailableError(KafkaError):
     pass
 
 
+class ConsumerMetadataNotSupportedError(KafkaError):
+    pass
+
+
 class PartitionUnavailableError(KafkaError):
     pass
 
