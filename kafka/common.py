@@ -170,6 +170,11 @@ class ConsumerNoMoreData(KafkaError):
 class ProtocolError(KafkaError):
     pass
 
+
+class UnsupportedCodecError(KafkaError):
+    pass
+
+
 kafka_errors = {
     -1 : UnknownError,
     1  : OffsetOutOfRangeError,
@@ -186,6 +191,7 @@ kafka_errors = {
     12 : OffsetMetadataTooLargeError,
     13 : StaleLeaderEpochCodeError,
 }
+
 
 def check_error(response):
     error = kafka_errors.get(response.error)
