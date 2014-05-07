@@ -220,7 +220,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Start a consumer
         consumer1 = self.consumer(
-            auto_commit_every_t = 600,
+            auto_commit_every_t = None,
             auto_commit_every_n = 20,
         )
 
@@ -230,7 +230,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # The total offset across both partitions should be at 180
         consumer2 = self.consumer(
-            auto_commit_every_t = 600,
+            auto_commit_every_t = None,
             auto_commit_every_n = 20,
         )
 
