@@ -50,14 +50,15 @@ class KafkaConnection(local):
     timeout: default 120. The socket timeout for sending and receiving data
              in seconds. None means no timeout, so a request can block forever.
     """
-    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
+    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS, activate=True):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
         self.timeout = timeout
         self._sock = None
 
-        self.reinit()
+        if activate is True:
+            self.reinit()
 
     def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
@@ -133,8 +134,7 @@ class KafkaConnection(local):
         Create an inactive copy of the connection object
         A reinit() has to be done on the copy before it can be used again
         """
-        c = copy.deepcopy(self)
-        c._sock = None
+        c = KafkaConnection(host=self.host, port=self.port, timeout=self.timeout, activate=False)
         return c
 
     def close(self):
