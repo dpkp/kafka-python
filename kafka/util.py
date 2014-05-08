@@ -1,5 +1,6 @@
-from collections import defaultdict
+import collections
 import struct
+import sys
 from threading import Thread, Event
 
 from kafka.common import BufferUnderflowError
@@ -15,6 +16,9 @@ def write_int_string(s):
 def write_short_string(s):
     if s is None:
         return struct.pack('>h', -1)
+    elif len(s) > 32767 and sys.version < (2,7):
+        # Python 2.6 issues a deprecation warning instead of a struct error
+        raise struct.error(len(s))
     else:
         return struct.pack('>h%ds' % len(s), len(s), s)
 
@@ -63,7 +67,7 @@ def relative_unpack(fmt, data, cur):
 
 
 def group_by_topic_and_partition(tuples):
-    out = defaultdict(dict)
+    out = collections.defaultdict(dict)
     for t in tuples:
         out[t.topic][t.partition] = t
     return out
