@@ -23,7 +23,7 @@ setup(
     version="0.9.1",
 
     install_requires=["distribute"],
-    tests_require=["tox", "mock"],
+    tests_require=["tox", "mock", "gevent"],
     cmdclass={"test": Tox},
 
     packages=["kafka"],
