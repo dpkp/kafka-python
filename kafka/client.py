@@ -224,7 +224,7 @@ class KafkaClient(object):
         Create an inactive copy of the client object
         A reinit() has to be done on the copy before it can be used again
         """
-        c = KafkaClient(hosts=['{}:{}'.format(entry[0], entry[1]) for entry in self.hosts],
+        c = KafkaClient(hosts=['{0}:{1}'.format(entry[0], entry[1]) for entry in self.hosts],
                         client_id=self.client_id,
                         timeout=self.timeout,
                         activate=False)
