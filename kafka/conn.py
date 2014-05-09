@@ -149,7 +149,5 @@ class KafkaConnection(local):
         Re-initialize the socket connection
         """
         self.close()
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(self.timeout)
-        self._sock.connect((self.host, self.port))
+        self._sock = socket.create_connection((self.host, self.port), self.timeout)
         self._dirty = False
