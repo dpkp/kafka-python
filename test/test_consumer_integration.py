@@ -112,6 +112,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_multi_process_consumer(self):
         # Produce 100 messages to partitions 0 and 1
@@ -124,6 +125,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_multi_process_consumer_blocking(self):
         consumer = self.consumer(consumer = MultiProcessConsumer)
@@ -152,6 +154,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_multi_proc_pending(self):
         self.send_messages(0, range(0, 10))

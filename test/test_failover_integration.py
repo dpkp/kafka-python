@@ -68,6 +68,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_switch_leader_async(self):
         key, topic, partition = random_string(5), self.topic, 0
