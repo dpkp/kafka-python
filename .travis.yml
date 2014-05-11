@@ -18,5 +18,5 @@ install:
     - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
 script:
-    - ./travis_run_tests.sh
+    - ./travis_run_tests.sh $TRAVIS_PYTHON_VERSION
 
