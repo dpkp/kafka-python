@@ -22,7 +22,7 @@ setup(
     name="kafka-python",
     version="0.9.1",
 
-    tests_require=["tox", "mock"],
+    tests_require=["tox", "mock", "gevent"],
     cmdclass={"test": Tox},
 
     packages=["kafka"],

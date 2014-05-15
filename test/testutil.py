@@ -15,6 +15,7 @@ __all__ = [
     'random_string',
     'ensure_topic_creation',
     'get_open_port',
+    'skip_gevent',
     'kafka_versions',
     'KafkaIntegrationTestCase',
     'Timer',
@@ -23,6 +24,19 @@ __all__ = [
 def random_string(l):
     s = "".join(random.choice(string.letters) for i in xrange(l))
     return s
+
+def skip_gevent():
+    def skip_gevent(func):
+        @functools.wraps(func)
+        def wrapper(self):
+            use_gevent = os.environ.get('USE_GEVENT')
+            if use_gevent is not None and \
+               use_gevent == '1':
+                self.skipTest('test not support for gevent')
+
+            return func(self)
+        return wrapper
+    return skip_gevent
 
 def kafka_versions(*versions):
     def kafka_versions(func):
