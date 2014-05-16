@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 TOX_ENV=$1
 if [ $1 == "2.7" ]; then
