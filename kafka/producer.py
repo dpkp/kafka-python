@@ -9,9 +9,11 @@ from collections import defaultdict
 from itertools import cycle
 from multiprocessing import Queue, Process
 
-from kafka.common import ProduceRequest, TopicAndPartition
+from kafka.common import (
+    ProduceRequest, TopicAndPartition, UnsupportedCodecError
+)
 from kafka.partitioner import HashedPartitioner
-from kafka.protocol import create_message
+from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 
 log = logging.getLogger("kafka")
 
@@ -21,7 +23,7 @@ BATCH_SEND_MSG_COUNT = 20
 STOP_ASYNC_PRODUCER = -1
 
 
-def _send_upstream(queue, client, batch_time, batch_size,
+def _send_upstream(queue, client, codec, batch_time, batch_size,
                    req_acks, ack_timeout):
     """
     Listen on the queue for a specified number of messages or till
@@ -62,7 +64,8 @@ def _send_upstream(queue, client, batch_time, batch_size,
 
         # Send collected requests upstream
         reqs = []
-        for topic_partition, messages in msgset.items():
+        for topic_partition, msg in msgset.items():
+            messages = create_message_set(msg, codec)
             req = ProduceRequest(topic_partition.topic,
                                  topic_partition.partition,
                                  messages)
@@ -102,6 +105,7 @@ class Producer(object):
     def __init__(self, client, async=False,
                  req_acks=ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=DEFAULT_ACK_TIMEOUT,
+                 codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
@@ -119,11 +123,19 @@ class Producer(object):
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
 
+        if codec is None:
+            codec = CODEC_NONE
+        elif codec not in ALL_CODECS:
+            raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)
+
+        self.codec = codec
+
         if self.async:
             self.queue = Queue()  # Messages are sent through this queue
             self.proc = Process(target=_send_upstream,
                                 args=(self.queue,
                                       self.client.copy(),
+                                      self.codec,
                                       batch_send_every_t,
                                       batch_send_every_n,
                                       self.req_acks,
@@ -139,11 +151,10 @@ class Producer(object):
         """
         if self.async:
             for m in msg:
-                self.queue.put((TopicAndPartition(topic, partition),
-                                create_message(m)))
+                self.queue.put((TopicAndPartition(topic, partition), m))
             resp = []
         else:
-            messages = [create_message(m) for m in msg]
+            messages = create_message_set(msg, self.codec)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
@@ -168,7 +179,7 @@ class Producer(object):
 
 class SimpleProducer(Producer):
     """
-    A simple, round-robbin producer. Each message goes to exactly one partition
+    A simple, round-robin producer. Each message goes to exactly one partition
 
     Params:
     client - The Kafka client instance to use
@@ -189,6 +200,7 @@ class SimpleProducer(Producer):
     def __init__(self, client, async=False,
                  req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT,
+                 codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
@@ -196,7 +208,7 @@ class SimpleProducer(Producer):
         self.partition_cycles = {}
         self.random_start = random_start
         super(SimpleProducer, self).__init__(client, async, req_acks,
-                                             ack_timeout, batch_send,
+                                             ack_timeout, codec, batch_send,
                                              batch_send_every_n,
                                              batch_send_every_t)
 
@@ -241,6 +253,7 @@ class KeyedProducer(Producer):
     def __init__(self, client, partitioner=None, async=False,
                  req_acks=Producer.ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=Producer.DEFAULT_ACK_TIMEOUT,
+                 codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
@@ -250,7 +263,7 @@ class KeyedProducer(Producer):
         self.partitioners = {}
 
         super(KeyedProducer, self).__init__(client, async, req_acks,
-                                            ack_timeout, batch_send,
+                                            ack_timeout, codec, batch_send,
                                             batch_send_every_n,
                                             batch_send_every_t)
 
