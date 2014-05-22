@@ -10,7 +10,7 @@ from itertools import cycle
 from multiprocessing import Queue, Process
 
 from kafka.common import (
-    ProduceRequest, TopicAndPartition, UnsupportedCodecError
+    ProduceRequest, TopicAndPartition, UnsupportedCodecError, UnknownTopicOrPartitionError
 )
 from kafka.partitioner import HashedPartitioner
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
@@ -216,7 +216,10 @@ class SimpleProducer(Producer):
         if topic not in self.partition_cycles:
             if topic not in self.client.topic_partitions:
                 self.client.load_metadata_for_topics(topic)
-            self.partition_cycles[topic] = cycle(self.client.topic_partitions[topic])
+            try:
+                self.partition_cycles[topic] = cycle(self.client.topic_partitions[topic])
+            except KeyError:
+                raise UnknownTopicOrPartitionError(topic)
 
             # Randomize the initial partition that is returned
             if self.random_start:
