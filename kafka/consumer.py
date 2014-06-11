@@ -123,6 +123,7 @@ class Consumer(object):
                           callback=get_or_init_offset_callback,
                           fail_on_error=False)
             self.offsets[partition] = offset
+        self.fetch_offsets = self.offsets.copy()
 
     def commit(self, partitions=None):
         """
