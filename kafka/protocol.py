@@ -1,9 +1,10 @@
 import logging
 import struct
 import zlib
+from functools import partial
 
 from kafka.codec import (
-    gzip_encode, gzip_decode, snappy_encode, snappy_decode
+    ALL_CODECS, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, CODEC_SNAPPY_XERIAL
 )
 from kafka.common import (
     BrokerMetadata, PartitionMetadata, Message, OffsetAndMessage,
@@ -20,11 +21,6 @@ from kafka.util import (
 log = logging.getLogger("kafka")
 
 ATTRIBUTE_CODEC_MASK = 0x03
-CODEC_NONE = 0x00
-CODEC_GZIP = 0x01
-CODEC_SNAPPY = 0x02
-ALL_CODECS = (CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY)
-
 
 class KafkaProtocol(object):
     """
@@ -154,18 +150,17 @@ class KafkaProtocol(object):
 
         codec = att & ATTRIBUTE_CODEC_MASK
 
-        if codec == CODEC_NONE:
+        if codec == CODEC_NONE.mask:
             yield (offset, Message(magic, att, key, value))
-
-        elif codec == CODEC_GZIP:
-            gz = gzip_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(gz):
-                yield (offset, msg)
-
-        elif codec == CODEC_SNAPPY:
-            snp = snappy_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(snp):
-                yield (offset, msg)
+        else:
+            decoders = filter(lambda c: c.mask == codec, ALL_CODECS)
+            if decoders:
+                message_set = decoders[0].decode(value)
+                for (offset, msg) in KafkaProtocol._decode_message_set_iter(message_set):
+                    yield (offset, msg)
+            else:
+                raise UnsupportedCodecError('FILL ME IN')
+        
 
     ##################
     #   Public API   #
@@ -528,47 +523,13 @@ def create_message(payload, key=None):
     """
     return Message(0, 0, key, payload)
 
-
-def create_gzip_message(payloads, key=None):
-    """
-    Construct a Gzipped Message containing multiple Messages
-
-    The given payloads will be encoded, compressed, and sent as a single atomic
-    message to Kafka.
-
-    Params
-    ======
-    payloads: list(bytes), a list of payload to send be sent to Kafka
-    key: bytes, a key used for partition routing (optional)
-    """
+def create_encoded_message(messages, codec=CODEC_NONE):
     message_set = KafkaProtocol._encode_message_set(
-        [create_message(payload) for payload in payloads])
-
-    gzipped = gzip_encode(message_set)
-    codec = ATTRIBUTE_CODEC_MASK & CODEC_GZIP
-
-    return Message(0, 0x00 | codec, key, gzipped)
-
-
-def create_snappy_message(payloads, key=None):
-    """
-    Construct a Snappy Message containing multiple Messages
-
-    The given payloads will be encoded, compressed, and sent as a single atomic
-    message to Kafka.
-
-    Params
-    ======
-    payloads: list(bytes), a list of payload to send be sent to Kafka
-    key: bytes, a key used for partition routing (optional)
-    """
-    message_set = KafkaProtocol._encode_message_set(
-        [create_message(payload) for payload in payloads])
-
-    snapped = snappy_encode(message_set)
-    codec = ATTRIBUTE_CODEC_MASK & CODEC_SNAPPY
-
-    return Message(0, 0x00 | codec, key, snapped)
+        [create_message(m) for m in messages])
+    encoded = codec.encode(message_set)
+    codec_flag = ATTRIBUTE_CODEC_MASK & codec.mask
+   
+    return Message(0, 0x00 | codec_flag, None, encoded)
 
 
 def create_message_set(messages, codec=CODEC_NONE):
@@ -579,9 +540,7 @@ def create_message_set(messages, codec=CODEC_NONE):
     """
     if codec == CODEC_NONE:
         return [create_message(m) for m in messages]
-    elif codec == CODEC_GZIP:
-        return [create_gzip_message(messages)]
-    elif codec == CODEC_SNAPPY:
-        return [create_snappy_message(messages)]
+    elif codec in ALL_CODECS:
+        return [create_encoded_message(messages, codec)]
     else:
         raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)

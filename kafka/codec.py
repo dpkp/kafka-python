@@ -1,6 +1,7 @@
 from cStringIO import StringIO
 import gzip
 import struct
+from functools import partial
 
 _XERIAL_V1_HEADER = (-126, 'S', 'N', 'A', 'P', 'P', 'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
@@ -138,3 +139,23 @@ def snappy_decode(payload):
         return out.read()
     else:
         return snappy.decompress(payload)
+
+
+class Codec(object):
+    def __init__(self, mask, encoder=lambda m: m, decoder=lambda m: m):
+        self.mask = mask
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def encode(self, payload):
+        return self.encoder(payload)
+
+    def decode(self, payload):
+        return self.decoder(payload)
+
+CODEC_NONE = Codec(0x00)
+CODEC_GZIP = Codec(0x01, gzip_encode, gzip_decode)
+CODEC_SNAPPY = Codec(0x02, snappy_encode, snappy_decode)
+CODEC_SNAPPY_XERIAL = Codec(0x02, partial(snappy_encode, xerial_compatible=True), snappy_decode) 
+
+ALL_CODECS = (CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, CODEC_SNAPPY_XERIAL)

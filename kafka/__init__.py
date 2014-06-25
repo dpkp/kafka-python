@@ -7,7 +7,7 @@ __copyright__ = 'Copyright 2012, David Arthur under Apache License, v2.0'
 from kafka.client import KafkaClient
 from kafka.conn import KafkaConnection
 from kafka.protocol import (
-    create_message, create_gzip_message, create_snappy_message
+    create_message, create_encoded_message 
 )
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
@@ -16,6 +16,5 @@ from kafka.consumer import SimpleConsumer, MultiProcessConsumer
 __all__ = [
     'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner', 'SimpleConsumer',
-    'MultiProcessConsumer', 'create_message', 'create_gzip_message',
-    'create_snappy_message'
+    'MultiProcessConsumer', 'create_message', 'create_encoded_message'
 ]

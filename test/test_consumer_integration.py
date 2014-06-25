@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 
 from kafka import *  # noqa
+from kafka.protocol import CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY
 from kafka.common import *  # noqa
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
 from fixtures import ZookeeperFixture, KafkaFixture
