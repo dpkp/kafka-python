@@ -6,6 +6,7 @@ from random import shuffle
 from threading import local
 
 from kafka.common import ConnectionError
+from kafka import compat
 
 log = logging.getLogger("kafka")
 
@@ -19,7 +20,7 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
-    if isinstance(hosts, basestring):
+    if isinstance(hosts, compat.basestring):
         hosts = hosts.strip().split(',')
 
     result = []
@@ -72,7 +73,7 @@ class KafkaConnection(local):
 
     def _read_bytes(self, num_bytes):
         bytes_left = num_bytes
-        responses = []
+        response = bytearray()
 
         log.debug("About to read %d bytes from Kafka", num_bytes)
         if self._dirty:
@@ -91,9 +92,9 @@ class KafkaConnection(local):
 
             bytes_left -= len(data)
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
-            responses.append(data)
+            response.extend(data)
 
-        return ''.join(responses)
+        return bytes(response)
 
     ##################
     #   Public API   #
@@ -126,7 +127,7 @@ class KafkaConnection(local):
 
         # Read the remainder of the response
         resp = self._read_bytes(size)
-        return str(resp)
+        return resp
 
     def copy(self):
         """
@@ -136,6 +137,9 @@ class KafkaConnection(local):
         c = copy.deepcopy(self)
         c._sock = None
         return c
+
+    def __deepcopy__(self, memo):
+        return KafkaConnection(self.host, self.port, self.timeout)
 
     def close(self):
         """

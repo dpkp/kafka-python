@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import os
 import random
 import socket
@@ -6,8 +8,8 @@ import unittest2
 
 import kafka
 from kafka.common import *
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import *
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod

@@ -4,16 +4,17 @@ import logging
 import time
 import random
 
-from Queue import Empty
 from collections import defaultdict
 from itertools import cycle
-from multiprocessing import Queue, Process
+from multiprocessing import Process, Queue
 
 from kafka.common import (
     ProduceRequest, TopicAndPartition, UnsupportedCodecError
 )
 from kafka.partitioner import HashedPartitioner
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
+from kafka.compat import Empty
+from kafka import compat
 
 log = logging.getLogger("kafka")
 
@@ -221,10 +222,10 @@ class SimpleProducer(Producer):
             # Randomize the initial partition that is returned
             if self.random_start:
                 num_partitions = len(self.client.topic_partitions[topic])
-                for _ in xrange(random.randint(0, num_partitions-1)):
-                    self.partition_cycles[topic].next()
+                for _ in compat.xrange(random.randint(0, num_partitions-1)):
+                    compat.iter_next(self.partition_cycles[topic])
 
-        return self.partition_cycles[topic].next()
+        return compat.iter_next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
         partition = self._next_partition(topic)

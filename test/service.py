@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import time
+from kafka import compat
 
 __all__ = [
     'ExternalService',
@@ -51,11 +52,11 @@ class SpawnedService(threading.Thread):
 
             if self.child.stdout in rds:
                 line = self.child.stdout.readline()
-                self.captured_stdout.append(line)
+                self.captured_stdout.append(compat.str(line))
 
             if self.child.stderr in rds:
                 line = self.child.stderr.readline()
-                self.captured_stderr.append(line)
+                self.captured_stderr.append(compat.str(line))
 
             if self.should_die.is_set():
                 self.child.terminate()

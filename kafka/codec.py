@@ -1,8 +1,7 @@
-from cStringIO import StringIO
 import gzip
 import struct
 
-_XERIAL_V1_HEADER = (-126, 'S', 'N', 'A', 'P', 'P', 'Y', 0, 1, 1)
+_XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
 
 try:
@@ -11,6 +10,8 @@ try:
 except ImportError:
     _has_snappy = False
 
+from kafka.compat import StringIO
+from kafka import compat
 
 def has_gzip():
     return True
@@ -65,12 +66,12 @@ def snappy_encode(payload, xerial_compatible=False, xerial_blocksize=32 * 1024):
 
     if xerial_compatible:
         def _chunker():
-            for i in xrange(0, len(payload), xerial_blocksize):
+            for i in compat.xrange(0, len(payload), xerial_blocksize):
                 yield payload[i:i+xerial_blocksize]
 
         out = StringIO()
 
-        header = ''.join([struct.pack('!' + fmt, dat) for fmt, dat
+        header = b''.join([struct.pack('!' + fmt, dat) for fmt, dat
             in zip(_XERIAL_V1_FORMAT, _XERIAL_V1_HEADER)])
 
         out.write(header)
@@ -122,7 +123,7 @@ def snappy_decode(payload):
     if _detect_xerial_stream(payload):
         # TODO ? Should become a fileobj ?
         out = StringIO()
-        byt = buffer(payload[16:])
+        byt = compat.buffer(payload[16:])
         length = len(byt)
         cursor = 0
 
@@ -131,7 +132,7 @@ def snappy_decode(payload):
             # Skip the block size
             cursor += 4
             end = cursor + block_size
-            out.write(snappy.decompress(byt[cursor:end]))
+            out.write(snappy.decompress(bytes(byt[cursor:end])))
             cursor = end
 
         out.seek(0)

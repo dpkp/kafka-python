@@ -1,4 +1,5 @@
 from itertools import cycle
+from kafka import compat
 
 
 class Partitioner(object):
@@ -43,7 +44,7 @@ class RoundRobinPartitioner(Partitioner):
         if self.partitions != partitions:
             self._set_partitions(partitions)
 
-        return self.iterpart.next()
+        return compat.iter_next(self.iterpart)
 
 
 class HashedPartitioner(Partitioner):

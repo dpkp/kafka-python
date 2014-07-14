@@ -3,13 +3,13 @@ import logging
 import os
 import random
 import socket
-import string
 import time
 import unittest2
 import uuid
 
 from kafka.common import OffsetRequest
 from kafka import KafkaClient
+from kafka import compat
 
 __all__ = [
     'random_string',
@@ -21,7 +21,7 @@ __all__ = [
 ]
 
 def random_string(l):
-    s = "".join(random.choice(string.letters) for i in xrange(l))
+    s = "".join(random.choice(compat.letters) for i in compat.xrange(l))
     return s
 
 def kafka_versions(*versions):
@@ -39,7 +39,7 @@ def kafka_versions(*versions):
         return wrapper
     return kafka_versions
 
-def ensure_topic_creation(client, topic_name, timeout = 30):
+def ensure_topic_creation(client, topic_name, timeout=30):
     start_time = time.time()
 
     client.load_metadata_for_topics(topic_name)
@@ -94,7 +94,7 @@ class KafkaIntegrationTestCase(unittest2.TestCase):
         if s not in self._messages:
             self._messages[s] = '%s-%s-%s' % (s, self.id(), str(uuid.uuid4()))
 
-        return self._messages[s]
+        return compat.bytes(self._messages[s])
 
 class Timer(object):
     def __enter__(self):
