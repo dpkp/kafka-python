@@ -703,13 +703,10 @@ class TestProtocol(unittest2.TestCase):
 
     @contextmanager
     def mock_create_message_fns(self):
-        with mock.patch.object(kafka.protocol, "create_message",
-                               return_value=sentinel.message), \
-             mock.patch.object(kafka.protocol, "create_gzip_message",
-                               return_value=sentinel.gzip_message), \
-             mock.patch.object(kafka.protocol, "create_snappy_message",
-                               return_value=sentinel.snappy_message):
-            yield
+        with mock.patch.object(kafka.protocol, "create_message", return_value=sentinel.message):
+            with mock.patch.object(kafka.protocol, "create_gzip_message", return_value=sentinel.gzip_message):
+                with mock.patch.object(kafka.protocol, "create_snappy_message", return_value=sentinel.snappy_message):
+                    yield
 
     def test_create_message_set(self):
         messages = [1, 2, 3]
