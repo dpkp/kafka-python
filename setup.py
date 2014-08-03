@@ -2,6 +2,7 @@ import sys
 
 from setuptools import setup, Command
 
+from kafka import __version__
 
 class Tox(Command):
 
@@ -20,7 +21,7 @@ class Tox(Command):
 
 setup(
     name="kafka-python",
-    version="0.9.1",
+    version=__version__,
 
     tests_require=["tox", "mock"],
     cmdclass={"test": Tox},
