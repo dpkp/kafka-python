@@ -1,6 +1,8 @@
 import logging
 import struct
 import zlib
+import sys
+from kafka import compat
 
 from kafka.codec import (
     gzip_encode, gzip_decode, snappy_encode, snappy_decode
@@ -53,7 +55,7 @@ class KafkaProtocol(object):
                            0,                    # ApiVersion
                            correlation_id,       # CorrelationId
                            len(client_id),       # ClientId size
-                           client_id)            # ClientId
+                           compat.bytes(client_id))            # ClientId
 
     @classmethod
     def _encode_message_set(cls, messages):
@@ -67,11 +69,11 @@ class KafkaProtocol(object):
           Offset => int64
           MessageSize => int32
         """
-        message_set = ""
+        message_set = bytearray()
         for message in messages:
             encoded_message = KafkaProtocol._encode_message(message)
-            message_set += struct.pack('>qi%ds' % len(encoded_message), 0, len(encoded_message), encoded_message)
-        return message_set
+            message_set.extend(struct.pack('>qi%ds' % len(encoded_message), 0, len(encoded_message), encoded_message))
+        return bytes(message_set)
 
     @classmethod
     def _encode_message(cls, message):
@@ -95,7 +97,10 @@ class KafkaProtocol(object):
             msg += write_int_string(message.key)
             msg += write_int_string(message.value)
             crc = zlib.crc32(msg)
-            msg = struct.pack('>i%ds' % len(msg), crc, msg)
+            if sys.version > '3':
+                msg = struct.pack('>I%ds' % len(msg), crc, msg)
+            else:
+                msg = struct.pack('>i%ds' % len(msg), crc, msg)
         else:
             raise ProtocolError("Unexpected magic number: %d" % message.magic)
         return msg
@@ -145,7 +150,10 @@ class KafkaProtocol(object):
         The offset is actually read from decode_message_set_iter (it is part
         of the MessageSet payload).
         """
-        ((crc, magic, att), cur) = relative_unpack('>iBB', data, 0)
+        if sys.version > '3':
+            ((crc, magic, att), cur) = relative_unpack('>IBB', data, 0)
+        else:
+            ((crc, magic, att), cur) = relative_unpack('>iBB', data, 0)
         if crc != zlib.crc32(data[4:]):
             raise ChecksumError("Message checksum failed")
 
@@ -200,7 +208,7 @@ class KafkaProtocol(object):
 
         for topic, topic_payloads in grouped_payloads.items():
             message += struct.pack('>h%dsi' % len(topic),
-                                   len(topic), topic, len(topic_payloads))
+                                   len(topic), compat.bytes(topic), len(topic_payloads))
 
             for partition, payload in topic_payloads.items():
                 msg_set = KafkaProtocol._encode_message_set(payload.messages)
@@ -222,7 +230,7 @@ class KafkaProtocol(object):
 
         for i in range(num_topics):
             ((strlen,), cur) = relative_unpack('>h', data, cur)
-            topic = data[cur:cur + strlen]
+            topic = compat.str(data[cur:cur + strlen])
             cur += strlen
             ((num_partitions,), cur) = relative_unpack('>i', data, cur)
             for i in range(num_partitions):
@@ -357,7 +365,7 @@ class KafkaProtocol(object):
         message += struct.pack('>i', len(topics))
 
         for topic in topics:
-            message += struct.pack('>h%ds' % len(topic), len(topic), topic)
+            message += struct.pack('>h%ds' % len(topic), len(topic), compat.bytes(topic))
 
         return write_int_string(message)
 
@@ -454,11 +462,11 @@ class KafkaProtocol(object):
         ((correlation_id,), cur) = relative_unpack('>i', data, 0)
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
 
-        for i in xrange(num_topics):
+        for i in compat.xrange(num_topics):
             (topic, cur) = read_short_string(data, cur)
             ((num_partitions,), cur) = relative_unpack('>i', data, cur)
 
-            for i in xrange(num_partitions):
+            for i in compat.xrange(num_partitions):
                 ((partition, error), cur) = relative_unpack('>ih', data, cur)
                 yield OffsetCommitResponse(topic, partition, error)
 

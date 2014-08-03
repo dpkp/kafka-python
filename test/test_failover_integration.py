@@ -2,9 +2,10 @@ import os
 import time
 
 from kafka import *  # noqa
+from kafka import compat
 from kafka.common import *  # noqa
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import *
 
 class TestFailover(KafkaIntegrationTestCase):
     create_client = False
@@ -47,13 +48,13 @@ class TestFailover(KafkaIntegrationTestCase):
             # XXX unfortunately, for warming to work, we need at least as many partitions as brokers
             self._send_random_messages(producer, self.topic, 10)
 
-            # kil leader for partition 0
+            # kill leader for partition 0
             broker = self._kill_leader(topic, partition)
 
             # expect failure, reload meta data
             with self.assertRaises(FailedPayloadsError):
-                producer.send_messages(self.topic, 'part 1')
-                producer.send_messages(self.topic, 'part 2')
+                producer.send_messages(self.topic, b'part 1')
+                producer.send_messages(self.topic, b'part 2')
             time.sleep(1)
 
             # send to new leader
@@ -99,7 +100,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
     def _send_random_messages(self, producer, topic, n):
         for j in range(n):
-            resp = producer.send_messages(topic, random_string(10))
+            resp = producer.send_messages(topic, compat.bytes(random_string(10)))
             if len(resp) > 0:
                 self.assertEquals(resp[0].error, 0)
         time.sleep(1)  # give it some time

@@ -1,19 +1,19 @@
 import copy
 import logging
 import collections
-
-import kafka.common
-
 from functools import partial
 from itertools import count
+
+import kafka.common
 from kafka.common import (TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
                           PartitionUnavailableError,
                           LeaderUnavailableError, KafkaUnavailableError,
                           UnknownTopicOrPartitionError, NotLeaderForPartitionError)
-
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
+from kafka import compat
+
 
 log = logging.getLogger("kafka")
 
@@ -81,7 +81,7 @@ class KafkaClient(object):
         """
         Generate a new correlation id
         """
-        return KafkaClient.ID_GEN.next()
+        return compat.iter_next(KafkaClient.ID_GEN)
 
     def _send_broker_unaware_request(self, requestId, request):
         """
@@ -223,7 +223,7 @@ class KafkaClient(object):
         A reinit() has to be done on the copy before it can be used again
         """
         c = copy.deepcopy(self)
-        for k, v in c.conns.items():
+        for k, v in self.conns.items():
             c.conns[k] = v.copy()
         return c
 

@@ -2,11 +2,12 @@ from __future__ import absolute_import
 
 from copy import copy
 import logging
-from multiprocessing import Process, Queue, Event
-from Queue import Empty
+
+from multiprocessing import Process, Event, Queue
 import time
 
 from kafka.client import KafkaClient, FetchRequest, ProduceRequest
+from kafka.compat import Empty
 
 log = logging.getLogger("kafka")
 

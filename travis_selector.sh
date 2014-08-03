@@ -7,6 +7,8 @@ elif [ $1 == "2.7" ]; then
     echo "py27"
 elif [ $1 == "2.6" ]; then
     echo "py26"
+elif [ $1 == "3.4" ]; then
+    echo "py34"
 else
     echo $1
 fi;
