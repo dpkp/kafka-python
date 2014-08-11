@@ -143,6 +143,15 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         producer.stop()
 
     @kafka_versions("all")
+    def test_produce__new_topic_fails_with_reasonable_error(self):
+        new_topic = 'new_topic_{guid}'.format(guid = str(uuid.uuid4()))
+        producer = SimpleProducer(self.client)
+
+        # At first it doesn't exist
+        with self.assertRaises(UnknownTopicOrPartitionError):
+            resp = producer.send_messages(new_topic, self.msg("one"))
+
+    @kafka_versions("all")
     def test_producer_random_order(self):
         producer = SimpleProducer(self.client, random_start = True)
         resp1 = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
