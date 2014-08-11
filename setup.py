@@ -2,7 +2,8 @@ import sys
 
 from setuptools import setup, Command
 
-from kafka import __version__
+with open('VERSION', 'r') as v:
+    __version__ = v.read().rstrip()
 
 class Tox(Command):
 

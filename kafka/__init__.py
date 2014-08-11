@@ -1,5 +1,7 @@
 __title__ = 'kafka'
-__version__ = '0.9.0'
+# Use setuptools to get version from setup.py
+import pkg_resources
+__version__ = pkg_resources.require('kafka-python')[0].version
 __author__ = 'David Arthur'
 __license__ = 'Apache License 2.0'
 __copyright__ = 'Copyright 2012, David Arthur under Apache License, v2.0'
