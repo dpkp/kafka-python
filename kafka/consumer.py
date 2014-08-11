@@ -265,6 +265,10 @@ class SimpleConsumer(Consumer):
         """
         self.partition_info = True
 
+    def seek_absolute(self, offset):
+        for partition in self.offsets.keys():
+            self.offsets[partition] = offset
+
     def seek(self, offset, whence):
         """
         Alter the current offset in the consumer, similar to fseek
