@@ -4,7 +4,7 @@ if [ -z "$SCALA_VERSION" ]; then
   SCALA_VERSION=2.8.0
 fi
 if [ -z "$KAFKA_VERSION" && -z "$TRAVIS" ]; then
-  KAFKA_VERSION="0.8.0 0.8.1"
+  KAFKA_VERSION="0.8.0 0.8.1 0.8.1.1"
 fi
 pushd servers
   mkdir -p dist

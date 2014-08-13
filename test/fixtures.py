@@ -61,21 +61,6 @@ class Fixture(object):
         return os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
 
     @classmethod
-    def test_classpath(cls):
-        # ./kafka-src/bin/kafka-run-class.sh is the authority.
-        jars = ["."]
-
-        # 0.8.0 build path, should contain the core jar and a deps jar
-        jars.extend(glob.glob(cls.kafka_root + "/core/target/scala-%s/*.jar" % cls.scala_version))
-
-        # 0.8.1 build path, should contain the core jar and several dep jars
-        jars.extend(glob.glob(cls.kafka_root + "/core/build/libs/*.jar"))
-        jars.extend(glob.glob(cls.kafka_root + "/core/build/dependant-libs-%s/*.jar" % cls.scala_version))
-
-        jars = filter(os.path.exists, map(os.path.abspath, jars))
-        return ":".join(jars)
-
-    @classmethod
     def kafka_run_class_args(cls, *args):
         result = [os.path.join(cls.kafka_root, 'bin', 'kafka-run-class.sh')]
         result.extend(args)

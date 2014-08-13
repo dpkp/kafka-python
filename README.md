@@ -204,4 +204,5 @@ Then run the tests against supported Kafka versions:
 ```shell
 KAFKA_VERSION=0.8.0 tox
 KAFKA_VERSION=0.8.1 tox
+KAFKA_VERSION=0.8.1.1 tox
 ```
