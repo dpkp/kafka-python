@@ -190,6 +190,11 @@ pip install python-snappy
 tox
 ```
 
+## Run a single unit test
+```shell
+tox -e py27 -- -v --with-id 102
+```
+
 ## Run the integration tests
 
 The integration tests will actually start up real local Zookeeper
