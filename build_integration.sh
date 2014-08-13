@@ -1,15 +1,15 @@
 #!/bin/bash
 
-#git submodule update --init
-#(cd servers/0.8.0/kafka-src && ./sbt update package assembly-package-dependency)
-#(cd servers/0.8.1/kafka-src && ./gradlew jar)
-
-SCALA_VERSION=2.8.0
-KAFKA_VERSIONS="0.8.0 0.8.1 0.8.1.1"
+if [ -z "$SCALA_VERSION" ]; then
+  SCALA_VERSION=2.8.0
+fi
+if [ -z "$KAFKA_VERSION" && -z "$TRAVIS" ]; then
+  KAFKA_VERSION="0.8.0 0.8.1"
+fi
 pushd servers
   mkdir -p dist
   pushd dist
-    for kafka in $KAFKA_VERSIONS; do
+    for kafka in $KAFKA_VERSION; do
       echo "-------------------------------------"
       echo "Checking kafka binaries for v${kafka}"
       echo
