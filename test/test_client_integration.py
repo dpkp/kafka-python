@@ -49,6 +49,17 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         messages = list(fetch_resp.messages)
         self.assertEquals(len(messages), 0)
 
+    @kafka_versions("all")
+    def test_ensure_topic_exists(self):
+
+        # assume that self.topic was created by setUp
+        # if so, this should succeed
+        self.client.ensure_topic_exists(self.topic, timeout=1)
+
+        # ensure_topic_exists should fail with KafkaTimeoutError
+        with self.assertRaises(KafkaTimeoutError):
+            self.client.ensure_topic_exists("this_topic_doesnt_exist", timeout=0)
+
     ####################
     #   Offset Tests   #
     ####################
