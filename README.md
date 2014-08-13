@@ -195,22 +195,8 @@ tox
 The integration tests will actually start up real local Zookeeper
 instance and Kafka brokers, and send messages in using the client.
 
-Note that you may want to add this to your global gitignore:
+First, get the kafka binaries for integration testing:
 ```shell
-.gradle/
-clients/build/
-contrib/build/
-contrib/hadoop-consumer/build/
-contrib/hadoop-producer/build/
-core/build/
-core/data/
-examples/build/
-perf/build/
-```
-
-First, check out and the Kafka source:
-```shell
-git submodule update --init
 ./build_integration.sh
 ```
 
