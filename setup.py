@@ -24,7 +24,7 @@ setup(
     name="kafka-python",
     version=__version__,
 
-    tests_require=["tox", "mock"],
+    tests_require=["tox", "mock", "gevent"],
     cmdclass={"test": Tox},
 
     packages=["kafka"],

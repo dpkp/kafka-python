@@ -256,6 +256,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_batched_simple_producer__triggers_by_message(self):
         start_offset0 = self.current_offset(self.topic, 0)
@@ -305,6 +306,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_batched_simple_producer__triggers_by_time(self):
         start_offset0 = self.current_offset(self.topic, 0)
@@ -357,6 +359,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_async_simple_producer(self):
         start_offset0 = self.current_offset(self.topic, 0)
@@ -370,6 +373,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @skip_gevent()
     @kafka_versions("all")
     def test_async_keyed_producer(self):
         start_offset0 = self.current_offset(self.topic, 0)
