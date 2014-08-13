@@ -26,10 +26,11 @@ class ExternalService(object):
 
 
 class SpawnedService(threading.Thread):
-    def __init__(self, args=[]):
+    def __init__(self, args=[], env=None):
         threading.Thread.__init__(self)
 
         self.args = args
+        self.env = env
         self.captured_stdout = []
         self.captured_stderr = []
 
@@ -41,6 +42,7 @@ class SpawnedService(threading.Thread):
     def run_with_handles(self):
         self.child = subprocess.Popen(
             self.args,
+            env=self.env,
             bufsize=1,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)

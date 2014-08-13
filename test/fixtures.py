@@ -81,16 +81,11 @@ class Fixture(object):
         result.extend(args)
         return result
 
-        # ./kafka-src/bin/kafka-run-class.sh is the authority.
-        result = ["java", "-Xmx512M", "-server"]
-        result.append("-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties"))
-        result.append("-Dcom.sun.management.jmxremote")
-        result.append("-Dcom.sun.management.jmxremote.authenticate=false")
-        result.append("-Dcom.sun.management.jmxremote.ssl=false")
-        result.append("-cp")
-        result.append(cls.test_classpath())
-        result.extend(args)
-        return result
+    @classmethod
+    def kafka_run_class_env(cls):
+        env = os.environ.copy()
+        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties")
+        return env
 
     @classmethod
     def render_template(cls, source_file, target_file, binding):
@@ -137,10 +132,11 @@ class ZookeeperFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Zookeeper child process
-        self.child = SpawnedService(self.kafka_run_class_args(
+        self.child = SpawnedService(args=self.kafka_run_class_args(
             "org.apache.zookeeper.server.quorum.QuorumPeerMain",
-            properties
-        ))
+            properties),
+            env=self.kafka_run_class_env()
+        )
 
         # Party!
         self.out("Starting...")
@@ -218,9 +214,10 @@ class KafkaFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Kafka child process
-        self.child = SpawnedService(self.kafka_run_class_args(
-            "kafka.Kafka", properties
-        ))
+        self.child = SpawnedService(args=self.kafka_run_class_args(
+            "kafka.Kafka", properties),
+            env=self.kafka_run_class_env()
+        )
 
         # Party!
         self.out("Creating Zookeeper chroot node...")
@@ -229,6 +226,7 @@ class KafkaFixture(Fixture):
                 "-server", "%s:%d" % (self.zk_host, self.zk_port),
                 "create", "/%s" % self.zk_chroot, "kafka-python"
             ),
+            env=self.kafka_run_class_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
