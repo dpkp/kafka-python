@@ -16,7 +16,7 @@ class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.8.0')
     scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
     project_root = os.environ.get('PROJECT_ROOT', os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    kafka_root = os.environ.get("KAFKA_ROOT", os.path.join(project_root, 'servers', kafka_version, "kafka-src"))
+    kafka_root = os.environ.get("KAFKA_ROOT", os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
     ivy_root = os.environ.get('IVY_ROOT', os.path.expanduser("~/.ivy2/cache"))
 
     @classmethod
@@ -77,6 +77,10 @@ class Fixture(object):
 
     @classmethod
     def kafka_run_class_args(cls, *args):
+        result = [os.path.join(cls.kafka_root, 'bin', 'kafka-run-class.sh')]
+        result.extend(args)
+        return result
+
         # ./kafka-src/bin/kafka-run-class.sh is the authority.
         result = ["java", "-Xmx512M", "-server"]
         result.append("-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties"))
