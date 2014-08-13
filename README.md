@@ -160,9 +160,20 @@ python setup.py install
 
 ## Optional Snappy install
 
+### Install Development Libraries
 Download and build Snappy from http://code.google.com/p/snappy/downloads/list
 
-Linux:
+Ubuntu:
+```shell
+apt-get install libsnappy-dev
+```
+
+OSX:
+```shell
+brew install snappy
+```
+
+From Source:
 ```shell
 wget http://snappy.googlecode.com/files/snappy-1.0.5.tar.gz
 tar xzvf snappy-1.0.5.tar.gz
@@ -172,11 +183,7 @@ make
 sudo make install
 ```
 
-OSX:
-```shell
-brew install snappy
-```
-
+### Install Python Module
 Install the `python-snappy` module
 ```shell
 pip install python-snappy
