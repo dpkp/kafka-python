@@ -204,10 +204,19 @@ First, get the kafka binaries for integration testing:
 ```shell
 ./build_integration.sh
 ```
+By default, the build_integration.sh script will download binary
+distributions for all supported kafka versions.
+To test against the latest source build, set KAFKA_VERSION=trunk
+and optionally set SCALA_VERSION (defaults to 2.8.0, but 2.10.1 is recommended)
+```shell
+SCALA_VERSION=2.10.1 KAFKA_VERSION=trunk ./build_integration.sh
+```
 
 Then run the tests against supported Kafka versions:
 ```shell
 KAFKA_VERSION=0.8.0 tox
 KAFKA_VERSION=0.8.1 tox
 KAFKA_VERSION=0.8.1.1 tox
+KAFKA_VERSION=trunk tox
 ```
+
