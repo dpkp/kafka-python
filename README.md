@@ -190,32 +190,33 @@ pip install python-snappy
 tox
 ```
 
+## Run a single unit test
+```shell
+tox -e py27 -- -v --with-id 102
+```
+
 ## Run the integration tests
 
 The integration tests will actually start up real local Zookeeper
 instance and Kafka brokers, and send messages in using the client.
 
-Note that you may want to add this to your global gitignore:
+First, get the kafka binaries for integration testing:
 ```shell
-.gradle/
-clients/build/
-contrib/build/
-contrib/hadoop-consumer/build/
-contrib/hadoop-producer/build/
-core/build/
-core/data/
-examples/build/
-perf/build/
-```
-
-First, check out and the Kafka source:
-```shell
-git submodule update --init
 ./build_integration.sh
+```
+By default, the build_integration.sh script will download binary
+distributions for all supported kafka versions.
+To test against the latest source build, set KAFKA_VERSION=trunk
+and optionally set SCALA_VERSION (defaults to 2.8.0, but 2.10.1 is recommended)
+```shell
+SCALA_VERSION=2.10.1 KAFKA_VERSION=trunk ./build_integration.sh
 ```
 
 Then run the tests against supported Kafka versions:
 ```shell
 KAFKA_VERSION=0.8.0 tox
 KAFKA_VERSION=0.8.1 tox
+KAFKA_VERSION=0.8.1.1 tox
+KAFKA_VERSION=trunk tox
 ```
+

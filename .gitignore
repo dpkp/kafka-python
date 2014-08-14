@@ -5,3 +5,6 @@ build
 dist
 MANIFEST
 env
+servers/*/kafka-bin
+.coverage
+.noseids

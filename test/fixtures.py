@@ -1,9 +1,11 @@
 import logging
 import glob
 import os
+import os.path
 import shutil
 import subprocess
 import tempfile
+import urllib2
 import uuid
 
 from urlparse import urlparse
@@ -14,40 +16,61 @@ class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.8.0')
     scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
     project_root = os.environ.get('PROJECT_ROOT', os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    kafka_root = os.environ.get("KAFKA_ROOT", os.path.join(project_root, 'servers', kafka_version, "kafka-src"))
+    kafka_root = os.environ.get("KAFKA_ROOT", os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
     ivy_root = os.environ.get('IVY_ROOT', os.path.expanduser("~/.ivy2/cache"))
+
+    @classmethod
+    def download_official_distribution(cls,
+                                       kafka_version=None,
+                                       scala_version=None,
+                                       output_dir=None):
+        if not kafka_version:
+            kafka_version = cls.kafka_version
+        if not scala_version:
+            scala_version = cls.scala_version
+        if not output_dir:
+            output_dir = os.path.join(cls.project_root, 'servers', 'dist')
+
+        distfile = 'kafka_%s-%s' % (scala_version, kafka_version,)
+        url_base = 'https://archive.apache.org/dist/kafka/%s/' % (kafka_version,)
+        output_file = os.path.join(output_dir, distfile + '.tgz')
+
+        if os.path.isfile(output_file):
+            logging.info("Found file already on disk: %s" % output_file)
+            return output_file
+
+        # New tarballs are .tgz, older ones are sometimes .tar.gz
+        try:
+            url = url_base + distfile + '.tgz'
+            logging.info("Attempting to download %s" % (url,))
+            response = urllib2.urlopen(url)
+        except urllib2.HTTPError:
+            logging.exception("HTTP Error")
+            url = url_base + distfile + '.tar.gz'
+            logging.info("Attempting to download %s" % (url,))
+            response = urllib2.urlopen(url)
+
+        logging.info("Saving distribution file to %s" % (output_file,))
+        with open(os.path.join(output_dir, distfile + '.tgz'), 'w') as f:
+            f.write(response.read())
+
+        return output_file
 
     @classmethod
     def test_resource(cls, filename):
         return os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
 
     @classmethod
-    def test_classpath(cls):
-        # ./kafka-src/bin/kafka-run-class.sh is the authority.
-        jars = ["."]
-
-        # 0.8.0 build path, should contain the core jar and a deps jar
-        jars.extend(glob.glob(cls.kafka_root + "/core/target/scala-%s/*.jar" % cls.scala_version))
-
-        # 0.8.1 build path, should contain the core jar and several dep jars
-        jars.extend(glob.glob(cls.kafka_root + "/core/build/libs/*.jar"))
-        jars.extend(glob.glob(cls.kafka_root + "/core/build/dependant-libs-%s/*.jar" % cls.scala_version))
-
-        jars = filter(os.path.exists, map(os.path.abspath, jars))
-        return ":".join(jars)
-
-    @classmethod
     def kafka_run_class_args(cls, *args):
-        # ./kafka-src/bin/kafka-run-class.sh is the authority.
-        result = ["java", "-Xmx512M", "-server"]
-        result.append("-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties"))
-        result.append("-Dcom.sun.management.jmxremote")
-        result.append("-Dcom.sun.management.jmxremote.authenticate=false")
-        result.append("-Dcom.sun.management.jmxremote.ssl=false")
-        result.append("-cp")
-        result.append(cls.test_classpath())
+        result = [os.path.join(cls.kafka_root, 'bin', 'kafka-run-class.sh')]
         result.extend(args)
         return result
+
+    @classmethod
+    def kafka_run_class_env(cls):
+        env = os.environ.copy()
+        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties")
+        return env
 
     @classmethod
     def render_template(cls, source_file, target_file, binding):
@@ -94,10 +117,11 @@ class ZookeeperFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Zookeeper child process
-        self.child = SpawnedService(self.kafka_run_class_args(
+        self.child = SpawnedService(args=self.kafka_run_class_args(
             "org.apache.zookeeper.server.quorum.QuorumPeerMain",
-            properties
-        ))
+            properties),
+            env=self.kafka_run_class_env()
+        )
 
         # Party!
         self.out("Starting...")
@@ -175,9 +199,10 @@ class KafkaFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Kafka child process
-        self.child = SpawnedService(self.kafka_run_class_args(
-            "kafka.Kafka", properties
-        ))
+        self.child = SpawnedService(args=self.kafka_run_class_args(
+            "kafka.Kafka", properties),
+            env=self.kafka_run_class_env()
+        )
 
         # Party!
         self.out("Creating Zookeeper chroot node...")
@@ -186,6 +211,7 @@ class KafkaFixture(Fixture):
                 "-server", "%s:%d" % (self.zk_host, self.zk_port),
                 "create", "/%s" % self.zk_chroot, "kafka-python"
             ),
+            env=self.kafka_run_class_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
