@@ -451,7 +451,11 @@ class SimpleConsumer(Consumer):
                     log.debug("Done iterating over partition %s" % partition)
                 partitions = retry_partitions
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
+        fetch_size_bytes=FETCH_MIN_BYTES,
+        buffer_size=FETCH_BUFFER_SIZE_BYTES,
+        max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
+        begin_offset=None, end_offset=None):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -472,6 +476,11 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
                               auto_commit_every_n=None,
                               auto_commit_every_t=None)
 
+    if begin_offset is not None:
+        for p in chunk:
+            consumer.offsets[p] = begin_offset
+            consumer.fetch_offsets[p] = begin_offset
+
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
 
@@ -489,6 +498,8 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
 
         message = consumer.get_message()
         if message:
+            if end_offset is not None and message[1].offset > end_offset:
+                break
             queue.put(message)
             count += 1
 
@@ -536,7 +547,23 @@ class MultiProcessConsumer(Consumer):
     def __init__(self, client, group, topic, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_procs=1, partitions_per_proc=0,
+                 offset_dict=None,
+                 fetch_size_bytes=FETCH_MIN_BYTES,
+                 buffer_size=FETCH_BUFFER_SIZE_BYTES,
+                 max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES):
+
+        def get_common_offsets(chunk, topic, offset_dict):
+            common_start_offset = None
+            common_end_offset = None
+            for partition in chunk:
+                start_offset = offset_dict[partition]['start_offset']
+                end_offset = offset_dict[partition]['end_offset']
+                if common_start_offset is None or common_start_offset > start_offset:
+                    common_start_offset = start_offset
+                if common_end_offset is None or common_end_offset < end_offset:
+                    common_end_offset = end_offset
+            return common_start_offset, common_end_offset
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -577,7 +604,17 @@ class MultiProcessConsumer(Consumer):
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 
-            proc = Process(target=_mp_consume, args=args)
+            kwargs = {}
+            if offset_dict is not None:
+                s_offset, e_offset = get_common_offsets(chunk, topic, offset_dict)
+                kwargs['begin_offset'] = s_offset
+                kwargs['end_offset'] = e_offset
+
+            kwargs['fetch_size_bytes'] = fetch_size_bytes
+            kwargs['buffer_size'] = buffer_size
+            kwargs['max_buffer_size'] = max_buffer_size
+
+            proc = Process(target=_mp_consume, args=args, kwargs=kwargs)
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
