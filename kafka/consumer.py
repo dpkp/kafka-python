@@ -474,7 +474,12 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
                               partitions=chunk,
                               auto_commit=False,
                               auto_commit_every_n=None,
-                              auto_commit_every_t=None)
+                              auto_commit_every_t=None,
+                              fetch_size_bytes=fetch_size_bytes,
+                              buffer_size=buffer_size,
+                              max_buffer_size=max_buffer_size,
+                              )
+
 
     if begin_offset is not None:
         for p in chunk:
