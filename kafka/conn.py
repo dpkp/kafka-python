@@ -76,6 +76,8 @@ class KafkaConnection(local):
         responses = []
 
         log.debug("About to read %d bytes from Kafka", num_bytes)
+
+        # Make sure we have a connection
         if self._dirty or not self._sock:
             self.reinit()
 
@@ -108,6 +110,7 @@ class KafkaConnection(local):
         try:
             if self._dirty or not self._sock:
                 self.reinit()
+            log.debug("Sending payload %s" % (payload,))
             sent = self._sock.sendall(payload)
             if sent is not None:
                 self._raise_connection_error()
@@ -142,14 +145,18 @@ class KafkaConnection(local):
         """
         Close this connection
         """
+        log.debug("Closing socket connection for %s:%d" % (self.host, self.port))
         if self._sock:
             self._sock.close()
             self._sock = None
+        else:
+            log.debug("No socket found to close!")
 
     def reinit(self):
         """
         Re-initialize the socket connection
         """
+        log.debug("Reinitializing socket connection for %s:%d" % (self.host, self.port))
         self.close()
         try:
             self._sock = socket.create_connection((self.host, self.port), self.timeout)
