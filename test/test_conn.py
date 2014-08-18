@@ -177,9 +177,25 @@ class ConnTest(unittest2.TestCase):
         except ConnectionError:
             self.assertEquals(self.conn._dirty, True)
 
-    @unittest2.skip("Not Implemented")
     def test_recv__doesnt_consume_extra_data_in_stream(self):
-        pass
+        data1 = self.config['payload']
+        size1 = len(data1)
+        encoded1 = struct.pack('>i%ds' % size1, size1, data1)
+        data2 = "an extra payload"
+        size2 = len(data2)
+        encoded2 = struct.pack('>i%ds' % size2, size2, data2)
+
+        self.conn._recv_buffer  = encoded1
+        self.conn._recv_buffer += encoded2
+
+        def mock_socket_recv(num_bytes):
+            data = self.conn._recv_buffer[0:num_bytes]
+            self.conn._recv_buffer = self.conn._recv_buffer[num_bytes:]
+            return data
+
+        with mock.patch.object(self.conn._sock, 'recv', new=mock_socket_recv):
+            self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
+            self.assertEquals(str(self.conn._recv_buffer), encoded2)
 
     def test_close__object_is_reusable(self):
 
