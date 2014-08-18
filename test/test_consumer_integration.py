@@ -165,6 +165,15 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+
+    @kafka_versions("0.8.1", "0.8.1.1")
+    def test_multi_proc_offsets(self):
+        self.send_messages(0, range(0, 10))
+        self.send_messages(1, range(10, 20))
+        consumer = self.consumer(consumer=MultiProcessConsumer)
+        msg_lst = [ message for message in consumer ]
+
+
     @kafka_versions("all")
     def test_large_messages(self):
         # Produce 10 "normal" size messages

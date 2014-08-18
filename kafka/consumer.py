@@ -542,6 +542,10 @@ class MultiProcessConsumer(Consumer):
                The available partitions will be divided among these processes
     partitions_per_proc: Number of partitions to be allocated per process
                (overrides num_procs)
+    offset_dict: a dictionary of offets broken down by partitions.
+                 This consumer will consume messages starting from the start offset to
+                 the end offset.
+                 Example { '0' : {'start_offset' : 111, 'end_offset' :222 }}
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
