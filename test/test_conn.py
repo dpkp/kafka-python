@@ -59,15 +59,11 @@ class ConnTest(unittest2.TestCase):
             'payload': 'test data'
         }
 
-        def mock_reinit(obj):
-            obj._sock = mock.MagicMock()
-            obj._sock.sendall.return_value = None
-            obj._dirty = False
-
-        with mock.patch.object(KafkaConnection, 'reinit', new=mock_reinit):
-            conn = KafkaConnection(fake_config['host'], fake_config['port'])
-            conn.send(fake_config['request_id'], fake_config['payload'])
-            conn._sock.sendall.assert_called_with(fake_config['payload'])
+        assert socket.create_connection is self.MockCreateConn
+        conn = KafkaConnection(fake_config['host'], fake_config['port'])
+        socket.create_connection.reset_mock()
+        conn.send(fake_config['request_id'], fake_config['payload'])
+        conn._sock.sendall.assert_called_with(fake_config['payload'])
 
     def test_init_creates_socket_connection(self):
         fake_config = {
@@ -76,7 +72,8 @@ class ConnTest(unittest2.TestCase):
         }
 
         assert socket.create_connection is self.MockCreateConn
-        conn = KafkaConnection(fake_config['host'], fake_config['port'])
+        socket.create_connection.reset_mock()
+        KafkaConnection(fake_config['host'], fake_config['port'])
         socket.create_connection.assert_called_with((fake_config['host'], fake_config['port']), DEFAULT_SOCKET_TIMEOUT_SECONDS)
 
     def test_init_failure_raises_connection_error(self):
@@ -88,9 +85,10 @@ class ConnTest(unittest2.TestCase):
         def raise_error(*args):
             raise socket.error
 
-        with mock.patch.object(socket, 'create_connection', new=raise_error):
-            with self.assertRaises(ConnectionError):
-                KafkaConnection(fake_config['host'], fake_config['port'])
+        assert socket.create_connection is self.MockCreateConn
+        socket.create_connection.side_effect=raise_error
+        with self.assertRaises(ConnectionError):
+            KafkaConnection(fake_config['host'], fake_config['port'])
 
     def test_send__reconnects_on_dirty_conn(self):
         fake_config = {
@@ -105,7 +103,6 @@ class ConnTest(unittest2.TestCase):
         conn = KafkaConnection(fake_config['host'], fake_config['port'])
  
         # Dirty it
-        
         try:
             conn._raise_connection_error()
         except ConnectionError:
