@@ -106,14 +106,15 @@ class KafkaConnection(local):
 
     def send(self, request_id, payload):
         "Send a request to Kafka"
+
         log.debug("About to send %d bytes to Kafka, request %d" % (len(payload), request_id))
+
+        # Make sure we have a connection
+        if self._dirty or not self._sock:
+            self.reinit()
+
         try:
-            if self._dirty or not self._sock:
-                self.reinit()
-            log.debug("Sending payload %s" % (payload,))
-            sent = self._sock.sendall(payload)
-            if sent is not None:
-                self._raise_connection_error()
+            self._sock.sendall(payload)
         except socket.error:
             log.exception('Unable to send payload to Kafka')
             self._raise_connection_error()
