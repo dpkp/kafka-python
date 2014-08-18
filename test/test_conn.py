@@ -163,14 +163,29 @@ class ConnTest(unittest2.TestCase):
         self.conn._read_bytes(len(self.config['payload']))
         self.assertEqual(socket.create_connection.call_count, 1)
 
-    @unittest2.skip("Not Implemented")
     def test_recv__failure_sets_dirty_connection(self):
-        pass
+
+        def raise_error(*args):
+            raise socket.error
+
+        # test that recv'ing attempts to reconnect
+        assert self.conn._dirty is False
+        assert isinstance(self.conn._sock, mock.Mock)
+        self.conn._sock.recv.side_effect=raise_error
+        try:
+            self.conn.recv(self.config['request_id'])
+        except ConnectionError:
+            self.assertEquals(self.conn._dirty, True)
 
     @unittest2.skip("Not Implemented")
     def test_recv__doesnt_consume_extra_data_in_stream(self):
         pass
 
-    @unittest2.skip("Not Implemented")
     def test_close__object_is_reusable(self):
-        pass
+
+        # test that sending to a closed connection
+        # will re-connect and send data to the socket
+        self.conn.close()
+        self.conn.send(self.config['request_id'], self.config['payload'])
+        self.assertEqual(socket.create_connection.call_count, 1)
+        self.conn._sock.sendall.assert_called_with(self.config['payload'])
