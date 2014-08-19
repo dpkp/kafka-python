@@ -169,8 +169,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
     def test_multi_proc_offsets(self):
         partition_zero_start_offset = 7
         partition_zero_end_offset = 9
-        partition_one_start_offset = 5
-        partition_one_end_offset = 9
+        partition_one_start_offset = 1
+        partition_one_end_offset = 4
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
 
@@ -188,12 +188,17 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         kwargs = {
             'consumer': MultiProcessConsumer,
             'offset_dict' : offset_dict,
-            'partitions_per_proc' : 1,
+            #'partitions_per_proc' : 1,
         }
 
         total_msg_cnt = (partition_zero_end_offset - partition_zero_start_offset + 1) + \
                 (partition_one_end_offset - partition_one_start_offset + 1)
 
+        consumer = self.consumer(**kwargs)
+        self.assert_message_count([msg for msg in consumer], total_msg_cnt)
+        consumer.stop()
+
+        kwargs['partitions_per_proc'] = 1
         consumer = self.consumer(**kwargs)
         self.assert_message_count([msg for msg in consumer], total_msg_cnt)
         consumer.stop()

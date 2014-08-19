@@ -455,7 +455,7 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
         fetch_size_bytes=FETCH_MIN_BYTES,
         buffer_size=FETCH_BUFFER_SIZE_BYTES,
         max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
-        start_offset=None, end_offset=None):
+        offset_dict=None):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -481,8 +481,9 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
                               )
 
 
-    if start_offset is not None:
-        for p in chunk:
+    for p in chunk:
+        if offset_dict is not None:
+            start_offset = offset_dict[p]['start_offset']
             consumer.offsets[p] = start_offset
             consumer.fetch_offsets[p] = start_offset
 
@@ -501,11 +502,14 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
         # indicates a specific number of messages, follow that advice
         count = 0
 
-        message = consumer.get_message()
-        if message:
-            if end_offset is not None and message[1].offset > end_offset:
+        # Returns a tuple of partition and OffsetMessage
+        result = consumer.get_message(get_partition_info=True)
+
+        if result:
+            partition, msg = result
+            if offset_dict is not None and msg.offset > offset_dict[partition]['end_offset']:
                 break
-            queue.put(message)
+            queue.put(result)
             count += 1
 
             # We have reached the required size. The controller might have
@@ -562,13 +566,6 @@ class MultiProcessConsumer(Consumer):
                  buffer_size=FETCH_BUFFER_SIZE_BYTES,
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES):
 
-        def get_common_offsets(chunk, topic, offset_dict):
-            chunk_set = set(chunk)
-            common_start_offset = min([v['start_offset'] for k,v in offset_dict.items() if k in chunk_set])
-            common_end_offset = max([v['end_offset'] for k,v in offset_dict.items() if k in chunk_set])
-            return common_start_offset, common_end_offset
-
-
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
             client, group, topic,
@@ -610,9 +607,7 @@ class MultiProcessConsumer(Consumer):
 
             kwargs = {}
             if offset_dict is not None:
-                s_offset, e_offset = get_common_offsets(chunk, topic, offset_dict)
-                kwargs['start_offset'] = s_offset
-                kwargs['end_offset'] = e_offset
+                kwargs['offset_dict'] = offset_dict
 
             kwargs['fetch_size_bytes'] = fetch_size_bytes
             kwargs['buffer_size'] = buffer_size
