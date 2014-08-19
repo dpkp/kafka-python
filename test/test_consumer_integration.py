@@ -165,13 +165,36 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
-
     @kafka_versions("0.8.1", "0.8.1.1")
     def test_multi_proc_offsets(self):
+        partition_zero_start_offset = 7
+        partition_zero_end_offset = 9
+        partition_one_start_offset = 15
+        partition_one_end_offset = 18
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
-        consumer = self.consumer(consumer=MultiProcessConsumer)
-        msg_lst = [ message for message in consumer ]
+
+        offset_dict = {
+            0 : {
+                'start_offset': partition_zero_start_offset,
+                'end_offset' : partition_zero_end_offset,
+            },
+            1 : {
+                'start_offset': partition_one_start_offset,
+                'end_offset' : partition_one_end_offset,
+            }
+        }
+
+        kwargs = {
+            'consumer': MultiProcessConsumer,
+            'offset_dict' : offset_dict,
+        }
+
+        consumer = self.consumer(**kwargs)
+        for message in consumer:
+            #import pdb; pdb.set_trace() #xxx
+            print "%s: %d" % (message.message.value, message.offset)
+        consumer.stop()
 
 
     @kafka_versions("all")
