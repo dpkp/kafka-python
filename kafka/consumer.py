@@ -563,16 +563,11 @@ class MultiProcessConsumer(Consumer):
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES):
 
         def get_common_offsets(chunk, topic, offset_dict):
-            common_start_offset = None
-            common_end_offset = None
-            for partition in chunk:
-                start_offset = offset_dict[partition]['start_offset']
-                end_offset = offset_dict[partition]['end_offset']
-                if common_start_offset is None or common_start_offset > start_offset:
-                    common_start_offset = start_offset
-                if common_end_offset is None or common_end_offset < end_offset:
-                    common_end_offset = end_offset
+            chunk_set = set(chunk)
+            common_start_offset = min([v['start_offset'] for k,v in offset_dict.items() if k in chunk_set])
+            common_end_offset = max([v['end_offset'] for k,v in offset_dict.items() if k in chunk_set])
             return common_start_offset, common_end_offset
+
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
