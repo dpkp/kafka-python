@@ -455,7 +455,7 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
         fetch_size_bytes=FETCH_MIN_BYTES,
         buffer_size=FETCH_BUFFER_SIZE_BYTES,
         max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
-        begin_offset=None, end_offset=None):
+        start_offset=None, end_offset=None):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -481,10 +481,10 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
                               )
 
 
-    if begin_offset is not None:
+    if start_offset is not None:
         for p in chunk:
-            consumer.offsets[p] = begin_offset
-            consumer.fetch_offsets[p] = begin_offset
+            consumer.offsets[p] = start_offset
+            consumer.fetch_offsets[p] = start_offset
 
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
@@ -611,7 +611,7 @@ class MultiProcessConsumer(Consumer):
             kwargs = {}
             if offset_dict is not None:
                 s_offset, e_offset = get_common_offsets(chunk, topic, offset_dict)
-                kwargs['begin_offset'] = s_offset
+                kwargs['start_offset'] = s_offset
                 kwargs['end_offset'] = e_offset
 
             kwargs['fetch_size_bytes'] = fetch_size_bytes
