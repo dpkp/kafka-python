@@ -21,7 +21,7 @@ class Tox(Command):
 
 
 setup(
-    name="kafka-python",
+    name="kafka-python-lf",
     version=__version__,
 
     tests_require=["tox", "mock"],
