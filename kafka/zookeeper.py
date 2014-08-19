@@ -3,7 +3,9 @@ This is originally from:
 
 https://github.com/mahendra/kafka-python/blob/zookeeper/kafka/zookeeper.py
 
-However, multiprocess is substituted for threading. Since threading
+It is modified in a few places to work with more recent KafkaClient.
+
+Also, multiprocess is substituted for threading. Since threading
 is gevent friendly, where multiprocess is not.
 """
 import logging
@@ -62,14 +64,6 @@ def get_client(zkclient, chroot='/'):
     brokers = _get_brokers(zkclient, chroot=chroot)
     brokers = ["%s:%s"%(host, port) for (host, port) in brokers]
     return KafkaClient(brokers)
-    # for host, port in brokers:
-    #     try:
-    #         return KafkaClient(host, port)
-    #     except Exception as exp:
-    #         log.error("Error while connecting to %s:%d" % (host, port),
-    #                   exc_info=sys.exc_info())
-    #
-    # raise RuntimeError("Unable to find any running broker")
 
 
 # TODO: Make this a subclass of Producer later
