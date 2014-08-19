@@ -20,7 +20,13 @@ from kafka.client import KafkaClient
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
-from kazoo.handlers.gevent import SequentialGeventHandler
+import sys
+
+if 'gevent' in sys.modules:
+    from kazoo.handlers.gevent import SequentialGeventHandler as kazoo_handler
+else:
+    from kazoo.handlers.threading import SequentialThreadingHandler as kazoo_handler
+
 
 BROKER_IDS_PATH = 'brokers/ids/'      # Path where kafka stores broker info
 PARTITIONER_PATH = 'python/kafka/'    # Path to use for consumer co-ordination
@@ -191,11 +197,10 @@ class ZSimpleConsumer(object):
         if 'partitions' in kwargs:
             raise ValueError("Partitions cannot be specified")
 
-        # self.driver = KafkaDriver(driver_type)
         self.ignore_non_allocation = ignore_non_allocation
         self.time_boundary = time_boundary
 
-        zkclient = KazooClient(hosts, handler=SequentialGeventHandler())
+        zkclient = KazooClient(hosts, handler=kazoo_handler())
         zkclient.start()
 
         self.client = get_client(zkclient, chroot=chroot)
@@ -237,7 +242,6 @@ class ZSimpleConsumer(object):
 
         # The shared memory and lock used for sharing allocation info
         self.lock = threading.Lock()
-        #self.allocated = multiprocessing.Array('i', len(partitions))
         self.allocated = [0] * len(partitions)
 
         # Initialize the array
@@ -362,7 +366,7 @@ class ZSimpleConsumer(object):
         old = None
 
         # Start zookeeper connection again
-        zkclient = KazooClient(hosts, handler=SequentialGeventHandler())
+        zkclient = KazooClient(hosts, handler=kazoo_handler())
         zkclient.start()
 
         identifier = '%s-%d-%s' % (self.identifier,
