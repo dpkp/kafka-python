@@ -85,14 +85,18 @@ class KafkaConnection(local):
             self.reinit()
 
         while bytes_left:
+
             try:
                 data = self._sock.recv(min(bytes_left, 4096))
+
+                # Receiving empty string from recv signals
+                # that the socket is in error.  we will never get
+                # more data from this socket
+                if data == '':
+                    raise socket.error('Not enough data to read message -- did server kill socket?')
+                
             except socket.error:
                 log.exception('Unable to receive data from Kafka')
-                self._raise_connection_error()
-
-            if data == '':
-                log.error("Not enough data to read this response")
                 self._raise_connection_error()
 
             bytes_left -= len(data)
