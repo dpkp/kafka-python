@@ -1,5 +1,3 @@
-import os
-import random
 import socket
 import struct
 
