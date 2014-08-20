@@ -13,21 +13,35 @@ class ConnTest(unittest2.TestCase):
             'host': 'localhost',
             'port': 9090,
             'request_id': 0,
-            'payload': 'test data'
+            'payload': 'test data',
+            'payload2': 'another packet'
         }
 
         # Mocking socket.create_connection will cause _sock to always be a
         # MagicMock()
         patcher = mock.patch('socket.create_connection', spec=True)
         self.MockCreateConn = patcher.start()
-
-        # Also mock socket.sendall() to appear successful
-        self.MockCreateConn().sendall.return_value = None
         self.addCleanup(patcher.stop)
 
-        # And mock socket.recv() to return the payload
-        self.MockCreateConn().recv.return_value = self.config['payload']
+        # Also mock socket.sendall() to appear successful
+        socket.create_connection().sendall.return_value = None
+
+        # And mock socket.recv() to return two payloads, then '', then raise
+        # Note that this currently ignores the num_bytes parameter to sock.recv()
+        payload_size = len(self.config['payload'])
+        payload2_size = len(self.config['payload2'])
+        socket.create_connection().recv.side_effect = [
+            struct.pack('>i', payload_size),
+            struct.pack('>%ds' % payload_size, self.config['payload']),
+            struct.pack('>i', payload2_size),
+            struct.pack('>%ds' % payload2_size, self.config['payload2']),
+            ''
+        ]
+
+        # Create a connection object
         self.conn = KafkaConnection(self.config['host'], self.config['port'])
+        
+        # Reset any mock counts caused by __init__
         socket.create_connection.reset_mock()
 
     def test_collect_hosts__happy_path(self):
@@ -92,17 +106,6 @@ class ConnTest(unittest2.TestCase):
         self.conn.send(self.config['request_id'], self.config['payload'])
         self.assertEqual(socket.create_connection.call_count, 1)
 
-        # A second way to dirty it...
-        self.conn.close()
-
-        # Reset the socket call counts
-        socket.create_connection.reset_mock()
-        self.assertEqual(socket.create_connection.call_count, 0)
-
-        # Now test that sending attempts to reconnect
-        self.conn.send(self.config['request_id'], self.config['payload'])
-        self.assertEqual(socket.create_connection.call_count, 1)
-
     def test_send__failure_sets_dirty_connection(self):
 
         def raise_error(*args):
@@ -117,21 +120,7 @@ class ConnTest(unittest2.TestCase):
 
     def test_recv(self):
 
-        # A function to mock _read_bytes
-        self.conn._mock_sent_size = False
-        self.conn._mock_data_sent = 0
-        def mock_socket_recv(num_bytes):
-            if not self.conn._mock_sent_size:
-                assert num_bytes == 4
-                self.conn._mock_sent_size = True
-                return struct.pack('>i', len(self.config['payload']))
-
-            recv_data = struct.pack('>%ds' % num_bytes, self.config['payload'][self.conn._mock_data_sent:self.conn._mock_data_sent+num_bytes])
-            self.conn._mock_data_sent += num_bytes
-            return recv_data
-
-        with mock.patch.object(self.conn, '_read_bytes', new=mock_socket_recv):
-            self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
+        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
 
     def test_recv__reconnects_on_dirty_conn(self):
 
@@ -143,18 +132,7 @@ class ConnTest(unittest2.TestCase):
 
         # Now test that recv'ing attempts to reconnect
         self.assertEqual(socket.create_connection.call_count, 0)
-        self.conn._read_bytes(len(self.config['payload']))
-        self.assertEqual(socket.create_connection.call_count, 1)
-
-        # A second way to dirty it...
-        self.conn.close()
-
-        # Reset the socket call counts
-        socket.create_connection.reset_mock()
-        self.assertEqual(socket.create_connection.call_count, 0)
-
-        # Now test that recv'ing attempts to reconnect
-        self.conn._read_bytes(len(self.config['payload']))
+        self.conn.recv(self.config['request_id'])
         self.assertEqual(socket.create_connection.call_count, 1)
 
     def test_recv__failure_sets_dirty_connection(self):
@@ -171,24 +149,10 @@ class ConnTest(unittest2.TestCase):
             self.assertIsNone(self.conn._sock)
 
     def test_recv__doesnt_consume_extra_data_in_stream(self):
-        data1 = self.config['payload']
-        size1 = len(data1)
-        encoded1 = struct.pack('>i%ds' % size1, size1, data1)
-        data2 = "an extra payload"
-        size2 = len(data2)
-        encoded2 = struct.pack('>i%ds' % size2, size2, data2)
 
-        self.conn._recv_buffer  = encoded1
-        self.conn._recv_buffer += encoded2
-
-        def mock_socket_recv(num_bytes):
-            data = self.conn._recv_buffer[0:num_bytes]
-            self.conn._recv_buffer = self.conn._recv_buffer[num_bytes:]
-            return data
-
-        with mock.patch.object(self.conn._sock, 'recv', new=mock_socket_recv):
-            self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
-            self.assertEquals(str(self.conn._recv_buffer), encoded2)
+        # Here just test that each call to recv will return a single payload
+        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
+        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload2'])
 
     def test_close__object_is_reusable(self):
 
