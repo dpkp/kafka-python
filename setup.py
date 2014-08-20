@@ -20,15 +20,25 @@ class Tox(Command):
         sys.exit(tox.cmdline([]))
 
 
+requires = [
+    'kazoo>=2.0',
+]
+
+install_requires = requires + [
+]
+
+test_requires = requires + [
+    "tox", 
+    "mock",
+]
+
 setup(
     name="kafka-python-lf",
     version=__version__,
-
-    tests_require=["tox", "mock"],
+    install_requires=install_requires,
+    tests_require=test_requires,
     cmdclass={"test": Tox},
-
     packages=["kafka"],
-
     author="David Arthur",
     author_email="mumrah@gmail.com",
     url="https://github.com/mumrah/kafka-python",
