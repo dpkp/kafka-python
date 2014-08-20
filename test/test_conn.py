@@ -25,6 +25,8 @@ class ConnTest(unittest2.TestCase):
         self.MockCreateConn().sendall.return_value = None
         self.addCleanup(patcher.stop)
 
+        # And mock socket.recv() to return the payload
+        self.MockCreateConn().recv.return_value = self.config['payload']
         self.conn = KafkaConnection(self.config['host'], self.config['port'])
         socket.create_connection.reset_mock()
 
@@ -80,12 +82,10 @@ class ConnTest(unittest2.TestCase):
     def test_send__reconnects_on_dirty_conn(self):
 
         # Dirty the connection
-        assert self.conn._dirty is False
         try:
             self.conn._raise_connection_error()
         except ConnectionError:
             pass
-        assert self.conn._dirty is True
 
         # Now test that sending attempts to reconnect
         self.assertEqual(socket.create_connection.call_count, 0)
@@ -108,14 +108,12 @@ class ConnTest(unittest2.TestCase):
         def raise_error(*args):
             raise socket.error
 
-        assert self.conn._dirty is False
-
         assert isinstance(self.conn._sock, mock.Mock)
         self.conn._sock.sendall.side_effect=raise_error
         try:
             self.conn.send(self.config['request_id'], self.config['payload'])
         except ConnectionError:
-            self.assertEquals(self.conn._dirty, True)
+            self.assertIsNone(self.conn._sock)
 
     def test_recv(self):
 
@@ -142,11 +140,9 @@ class ConnTest(unittest2.TestCase):
             self.conn._raise_connection_error()
         except ConnectionError:
             pass
-        assert self.conn._dirty is True
 
         # Now test that recv'ing attempts to reconnect
         self.assertEqual(socket.create_connection.call_count, 0)
-        self.conn._sock.recv.return_value = self.config['payload']
         self.conn._read_bytes(len(self.config['payload']))
         self.assertEqual(socket.create_connection.call_count, 1)
 
@@ -167,13 +163,12 @@ class ConnTest(unittest2.TestCase):
             raise socket.error
 
         # test that recv'ing attempts to reconnect
-        assert self.conn._dirty is False
         assert isinstance(self.conn._sock, mock.Mock)
         self.conn._sock.recv.side_effect=raise_error
         try:
             self.conn.recv(self.config['request_id'])
         except ConnectionError:
-            self.assertEquals(self.conn._dirty, True)
+            self.assertIsNone(self.conn._sock)
 
     def test_recv__doesnt_consume_extra_data_in_stream(self):
         data1 = self.config['payload']
