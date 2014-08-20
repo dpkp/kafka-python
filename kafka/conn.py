@@ -155,6 +155,15 @@ class KafkaConnection(local):
         """
         log.debug("Closing socket connection for %s:%d" % (self.host, self.port))
         if self._sock:
+            # Call shutdown to be a good TCP client
+            # But expect an error if the socket has already been
+            # closed by the server
+            try:
+                self._sock.shutdown(socket.SHUT_RDWR)
+            except socket.error:
+                pass
+
+            # Closing the socket should always succeed 
             self._sock.close()
             self._sock = None
         else:
