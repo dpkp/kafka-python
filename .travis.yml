@@ -1,27 +1,35 @@
 language: python
+
 python:
-- 2.6
-- 2.7
-- pypy
+    - 2.6
+    - 2.7
+    - pypy
+
 env:
-- 
-- KAFKA_VERSION=0.8.0
-- KAFKA_VERSION=0.8.1
-- KAFKA_VERSION=0.8.1.1
+    - 
+    - KAFKA_VERSION=0.8.0
+    - KAFKA_VERSION=0.8.1
+    - KAFKA_VERSION=0.8.1.1
+
 before_install:
-- sudo apt-get install libsnappy-dev
-- "./build_integration.sh"
+    - sudo apt-get install libsnappy-dev
+    - ./build_integration.sh
+
 install:
-- pip install tox
-- pip install .
-- sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
+    - pip install tox
+    - pip install .
+    # Deal with issue on Travis builders re: multiprocessing.Queue :(
+    # See https://github.com/travis-ci/travis-cookbooks/issues/155
+    - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
+
 script:
-- tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+    - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+
 deploy:
-  provider: pypi
-  user: tkuhlman-travis
-  password:
-    secure: P09RAtc/hIaa/yYYg/BpacBJv6gvkJZloyDD5el3b8mV3tdXw1/hHvUizqXVGrSoO9QR/rM/XubApO4Q5dfW9hrLJwV9y/If2ldD4+GO2CYPuRsE7urQuePmDTD2rYw+dvPX7vv5vKivLrFYzqnP2NEJ0ylSRdWZaY0uuJJl4g8=
-  on:
-    tags: true
-    all_branches: true
+    provider: pypi
+    user: tkuhlman-travis
+    password:
+        secure: P09RAtc/hIaa/yYYg/BpacBJv6gvkJZloyDD5el3b8mV3tdXw1/hHvUizqXVGrSoO9QR/rM/XubApO4Q5dfW9hrLJwV9y/If2ldD4+GO2CYPuRsE7urQuePmDTD2rYw+dvPX7vv5vKivLrFYzqnP2NEJ0ylSRdWZaY0uuJJl4g8=
+    on:
+        tags: true
+        all_branches: true
