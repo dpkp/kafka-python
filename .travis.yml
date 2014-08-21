@@ -21,3 +21,19 @@ script:
     - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
     - KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
     - KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+
+branches:
+  only:
+      - master
+      - /^release-.*$/
+
+deploy:
+    provider: pypi
+    user: mumrah
+    password:
+        secure: VR3fZ1I4mz87KXxin57Xa38ubSlDUYsKmKgtr9TXKv7cj8+vBqCgYOTiBga+hfZuRXdQOf7NO8GPtiYRTjeSZuhqMifD1xSftdr2uFWGgJQtjq/m+WG2A04PSRnhVc+jjamYVgxErOwrs/5t162BZKbGBN+f3vO8imyQvy0omnA=
+    server: https://testpypi.python.org/pypi
+    on:
+        tags: true
+        all_branches: true
+        condition: "$TRAVIS_BRANCH =~ ^release-.*$"
