@@ -1,12 +1,15 @@
-install: 
-- pip install tox
-- pip install .
-- sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
-language: python
 python: 
 - 2.6
 - 2.7
 - pypy
+script: 
+- tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+- KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+- KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+install: 
+- pip install tox
+- pip install .
+- sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 before_install: 
 - git submodule update --init --recursive
 - sudo apt-get install libsnappy-dev
@@ -17,10 +20,7 @@ deploy:
     all_branches: true
   server: https://testpypi.python.org/pypi
   password: 
-    secure: bpyMiaz/PX10iqONMJgpZqiOwU53GN43n3zgosVhkZSVbWRP+6NsQ/xQTZE2kbUZUBMYu7QQm/3LtZVJlTrHWq29uNyJ5dBWwX92hd/MWm29RS6o63uVWk++woRuoN2FooTQ1nREnnPJmj7/T3ERUb1SkZoqBUx7sLfe2Br5ebk=
+    secure: fk4xTxCkKkJQelZ1OxeWNZ2L04UPT0EoEPfm1dV8SLnG6OJEiMNFZXOlcM9BGqV+yzCFo0/+h/pdVvpw38wYa7xo7yJ1AxcMkRECSwGqSUTDtN14+dQ3wVPRY4O/LGRfiQe9oD8pomF4x8fIl8+cdnyHsEoUD/zKOX0xz+YaSSc=
   user: mumrah
   provider: pypi
-script: 
-- tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
-- KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
-- KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+language: python
