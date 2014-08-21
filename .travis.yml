@@ -24,3 +24,8 @@ install:
 
 script:
     - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+
+branches:
+  only:
+    - master
+    - /^release-.*$/
