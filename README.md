@@ -9,9 +9,11 @@ is also supported for message sets.
 
 http://kafka.apache.org/
 
+On Freenode at #kafka-python, as well as #apache-kafka
+
 # License
 
-Copyright 2013, David Arthur under Apache License, v2.0. See `LICENSE`
+Copyright 2014, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
