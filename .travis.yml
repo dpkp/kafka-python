@@ -14,7 +14,6 @@ before_install:
 deploy: 
   password: 
     secure: aePP1MX2yK46MB2qrRxRenuocZe3/KdP5Xw4woTeQoGL1lNkL2OWWFy8KlAwdELUCk/DlE7+xgu6VZWCX8WBl0Ke2jYS3GWUS1kYIrXtHqIeW8yG/Mx9o9kgUDtPvYKhfN3ElOqH/E621NyNkiVCkKqJGf+4NLbKVU+oL8Vkm9A=
-  server: https://pypi.python.org/pypi
   provider: pypi
   on: 
     tags: true
