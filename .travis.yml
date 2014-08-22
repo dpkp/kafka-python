@@ -2,6 +2,19 @@ install:
 - pip install tox
 - pip install .
 - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
+python: 
+- 2.6
+- 2.7
+- pypy
+deploy: 
+  server: https://testpypi.python.org/pypi
+  on: 
+    tags: true
+    all_branches: true
+  password: 
+    secure: TIZNKxktOm42/LHLDCuKuPqmAfYKekyHL4MqEFpnqDI5T5sHzG9IQaOwppYfQNggHiILUBzk1j6w/FPJunJyd62AFtydkKtIccqENIIAio78afeCRMQDynstNXjDefmt0s90xLGSlLzDMxCEWB4F6frEtPl/8KpNSFB2fvj+HXY=
+  user: mumrah
+  provider: pypi
 script: 
 - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
 - KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
@@ -11,16 +24,3 @@ before_install:
 - git submodule update --init --recursive
 - sudo apt-get install libsnappy-dev
 - ./build_integration.sh
-deploy: 
-  user: mumrah
-  password: 
-    secure: "Ey5iHeOa/TSuUmGKR5Vc93Y9tT6QLrFYnPzLo/d5XoQCA+CzqDV/CwRqsHkLm/56sAzNpnOOVB/XIAuZHB9ZgcxkNuuYMtYsDcWuDj+XocEZsDraeyZrMerJ5663gT2u059uQGtEZYy5FbXF7lRElkm5/b39lT3P8uQyeauAUSI="
-  server: https://testpypi.python.org/pypi
-  provider: pypi
-  on: 
-    tags: true
-    all_branches: true
-python: 
-- 2.6
-- 2.7
-- pypy
