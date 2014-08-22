@@ -5,6 +5,7 @@ from setuptools import setup, Command
 with open('VERSION', 'r') as v:
     __version__ = v.read().rstrip()
 
+
 class Tox(Command):
 
     user_options = []
@@ -15,7 +16,8 @@ class Tox(Command):
     def finalize_options(self):
         pass
 
-    def run(self):
+    @classmethod
+    def run(cls):
         import tox
         sys.exit(tox.cmdline([]))
 
@@ -24,7 +26,7 @@ setup(
     name="kafka-python",
     version=__version__,
 
-    tests_require=["tox", "mock"],
+    tests_require=["tox", "mock", "unittest2"],
     cmdclass={"test": Tox},
 
     packages=["kafka"],
