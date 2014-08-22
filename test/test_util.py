@@ -16,6 +16,14 @@ class UtilTest(unittest2.TestCase):
             '\x00\x00\x00\x0bsome string'
         )
 
+    def test_write_int_string__unicode(self):
+        with self.assertRaises(TypeError) as cm:
+            kafka.util.write_int_string(u'unicode')
+        #: :type: TypeError
+        te = cm.exception
+        self.assertIn('unicode', te.message)
+        self.assertIn('to be str', te.message)
+
     def test_write_int_string__empty(self):
         self.assertEqual(
             kafka.util.write_int_string(''),
@@ -42,6 +50,14 @@ class UtilTest(unittest2.TestCase):
             kafka.util.write_short_string('some string'),
             '\x00\x0bsome string'
         )
+
+    def test_write_short_string__unicode(self):
+        with self.assertRaises(TypeError) as cm:
+            kafka.util.write_short_string(u'hello')
+        #: :type: TypeError
+        te = cm.exception
+        self.assertIn('unicode', te.message)
+        self.assertIn('to be str', te.message)
 
     def test_write_short_string__empty(self):
         self.assertEqual(
