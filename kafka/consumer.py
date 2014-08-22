@@ -100,20 +100,8 @@ class Consumer(object):
                                                self.commit)
             self.commit_timer.start()
 
-        def get_or_init_offset_callback(resp):
-            try:
-                kafka.common.check_error(resp)
-                return resp.offset
-            except kafka.common.UnknownTopicOrPartitionError:
-                return 0
-
         if auto_commit:
-            for partition in partitions:
-                req = OffsetFetchRequest(topic, partition)
-                (offset,) = self.client.send_offset_fetch_request(group, [req],
-                              callback=get_or_init_offset_callback,
-                              fail_on_error=False)
-                self.offsets[partition] = offset
+            self.offsets = self.get_offsets(partitions)
         else:
             for partition in partitions:
                 self.offsets[partition] = 0
@@ -155,6 +143,31 @@ class Consumer(object):
                 kafka.common.check_error(resp)
 
             self.count_since_commit = 0
+
+    def get_offsets(self, partitions=None):
+        """
+        Fetch offsets for the specified partitions or all partitions. Default offset to 0 if not found.
+        Returns a dictionary with partition as key and the offset as value
+        """
+        offsets = {}
+        if partitions is None:
+            partitions = self.client.topic_partitions[self.topic]
+
+        def get_or_init_offset_callback(resp):
+            try:
+                kafka.common.check_error(resp)
+                return resp.offset
+            except kafka.common.UnknownTopicOrPartitionError:
+                return 0
+
+        for partition in partitions:
+            req = OffsetFetchRequest(self.topic, partition)
+            (offset,) = self.client.send_offset_fetch_request(self.group, [req],
+                                                              callback=get_or_init_offset_callback,
+                                                              fail_on_error=False)
+            offsets[partition] = offset
+
+        return offsets
 
     def _auto_commit(self):
         """
@@ -450,6 +463,7 @@ class SimpleConsumer(Consumer):
                     # Stop iterating through this partition
                     log.debug("Done iterating over partition %s" % partition)
                 partitions = retry_partitions
+
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
     """
