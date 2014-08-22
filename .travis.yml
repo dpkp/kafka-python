@@ -19,7 +19,7 @@ deploy:
   user: mumrah
   password: 
     secure: XMpVNYK2hnf2zA71iFZFvxmsFBnQWNzHx9MSDby1KjFIFh4gMmp4nShGmHtFDX24+A5IY3bdSrWSVvlOqvnkdAxPkSqG6au1ypT7TMBvI8kWmcpnQFACrULD+AHJDVuSeaAK3oHmsQwYE5EMz6zxYxmtMAIGFmhZXg+8SNjTpg0=
-  server: https://testpypi.python.org
+  server: https://testpypi.python.org/pypi
 script: 
 - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
 - KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
