@@ -14,7 +14,7 @@ before_install:
 deploy: 
   user: mumrah
   password: 
-    secure: Q8I7eCXohFcfxi7Qdgr7Nx0MBKlFx8ZjOitZA+AFv0juu3nOviIX8P2kx+VdbJwfnHDEhCipG7rwx+M8lkARj8ZJ6nMqP7BjOaksFZyq+LNn0wo0g7YcDBPt5EYp2MlYc2BxhQOvU9N/p26PrvD1bgbLBXa/lF0Ram5OUcjK/yU= 
+    secure: "Nz4SiWjQixMmneeit/rvQVFM+pFeZ8CKE6YEqpstzeZgx4lvOBVnrh4bgpDxjBl0e2tyZnNrBiPOh5XV9mq48WAIgA1BhHcQVsyUgEAGCRtYqrftfNWpYokssH4FshM+X+oBsvoiDvpFvEVhq4F0YldwlyBuUl2V+nJdd+CCcNU="
   server: https://testpypi.python.org/pypi
   provider: pypi
   on: 
