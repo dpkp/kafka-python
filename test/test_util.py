@@ -1,9 +1,9 @@
-import os
-import random
+# -*- coding: utf-8 -*-
 import struct
 import unittest2
 import kafka.util
 import kafka.common
+
 
 class UtilTest(unittest2.TestCase):
     @unittest2.skip("Unwritten")
@@ -64,20 +64,19 @@ class UtilTest(unittest2.TestCase):
         self.assertEqual(kafka.util.read_short_string('\x00\x00', 0), ('', 2))
         self.assertEqual(kafka.util.read_short_string('\x00\x0bsome string', 0), ('some string', 13))
 
-    def test_read_int_string__insufficient_data(self):
+    def test_read_int_string__insufficient_data2(self):
         with self.assertRaises(kafka.common.BufferUnderflowError):
             kafka.util.read_int_string('\x00\x021', 0)
 
-    def test_relative_unpack(self):
+    def test_relative_unpack2(self):
         self.assertEqual(
             kafka.util.relative_unpack('>hh', '\x00\x01\x00\x00\x02', 0),
             ((1, 0), 4)
         )
 
-    def test_relative_unpack(self):
+    def test_relative_unpack3(self):
         with self.assertRaises(kafka.common.BufferUnderflowError):
             kafka.util.relative_unpack('>hh', '\x00', 0)
-
 
     def test_group_by_topic_and_partition(self):
         t = kafka.common.TopicAndPartition
@@ -91,12 +90,12 @@ class UtilTest(unittest2.TestCase):
         ]
 
         self.assertEqual(kafka.util.group_by_topic_and_partition(l), {
-            "a" : {
-                1 : t("a", 1),
-                2 : t("a", 2),
-                3 : t("a", 3),
+            "a": {
+                1: t("a", 1),
+                2: t("a", 2),
+                3: t("a", 3),
             },
-            "b" : {
-                3 : t("b", 3),
+            "b": {
+                3: t("b", 3),
             }
         })
