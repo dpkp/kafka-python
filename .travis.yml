@@ -36,3 +36,12 @@ deploy:
 
 script:
     - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+
+deploy:
+    provider: pypi
+    user: tkuhlman-travis
+    password:
+        secure: P09RAtc/hIaa/yYYg/BpacBJv6gvkJZloyDD5el3b8mV3tdXw1/hHvUizqXVGrSoO9QR/rM/XubApO4Q5dfW9hrLJwV9y/If2ldD4+GO2CYPuRsE7urQuePmDTD2rYw+dvPX7vv5vKivLrFYzqnP2NEJ0ylSRdWZaY0uuJJl4g8=
+    on:
+        tags: true
+        all_branches: true
