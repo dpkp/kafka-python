@@ -8,8 +8,8 @@ import kafka.common
 
 from kafka.common import (TopicAndPartition,
                           ConnectionError, FailedPayloadsError,
-                          PartitionUnavailableError,
-                          LeaderUnavailableError, KafkaUnavailableError,
+                          PartitionUnavailableError, LeaderUnavailableError, KafkaUnavailableError,
+                          KafkaTimeoutError,
                           UnknownTopicOrPartitionError, NotLeaderForPartitionError)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
@@ -219,7 +219,7 @@ class KafkaClient(object):
         self.load_metadata_for_topics(topic)
         while not self.has_metadata_for_topic(topic):
             if time.time() > start_time + timeout:
-                raise KafkaTimeoutError("Unable to create topic {}".format(topic))
+                raise KafkaTimeoutError("Unable to create topic {0}".format(topic))
             self.load_metadata_for_topics(topic)
             time.sleep(.5)
 

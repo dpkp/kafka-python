@@ -135,6 +135,10 @@ class KafkaUnavailableError(KafkaError):
     pass
 
 
+class KafkaTimeoutError(KafkaError):
+    pass
+
+
 class LeaderUnavailableError(KafkaError):
     pass
 
