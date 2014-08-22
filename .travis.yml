@@ -1,11 +1,8 @@
+language: python
 python: 
 - 2.6
 - 2.7
 - pypy
-script: 
-- tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
-- KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
-- KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
 install: 
 - pip install tox
 - pip install .
@@ -16,11 +13,14 @@ before_install:
 - ./build_integration.sh
 deploy: 
   on: 
-    tags: true
     all_branches: true
-  server: https://testpypi.python.org/pypi
-  password: 
-    secure: fk4xTxCkKkJQelZ1OxeWNZ2L04UPT0EoEPfm1dV8SLnG6OJEiMNFZXOlcM9BGqV+yzCFo0/+h/pdVvpw38wYa7xo7yJ1AxcMkRECSwGqSUTDtN14+dQ3wVPRY4O/LGRfiQe9oD8pomF4x8fIl8+cdnyHsEoUD/zKOX0xz+YaSSc=
-  user: mumrah
+    tags: true
   provider: pypi
-language: python
+  user: mumrah
+  password: 
+    secure: XMpVNYK2hnf2zA71iFZFvxmsFBnQWNzHx9MSDby1KjFIFh4gMmp4nShGmHtFDX24+A5IY3bdSrWSVvlOqvnkdAxPkSqG6au1ypT7TMBvI8kWmcpnQFACrULD+AHJDVuSeaAK3oHmsQwYE5EMz6zxYxmtMAIGFmhZXg+8SNjTpg0=
+  server: https://testpypi.python.org
+script: 
+- tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+- KAFKA_VERSION=0.8.0 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
+- KAFKA_VERSION=0.8.1 tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
