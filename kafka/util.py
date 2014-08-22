@@ -16,7 +16,7 @@ def write_int_string(s):
 def write_short_string(s):
     if s is None:
         return struct.pack('>h', -1)
-    elif len(s) > 32767 and sys.version < (2,7):
+    elif len(s) > 32767 and sys.version < (2, 7):
         # Python 2.6 issues a deprecation warning instead of a struct error
         raise struct.error(len(s))
     else:
@@ -117,4 +117,5 @@ class ReentrantTimer(object):
 
         self.active.set()
         self.thread.join(self.t + 1)
+        # noinspection PyAttributeOutsideInit
         self.timer = None
