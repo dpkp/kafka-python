@@ -22,10 +22,17 @@ install:
     # See https://github.com/travis-ci/travis-cookbooks/issues/155
     - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
+deploy:
+  provider: pypi
+  server: https://pypi.python.org/pypi
+  user: mumrah
+  password:
+    secure: TIZNKxktOm42/LHLDCuKuPqmAfYKekyHL4MqEFpnqDI5T5sHzG9IQaOwppYfQNggHiILUBzk1j6w/FPJunJyd62AFtydkKtIccqENIIAio78afeCRMQDynstNXjDefmt0s90xLGSlLzDMxCEWB4F6frEtPl/8KpNSFB2fvj+HXY=
+  on:
+    tags: true
+    all_branches: true
+    # TODO replace all_branches with "branch: master" after https://github.com/travis-ci/travis-ci/issues/1675 is fixed
+    # branch: master
+
 script:
     - tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`
-
-branches:
-  only:
-    - master
-    - /^release-.*$/

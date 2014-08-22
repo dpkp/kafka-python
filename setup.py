@@ -32,12 +32,20 @@ setup(
     author="David Arthur",
     author_email="mumrah@gmail.com",
     url="https://github.com/mumrah/kafka-python",
-    license="Copyright 2012, David Arthur under Apache License, v2.0",
+    license="Apache License 2.0",
     description="Pure Python client for Apache Kafka",
     long_description="""
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
-"""
+""",
+    keywords="apache kafka",
+    classifiers = [
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: Apache Software License",
+        "Programming Language :: Python",
+        "Topic :: Software Development :: Libraries :: Python Modules"
+    ]
 )
