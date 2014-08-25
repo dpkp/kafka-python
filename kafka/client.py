@@ -187,7 +187,7 @@ class KafkaClient(object):
     def _raise_on_response_error(self, resp):
         try:
             kafka.common.check_error(resp)
-        except (UnknownTopicOrPartitionError, NotLeaderForPartitionError) as e:
+        except (UnknownTopicOrPartitionError, NotLeaderForPartitionError):
             self.reset_topic_metadata(resp.topic)
             raise
 

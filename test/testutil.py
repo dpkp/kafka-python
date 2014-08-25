@@ -48,6 +48,7 @@ def get_open_port():
 class KafkaIntegrationTestCase(unittest2.TestCase):
     create_client = True
     topic = None
+    server = None
 
     def setUp(self):
         super(KafkaIntegrationTestCase, self).setUp()

@@ -24,13 +24,13 @@ class ConnTest(unittest2.TestCase):
         self.addCleanup(patcher.stop)
 
         # Also mock socket.sendall() to appear successful
-        socket.create_connection().sendall.return_value = None
+        self.MockCreateConn().sendall.return_value = None
 
         # And mock socket.recv() to return two payloads, then '', then raise
         # Note that this currently ignores the num_bytes parameter to sock.recv()
         payload_size = len(self.config['payload'])
         payload2_size = len(self.config['payload2'])
-        socket.create_connection().recv.side_effect = [
+        self.MockCreateConn().recv.side_effect = [
             struct.pack('>i', payload_size),
             struct.pack('>%ds' % payload_size, self.config['payload']),
             struct.pack('>i', payload2_size),
@@ -42,7 +42,7 @@ class ConnTest(unittest2.TestCase):
         self.conn = KafkaConnection(self.config['host'], self.config['port'])
         
         # Reset any mock counts caused by __init__
-        socket.create_connection.reset_mock()
+        self.MockCreateConn.reset_mock()
 
     def test_collect_hosts__happy_path(self):
         hosts = "localhost:1234,localhost"
@@ -81,7 +81,7 @@ class ConnTest(unittest2.TestCase):
 
     def test_init_creates_socket_connection(self):
         KafkaConnection(self.config['host'], self.config['port'])
-        socket.create_connection.assert_called_with((self.config['host'], self.config['port']), DEFAULT_SOCKET_TIMEOUT_SECONDS)
+        self.MockCreateConn.assert_called_with((self.config['host'], self.config['port']), DEFAULT_SOCKET_TIMEOUT_SECONDS)
 
     def test_init_failure_raises_connection_error(self):
 
@@ -102,9 +102,9 @@ class ConnTest(unittest2.TestCase):
             pass
 
         # Now test that sending attempts to reconnect
-        self.assertEqual(socket.create_connection.call_count, 0)
+        self.assertEqual(self.MockCreateConn.call_count, 0)
         self.conn.send(self.config['request_id'], self.config['payload'])
-        self.assertEqual(socket.create_connection.call_count, 1)
+        self.assertEqual(self.MockCreateConn.call_count, 1)
 
     def test_send__failure_sets_dirty_connection(self):
 
@@ -131,9 +131,9 @@ class ConnTest(unittest2.TestCase):
             pass
 
         # Now test that recv'ing attempts to reconnect
-        self.assertEqual(socket.create_connection.call_count, 0)
+        self.assertEqual(self.MockCreateConn.call_count, 0)
         self.conn.recv(self.config['request_id'])
-        self.assertEqual(socket.create_connection.call_count, 1)
+        self.assertEqual(self.MockCreateConn.call_count, 1)
 
     def test_recv__failure_sets_dirty_connection(self):
 
@@ -160,5 +160,5 @@ class ConnTest(unittest2.TestCase):
         # will re-connect and send data to the socket
         self.conn.close()
         self.conn.send(self.config['request_id'], self.config['payload'])
-        self.assertEqual(socket.create_connection.call_count, 1)
+        self.assertEqual(self.MockCreateConn.call_count, 1)
         self.conn._sock.sendall.assert_called_with(self.config['payload'])

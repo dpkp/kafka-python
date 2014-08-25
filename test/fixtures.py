@@ -1,5 +1,4 @@
 import logging
-import glob
 import os
 import os.path
 import shutil
@@ -9,8 +8,8 @@ import urllib2
 import uuid
 
 from urlparse import urlparse
-from service import ExternalService, SpawnedService
-from testutil import get_open_port
+from test.service import ExternalService, SpawnedService
+from test.testutil import get_open_port
 
 class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.8.0')
@@ -36,23 +35,23 @@ class Fixture(object):
         output_file = os.path.join(output_dir, distfile + '.tgz')
 
         if os.path.isfile(output_file):
-            logging.info("Found file already on disk: %s" % output_file)
+            logging.info("Found file already on disk: %s", output_file)
             return output_file
 
         # New tarballs are .tgz, older ones are sometimes .tar.gz
         try:
             url = url_base + distfile + '.tgz'
-            logging.info("Attempting to download %s" % (url,))
+            logging.info("Attempting to download %s", url)
             response = urllib2.urlopen(url)
         except urllib2.HTTPError:
             logging.exception("HTTP Error")
             url = url_base + distfile + '.tar.gz'
-            logging.info("Attempting to download %s" % (url,))
+            logging.info("Attempting to download %s", url)
             response = urllib2.urlopen(url)
 
-        logging.info("Saving distribution file to %s" % (output_file,))
-        with open(os.path.join(output_dir, distfile + '.tgz'), 'w') as f:
-            f.write(response.read())
+        logging.info("Saving distribution file to %s", output_file)
+        with open(output_file, 'w') as output_file_fd:
+            output_file_fd.write(response.read())
 
         return output_file
 
@@ -117,11 +116,9 @@ class ZookeeperFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Zookeeper child process
-        self.child = SpawnedService(args=self.kafka_run_class_args(
-            "org.apache.zookeeper.server.quorum.QuorumPeerMain",
-            properties),
-            env=self.kafka_run_class_env()
-        )
+        args = self.kafka_run_class_args("org.apache.zookeeper.server.quorum.QuorumPeerMain", properties)
+        env = self.kafka_run_class_env()
+        self.child = SpawnedService(args, env)
 
         # Party!
         self.out("Starting...")
@@ -162,7 +159,7 @@ class KafkaFixture(Fixture):
         self.zk_port = zk_port
         self.zk_chroot = zk_chroot
 
-        self.replicas   = replicas
+        self.replicas = replicas
         self.partitions = partitions
 
         self.tmp_dir = None
@@ -199,21 +196,19 @@ class KafkaFixture(Fixture):
         self.render_template(template, properties, vars(self))
 
         # Configure Kafka child process
-        self.child = SpawnedService(args=self.kafka_run_class_args(
-            "kafka.Kafka", properties),
-            env=self.kafka_run_class_env()
-        )
+        args = self.kafka_run_class_args("kafka.Kafka", properties)
+        env = self.kafka_run_class_env()
+        self.child = SpawnedService(args, env)
 
         # Party!
         self.out("Creating Zookeeper chroot node...")
-        proc = subprocess.Popen(self.kafka_run_class_args(
-                "org.apache.zookeeper.ZooKeeperMain",
-                "-server", "%s:%d" % (self.zk_host, self.zk_port),
-                "create", "/%s" % self.zk_chroot, "kafka-python"
-            ),
-            env=self.kafka_run_class_env(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        args = self.kafka_run_class_args("org.apache.zookeeper.ZooKeeperMain",
+                                         "-server", "%s:%d" % (self.zk_host, self.zk_port),
+                                         "create",
+                                         "/%s" % self.zk_chroot,
+                                         "kafka-python")
+        env = self.kafka_run_class_env()
+        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if proc.wait() != 0:
             self.out("Failed to create Zookeeper chroot node")
