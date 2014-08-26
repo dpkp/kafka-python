@@ -197,8 +197,8 @@ kafka_errors = {
 }
 
 
-def check_error(response):
+def check_error(response, request=None):
     error = kafka_errors.get(response.error)
     if error:
-        raise error(response)
+        raise error((response, request))
 
