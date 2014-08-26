@@ -150,10 +150,8 @@ class Consumer(object):
                 reqs.append(OffsetCommitRequest(self.topic, partition,
                                                 offset, None))
 
-            resps = self.client.send_offset_commit_request(self.group, reqs)
-            for resp in resps:
-                kafka.common.check_error(resp)
-
+            resps = self.client.send_offset_commit_request(self.group, reqs,
+                                                           fail_on_error=True)
             self.count_since_commit = 0
 
     def _auto_commit(self):
@@ -188,7 +186,7 @@ class Consumer(object):
         for partition in partitions:
             reqs.append(OffsetRequest(self.topic, partition, -1, 1))
 
-        resps = self.client.send_offset_request(reqs)
+        resps = self.client.send_offset_request(reqs, fail_on_error=True)
         for resp in resps:
             partition = resp.partition
             pending = resp.offsets[0]
@@ -297,7 +295,7 @@ class SimpleConsumer(Consumer):
                 else:
                     pass
 
-            resps = self.client.send_offset_request(reqs)
+            resps = self.client.send_offset_request(reqs, fail_on_error=True)
             for resp in resps:
                 self.offsets[resp.partition] = \
                     resp.offsets[0] + deltas[resp.partition]
@@ -419,6 +417,7 @@ class SimpleConsumer(Consumer):
             # Send request
             responses = self.client.send_fetch_request(
                 requests,
+                fail_on_error=True,
                 max_wait_time=int(self.fetch_max_wait_time),
                 min_bytes=self.fetch_min_bytes)
 

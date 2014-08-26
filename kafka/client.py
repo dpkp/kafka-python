@@ -184,9 +184,9 @@ class KafkaClient(object):
     def __repr__(self):
         return '<KafkaClient client_id=%s>' % (self.client_id)
 
-    def _raise_on_response_error(self, resp):
+    def _raise_on_response_error(self, resp, req=None):
         try:
-            kafka.common.check_error(resp)
+            kafka.common.check_error(resp, request=req)
         except (UnknownTopicOrPartitionError, NotLeaderForPartitionError) as e:
             self.reset_topic_metadata(resp.topic)
             raise
@@ -312,9 +312,9 @@ class KafkaClient(object):
         resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
-        for resp in resps:
+        for i, resp in enumerate(resps):
             if fail_on_error is True:
-                self._raise_on_response_error(resp)
+                self._raise_on_response_error(resp, req=payloads[i])
 
             if callback is not None:
                 out.append(callback(resp))
@@ -340,9 +340,9 @@ class KafkaClient(object):
             KafkaProtocol.decode_fetch_response)
 
         out = []
-        for resp in resps:
+        for i, resp in enumerate(resps):
             if fail_on_error is True:
-                self._raise_on_response_error(resp)
+                self._raise_on_response_error(resp, req=payloads[i])
 
             if callback is not None:
                 out.append(callback(resp))
@@ -358,9 +358,9 @@ class KafkaClient(object):
             KafkaProtocol.decode_offset_response)
 
         out = []
-        for resp in resps:
+        for i, resp in enumerate(resps):
             if fail_on_error is True:
-                self._raise_on_response_error(resp)
+                self._raise_on_response_error(resp, req=payloads[i])
             if callback is not None:
                 out.append(callback(resp))
             else:
@@ -375,9 +375,9 @@ class KafkaClient(object):
         resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
-        for resp in resps:
+        for i, resp in enumerate(resps):
             if fail_on_error is True:
-                self._raise_on_response_error(resp)
+                self._raise_on_response_error(resp, req=payloads[i])
 
             if callback is not None:
                 out.append(callback(resp))
@@ -394,9 +394,9 @@ class KafkaClient(object):
         resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         out = []
-        for resp in resps:
+        for i, resp in enumerate(resps):
             if fail_on_error is True:
-                self._raise_on_response_error(resp)
+                self._raise_on_response_error(resp, req=payloads[i])
             if callback is not None:
                 out.append(callback(resp))
             else:
