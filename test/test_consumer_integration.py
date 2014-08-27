@@ -240,6 +240,25 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer1.stop()
         consumer2.stop()
 
+    # TODO: Make this a unit test -- should not require integration
+    @kafka_versions("all")
+    def test_fetch_buffer_size(self):
+
+        # Test parameters (see issue 135 / PR 136)
+        TEST_MESSAGE_SIZE=1048
+        INIT_BUFFER_SIZE=1024
+        MAX_BUFFER_SIZE=2048
+        assert TEST_MESSAGE_SIZE > INIT_BUFFER_SIZE
+        assert TEST_MESSAGE_SIZE < MAX_BUFFER_SIZE
+        assert MAX_BUFFER_SIZE == 2 * INIT_BUFFER_SIZE
+
+        self.send_messages(0, [ "x" * 1048 ])
+        self.send_messages(1, [ "x" * 1048 ])
+
+        consumer = self.consumer(buffer_size=1024, max_buffer_size=2048)
+        messages = [ message for message in consumer ]
+        self.assertEquals(len(messages), 2)
+
     def consumer(self, **kwargs):
         if os.environ['KAFKA_VERSION'] == "0.8.0":
             # Kafka 0.8.0 simply doesn't support offset requests, so hard code it being off
