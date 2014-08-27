@@ -9,7 +9,10 @@ is also supported for message sets.
 
 http://kafka.apache.org/
 
-On Freenode at #kafka-python, as well as #apache-kafka
+On Freenode IRC at #kafka-python, as well as #apache-kafka
+
+For general discussion of kafka-client design and implementation (not python specific),
+see https://groups.google.com/forum/m/#!forum/kafka-clients
 
 # License
 
