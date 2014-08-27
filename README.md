@@ -42,8 +42,13 @@ kafka = KafkaClient("localhost:9092")
 
 # To send messages synchronously
 producer = SimpleProducer(kafka)
+
+# Note that the application is responsible for encoding messages to type str
 producer.send_messages("my-topic", "some message")
 producer.send_messages("my-topic", "this method", "is variadic")
+
+# Send unicode message
+producer.send_messages("my-topic", u'你怎么样?'.encode('utf-8'))
 
 # To send messages asynchronously
 producer = SimpleProducer(kafka, async=True)
@@ -78,6 +83,8 @@ producer = SimpleProducer(kafka, batch_send=True,
 # To consume messages
 consumer = SimpleConsumer(kafka, "my-group", "my-topic")
 for message in consumer:
+    # message is raw byte string -- decode if necessary!
+    # e.g., for unicode: `message.decode('utf-8')`
     print(message)
 
 kafka.close()

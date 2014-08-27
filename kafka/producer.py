@@ -148,7 +148,28 @@ class Producer(object):
     def send_messages(self, topic, partition, *msg):
         """
         Helper method to send produce requests
+        @param: topic, name of topic for produce request -- type str
+        @param: partition, partition number for produce request -- type int
+        @param: *msg, one or more message payloads -- type str
+        @returns: ResponseRequest returned by server
+        raises on error
+
+        Note that msg type *must* be encoded to str by user.
+        Passing unicode message will not work, for example
+        you should encode before calling send_messages via
+        something like `unicode_message.encode('utf-8')`
+
+        All messages produced via this method will set the message 'key' to Null
         """
+
+        # Guarantee that msg is actually a list or tuple (should always be true)
+        if not isinstance(msg, (list, tuple)):
+            raise TypeError("msg is not a list or tuple!")
+
+        # Raise TypeError if any message is not encoded as a str
+        if any(not isinstance(m, str) for m in msg):
+            raise TypeError("all produce message payloads must be type str")
+
         if self.async:
             for m in msg:
                 self.queue.put((TopicAndPartition(topic, partition), m))
