@@ -74,7 +74,8 @@ class TestFailover(KafkaIntegrationTestCase):
         self._send_random_messages(producer, topic, partition, 10)
 
         # count number of messages
-        count = self._count_messages('test_switch_leader group', topic, partition)
+        count = self._count_messages('test_switch_leader group', topic,
+                                     partitions=(partition,))
 
         # Should be equal to 10 before + 1 recovery + 10 after
         self.assertEquals(count, 21)
@@ -108,7 +109,8 @@ class TestFailover(KafkaIntegrationTestCase):
         producer.stop()
 
         # count number of messages
-        count = self._count_messages('test_switch_leader_async group', topic, partition)
+        count = self._count_messages('test_switch_leader_async group', topic,
+                                     partitions=(partition,))
 
         # Should be equal to 10 before + 1 recovery + 10 after
         self.assertEquals(count, 21)
@@ -128,18 +130,17 @@ class TestFailover(KafkaIntegrationTestCase):
         broker.close()
         return broker
 
-    def _count_messages(self, group, topic, timeout=1):
+    def _count_messages(self, group, topic, timeout=1, partitions=None):
         hosts = ','.join(['%s:%d' % (broker.host, broker.port)
                           for broker in self.brokers])
 
         client = KafkaClient(hosts)
         consumer = SimpleConsumer(client, group, topic,
+                                  partitions=partitions,
                                   auto_commit=False,
                                   iter_timeout=timeout)
 
-        all_messages = []
-        for message in consumer:
-            all_messages.append(message)
+        count = consumer.pending(partitions)
         consumer.stop()
         client.close()
-        return len(all_messages)
+        return count
