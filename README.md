@@ -20,7 +20,7 @@ Copyright 2014, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-The current version of this package is **0.9.1** and is compatible with
+The current version of this package is **0.9.2** and is compatible with
 
 Kafka broker versions
 - 0.8.0
