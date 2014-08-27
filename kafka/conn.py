@@ -93,8 +93,8 @@ class KafkaConnection(local):
                 # that the socket is in error.  we will never get
                 # more data from this socket
                 if data == '':
-                    raise socket.error('Not enough data to read message -- did server kill socket?')
-                
+                    raise socket.error("Not enough data to read message -- did server kill socket?")
+
             except socket.error:
                 log.exception('Unable to receive data from Kafka')
                 self._raise_connection_error()
@@ -170,7 +170,7 @@ class KafkaConnection(local):
             except socket.error:
                 pass
 
-            # Closing the socket should always succeed 
+            # Closing the socket should always succeed
             self._sock.close()
             self._sock = None
         else:

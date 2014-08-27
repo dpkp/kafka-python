@@ -1,13 +1,11 @@
 import os
-import random
 import socket
-import time
 import unittest2
 
 import kafka
 from kafka.common import *
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import *
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod
@@ -34,7 +32,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
         with Timer() as t:
             with self.assertRaises((socket.timeout, socket.error)):
-                conn = kafka.conn.KafkaConnection("localhost", server_port, 1.0)
+                kafka.conn.KafkaConnection("localhost", server_port, 1.0)
         self.assertGreaterEqual(t.interval, 1.0)
 
     @kafka_versions("all")

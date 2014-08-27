@@ -1,6 +1,3 @@
-import os
-import random
-import struct
 import unittest2
 
 from mock import MagicMock, patch
@@ -11,9 +8,7 @@ from kafka.common import (
     TopicAndPartition, KafkaUnavailableError,
     LeaderUnavailableError, PartitionUnavailableError
 )
-from kafka.protocol import (
-    create_message, KafkaProtocol
-)
+from kafka.protocol import create_message
 
 class TestKafkaClient(unittest2.TestCase):
     def test_init_with_list(self):

@@ -2,7 +2,6 @@ import logging
 import re
 import select
 import subprocess
-import sys
 import threading
 import time
 
@@ -14,7 +13,7 @@ __all__ = [
 
 class ExternalService(object):
     def __init__(self, host, port):
-        print("Using already running service at %s:%d" % (host, port))
+        logging.info("Using already running service at %s:%d", host, port)
         self.host = host
         self.port = port
 
@@ -26,9 +25,11 @@ class ExternalService(object):
 
 
 class SpawnedService(threading.Thread):
-    def __init__(self, args=[], env=None):
+    def __init__(self, args=None, env=None):
         threading.Thread.__init__(self)
 
+        if args is None:
+            raise TypeError("args parameter is required")
         self.args = args
         self.env = env
         self.captured_stdout = []
@@ -49,7 +50,7 @@ class SpawnedService(threading.Thread):
         alive = True
 
         while True:
-            (rds, wds, xds) = select.select([self.child.stdout, self.child.stderr], [], [], 1)
+            (rds, _, _) = select.select([self.child.stdout, self.child.stderr], [], [], 1)
 
             if self.child.stdout in rds:
                 line = self.child.stdout.readline()
