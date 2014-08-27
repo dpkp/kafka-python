@@ -51,6 +51,8 @@ producer.send_messages("my-topic", "this method", "is variadic")
 producer.send_messages("my-topic", u'你怎么样?'.encode('utf-8'))
 
 # To send messages asynchronously
+# WARNING: current implementation does not guarantee message delivery on failure!
+# messages can get dropped! Use at your own risk! Or help us improve with a PR!
 producer = SimpleProducer(kafka, async=True)
 producer.send_messages("my-topic", "async message")
 
@@ -63,7 +65,7 @@ producer = SimpleProducer(kafka, async=False,
                           req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
                           ack_timeout=2000)
 
-response = producer.send_messages("my-topic", "async message")
+response = producer.send_messages("my-topic", "another message")
 
 if response:
     print(response[0].error)

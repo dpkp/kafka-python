@@ -87,6 +87,9 @@ class Producer(object):
     client - The Kafka client instance to use
     async - If set to true, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
+            WARNING!!! current implementation of async producer does not
+            guarantee message delivery.  Use at your own risk! Or help us
+            improve with a PR!
     req_acks - A value indicating the acknowledgements that the server must
                receive before responding to the request
     ack_timeout - Value (in milliseconds) indicating a timeout for waiting
@@ -131,6 +134,9 @@ class Producer(object):
         self.codec = codec
 
         if self.async:
+            log.warning("async producer does not guarantee message delivery!")
+            log.warning("Current implementation does not retry Failed messages")
+            log.warning("Use at your own risk! (or help improve with a PR!)")
             self.queue = Queue()  # Messages are sent through this queue
             self.proc = Process(target=_send_upstream,
                                 args=(self.queue,
