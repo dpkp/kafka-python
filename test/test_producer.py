@@ -4,14 +4,14 @@ import logging
 import os
 import random
 import struct
-import unittest2
+from . import unittest
 
 from mock import MagicMock, patch
 
 from kafka import KafkaClient
 from kafka.producer import Producer
 
-class TestKafkaProducer(unittest2.TestCase):
+class TestKafkaProducer(unittest.TestCase):
     def test_producer_message_types(self):
 
         producer = Producer(MagicMock())

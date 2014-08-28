@@ -2,12 +2,12 @@ import socket
 import struct
 
 import mock
-import unittest2
+from . import unittest
 
 from kafka.common import *
 from kafka.conn import *
 
-class ConnTest(unittest2.TestCase):
+class ConnTest(unittest.TestCase):
     def setUp(self):
         self.config = {
             'host': 'localhost',

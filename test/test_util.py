@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import struct
-import unittest2
 import kafka.util
 import kafka.common
 
+from . import unittest
 
-class UtilTest(unittest2.TestCase):
-    @unittest2.skip("Unwritten")
+
+class UtilTest(unittest.TestCase):
+    @unittest.skip("Unwritten")
     def test_relative_unpack(self):
         pass
 

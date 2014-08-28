@@ -1,7 +1,7 @@
 import contextlib
 from contextlib import contextmanager
 import struct
-import unittest2
+from . import unittest
 
 import mock
 from mock import sentinel
@@ -27,7 +27,7 @@ from kafka.protocol import (
     create_message_set
 )
 
-class TestProtocol(unittest2.TestCase):
+class TestProtocol(unittest.TestCase):
     def test_create_message(self):
         payload = "test"
         key = "key"
@@ -65,7 +65,7 @@ class TestProtocol(unittest2.TestCase):
 
         self.assertEqual(decoded, expect)
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_create_snappy(self):
         payloads = ["v1", "v2"]
         msg = create_snappy_message(payloads)
@@ -222,7 +222,7 @@ class TestProtocol(unittest2.TestCase):
         self.assertEqual(returned_offset2, 0)
         self.assertEqual(decoded_message2, create_message("v2"))
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_decode_message_snappy(self):
         snappy_encoded = ('\xec\x80\xa1\x95\x00\x02\xff\xff\xff\xff\x00\x00'
                           '\x00,8\x00\x00\x19\x01@\x10L\x9f[\xc2\x00\x00\xff'

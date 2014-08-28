@@ -1,5 +1,5 @@
 import struct
-import unittest2
+from . import unittest
 
 from kafka.codec import (
     has_snappy, gzip_encode, gzip_decode,
@@ -10,21 +10,21 @@ from kafka.protocol import (
 )
 from testutil import *
 
-class TestCodec(unittest2.TestCase):
+class TestCodec(unittest.TestCase):
     def test_gzip(self):
         for i in xrange(1000):
             s1 = random_string(100)
             s2 = gzip_decode(gzip_encode(s1))
             self.assertEquals(s1, s2)
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy(self):
         for i in xrange(1000):
             s1 = random_string(100)
             s2 = snappy_decode(snappy_encode(s1))
             self.assertEquals(s1, s2)
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_detect_xerial(self):
         import kafka as kafka1
         _detect_xerial_stream = kafka1.codec._detect_xerial_stream
@@ -41,7 +41,7 @@ class TestCodec(unittest2.TestCase):
         self.assertFalse(_detect_xerial_stream(random_snappy))
         self.assertFalse(_detect_xerial_stream(short_data))
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_decode_xerial(self):
         header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01'
         random_snappy = snappy_encode('SNAPPY' * 50)
@@ -55,7 +55,7 @@ class TestCodec(unittest2.TestCase):
 
         self.assertEquals(snappy_decode(to_test), ('SNAPPY' * 50) + ('XERIAL' * 50))
 
-    @unittest2.skipUnless(has_snappy(), "Snappy not available")
+    @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_encode_xerial(self):
         to_ensure = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01' + \
             '\x00\x00\x00\x18' + \

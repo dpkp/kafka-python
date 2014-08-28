@@ -1,6 +1,6 @@
 import os
 import socket
-import unittest2
+from . import unittest
 
 import kafka
 from kafka.common import *
@@ -24,7 +24,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         cls.server.close()
         cls.zk.close()
 
-    @unittest2.skip("This doesn't appear to work on Linux?")
+    @unittest.skip("This doesn't appear to work on Linux?")
     def test_timeout(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_port = get_open_port()
