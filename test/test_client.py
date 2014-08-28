@@ -1,4 +1,4 @@
-import unittest2
+from . import unittest
 
 from mock import MagicMock, patch
 
@@ -10,7 +10,7 @@ from kafka.common import (
 )
 from kafka.protocol import create_message
 
-class TestKafkaClient(unittest2.TestCase):
+class TestKafkaClient(unittest.TestCase):
     def test_init_with_list(self):
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])
