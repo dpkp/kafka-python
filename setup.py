@@ -48,6 +48,7 @@ protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 """,
     keywords="apache kafka",
+    install_requires=['six'],
     classifiers = [
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

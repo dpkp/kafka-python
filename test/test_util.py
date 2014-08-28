@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import struct
+
+import six
+
 import kafka.util
 import kafka.common
 
@@ -13,8 +16,8 @@ class UtilTest(unittest.TestCase):
 
     def test_write_int_string(self):
         self.assertEqual(
-            kafka.util.write_int_string('some string'),
-            '\x00\x00\x00\x0bsome string'
+            kafka.util.write_int_string(b'some string'),
+            b'\x00\x00\x00\x0bsome string'
         )
 
     def test_write_int_string__unicode(self):
@@ -22,34 +25,37 @@ class UtilTest(unittest.TestCase):
             kafka.util.write_int_string(u'unicode')
         #: :type: TypeError
         te = cm.exception
-        self.assertIn('unicode', te.message)
-        self.assertIn('to be str', te.message)
+        if six.PY2:
+            self.assertIn('unicode', str(te))
+        else:
+            self.assertIn('str', str(te))
+        self.assertIn('to be bytes', str(te))
 
     def test_write_int_string__empty(self):
         self.assertEqual(
-            kafka.util.write_int_string(''),
-            '\x00\x00\x00\x00'
+            kafka.util.write_int_string(b''),
+            b'\x00\x00\x00\x00'
         )
 
     def test_write_int_string__null(self):
         self.assertEqual(
             kafka.util.write_int_string(None),
-            '\xff\xff\xff\xff'
+            b'\xff\xff\xff\xff'
         )
 
     def test_read_int_string(self):
-        self.assertEqual(kafka.util.read_int_string('\xff\xff\xff\xff', 0), (None, 4))
-        self.assertEqual(kafka.util.read_int_string('\x00\x00\x00\x00', 0), ('', 4))
-        self.assertEqual(kafka.util.read_int_string('\x00\x00\x00\x0bsome string', 0), ('some string', 15))
+        self.assertEqual(kafka.util.read_int_string(b'\xff\xff\xff\xff', 0), (None, 4))
+        self.assertEqual(kafka.util.read_int_string(b'\x00\x00\x00\x00', 0), (b'', 4))
+        self.assertEqual(kafka.util.read_int_string(b'\x00\x00\x00\x0bsome string', 0), (b'some string', 15))
 
     def test_read_int_string__insufficient_data(self):
         with self.assertRaises(kafka.common.BufferUnderflowError):
-            kafka.util.read_int_string('\x00\x00\x00\x021', 0)
+            kafka.util.read_int_string(b'\x00\x00\x00\x021', 0)
 
     def test_write_short_string(self):
         self.assertEqual(
-            kafka.util.write_short_string('some string'),
-            '\x00\x0bsome string'
+            kafka.util.write_short_string(b'some string'),
+            b'\x00\x0bsome string'
         )
 
     def test_write_short_string__unicode(self):
@@ -57,29 +63,32 @@ class UtilTest(unittest.TestCase):
             kafka.util.write_short_string(u'hello')
         #: :type: TypeError
         te = cm.exception
-        self.assertIn('unicode', te.message)
-        self.assertIn('to be str', te.message)
+        if six.PY2:
+            self.assertIn('unicode', str(te))
+        else:
+            self.assertIn('str', str(te))
+        self.assertIn('to be bytes', str(te))
 
     def test_write_short_string__empty(self):
         self.assertEqual(
-            kafka.util.write_short_string(''),
-            '\x00\x00'
+            kafka.util.write_short_string(b''),
+            b'\x00\x00'
         )
 
     def test_write_short_string__null(self):
         self.assertEqual(
             kafka.util.write_short_string(None),
-            '\xff\xff'
+            b'\xff\xff'
         )
 
     def test_write_short_string__too_long(self):
         with self.assertRaises(struct.error):
-            kafka.util.write_short_string(' ' * 33000)
+            kafka.util.write_short_string(b' ' * 33000)
 
     def test_read_short_string(self):
-        self.assertEqual(kafka.util.read_short_string('\xff\xff', 0), (None, 2))
-        self.assertEqual(kafka.util.read_short_string('\x00\x00', 0), ('', 2))
-        self.assertEqual(kafka.util.read_short_string('\x00\x0bsome string', 0), ('some string', 13))
+        self.assertEqual(kafka.util.read_short_string(b'\xff\xff', 0), (None, 2))
+        self.assertEqual(kafka.util.read_short_string(b'\x00\x00', 0), (b'', 2))
+        self.assertEqual(kafka.util.read_short_string(b'\x00\x0bsome string', 0), (b'some string', 13))
 
     def test_read_int_string__insufficient_data2(self):
         with self.assertRaises(kafka.common.BufferUnderflowError):
@@ -87,7 +96,7 @@ class UtilTest(unittest.TestCase):
 
     def test_relative_unpack2(self):
         self.assertEqual(
-            kafka.util.relative_unpack('>hh', '\x00\x01\x00\x00\x02', 0),
+            kafka.util.relative_unpack('>hh', b'\x00\x01\x00\x00\x02', 0),
             ((1, 0), 4)
         )
 

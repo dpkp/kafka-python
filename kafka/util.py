@@ -1,14 +1,30 @@
 import collections
 import struct
 import sys
+import zlib
 from threading import Thread, Event
+
+import six
 
 from kafka.common import BufferUnderflowError
 
 
+def crc32(data):
+    """
+    Python 2 returns a value in the range [-2**31, 2**31-1].
+    Python 3 returns a value in the range [0, 2**32-1].
+
+    We want a consistent behavior so let's use python2's.
+    """
+    crc = zlib.crc32(data)
+    if six.PY3 and crc > 2**31:
+        crc -= 2 ** 32
+    return crc
+
+
 def write_int_string(s):
-    if s is not None and not isinstance(s, str):
-        raise TypeError('Expected "%s" to be str\n'
+    if s is not None and not isinstance(s, six.binary_type):
+        raise TypeError('Expected "%s" to be bytes\n'
                         'data=%s' % (type(s), repr(s)))
     if s is None:
         return struct.pack('>i', -1)
@@ -17,12 +33,12 @@ def write_int_string(s):
 
 
 def write_short_string(s):
-    if s is not None and not isinstance(s, str):
-        raise TypeError('Expected "%s" to be str\n'
+    if s is not None and not isinstance(s, six.binary_type):
+        raise TypeError('Expected "%s" to be bytes\n'
                         'data=%s' % (type(s), repr(s)))
     if s is None:
         return struct.pack('>h', -1)
-    elif len(s) > 32767 and sys.version < (2, 7):
+    elif len(s) > 32767 and sys.version_info < (2, 7):
         # Python 2.6 issues a deprecation warning instead of a struct error
         raise struct.error(len(s))
     else:

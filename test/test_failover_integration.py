@@ -6,8 +6,8 @@ from . import unittest
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.producer import Producer
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from .fixtures import ZookeeperFixture, KafkaFixture
+from .testutil import *
 
 
 class TestFailover(KafkaIntegrationTestCase):
