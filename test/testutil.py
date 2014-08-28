@@ -64,7 +64,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         if self.create_client:
             self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
 
-        self.client.ensure_topic_exists(self.topic)
+        self.client.ensure_topic_exists(self.topic.encode('utf-8'))
 
         self._messages = {}
 
