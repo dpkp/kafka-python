@@ -54,7 +54,7 @@ class SpawnedService(threading.Thread):
 
             if self.child.stdout in rds:
                 line = self.child.stdout.readline()
-                self.captured_stdout.append(line)
+                self.captured_stdout.append(line.decode('utf-8'))
 
             if self.child.stderr in rds:
                 line = self.child.stderr.readline()
