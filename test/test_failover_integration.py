@@ -6,8 +6,8 @@ from . import unittest
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.producer import Producer
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from .fixtures import ZookeeperFixture, KafkaFixture
+from .testutil import *
 
 
 class TestFailover(KafkaIntegrationTestCase):
@@ -63,7 +63,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, 'success')
                 logging.debug("success!")
                 recovered = True
-            except FailedPayloadsError, ConnectionError:
+            except (FailedPayloadsError, ConnectionError):
                 logging.debug("caught exception sending message -- will retry")
                 continue
 

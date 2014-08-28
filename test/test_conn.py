@@ -13,8 +13,8 @@ class ConnTest(unittest.TestCase):
             'host': 'localhost',
             'port': 9090,
             'request_id': 0,
-            'payload': 'test data',
-            'payload2': 'another packet'
+            'payload': b'test data',
+            'payload2': b'another packet'
         }
 
         # Mocking socket.create_connection will cause _sock to always be a
@@ -35,12 +35,12 @@ class ConnTest(unittest.TestCase):
             struct.pack('>%ds' % payload_size, self.config['payload']),
             struct.pack('>i', payload2_size),
             struct.pack('>%ds' % payload2_size, self.config['payload2']),
-            ''
+            b''
         ]
 
         # Create a connection object
         self.conn = KafkaConnection(self.config['host'], self.config['port'])
-        
+
         # Reset any mock counts caused by __init__
         self.MockCreateConn.reset_mock()
 

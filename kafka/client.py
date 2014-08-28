@@ -81,7 +81,7 @@ class KafkaClient(object):
         """
         Generate a new correlation id
         """
-        return KafkaClient.ID_GEN.next()
+        return next(KafkaClient.ID_GEN)
 
     def _send_broker_unaware_request(self, requestId, request):
         """

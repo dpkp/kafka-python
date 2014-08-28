@@ -7,6 +7,8 @@ import string
 import time
 import uuid
 
+from six.moves import xrange
+
 from . import unittest
 
 from kafka.common import OffsetRequest
@@ -21,8 +23,8 @@ __all__ = [
 ]
 
 def random_string(l):
-    s = "".join(random.choice(string.letters) for i in xrange(l))
-    return s
+    s = "".join(random.choice(string.ascii_letters) for i in xrange(l))
+    return s.encode('utf-8')
 
 def kafka_versions(*versions):
     def kafka_versions(func):
