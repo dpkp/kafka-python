@@ -20,7 +20,7 @@ log = logging.getLogger("kafka")
 
 class KafkaClient(object):
 
-    CLIENT_ID = "kafka-python"
+    CLIENT_ID = b"kafka-python"
     ID_GEN = itertools.count()
 
     # NOTE: The timeout given to the client should always be greater than the
