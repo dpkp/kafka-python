@@ -9,7 +9,7 @@ from .fixtures import ZookeeperFixture, KafkaFixture
 from .testutil import *
 
 class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
-    topic = 'produce_topic'
+    topic = b'produce_topic'
 
     @classmethod
     def setUpClass(cls):  # noqa
