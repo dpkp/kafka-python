@@ -88,7 +88,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         if s not in self._messages:
             self._messages[s] = '%s-%s-%s' % (s, self.id(), str(uuid.uuid4()))
 
-        return self._messages[s]
+        return self._messages[s].encode('utf-8')
 
 class Timer(object):
     def __enter__(self):

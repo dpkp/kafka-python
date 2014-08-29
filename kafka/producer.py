@@ -180,7 +180,7 @@ class Producer(object):
 
         # Raise TypeError if any message is not encoded as bytes
         if any(not isinstance(m, six.binary_type) for m in msg):
-            raise TypeError("all produce message payloads must be type str")
+            raise TypeError("all produce message payloads must be type bytes")
 
         if self.async:
             for m in msg:
