@@ -15,7 +15,7 @@ class TestKafkaProducer(unittest.TestCase):
     def test_producer_message_types(self):
 
         producer = Producer(MagicMock())
-        topic = "test-topic"
+        topic = b"test-topic"
         partition = 0
 
         bad_data_types = (u'你怎么样?', 12, ['a', 'list'], ('a', 'tuple'), {'a': 'dict'})
