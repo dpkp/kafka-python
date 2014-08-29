@@ -63,7 +63,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, 'success')
                 logging.debug("success!")
                 recovered = True
-            except FailedPayloadsError, ConnectionError:
+            except (FailedPayloadsError, ConnectionError):
                 logging.debug("caught exception sending message -- will retry")
                 continue
 
