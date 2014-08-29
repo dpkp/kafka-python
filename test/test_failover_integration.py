@@ -60,7 +60,7 @@ class TestFailover(KafkaIntegrationTestCase):
         while not recovered and (time.time() - started) < timeout:
             try:
                 logging.debug("attempting to send 'success' message after leader killed")
-                producer.send_messages(topic, partition, 'success')
+                producer.send_messages(topic, partition, b'success')
                 logging.debug("success!")
                 recovered = True
             except (FailedPayloadsError, ConnectionError):
