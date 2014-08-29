@@ -258,9 +258,9 @@ class SimpleProducer(Producer):
             if self.random_start:
                 num_partitions = len(self.client.topic_partitions[topic])
                 for _ in xrange(random.randint(0, num_partitions-1)):
-                    self.partition_cycles[topic].next()
+                    next(self.partition_cycles[topic])
 
-        return self.partition_cycles[topic].next()
+        return next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
         partition = self._next_partition(topic)
