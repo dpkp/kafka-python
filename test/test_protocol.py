@@ -108,7 +108,6 @@ class TestProtocol(unittest.TestCase):
     def test_encode_message(self):
         message = create_message(b"test", b"key")
         encoded = KafkaProtocol._encode_message(message)
-        print("CRC", -1427009701)
         expect = b"".join([
             struct.pack(">i", -1427009701), # CRC
             struct.pack(">bb", 0, 0),       # Magic, flags

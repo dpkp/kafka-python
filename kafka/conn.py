@@ -155,6 +155,10 @@ class KafkaConnection(local):
         return a new KafkaConnection object
         """
         c = copy.deepcopy(self)
+        # Python 3 doesn't copy custom attributes of the threadlocal subclass
+        c.host = copy.copy(self.host)
+        c.port = copy.copy(self.port)
+        c.timeout = copy.copy(self.timeout)
         c._sock = None
         return c
 
