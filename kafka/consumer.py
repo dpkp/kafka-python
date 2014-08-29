@@ -10,6 +10,8 @@ import numbers
 from threading import Lock
 from multiprocessing import Process, Queue as MPQueue, Event, Value
 
+import six
+
 try:
     from Queue import Empty, Queue
 except ImportError:  # python 2
@@ -427,7 +429,7 @@ class SimpleConsumer(Consumer):
                       for p in self.fetch_offsets.keys())
         while partitions:
             requests = []
-            for partition, buffer_size in partitions.iteritems():
+            for partition, buffer_size in six.iteritems(partitions):
                 requests.append(FetchRequest(self.topic, partition,
                                              self.fetch_offsets[partition],
                                              buffer_size))
