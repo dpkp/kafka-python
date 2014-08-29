@@ -59,7 +59,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
             return
 
         if not self.topic:
-            self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
+            self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10).decode('utf-8'))
 
         if self.create_client:
             self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
