@@ -200,7 +200,7 @@ class Consumer(object):
             partition = resp.partition
             pending = resp.offsets[0]
             offset = self.offsets[partition]
-            total += pending - offset - (1 if offset > 0 else 0)
+            total += pending - offset
 
         return total
 
