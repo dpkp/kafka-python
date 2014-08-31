@@ -2,11 +2,18 @@ import os
 import time
 import uuid
 
-from kafka import *  # noqa
-from kafka.common import *  # noqa
+from kafka import (
+    SimpleProducer, KeyedProducer,
+    create_message, create_gzip_message, create_snappy_message,
+    RoundRobinPartitioner, HashedPartitioner
+)
+from kafka.common import (
+    FetchRequest, ProduceRequest, UnknownTopicOrPartitionError
+)
 from kafka.codec import has_gzip, has_snappy
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import KafkaIntegrationTestCase, kafka_versions
 
 class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
     topic = 'produce_topic'

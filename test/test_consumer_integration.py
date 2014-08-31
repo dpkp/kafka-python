@@ -1,11 +1,14 @@
-import os
 from datetime import datetime
+import os
 
-from kafka import *  # noqa
-from kafka.common import *  # noqa
+from kafka import SimpleConsumer, MultiProcessConsumer, create_message
+from kafka.common import ProduceRequest, ConsumerFetchSizeTooSmall
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import (
+    KafkaIntegrationTestCase, kafka_versions, random_string, Timer
+)
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):
     @classmethod

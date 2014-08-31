@@ -4,8 +4,9 @@ import unittest2
 
 import kafka
 from kafka.common import *
-from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import *
+
+from .fixtures import ZookeeperFixture, KafkaFixture
+from .testutil import *
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod

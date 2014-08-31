@@ -1,10 +1,8 @@
-import contextlib
-from contextlib import contextmanager
+from contextlib import contextmanager, nested
 import struct
-import unittest2
 
-import mock
-from mock import sentinel
+import unittest2
+from mock import patch, sentinel
 
 from kafka import KafkaClient
 from kafka.common import (
@@ -701,12 +699,12 @@ class TestProtocol(unittest2.TestCase):
 
     @contextmanager
     def mock_create_message_fns(self):
-        patches = contextlib.nested(
-            mock.patch.object(kafka.protocol, "create_message",
+        patches = nested(
+            patch.object(kafka.protocol, "create_message",
                               return_value=sentinel.message),
-            mock.patch.object(kafka.protocol, "create_gzip_message",
+            patch.object(kafka.protocol, "create_gzip_message",
                               return_value=sentinel.gzip_message),
-            mock.patch.object(kafka.protocol, "create_snappy_message",
+            patch.object(kafka.protocol, "create_snappy_message",
                               return_value=sentinel.snappy_message),
         )
 

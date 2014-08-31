@@ -3,11 +3,14 @@ import os
 import time
 import unittest2
 
-from kafka import *  # noqa
-from kafka.common import *  # noqa
+from kafka import KafkaClient, SimpleConsumer
+from kafka.common import TopicAndPartition, FailedPayloadsError
 from kafka.producer import Producer
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import (
+    KafkaIntegrationTestCase, kafka_versions, random_string
+)
 
 
 class TestFailover(KafkaIntegrationTestCase):

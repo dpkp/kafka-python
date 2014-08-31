@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import struct
+
 import unittest2
+
 import kafka.util
 import kafka.common
 
