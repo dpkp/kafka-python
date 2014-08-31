@@ -217,8 +217,21 @@ pip install python-snappy
 tox
 ```
 
-## Run a single unit test
+## Run a subset of unit tests
 ```shell
+# run protocol tests only
+tox -- -v test.test_protocol
+```
+
+```shell
+# test with pypy only
+tox -e pypy
+```
+
+```shell
+# Run only 1 test, and use python 2.7
+tox -e py27 -- -v --with-id --collect-only
+# pick a test number from the list like #102
 tox -e py27 -- -v --with-id 102
 ```
 
@@ -239,11 +252,11 @@ and optionally set SCALA_VERSION (defaults to 2.8.0, but 2.10.1 is recommended)
 SCALA_VERSION=2.10.1 KAFKA_VERSION=trunk ./build_integration.sh
 ```
 
-Then run the tests against supported Kafka versions:
+Then run the tests against supported Kafka versions, simply set the `KAFKA_VERSION`
+env variable to the server build you want to use for testing:
 ```shell
 KAFKA_VERSION=0.8.0 tox
 KAFKA_VERSION=0.8.1 tox
 KAFKA_VERSION=0.8.1.1 tox
 KAFKA_VERSION=trunk tox
 ```
-
