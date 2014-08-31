@@ -37,13 +37,10 @@ Python versions
 ## High level
 
 ```python
-from kafka.client import KafkaClient
-from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer, KeyedProducer
-
-kafka = KafkaClient("localhost:9092")
+from kafka import KafkaClient, SimpleProducer, SimpleConsumer
 
 # To send messages synchronously
+kafka = KafkaClient("localhost:9092")
 producer = SimpleProducer(kafka)
 
 # Note that the application is responsible for encoding messages to type str
@@ -97,9 +94,7 @@ kafka.close()
 
 ## Keyed messages
 ```python
-from kafka.client import KafkaClient
-from kafka.producer import KeyedProducer
-from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
+from kafka import KafkaClient, KeyedProducer, HashedPartitioner, RoundRobinPartitioner
 
 kafka = KafkaClient("localhost:9092")
 
@@ -113,8 +108,7 @@ producer = KeyedProducer(kafka, partitioner=RoundRobinPartitioner)
 
 ## Multiprocess consumer
 ```python
-from kafka.client import KafkaClient
-from kafka.consumer import MultiProcessConsumer
+from kafka import KafkaClient, MultiProcessConsumer
 
 kafka = KafkaClient("localhost:9092")
 
@@ -135,10 +129,13 @@ for message in consumer.get_messages(count=5, block=True, timeout=4):
 ## Low level
 
 ```python
-from kafka.client import KafkaClient
+from kafka import KafkaClient
+from kafka.protocol import KafkaProtocol, ProduceRequest
+
 kafka = KafkaClient("localhost:9092")
+
 req = ProduceRequest(topic="my-topic", partition=1,
-    messages=[KafkaProdocol.encode_message("some message")])
+    messages=[KafkaProtocol.encode_message("some message")])
 resps = kafka.send_produce_request(payloads=[req], fail_on_error=True)
 kafka.close()
 
