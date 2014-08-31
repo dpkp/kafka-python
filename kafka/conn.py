@@ -1,8 +1,8 @@
 import copy
 import logging
+from random import shuffle
 import socket
 import struct
-from random import shuffle
 from threading import local
 
 from kafka.common import ConnectionError
