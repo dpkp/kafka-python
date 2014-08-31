@@ -156,11 +156,11 @@ class Producer(object):
         Helper method to send produce requests
         @param: topic, name of topic for produce request -- type str
         @param: partition, partition number for produce request -- type int
-        @param: *msg, one or more message payloads -- type str
+        @param: *msg, one or more message payloads -- type bytes
         @returns: ResponseRequest returned by server
         raises on error
 
-        Note that msg type *must* be encoded to str by user.
+        Note that msg type *must* be encoded to bytes by user.
         Passing unicode message will not work, for example
         you should encode before calling send_messages via
         something like `unicode_message.encode('utf-8')`
@@ -172,9 +172,9 @@ class Producer(object):
         if not isinstance(msg, (list, tuple)):
             raise TypeError("msg is not a list or tuple!")
 
-        # Raise TypeError if any message is not encoded as a str
-        if any(not isinstance(m, str) for m in msg):
-            raise TypeError("all produce message payloads must be type str")
+        # Raise TypeError if any message is not encoded as bytes
+        if any(not isinstance(m, bytes) for m in msg):
+            raise TypeError("all produce message payloads must be type bytes")
 
         if self.async:
             for m in msg:
