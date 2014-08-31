@@ -149,8 +149,17 @@ resps[0].offset     # offset of the first message sent in this request
 
 Install with your favorite package manager
 
+## Latest Release
 Pip:
 
+```shell
+pip install kafka-python
+```
+
+Releases are also listed at https://github.com/mumrah/kafka-python/releases
+
+
+## Bleeding-Edge
 ```shell
 git clone https://github.com/mumrah/kafka-python
 pip install ./kafka-python
