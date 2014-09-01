@@ -200,6 +200,24 @@ class KafkaClient(object):
     #################
     #   Public API  #
     #################
+    def close(self):
+        for conn in self.conns.values():
+            conn.close()
+
+    def copy(self):
+        """
+        Create an inactive copy of the client object
+        A reinit() has to be done on the copy before it can be used again
+        """
+        c = copy.deepcopy(self)
+        for k, v in c.conns.items():
+            c.conns[k] = v.copy()
+        return c
+
+    def reinit(self):
+        for conn in self.conns.values():
+            conn.reinit()
+
     def reset_topic_metadata(self, *topics):
         for topic in topics:
             try:
@@ -228,24 +246,6 @@ class KafkaClient(object):
                 raise KafkaTimeoutError("Unable to create topic {0}".format(topic))
             self.load_metadata_for_topics(topic)
             time.sleep(.5)
-
-    def close(self):
-        for conn in self.conns.values():
-            conn.close()
-
-    def copy(self):
-        """
-        Create an inactive copy of the client object
-        A reinit() has to be done on the copy before it can be used again
-        """
-        c = copy.deepcopy(self)
-        for k, v in c.conns.items():
-            c.conns[k] = v.copy()
-        return c
-
-    def reinit(self):
-        for conn in self.conns.values():
-            conn.reinit()
 
     def load_metadata_for_topics(self, *topics):
         """
