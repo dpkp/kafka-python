@@ -82,7 +82,7 @@ class Consumer(object):
         self.offsets = {}
 
         if not partitions:
-            partitions = self.client.topic_partitions[topic]
+            partitions = self.client.get_partition_ids_for_topic(topic)
         else:
             assert all(isinstance(x, numbers.Integral) for x in partitions)
 
@@ -108,7 +108,7 @@ class Consumer(object):
 
     def fetch_last_known_offsets(self, partitions=None):
         if not partitions:
-            partitions = self.client.topic_partitions[self.topic]
+            partitions = self.client.get_partition_ids_for_topic(self.topic)
 
         def get_or_init_offset_callback(resp):
             try:
