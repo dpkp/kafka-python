@@ -257,6 +257,10 @@ class KafkaClient(object):
                 self.load_metadata_for_topics(topic)
             except LeaderNotAvailableError:
                 pass
+            except UnknownTopicOrPartitionError:
+                # Server is not configured to auto-create
+                # retrying in this case will not help
+                raise
             time.sleep(.5)
 
     def load_metadata_for_topics(self, *topics):
