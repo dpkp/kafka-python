@@ -76,6 +76,9 @@ class KafkaError(RuntimeError):
 class BrokerResponseError(KafkaError):
     pass
 
+class NoError(BrokerResponseError):
+    errno = 0
+    message = 'SUCCESS'
 
 class UnknownError(BrokerResponseError):
     errno = -1
@@ -197,6 +200,7 @@ class UnsupportedCodecError(KafkaError):
 
 kafka_errors = {
     -1 : UnknownError,
+    0  : NoError,
     1  : OffsetOutOfRangeError,
     2  : InvalidMessageError,
     3  : UnknownTopicOrPartitionError,
@@ -214,7 +218,7 @@ kafka_errors = {
 
 
 def check_error(response):
-    error = kafka_errors.get(response.error)
-    if error:
+    error = kafka_errors.get(response.error, UnknownError)
+    if error is not NoError:
         raise error(response)
 
