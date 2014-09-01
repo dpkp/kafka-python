@@ -17,7 +17,13 @@ OffsetRequest = namedtuple("OffsetRequest",
 OffsetCommitRequest = namedtuple("OffsetCommitRequest",
                                  ["topic", "partition", "offset", "metadata"])
 
+MetadataRequest = namedtuple("MetadataRequest",
+    ["topics"])
+
 OffsetFetchRequest = namedtuple("OffsetFetchRequest", ["topic", "partition"])
+
+MetadataResponse = namedtuple("MetadataResponse",
+    ["brokers", "topics"])
 
 # Response payloads
 ProduceResponse = namedtuple("ProduceResponse",
@@ -36,16 +42,26 @@ OffsetFetchResponse = namedtuple("OffsetFetchResponse",
                                  ["topic", "partition", "offset",
                                   "metadata", "error"])
 
-BrokerMetadata = namedtuple("BrokerMetadata", ["nodeId", "host", "port"])
 
-PartitionMetadata = namedtuple("PartitionMetadata",
-                               ["topic", "partition", "leader",
-                                "replicas", "isr"])
 
 # Other useful structs
-OffsetAndMessage = namedtuple("OffsetAndMessage", ["offset", "message"])
-Message = namedtuple("Message", ["magic", "attributes", "key", "value"])
-TopicAndPartition = namedtuple("TopicAndPartition", ["topic", "partition"])
+BrokerMetadata = namedtuple("BrokerMetadata",
+    ["nodeId", "host", "port"])
+
+TopicMetadata = namedtuple("TopicMetadata",
+    ["topic", "error", "partitions"])
+
+PartitionMetadata = namedtuple("PartitionMetadata",
+    ["topic", "partition", "leader", "replicas", "isr", "error"])
+
+OffsetAndMessage = namedtuple("OffsetAndMessage",
+    ["offset", "message"])
+
+Message = namedtuple("Message",
+    ["magic", "attributes", "key", "value"])
+
+TopicAndPartition = namedtuple("TopicAndPartition",
+    ["topic", "partition"])
 
 
 #################
