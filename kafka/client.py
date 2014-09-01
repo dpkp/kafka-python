@@ -8,8 +8,8 @@ import kafka.common
 
 from kafka.common import (TopicAndPartition, BrokerMetadata,
                           ConnectionError, FailedPayloadsError,
-                          PartitionUnavailableError, LeaderUnavailableError, KafkaUnavailableError,
-                          KafkaTimeoutError,
+                          PartitionUnavailableError, LeaderNotAvailableError,
+                          KafkaUnavailableError, KafkaTimeoutError,
                           UnknownTopicOrPartitionError, NotLeaderForPartitionError)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
@@ -136,7 +136,7 @@ class KafkaClient(object):
             leader = self._get_leader_for_partition(payload.topic,
                                                     payload.partition)
             if leader is None:
-                raise LeaderUnavailableError(
+                raise LeaderNotAvailableError(
                     "Leader not available for topic %s partition %s" %
                     (payload.topic, payload.partition))
 

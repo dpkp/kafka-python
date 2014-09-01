@@ -7,7 +7,7 @@ from kafka.common import (
     ProduceRequest, MetadataResponse,
     BrokerMetadata, TopicMetadata, PartitionMetadata,
     TopicAndPartition, KafkaUnavailableError,
-    LeaderUnavailableError, PartitionUnavailableError
+    LeaderNotAvailableError, PartitionUnavailableError
 )
 from kafka.protocol import create_message
 
@@ -261,6 +261,6 @@ class TestKafkaClient(unittest2.TestCase):
             "topic_noleader", 0,
             [create_message("a"), create_message("b")])]
 
-        with self.assertRaises(LeaderUnavailableError):
+        with self.assertRaises(LeaderNotAvailableError):
             client.send_produce_request(requests)
 

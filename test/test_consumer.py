@@ -9,8 +9,7 @@ from kafka import KafkaClient
 from kafka.consumer import SimpleConsumer
 from kafka.common import (
     ProduceRequest, BrokerMetadata, PartitionMetadata,
-    TopicAndPartition, KafkaUnavailableError,
-    LeaderUnavailableError, PartitionUnavailableError
+    TopicAndPartition, PartitionUnavailableError
 )
 from kafka.protocol import (
     create_message, KafkaProtocol

@@ -158,10 +158,6 @@ class KafkaTimeoutError(KafkaError):
     pass
 
 
-class LeaderUnavailableError(KafkaError):
-    pass
-
-
 class PartitionUnavailableError(KafkaError):
     pass
 
