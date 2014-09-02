@@ -7,7 +7,7 @@ from kafka.common import (
     ProduceRequest, MetadataResponse,
     BrokerMetadata, TopicMetadata, PartitionMetadata,
     TopicAndPartition, KafkaUnavailableError,
-    LeaderNotAvailableError, PartitionUnavailableError, NoError,
+    LeaderNotAvailableError, NoError,
     UnknownTopicOrPartitionError
 )
 from kafka.protocol import create_message
@@ -191,7 +191,6 @@ class TestKafkaClient(unittest2.TestCase):
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_for_unassigned_partitions(self, protocol, conn):
-        "Get leader raises if no partitions is defined for a topic"
 
         conn.recv.return_value = 'response'  # anything but None
 
@@ -201,7 +200,8 @@ class TestKafkaClient(unittest2.TestCase):
         ]
 
         topics = [
-            TopicMetadata('topic_no_partitions', NO_ERROR, [])
+            TopicMetadata('topic_no_partitions', NO_LEADER, []),
+            TopicMetadata('topic_unknown', UNKNOWN_TOPIC_OR_PARTITION, []),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
 
@@ -209,13 +209,15 @@ class TestKafkaClient(unittest2.TestCase):
 
         self.assertDictEqual({}, client.topics_to_brokers)
 
-        with self.assertRaises(PartitionUnavailableError):
+        with self.assertRaises(LeaderNotAvailableError):
             client._get_leader_for_partition('topic_no_partitions', 0)
+
+        with self.assertRaises(UnknownTopicOrPartitionError):
+            client._get_leader_for_partition('topic_unknown', 0)
 
     @patch('kafka.client.KafkaConnection')
     @patch('kafka.client.KafkaProtocol')
-    def test_get_leader_returns_none_when_noleader(self, protocol, conn):
-        "Getting leader for partitions returns None when the partiion has no leader"
+    def test_get_leader_exceptions_when_noleader(self, protocol, conn):
 
         conn.recv.return_value = 'response'  # anything but None
 
@@ -241,8 +243,16 @@ class TestKafkaClient(unittest2.TestCase):
                 TopicAndPartition('topic_noleader', 1): None
             },
             client.topics_to_brokers)
-        self.assertIsNone(client._get_leader_for_partition('topic_noleader', 0))
-        self.assertIsNone(client._get_leader_for_partition('topic_noleader', 1))
+
+        # No leader partitions -- raise LeaderNotAvailableError
+        with self.assertRaises(LeaderNotAvailableError):
+            self.assertIsNone(client._get_leader_for_partition('topic_noleader', 0))
+        with self.assertRaises(LeaderNotAvailableError):
+            self.assertIsNone(client._get_leader_for_partition('topic_noleader', 1))
+
+        # Unknown partitions -- raise UnknownTopicOrPartitionError
+        with self.assertRaises(UnknownTopicOrPartitionError):
+            self.assertIsNone(client._get_leader_for_partition('topic_noleader', 2))
 
         topics = [
             TopicMetadata('topic_noleader', NO_ERROR, [

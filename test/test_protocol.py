@@ -13,8 +13,8 @@ from kafka.common import (
     ProduceRequest, FetchRequest, Message, ChecksumError,
     ProduceResponse, FetchResponse, OffsetAndMessage,
     BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,
-    KafkaUnavailableError, PartitionUnavailableError,
-    UnsupportedCodecError, ConsumerFetchSizeTooSmall, ProtocolError,
+    KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
+    ProtocolError
 )
 from kafka.codec import (
     has_snappy, gzip_encode, gzip_decode,

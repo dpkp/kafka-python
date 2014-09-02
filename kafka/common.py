@@ -158,10 +158,6 @@ class KafkaTimeoutError(KafkaError):
     pass
 
 
-class PartitionUnavailableError(KafkaError):
-    pass
-
-
 class FailedPayloadsError(KafkaError):
     pass
 

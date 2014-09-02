@@ -5,15 +5,7 @@ import unittest2
 
 from mock import MagicMock, patch
 
-from kafka import KafkaClient
 from kafka.consumer import SimpleConsumer
-from kafka.common import (
-    ProduceRequest, BrokerMetadata, PartitionMetadata,
-    TopicAndPartition, PartitionUnavailableError
-)
-from kafka.protocol import (
-    create_message, KafkaProtocol
-)
 
 class TestKafkaConsumer(unittest2.TestCase):
     def test_non_integer_partitions(self):
