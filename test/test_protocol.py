@@ -4,20 +4,15 @@ import struct
 import unittest2
 from mock import patch, sentinel
 
-from kafka import KafkaClient
 from kafka.common import (
     OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
     OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
     ProduceRequest, FetchRequest, Message, ChecksumError,
     ConsumerFetchSizeTooSmall, ProduceResponse, FetchResponse, OffsetAndMessage,
-    BrokerMetadata, PartitionMetadata, TopicAndPartition, KafkaUnavailableError,
-    ProtocolError, LeaderUnavailableError, PartitionUnavailableError,
+    BrokerMetadata, PartitionMetadata, ProtocolError,
     UnsupportedCodecError
 )
-from kafka.codec import (
-    has_snappy, gzip_encode, gzip_decode,
-    snappy_encode, snappy_decode
-)
+from kafka.codec import has_snappy, gzip_decode, snappy_decode
 import kafka.protocol
 from kafka.protocol import (
     ATTRIBUTE_CODEC_MASK, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, KafkaProtocol,

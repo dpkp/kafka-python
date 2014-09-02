@@ -4,7 +4,7 @@ import time
 import unittest2
 
 from kafka import KafkaClient, SimpleConsumer
-from kafka.common import TopicAndPartition, FailedPayloadsError
+from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
 from kafka.producer import Producer
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -45,7 +45,6 @@ class TestFailover(KafkaIntegrationTestCase):
 
     @kafka_versions("all")
     def test_switch_leader(self):
-        key = random_string(5)
         topic = self.topic
         partition = 0
 
@@ -57,7 +56,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self._send_random_messages(producer, topic, partition, 100)
 
         # kill leader for partition
-        broker = self._kill_leader(topic, partition)
+        self._kill_leader(topic, partition)
 
         # expect failure, but dont wait more than 60 secs to recover
         recovered = False
@@ -87,7 +86,6 @@ class TestFailover(KafkaIntegrationTestCase):
     #@kafka_versions("all")
     @unittest2.skip("async producer does not support reliable failover yet")
     def test_switch_leader_async(self):
-        key = random_string(5)
         topic = self.topic
         partition = 0
 
@@ -98,7 +96,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self._send_random_messages(producer, topic, partition, 10)
 
         # kill leader for partition
-        broker = self._kill_leader(topic, partition)
+        self._kill_leader(topic, partition)
 
         logging.debug("attempting to send 'success' message after leader killed")
 
@@ -115,8 +113,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # count number of messages
         # Should be equal to 10 before + 1 recovery + 10 after
-        count = self.assert_message_count(topic, 21, partitions=(partition,))
-
+        self.assert_message_count(topic, 21, partitions=(partition,))
 
     def _send_random_messages(self, producer, topic, partition, n):
         for j in range(n):

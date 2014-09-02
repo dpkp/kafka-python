@@ -1,4 +1,3 @@
-from datetime import datetime
 import os
 
 from kafka import SimpleConsumer, MultiProcessConsumer, create_message
@@ -218,8 +217,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("0.8.1", "0.8.1.1")
     def test_offset_behavior__resuming_behavior(self):
-        msgs1 = self.send_messages(0, range(0, 100))
-        msgs2 = self.send_messages(1, range(100, 200))
+        self.send_messages(0, range(0, 100))
+        self.send_messages(1, range(100, 200))
 
         # Start a consumer
         consumer1 = self.consumer(
