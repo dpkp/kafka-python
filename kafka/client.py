@@ -132,8 +132,8 @@ class KafkaClient(object):
 
         Params
         ======
-        payloads: list of object-like entities with a topic and
-                  partition attribute
+        payloads: list of object-like entities with a topic (str) and
+                  partition (int) attribute
         encode_fn: a method to encode the list of payloads to a request body,
                    must accept client_id, correlation_id, and payloads as
                    keyword arguments

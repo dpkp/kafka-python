@@ -295,3 +295,28 @@ class TestKafkaClient(unittest2.TestCase):
         with self.assertRaises(LeaderNotAvailableError):
             client.send_produce_request(requests)
 
+    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.KafkaProtocol')
+    def test_send_produce_request_raises_when_topic_unknown(self, protocol, conn):
+
+        conn.recv.return_value = 'response'  # anything but None
+
+        brokers = [
+            BrokerMetadata(0, 'broker_1', 4567),
+            BrokerMetadata(1, 'broker_2', 5678)
+        ]
+
+        topics = [
+            TopicMetadata('topic_doesnt_exist', UNKNOWN_TOPIC_OR_PARTITION, []),
+        ]
+        protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
+
+        client = KafkaClient(hosts=['broker_1:4567'])
+
+        requests = [ProduceRequest(
+            "topic_doesnt_exist", 0,
+            [create_message("a"), create_message("b")])]
+
+        with self.assertRaises(UnknownTopicOrPartitionError):
+            client.send_produce_request(requests)
+
