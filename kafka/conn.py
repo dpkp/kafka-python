@@ -5,6 +5,8 @@ import struct
 from random import shuffle
 from threading import local
 
+import six
+
 from kafka.common import ConnectionError
 
 log = logging.getLogger("kafka")
@@ -19,7 +21,7 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
-    if isinstance(hosts, basestring):
+    if isinstance(hosts, six.string_types):
         hosts = hosts.strip().split(',')
 
     result = []
@@ -92,7 +94,7 @@ class KafkaConnection(local):
                 # Receiving empty string from recv signals
                 # that the socket is in error.  we will never get
                 # more data from this socket
-                if data == '':
+                if data == b'':
                     raise socket.error("Not enough data to read message -- did server kill socket?")
 
             except socket.error:
@@ -103,7 +105,7 @@ class KafkaConnection(local):
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
             responses.append(data)
 
-        return ''.join(responses)
+        return b''.join(responses)
 
     ##################
     #   Public API   #
@@ -144,7 +146,7 @@ class KafkaConnection(local):
 
         # Read the remainder of the response
         resp = self._read_bytes(size)
-        return str(resp)
+        return resp
 
     def copy(self):
         """
@@ -153,6 +155,10 @@ class KafkaConnection(local):
         return a new KafkaConnection object
         """
         c = copy.deepcopy(self)
+        # Python 3 doesn't copy custom attributes of the threadlocal subclass
+        c.host = copy.copy(self.host)
+        c.port = copy.copy(self.port)
+        c.timeout = copy.copy(self.timeout)
         c._sock = None
         return c
 

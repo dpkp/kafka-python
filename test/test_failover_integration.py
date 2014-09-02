@@ -1,13 +1,13 @@
 import logging
 import os
 import time
-import unittest2
+from . import unittest
 
 from kafka import *  # noqa
 from kafka.common import *  # noqa
 from kafka.producer import Producer
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+from .fixtures import ZookeeperFixture, KafkaFixture
+from .testutil import *
 
 
 class TestFailover(KafkaIntegrationTestCase):
@@ -60,7 +60,7 @@ class TestFailover(KafkaIntegrationTestCase):
         while not recovered and (time.time() - started) < timeout:
             try:
                 logging.debug("attempting to send 'success' message after leader killed")
-                producer.send_messages(topic, partition, 'success')
+                producer.send_messages(topic, partition, b'success')
                 logging.debug("success!")
                 recovered = True
             except (FailedPayloadsError, ConnectionError):
@@ -82,7 +82,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
 
     #@kafka_versions("all")
-    @unittest2.skip("async producer does not support reliable failover yet")
+    @unittest.skip("async producer does not support reliable failover yet")
     def test_switch_leader_async(self):
         key, topic, partition = random_string(5), self.topic, 0
 

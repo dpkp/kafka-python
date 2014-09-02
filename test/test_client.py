@@ -1,5 +1,6 @@
-import unittest2
+from . import unittest
 
+import six
 from mock import MagicMock, patch
 
 from kafka import KafkaClient
@@ -10,30 +11,30 @@ from kafka.common import (
 )
 from kafka.protocol import create_message
 
-class TestKafkaClient(unittest2.TestCase):
+class TestKafkaClient(unittest.TestCase):
     def test_init_with_list(self):
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])
 
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
+        self.assertEqual(
+            sorted([('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)]),
+            sorted(client.hosts))
 
     def test_init_with_csv(self):
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             client = KafkaClient(hosts='kafka01:9092,kafka02:9092,kafka03:9092')
 
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
+        self.assertEqual(
+            sorted([('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)]),
+            sorted(client.hosts))
 
     def test_init_with_unicode_csv(self):
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             client = KafkaClient(hosts=u'kafka01:9092,kafka02:9092,kafka03:9092')
 
-        self.assertItemsEqual(
-            [('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)],
-            client.hosts)
+        self.assertEqual(
+            sorted([('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)]),
+            sorted(client.hosts))
 
     def test_send_broker_unaware_request_fail(self):
         'Tests that call fails when all hosts are unavailable'
@@ -58,7 +59,7 @@ class TestKafkaClient(unittest2.TestCase):
                 with self.assertRaises(KafkaUnavailableError):
                     client._send_broker_unaware_request(1, 'fake request')
 
-                for key, conn in mocked_conns.iteritems():
+                for key, conn in six.iteritems(mocked_conns):
                     conn.send.assert_called_with(1, 'fake request')
 
     def test_send_broker_unaware_request(self):

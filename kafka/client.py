@@ -20,7 +20,7 @@ log = logging.getLogger("kafka")
 
 class KafkaClient(object):
 
-    CLIENT_ID = "kafka-python"
+    CLIENT_ID = b"kafka-python"
     ID_GEN = itertools.count()
 
     # NOTE: The timeout given to the client should always be greater than the
@@ -81,7 +81,7 @@ class KafkaClient(object):
         """
         Generate a new correlation id
         """
-        return KafkaClient.ID_GEN.next()
+        return next(KafkaClient.ID_GEN)
 
     def _send_broker_unaware_request(self, requestId, request):
         """
@@ -145,7 +145,7 @@ class KafkaClient(object):
 
         # For each broker, send the list of request payloads
         for broker, payloads in payloads_by_broker.items():
-            conn = self._get_conn(broker.host, broker.port)
+            conn = self._get_conn(broker.host.decode('utf-8'), broker.port)
             requestId = self._next_id()
             request = encoder_fn(client_id=self.client_id,
                                  correlation_id=requestId, payloads=payloads)
@@ -233,8 +233,8 @@ class KafkaClient(object):
         A reinit() has to be done on the copy before it can be used again
         """
         c = copy.deepcopy(self)
-        for k, v in c.conns.items():
-            c.conns[k] = v.copy()
+        for key in c.conns:
+            c.conns[key] = self.conns[key].copy()
         return c
 
     def reinit(self):

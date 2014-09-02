@@ -4,10 +4,10 @@ import os.path
 import shutil
 import subprocess
 import tempfile
-import urllib2
+from six.moves import urllib
 import uuid
 
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse  # pylint: disable-msg=E0611
 from test.service import ExternalService, SpawnedService
 from test.testutil import get_open_port
 
@@ -42,12 +42,12 @@ class Fixture(object):
         try:
             url = url_base + distfile + '.tgz'
             logging.info("Attempting to download %s", url)
-            response = urllib2.urlopen(url)
-        except urllib2.HTTPError:
+            response = urllib.request.urlopen(url)
+        except urllib.error.HTTPError:
             logging.exception("HTTP Error")
             url = url_base + distfile + '.tar.gz'
             logging.info("Attempting to download %s", url)
-            response = urllib2.urlopen(url)
+            response = urllib.request.urlopen(url)
 
         logging.info("Saving distribution file to %s", output_file)
         with open(output_file, 'w') as output_file_fd:
