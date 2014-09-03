@@ -591,7 +591,7 @@ class MultiProcessConsumer(Consumer):
         for chunk in chunks:
             chunk = filter(lambda x: x is not None, chunk)
             args = (client.copy(),
-                    group, topic, chunk,
+                    group, topic, list(chunk),
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 

@@ -151,7 +151,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         with Timer() as t:
             messages = consumer.get_messages(count=10, block=True, timeout=5)
             self.assert_message_count(messages, 5)
-        self.assertGreaterEqual(t.interval, 5)
+        self.assertGreaterEqual(t.interval, 4.95)
 
         consumer.stop()
 
