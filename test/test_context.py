@@ -1,17 +1,17 @@
 """
-KafkaTransaction tests.
+OffsetCommitContext tests.
 """
 from unittest2 import TestCase
 
 from mock import MagicMock, patch
 
 from kafka.common import OffsetOutOfRangeError
-from kafka.transaction import KafkaTransaction
+from kafka.context import OffsetCommitContext
 
 
-class TestKafkaTransaction(TestCase):
+class TestOffsetCommitContext(TestCase):
     """
-    KafkaTransaction tests.
+    OffsetCommitContext tests.
     """
 
     def setUp(self):
@@ -24,13 +24,13 @@ class TestKafkaTransaction(TestCase):
         self.consumer.group = self.group
         self.consumer.client = self.client
         self.consumer.offsets = {self.partition: 0}
-        self.transaction = KafkaTransaction(self.consumer)
+        self.context = OffsetCommitContext(self.consumer)
 
     def test_noop(self):
         """
-        Should revert consumer after transaction with no mark() call.
+        Should revert consumer after context exit with no mark() call.
         """
-        with self.transaction:
+        with self.context:
             # advance offset
             self.consumer.offsets = {self.partition: 1}
 
@@ -42,10 +42,10 @@ class TestKafkaTransaction(TestCase):
 
     def test_mark(self):
         """
-        Should remain at marked location.
+        Should remain at marked location ater context exit.
         """
-        with self.transaction as transaction:
-            transaction.mark(self.partition, 0)
+        with self.context as context:
+            context.mark(self.partition, 0)
             # advance offset
             self.consumer.offsets = {self.partition: 1}
 
@@ -61,12 +61,12 @@ class TestKafkaTransaction(TestCase):
 
     def test_mark_multiple(self):
         """
-        Should remain at highest marked location.
+        Should remain at highest marked location after context exit.
         """
-        with self.transaction as transaction:
-            transaction.mark(self.partition, 0)
-            transaction.mark(self.partition, 1)
-            transaction.mark(self.partition, 2)
+        with self.context as context:
+            context.mark(self.partition, 0)
+            context.mark(self.partition, 1)
+            context.mark(self.partition, 2)
             # advance offset
             self.consumer.offsets = {self.partition: 3}
 
@@ -82,11 +82,11 @@ class TestKafkaTransaction(TestCase):
 
     def test_rollback(self):
         """
-        Should rollback to beginning of transaction.
+        Should rollback to initial offsets on context exit with exception.
         """
         with self.assertRaises(Exception):
-            with self.transaction as transaction:
-                transaction.mark(self.partition, 0)
+            with self.context as context:
+                context.mark(self.partition, 0)
                 # advance offset
                 self.consumer.offsets = {self.partition: 1}
 
@@ -101,7 +101,7 @@ class TestKafkaTransaction(TestCase):
 
     def test_out_of_range(self):
         """
-        Should remain at beginning of range.
+        Should reset to beginning of valid offsets on `OffsetOutOfRangeError`
         """
         def _seek(offset, whence):
             # seek must be called with 0, 0 to find the beginning of the range
@@ -111,7 +111,7 @@ class TestKafkaTransaction(TestCase):
             self.consumer.offsets = {self.partition: 100}
 
         with patch.object(self.consumer, "seek", _seek):
-            with self.transaction:
+            with self.context:
                 raise OffsetOutOfRangeError()
 
         self.assertEqual(self.consumer.offsets, {self.partition: 100})
