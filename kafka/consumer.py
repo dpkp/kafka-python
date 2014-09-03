@@ -4,7 +4,8 @@ from itertools import izip_longest, repeat
 import logging
 import time
 import numbers
-from threading import Lock
+from threading import Lock, Thread
+
 from multiprocessing import Process, Queue as MPQueue, Event, Value
 from Queue import Empty, Queue
 
@@ -26,7 +27,7 @@ AUTO_COMMIT_INTERVAL = 5000
 FETCH_DEFAULT_BLOCK_TIMEOUT = 1
 FETCH_MAX_WAIT_TIME = 100
 FETCH_MIN_BYTES = 4096
-FETCH_BUFFER_SIZE_BYTES = 4096
+FETCH_BUFFER_SIZE_BYTES = 4096  * 100
 MAX_FETCH_BUFFER_SIZE_BYTES = FETCH_BUFFER_SIZE_BYTES * 8
 
 ITER_TIMEOUT_SECONDS = 60
@@ -254,6 +255,9 @@ class SimpleConsumer(Consumer):
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
         self.queue = Queue()
+        self.fetch_thread = Thread(target=self._fetch_loop)
+        self.fetch_thread.daemon = True
+        self.fetch_thread.start()
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -367,10 +371,11 @@ class SimpleConsumer(Consumer):
         """
         if self.queue.empty():
             # We're out of messages, go grab some more.
-            with FetchContext(self, block, timeout):
-                self._fetch()
+            print "QUEUE IS EMPTY"
+            #with FetchContext(self, block, timeout):
+                #self._fetch()
         try:
-            partition, message = self.queue.get_nowait()
+            partition, message = self.queue.get(timeout=timeout)
 
             if update_offset:
                 # Update partition offset
@@ -407,13 +412,19 @@ class SimpleConsumer(Consumer):
                 # Timed out waiting for a message
                 break
 
+    def _fetch_loop(self):
+        while True:
+            self._fetch()
+
     def _fetch(self):
         # Create fetch request payloads for all the partitions
         requests = []
         partitions = self.fetch_offsets.keys()
         while partitions:
+            print "FETCHING"
             for partition in partitions:
-                requests.append(FetchRequest(self.topic, partition,
+                requests.append(FetchRequest(self.topic,
+                                             partition,
                                              self.fetch_offsets[partition],
                                              self.buffer_size))
             # Send request
@@ -421,6 +432,8 @@ class SimpleConsumer(Consumer):
                 requests,
                 max_wait_time=int(self.fetch_max_wait_time),
                 min_bytes=self.fetch_min_bytes)
+
+            print "len response", len(responses)
 
             retry_partitions = set()
             for resp in responses:
