@@ -1,3 +1,4 @@
+import binascii
 import collections
 import copy
 import functools
@@ -96,7 +97,7 @@ class KafkaClient(object):
                 return response
             except Exception as e:
                 log.warning("Could not send request [%r] to server %s:%i, "
-                            "trying next server: %s" % (request, host, port, e))
+                            "trying next server: %s" % (binascii.b2a_hex(request), host, port, e))
 
         raise KafkaUnavailableError("All servers failed to process request")
 
@@ -160,11 +161,11 @@ class KafkaClient(object):
                     response = conn.recv(requestId)
                 except ConnectionError as e:
                     log.warning("Could not receive response to request [%s] "
-                                "from server %s: %s", request, conn, e)
+                                "from server %s: %s", binascii.b2a_hex(request), conn, e)
                     failed = True
             except ConnectionError as e:
                 log.warning("Could not send request [%s] to server %s: %s",
-                            request, conn, e)
+                            binascii.b2a_hex(request), conn, e)
                 failed = True
 
             if failed:

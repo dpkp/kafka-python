@@ -4,6 +4,7 @@ import six
 from mock import MagicMock, patch
 
 from kafka import KafkaClient
+import kafka.protocol
 from kafka.common import (
     ProduceRequest, BrokerMetadata, PartitionMetadata,
     TopicAndPartition, KafkaUnavailableError,
@@ -56,11 +57,12 @@ class TestKafkaClient(unittest.TestCase):
             with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
                 client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
 
+                req = kafka.protocol.KafkaProtocol.encode_metadata_request(b'client', 0)
                 with self.assertRaises(KafkaUnavailableError):
-                    client._send_broker_unaware_request(1, 'fake request')
+                    client._send_broker_unaware_request(1, req)
 
                 for key, conn in six.iteritems(mocked_conns):
-                    conn.send.assert_called_with(1, 'fake request')
+                    conn.send.assert_called_with(1, req)
 
     def test_send_broker_unaware_request(self):
         'Tests that call works when at least one of the host is available'
@@ -83,7 +85,8 @@ class TestKafkaClient(unittest.TestCase):
             with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
                 client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
 
-                resp = client._send_broker_unaware_request(1, 'fake request')
+                req = kafka.protocol.KafkaProtocol.encode_metadata_request(b'client', 0)
+                resp = client._send_broker_unaware_request(1, req)
 
                 self.assertEqual('valid response', resp)
                 mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
