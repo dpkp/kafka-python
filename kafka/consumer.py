@@ -369,11 +369,12 @@ class SimpleConsumer(Consumer):
         If get_partition_info is True, returns (partition, message)
         If get_partition_info is False, returns message
         """
-        if self.queue.empty():
-            # We're out of messages, go grab some more.
-            print "QUEUE IS EMPTY"
-            #with FetchContext(self, block, timeout):
-                #self._fetch()
+        # if self.queue.empty():
+        #     pass
+        #     # We're out of messages, go grab some more.
+        #     #print "QUEUE IS EMPTY"
+        #     #with FetchContext(self, block, timeout):
+        #         #self._fetch()
         try:
             partition, message = self.queue.get(timeout=timeout)
 
@@ -421,7 +422,6 @@ class SimpleConsumer(Consumer):
         requests = []
         partitions = self.fetch_offsets.keys()
         while partitions:
-            print "FETCHING"
             for partition in partitions:
                 requests.append(FetchRequest(self.topic,
                                              partition,
@@ -432,8 +432,6 @@ class SimpleConsumer(Consumer):
                 requests,
                 max_wait_time=int(self.fetch_max_wait_time),
                 min_bytes=self.fetch_min_bytes)
-
-            print "len response", len(responses)
 
             retry_partitions = set()
             for resp in responses:
