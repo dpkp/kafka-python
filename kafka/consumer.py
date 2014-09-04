@@ -4,10 +4,10 @@ from itertools import izip_longest, repeat
 import logging
 import time
 import numbers
-from threading import Lock, Thread
+from threading import Lock, Thread, Event
 
-from multiprocessing import Process, Queue as MPQueue, Event, Value
-from Queue import Empty, Queue
+#from multiprocessing import Process, Queue as MPQueue, Event, Value
+from Queue import Empty, Full, Queue
 
 import kafka
 from kafka.common import (
@@ -27,12 +27,13 @@ AUTO_COMMIT_INTERVAL = 5000
 FETCH_DEFAULT_BLOCK_TIMEOUT = 1
 FETCH_MAX_WAIT_TIME = 100
 FETCH_MIN_BYTES = 4096
-FETCH_BUFFER_SIZE_BYTES = 4096  * 100
+FETCH_BUFFER_SIZE_BYTES = 262144
 MAX_FETCH_BUFFER_SIZE_BYTES = FETCH_BUFFER_SIZE_BYTES * 8
 
 ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
 
+MAX_QUEUE_SIZE = 10 * 1024
 
 class FetchContext(object):
     """
@@ -199,6 +200,9 @@ class Consumer(object):
         return total
 
 
+class ConsumerFetchThreadDied(Exception):
+    pass
+
 class SimpleConsumer(Consumer):
     """
     A simple consumer implementation that consumes all/specified partitions
@@ -254,7 +258,8 @@ class SimpleConsumer(Consumer):
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
-        self.queue = Queue()
+        self.queue = Queue(maxsize=MAX_QUEUE_SIZE)
+        self.should_fetch = Event()
         self.fetch_thread = Thread(target=self._fetch_loop)
         self.fetch_thread.daemon = True
         self.fetch_thread.start()
@@ -314,7 +319,7 @@ class SimpleConsumer(Consumer):
             self.count_since_commit += 1
             self.commit()
 
-        self.queue = Queue()
+        self.queue = Queue(maxsize=MAX_QUEUE_SIZE)
 
     def get_messages(self, count=1, block=True, timeout=0.1):
         """
@@ -369,12 +374,8 @@ class SimpleConsumer(Consumer):
         If get_partition_info is True, returns (partition, message)
         If get_partition_info is False, returns message
         """
-        # if self.queue.empty():
-        #     pass
-        #     # We're out of messages, go grab some more.
-        #     #print "QUEUE IS EMPTY"
-        #     #with FetchContext(self, block, timeout):
-        #         #self._fetch()
+        if self.should_fetch.is_set():
+            raise ConsumerFetchThreadDied()
         try:
             partition, message = self.queue.get(timeout=timeout)
 
@@ -413,9 +414,15 @@ class SimpleConsumer(Consumer):
                 # Timed out waiting for a message
                 break
 
+    def stop(self):
+        super(SimpleConsumer, self).stop()
+        self.should_fetch.set()
+
     def _fetch_loop(self):
-        while True:
+        log.info("Starting fetch loop")
+        while not self.should_fetch.is_set():
             self._fetch()
+        log.info("Stopping fetch loop")
 
     def _fetch(self):
         # Create fetch request payloads for all the partitions
@@ -439,8 +446,12 @@ class SimpleConsumer(Consumer):
                 try:
                     for message in resp.messages:
                         # Put the message in our queue
-                        self.queue.put((partition, message))
+                        self.queue.put((partition, message), block=False)
                         self.fetch_offsets[partition] = message.offset + 1
+
+                except Full:
+                    log.error("Queue is full. Increase MAX_QUEUE_SIZE")
+                    self.stop()
                 except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
