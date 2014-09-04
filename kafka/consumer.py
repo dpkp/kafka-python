@@ -448,14 +448,8 @@ class SimpleConsumer(Consumer):
                 try:
                     for message in resp.messages:
                         # Put the message in our queue
-                        self.queue.put((partition, message), block=False)
+                        self.queue.put((partition, message), block=True)
                         self.fetch_offsets[partition] = message.offset + 1
-
-                except Full as e:
-                    log.error("Queue is full. Increase MAX_QUEUE_SIZE")
-                    self.got_error = True
-                    self.error = e
-                    self.stop()
                 except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
