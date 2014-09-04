@@ -200,7 +200,7 @@ class Consumer(object):
         return total
 
 
-class ConsumerFetchThreadDied(Exception):
+class DefaultSimpleConsumerException(Exception):
     pass
 
 class SimpleConsumer(Consumer):
@@ -263,6 +263,8 @@ class SimpleConsumer(Consumer):
         self.fetch_thread = Thread(target=self._fetch_loop)
         self.fetch_thread.daemon = True
         self.fetch_thread.start()
+        self.got_error = False
+        self.error = DefaultSimpleConsumerException()
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -374,8 +376,8 @@ class SimpleConsumer(Consumer):
         If get_partition_info is True, returns (partition, message)
         If get_partition_info is False, returns message
         """
-        if self.should_fetch.is_set():
-            raise ConsumerFetchThreadDied()
+        if self.got_error:
+            raise self.error
         try:
             partition, message = self.queue.get(timeout=timeout)
 
@@ -449,8 +451,10 @@ class SimpleConsumer(Consumer):
                         self.queue.put((partition, message), block=False)
                         self.fetch_offsets[partition] = message.offset + 1
 
-                except Full:
+                except Full as e:
                     log.error("Queue is full. Increase MAX_QUEUE_SIZE")
+                    self.got_error = True
+                    self.error = e
                     self.stop()
                 except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
@@ -468,9 +472,16 @@ class SimpleConsumer(Consumer):
                     retry_partitions.add(partition)
                 except ConsumerNoMoreData as e:
                     log.debug("Iteration was ended by %r", e)
+                    self.got_error = True
+                    self.error = e
+                    self.stop()
                 except StopIteration:
                     # Stop iterating through this partition
                     log.debug("Done iterating over partition %s" % partition)
+                except Exception as e:
+                    self.got_error = True
+                    self.error = e
+                    self.stop()
                 partitions = retry_partitions
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
