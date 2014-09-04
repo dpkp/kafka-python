@@ -6,8 +6,8 @@ import time
 import numbers
 from threading import Lock, Thread, Event
 
-#from multiprocessing import Process, Queue as MPQueue, Event, Value
-from Queue import Empty, Full, Queue
+from multiprocessing import Process, Queue as MPQueue, Event as MPEvent, Value
+from Queue import Empty,  Queue
 
 import kafka
 from kafka.common import (
@@ -448,14 +448,8 @@ class SimpleConsumer(Consumer):
                 try:
                     for message in resp.messages:
                         # Put the message in our queue
-                        self.queue.put((partition, message), block=False)
+                        self.queue.put((partition, message), block=True)
                         self.fetch_offsets[partition] = message.offset + 1
-
-                except Full as e:
-                    log.error("Queue is full. Increase MAX_QUEUE_SIZE")
-                    self.got_error = True
-                    self.error = e
-                    self.stop()
                 except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
@@ -582,9 +576,9 @@ class MultiProcessConsumer(Consumer):
         # Variables for managing and controlling the data flow from
         # consumer child process to master
         self.queue = MPQueue(1024)  # Child consumers dump messages into this
-        self.start = Event()        # Indicates the consumers to start fetch
-        self.exit = Event()         # Requests the consumers to shutdown
-        self.pause = Event()        # Requests the consumers to pause fetch
+        self.start = MPEvent()        # Indicates the consumers to start fetch
+        self.exit = MPEvent()         # Requests the consumers to shutdown
+        self.pause = MPEvent()        # Requests the consumers to pause fetch
         self.size = Value('i', 0)   # Indicator of number of messages to fetch
 
         partitions = self.offsets.keys()
