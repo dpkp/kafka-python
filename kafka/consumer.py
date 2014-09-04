@@ -6,8 +6,8 @@ import time
 import numbers
 from threading import Lock, Thread, Event
 
-#from multiprocessing import Process, Queue as MPQueue, Event, Value
-from Queue import Empty, Full, Queue
+from multiprocessing import Process, Queue as MPQueue, Event as MPEvent, Value
+from Queue import Empty,  Queue
 
 import kafka
 from kafka.common import (
@@ -576,9 +576,9 @@ class MultiProcessConsumer(Consumer):
         # Variables for managing and controlling the data flow from
         # consumer child process to master
         self.queue = MPQueue(1024)  # Child consumers dump messages into this
-        self.start = Event()        # Indicates the consumers to start fetch
-        self.exit = Event()         # Requests the consumers to shutdown
-        self.pause = Event()        # Requests the consumers to pause fetch
+        self.start = MPEvent()        # Indicates the consumers to start fetch
+        self.exit = MPEvent()         # Requests the consumers to shutdown
+        self.pause = MPEvent()        # Requests the consumers to pause fetch
         self.size = Value('i', 0)   # Indicator of number of messages to fetch
 
         partitions = self.offsets.keys()
