@@ -24,17 +24,6 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         cls.server.close()
         cls.zk.close()
 
-    @unittest2.skip("This doesn't appear to work on Linux?")
-    def test_timeout(self):
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_port = get_open_port()
-        server_socket.bind(('localhost', server_port))
-
-        with Timer() as t:
-            with self.assertRaises((socket.timeout, socket.error)):
-                kafka.conn.KafkaConnection("localhost", server_port, 1.0)
-        self.assertGreaterEqual(t.interval, 1.0)
-
     @kafka_versions("all")
     def test_consume_none(self):
         fetch = FetchRequest(self.topic, 0, 0, 1024)

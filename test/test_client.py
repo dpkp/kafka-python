@@ -1,3 +1,5 @@
+import socket
+from time import sleep
 import unittest2
 
 from mock import MagicMock, patch
@@ -6,9 +8,13 @@ from kafka import KafkaClient
 from kafka.common import (
     ProduceRequest, BrokerMetadata, PartitionMetadata,
     TopicAndPartition, KafkaUnavailableError,
-    LeaderUnavailableError, PartitionUnavailableError
+    LeaderUnavailableError, PartitionUnavailableError,
+    ConnectionError
 )
+from kafka.conn import KafkaConnection
 from kafka.protocol import create_message
+
+from test.testutil import Timer
 
 class TestKafkaClient(unittest2.TestCase):
     def test_init_with_list(self):
@@ -242,3 +248,15 @@ class TestKafkaClient(unittest2.TestCase):
         with self.assertRaises(LeaderUnavailableError):
             client.send_produce_request(requests)
 
+    def test_timeout(self):
+        def _timeout(*args, **kwargs):
+            timeout = args[1]
+            sleep(timeout)
+            raise socket.timeout
+
+        with patch.object(socket, "create_connection", side_effect=_timeout):
+
+            with Timer() as t:
+                with self.assertRaises(ConnectionError):
+                    KafkaConnection("nowhere", 1234, 1.0)
+            self.assertGreaterEqual(t.interval, 1.0)
