@@ -1,7 +1,7 @@
+import binascii
 import collections
 import struct
 import sys
-import zlib
 from threading import Thread, Event
 
 import six
@@ -10,16 +10,7 @@ from kafka.common import BufferUnderflowError
 
 
 def crc32(data):
-    """
-    Python 2 returns a value in the range [-2**31, 2**31-1].
-    Python 3 returns a value in the range [0, 2**32-1].
-
-    We want a consistent behavior so let's use python2's.
-    """
-    crc = zlib.crc32(data)
-    if six.PY3 and crc > 2**31:
-        crc -= 2 ** 32
-    return crc
+    return binascii.crc32(data) & 0xffffffff
 
 
 def write_int_string(s):
