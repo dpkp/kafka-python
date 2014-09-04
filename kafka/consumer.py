@@ -4,9 +4,10 @@ from itertools import izip_longest, repeat
 import logging
 import time
 import numbers
-from threading import Lock
-from multiprocessing import Process, Queue as MPQueue, Event, Value
-from Queue import Empty, Queue
+from threading import Lock, Thread, Event
+
+#from multiprocessing import Process, Queue as MPQueue, Event, Value
+from Queue import Empty, Full, Queue
 
 import kafka
 from kafka.common import (
@@ -26,12 +27,13 @@ AUTO_COMMIT_INTERVAL = 5000
 FETCH_DEFAULT_BLOCK_TIMEOUT = 1
 FETCH_MAX_WAIT_TIME = 100
 FETCH_MIN_BYTES = 4096
-FETCH_BUFFER_SIZE_BYTES = 4096
+FETCH_BUFFER_SIZE_BYTES = 262144
 MAX_FETCH_BUFFER_SIZE_BYTES = FETCH_BUFFER_SIZE_BYTES * 8
 
 ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
 
+MAX_QUEUE_SIZE = 10 * 1024
 
 class FetchContext(object):
     """
@@ -198,6 +200,9 @@ class Consumer(object):
         return total
 
 
+class DefaultSimpleConsumerException(Exception):
+    pass
+
 class SimpleConsumer(Consumer):
     """
     A simple consumer implementation that consumes all/specified partitions
@@ -253,7 +258,13 @@ class SimpleConsumer(Consumer):
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
-        self.queue = Queue()
+        self.queue = Queue(maxsize=MAX_QUEUE_SIZE)
+        self.should_fetch = Event()
+        self.fetch_thread = Thread(target=self._fetch_loop)
+        self.fetch_thread.daemon = True
+        self.fetch_thread.start()
+        self.got_error = False
+        self.error = DefaultSimpleConsumerException()
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -310,7 +321,7 @@ class SimpleConsumer(Consumer):
             self.count_since_commit += 1
             self.commit()
 
-        self.queue = Queue()
+        self.queue = Queue(maxsize=MAX_QUEUE_SIZE)
 
     def get_messages(self, count=1, block=True, timeout=0.1):
         """
@@ -365,12 +376,10 @@ class SimpleConsumer(Consumer):
         If get_partition_info is True, returns (partition, message)
         If get_partition_info is False, returns message
         """
-        if self.queue.empty():
-            # We're out of messages, go grab some more.
-            with FetchContext(self, block, timeout):
-                self._fetch()
+        if self.got_error:
+            raise self.error
         try:
-            partition, message = self.queue.get_nowait()
+            partition, message = self.queue.get(timeout=timeout)
 
             if update_offset:
                 # Update partition offset
@@ -407,13 +416,24 @@ class SimpleConsumer(Consumer):
                 # Timed out waiting for a message
                 break
 
+    def stop(self):
+        super(SimpleConsumer, self).stop()
+        self.should_fetch.set()
+
+    def _fetch_loop(self):
+        log.info("Starting fetch loop")
+        while not self.should_fetch.is_set():
+            self._fetch()
+        log.info("Stopping fetch loop")
+
     def _fetch(self):
         # Create fetch request payloads for all the partitions
         requests = []
         partitions = self.fetch_offsets.keys()
         while partitions:
             for partition in partitions:
-                requests.append(FetchRequest(self.topic, partition,
+                requests.append(FetchRequest(self.topic,
+                                             partition,
                                              self.fetch_offsets[partition],
                                              self.buffer_size))
             # Send request
@@ -428,8 +448,14 @@ class SimpleConsumer(Consumer):
                 try:
                     for message in resp.messages:
                         # Put the message in our queue
-                        self.queue.put((partition, message))
+                        self.queue.put((partition, message), block=False)
                         self.fetch_offsets[partition] = message.offset + 1
+
+                except Full as e:
+                    log.error("Queue is full. Increase MAX_QUEUE_SIZE")
+                    self.got_error = True
+                    self.error = e
+                    self.stop()
                 except ConsumerFetchSizeTooSmall:
                     if (self.max_buffer_size is not None and
                             self.buffer_size == self.max_buffer_size):
@@ -446,9 +472,16 @@ class SimpleConsumer(Consumer):
                     retry_partitions.add(partition)
                 except ConsumerNoMoreData as e:
                     log.debug("Iteration was ended by %r", e)
+                    self.got_error = True
+                    self.error = e
+                    self.stop()
                 except StopIteration:
                     # Stop iterating through this partition
                     log.debug("Done iterating over partition %s" % partition)
+                except Exception as e:
+                    self.got_error = True
+                    self.error = e
+                    self.stop()
                 partitions = retry_partitions
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):

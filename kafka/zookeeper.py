@@ -20,6 +20,7 @@ from kafka.client import KafkaClient
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.consumer import SimpleConsumer
 from kazoo.client import KazooClient
+import time
 import sys
 
 if 'gevent' in sys.modules:
@@ -353,7 +354,7 @@ class ZSimpleConsumer(object):
             partitions = filter(lambda x: x >= 0, partitions)
             self.consumer = self.consumer_fact(partitions=partitions)
             self.consumer_state = ALLOCATION_COMPLETED
-            log.info("Reinitialized consumer with %s" % partitions)
+            log.info("Reinitialized consumer with partitions: %s" % partitions)
 
 
     def _check_and_allocate(self, hosts, path, partitions, array):
@@ -420,7 +421,7 @@ class ZSimpleConsumer(object):
             elif partitioner.allocating:
                 # We have to wait till the partition is allocated
                 log.info("Waiting for partition allocation")
-                partitioner.wait_for_acquire()
+                partitioner.wait_for_acquire(timeout=1)
 
         # Clean up
         partitioner.finish()
@@ -455,11 +456,15 @@ class ZSimpleConsumer(object):
         timeout: If None, and block=True, the API will block infinitely.
                  If >0, API will block for specified time (in seconds)
         """
-        self._set_consumer(block, timeout)
+        self._set_consumer(block=False, timeout=timeout)
 
         if self.consumer is None:
             raise RuntimeError("Error in partition allocation")
         elif not self.consumer:
+            # This is needed in cases where gevent is used with
+            # a thread that does not have any calls that would yield.
+            # If we do not sleep here a greenlet could spin indefinitely.
+            time.sleep(0)
             return []
 
         return self.consumer.get_messages(count, block, timeout)
