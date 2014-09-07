@@ -37,13 +37,10 @@ Python versions
 ## High level
 
 ```python
-from kafka.client import KafkaClient
-from kafka.consumer import SimpleConsumer
-from kafka.producer import SimpleProducer, KeyedProducer
-
-kafka = KafkaClient("localhost:9092")
+from kafka import KafkaClient, SimpleProducer, SimpleConsumer
 
 # To send messages synchronously
+kafka = KafkaClient("localhost:9092")
 producer = SimpleProducer(kafka)
 
 # Note that the application is responsible for encoding messages to type str
@@ -97,9 +94,7 @@ kafka.close()
 
 ## Keyed messages
 ```python
-from kafka.client import KafkaClient
-from kafka.producer import KeyedProducer
-from kafka.partitioner import HashedPartitioner, RoundRobinPartitioner
+from kafka import KafkaClient, KeyedProducer, HashedPartitioner, RoundRobinPartitioner
 
 kafka = KafkaClient("localhost:9092")
 
@@ -113,8 +108,7 @@ producer = KeyedProducer(kafka, partitioner=RoundRobinPartitioner)
 
 ## Multiprocess consumer
 ```python
-from kafka.client import KafkaClient
-from kafka.consumer import MultiProcessConsumer
+from kafka import KafkaClient, MultiProcessConsumer
 
 kafka = KafkaClient("localhost:9092")
 
@@ -135,10 +129,13 @@ for message in consumer.get_messages(count=5, block=True, timeout=4):
 ## Low level
 
 ```python
-from kafka.client import KafkaClient
+from kafka import KafkaClient
+from kafka.protocol import KafkaProtocol, ProduceRequest
+
 kafka = KafkaClient("localhost:9092")
+
 req = ProduceRequest(topic="my-topic", partition=1,
-    messages=[KafkaProdocol.encode_message("some message")])
+    messages=[KafkaProtocol.encode_message("some message")])
 resps = kafka.send_produce_request(payloads=[req], fail_on_error=True)
 kafka.close()
 
@@ -152,8 +149,17 @@ resps[0].offset     # offset of the first message sent in this request
 
 Install with your favorite package manager
 
+## Latest Release
 Pip:
 
+```shell
+pip install kafka-python
+```
+
+Releases are also listed at https://github.com/mumrah/kafka-python/releases
+
+
+## Bleeding-Edge
 ```shell
 git clone https://github.com/mumrah/kafka-python
 pip install ./kafka-python
@@ -211,8 +217,21 @@ pip install python-snappy
 tox
 ```
 
-## Run a single unit test
+## Run a subset of unit tests
 ```shell
+# run protocol tests only
+tox -- -v test.test_protocol
+```
+
+```shell
+# test with pypy only
+tox -e pypy
+```
+
+```shell
+# Run only 1 test, and use python 2.7
+tox -e py27 -- -v --with-id --collect-only
+# pick a test number from the list like #102
 tox -e py27 -- -v --with-id 102
 ```
 
@@ -233,11 +252,11 @@ and optionally set SCALA_VERSION (defaults to 2.8.0, but 2.10.1 is recommended)
 SCALA_VERSION=2.10.1 KAFKA_VERSION=trunk ./build_integration.sh
 ```
 
-Then run the tests against supported Kafka versions:
+Then run the tests against supported Kafka versions, simply set the `KAFKA_VERSION`
+env variable to the server build you want to use for testing:
 ```shell
 KAFKA_VERSION=0.8.0 tox
 KAFKA_VERSION=0.8.1 tox
 KAFKA_VERSION=0.8.1.1 tox
 KAFKA_VERSION=trunk tox
 ```
-

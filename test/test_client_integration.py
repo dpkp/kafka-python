@@ -2,10 +2,16 @@ import os
 import socket
 import unittest2
 
-import kafka
-from kafka.common import *
+from kafka.conn import KafkaConnection
+from kafka.common import (
+    FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
+    KafkaTimeoutError
+)
+
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import *
+from test.testutil import (
+    KafkaIntegrationTestCase, get_open_port, kafka_versions, Timer
+)
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod

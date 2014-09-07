@@ -8,12 +8,12 @@ from threading import Lock
 from multiprocessing import Process, Queue as MPQueue, Event, Value
 from Queue import Empty, Queue
 
-import kafka
+import kafka.common
 from kafka.common import (
-    FetchRequest,
-    OffsetRequest, OffsetCommitRequest,
-    OffsetFetchRequest,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
+    FetchRequest, OffsetRequest,
+    OffsetCommitRequest, OffsetFetchRequest,
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
+    UnknownTopicOrPartitionError
 )
 
 from kafka.util import ReentrantTimer
@@ -114,7 +114,7 @@ class Consumer(object):
             try:
                 kafka.common.check_error(resp)
                 return resp.offset
-            except kafka.common.UnknownTopicOrPartitionError:
+            except UnknownTopicOrPartitionError:
                 return 0
 
         for partition in partitions:

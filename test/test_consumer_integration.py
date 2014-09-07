@@ -1,11 +1,13 @@
 import os
-from datetime import datetime
 
-from kafka import *  # noqa
-from kafka.common import *  # noqa
+from kafka import SimpleConsumer, MultiProcessConsumer, create_message
+from kafka.common import ProduceRequest, ConsumerFetchSizeTooSmall
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
-from fixtures import ZookeeperFixture, KafkaFixture
-from testutil import *
+
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import (
+    KafkaIntegrationTestCase, kafka_versions, random_string, Timer
+)
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):
     @classmethod
@@ -215,8 +217,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("0.8.1", "0.8.1.1")
     def test_offset_behavior__resuming_behavior(self):
-        msgs1 = self.send_messages(0, range(0, 100))
-        msgs2 = self.send_messages(1, range(100, 200))
+        self.send_messages(0, range(0, 100))
+        self.send_messages(1, range(100, 200))
 
         # Start a consumer
         consumer1 = self.consumer(

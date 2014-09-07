@@ -4,8 +4,8 @@ import struct
 import mock
 import unittest2
 
-from kafka.common import *
-from kafka.conn import *
+from kafka.common import ConnectionError
+from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SECONDS
 
 class ConnTest(unittest2.TestCase):
     def setUp(self):

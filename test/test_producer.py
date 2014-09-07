@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import os
-import random
-import struct
+
 import unittest2
+from mock import MagicMock
 
-from mock import MagicMock, patch
-
-from kafka import KafkaClient
 from kafka.producer import Producer
 
 class TestKafkaProducer(unittest2.TestCase):
