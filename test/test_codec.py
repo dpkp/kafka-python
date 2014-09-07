@@ -6,7 +6,7 @@ from kafka.codec import (
     snappy_encode, snappy_decode
 )
 from kafka.protocol import (
-    create_gzip_message, create_message, create_snappy_message, KafkaProtocol
+    create_message, create_encoded_message, KafkaProtocol
 )
 from testutil import *
 

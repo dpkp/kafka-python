@@ -23,8 +23,7 @@ from kafka.codec import (
 import kafka.protocol
 from kafka.protocol import (
     ATTRIBUTE_CODEC_MASK, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, KafkaProtocol,
-    create_message, create_gzip_message, create_snappy_message,
-    create_message_set
+    create_message, create_encoded_message, create_message_set
 )
 
 class TestProtocol(unittest2.TestCase):
@@ -39,9 +38,9 @@ class TestProtocol(unittest2.TestCase):
 
     def test_create_gzip(self):
         payloads = ["v1", "v2"]
-        msg = create_gzip_message(payloads)
+        msg = create_encoded_message(payloads, CODEC_GZIP)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_GZIP)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_GZIP.mask)
         self.assertEqual(msg.key, None)
         # Need to decode to check since gzipped payload is non-deterministic
         decoded = gzip_decode(msg.value)
@@ -68,9 +67,9 @@ class TestProtocol(unittest2.TestCase):
     @unittest2.skipUnless(has_snappy(), "Snappy not available")
     def test_create_snappy(self):
         payloads = ["v1", "v2"]
-        msg = create_snappy_message(payloads)
+        msg = create_encoded_message(payloads, CODEC_SNAPPY)
         self.assertEqual(msg.magic, 0)
-        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_SNAPPY)
+        self.assertEqual(msg.attributes, ATTRIBUTE_CODEC_MASK & CODEC_SNAPPY.mask)
         self.assertEqual(msg.key, None)
         decoded = snappy_decode(msg.value)
         expect = "".join([
@@ -703,11 +702,27 @@ class TestProtocol(unittest2.TestCase):
     def mock_create_message_fns(self):
         patches = contextlib.nested(
             mock.patch.object(kafka.protocol, "create_message",
-                              return_value=sentinel.message),
-            mock.patch.object(kafka.protocol, "create_gzip_message",
-                              return_value=sentinel.gzip_message),
-            mock.patch.object(kafka.protocol, "create_snappy_message",
-                              return_value=sentinel.snappy_message),
+                              return_value=sentinel.message)
+        )
+
+        with patches:
+            yield
+
+    @contextmanager
+    def mock_create_gzip_message_fns(self):
+        patches = contextlib.nested(
+            mock.patch('kafka.protocol.create_encoded_message',
+                              return_value=sentinel.gzip_message)
+        )
+
+        with patches:
+            yield
+
+    @contextmanager
+    def mock_create_snappy_message_fns(self):
+        patches = contextlib.nested(
+            mock.patch('kafka.protocol.create_encoded_message',
+                              return_value=sentinel.snappy_message)
         )
 
         with patches:
@@ -730,13 +745,13 @@ class TestProtocol(unittest2.TestCase):
 
         # CODEC_GZIP: Expect list of one gzip-encoded message.
         expect = [sentinel.gzip_message]
-        with self.mock_create_message_fns():
+        with self.mock_create_gzip_message_fns():
             message_set = create_message_set(messages, CODEC_GZIP)
         self.assertEqual(message_set, expect)
 
         # CODEC_SNAPPY: Expect list of one snappy-encoded message.
         expect = [sentinel.snappy_message]
-        with self.mock_create_message_fns():
+        with self.mock_create_snappy_message_fns():
             message_set = create_message_set(messages, CODEC_SNAPPY)
         self.assertEqual(message_set, expect)
 
