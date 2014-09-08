@@ -9,11 +9,12 @@ from kafka.codec import (
     gzip_encode, gzip_decode, snappy_encode, snappy_decode
 )
 from kafka.common import (
-    BrokerMetadata, PartitionMetadata, Message, OffsetAndMessage,
-    ProduceResponse, FetchResponse, OffsetResponse,
-    OffsetCommitResponse, OffsetFetchResponse, ProtocolError,
-    BufferUnderflowError, ChecksumError, ConsumerFetchSizeTooSmall,
-    UnsupportedCodecError
+    Message, OffsetAndMessage, TopicAndPartition,
+    BrokerMetadata, TopicMetadata, PartitionMetadata,
+    MetadataResponse, ProduceResponse, FetchResponse,
+    OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
+    ProtocolError, BufferUnderflowError, ChecksumError,
+    ConsumerFetchSizeTooSmall, UnsupportedCodecError
 )
 from kafka.util import (
     crc32, read_short_string, read_int_string, relative_unpack,
@@ -343,7 +344,8 @@ class KafkaProtocol(object):
                 yield OffsetResponse(topic, partition, error, tuple(offsets))
 
     @classmethod
-    def encode_metadata_request(cls, client_id, correlation_id, topics=None):
+    def encode_metadata_request(cls, client_id, correlation_id, topics=None,
+                                payloads=None):
         """
         Encode a MetadataRequest
 
@@ -353,7 +355,11 @@ class KafkaProtocol(object):
         correlation_id: int
         topics: list of strings
         """
-        topics = [] if topics is None else topics
+        if payloads is None:
+            topics = [] if topics is None else topics
+        else:
+            topics = payloads
+
         message = cls._encode_message_header(client_id, correlation_id,
                                              KafkaProtocol.METADATA_KEY)
 
@@ -376,28 +382,24 @@ class KafkaProtocol(object):
         ((correlation_id, numbrokers), cur) = relative_unpack('>ii', data, 0)
 
         # Broker info
-        brokers = {}
+        brokers = []
         for i in range(numbrokers):
             ((nodeId, ), cur) = relative_unpack('>i', data, cur)
             (host, cur) = read_short_string(data, cur)
             ((port,), cur) = relative_unpack('>i', data, cur)
-            brokers[nodeId] = BrokerMetadata(nodeId, host, port)
+            brokers.append(BrokerMetadata(nodeId, host, port))
 
         # Topic info
         ((num_topics,), cur) = relative_unpack('>i', data, cur)
-        topic_metadata = {}
+        topic_metadata = []
 
         for i in range(num_topics):
-            # NOTE: topic_error is discarded. Should probably be returned with
-            # the topic metadata.
             ((topic_error,), cur) = relative_unpack('>h', data, cur)
             (topic_name, cur) = read_short_string(data, cur)
             ((num_partitions,), cur) = relative_unpack('>i', data, cur)
-            partition_metadata = {}
+            partition_metadata = []
 
             for j in range(num_partitions):
-                # NOTE: partition_error_code is discarded. Should probably be
-                # returned with the partition metadata.
                 ((partition_error_code, partition, leader, numReplicas), cur) = \
                     relative_unpack('>hiii', data, cur)
 
@@ -407,13 +409,16 @@ class KafkaProtocol(object):
                 ((num_isr,), cur) = relative_unpack('>i', data, cur)
                 (isr, cur) = relative_unpack('>%di' % num_isr, data, cur)
 
-                partition_metadata[partition] = \
-                    PartitionMetadata(
-                        topic_name, partition, leader, replicas, isr)
+                partition_metadata.append(
+                    PartitionMetadata(topic_name, partition, leader,
+                                      replicas, isr, partition_error_code)
+                )
 
-            topic_metadata[topic_name] = partition_metadata
+            topic_metadata.append(
+                TopicMetadata(topic_name, topic_error, partition_metadata)
+            )
 
-        return brokers, topic_metadata
+        return MetadataResponse(brokers, topic_metadata)
 
     @classmethod
     def encode_offset_commit_request(cls, client_id, correlation_id,

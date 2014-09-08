@@ -9,7 +9,8 @@ from kafka import (
 )
 from kafka.codec import has_snappy
 from kafka.common import (
-    FetchRequest, ProduceRequest, UnknownTopicOrPartitionError
+    FetchRequest, ProduceRequest,
+    UnknownTopicOrPartitionError, LeaderNotAvailableError
 )
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -165,7 +166,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         producer = SimpleProducer(self.client)
 
         # At first it doesn't exist
-        with self.assertRaises(UnknownTopicOrPartitionError):
+        with self.assertRaises((UnknownTopicOrPartitionError,
+                                LeaderNotAvailableError)):
             producer.send_messages(new_topic, self.msg("one"))
 
     @kafka_versions("all")
