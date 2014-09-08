@@ -1,5 +1,7 @@
 import os
 
+from six.moves import xrange
+
 from kafka import SimpleConsumer, MultiProcessConsumer, create_message
 from kafka.common import ProduceRequest, ConsumerFetchSizeTooSmall
 from kafka.consumer import MAX_FETCH_BUFFER_SIZE_BYTES
@@ -150,7 +152,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         with Timer() as t:
             messages = consumer.get_messages(count=10, block=True, timeout=5)
             self.assert_message_count(messages, 5)
-        self.assertGreaterEqual(t.interval, 5)
+        self.assertGreaterEqual(t.interval, 4.95)
 
         consumer.stop()
 
@@ -269,7 +271,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             kwargs.setdefault('auto_commit', True)
 
         consumer_class = kwargs.pop('consumer', SimpleConsumer)
-        group = kwargs.pop('group', self.id())
+        group = kwargs.pop('group', self.id().encode('utf-8'))
         topic = kwargs.pop('topic', self.topic)
 
         if consumer_class == SimpleConsumer:

@@ -1,14 +1,21 @@
+import binascii
 import collections
 import struct
 import sys
 from threading import Thread, Event
 
+import six
+
 from kafka.common import BufferUnderflowError
 
 
+def crc32(data):
+    return binascii.crc32(data) & 0xffffffff
+
+
 def write_int_string(s):
-    if s is not None and not isinstance(s, str):
-        raise TypeError('Expected "%s" to be str\n'
+    if s is not None and not isinstance(s, six.binary_type):
+        raise TypeError('Expected "%s" to be bytes\n'
                         'data=%s' % (type(s), repr(s)))
     if s is None:
         return struct.pack('>i', -1)
@@ -17,12 +24,12 @@ def write_int_string(s):
 
 
 def write_short_string(s):
-    if s is not None and not isinstance(s, str):
-        raise TypeError('Expected "%s" to be str\n'
+    if s is not None and not isinstance(s, six.binary_type):
+        raise TypeError('Expected "%s" to be bytes\n'
                         'data=%s' % (type(s), repr(s)))
     if s is None:
         return struct.pack('>h', -1)
-    elif len(s) > 32767 and sys.version < (2, 7):
+    elif len(s) > 32767 and sys.version_info < (2, 7):
         # Python 2.6 issues a deprecation warning instead of a struct error
         raise struct.error(len(s))
     else:

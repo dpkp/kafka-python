@@ -1,8 +1,5 @@
 import os
-import socket
-import unittest2
 
-from kafka.conn import KafkaConnection
 from kafka.common import (
     FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
     KafkaTimeoutError
@@ -10,7 +7,7 @@ from kafka.common import (
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (
-    KafkaIntegrationTestCase, get_open_port, kafka_versions, Timer
+    KafkaIntegrationTestCase, kafka_versions
 )
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
@@ -51,7 +48,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
         # ensure_topic_exists should fail with KafkaTimeoutError
         with self.assertRaises(KafkaTimeoutError):
-            self.client.ensure_topic_exists("this_topic_doesnt_exist", timeout=0)
+            self.client.ensure_topic_exists(b"this_topic_doesnt_exist", timeout=0)
 
     ####################
     #   Offset Tests   #
@@ -59,12 +56,12 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("0.8.1", "0.8.1.1")
     def test_commit_fetch_offsets(self):
-        req = OffsetCommitRequest(self.topic, 0, 42, "metadata")
-        (resp,) = self.client.send_offset_commit_request("group", [req])
+        req = OffsetCommitRequest(self.topic, 0, 42, b"metadata")
+        (resp,) = self.client.send_offset_commit_request(b"group", [req])
         self.assertEquals(resp.error, 0)
 
         req = OffsetFetchRequest(self.topic, 0)
-        (resp,) = self.client.send_offset_fetch_request("group", [req])
+        (resp,) = self.client.send_offset_fetch_request(b"group", [req])
         self.assertEquals(resp.error, 0)
         self.assertEquals(resp.offset, 42)
-        self.assertEquals(resp.metadata, "")  # Metadata isn't stored for now
+        self.assertEquals(resp.metadata, b"")  # Metadata isn't stored for now

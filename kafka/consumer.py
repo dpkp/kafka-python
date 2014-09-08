@@ -1,12 +1,21 @@
 from __future__ import absolute_import
 
-from itertools import izip_longest, repeat
+try:
+    from itertools import zip_longest as izip_longest, repeat  # pylint: disable-msg=E0611
+except ImportError:  # python 2
+    from itertools import izip_longest as izip_longest, repeat
 import logging
 import time
 import numbers
 from threading import Lock
 from multiprocessing import Process, Queue as MPQueue, Event, Value
-from Queue import Empty, Queue
+
+import six
+
+try:
+    from Queue import Empty, Queue
+except ImportError:  # python 2
+    from queue import Empty, Queue
 
 import kafka.common
 from kafka.common import (
@@ -420,7 +429,7 @@ class SimpleConsumer(Consumer):
                       for p in self.fetch_offsets.keys())
         while partitions:
             requests = []
-            for partition, buffer_size in partitions.iteritems():
+            for partition, buffer_size in six.iteritems(partitions):
                 requests.append(FetchRequest(self.topic, partition,
                                              self.fetch_offsets[partition],
                                              buffer_size))
@@ -582,7 +591,7 @@ class MultiProcessConsumer(Consumer):
         for chunk in chunks:
             chunk = filter(lambda x: x is not None, chunk)
             args = (client.copy(),
-                    group, topic, chunk,
+                    group, topic, list(chunk),
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 

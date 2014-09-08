@@ -5,11 +5,13 @@ import random
 import socket
 import string
 import time
-import unittest2
 import uuid
 
-from kafka.common import OffsetRequest
+from six.moves import xrange
+from . import unittest
+
 from kafka import KafkaClient
+from kafka.common import OffsetRequest
 
 __all__ = [
     'random_string',
@@ -20,8 +22,8 @@ __all__ = [
 ]
 
 def random_string(l):
-    s = "".join(random.choice(string.letters) for i in xrange(l))
-    return s
+    s = "".join(random.choice(string.ascii_letters) for i in xrange(l))
+    return s.encode('utf-8')
 
 def kafka_versions(*versions):
     def kafka_versions(func):
@@ -45,7 +47,7 @@ def get_open_port():
     sock.close()
     return port
 
-class KafkaIntegrationTestCase(unittest2.TestCase):
+class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
     server = None
@@ -56,7 +58,8 @@ class KafkaIntegrationTestCase(unittest2.TestCase):
             return
 
         if not self.topic:
-            self.topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
+            topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10).decode('utf-8'))
+            self.topic = topic.encode('utf-8')
 
         if self.create_client:
             self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
@@ -84,7 +87,7 @@ class KafkaIntegrationTestCase(unittest2.TestCase):
         if s not in self._messages:
             self._messages[s] = '%s-%s-%s' % (s, self.id(), str(uuid.uuid4()))
 
-        return self._messages[s]
+        return self._messages[s].encode('utf-8')
 
 class Timer(object):
     def __enter__(self):

@@ -43,7 +43,7 @@ class RoundRobinPartitioner(Partitioner):
         if self.partitions != partitions:
             self._set_partitions(partitions)
 
-        return self.iterpart.next()
+        return next(self.iterpart)
 
 
 class HashedPartitioner(Partitioner):

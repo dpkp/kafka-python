@@ -22,11 +22,16 @@ class Tox(Command):
         sys.exit(tox.cmdline([]))
 
 
+test_require = ['tox', 'mock']
+if sys.version_info < (2, 7):
+    test_require.append('unittest2')
+
+
 setup(
     name="kafka-python",
     version=__version__,
 
-    tests_require=["tox", "mock", "unittest2"],
+    tests_require=test_require,
     cmdclass={"test": Tox},
 
     packages=["kafka"],
@@ -43,6 +48,7 @@ protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 """,
     keywords="apache kafka",
+    install_requires=['six'],
     classifiers = [
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
