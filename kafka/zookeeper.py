@@ -256,10 +256,10 @@ class ZSimpleConsumer(object):
         log.info("Consumer id set to: %s" % self.identifier)
 
         # Start the worker
-        self.proc = threading.Thread(target=self._check_and_allocate)
+        self.partioner_thread = threading.Thread(target=self._check_and_allocate)
 
-        #self.proc.daemon = True
-        self.proc.start()
+        self.partioner_thread.daemon = True
+        self.partioner_thread.start()
 
     def status(self):
         """
@@ -385,25 +385,20 @@ class ZSimpleConsumer(object):
 
     def stop(self):
         self.exit.set()
-        self.proc.join()
+        self.partioner_thread.join()
         self.zkclient.stop()
         self.zkclient.close()
-        #self._set_consumer(block=True)
         self.client.close()
 
     def commit(self):
         if self.consumer:
             self.consumer.commit()
-        #self._set_consumer(block=False)
 
     def seek(self, *args, **kwargs):
-        self._set_consumer()
-
         if self.consumer is None:
             raise RuntimeError("Error in partition allocation")
         elif not self.consumer:
             raise RuntimeError("Waiting for partition allocation")
-
         return self.consumer.seek(*args, **kwargs)
 
     def pending(self):
