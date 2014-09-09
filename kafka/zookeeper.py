@@ -212,11 +212,6 @@ class ZSimpleConsumer(object):
         #self.allocated = [ALLOCATION_CHANGING] * len(partitions)
 
 
-        # create consumer id
-        hostname = socket.gethostname()
-        self.identifier = "%s-%s-%s" % (topic, group, hostname)
-        log.debug("Consumer id set to: %s" % self.identifier)
-
         self.path = os.path.join(chroot, PARTITIONER_PATH, topic, group)
         log.debug("Using path %s for co-ordination" % self.path)
 
@@ -251,34 +246,20 @@ class ZSimpleConsumer(object):
         #self._set_partitions(self.allocated, [], ALLOCATION_CHANGING)
         self.consumer_state = ALLOCATION_CHANGING
 
+        # create consumer id
+        hostname = socket.gethostname()
+        self.identifier = "%s-%s-%s-%s-%s" % (topic,
+                                              group,
+                                              hostname,
+                                              os.getpid(),
+                                              uuid.uuid4().hex)
+        log.info("Consumer id set to: %s" % self.identifier)
 
-        self.identifier = '%s-%d-%s' % (self.identifier,
-                                   os.getpid(),
-                                   uuid.uuid4().hex)
         # Start the worker
         self.proc = threading.Thread(target=self._check_and_allocate)
 
-        self.proc.daemon = True
+        #self.proc.daemon = True
         self.proc.start()
-
-        # Stop the Zookeeper client (worker will create one itself)
-        # zkclient.stop()
-        # zkclient.close()
-
-        # Do the setup once and block till we get an allocation
-        #self._set_consumer(block=block_init, timeout=None)
-
-    def __repr__(self):
-        """
-        Give a string representation of the consumer
-        """
-        partitions = filter(lambda x: x>=0, self.allocated)
-        message = ','.join([str(i) for i in partitions])
-
-        if not message:
-            message = self.status()
-
-        return u'ZSimpleConsumer<%s>' % message
 
     def status(self):
         """
@@ -297,20 +278,7 @@ class ZSimpleConsumer(object):
         elif self.consumer_state == ALLOCATION_INACTIVE:
             return 'INACTIVE'
 
-    # def _set_partitions(self, array, partitions, filler):
-    #     """
-    #     Update partition info in the shared memory array
-    #     """
-    #     i = 0
-    #     for partition in partitions:
-    #         array[i] = partition
-    #         i += 1
-    #
-    #     while i < len(array):
-    #         array[i] = filler
-    #         i += 1
-
-    def _get_new_partioner(self):
+    def _get_new_partitioner(self):
         return self.zkclient.SetPartitioner(path=self.path,
                                                    set=self.partitions,
                                                    identifier=self.identifier,
@@ -327,7 +295,7 @@ class ZSimpleConsumer(object):
 
 
         # Set up the partitioner
-        partitioner = self._get_new_partioner()
+        partitioner = self._get_new_partitioner()
 
         # Once allocation is done, sleep for some time between each checks
         sleep_time = self.time_boundary / 2.0
@@ -357,7 +325,7 @@ class ZSimpleConsumer(object):
                 # We have been asked to release the partitions
 
                 log.info("Releasing partitions for reallocation")
-                #old = None
+                old = None
                 self.consumer.stop()
                 partitioner.release_set()
 
@@ -369,7 +337,7 @@ class ZSimpleConsumer(object):
 
                 log.error("Partitioner Failed. Creating new partitioner.")
 
-                partitioner = self._get_new_partioner()
+                partitioner = self._get_new_partitioner()
 
             elif partitioner.allocating:
                 # We have to wait till the partition is allocated
