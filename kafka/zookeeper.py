@@ -31,7 +31,7 @@ else:
 
 BROKER_IDS_PATH = 'brokers/ids/'      # Path where kafka stores broker info
 PARTITIONER_PATH = 'python/kafka/'    # Path to use for consumer co-ordination
-DEFAULT_TIME_BOUNDARY = 5
+DEFAULT_TIME_BOUNDARY = 10
 
 # Allocation states
 ALLOCATION_COMPLETED = -1
@@ -140,6 +140,7 @@ class ZKeyedProducer(ZProducer):
         self.producer.send(key, msg)
 
 
+
 class ZSimpleConsumer(object):
     """
     A consumer that uses Zookeeper to co-ordinate and share the partitions
@@ -201,20 +202,23 @@ class ZSimpleConsumer(object):
         self.ignore_non_allocation = ignore_non_allocation
         self.time_boundary = time_boundary
 
-        zkclient = KazooClient(hosts, handler=kazoo_handler())
-        zkclient.start()
+        self.zkclient = KazooClient(hosts, handler=kazoo_handler())
+        self.zkclient.start()
 
-        self.client = get_client(zkclient, chroot=chroot)
+        self.client = get_client(self.zkclient, chroot=chroot)
         self.client.load_metadata_for_topics(topic)
-        partitions = set(self.client.topic_partitions[topic])
+        self.partitions = set(self.client.topic_partitions[topic])
+
+        #self.allocated = [ALLOCATION_CHANGING] * len(partitions)
+
 
         # create consumer id
         hostname = socket.gethostname()
         self.identifier = "%s-%s-%s" % (topic, group, hostname)
         log.debug("Consumer id set to: %s" % self.identifier)
 
-        path = os.path.join(chroot, PARTITIONER_PATH, topic, group)
-        log.debug("Using path %s for co-ordination" % path)
+        self.path = os.path.join(chroot, PARTITIONER_PATH, topic, group)
+        log.debug("Using path %s for co-ordination" % self.path)
 
         # Create a function which can be used for creating consumers
         self.consumer = []
@@ -240,30 +244,29 @@ class ZSimpleConsumer(object):
         # Used by the worker to indicate that allocation has changed
         self.changed = threading.Event()
 
-
         # The shared memory and lock used for sharing allocation info
         self.lock = threading.Lock()
-        self.allocated = [0] * len(partitions)
 
         # Initialize the array
-        self._set_partitions(self.allocated, [], ALLOCATION_CHANGING)
+        #self._set_partitions(self.allocated, [], ALLOCATION_CHANGING)
         self.consumer_state = ALLOCATION_CHANGING
 
+
+        self.identifier = '%s-%d-%s' % (self.identifier,
+                                   os.getpid(),
+                                   uuid.uuid4().hex)
         # Start the worker
-        self.proc = threading.Thread(target=self._check_and_allocate,
-                                     args=(hosts,
-                                           path,
-                                           partitions,
-                                           self.allocated))
+        self.proc = threading.Thread(target=self._check_and_allocate)
+
         self.proc.daemon = True
         self.proc.start()
 
         # Stop the Zookeeper client (worker will create one itself)
-        zkclient.stop()
-        zkclient.close()
+        # zkclient.stop()
+        # zkclient.close()
 
         # Do the setup once and block till we get an allocation
-        self._set_consumer(block=block_init, timeout=None)
+        #self._set_consumer(block=block_init, timeout=None)
 
     def __repr__(self):
         """
@@ -294,70 +297,26 @@ class ZSimpleConsumer(object):
         elif self.consumer_state == ALLOCATION_INACTIVE:
             return 'INACTIVE'
 
-    def _set_partitions(self, array, partitions, filler):
-        """
-        Update partition info in the shared memory array
-        """
-        i = 0
-        for partition in partitions:
-            array[i] = partition
-            i += 1
+    # def _set_partitions(self, array, partitions, filler):
+    #     """
+    #     Update partition info in the shared memory array
+    #     """
+    #     i = 0
+    #     for partition in partitions:
+    #         array[i] = partition
+    #         i += 1
+    #
+    #     while i < len(array):
+    #         array[i] = filler
+    #         i += 1
 
-        while i < len(array):
-            array[i] = filler
-            i += 1
+    def _get_new_partioner(self):
+        return self.zkclient.SetPartitioner(path=self.path,
+                                                   set=self.partitions,
+                                                   identifier=self.identifier,
+                                                   time_boundary=self.time_boundary)
 
-    def _set_consumer(self, block=False, timeout=None):
-        """
-        Check if a new consumer has to be created because of a re-balance
-        """
-        if not block:
-            timeout = 0
-
-        if not self.changed.wait(timeout=timeout):
-            return
-
-        # There is a change. Get our new partitions
-        with self.lock:
-            partitions = [p for p in self.allocated]
-            self.changed.clear()
-
-        # If we have a consumer clean it up
-        if self.consumer:
-            self.consumer.stop()
-
-        self.consumer = None
-        self.consumer_state = partitions[0]
-
-        if self.consumer_state == ALLOCATION_MISSED:
-            # Check if we must change the consumer
-            if not self.ignore_non_allocation:
-                raise RuntimeError("Did not get any partition allocation")
-            else:
-                log.info("No partitions allocated. Ignoring")
-                self.consumer = []
-
-        elif self.consumer_state == ALLOCATION_FAILED:
-            # Allocation has failed. Nothing we can do about it
-            raise RuntimeError("Error in partition allocation")
-
-        elif self.consumer_state == ALLOCATION_CHANGING:
-            # Allocation is changing because of consumer changes
-            self.consumer = []
-            log.info("Partitions are being reassigned")
-            return
-
-        elif self.consumer_state == ALLOCATION_INACTIVE:
-            log.info("Consumer is inactive")
-        else:
-            # Create a new consumer
-            partitions = filter(lambda x: x >= 0, partitions)
-            self.consumer = self.consumer_fact(partitions=partitions)
-            self.consumer_state = ALLOCATION_COMPLETED
-            log.info("Reinitialized consumer with partitions: %s" % partitions)
-
-
-    def _check_and_allocate(self, hosts, path, partitions, array):
+    def _check_and_allocate(self):
         """
         Checks if a new allocation is needed for the partitions.
         If so, co-ordinates with Zookeeper to get a set of partitions
@@ -366,35 +325,29 @@ class ZSimpleConsumer(object):
 
         old = None
 
-        # Start zookeeper connection again
-        zkclient = KazooClient(hosts, handler=kazoo_handler())
-        zkclient.start()
-
-        identifier = '%s-%d-%s' % (self.identifier,
-                                   os.getpid(),
-                                   uuid.uuid4().hex)
 
         # Set up the partitioner
-        partitioner = zkclient.SetPartitioner(path=path, set=partitions,
-                                              identifier=identifier,
-                                              time_boundary=self.time_boundary)
+        partitioner = self._get_new_partioner()
 
         # Once allocation is done, sleep for some time between each checks
         sleep_time = self.time_boundary / 2.0
 
+
         # Keep running the allocation logic till we are asked to exit
         while not self.exit.is_set():
+
+            log.info("ZK Partitoner state: %s"%partitioner.state)
+
             if partitioner.acquired:
                 # A new set of partitions has been acquired
+
                 new = list(partitioner)
 
                 # If there is a change, notify for a consumer change
                 if new != old:
                     log.info("Acquired partitions: %s" % str(new))
+                    self.consumer = self.consumer_fact(partitions=new)
                     old = new
-                    with self.lock:
-                        self._set_partitions(array, new, ALLOCATION_MISSED)
-                        self.changed.set()
 
                 # Wait for a while before checking again. In the meantime
                 # wake up if the user calls for exit
@@ -402,21 +355,21 @@ class ZSimpleConsumer(object):
 
             elif partitioner.release:
                 # We have been asked to release the partitions
-                log.info("Releasing partitions for reallocation")
-                old = None
-                with self.lock:
-                    self._set_partitions(array, [], ALLOCATION_CHANGING)
-                    self.changed.set()
 
+                log.info("Releasing partitions for reallocation")
+                #old = None
+                self.consumer.stop()
                 partitioner.release_set()
 
             elif partitioner.failed:
                 # Partition allocation failed
-                old = []
-                with self.lock:
-                    self._set_partitions(array, old, ALLOCATION_FAILED)
-                    self.changed.set()
-                break
+
+                # Failure means we need to create a new SetPartitioner:
+                # see: http://kazoo.readthedocs.org/en/latest/api/recipe/partitioner.html
+
+                log.error("Partitioner Failed. Creating new partitioner.")
+
+                partitioner = self._get_new_partioner()
 
             elif partitioner.allocating:
                 # We have to wait till the partition is allocated
@@ -425,13 +378,6 @@ class ZSimpleConsumer(object):
 
         # Clean up
         partitioner.finish()
-
-        with self.lock:
-            self._set_partitions(array, [], ALLOCATION_INACTIVE)
-            self.changed.set()
-
-        zkclient.stop()
-        zkclient.close()
 
     def __iter__(self):
         """
@@ -456,7 +402,7 @@ class ZSimpleConsumer(object):
         timeout: If None, and block=True, the API will block infinitely.
                  If >0, API will block for specified time (in seconds)
         """
-        self._set_consumer(block=False, timeout=timeout)
+        #self._set_consumer(block=False, timeout=timeout)
 
         if self.consumer is None:
             raise RuntimeError("Error in partition allocation")
@@ -472,13 +418,15 @@ class ZSimpleConsumer(object):
     def stop(self):
         self.exit.set()
         self.proc.join()
-        self._set_consumer(block=True)
+        self.zkclient.stop()
+        self.zkclient.close()
+        #self._set_consumer(block=True)
         self.client.close()
 
     def commit(self):
         if self.consumer:
             self.consumer.commit()
-        self._set_consumer(block=False)
+        #self._set_consumer(block=False)
 
     def seek(self, *args, **kwargs):
         self._set_consumer()
