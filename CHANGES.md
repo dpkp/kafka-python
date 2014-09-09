@@ -1,3 +1,11 @@
+# 0.9.3 (Unreleased)
+
+* Metadata Refactor (dpkp  PR 223)
+* Add Python 3 support (brutasse/wizzat - PR 227)
+* Minor cleanups - imports / README / PyPI classifiers (dpkp - PR 221)
+* Fix socket test (dpkp - PR 222)
+* Fix exception catching bug in test_failover_integration (zever - PR 216)
+
 # 0.9.2 (Aug 26, 2014)
 
 * Warn users that async producer does not reliably handle failures (dpkp - PR 213)
