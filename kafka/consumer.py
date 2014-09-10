@@ -468,7 +468,11 @@ class SimpleConsumer(Consumer):
                     log.debug("Done iterating over partition %s" % partition)
             partitions = retry_partitions
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size,
+        fetch_size_bytes=FETCH_MIN_BYTES,
+        buffer_size=FETCH_BUFFER_SIZE_BYTES,
+        max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
+        offset_dict=None):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -487,7 +491,18 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
                               partitions=chunk,
                               auto_commit=False,
                               auto_commit_every_n=None,
-                              auto_commit_every_t=None)
+                              auto_commit_every_t=None,
+                              fetch_size_bytes=fetch_size_bytes,
+                              buffer_size=buffer_size,
+                              max_buffer_size=max_buffer_size,
+                              )
+
+
+    for p in chunk:
+        if offset_dict is not None:
+            start_offset = offset_dict[p]['start_offset']
+            consumer.offsets[p] = start_offset
+            consumer.fetch_offsets[p] = start_offset
 
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
@@ -504,9 +519,14 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
         # indicates a specific number of messages, follow that advice
         count = 0
 
-        message = consumer.get_message()
-        if message:
-            queue.put(message)
+        # Returns a tuple of partition and OffsetMessage
+        result = consumer.get_message(get_partition_info=True)
+
+        if result:
+            partition, msg = result
+            if offset_dict is not None and msg.offset > offset_dict[partition]['end_offset']:
+                break
+            queue.put(result)
             count += 1
 
             # We have reached the required size. The controller might have
@@ -543,6 +563,10 @@ class MultiProcessConsumer(Consumer):
                The available partitions will be divided among these processes
     partitions_per_proc: Number of partitions to be allocated per process
                (overrides num_procs)
+    offset_dict: a dictionary of offets broken down by partitions.
+                 This consumer will consume messages starting from the start offset to
+                 the end offset.
+                 Example { '0' : {'start_offset' : 111, 'end_offset' :222 }}
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
@@ -553,7 +577,11 @@ class MultiProcessConsumer(Consumer):
     def __init__(self, client, group, topic, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_procs=1, partitions_per_proc=0,
+                 offset_dict=None,
+                 fetch_size_bytes=FETCH_MIN_BYTES,
+                 buffer_size=FETCH_BUFFER_SIZE_BYTES,
+                 max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -594,7 +622,15 @@ class MultiProcessConsumer(Consumer):
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 
-            proc = Process(target=_mp_consume, args=args)
+            kwargs = {}
+            if offset_dict is not None:
+                kwargs['offset_dict'] = offset_dict
+
+            kwargs['fetch_size_bytes'] = fetch_size_bytes
+            kwargs['buffer_size'] = buffer_size
+            kwargs['max_buffer_size'] = max_buffer_size
+
+            proc = Process(target=_mp_consume, args=args, kwargs=kwargs)
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
