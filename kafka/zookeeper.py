@@ -216,7 +216,7 @@ class ZSimpleConsumer(object):
         log.debug("Using path %s for co-ordination" % self.path)
 
         # Create a function which can be used for creating consumers
-        self.consumer = []
+        self.consumer = None
         self.consumer_fact = partial(SimpleConsumer,
                                      self.client,
                                      group,
@@ -314,7 +314,10 @@ class ZSimpleConsumer(object):
                 # If there is a change, notify for a consumer change
                 if new != old:
                     log.info("Acquired partitions: %s" % str(new))
-                    self.consumer = self.consumer_fact(partitions=new)
+                    if len(new) > 0:
+                        self.consumer = self.consumer_fact(partitions=new)
+                    else:
+                        self.consumer = None
                     old = new
 
                 # Wait for a while before checking again. In the meantime
@@ -326,7 +329,8 @@ class ZSimpleConsumer(object):
 
                 log.info("Releasing partitions for reallocation")
                 old = None
-                self.consumer.stop()
+                if self.consumer is not None:
+                    self.consumer.stop()
                 partitioner.release_set()
 
             elif partitioner.failed:
@@ -370,11 +374,8 @@ class ZSimpleConsumer(object):
         timeout: If None, and block=True, the API will block infinitely.
                  If >0, API will block for specified time (in seconds)
         """
-        #self._set_consumer(block=False, timeout=timeout)
 
         if self.consumer is None:
-            raise RuntimeError("Error in partition allocation")
-        elif not self.consumer:
             # This is needed in cases where gevent is used with
             # a thread that does not have any calls that would yield.
             # If we do not sleep here a greenlet could spin indefinitely.
