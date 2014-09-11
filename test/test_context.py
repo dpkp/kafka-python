@@ -1,7 +1,7 @@
 """
 OffsetCommitContext tests.
 """
-from unittest2 import TestCase
+from . import unittest
 
 from mock import MagicMock, patch
 
@@ -9,7 +9,7 @@ from kafka.common import OffsetOutOfRangeError
 from kafka.context import OffsetCommitContext
 
 
-class TestOffsetCommitContext(TestCase):
+class TestOffsetCommitContext(unittest.TestCase):
     """
     OffsetCommitContext tests.
     """
