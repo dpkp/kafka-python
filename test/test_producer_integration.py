@@ -2,6 +2,8 @@ import os
 import time
 import uuid
 
+from six.moves import range
+
 from kafka import (
     SimpleProducer, KeyedProducer,
     create_message, create_gzip_message, create_snappy_message,
