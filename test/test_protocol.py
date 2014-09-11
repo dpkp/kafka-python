@@ -453,31 +453,31 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(encoded, expected)
 
     def _create_encoded_metadata_response(self, brokers, topics):
-        encoded = struct.pack('>ii', 3, len(brokers))
+        encoded = []
+        encoded.append(struct.pack('>ii', 3, len(brokers)))
         for broker in brokers:
-            encoded += struct.pack('>ih%dsi' % len(broker.host), broker.nodeId,
-                                   len(broker.host), broker.host, broker.port)
+            encoded.append(struct.pack('>ih%dsi' % len(broker.host),
+                                       broker.nodeId, len(broker.host),
+                                       broker.host, broker.port))
 
-        encoded += struct.pack('>i', len(topics))
+        encoded.append(struct.pack('>i', len(topics)))
         for topic in topics:
-            encoded += struct.pack('>hh%dsi' % len(topic.topic),
-                                   topic.error, len(topic.topic),
-                                   topic.topic, len(topic.partitions))
+            encoded.append(struct.pack('>hh%dsi' % len(topic.topic),
+                                       topic.error, len(topic.topic),
+                                       topic.topic, len(topic.partitions)))
             for metadata in topic.partitions:
-                encoded += struct.pack('>hiii',
-                                       metadata.error,
-                                       metadata.partition,
-                                       metadata.leader,
-                                       len(metadata.replicas))
+                encoded.append(struct.pack('>hiii', metadata.error,
+                                           metadata.partition, metadata.leader,
+                                           len(metadata.replicas)))
                 if len(metadata.replicas) > 0:
-                    encoded += struct.pack('>%di' % len(metadata.replicas),
-                                           *metadata.replicas)
+                    encoded.append(struct.pack('>%di' % len(metadata.replicas),
+                                               *metadata.replicas))
 
-                encoded += struct.pack('>i', len(metadata.isr))
+                encoded.append(struct.pack('>i', len(metadata.isr)))
                 if len(metadata.isr) > 0:
-                    encoded += struct.pack('>%di' % len(metadata.isr),
-                                           *metadata.isr)
-        return encoded
+                    encoded.append(struct.pack('>%di' % len(metadata.isr),
+                                               *metadata.isr))
+        return b''.join(encoded)
 
     def test_decode_metadata_response(self):
         node_brokers = [
