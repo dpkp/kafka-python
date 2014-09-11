@@ -63,6 +63,9 @@ Message = namedtuple("Message",
 TopicAndPartition = namedtuple("TopicAndPartition",
     ["topic", "partition"])
 
+KafkaMessage = namedtuple("KafkaMessage",
+    ["topic", "partition", "offset", "key", "value"])
+
 
 #################
 #   Exceptions  #
@@ -179,6 +182,10 @@ class ConsumerFetchSizeTooSmall(KafkaError):
 
 
 class ConsumerNoMoreData(KafkaError):
+    pass
+
+
+class ConsumerTimeout(KafkaError):
     pass
 
 
