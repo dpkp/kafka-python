@@ -6,7 +6,7 @@ from . import unittest
 
 from kafka import KafkaClient, SimpleConsumer
 from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
-from kafka.producer import Producer
+from kafka.producer.base import Producer
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (

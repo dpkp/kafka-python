@@ -5,7 +5,7 @@ import logging
 from mock import MagicMock
 from . import unittest
 
-from kafka.producer import Producer
+from kafka.producer.base import Producer
 
 class TestKafkaProducer(unittest.TestCase):
     def test_producer_message_types(self):
