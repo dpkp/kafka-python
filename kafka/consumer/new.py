@@ -152,7 +152,7 @@ class KafkaConsumer(object):
   def _fetch_stored_offsets(self):
     logger.info("Consumer fetching stored offsets")
     for topic in self.topics:
-      for partition in self.client.topic_partitions[topic]:
+      for partition in self.client.get_partition_ids_for_topic(topic):
 
         (resp,) = self.client.send_offset_fetch_request(
             self._config['group_id'],
@@ -179,19 +179,19 @@ class KafkaConsumer(object):
   def _auto_reset_offsets(self):
     logger.info("Consumer auto-resetting offsets")
     for topic in self.topics:
-      for partition in self.client.topic_partitions[topic]:
+      for partition in self.client.get_partition_ids_for_topic(topic):
 
         self._offsets.fetch[topic][partition] = self._reset_partition_offset(topic, partition)
         self._offsets.commit[topic][partition] = None
 
   def _reset_highwater_offsets(self):
     for topic in self.topics:
-      for partition in self.client.topic_partitions[topic]:
+      for partition in self.client.get_partition_ids_for_topic(topic):
         self._offsets.highwater[topic][partition] = None
 
   def _reset_task_done_offsets(self):
     for topic in self.topics:
-      for partition in self.client.topic_partitions[topic]:
+      for partition in self.client.get_partition_ids_for_topic(topic):
         self._offsets.task_done[topic][partition] = None
 
   def __repr__(self):
