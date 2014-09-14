@@ -197,6 +197,10 @@ class UnsupportedCodecError(KafkaError):
     pass
 
 
+class KafkaConfigurationError(KafkaError):
+    pass
+
+
 kafka_errors = {
     -1 : UnknownError,
     0  : NoError,
