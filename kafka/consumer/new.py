@@ -146,7 +146,7 @@ class KafkaConsumer(object):
   def _fetch_stored_offsets(self):
     logger.info("Consumer fetching stored offsets")
     for topic, partition in self._topics:
-      (resp,) = self.client.send_offset_fetch_request(
+      (resp,) = self._client.send_offset_fetch_request(
           self._config['group_id'],
           [OffsetFetchRequest(topic, partition)],
           fail_on_error=False)
@@ -288,7 +288,7 @@ class KafkaConsumer(object):
 
     if commits:
       logger.info('committing consumer offsets to group %s', self._config['group_id'])
-      resps = self.client.send_offset_commit_request(self._config['group_id'],
+      resps = self._client.send_offset_commit_request(self._config['group_id'],
                                                      commits,
                                                      fail_on_error=False)
 
@@ -324,7 +324,11 @@ class KafkaConsumer(object):
       logger.info("Configuring consumer to auto-commit offsets")
       self._set_next_auto_commit_time()
 
-    self.client = KafkaClient(self._config['metadata_broker_list'],
+    if self._config['metadata_broker_list'] is None:
+      raise KafkaConfigurationError('metadata_broker_list required to '
+                                    'configure KafkaConsumer')
+
+    self._client = KafkaClient(self._config['metadata_broker_list'],
                               client_id=self._config['client_id'],
                               timeout=(self._config['socket_timeout_ms'] / 1000.0))
 
@@ -347,7 +351,7 @@ class KafkaConsumer(object):
     kafka.set_topic_partitions("topic1", ("topic2", 2), {"topic3": 0})
     """
     self._topics = []
-    self.client.load_metadata_for_topics()
+    self._client.load_metadata_for_topics()
 
     # Handle different topic types
     for arg in topics:
@@ -423,7 +427,7 @@ class KafkaConsumer(object):
     # client.send_fetch_request will collect topic/partition requests by leader
     # and send each group as a single FetchRequest to the correct broker
     try:
-      responses = self.client.send_fetch_request(fetches,
+      responses = self._client.send_fetch_request(fetches,
                                                  max_wait_time=max_wait_time,
                                                  min_bytes=min_bytes,
                                                  fail_on_error=False)
@@ -504,7 +508,7 @@ class KafkaConsumer(object):
   def get_partition_offsets(self, topic, partition, request_time, num_offsets):
     reqs = [OffsetRequest(topic, partition, request_time, num_offsets)]
 
-    (resp,) = self.client.send_offset_request(reqs)
+    (resp,) = self._client.send_offset_request(reqs)
 
     check_error(resp)
 
@@ -521,7 +525,7 @@ class KafkaConsumer(object):
       logger.info("Sleeping for refresh_leader_backoff_ms: %d", sleep_ms)
       time.sleep(sleep_ms / 1000.0)
       try:
-        self.client.load_metadata_for_topics()
+        self._client.load_metadata_for_topics()
       except KafkaUnavailableError:
         logger.warning("Unable to refresh topic metadata... cluster unavailable")
         self._check_consumer_timeout()
