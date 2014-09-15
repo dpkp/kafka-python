@@ -19,6 +19,7 @@ from functools import partial
 from kafka.client import KafkaClient
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.consumer import SimpleConsumer
+from kazoo.exceptions import SessionExpiredError
 from kazoo.client import KazooClient
 import time
 import sys
@@ -139,6 +140,8 @@ class ZKeyedProducer(ZProducer):
     def send(self, key, msg):
         self.producer.send(key, msg)
 
+class DefaultZSimpleConsumerException(Exception):
+    pass
 
 
 class ZSimpleConsumer(object):
@@ -255,6 +258,9 @@ class ZSimpleConsumer(object):
                                               uuid.uuid4().hex)
         log.info("Consumer id set to: %s" % self.identifier)
 
+        self.got_error = False
+        self.error = DefaultZSimpleConsumerException()
+
         # Start the worker
         self.partioner_thread = threading.Thread(target=self._check_and_allocate)
 
@@ -305,48 +311,58 @@ class ZSimpleConsumer(object):
         while not self.exit.is_set():
 
             log.info("ZK Partitoner state: %s"%partitioner.state)
+            try:
+                if partitioner.acquired:
+                    # A new set of partitions has been acquired
 
-            if partitioner.acquired:
-                # A new set of partitions has been acquired
+                    new = list(partitioner)
 
-                new = list(partitioner)
+                    # If there is a change, notify for a consumer change
+                    if new != old:
+                        log.info("Acquired partitions: %s" % str(new))
+                        if len(new) > 0:
+                            self.consumer = self.consumer_fact(partitions=new)
+                        else:
+                            self.consumer = None
+                        old = new
 
-                # If there is a change, notify for a consumer change
-                if new != old:
-                    log.info("Acquired partitions: %s" % str(new))
-                    if len(new) > 0:
-                        self.consumer = self.consumer_fact(partitions=new)
-                    else:
-                        self.consumer = None
-                    old = new
+                    # Wait for a while before checking again. In the meantime
+                    # wake up if the user calls for exit
+                    self.exit.wait(sleep_time)
 
-                # Wait for a while before checking again. In the meantime
-                # wake up if the user calls for exit
-                self.exit.wait(sleep_time)
+                elif partitioner.release:
+                    # We have been asked to release the partitions
 
-            elif partitioner.release:
-                # We have been asked to release the partitions
+                    log.info("Releasing partitions for reallocation")
+                    old = None
+                    if self.consumer is not None:
+                        self.consumer.stop()
+                    partitioner.release_set()
 
-                log.info("Releasing partitions for reallocation")
-                old = None
-                if self.consumer is not None:
-                    self.consumer.stop()
-                partitioner.release_set()
+                elif partitioner.failed:
+                    # Partition allocation failed
 
-            elif partitioner.failed:
-                # Partition allocation failed
+                    # Failure means we need to create a new SetPartitioner:
+                    # see: http://kazoo.readthedocs.org/en/latest/api/recipe/partitioner.html
 
-                # Failure means we need to create a new SetPartitioner:
-                # see: http://kazoo.readthedocs.org/en/latest/api/recipe/partitioner.html
+                    log.error("Partitioner Failed. Creating new partitioner.")
 
-                log.error("Partitioner Failed. Creating new partitioner.")
+                    partitioner = self._get_new_partitioner()
 
-                partitioner = self._get_new_partitioner()
-
-            elif partitioner.allocating:
-                # We have to wait till the partition is allocated
-                log.info("Waiting for partition allocation")
-                partitioner.wait_for_acquire(timeout=1)
+                elif partitioner.allocating:
+                    # We have to wait till the partition is allocated
+                    log.info("Waiting for partition allocation")
+                    partitioner.wait_for_acquire(timeout=1)
+            except SessionExpiredError as e:
+                log.error("Zookeeper session expired. Error:%s"%e)
+                self.error = e
+                self.got_error = True
+                break
+            except Exception as e:
+                log.error("Exception raised in partitioner thread. Error:%s"%e)
+                self.error = e
+                self.got_error = True
+                break
 
         # Clean up
         partitioner.finish()
@@ -374,6 +390,9 @@ class ZSimpleConsumer(object):
         timeout: If None, and block=True, the API will block infinitely.
                  If >0, API will block for specified time (in seconds)
         """
+
+        if self.got_error:
+            raise self.error
 
         if self.consumer is None:
             # This is needed in cases where gevent is used with
