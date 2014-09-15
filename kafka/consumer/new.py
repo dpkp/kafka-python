@@ -172,7 +172,7 @@ class KafkaConsumer(object):
         self._msg_iter = self.fetch_messages()
 
       # Check for auto-commit
-      if self.should_auto_commit():
+      if self._should_auto_commit():
         self.commit()
 
       try:
@@ -220,7 +220,7 @@ class KafkaConsumer(object):
 
     self._offsets.task_done[topic_partition] = offset
 
-  def should_auto_commit(self):
+  def _should_auto_commit(self):
     if not self._config['auto_commit_enable']:
       return False
 
