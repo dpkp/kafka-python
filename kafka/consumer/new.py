@@ -122,8 +122,8 @@ class KafkaConsumer(object):
 
   def __init__(self, *topics, **configs):
     self.configure(**configs)
-
     self.set_topic_partitions(*topics)
+    self._msg_iter = None
 
     # Setup offsets
     self._offsets = OffsetsStruct(fetch=defaultdict(dict),
@@ -142,9 +142,6 @@ class KafkaConsumer(object):
     # should always get initialized to None
     self._reset_highwater_offsets()
     self._reset_task_done_offsets()
-
-    # Start the message fetch generator
-    self._msg_iter = self.fetch_messages()
 
   def _fetch_stored_offsets(self):
     logger.info("Consumer fetching stored offsets")
@@ -198,6 +195,10 @@ class KafkaConsumer(object):
     self._set_consumer_timeout_start()
     while True:
 
+      # Fetch a new batch if needed
+      if self._msg_iter is None:
+        self._msg_iter = self.fetch_messages()
+
       # Check for auto-commit
       if self.should_auto_commit():
         self.commit()
@@ -205,9 +206,9 @@ class KafkaConsumer(object):
       try:
         return self._msg_iter.next()
 
-      # If the previous batch finishes, start get new batch
+      # Handle batch completion
       except StopIteration:
-        self._msg_iter = self.fetch_messages()
+        self._msg_iter = None
 
       self._check_consumer_timeout()
 
