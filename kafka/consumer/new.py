@@ -290,6 +290,27 @@ class KafkaConsumer(object):
       return False
 
   def configure(self, **configs):
+    """
+    Configuration settings can be passed to constructor,
+    otherwise defaults will be used:
+      client_id='kafka.consumer.XXX',
+      group_id=None,
+      fetch_message_max_bytes=1024*1024,
+      fetch_min_bytes=1,
+      fetch_wait_max_ms=100,
+      refresh_leader_backoff_ms=200,
+      metadata_broker_list=None,
+      socket_timeout_ms=30*1000,
+      auto_offset_reset='largest',
+      deserializer_class=Event.from_bytes,
+      auto_commit_enable=False,
+      auto_commit_interval_ms=60 * 1000,
+      consumer_timeout_ms=-1
+
+
+    Configuration parameters are described in more detail at
+    http://kafka.apache.org/documentation.html#highlevelconsumerapi
+    """
     self._config = {}
     for key in DEFAULT_CONSUMER_CONFIG:
       self._config[key] = configs.pop(key, DEFAULT_CONSUMER_CONFIG[key])
