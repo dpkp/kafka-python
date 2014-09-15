@@ -233,9 +233,16 @@ class KafkaConsumer(object):
     self._next_commit = time.time() + (self._config['auto_commit_interval_ms'] / 1000.0)
 
   def commit(self):
+    """
+    Store consumed message offsets (marked via task_done())
+    to kafka cluster for this consumer_group.
+
+    Note -- this functionality requires server version >=0.8.1.1
+    see https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
+    """
     if not self._config['group_id']:
       logger.warning('Cannot commit without a group_id!')
-      raise RuntimeError('Attempted to commit offsets without a configured consumer group (group_id)')
+      raise KafkaConfigurationError('Attempted to commit offsets without a configured consumer group (group_id)')
 
     # API supports storing metadata with each commit
     # but for now it is unused
