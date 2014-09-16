@@ -119,9 +119,9 @@ class KafkaClient(object):
                 response = conn.recv(requestId)
                 return decoder_fn(response)
 
-            except Exception as e:
-                log.warning("Could not send request [%r] to server %s:%i, "
-                            "trying next server: %s" % (requestId, host, port, e))
+            except Exception:
+                log.exception("Could not send request [%r] to server %s:%i, "
+                              "trying next server" % (requestId, host, port))
 
         raise KafkaUnavailableError("All servers failed to process request")
 
