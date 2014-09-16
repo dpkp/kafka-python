@@ -330,8 +330,14 @@ class KafkaConsumer(object):
         max_wait_time = self._config['fetch_wait_max_ms']
         min_bytes = self._config['fetch_min_bytes']
 
-        fetches = []
+        # Get current fetch offsets
         offsets = self._offsets.fetch
+        if not offsets:
+            if not self._topics:
+                raise KafkaConfigurationError('No topics or partitions configured')
+            raise KafkaConfigurationError('No fetch offsets found when calling fetch_messages')
+
+        fetches = []
         for topic_partition, offset in offsets.iteritems():
             fetches.append(FetchRequest(topic_partition[0], topic_partition[1], offset, max_bytes))
 
