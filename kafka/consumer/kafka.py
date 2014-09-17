@@ -485,12 +485,11 @@ class KafkaConsumer(object):
                            offset, prev_done)
 
         # Warn on smaller offsets than previous commit
-        # "commit" offsets are actually the offset of the next # message to fetch.
-        # so task_done should be compared with (commit - 1)
-        prev_done = (self._offsets.commit[topic_partition] - 1)
-        if prev_done is not None and (offset <= prev_done):
-            logger.warning('Marking task_done on a previously committed offset?: %d <= %d',
-                           offset, prev_done)
+        # "commit" offsets are actually the offset of the next message to fetch.
+        prev_commit = self._offsets.commit[topic_partition]
+        if prev_commit is not None and ((offset + 1) <= prev_commit):
+            logger.warning('Marking task_done on a previously committed offset?: %d (+1) <= %d',
+                           offset, prev_commit)
 
         self._offsets.task_done[topic_partition] = offset
 
