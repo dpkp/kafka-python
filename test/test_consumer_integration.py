@@ -326,14 +326,15 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("all")
     def test_kafka_consumer__blocking(self):
+        TIMEOUT_MS = 500
         consumer = self.kafka_consumer(auto_offset_reset='smallest',
-                                       consumer_timeout_ms=1000)
+                                       consumer_timeout_ms=TIMEOUT_MS)
 
         # Ask for 5 messages, nothing in queue, block 5 seconds
         with Timer() as t:
             with self.assertRaises(ConsumerTimeout):
                 msg = consumer.next()
-        self.assertGreaterEqual(t.interval, 1)
+        self.assertGreaterEqual(t.interval, TIMEOUT_MS / 1000.0 )
 
         self.send_messages(0, range(0, 10))
 
@@ -344,7 +345,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
                 msg = consumer.next()
                 messages.add((msg.partition, msg.offset))
         self.assertEqual(len(messages), 5)
-        self.assertLess(t.interval, 1)
+        self.assertLess(t.interval, TIMEOUT_MS / 1000.0 )
 
         # Ask for 10 messages, get 5 back, block 5 seconds
         messages = set()
@@ -354,7 +355,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
                     msg = consumer.next()
                     messages.add((msg.partition, msg.offset))
         self.assertEqual(len(messages), 5)
-        self.assertGreaterEqual(t.interval, 1)
+        self.assertGreaterEqual(t.interval, TIMEOUT_MS / 1000.0 )
 
     @kafka_versions("0.8.1", "0.8.1.1")
     def test_kafka_consumer__offset_commit_resume(self):
