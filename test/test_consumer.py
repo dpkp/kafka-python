@@ -2,8 +2,7 @@
 from mock import MagicMock
 from . import unittest
 
-from kafka.consumer import SimpleConsumer
-from kafka.consumer.new import KafkaConsumer
+from kafka import SimpleConsumer, KafkaConsumer
 from kafka.common import KafkaConfigurationError
 
 class TestKafkaConsumer(unittest.TestCase):

@@ -103,7 +103,7 @@ class KafkaConsumer(object):
 
     Configuration settings can be passed to constructor,
     otherwise defaults will be used:
-      client_id='kafka.consumer.XXX',
+      client_id='kafka.consumer.kafka',
       group_id=None,
       fetch_message_max_bytes=1024*1024,
       fetch_min_bytes=1,
@@ -129,7 +129,7 @@ class KafkaConsumer(object):
         """
         Configuration settings can be passed to constructor,
         otherwise defaults will be used:
-            client_id='kafka.consumer.XXX',
+            client_id='kafka.consumer.kafka',
             group_id=None,
             fetch_message_max_bytes=1024*1024,
             fetch_min_bytes=1,

@@ -3,12 +3,11 @@ import os
 
 from six.moves import xrange
 
-from kafka import SimpleConsumer, MultiProcessConsumer, create_message
+from kafka import SimpleConsumer, MultiProcessConsumer, KafkaConsumer, create_message
 from kafka.common import (
     ProduceRequest, ConsumerFetchSizeTooSmall, ConsumerTimeout
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
-from kafka.consumer.new import KafkaConsumer
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (

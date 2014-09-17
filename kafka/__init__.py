@@ -13,7 +13,7 @@ from kafka.protocol import (
 )
 from kafka.producer import SimpleProducer, KeyedProducer
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
-from kafka.consumer import SimpleConsumer, MultiProcessConsumer
+from kafka.consumer import SimpleConsumer, MultiProcessConsumer, KafkaConsumer
 
 __all__ = [
     'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
