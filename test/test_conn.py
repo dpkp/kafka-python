@@ -120,7 +120,7 @@ class ConnTest(unittest.TestCase):
 
     def test_recv(self):
 
-        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
+        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload'])
 
     def test_recv__reconnects_on_dirty_conn(self):
 
@@ -151,8 +151,8 @@ class ConnTest(unittest.TestCase):
     def test_recv__doesnt_consume_extra_data_in_stream(self):
 
         # Here just test that each call to recv will return a single payload
-        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload'])
-        self.assertEquals(self.conn.recv(self.config['request_id']), self.config['payload2'])
+        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload'])
+        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload2'])
 
     def test_close__object_is_reusable(self):
 

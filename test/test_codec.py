@@ -15,14 +15,14 @@ class TestCodec(unittest.TestCase):
         for i in xrange(1000):
             s1 = random_string(100)
             s2 = gzip_decode(gzip_encode(s1))
-            self.assertEquals(s1, s2)
+            self.assertEqual(s1, s2)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy(self):
         for i in xrange(1000):
             s1 = random_string(100)
             s2 = snappy_decode(snappy_encode(s1))
-            self.assertEquals(s1, s2)
+            self.assertEqual(s1, s2)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_detect_xerial(self):
@@ -53,7 +53,7 @@ class TestCodec(unittest.TestCase):
             + struct.pack('!i', block_len) + random_snappy \
             + struct.pack('!i', block_len2) + random_snappy2 \
 
-        self.assertEquals(snappy_decode(to_test), (b'SNAPPY' * 50) + (b'XERIAL' * 50))
+        self.assertEqual(snappy_decode(to_test), (b'SNAPPY' * 50) + (b'XERIAL' * 50))
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_encode_xerial(self):
@@ -68,5 +68,5 @@ class TestCodec(unittest.TestCase):
         to_test = (b'SNAPPY' * 50) + (b'XERIAL' * 50)
 
         compressed = snappy_encode(to_test, xerial_compatible=True, xerial_blocksize=300)
-        self.assertEquals(compressed, to_ensure)
+        self.assertEqual(compressed, to_ensure)
 
