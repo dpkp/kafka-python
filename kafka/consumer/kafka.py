@@ -514,7 +514,7 @@ class KafkaConsumer(object):
 
         # API supports storing metadata with each commit
         # but for now it is unused
-        metadata = ''
+        metadata = b''
 
         offsets = self._offsets.task_done
         commits = []
