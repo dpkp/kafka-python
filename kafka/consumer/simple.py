@@ -207,10 +207,11 @@ class SimpleConsumer(Consumer):
                 if not block:
                     # If we're not blocking, break.
                     break
-                if timeout is not None:
-                    # If we're blocking and have a timeout, reduce it to the
-                    # appropriate value
-                    timeout = max_time - time.time()
+
+            # If we have a timeout, reduce it to the
+            # appropriate value
+            if timeout is not None:
+                timeout = max_time - time.time()
 
         # Update and commit offsets if necessary
         self.offsets.update(new_offsets)
