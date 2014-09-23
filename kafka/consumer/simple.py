@@ -305,7 +305,7 @@ class SimpleConsumer(Consumer):
                     if self.max_buffer_size is None:
                         buffer_size *= 2
                     else:
-                        buffer_size = max(buffer_size * 2,
+                        buffer_size = min(buffer_size * 2,
                                           self.max_buffer_size)
                     log.warn("Fetch size too small, increase to %d (2x) "
                              "and retry", buffer_size)
