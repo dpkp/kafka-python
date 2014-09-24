@@ -153,7 +153,7 @@ class Producer(object):
             self.proc.daemon = True
             self.proc.start()
 
-    def send_messages(self, topic, partition, *msg):
+    def send_messages(self, topic, partition, key=None, *msg):
         """
         Helper method to send produce requests
         @param: topic, name of topic for produce request -- type str
@@ -183,7 +183,7 @@ class Producer(object):
                 self.queue.put((TopicAndPartition(topic, partition), m))
             resp = []
         else:
-            messages = create_message_set(msg, self.codec)
+            messages = create_message_set(msg, self.codec, key)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
