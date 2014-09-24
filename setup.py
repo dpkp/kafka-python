@@ -34,7 +34,11 @@ setup(
     tests_require=test_require,
     cmdclass={"test": Tox},
 
-    packages=["kafka"],
+    packages=[
+        "kafka",
+        "kafka.consumer",
+        "kafka.producer",
+    ],
 
     author="David Arthur",
     author_email="mumrah@gmail.com",
@@ -58,6 +62,6 @@ is also supported for message sets.
         "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: Implementation :: PyPy",
-        "Topic :: Software Development :: Libraries :: Python Modules"
+        "Topic :: Software Development :: Libraries :: Python Modules",
     ]
 )
