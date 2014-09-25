@@ -37,6 +37,7 @@ setup(
     packages=[
         "kafka",
         "kafka.consumer",
+        "kafka.partitioner",
         "kafka.producer",
     ],
 
