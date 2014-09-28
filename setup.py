@@ -39,6 +39,7 @@ setup(
         "kafka.consumer",
         "kafka.partitioner",
         "kafka.producer",
+        "kafka.partitioner",
     ],
 
     author="David Arthur",

@@ -67,7 +67,7 @@ class SimpleProducer(Producer):
 
     def send_messages(self, topic, *msg):
         partition = self._next_partition(topic)
-        return super(SimpleProducer, self).send_messages(topic, partition, *msg)
+        return super(SimpleProducer, self).send_messages(topic, partition, None, *msg)
 
     def __repr__(self):
         return '<SimpleProducer batch=%s>' % self.async
