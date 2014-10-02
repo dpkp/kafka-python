@@ -423,7 +423,13 @@ class SimpleConsumer(Consumer):
     def _fetch_loop(self):
         log.info("Starting fetch loop")
         while not self.should_fetch.is_set():
-            self._fetch()
+            try:
+                self._fetch()
+            except Exception as e:
+                self.got_error = True
+                self.error = e
+                self.stop()
+
         log.info("Stopping fetch loop")
 
     def _fetch(self):
