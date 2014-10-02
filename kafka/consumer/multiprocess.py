@@ -18,7 +18,7 @@ from .simple import Consumer, SimpleConsumer
 log = logging.getLogger("kafka")
 
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size, load_initial_offsets):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -37,7 +37,8 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
                               partitions=chunk,
                               auto_commit=False,
                               auto_commit_every_n=None,
-                              auto_commit_every_t=None)
+                              auto_commit_every_t=None,
+                              load_initial_offsets=load_initial_offsets)
 
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
@@ -105,7 +106,8 @@ class MultiProcessConsumer(Consumer):
     def __init__(self, client, group, topic, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_procs=1, partitions_per_proc=0,
+                 child_loads_initial_offsets=False):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -146,7 +148,8 @@ class MultiProcessConsumer(Consumer):
             args = (client.copy(),
                     group, topic, chunk,
                     self.queue, self.start, self.exit,
-                    self.pause, self.size)
+                    self.pause, self.size,
+                    child_loads_initial_offsets)
 
             proc = Process(target=_mp_consume, args=args)
             proc.daemon = True
