@@ -38,7 +38,8 @@ class Consumer(object):
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 load_initial_offsets=False):
 
         self.client = client
         self.topic = topic
@@ -65,7 +66,7 @@ class Consumer(object):
                                                self.commit)
             self.commit_timer.start()
 
-        if auto_commit:
+        if auto_commit or load_initial_offsets:
             self.fetch_last_known_offsets(partitions)
         else:
             for partition in partitions:
