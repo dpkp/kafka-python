@@ -7,14 +7,17 @@ import numbers
 from threading import Lock, Thread, Event
 
 from multiprocessing import Process, Queue as MPQueue, Event as MPEvent, Value
-from Queue import Empty,  Queue
+from Queue import Empty, Queue
 
 import kafka
 from kafka.common import (
     FetchRequest,
-    OffsetRequest, OffsetCommitRequest,
+    OffsetRequest,
+    OffsetCommitRequest,
     OffsetFetchRequest,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData
+    ConsumerFetchSizeTooSmall,
+    ConsumerNoMoreData,
+    MessageTooLargeError
 )
 
 from kafka.util import ReentrantTimer
@@ -34,6 +37,7 @@ ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
 
 MAX_QUEUE_SIZE = 10 * 1024
+
 
 class FetchContext(object):
     """
@@ -113,8 +117,8 @@ class Consumer(object):
             for partition in partitions:
                 req = OffsetFetchRequest(topic, partition)
                 (offset,) = self.client.send_offset_fetch_request(group, [req],
-                              callback=get_or_init_offset_callback,
-                              fail_on_error=False)
+                                                                  callback=get_or_init_offset_callback,
+                                                                  fail_on_error=False)
                 self.offsets[partition] = offset
         else:
             for partition in partitions:
@@ -202,6 +206,7 @@ class Consumer(object):
 
 class DefaultSimpleConsumerException(Exception):
     pass
+
 
 class SimpleConsumer(Consumer):
     """
@@ -425,6 +430,12 @@ class SimpleConsumer(Consumer):
         while not self.should_fetch.is_set():
             try:
                 self._fetch()
+            except MessageTooLargeError as e:
+                # this is a serious issue, bail out
+                self.got_error = True
+                self.error = e
+                self.stop()
+                raise
             except Exception as e:
                 self.got_error = True
                 self.error = e
@@ -464,6 +475,14 @@ class SimpleConsumer(Consumer):
                         raise
                     if self.max_buffer_size is None:
                         self.buffer_size *= 2
+                        # although the client has specifies None for max_buffer_size i.e. no limit
+                        # we want to make sure we have an upper bound to how much it grows
+                        # If the buffer has exceed the max, bail out
+                        if self.buffer_size > MAX_FETCH_BUFFER_SIZE_BYTES:
+                            log.error('Message size exceeded maximum allowed of {0}'.format(MAX_FETCH_BUFFER_SIZE_BYTES))
+                            log.error('Current buffer_size is: {0}'.format(self.buffer_size))
+                            log.error('topic: {0}, partition: {1}, offset:{2}'.format(self.topic, partition, self.fetch_offsets[partition]))
+                            raise MessageTooLargeError
                     else:
                         self.buffer_size = max(self.buffer_size * 2,
                                                self.max_buffer_size)
@@ -483,6 +502,7 @@ class SimpleConsumer(Consumer):
                     self.error = e
                     self.stop()
                 partitions = retry_partitions
+
 
 def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
     """
