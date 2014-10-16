@@ -18,7 +18,7 @@ from .simple import Consumer, SimpleConsumer
 log = logging.getLogger("kafka")
 
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size, simple_consumer_options):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -37,7 +37,8 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
                               partitions=chunk,
                               auto_commit=False,
                               auto_commit_every_n=None,
-                              auto_commit_every_t=None)
+                              auto_commit_every_t=None,
+                              **simple_consumer_options)
 
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
@@ -93,6 +94,9 @@ class MultiProcessConsumer(Consumer):
                The available partitions will be divided among these processes
     partitions_per_proc: Number of partitions to be allocated per process
                (overrides num_procs)
+    simple_consumer_options: default {}. Pass named options through to the
+                             SimpleConsumer to override defaults. Used mostly
+                             for fetch_size_bytes, buffer_size, max_buffer_size
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
@@ -103,7 +107,8 @@ class MultiProcessConsumer(Consumer):
     def __init__(self, client, group, topic, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_procs=1, partitions_per_proc=0,
+                 simple_consumer_options={}):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -142,7 +147,7 @@ class MultiProcessConsumer(Consumer):
             args = (client.copy(),
                     group, topic, list(chunk),
                     self.queue, self.start, self.exit,
-                    self.pause, self.size)
+                    self.pause, self.size, simple_consumer_options)
 
             proc = Process(target=_mp_consume, args=args)
             proc.daemon = True
