@@ -56,7 +56,7 @@ class KeyedProducer(Producer):
 
     def send(self, topic, key, msg):
         partition = self._next_partition(topic, key)
-        return self.send_messages(topic, partition, msg)
+        return self.send_keyed_messages(topic, partition, str(key).encode('utf-8'), msg)
 
     def __repr__(self):
         return '<KeyedProducer batch=%s>' % self.async

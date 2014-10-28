@@ -169,6 +169,23 @@ class Producer(object):
 
         All messages produced via this method will set the message 'key' to Null
         """
+        return self.send_keyed_messages(topic, partition, None, *msg);
+
+    def send_keyed_messages(self, topic, partition, key=None, *msg):
+        """
+        Helper method to send produce requests
+        @param: topic, name of topic for produce request -- type str
+        @param: partition, partition number for produce request -- type int
+        @param: key, key to attach to the message -- type str
+        @param: *msg, one or more message payloads -- type bytes
+        @returns: ResponseRequest returned by server
+        raises on error
+
+        Note that msg type *must* be encoded to bytes by user.
+        Passing unicode message will not work, for example
+        you should encode before calling send_messages via
+        something like `unicode_message.encode('utf-8')`
+        """
 
         # Guarantee that msg is actually a list or tuple (should always be true)
         if not isinstance(msg, (list, tuple)):
@@ -183,7 +200,7 @@ class Producer(object):
                 self.queue.put((TopicAndPartition(topic, partition), m))
             resp = []
         else:
-            messages = create_message_set(msg, self.codec)
+            messages = create_message_set(msg, self.codec, key)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
