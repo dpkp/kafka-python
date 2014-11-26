@@ -169,7 +169,9 @@ class Producer(object):
 
         All messages produced via this method will set the message 'key' to Null
         """
+        return self._send_messages(topic, partition, *msg)
 
+    def _send_messages(self, topic, partition, *msg, **kwargs):
         # Guarantee that msg is actually a list or tuple (should always be true)
         if not isinstance(msg, (list, tuple)):
             raise TypeError("msg is not a list or tuple!")
