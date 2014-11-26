@@ -49,7 +49,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         # timeout is reached
         while count > 0 and timeout >= 0:
             try:
-                topic_partition, msg = queue.get(timeout=timeout)
+                topic_partition, msg, key = queue.get(timeout=timeout)
 
             except Empty:
                 break
@@ -67,7 +67,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         # Send collected requests upstream
         reqs = []
         for topic_partition, msg in msgset.items():
-            messages = create_message_set(msg, codec)
+            messages = create_message_set(msg, codec, key)
             req = ProduceRequest(topic_partition.topic,
                                  topic_partition.partition,
                                  messages)
@@ -169,6 +169,10 @@ class Producer(object):
 
         All messages produced via this method will set the message 'key' to Null
         """
+        return self._send_messages(topic, partition, *msg)
+
+    def _send_messages(self, topic, partition, *msg, **kwargs):
+        key = kwargs.pop('key', None)
 
         # Guarantee that msg is actually a list or tuple (should always be true)
         if not isinstance(msg, (list, tuple)):
@@ -178,12 +182,16 @@ class Producer(object):
         if any(not isinstance(m, six.binary_type) for m in msg):
             raise TypeError("all produce message payloads must be type bytes")
 
+        # Raise TypeError if the key is not encoded as bytes
+        if key is not None and not isinstance(key, six.binary_type):
+            raise TypeError("the key must be type bytes")
+
         if self.async:
             for m in msg:
-                self.queue.put((TopicAndPartition(topic, partition), m))
+                self.queue.put((TopicAndPartition(topic, partition), m, key))
             resp = []
         else:
-            messages = create_message_set(msg, self.codec)
+            messages = create_message_set(msg, self.codec, key)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
@@ -199,7 +207,7 @@ class Producer(object):
         forcefully cleaning up.
         """
         if self.async:
-            self.queue.put((STOP_ASYNC_PRODUCER, None))
+            self.queue.put((STOP_ASYNC_PRODUCER, None, None))
             self.proc.join(timeout)
 
             if self.proc.is_alive():
