@@ -89,6 +89,10 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
         return self._messages[s].encode('utf-8')
 
+    def key(self, k):
+        return k.encode('utf-8')
+
+
 class Timer(object):
     def __enter__(self):
         self.start = time.time()
