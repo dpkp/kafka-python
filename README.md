@@ -130,13 +130,14 @@ for message in consumer.get_messages(count=5, block=True, timeout=4):
 ## Low level
 
 ```python
-from kafka import KafkaClient
-from kafka.protocol import KafkaProtocol, ProduceRequest
+from kafka import KafkaClient, create_message
+from kafka.protocol import KafkaProtocol
+from kafka.common import ProduceRequest
 
 kafka = KafkaClient("localhost:9092")
 
 req = ProduceRequest(topic="my-topic", partition=1,
-    messages=[KafkaProtocol.encode_message("some message")])
+    messages=[create_message("some message")])
 resps = kafka.send_produce_request(payloads=[req], fail_on_error=True)
 kafka.close()
 
