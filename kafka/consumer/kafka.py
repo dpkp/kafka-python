@@ -160,8 +160,7 @@ class KafkaConsumer(object):
 
         # Handle str/bytes conversions
         for config_key in BYTES_CONFIGURATION_KEYS:
-            if not (self._config[config_key] is None or
-                    isinstance(self._config[config_key], six.binary_type)):
+            if isinstance(self._config[config_key], six.string_types):
                 logger.warning("Converting configuration key '%s' to bytes" %
                                config_key)
                 self._config[config_key] = self._config[config_key].encode('utf-8')
