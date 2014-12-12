@@ -228,7 +228,7 @@ class KafkaConsumer(object):
             if isinstance(arg, (six.string_types, six.binary_type)):
                 topic = kafka_bytestring(arg)
 
-                for partition in self._client.get_partition_ids_for_topic(arg):
+                for partition in self._client.get_partition_ids_for_topic(topic):
                     self._consume_topic_partition(topic, partition)
 
             # (topic, partition [, offset]) tuple
