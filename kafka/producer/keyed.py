@@ -54,6 +54,10 @@ class KeyedProducer(Producer):
         partitioner = self.partitioners[topic]
         return partitioner.partition(key, self.client.get_partition_ids_for_topic(topic))
 
+    def send_messages(self,topic,key,*msg):
+        partition = self._next_partition(topic, key)
+        return self._send_messages(topic, partition, *msg,key=key)
+
     def send(self, topic, key, msg):
         partition = self._next_partition(topic, key)
         return self._send_messages(topic, partition, msg, key=key)
