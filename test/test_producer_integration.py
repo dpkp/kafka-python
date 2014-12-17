@@ -251,7 +251,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer = SimpleProducer(self.client, req_acks=SimpleProducer.ACK_NOT_REQUIRED)
         resp = producer.send_messages(self.topic, self.msg("one"))
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         self.assert_fetch_offset(0, start_offset0, [ self.msg("one") ])
         producer.stop()
@@ -301,7 +301,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         )
 
         # Batch mode is async. No ack
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         # It hasn't sent yet
         self.assert_fetch_offset(0, start_offset0, [])
@@ -314,7 +314,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         )
 
         # Batch mode is async. No ack
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         self.assert_fetch_offset(0, start_offset0, [
             self.msg("one"),
@@ -350,7 +350,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         )
 
         # Batch mode is async. No ack
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         # It hasn't sent yet
         self.assert_fetch_offset(0, start_offset0, [])
@@ -363,7 +363,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         )
 
         # Batch mode is async. No ack
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         # Wait the timeout out
         time.sleep(5)
@@ -389,7 +389,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer = SimpleProducer(self.client, async=True)
         resp = producer.send_messages(self.topic, self.msg("one"))
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         self.assert_fetch_offset(0, start_offset0, [ self.msg("one") ])
 
@@ -402,7 +402,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         producer = KeyedProducer(self.client, partitioner = RoundRobinPartitioner, async=True)
 
         resp = producer.send(self.topic, self.key("key1"), self.msg("one"))
-        self.assertEquals(len(resp), 0)
+        self.assertEqual(len(resp), 0)
 
         self.assert_fetch_offset(0, start_offset0, [ self.msg("one") ])
 
@@ -429,9 +429,9 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         resp, = self.client.send_fetch_request([ FetchRequest(self.topic, partition, start_offset, 1024) ])
 
-        self.assertEquals(resp.error, 0)
-        self.assertEquals(resp.partition, partition)
+        self.assertEqual(resp.error, 0)
+        self.assertEqual(resp.partition, partition)
         messages = [ x.message.value for x in resp.messages ]
 
         self.assertEqual(messages, expected_messages)
-        self.assertEquals(resp.highwaterMark, start_offset+len(expected_messages))
+        self.assertEqual(resp.highwaterMark, start_offset+len(expected_messages))

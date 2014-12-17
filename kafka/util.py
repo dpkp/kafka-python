@@ -86,6 +86,18 @@ def group_by_topic_and_partition(tuples):
     return out
 
 
+def kafka_bytestring(s):
+    """
+    Takes a string or bytes instance
+    Returns bytes, encoding strings in utf-8 as necessary
+    """
+    if isinstance(s, six.binary_type):
+        return s
+    if isinstance(s, six.string_types):
+        return s.encode('utf-8')
+    raise TypeError(s)
+
+
 class ReentrantTimer(object):
     """
     A timer that can be restarted, unlike threading.Timer

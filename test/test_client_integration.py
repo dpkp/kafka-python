@@ -32,12 +32,12 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         fetch = FetchRequest(self.topic, 0, 0, 1024)
 
         fetch_resp, = self.client.send_fetch_request([fetch])
-        self.assertEquals(fetch_resp.error, 0)
-        self.assertEquals(fetch_resp.topic, self.topic)
-        self.assertEquals(fetch_resp.partition, 0)
+        self.assertEqual(fetch_resp.error, 0)
+        self.assertEqual(fetch_resp.topic, self.topic)
+        self.assertEqual(fetch_resp.partition, 0)
 
         messages = list(fetch_resp.messages)
-        self.assertEquals(len(messages), 0)
+        self.assertEqual(len(messages), 0)
 
     @kafka_versions("all")
     def test_ensure_topic_exists(self):
@@ -58,10 +58,10 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest(self.topic, 0, 42, b"metadata")
         (resp,) = self.client.send_offset_commit_request(b"group", [req])
-        self.assertEquals(resp.error, 0)
+        self.assertEqual(resp.error, 0)
 
         req = OffsetFetchRequest(self.topic, 0)
         (resp,) = self.client.send_offset_fetch_request(b"group", [req])
-        self.assertEquals(resp.error, 0)
-        self.assertEquals(resp.offset, 42)
-        self.assertEquals(resp.metadata, b"")  # Metadata isn't stored for now
+        self.assertEqual(resp.error, 0)
+        self.assertEqual(resp.offset, 42)
+        self.assertEqual(resp.metadata, b"")  # Metadata isn't stored for now

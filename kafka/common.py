@@ -63,6 +63,9 @@ Message = namedtuple("Message",
 TopicAndPartition = namedtuple("TopicAndPartition",
     ["topic", "partition"])
 
+KafkaMessage = namedtuple("KafkaMessage",
+    ["topic", "partition", "offset", "key", "value"])
+
 
 #################
 #   Exceptions  #
@@ -182,11 +185,19 @@ class ConsumerNoMoreData(KafkaError):
     pass
 
 
+class ConsumerTimeout(KafkaError):
+    pass
+
+
 class ProtocolError(KafkaError):
     pass
 
 
 class UnsupportedCodecError(KafkaError):
+    pass
+
+
+class KafkaConfigurationError(KafkaError):
     pass
 
 
