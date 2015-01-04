@@ -8,3 +8,4 @@ env
 servers/*/kafka-bin
 .coverage
 .noseids
+docs/_build
