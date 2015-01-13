@@ -42,7 +42,7 @@ class SimpleProducer(Producer):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 random_start=False):
+                 random_start=True):
         self.partition_cycles = {}
         self.random_start = random_start
         super(SimpleProducer, self).__init__(client, async, req_acks,
