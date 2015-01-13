@@ -10,9 +10,8 @@ from kafka.common import (
     ProduceRequest, MetadataResponse,
     BrokerMetadata, TopicMetadata, PartitionMetadata,
     TopicAndPartition, KafkaUnavailableError,
-    LeaderNotAvailableError, NoError,
-    UnknownTopicOrPartitionError, KafkaTimeoutError,
-    ConnectionError
+    LeaderNotAvailableError, UnknownTopicOrPartitionError,
+    KafkaTimeoutError, ConnectionError
 )
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol, create_message
