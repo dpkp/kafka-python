@@ -123,7 +123,7 @@ class ZookeeperFixture(Fixture):
         # Party!
         self.out("Starting...")
         self.child.start()
-        self.child.wait_for(r"Snapshotting")
+        self.child.wait_for(r"binding to port")
         self.out("Done!")
 
     def close(self):
