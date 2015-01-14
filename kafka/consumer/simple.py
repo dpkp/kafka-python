@@ -131,11 +131,12 @@ class SimpleConsumer(Consumer):
         LATEST = -1
         EARLIEST = -2
         if self.use_latest_offsets:
-            req = OffsetRequest(self.topic, partition, LATEST, 1)
+            reqs = [OffsetRequest(self.topic, partition, LATEST, 1)]
         else:
-            req = OffsetRequest(self.topic, partition, EARLIEST, 1)
+            reqs = [OffsetRequest(self.topic, partition, EARLIEST, 1)]
 
-        resp = self.client.send_offset_request(req)
+        # send_offset_request
+        (resp, ) = self.client.send_offset_request(reqs)
         check_error(resp)
         self.offsets[partition] = resp.offsets[0]
         self.fetch_offsets[partition] = resp.offsets[0]
