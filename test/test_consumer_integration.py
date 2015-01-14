@@ -257,7 +257,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         big_consumer.stop()
 
-    @kafka_versions("0.8.1", "0.8.1.1")
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
     def test_offset_behavior__resuming_behavior(self):
         self.send_messages(0, range(0, 100))
         self.send_messages(1, range(100, 200))
@@ -357,7 +357,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEqual(len(messages), 5)
         self.assertGreaterEqual(t.interval, TIMEOUT_MS / 1000.0 )
 
-    @kafka_versions("0.8.1", "0.8.1.1")
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
     def test_kafka_consumer__offset_commit_resume(self):
         GROUP_ID = random_string(10)
 
