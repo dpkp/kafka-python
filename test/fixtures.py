@@ -212,8 +212,8 @@ class KafkaFixture(Fixture):
 
         if proc.wait() != 0:
             self.out("Failed to create Zookeeper chroot node")
-            self.out(proc.stdout)
-            self.out(proc.stderr)
+            self.out(proc.stdout.read())
+            self.out(proc.stderr.read())
             raise RuntimeError("Failed to create Zookeeper chroot node")
         self.out("Done!")
 
