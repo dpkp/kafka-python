@@ -161,7 +161,9 @@ class KafkaTimeoutError(KafkaError):
 
 
 class FailedPayloadsError(KafkaError):
-    pass
+    def __init__(self, failed_payloads, *args):
+        KafkaError.__init__(self, *args)
+        self.failed_payloads = failed_payloads
 
 
 class ConnectionError(KafkaError):
