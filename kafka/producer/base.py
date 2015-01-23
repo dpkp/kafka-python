@@ -99,6 +99,7 @@ class Producer(object):
     batch_send - If True, messages are send in batches
     batch_send_every_n - If set, messages are send in batches of this size
     batch_send_every_t - If set, messages are send after this timeout
+    kwargs - keyword arguments that get passed throught to `client.send_produce_request`
     """
 
     ACK_NOT_REQUIRED = 0            # No ack is required
@@ -113,7 +114,8 @@ class Producer(object):
                  codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
-                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
+                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
+                 **kwargs):
 
         if batch_send:
             async = True
@@ -127,6 +129,8 @@ class Producer(object):
         self.async = async
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
+        self._request_kwargs = {'acks': self.req_acks, 'timeout': self.ack_timeout}
+        self._request_kwargs.update(kwargs)
 
         if codec is None:
             codec = CODEC_NONE
@@ -194,8 +198,7 @@ class Producer(object):
             messages = create_message_set(msg, self.codec, key)
             req = ProduceRequest(topic, partition, messages)
             try:
-                resp = self.client.send_produce_request([req], acks=self.req_acks,
-                                                        timeout=self.ack_timeout)
+                resp = self.client.send_produce_request([req], **self._request_kwargs)
             except Exception:
                 log.exception("Unable to send messages")
                 raise
