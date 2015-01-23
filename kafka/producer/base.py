@@ -195,7 +195,7 @@ class Producer(object):
             for m in msg:
                 try:
                     item = (TopicAndPartition(topic, partition), m, key)
-                    self.queue.put(item)
+                    self.queue.put_nowait(item)
                 except Full:
                     raise BatchQueueOverfilledError(
                         'Producer batch send queue overfilled. '
