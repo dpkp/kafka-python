@@ -4,15 +4,16 @@ import logging
 import time
 
 try:
-    from queue import Empty
+    from queue import Empty, Full
 except ImportError:
-    from Queue import Empty
+    from Queue import Empty, Full
 from collections import defaultdict
 from multiprocessing import Queue, Process
 
 import six
 
 from kafka.common import (
+    BatchQueueOverfilledError,
     ProduceRequest, TopicAndPartition, UnsupportedCodecError
 )
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
@@ -21,6 +22,7 @@ log = logging.getLogger("kafka")
 
 BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
+BATCH_SEND_QUEUE_MAXSIZE = 0
 
 STOP_ASYNC_PRODUCER = -1
 
@@ -113,12 +115,14 @@ class Producer(object):
                  codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
-                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
+                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
+                 batch_send_queue_maxsize=BATCH_SEND_QUEUE_MAXSIZE):
 
         if batch_send:
             async = True
             assert batch_send_every_n > 0
             assert batch_send_every_t > 0
+            assert batch_send_queue_maxsize >= 0
         else:
             batch_send_every_n = 1
             batch_send_every_t = 3600
@@ -139,7 +143,8 @@ class Producer(object):
             log.warning("async producer does not guarantee message delivery!")
             log.warning("Current implementation does not retry Failed messages")
             log.warning("Use at your own risk! (or help improve with a PR!)")
-            self.queue = Queue()  # Messages are sent through this queue
+            # Messages are sent through this queue
+            self.queue = Queue(maxsize=batch_send_queue_maxsize)
             self.proc = Process(target=_send_upstream,
                                 args=(self.queue,
                                       self.client.copy(),
@@ -188,7 +193,13 @@ class Producer(object):
 
         if self.async:
             for m in msg:
-                self.queue.put((TopicAndPartition(topic, partition), m, key))
+                try:
+                    item = (TopicAndPartition(topic, partition), m, key)
+                    self.queue.put(item)
+                except Full:
+                    raise BatchQueueOverfilledError(
+                        'Producer batch send queue overfilled. '
+                        'Current queue size %d.' % self.queue.qsize())
             resp = []
         else:
             messages = create_message_set(msg, self.codec, key)
