@@ -129,13 +129,12 @@ class KafkaQueue(object):
         Messages are buffered in the producer thread until
         producer_flush_timeout or producer_flush_buffer is reached.
 
-        Params
-        ======
-        client: KafkaClient object
-        topic: str, the topic name
-        partitions: list of ints, the partions to consume from
-        producer_config: dict, see below
-        consumer_config: dict, see below
+        Arguments:
+            client: KafkaClient object
+            topic: str, the topic name
+            partitions: list of ints, the partions to consume from
+            producer_config: dict, see below
+            consumer_config: dict, see below
 
         Consumer Config
         ===============
@@ -184,14 +183,12 @@ class KafkaQueue(object):
         """
         Consume a message from Kafka
 
-        Params
-        ======
-        block: boolean, default True
-        timeout: int, number of seconds to wait when blocking, default None
+        Arguments:
+            block: boolean, default True
+            timeout: int, number of seconds to wait when blocking, default None
 
-        Returns
-        =======
-        msg: str, the payload from Kafka
+        Returns:
+            msg: str, the payload from Kafka
         """
         return self.in_queue.get(block, timeout).payload
 
@@ -199,11 +196,10 @@ class KafkaQueue(object):
         """
         Send a message to Kafka
 
-        Params
-        ======
-        msg: std, the message to send
-        block: boolean, default True
-        timeout: int, number of seconds to wait when blocking, default None
+        Arguments:
+            msg: std, the message to send
+            block: boolean, default True
+            timeout: int, number of seconds to wait when blocking, default None
         """
         self.out_queue.put(msg, block, timeout)
 

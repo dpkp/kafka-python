@@ -54,72 +54,78 @@ class KafkaConsumer(object):
     """
     A simpler kafka consumer
 
-    ```
-    # A very basic 'tail' consumer, with no stored offset management
-    kafka = KafkaConsumer('topic1')
-    for m in kafka:
-      print m
+    .. code:: python
 
-    # Alternate interface: next()
-    print kafka.next()
+        # A very basic 'tail' consumer, with no stored offset management
+        kafka = KafkaConsumer('topic1')
+        for m in kafka:
+          print m
 
-    # Alternate interface: batch iteration
-    while True:
-      for m in kafka.fetch_messages():
-        print m
-      print "Done with batch - let's do another!"
-    ```
+        # Alternate interface: next()
+        print kafka.next()
 
-    ```
-    # more advanced consumer -- multiple topics w/ auto commit offset management
-    kafka = KafkaConsumer('topic1', 'topic2',
-                          group_id='my_consumer_group',
-                          auto_commit_enable=True,
-                          auto_commit_interval_ms=30 * 1000,
-                          auto_offset_reset='smallest')
+        # Alternate interface: batch iteration
+        while True:
+          for m in kafka.fetch_messages():
+            print m
+          print "Done with batch - let's do another!"
 
-    # Infinite iteration
-    for m in kafka:
-      process_message(m)
-      kafka.task_done(m)
 
-    # Alternate interface: next()
-    m = kafka.next()
-    process_message(m)
-    kafka.task_done(m)
+    .. code:: python
 
-    # If auto_commit_enable is False, remember to commit() periodically
-    kafka.commit()
+        # more advanced consumer -- multiple topics w/ auto commit offset management
+        kafka = KafkaConsumer('topic1', 'topic2',
+                              group_id='my_consumer_group',
+                              auto_commit_enable=True,
+                              auto_commit_interval_ms=30 * 1000,
+                              auto_offset_reset='smallest')
 
-    # Batch process interface
-    while True:
-      for m in kafka.fetch_messages():
+        # Infinite iteration
+        for m in kafka:
+          process_message(m)
+          kafka.task_done(m)
+
+        # Alternate interface: next()
+        m = kafka.next()
         process_message(m)
         kafka.task_done(m)
-    ```
+
+        # If auto_commit_enable is False, remember to commit() periodically
+        kafka.commit()
+
+        # Batch process interface
+        while True:
+          for m in kafka.fetch_messages():
+            process_message(m)
+            kafka.task_done(m)
+
 
     messages (m) are namedtuples with attributes:
-      m.topic: topic name (str)
-      m.partition: partition number (int)
-      m.offset: message offset on topic-partition log (int)
-      m.key: key (bytes - can be None)
-      m.value: message (output of deserializer_class - default is raw bytes)
+
+      * `m.topic`: topic name (str)
+      * `m.partition`: partition number (int)
+      * `m.offset`: message offset on topic-partition log (int)
+      * `m.key`: key (bytes - can be None)
+      * `m.value`: message (output of deserializer_class - default is raw bytes)
 
     Configuration settings can be passed to constructor,
     otherwise defaults will be used:
-      client_id='kafka.consumer.kafka',
-      group_id=None,
-      fetch_message_max_bytes=1024*1024,
-      fetch_min_bytes=1,
-      fetch_wait_max_ms=100,
-      refresh_leader_backoff_ms=200,
-      metadata_broker_list=None,
-      socket_timeout_ms=30*1000,
-      auto_offset_reset='largest',
-      deserializer_class=lambda msg: msg,
-      auto_commit_enable=False,
-      auto_commit_interval_ms=60 * 1000,
-      consumer_timeout_ms=-1
+
+    .. code:: python
+
+        client_id='kafka.consumer.kafka',
+        group_id=None,
+        fetch_message_max_bytes=1024*1024,
+        fetch_min_bytes=1,
+        fetch_wait_max_ms=100,
+        refresh_leader_backoff_ms=200,
+        metadata_broker_list=None,
+        socket_timeout_ms=30*1000,
+        auto_offset_reset='largest',
+        deserializer_class=lambda msg: msg,
+        auto_commit_enable=False,
+        auto_commit_interval_ms=60 * 1000,
+        consumer_timeout_ms=-1
 
     Configuration parameters are described in more detail at
     http://kafka.apache.org/documentation.html#highlevelconsumerapi
@@ -133,6 +139,9 @@ class KafkaConsumer(object):
         """
         Configuration settings can be passed to constructor,
         otherwise defaults will be used:
+
+        .. code:: python
+
             client_id='kafka.consumer.kafka',
             group_id=None,
             fetch_message_max_bytes=1024*1024,
@@ -189,28 +198,35 @@ class KafkaConsumer(object):
         Optionally specify offsets to start from
 
         Accepts types:
-        str (utf-8): topic name (will consume all available partitions)
-        tuple: (topic, partition)
-        dict: { topic: partition }
-              { topic: [partition list] }
-              { topic: (partition tuple,) }
+
+        * str (utf-8): topic name (will consume all available partitions)
+        * tuple: (topic, partition)
+        * dict:
+            - { topic: partition }
+            - { topic: [partition list] }
+            - { topic: (partition tuple,) }
 
         Optionally, offsets can be specified directly:
-        tuple: (topic, partition, offset)
-        dict:  { (topic, partition): offset, ... }
 
-        Ex:
-        kafka = KafkaConsumer()
+        * tuple: (topic, partition, offset)
+        * dict:  { (topic, partition): offset, ... }
 
-        # Consume topic1-all; topic2-partition2; topic3-partition0
-        kafka.set_topic_partitions("topic1", ("topic2", 2), {"topic3": 0})
+        Example:
 
-        # Consume topic1-0 starting at offset 123, and topic2-1 at offset 456
-        # using tuples --
-        kafka.set_topic_partitions(("topic1", 0, 123), ("topic2", 1, 456))
+        .. code:: python
 
-        # using dict --
-        kafka.set_topic_partitions({ ("topic1", 0): 123, ("topic2", 1): 456 })
+            kafka = KafkaConsumer()
+
+            # Consume topic1-all; topic2-partition2; topic3-partition0
+            kafka.set_topic_partitions("topic1", ("topic2", 2), {"topic3": 0})
+
+            # Consume topic1-0 starting at offset 123, and topic2-1 at offset 456
+            # using tuples --
+            kafka.set_topic_partitions(("topic1", 0, 123), ("topic2", 1, 456))
+
+            # using dict --
+            kafka.set_topic_partitions({ ("topic1", 0): 123, ("topic2", 1): 456 })
+
         """
         self._topics = []
         self._client.load_metadata_for_topics()
@@ -309,10 +325,12 @@ class KafkaConsumer(object):
         Otherwise blocks indefinitely
 
         Note that this is also the method called internally during iteration:
-        ```
-        for m in consumer:
-          pass
-        ```
+
+        .. code:: python
+
+            for m in consumer:
+                pass
+
         """
         self._set_consumer_timeout_start()
         while True:
@@ -336,11 +354,12 @@ class KafkaConsumer(object):
         OffsetOutOfRange, per the configured `auto_offset_reset` policy
 
         Key configuration parameters:
-        `fetch_message_max_bytes`
-        `fetch_max_wait_ms`
-        `fetch_min_bytes`
-        `deserializer_class`
-        `auto_offset_reset`
+
+        * `fetch_message_max_bytes`
+        * `fetch_max_wait_ms`
+        * `fetch_min_bytes`
+        * `deserializer_class`
+        * `auto_offset_reset`
         """
 
         max_bytes = self._config['fetch_message_max_bytes']
@@ -418,20 +437,18 @@ class KafkaConsumer(object):
         """
         Request available fetch offsets for a single topic/partition
 
-        @param topic (str)
-        @param partition (int)
-        @param request_time_ms (int) -- Used to ask for all messages before a
-                                        certain time (ms). There are two special
-                                        values. Specify -1 to receive the latest
-                                        offset (i.e. the offset of the next coming
-                                        message) and -2 to receive the earliest
-                                        available offset. Note that because offsets
-                                        are pulled in descending order, asking for
-                                        the earliest offset will always return you
-                                        a single element.
-        @param max_num_offsets (int)
+        Arguments:
+            topic (str)
+            partition (int)
+            request_time_ms (int): Used to ask for all messages before a
+                certain time (ms). There are two special values. Specify -1 to receive the latest
+                offset (i.e. the offset of the next coming message) and -2 to receive the earliest
+                available offset. Note that because offsets are pulled in descending order, asking for
+                the earliest offset will always return you a single element.
+            max_num_offsets (int)
 
-        @return offsets (list)
+        Returns:
+            offsets (list)
         """
         reqs = [OffsetRequest(topic, partition, request_time_ms, max_num_offsets)]
 
@@ -448,9 +465,12 @@ class KafkaConsumer(object):
 
     def offsets(self, group=None):
         """
-        Returns a copy of internal offsets struct
-        optional param: group [fetch|commit|task_done|highwater]
-        if no group specified, returns all groups
+        Keyword Arguments:
+            group: Either "fetch", "commit", "task_done", or "highwater".
+                If no group specified, returns all groups.
+
+        Returns:
+            A copy of internal offsets struct
         """
         if not group:
             return {
@@ -498,8 +518,8 @@ class KafkaConsumer(object):
         Store consumed message offsets (marked via task_done())
         to kafka cluster for this consumer_group.
 
-        Note -- this functionality requires server version >=0.8.1.1
-        see https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
+        **Note**: this functionality requires server version >=0.8.1.1
+        See `this wiki page <https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI>`_.
         """
         if not self._config['group_id']:
             logger.warning('Cannot commit without a group_id!')

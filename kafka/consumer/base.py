@@ -32,9 +32,11 @@ class Consumer(object):
     Base class to be used by other consumers. Not to be used directly
 
     This base class provides logic for
+
     * initialization and fetching metadata of partitions
     * Auto-commit logic
     * APIs for fetching pending message count
+
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
@@ -93,8 +95,9 @@ class Consumer(object):
         """
         Commit offsets for this consumer
 
-        partitions: list of partitions to commit, default is to commit
-                    all of them
+        Keyword Arguments:
+            partitions (list): list of partitions to commit, default is to commit
+                all of them
         """
 
         # short circuit if nothing happened. This check is kept outside
@@ -148,7 +151,8 @@ class Consumer(object):
         """
         Gets the pending message count
 
-        partitions: list of partitions to check for, default is to check all
+        Keyword Arguments:
+            partitions (list): list of partitions to check for, default is to check all
         """
         if not partitions:
             partitions = self.offsets.keys()

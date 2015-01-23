@@ -18,6 +18,8 @@ class OffsetCommitContext(object):
 
     Example:
 
+    .. code:: python
+
         consumer = SimpleConsumer(client, group, topic, auto_commit=False)
         consumer.provide_partition_info()
         consumer.fetch_last_known_offsets()
@@ -57,7 +59,10 @@ class OffsetCommitContext(object):
         In order to know the current partition, it is helpful to initialize
         the consumer to provide partition info via:
 
+        .. code:: python
+
             consumer.provide_partition_info()
+
         """
         max_offset = max(offset + 1, self.high_water_mark.get(partition, 0))
 
