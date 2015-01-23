@@ -25,3 +25,14 @@ class TestKafkaProducer(unittest.TestCase):
             # This should not raise an exception
             producer.send_messages(topic, partition, m)
 
+    def test_topic_message_types(self):
+        from kafka.producer.simple import SimpleProducer
+
+        producer = SimpleProducer(MagicMock())
+        topic = "test-topic"
+        partition = 0
+
+        def send_message():
+            producer.send_messages(topic, partition, b'hi')
+
+        self.assertRaises(TypeError, send_message)

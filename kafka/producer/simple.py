@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import random
+import six
 
 from itertools import cycle
 
@@ -68,6 +69,9 @@ class SimpleProducer(Producer):
         return next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
+        if not isinstance(topic, six.binary_type):
+            raise TypeError("topic must be type bytes")
+
         partition = self._next_partition(topic)
         return super(SimpleProducer, self).send_messages(topic, partition, *msg)
 
