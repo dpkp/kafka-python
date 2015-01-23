@@ -249,7 +249,13 @@ class Producer(object):
 
         if self.async:
             for m in msg:
-                self.queue.put((TopicAndPartition(topic, partition), m, key))
+                try:
+                    item = (TopicAndPartition(topic, partition), m, key)
+                    self.queue.put_nowait(item)
+                except Full:
+                    raise BatchQueueOverfilledError(
+                        'Producer batch send queue overfilled. '
+                        'Current queue size %d.' % self.queue.qsize())
             resp = []
         else:
             messages = create_message_set([(m, key) for m in msg], self.codec, key)
