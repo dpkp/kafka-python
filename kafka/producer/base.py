@@ -22,7 +22,8 @@ log = logging.getLogger("kafka")
 
 BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
-BATCH_SEND_QUEUE_MAXSIZE = 0
+# unlimited
+ASYNC_QUEUE_MAXSIZE = 0
 
 STOP_ASYNC_PRODUCER = -1
 
@@ -116,13 +117,13 @@ class Producer(object):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 batch_send_queue_maxsize=BATCH_SEND_QUEUE_MAXSIZE):
+                 async_queue_maxsize=ASYNC_QUEUE_MAXSIZE):
 
         if batch_send:
             async = True
             assert batch_send_every_n > 0
             assert batch_send_every_t > 0
-            assert batch_send_queue_maxsize >= 0
+            assert async_queue_maxsize >= 0
         else:
             batch_send_every_n = 1
             batch_send_every_t = 3600
@@ -144,7 +145,7 @@ class Producer(object):
             log.warning("Current implementation does not retry Failed messages")
             log.warning("Use at your own risk! (or help improve with a PR!)")
             # Messages are sent through this queue
-            self.queue = Queue(maxsize=batch_send_queue_maxsize)
+            self.queue = Queue(maxsize=async_queue_maxsize)
             self.proc = Process(target=_send_upstream,
                                 args=(self.queue,
                                       self.client.copy(),
