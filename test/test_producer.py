@@ -2,9 +2,10 @@
 
 import logging
 
-from mock import MagicMock
+from mock import MagicMock, patch
 from . import unittest
 
+from kafka.common import BatchQueueOverfilledError
 from kafka.producer.base import Producer
 
 class TestKafkaProducer(unittest.TestCase):
@@ -25,3 +26,30 @@ class TestKafkaProducer(unittest.TestCase):
             # This should not raise an exception
             producer.send_messages(topic, partition, m)
 
+    @patch('kafka.producer.base.Process')
+    def test_producer_async_queue_overfilled_batch_send(self, process_mock):
+        queue_size = 2
+        producer = Producer(MagicMock(), batch_send=True,
+                            async_queue_maxsize=queue_size)
+
+        topic = b'test-topic'
+        partition = 0
+        message = b'test-message'
+
+        with self.assertRaises(BatchQueueOverfilledError):
+            message_list = [message] * (queue_size + 1)
+            producer.send_messages(topic, partition, *message_list)
+
+    @patch('kafka.producer.base.Process')
+    def test_producer_async_queue_overfilled(self, process_mock):
+        queue_size = 2
+        producer = Producer(MagicMock(), async=True,
+                            async_queue_maxsize=queue_size)
+
+        topic = b'test-topic'
+        partition = 0
+        message = b'test-message'
+
+        with self.assertRaises(BatchQueueOverfilledError):
+            message_list = [message] * (queue_size + 1)
+            producer.send_messages(topic, partition, *message_list)
