@@ -18,7 +18,7 @@ before_install:
     - ./build_integration.sh
 
 install:
-    - pip install tox
+    - pip install tox coveralls
     - pip install .
     # Deal with issue on Travis builders re: multiprocessing.Queue :(
     # See https://github.com/travis-ci/travis-cookbooks/issues/155
@@ -38,3 +38,6 @@ deploy:
 
 script:
   - if [ -n "$UNIT_AND_LINT_ONLY" ]; then tox -e lint,`./travis_selector.sh $TRAVIS_PYTHON_VERSION`; else tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`; fi
+
+after_success:
+  - coveralls
