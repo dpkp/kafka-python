@@ -19,5 +19,5 @@ __all__ = [
     'KafkaClient', 'KafkaConnection', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner', 'SimpleConsumer',
     'MultiProcessConsumer', 'create_message', 'create_gzip_message',
-    'create_snappy_message'
+    'create_snappy_message', 'KafkaConsumer',
 ]

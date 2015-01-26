@@ -80,19 +80,21 @@ class MultiProcessConsumer(Consumer):
     A consumer implementation that consumes partitions for a topic in
     parallel using multiple processes
 
-    client: a connected KafkaClient
-    group: a name for this consumer, used for offset storage and must be unique
-    topic: the topic to consume
+    Arguments:
+        client: a connected KafkaClient
+        group: a name for this consumer, used for offset storage and must be unique
+        topic: the topic to consume
 
-    auto_commit: default True. Whether or not to auto commit the offsets
-    auto_commit_every_n: default 100. How many messages to consume
-                         before a commit
-    auto_commit_every_t: default 5000. How much time (in milliseconds) to
-                         wait before commit
-    num_procs: Number of processes to start for consuming messages.
-               The available partitions will be divided among these processes
-    partitions_per_proc: Number of partitions to be allocated per process
-               (overrides num_procs)
+    Keyword Arguments:
+        auto_commit: default True. Whether or not to auto commit the offsets
+        auto_commit_every_n: default 100. How many messages to consume
+            before a commit
+        auto_commit_every_t: default 5000. How much time (in milliseconds) to
+            wait before commit
+        num_procs: Number of processes to start for consuming messages.
+            The available partitions will be divided among these processes
+        partitions_per_proc: Number of partitions to be allocated per process
+            (overrides num_procs)
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
@@ -198,11 +200,12 @@ class MultiProcessConsumer(Consumer):
         """
         Fetch the specified number of messages
 
-        count: Indicates the maximum number of messages to be fetched
-        block: If True, the API will block till some messages are fetched.
-        timeout: If block is True, the function will block for the specified
-                 time (in seconds) until count messages is fetched. If None,
-                 it will block forever.
+        Keyword Arguments:
+            count: Indicates the maximum number of messages to be fetched
+            block: If True, the API will block till some messages are fetched.
+            timeout: If block is True, the function will block for the specified
+                time (in seconds) until count messages is fetched. If None,
+                it will block forever.
         """
         messages = []
 

@@ -85,20 +85,20 @@ class Producer(object):
     """
     Base class to be used by producers
 
-    Params:
-    client - The Kafka client instance to use
-    async - If set to true, the messages are sent asynchronously via another
+    Arguments:
+        client: The Kafka client instance to use
+        async: If set to true, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
             WARNING!!! current implementation of async producer does not
             guarantee message delivery.  Use at your own risk! Or help us
             improve with a PR!
-    req_acks - A value indicating the acknowledgements that the server must
-               receive before responding to the request
-    ack_timeout - Value (in milliseconds) indicating a timeout for waiting
-                  for an acknowledgement
-    batch_send - If True, messages are send in batches
-    batch_send_every_n - If set, messages are send in batches of this size
-    batch_send_every_t - If set, messages are send after this timeout
+        req_acks: A value indicating the acknowledgements that the server must
+            receive before responding to the request
+        ack_timeout: Value (in milliseconds) indicating a timeout for waiting
+            for an acknowledgement
+        batch_send: If True, messages are send in batches
+        batch_send_every_n: If set, messages are send in batches of this size
+        batch_send_every_t: If set, messages are send after this timeout
     """
 
     ACK_NOT_REQUIRED = 0            # No ack is required

@@ -15,17 +15,19 @@ class KeyedProducer(Producer):
     """
     A producer which distributes messages to partitions based on the key
 
-    Args:
-    client - The kafka client instance
-    partitioner - A partitioner class that will be used to get the partition
-        to send the message to. Must be derived from Partitioner
-    async - If True, the messages are sent asynchronously via another
+    Arguments:
+        client: The kafka client instance
+
+    Keyword Arguments:
+        partitioner: A partitioner class that will be used to get the partition
+            to send the message to. Must be derived from Partitioner
+        async: If True, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
-    ack_timeout - Value (in milliseconds) indicating a timeout for waiting
-                  for an acknowledgement
-    batch_send - If True, messages are send in batches
-    batch_send_every_n - If set, messages are send in batches of this size
-    batch_send_every_t - If set, messages are send after this timeout
+        ack_timeout: Value (in milliseconds) indicating a timeout for waiting
+            for an acknowledgement
+        batch_send: If True, messages are send in batches
+        batch_send_every_n: If set, messages are send in batches of this size
+        batch_send_every_t: If set, messages are send after this timeout
     """
     def __init__(self, client, partitioner=None, async=False,
                  req_acks=Producer.ACK_AFTER_LOCAL_WRITE,

@@ -70,27 +70,36 @@ class SimpleConsumer(Consumer):
     A simple consumer implementation that consumes all/specified partitions
     for a topic
 
-    client: a connected KafkaClient
-    group: a name for this consumer, used for offset storage and must be unique
-    topic: the topic to consume
-    partitions: An optional list of partitions to consume the data from
+    Arguments:
+        client: a connected KafkaClient
+        group: a name for this consumer, used for offset storage and must be unique
+        topic: the topic to consume
 
-    auto_commit: default True. Whether or not to auto commit the offsets
-    auto_commit_every_n: default 100. How many messages to consume
-                         before a commit
-    auto_commit_every_t: default 5000. How much time (in milliseconds) to
-                         wait before commit
-    fetch_size_bytes:    number of bytes to request in a FetchRequest
-    buffer_size:         default 4K. Initial number of bytes to tell kafka we
-                         have available. This will double as needed.
-    max_buffer_size:     default 16K. Max number of bytes to tell kafka we have
-                         available. None means no limit.
-    iter_timeout:        default None. How much time (in seconds) to wait for a
-                         message in the iterator before exiting. None means no
-                         timeout, so it will wait forever.
-    auto_offset_reset: default largest. Reset partition offsets upon
-                         OffsetOutOfRangeError. Valid values are largest and smallest.
-                         If None do not reset the offsets and raise OffsetOutOfRangeError.
+    Keyword Arguments:
+        partitions: An optional list of partitions to consume the data from
+
+        auto_commit: default True. Whether or not to auto commit the offsets
+
+        auto_commit_every_n: default 100. How many messages to consume
+             before a commit
+
+        auto_commit_every_t: default 5000. How much time (in milliseconds) to
+             wait before commit
+        fetch_size_bytes: number of bytes to request in a FetchRequest
+
+        buffer_size: default 4K. Initial number of bytes to tell kafka we
+             have available. This will double as needed.
+
+        max_buffer_size: default 16K. Max number of bytes to tell kafka we have
+             available. None means no limit.
+
+        iter_timeout: default None. How much time (in seconds) to wait for a
+             message in the iterator before exiting. None means no
+             timeout, so it will wait forever.
+
+        auto_offset_reset: default largest. Reset partition offsets upon
+             OffsetOutOfRangeError. Valid values are largest and smallest.
+             Otherwise, do not reset the offsets and raise OffsetOutOfRangeError.
 
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
@@ -166,11 +175,13 @@ class SimpleConsumer(Consumer):
         """
         Alter the current offset in the consumer, similar to fseek
 
-        offset: how much to modify the offset
-        whence: where to modify it from
-                0 is relative to the earliest available offset (head)
-                1 is relative to the current offset
-                2 is relative to the latest known offset (tail)
+        Arguments:
+            offset: how much to modify the offset
+            whence: where to modify it from
+
+                * 0 is relative to the earliest available offset (head)
+                * 1 is relative to the current offset
+                * 2 is relative to the latest known offset (tail)
         """
 
         if whence == 1:  # relative to current position
@@ -213,11 +224,12 @@ class SimpleConsumer(Consumer):
         """
         Fetch the specified number of messages
 
-        count: Indicates the maximum number of messages to be fetched
-        block: If True, the API will block till some messages are fetched.
-        timeout: If block is True, the function will block for the specified
-                 time (in seconds) until count messages is fetched. If None,
-                 it will block forever.
+        Keyword Arguments:
+            count: Indicates the maximum number of messages to be fetched
+            block: If True, the API will block till some messages are fetched.
+            timeout: If block is True, the function will block for the specified
+                time (in seconds) until count messages is fetched. If None,
+                it will block forever.
         """
         messages = []
         if timeout is not None:

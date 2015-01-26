@@ -103,10 +103,12 @@ class ReentrantTimer(object):
     A timer that can be restarted, unlike threading.Timer
     (although this uses threading.Timer)
 
-    t: timer interval in milliseconds
-    fn: a callable to invoke
-    args: tuple of args to be passed to function
-    kwargs: keyword arguments to be passed to function
+    Arguments:
+
+        t: timer interval in milliseconds
+        fn: a callable to invoke
+        args: tuple of args to be passed to function
+        kwargs: keyword arguments to be passed to function
     """
     def __init__(self, t, fn, *args, **kwargs):
 
