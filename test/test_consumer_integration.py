@@ -5,7 +5,7 @@ from six.moves import xrange
 
 from kafka import SimpleConsumer, MultiProcessConsumer, KafkaConsumer, create_message
 from kafka.common import (
-    ProduceRequest, ConsumerFetchSizeTooSmall, ConsumerTimeout
+    ProduceRequest, ConsumerFetchSizeTooSmall, ConsumerTimeout, OffsetOutOfRangeError
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
 
@@ -84,6 +84,48 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assert_message_count([ message for message in consumer ], 200)
 
         consumer.stop()
+
+    @kafka_versions('all')
+    def test_simple_consumer_smallest_offset_reset(self):
+        self.send_messages(0, range(0, 100))
+        self.send_messages(1, range(100, 200))
+
+        consumer = self.consumer(auto_offset_reset='smallest')
+        # Move fetch offset ahead of 300 message (out of range)
+        consumer.seek(300, 2)
+        # Since auto_offset_reset is set to smallest we should read all 200
+        # messages from beginning.
+        self.assert_message_count([message for message in consumer], 200)
+
+    @kafka_versions('all')
+    def test_simple_consumer_largest_offset_reset(self):
+        self.send_messages(0, range(0, 100))
+        self.send_messages(1, range(100, 200))
+
+        # Default largest
+        consumer = self.consumer()
+        # Move fetch offset ahead of 300 message (out of range)
+        consumer.seek(300, 2)
+        # Since auto_offset_reset is set to largest we should not read any
+        # messages.
+        self.assert_message_count([message for message in consumer], 0)
+        # Send 200 new messages to the queue
+        self.send_messages(0, range(200, 300))
+        self.send_messages(1, range(300, 400))
+        # Since the offset is set to largest we should read all the new messages.
+        self.assert_message_count([message for message in consumer], 200)
+
+    @kafka_versions('all')
+    def test_simple_consumer_no_reset(self):
+        self.send_messages(0, range(0, 100))
+        self.send_messages(1, range(100, 200))
+
+        # Default largest
+        consumer = self.consumer(auto_offset_reset=None)
+        # Move fetch offset ahead of 300 message (out of range)
+        consumer.seek(300, 2)
+        with self.assertRaises(OffsetOutOfRangeError):
+            consumer.get_message()
 
     @kafka_versions("all")
     def test_simple_consumer__seek(self):

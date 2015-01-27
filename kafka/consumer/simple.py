@@ -348,6 +348,8 @@ class SimpleConsumer(Consumer):
                                 "Resetting partition offset...",
                                 resp.topic, resp.partition)
                     self.reset_partition_offset(resp.partition)
+                    # Retry this partition
+                    retry_partitions[resp.partition] = partitions[resp.partition]
                     continue
 
                 partition = resp.partition
