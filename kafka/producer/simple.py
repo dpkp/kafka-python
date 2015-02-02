@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import random
+import six
 
 from itertools import cycle
 
@@ -68,8 +69,13 @@ class SimpleProducer(Producer):
         return next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
+        if not isinstance(topic, six.binary_type):
+            topic = topic.encode('utf-8')
+
         partition = self._next_partition(topic)
-        return super(SimpleProducer, self).send_messages(topic, partition, *msg)
+        return super(SimpleProducer, self).send_messages(
+            topic, partition, *msg
+        )
 
     def __repr__(self):
         return '<SimpleProducer batch=%s>' % self.async

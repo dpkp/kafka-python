@@ -7,6 +7,7 @@ from . import unittest
 
 from kafka.producer.base import Producer
 
+
 class TestKafkaProducer(unittest.TestCase):
     def test_producer_message_types(self):
 
@@ -25,3 +26,17 @@ class TestKafkaProducer(unittest.TestCase):
             # This should not raise an exception
             producer.send_messages(topic, partition, m)
 
+    def test_topic_message_types(self):
+        from kafka.producer.simple import SimpleProducer
+
+        client = MagicMock()
+
+        def partitions(topic):
+            return [0, 1]
+
+        client.get_partition_ids_for_topic = partitions
+
+        producer = SimpleProducer(client, random_start=False)
+        topic = b"test-topic"
+        producer.send_messages(topic, b'hi')
+        assert client.send_produce_request.called
