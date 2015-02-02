@@ -146,3 +146,4 @@ class ReentrantTimer(object):
         self.thread.join(self.t + 1)
         # noinspection PyAttributeOutsideInit
         self.timer = None
+        self.fn = None
