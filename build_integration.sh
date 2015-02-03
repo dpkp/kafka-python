@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Versions available for testing via binary distributions
-OFFICIAL_RELEASES="0.8.0 0.8.1 0.8.1.1"
+OFFICIAL_RELEASES="0.8.0 0.8.1 0.8.1.1 0.8.2.0"
 
 # Useful configuration vars, with sensible defaults
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.8.0
+  SCALA_VERSION=2.10
 fi
 
 # On travis CI, empty KAFKA_VERSION means skip integration tests
@@ -45,12 +45,18 @@ pushd servers
         echo "-------------------------------------"
         echo "Checking kafka binaries for ${kafka}"
         echo
-        wget -N https://archive.apache.org/dist/kafka/$kafka/kafka_${SCALA_VERSION}-${kafka}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/kafka_${SCALA_VERSION}-${kafka}.tar.gz
+        # kafka 0.8.0 is only available w/ scala 2.8.0
+        if [ "$kafka" == "0.8.0" ]; then
+          KAFKA_ARTIFACT="kafka_2.8.0-${kafka}"
+        else
+          KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}"
+        fi
+        wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
         echo
         if [ ! -d "../$kafka/kafka-bin" ]; then
           echo "Extracting kafka binaries for ${kafka}"
-          tar xzvf kafka_${SCALA_VERSION}-${kafka}.t* -C ../$kafka/
-          mv ../$kafka/kafka_${SCALA_VERSION}-${kafka} ../$kafka/kafka-bin
+          tar xzvf ${KAFKA_ARTIFACT}.t* -C ../$kafka/
+          mv ../$kafka/${KAFKA_ARTIFACT} ../$kafka/kafka-bin
         else
           echo "$kafka/kafka-bin directory already exists -- skipping tgz extraction"
         fi
