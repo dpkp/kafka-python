@@ -126,7 +126,11 @@ class ReentrantTimer(object):
         self.active = None
 
     def _timer(self, active):
-        while not active.wait(self.t):
+        # python2.6 Event.wait() always returns None
+        # python2.7 and greater returns the flag value (true/false)
+        # we want the flag value, so add an 'or' here for python2.6
+        # this is redundant for later python versions (FLAG OR FLAG == FLAG)
+        while not (active.wait(self.t) or active.is_set()):
             self.fn(*self.args, **self.kwargs)
 
     def start(self):
