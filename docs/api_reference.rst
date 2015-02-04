@@ -21,9 +21,6 @@ kafka
 .. automodule:: kafka.protocol
    :members:
 
-.. automodule:: kafka.queue
-   :members:
-
 .. automodule:: kafka.util
    :members:
 
