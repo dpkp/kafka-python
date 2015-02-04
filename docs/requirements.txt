@@ -4,4 +4,4 @@ sphinxcontrib-napoleon
 # Install kafka-python in editable mode
 # This allows the sphinx autodoc module
 # to load the Python modules and extract docstrings.
--e ..
+# -e ..
