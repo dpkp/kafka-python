@@ -20,7 +20,7 @@ see https://groups.google.com/forum/m/#!forum/kafka-clients
 
 # License
 
-Copyright 2014, David Arthur under Apache License, v2.0. See `LICENSE`
+Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 

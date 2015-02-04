@@ -35,7 +35,7 @@ Python versions
 License
 -------
 
-Copyright 2014, David Arthur under Apache License, v2.0. See `LICENSE <https://github.com/mumrah/kafka-python/blob/master/LICENSE>`_.
+Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE <https://github.com/mumrah/kafka-python/blob/master/LICENSE>`_.
 
 
 Contents

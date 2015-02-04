@@ -4,7 +4,7 @@ import pkg_resources
 __version__ = pkg_resources.require('kafka-python')[0].version
 __author__ = 'David Arthur'
 __license__ = 'Apache License 2.0'
-__copyright__ = 'Copyright 2014, David Arthur under Apache License, v2.0'
+__copyright__ = 'Copyright 2015, David Arthur under Apache License, v2.0'
 
 from kafka.client import KafkaClient
 from kafka.conn import KafkaConnection
