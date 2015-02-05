@@ -27,6 +27,7 @@ Kafka broker versions
 * 0.8.0
 
 Python versions
+
 * 2.6 (tested on 2.6.9)
 * 2.7 (tested on 2.7.9)
 * 3.3 (tested on 3.3.5)
