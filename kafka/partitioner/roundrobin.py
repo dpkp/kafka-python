@@ -15,9 +15,9 @@ class RoundRobinPartitioner(Partitioner):
         self.partitions = partitions
         self.iterpart = cycle(partitions)
 
-    def partition(self, key, partitions):
+    def partition(self, key, partitions=None):
         # Refresh the partition list if necessary
-        if self.partitions != partitions:
+        if partitions and self.partitions != partitions:
             self._set_partitions(partitions)
 
         return next(self.iterpart)

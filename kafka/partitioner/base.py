@@ -12,14 +12,13 @@ class Partitioner(object):
         """
         self.partitions = partitions
 
-    def partition(self, key, partitions):
+    def partition(self, key, partitions=None):
         """
         Takes a string key and num_partitions as argument and returns
         a partition to be used for the message
 
         Arguments:
-            partitions: The list of partitions is passed in every call. This
-                may look like an overhead, but it will be useful
-                (in future) when we handle cases like rebalancing
+            key: the key to use for partitioning
+            partitions: (optional) a list of partitions.
         """
         raise NotImplementedError('partition function has to be implemented')
