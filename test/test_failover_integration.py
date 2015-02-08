@@ -17,8 +17,7 @@ from test.testutil import (
 class TestFailover(KafkaIntegrationTestCase):
     create_client = False
 
-    @classmethod
-    def setUpClass(cls):  # noqa
+    def setUp(self):
         if not os.environ.get('KAFKA_VERSION'):
             return
 
@@ -27,22 +26,23 @@ class TestFailover(KafkaIntegrationTestCase):
         partitions = 2
 
         # mini zookeeper, 2 kafka brokers
-        cls.zk = ZookeeperFixture.instance()
-        kk_args = [cls.zk.host, cls.zk.port, zk_chroot, replicas, partitions]
-        cls.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
+        self.zk = ZookeeperFixture.instance()
+        kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
+        self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
 
-        hosts = ['%s:%d' % (b.host, b.port) for b in cls.brokers]
-        cls.client = KafkaClient(hosts)
+        hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
+        self.client = KafkaClient(hosts)
+        super(TestFailover, self).setUp()
 
-    @classmethod
-    def tearDownClass(cls):
+    def tearDown(self):
+        super(TestFailover, self).tearDown()
         if not os.environ.get('KAFKA_VERSION'):
             return
 
-        cls.client.close()
-        for broker in cls.brokers:
+        self.client.close()
+        for broker in self.brokers:
             broker.close()
-        cls.zk.close()
+        self.zk.close()
 
     @kafka_versions("all")
     def test_switch_leader(self):
