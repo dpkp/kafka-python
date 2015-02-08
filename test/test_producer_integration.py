@@ -19,7 +19,6 @@ from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions
 
 class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
-    topic = b'produce_topic'
 
     @classmethod
     def setUpClass(cls):  # noqa
