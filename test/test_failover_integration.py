@@ -50,11 +50,18 @@ class TestFailover(KafkaIntegrationTestCase):
         topic = self.topic
         partition = 0
 
-        # Test the base class Producer -- send_messages to a specific partition
+        # Testing the base Producer class here so that we can easily send
+        # messages to a specific partition, kill the leader for that partition
+        # and check that after another broker takes leadership the producer
+        # is able to resume sending messages
+
+        # require that the server commit messages to all in-sync replicas
+        # so that failover doesn't lose any messages on server-side
+        # and we can assert that server-side message count equals client-side
         producer = Producer(self.client, async=False,
                             req_acks=Producer.ACK_AFTER_CLUSTER_COMMIT)
 
-        # Send 10 random messages
+        # Send 100 random messages to a specific partition
         self._send_random_messages(producer, topic, partition, 100)
 
         # kill leader for partition
@@ -81,7 +88,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self._send_random_messages(producer, topic, partition, 100)
 
         # count number of messages
-        # Should be equal to 10 before + 1 recovery + 10 after
+        # Should be equal to 100 before + 1 recovery + 100 after
         self.assert_message_count(topic, 201, partitions=(partition,))
 
 
