@@ -261,7 +261,7 @@ class KafkaClient(object):
         if topic not in self.topic_partitions:
             return None
 
-        return list(self.topic_partitions[topic])
+        return sorted(list(self.topic_partitions[topic]))
 
     def ensure_topic_exists(self, topic, timeout = 30):
         start_time = time.time()
