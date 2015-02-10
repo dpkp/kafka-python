@@ -1,10 +1,18 @@
-# Kafka Python client
+Kafka Python client
+------------------------
+.. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
+    :target: https://travis-ci.org/mumrah/kafka-pytho
+    :alt: Build Status
 
-[![Build Status](https://api.travis-ci.org/mumrah/kafka-python.png?branch=master)](https://travis-ci.org/mumrah/kafka-python)
-[![Coverage Status](https://coveralls.io/repos/mumrah/kafka-python/badge.svg?branch=master)](https://coveralls.io/r/mumrah/kafka-python?branch=master)
-[![Full documentation available on ReadTheDocs](https://readthedocs.org/projects/kafka-python/badge/?version=latest)](https://readthedocs.org/projects/kafka-python/?badge=latest)
+.. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
+    :target: https://coveralls.io/repos/mumrah/kafka-python/badge.svg?branch=master
+    :alt: Coverage Status
 
-[Full documentation available on ReadTheDocs](http://kafka-python.readthedocs.org/en/latest/) 
+.. image:: https://readthedocs.org/projects/kafka-python/badge/?version=latest
+    :target: http://kafka-python.readthedocs.org/en/latest/
+    :alt: Full documentation available on ReadTheDocs
+
+`Full documentation available on ReadTheDoc`_
 
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
@@ -24,7 +32,7 @@ Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE`
 
 # Status
 
-The current stable version of this package is [**0.9.3**](https://github.com/mumrah/kafka-python/releases/tag/v0.9.3) and is compatible with
+The current stable version of this package is **`0.9.3`_** and is compatible with:
 
 Kafka broker versions
 - 0.8.2.0 [offset management currently ZK only -- does not support ConsumerCoordinator offset management APIs]
@@ -38,3 +46,6 @@ Python versions
 - 3.3 (tested on 3.3.5)
 - 3.4 (tested on 3.4.2)
 - pypy (tested on pypy 2.4.0 / python 2.7.8)
+
+.. _Full documentation available on ReadTheDocs: http://kafka-python.readthedocs.org/en/latest/
+.. _0.9.3: https://github.com/mumrah/kafka-python/releases/tag/v0.9.3
