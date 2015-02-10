@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 .. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
-    :target: https://travis-ci.org/mumrah/kafka-pytho
+    :target: https://travis-ci.org/mumrah/kafka-python
     :alt: Build Status
 
 .. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
@@ -12,7 +12,7 @@ Kafka Python client
     :target: http://kafka-python.readthedocs.org/en/latest/
     :alt: Full documentation available on ReadTheDocs
 
-`Full documentation available on ReadTheDoc`_
+`Full documentation available on ReadTheDocs`_
 
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
@@ -26,13 +26,13 @@ On Freenode IRC at #kafka-python, as well as #apache-kafka
 For general discussion of kafka-client design and implementation (not python specific),
 see https://groups.google.com/forum/#!forum/kafka-clients
 
-# License
-
+License
+----------
 Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE`
 
-# Status
-
-The current stable version of this package is **`0.9.3`_** and is compatible with:
+Status
+----------
+The current stable version of this package is **0.9.3_** and is compatible with:
 
 Kafka broker versions
 - 0.8.2.0 [offset management currently ZK only -- does not support ConsumerCoordinator offset management APIs]
