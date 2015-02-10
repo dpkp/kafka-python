@@ -4,7 +4,7 @@ Kafka Python client
     :target: https://travis-ci.org/mumrah/kafka-python
     :alt: Build Status
 
-.. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
+.. image:: https://coveralls.io/r/mumrah/kafka-python?branch=master
     :target: https://coveralls.io/repos/mumrah/kafka-python/badge.svg?branch=master
     :alt: Coverage Status
 
@@ -32,7 +32,7 @@ Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE`
 
 Status
 ----------
-The current stable version of this package is **0.9.3_** and is compatible with:
+The current stable version of this package is `0.9.3`_ and is compatible with:
 
 Kafka broker versions
 - 0.8.2.0 [offset management currently ZK only -- does not support ConsumerCoordinator offset management APIs]
