@@ -48,7 +48,7 @@ Contents
    install
    tests
    usage
-   api_reference
+   API reference </apidoc/modules>
 
 Indices and tables
 ==================

@@ -30,6 +30,7 @@ import os
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
     'sphinxcontrib.napoleon',
 ]
@@ -57,7 +58,7 @@ copyright = u'2015, David Arthur'
 # The short X.Y version.
 with open('../VERSION') as version_file:
   version = version_file.read()
-  
+
 # The full version, including alpha/beta/rc tags.
 release = version
 
