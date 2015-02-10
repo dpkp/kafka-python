@@ -16,7 +16,7 @@ http://kafka.apache.org/
 On Freenode IRC at #kafka-python, as well as #apache-kafka
 
 For general discussion of kafka-client design and implementation (not python specific),
-see https://groups.google.com/forum/m/#!forum/kafka-clients
+see https://groups.google.com/forum/#!forum/kafka-clients
 
 # License
 
