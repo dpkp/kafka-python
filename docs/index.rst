@@ -1,4 +1,3 @@
-
 kafka-python
 ============
 
@@ -49,8 +48,7 @@ Contents
    install
    tests
    usage
-   api_reference
-
+   API reference </apidoc/modules>
 
 Indices and tables
 ==================
@@ -58,4 +56,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
