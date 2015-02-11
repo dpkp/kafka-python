@@ -57,7 +57,8 @@ class KafkaConsumer(object):
     .. code:: python
 
         # A very basic 'tail' consumer, with no stored offset management
-        kafka = KafkaConsumer('topic1')
+        kafka = KafkaConsumer('topic1',
+                              metadata_broker_list=['localhost:9092'])
         for m in kafka:
           print m
 
@@ -73,8 +74,10 @@ class KafkaConsumer(object):
 
     .. code:: python
 
-        # more advanced consumer -- multiple topics w/ auto commit offset management
+        # more advanced consumer -- multiple topics w/ auto commit offset
+        # management
         kafka = KafkaConsumer('topic1', 'topic2',
+                              metadata_broker_list=['localhost:9092'],
                               group_id='my_consumer_group',
                               auto_commit_enable=True,
                               auto_commit_interval_ms=30 * 1000,

@@ -6,7 +6,7 @@ High level
 
 .. code:: python
 
-    from kafka import KafkaClient, SimpleProducer, SimpleConsumer
+    from kafka import SimpleProducer, KafkaClient, KafkaConsumer
 
     # To send messages synchronously
     kafka = KafkaClient("localhost:9092")
@@ -52,7 +52,8 @@ High level
                               batch_send_every_t=60)
 
     # To consume messages
-    consumer = SimpleConsumer(kafka, "my-group", "my-topic")
+    consumer = KafkaConsumer("my-topic", group_id="my_group",
+                             metadata_broker_list=["localhost:9092"])
     for message in consumer:
         # message is raw byte string -- decode if necessary!
         # e.g., for unicode: `message.decode('utf-8')`
@@ -66,7 +67,8 @@ Keyed messages
 
 .. code:: python
 
-    from kafka import KafkaClient, KeyedProducer, HashedPartitioner, RoundRobinPartitioner
+    from kafka import (KafkaClient, KeyedProducer, HashedPartitioner,
+                       RoundRobinPartitioner)
 
     kafka = KafkaClient("localhost:9092")
 
