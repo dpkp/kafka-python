@@ -127,6 +127,7 @@ class Producer(object):
         self.async = async
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
+        self.stopped = False
 
         if codec is None:
             codec = CODEC_NONE
@@ -212,3 +213,8 @@ class Producer(object):
 
             if self.proc.is_alive():
                 self.proc.terminate()
+        self.stopped = True
+
+    def __del__(self):
+        if not self.stopped:
+            self.stop()

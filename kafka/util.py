@@ -151,3 +151,6 @@ class ReentrantTimer(object):
         # noinspection PyAttributeOutsideInit
         self.timer = None
         self.fn = None
+
+    def __del__(self):
+        self.stop()
