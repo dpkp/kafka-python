@@ -71,9 +71,9 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offset = self.current_offset(self.topic, 0)
 
         message1 = create_gzip_message([
-            ("Gzipped 1 %d" % i).encode('utf-8') for i in range(100)])
+            (("Gzipped 1 %d" % i).encode('utf-8'), None) for i in range(100)])
         message2 = create_gzip_message([
-            ("Gzipped 2 %d" % i).encode('utf-8') for i in range(100)])
+            (("Gzipped 2 %d" % i).encode('utf-8'), None) for i in range(100)])
 
         self.assert_produce_request(
             [ message1, message2 ],
@@ -87,8 +87,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offset = self.current_offset(self.topic, 0)
 
         self.assert_produce_request([
-                create_snappy_message(["Snappy 1 %d" % i for i in range(100)]),
-                create_snappy_message(["Snappy 2 %d" % i for i in range(100)]),
+                create_snappy_message([("Snappy 1 %d" % i, None) for i in range(100)]),
+                create_snappy_message([("Snappy 2 %d" % i, None) for i in range(100)]),
             ],
             start_offset,
             200,
@@ -102,13 +102,13 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         messages = [
             create_message(b"Just a plain message"),
             create_gzip_message([
-                ("Gzipped %d" % i).encode('utf-8') for i in range(100)]),
+                (("Gzipped %d" % i).encode('utf-8'), None) for i in range(100)]),
         ]
 
         # All snappy integration tests fail with nosnappyjava
         if False and has_snappy():
             msg_count += 100
-            messages.append(create_snappy_message(["Snappy %d" % i for i in range(100)]))
+            messages.append(create_snappy_message([("Snappy %d" % i, None) for i in range(100)]))
 
         self.assert_produce_request(messages, start_offset, msg_count)
 
@@ -118,7 +118,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         self.assert_produce_request([
             create_gzip_message([
-                ("Gzipped batch 1, message %d" % i).encode('utf-8')
+                (("Gzipped batch 1, message %d" % i).encode('utf-8'), None)
                 for i in range(50000)])
             ],
             start_offset,
@@ -127,7 +127,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         self.assert_produce_request([
             create_gzip_message([
-                ("Gzipped batch 1, message %d" % i).encode('utf-8')
+                (("Gzipped batch 1, message %d" % i).encode('utf-8'), None)
                 for i in range(50000)])
             ],
             start_offset+50000,
