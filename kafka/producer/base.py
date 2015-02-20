@@ -62,7 +62,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
             # Adjust the timeout to match the remaining period
             count -= 1
             timeout = send_at - time.time()
-            msgset[topic_partition].append(msg)
+            msgset[topic_partition].append((msg, key))
 
         # Send collected requests upstream
         reqs = []
@@ -191,7 +191,7 @@ class Producer(object):
                 self.queue.put((TopicAndPartition(topic, partition), m, key))
             resp = []
         else:
-            messages = create_message_set(msg, self.codec, key)
+            messages = create_message_set([(m, key) for m in msg], self.codec, key)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request([req], acks=self.req_acks,
