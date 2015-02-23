@@ -305,6 +305,10 @@ class SimpleConsumer(Consumer):
                 buffer_size = partitions[partition]
                 try:
                     for message in resp.messages:
+                        if message.offset < self.fetch_offsets[partition]:
+                            log.debug('Skipping message %s because its offset is less than the consumer offset',
+                                      message)
+                            continue
                         # Put the message in our queue
                         self.queue.put((partition, message))
                         self.fetch_offsets[partition] = message.offset + 1
