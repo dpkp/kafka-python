@@ -15,7 +15,8 @@ from threading import Thread, Event
 import six
 
 from kafka.common import (
-    ProduceRequest, TopicAndPartition, UnsupportedCodecError
+    ProduceRequest, TopicAndPartition,
+    UnsupportedCodecError, FailedPayloadsError
 )
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 from kafka.util import kafka_bytestring
