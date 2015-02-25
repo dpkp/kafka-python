@@ -170,7 +170,6 @@ class KafkaConnection(local):
         c.port = copy.copy(self.port)
         c.timeout = copy.copy(self.timeout)
         c._sock = None
-        c._dirty = True
         return c
 
     def close(self):
