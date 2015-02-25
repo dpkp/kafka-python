@@ -6,6 +6,7 @@ from collections import namedtuple
 #   Structs   #
 ###############
 
+<<<<<<< HEAD
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-MetadataAPI
 MetadataRequest = namedtuple("MetadataRequest",
     ["topics"])
@@ -14,8 +15,15 @@ MetadataResponse = namedtuple("MetadataResponse",
     ["brokers", "topics"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ProduceAPI
-ProduceRequest = namedtuple("ProduceRequest",
-    ["topic", "partition", "messages"])
+_ProduceRequest = namedtuple("ProduceRequest",
+    ["topic", "partition", "messages", "retries"])
+
+
+class ProduceRequest(_ProduceRequest):
+    def __new__(cls, topic, partition, messages, retries=0):
+        return super(ProduceRequest, cls).__new__(
+            cls, topic, partition, messages, retries)
+
 
 ProduceResponse = namedtuple("ProduceResponse",
     ["topic", "partition", "error", "offset"])

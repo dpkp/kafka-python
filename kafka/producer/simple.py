@@ -10,7 +10,8 @@ from six.moves import xrange
 
 from .base import (
     Producer, BATCH_SEND_DEFAULT_INTERVAL,
-    BATCH_SEND_MSG_COUNT
+    BATCH_SEND_MSG_COUNT,
+    BATCH_RETRY_BACKOFF_MS, BATCH_RETRIES_LIMIT
 )
 
 log = logging.getLogger("kafka")
@@ -45,13 +46,17 @@ class SimpleProducer(Producer):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 random_start=True):
+                 random_start=True,
+                 batch_retry_backoff_ms=BATCH_RETRY_BACKOFF_MS,
+                 batch_retries_limit=BATCH_RETRIES_LIMIT):
         self.partition_cycles = {}
         self.random_start = random_start
         super(SimpleProducer, self).__init__(client, async, req_acks,
                                              ack_timeout, codec, batch_send,
                                              batch_send_every_n,
-                                             batch_send_every_t)
+                                             batch_send_every_t,
+                                             batch_retry_backoff_ms,
+                                             batch_retries_limit)
 
     def _next_partition(self, topic):
         if topic not in self.partition_cycles:
