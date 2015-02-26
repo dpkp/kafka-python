@@ -44,6 +44,9 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
     while not stop_event.is_set():
         timeout = batch_time
+
+        # it's a simplification: we're comparing message sets and
+        # messages: each set can contain [1..batch_size] messages
         count = batch_size - len(reqs)
         send_at = time.time() + timeout
         msgset = defaultdict(list)
@@ -74,6 +77,10 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                  messages)
             reqs.append(req)
 
+        if not reqs:
+            continue
+
+        reqs_to_retry = []
         try:
             client.send_produce_request(reqs,
                                         acks=req_acks,
@@ -81,15 +88,22 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         except FailedPayloadsError as ex:
             log.exception("Failed payloads count %s" % len(ex.message))
             if retries_limit is None:
-                reqs = ex.message
-                continue
-            for req in ex.message:
-                if retries_limit and req.retries < retries_limit:
-                    reqs.append(req._replace(retries=req.retries+1))
+                # retry all failed messages until success
+                reqs_to_retry = ex.message
+            elif not retries_limit < 0:
+                #
+                for req in ex.message:
+                    if retries_limit and req.retries < retries_limit:
+                        updated_req = req._replace(retries=req.retries+1)
+                        reqs_to_retry.append(updated_req)
         except Exception as ex:
             log.exception("Unable to send message: %s" % type(ex))
+        finally:
+            reqs = []
 
-        if reqs and retry_backoff:
+        if reqs_to_retry and retry_backoff:
+            reqs = reqs_to_retry
+            log.warning("%s requests will be retried next call." % len(reqs))
             time.sleep(float(retry_backoff) / 1000)
 
 
