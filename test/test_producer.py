@@ -106,11 +106,11 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         for i in range(10):
             self.queue.put((TopicAndPartition("test", i), "msg %i", "key %i"))
 
-        flag = mp.Value('c', 'f')
+        is_first_time = mp.Value('b', True)
         def send_side_effect(reqs, *args, **kwargs):
             self.send_calls_count.value += 1
-            if flag.value == 'f':
-                flag.value = 't'
+            if is_first_time.value:
+                is_first_time.value = False
                 raise FailedPayloadsError(reqs)
 
         self.client.send_produce_request.side_effect = send_side_effect
@@ -166,14 +166,13 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # the queue should have 7 elements
         # 3 batches of 1 msg each were retried all this time
         self.assertEqual(self.queue.empty(), False)
-        left = 0
-        for i in range(10):
-            try:
+        try:
+            for i in range(7):
                 self.queue.get(timeout=0.01)
-                left += 1
-            except Empty:
-                break
-        self.assertEqual(left, 7)
+        except Empty:
+            self.fail("Should be 7 elems in the queue")
+        self.assertEqual(self.queue.empty(), True)
 
-        # 1s / 50ms of backoff = 20 times
-        self.assertEqual(self.send_calls_count.value, 20)
+        # 1s / 50ms of backoff = 20 times max
+        self.assertTrue(self.send_calls_count.value > 10)
+        self.assertTrue(self.send_calls_count.value <= 20)

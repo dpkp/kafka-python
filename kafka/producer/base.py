@@ -86,13 +86,15 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                         acks=req_acks,
                                         timeout=ack_timeout)
         except FailedPayloadsError as ex:
-            log.exception("Failed payloads count %s" % len(ex.message))
+            failed_reqs = ex.args[0]
+            log.exception("Failed payloads count %s" % len(failed_reqs))
+
             if retries_limit is None:
                 # retry all failed messages until success
-                reqs_to_retry = ex.message
+                reqs_to_retry = failed_reqs
             elif not retries_limit < 0:
                 #
-                for req in ex.message:
+                for req in failed_reqs:
                     if retries_limit and req.retries < retries_limit:
                         updated_req = req._replace(retries=req.retries+1)
                         reqs_to_retry.append(updated_req)
