@@ -210,5 +210,5 @@ class Producer(object):
             self.queue.put((STOP_ASYNC_PRODUCER, None, None))
             self.thread.join(timeout)
 
-        if self.thread.is_alive():
-            self.thread_stop_event.set()
+            if self.thread.is_alive():
+                self.thread_stop_event.set()
