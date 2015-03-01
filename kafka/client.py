@@ -15,6 +15,7 @@ from kafka.common import (TopicAndPartition, BrokerMetadata,
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
+from kafka.util import kafka_bytestring
 
 log = logging.getLogger("kafka")
 
@@ -30,7 +31,7 @@ class KafkaClient(object):
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
         # We need one connection to bootstrap
-        self.client_id = client_id
+        self.client_id = kafka_bytestring(client_id)
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
 
