@@ -269,13 +269,18 @@ class KafkaClient(object):
 
             self.topic_partitions[topic] = []
             for partition, meta in partitions.items():
-                self.topic_partitions[topic].append(partition)
-                topic_part = TopicAndPartition(topic, partition)
-                if meta.leader == -1:
-                    log.warning('No leader for topic %s partition %s', topic, partition)
-                    self.topics_to_brokers[topic_part] = None
-                else:
-                    self.topics_to_brokers[topic_part] = brokers[meta.leader]
+                try:
+
+                  self.topic_partitions[topic].append(partition)
+                  topic_part = TopicAndPartition(topic, partition)
+                  if meta.leader == -1:
+                      log.warning('No leader for topic %s partition %s', topic, partition)
+                      self.topics_to_brokers[topic_part] = None
+                  else:
+                      self.topics_to_brokers[topic_part] = brokers[meta.leader]
+
+                except Exception, e:
+                  logging.warn("Failed to get partition meta for topic " + topic + "," + str(e))
 
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
