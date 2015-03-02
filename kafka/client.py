@@ -86,7 +86,7 @@ class KafkaClient(object):
         self.load_metadata_for_topics(topic)
 
         # If the partition doesn't actually exist, raise
-        if partition not in self.topic_partitions[topic]:
+        if partition not in self.topic_partitions.get(topic, []):
             raise UnknownTopicOrPartitionError(key)
 
         # If there's no leader for the partition, raise
