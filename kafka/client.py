@@ -265,7 +265,7 @@ class KafkaClient(object):
 
     def get_partition_ids_for_topic(self, topic):
         if topic not in self.topic_partitions:
-            return None
+            return []
 
         return sorted(list(self.topic_partitions[topic]))
 
