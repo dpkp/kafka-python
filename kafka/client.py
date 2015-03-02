@@ -178,8 +178,13 @@ class KafkaClient(object):
             # Send the request, recv the response
             try:
                 conn.send(requestId, request)
+
+                # decoder_fn=None signal that the server  is expected to not
+                # send a response.  This probably only applies to
+                # ProduceRequest w/ acks = 0
                 if decoder_fn is None:
                     continue
+
                 try:
                     response = conn.recv(requestId)
                 except ConnectionError as e:
