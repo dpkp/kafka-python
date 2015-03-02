@@ -2,10 +2,11 @@ import os
 import time
 import uuid
 
+from mock import MagicMock
 from six.moves import range
 
 from kafka import (
-    SimpleProducer, KeyedProducer,
+    SimpleProducer, KeyedProducer, KafkaProducer,
     create_message, create_gzip_message, create_snappy_message,
     RoundRobinPartitioner, HashedPartitioner
 )
@@ -450,6 +451,46 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         self.assert_fetch_offset(partition, start_offset, [ self.msg("one") ])
 
         producer.stop()
+
+    @kafka_versions("all")
+    def test_async_kafka_producer(self):
+        start_offset0 = self.current_offset(self.topic, 0)
+
+        brokers = '%s:%d' % (self.server.host, self.server.port)
+        producer = KafkaProducer(bootstrap_servers=brokers,
+                                 producer_loop_idle_wait_ms=100)
+
+        fake_callback = MagicMock()
+        resp = producer.send(
+            topic=self.topic,
+            partition=0,
+            key=self.key("key1"),
+            value=self.msg("one"),
+            callback=fake_callback
+        )
+
+        # response should be None
+        self.assertIsNone(resp)
+
+        # Sleep for 1 producer loop idle
+        time.sleep(0.1)
+        self.assert_fetch_offset(0, start_offset0, [ self.msg("one") ])
+
+        # Verify callback worked
+        self.assertTrue(fake_callback.called)
+        self.assertEqual(fake_callback.call_count, 1)
+
+        args, kwargs = fake_callback.call_args
+        self.assertEqual(len(args), 2)
+
+        record, response = args
+        self.assertEqual(record.topic, self.topic)
+        self.assertEqual(record.partition, 0)
+        self.assertEqual(record.key, self.key("key1"))
+        self.assertEqual(record.value, self.msg("one"))
+        self.assertEqual(response.offset, start_offset0)
+
+        producer.close()
 
     def assert_produce_request(self, messages, initial_offset, message_ct,
                                partition=0):
