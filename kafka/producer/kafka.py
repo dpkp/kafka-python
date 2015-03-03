@@ -477,5 +477,8 @@ class KafkaProducer(object):
 
         return True
 
+    def __del__(self):
+        self.close()
+
     def metrics(self):
         raise NotImplementedError()
