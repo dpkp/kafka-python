@@ -2,7 +2,10 @@ from __future__ import absolute_import
 
 from collections import namedtuple
 import logging
-from Queue import Empty, Full, Queue
+try:
+    from Queue import Empty, Full, Queue
+except ImportError:  # python 3
+    from queue import Empty, Full, Queue
 import random
 import threading
 import time
