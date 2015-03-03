@@ -287,7 +287,7 @@ class KafkaProducer(object):
 
             # hash the index
             if record.key is not None:
-                idx = hash(key) % size
+                idx = hash(record.key) % size
 
             # or round-robin it, if no key available
             else:
@@ -475,4 +475,4 @@ class KafkaProducer(object):
         return True
 
     def metrics(self):
-        raise NotImplemented()
+        raise NotImplementedError()
