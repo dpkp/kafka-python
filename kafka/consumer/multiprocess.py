@@ -131,7 +131,7 @@ class MultiProcessConsumer(Consumer):
         # * we have an even distribution of partitions among processes
         if not partitions_per_proc:
             partitions_per_proc = round(len(partitions) * 1.0 / num_procs)
-            if partitions_per_proc < num_procs * 0.5:
+            if partitions_per_proc * num_procs < len(partitions):
                 partitions_per_proc += 1
 
         # The final set of chunks
