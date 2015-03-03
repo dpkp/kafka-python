@@ -430,6 +430,10 @@ class KafkaConsumer(object):
                                    offset, message.key,
                                    self._config['deserializer_class'](message.value))
 
+                if offset < self._offsets.fetch[topic_partition]:
+                    logger.debug('Skipping message %s because its offset is less than the consumer offset',
+                                 msg)
+                    continue
                 # Only increment fetch offset if we safely got the message and deserialized
                 self._offsets.fetch[topic_partition] = offset + 1
 
