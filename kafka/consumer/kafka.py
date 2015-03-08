@@ -47,8 +47,6 @@ DEFAULT_CONSUMER_CONFIG = {
     'rebalance_backoff_ms': 2000,
 }
 
-BYTES_CONFIGURATION_KEYS = ('client_id', 'group_id')
-
 
 class KafkaConsumer(object):
     """
@@ -170,13 +168,6 @@ class KafkaConsumer(object):
         if configs:
             raise KafkaConfigurationError('Unknown configuration key(s): ' +
                                           str(list(configs.keys())))
-
-        # Handle str/bytes conversions
-        for config_key in BYTES_CONFIGURATION_KEYS:
-            if isinstance(self._config[config_key], six.string_types):
-                logger.warning("Converting configuration key '%s' to bytes" %
-                               config_key)
-                self._config[config_key] = self._config[config_key].encode('utf-8')
 
         if self._config['auto_commit_enable']:
             if not self._config['group_id']:
@@ -558,7 +549,7 @@ class KafkaConsumer(object):
 
         if commits:
             logger.info('committing consumer offsets to group %s', self._config['group_id'])
-            resps = self._client.send_offset_commit_request(self._config['group_id'],
+            resps = self._client.send_offset_commit_request(kafka_bytestring(self._config['group_id']),
                                                             commits,
                                                             fail_on_error=False)
 
@@ -622,7 +613,7 @@ class KafkaConsumer(object):
         logger.info("Consumer fetching stored offsets")
         for topic_partition in self._topics:
             (resp,) = self._client.send_offset_fetch_request(
-                self._config['group_id'],
+                kafka_bytestring(self._config['group_id']),
                 [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
                 fail_on_error=False)
             try:
