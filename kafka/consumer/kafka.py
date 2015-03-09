@@ -89,7 +89,7 @@ class KafkaConsumer(object):
             auto_offset_reset (str, optional): A policy for resetting offsets on
                 OffsetOutOfRange errors. 'smallest' will move to the oldest
                 available message, 'largest' will move to the most recent.  Any
-                ofther value will raise the exception.  Defaults to 'smallest'.
+                ofther value will raise the exception.  Defaults to 'largest'.
             deserializer_class (callable, optional):  Any callable that takes a
                 raw message value and returns a deserialized value.  Defaults to
                  lambda msg: msg.
