@@ -329,7 +329,7 @@ class KafkaProducer(object):
                     idx = (idx + 1) % size
                 indices[record.topic] = idx
 
-            partition = partitions[idx]
+            return partitions[idx]
 
     def _encode_produce_request(self, record):
         value_serializer = self._config['value_serializer']
