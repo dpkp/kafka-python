@@ -6,43 +6,46 @@ from collections import namedtuple
 #   Structs   #
 ###############
 
-# Request payloads
-ProduceRequest = namedtuple("ProduceRequest",
-                            ["topic", "partition", "messages"])
-
-FetchRequest = namedtuple("FetchRequest",
-                          ["topic", "partition", "offset", "max_bytes"])
-
-OffsetRequest = namedtuple("OffsetRequest",
-                           ["topic", "partition", "time", "max_offsets"])
-
-OffsetCommitRequest = namedtuple("OffsetCommitRequest",
-                                 ["topic", "partition", "offset", "metadata"])
-
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-MetadataAPI
 MetadataRequest = namedtuple("MetadataRequest",
     ["topics"])
-
-OffsetFetchRequest = namedtuple("OffsetFetchRequest", ["topic", "partition"])
 
 MetadataResponse = namedtuple("MetadataResponse",
     ["brokers", "topics"])
 
-# Response payloads
-ProduceResponse = namedtuple("ProduceResponse",
-                             ["topic", "partition", "error", "offset"])
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ProduceAPI
+ProduceRequest = namedtuple("ProduceRequest",
+    ["topic", "partition", "messages"])
 
-FetchResponse = namedtuple("FetchResponse", ["topic", "partition", "error",
-                                             "highwaterMark", "messages"])
+ProduceResponse = namedtuple("ProduceResponse",
+    ["topic", "partition", "error", "offset"])
+
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-FetchAPI
+FetchRequest = namedtuple("FetchRequest",
+    ["topic", "partition", "offset", "max_bytes"])
+
+FetchResponse = namedtuple("FetchResponse",
+    ["topic", "partition", "error", "highwaterMark", "messages"])
+
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetAPI
+OffsetRequest = namedtuple("OffsetRequest",
+    ["topic", "partition", "time", "max_offsets"])
 
 OffsetResponse = namedtuple("OffsetResponse",
-                            ["topic", "partition", "error", "offsets"])
+    ["topic", "partition", "error", "offsets"])
+
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
+OffsetCommitRequest = namedtuple("OffsetCommitRequest",
+    ["topic", "partition", "offset", "metadata"])
 
 OffsetCommitResponse = namedtuple("OffsetCommitResponse",
-                                  ["topic", "partition", "error"])
+    ["topic", "partition", "error"])
+
+OffsetFetchRequest = namedtuple("OffsetFetchRequest",
+    ["topic", "partition"])
 
 OffsetFetchResponse = namedtuple("OffsetFetchResponse",
-                                 ["topic", "partition", "offset",
-                                  "metadata", "error"])
+    ["topic", "partition", "offset", "metadata", "error"])
 
 
 
