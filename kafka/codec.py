@@ -24,22 +24,17 @@ def has_snappy():
 
 
 def gzip_encode(payload):
-    buffer = BytesIO()
-    handle = gzip.GzipFile(fileobj=buffer, mode="w")
-    handle.write(payload)
-    handle.close()
-    buffer.seek(0)
-    result = buffer.read()
-    buffer.close()
+    with BytesIO() as buf:
+        with gzip.GzipFile(fileobj=buf, mode="w") as gzipper:
+            gzipper.write(payload)
+        result = buf.getvalue()
     return result
 
 
 def gzip_decode(payload):
-    buffer = BytesIO(payload)
-    handle = gzip.GzipFile(fileobj=buffer, mode='r')
-    result = handle.read()
-    handle.close()
-    buffer.close()
+    with BytesIO(payload) as buf:
+        with gzip.GzipFile(fileobj=buf, mode='r') as gzipper:
+            result = gzipper.read()
     return result
 
 
