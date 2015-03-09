@@ -25,16 +25,31 @@ def has_snappy():
 
 def gzip_encode(payload):
     with BytesIO() as buf:
-        with gzip.GzipFile(fileobj=buf, mode="w") as gzipper:
+
+        # Gzip context manager introduced in python 2.6
+        # so old-fashioned way until we decide to not support 2.6
+        gzipper = gzip.GzipFile(fileobj=buf, mode="w")
+        try:
             gzipper.write(payload)
+        finally:
+            gzipper.close()
+
         result = buf.getvalue()
+
     return result
 
 
 def gzip_decode(payload):
     with BytesIO(payload) as buf:
-        with gzip.GzipFile(fileobj=buf, mode='r') as gzipper:
+
+        # Gzip context manager introduced in python 2.6
+        # so old-fashioned way until we decide to not support 2.6
+        gzipper = gzip.GzipFile(fileobj=buf, mode='r')
+        try:
             result = gzipper.read()
+        finally:
+            gzipper.close()
+
     return result
 
 
