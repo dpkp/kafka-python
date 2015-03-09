@@ -109,11 +109,11 @@ class KafkaProtocol(object):
         return msg
 
     @classmethod
-    def _decode_message_set_iter(cls, data):
+    def _decode_message_set(cls, data):
         """
         Iteratively decode a MessageSet
 
-        Reads repeated elements of MessageSetItem, calling decode_message
+        Reads repeated elements of MessageSetItem, calling _decode_message_set_item
         to decode a single message. Since compressed messages contain further
         MessageSets, these two methods have been decoupled so that they may
         recurse easily.
@@ -147,9 +147,9 @@ class KafkaProtocol(object):
         """
         Decode a single Message
 
-        The only caller of this method is decode_message_set_iter.
+        The only caller of this method is decode_message_set.
         They are decoupled to support nested messages (compressed MessageSets).
-        The offset is actually read from decode_message_set_iter (it is part
+        The offset is actually read from decode_message_set (it is part
         of the MessageSet payload).
         """
         ((crc, magic, att), cur) = relative_unpack('>IBB', data, 0)
@@ -167,12 +167,12 @@ class KafkaProtocol(object):
 
         elif codec == CODEC_GZIP:
             gz = gzip_decode(value)
-            for msg_set_item in KafkaProtocol._decode_message_set_iter(gz):
+            for msg_set_item in KafkaProtocol._decode_message_set(gz):
                 yield msg_set_item
 
         elif codec == CODEC_SNAPPY:
             snp = snappy_decode(value)
-            for msg_set_item in KafkaProtocol._decode_message_set_iter(snp):
+            for msg_set_item in KafkaProtocol._decode_message_set(snp):
                 yield msg_set_item
 
     ##################
@@ -301,7 +301,7 @@ class KafkaProtocol(object):
                 yield FetchResponse(
                     topic, partition, error,
                     highwater_mark_offset,
-                    KafkaProtocol._decode_message_set_iter(message_set))
+                    KafkaProtocol._decode_message_set(message_set))
 
     @classmethod
     def encode_offset_request(cls, client_id, correlation_id, payloads=None):
