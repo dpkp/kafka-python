@@ -9,7 +9,7 @@ from kafka.codec import (
     gzip_encode, gzip_decode, snappy_encode, snappy_decode
 )
 from kafka.common import (
-    Message, OffsetAndMessage, TopicAndPartition,
+    Message, MessageSetItem, TopicAndPartition,
     BrokerMetadata, TopicMetadata, PartitionMetadata,
     MetadataResponse, ProduceResponse, FetchResponse,
     OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
@@ -113,8 +113,8 @@ class KafkaProtocol(object):
         """
         Iteratively decode a MessageSet
 
-        Reads repeated elements of (offset, message), calling decode_message
-        to decode a single message. Since compressed messages contain futher
+        Reads repeated elements of MessageSetItem, calling decode_message
+        to decode a single message. Since compressed messages contain further
         MessageSets, these two methods have been decoupled so that they may
         recurse easily.
         """
@@ -123,28 +123,27 @@ class KafkaProtocol(object):
         while cur < len(data):
             try:
                 ((offset, ), cur) = relative_unpack('>q', data, cur)
-                (msg, cur) = read_int_string(data, cur)
-                for (offset, message) in KafkaProtocol._decode_message(msg, offset):
+                (msg_data, cur) = read_int_string(data, cur)
+                for msg_set_item in KafkaProtocol._decode_message_set_item(msg_data, offset):
+                    yield msg_set_item
                     read_message = True
-                    yield OffsetAndMessage(offset, message)
             except BufferUnderflowError:
-                # NOTE: Not sure this is correct error handling:
-                # Is it possible to get a BUE if the message set is somewhere
-                # in the middle of the fetch response? If so, we probably have
-                # an issue that's not fetch size too small.
-                # Aren't we ignoring errors if we fail to unpack data by
-                # raising StopIteration()?
-                # If _decode_message() raises a ChecksumError, couldn't that
-                # also be due to the fetch size being too small?
-                if read_message is False:
-                    # If we get a partial read of a message, but haven't
-                    # yielded anything there's a problem
-                    raise ConsumerFetchSizeTooSmall()
-                else:
+                # As an optimization the server is allowed to return a
+                # partial message at the end of the message set.
+                # In order to handle this, we catch the BufferUnderflowError
+                #
+                # TODO: verify that this is indeed the end of the buffer
+                if read_message:
                     raise StopIteration()
 
+                # If we get a partial read of a message, but haven't
+                # yielded anything there's a problem
+                else:
+                    raise ConsumerFetchSizeTooSmall()
+
+
     @classmethod
-    def _decode_message(cls, data, offset):
+    def _decode_message_set_item(cls, data, offset):
         """
         Decode a single Message
 
@@ -163,17 +162,18 @@ class KafkaProtocol(object):
         codec = att & ATTRIBUTE_CODEC_MASK
 
         if codec == CODEC_NONE:
-            yield (offset, Message(crc, magic, att, key, value))
+            message = Message(crc, magic, att, key, value)
+            yield MessageSetItem(offset, message)
 
         elif codec == CODEC_GZIP:
             gz = gzip_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(gz):
-                yield (offset, msg)
+            for msg_set_item in KafkaProtocol._decode_message_set_iter(gz):
+                yield msg_set_item
 
         elif codec == CODEC_SNAPPY:
             snp = snappy_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(snp):
-                yield (offset, msg)
+            for msg_set_item in KafkaProtocol._decode_message_set_iter(snp):
+                yield msg_set_item
 
     ##################
     #   Public API   #

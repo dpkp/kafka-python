@@ -10,7 +10,7 @@ from kafka.common import (
     OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
     OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
     ProduceRequest, FetchRequest, Message, ChecksumError,
-    ProduceResponse, FetchResponse, OffsetAndMessage,
+    ProduceResponse, FetchResponse, MessageSetItem,
     BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,
     KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
     ProtocolError
@@ -419,11 +419,11 @@ class TestProtocol(unittest.TestCase):
                                  list(response.messages))
 
         expanded_responses = list(map(expand_messages, responses))
-        expect = [FetchResponse(t1, 0, 0, 10, [OffsetAndMessage(0, msgs[0]),
-                                               OffsetAndMessage(0, msgs[1])]),
-                  FetchResponse(t1, 1, 1, 20, [OffsetAndMessage(0, msgs[2])]),
-                  FetchResponse(t2, 0, 0, 30, [OffsetAndMessage(0, msgs[3]),
-                                               OffsetAndMessage(0, msgs[4])])]
+        expect = [FetchResponse(t1, 0, 0, 10, [MessageSetItem(0, msgs[0]),
+                                               MessageSetItem(0, msgs[1])]),
+                  FetchResponse(t1, 1, 1, 20, [MessageSetItem(0, msgs[2])]),
+                  FetchResponse(t2, 0, 0, 30, [MessageSetItem(0, msgs[3]),
+                                               MessageSetItem(0, msgs[4])])]
         self.assertEqual(expanded_responses, expect)
 
     def test_encode_metadata_request_no_topics(self):
