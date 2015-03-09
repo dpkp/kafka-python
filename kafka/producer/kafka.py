@@ -3,14 +3,12 @@ from __future__ import absolute_import
 from collections import namedtuple
 import logging
 try:
-    from Queue import Empty, Full, Queue
+    from Queue import Empty, Queue
 except ImportError:  # python 3
-    from queue import Empty, Full, Queue
+    from queue import Empty, Queue
 import random
 import threading
 import time
-
-import six
 
 from kafka.client import KafkaClient
 from kafka.common import (
