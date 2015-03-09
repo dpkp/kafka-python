@@ -15,6 +15,7 @@ from kafka.common import (
     ProduceRequest, ConnectionError, RequestTimedOutError,
     NotLeaderForPartitionError, LeaderNotAvailableError,
     UnknownTopicOrPartitionError, FailedPayloadsError, KafkaUnavailableError,
+    InvalidMessageError, InvalidMessageSizeError, MessageSizeTooLargeError,
     KafkaConfigurationError
 )
 from kafka.protocol import (
@@ -248,6 +249,22 @@ class KafkaProducer(object):
                     except RequestTimedOutError:
                         self._handle_dropped_message(record)
                         break
+
+                # Message errors should not be retried
+                except (
+                    # Message contents does not match its CRC
+                    InvalidMessageError,
+
+                    # Message has a negative size
+                    InvalidMessageSizeError,
+
+                    # Message larger than server configured maximum message size
+                    MessageSizeTooLargeError
+
+                ) as e:
+                    retries = 0
+                    logger.error("%s error -- dropping message without retry",
+                                 type(e))
 
                 # If the whole cluster is unavailable, we should backoff
                 except KafkaUnavailableError:
