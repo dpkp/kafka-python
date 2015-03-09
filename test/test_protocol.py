@@ -132,11 +132,7 @@ class TestProtocol(unittest.TestCase):
 
     def test_encode_message_failure(self):
         with self.assertRaises(ProtocolError):
-            KafkaProtocol._encode_message(
-                # setting magic = 1 should raise a ProtocolError
-                Message(crc=None, magic=1, attributes=0,
-                        key="key", value="test")
-            )
+            KafkaProtocol._encode_message(Message(1, 0, "key", "test"))
 
     def test_encode_message_set(self):
         message_set = [

@@ -51,7 +51,7 @@ MessageSetItem = namedtuple("MessageSet",
     ["offset", "message"])
 
 Message = namedtuple("Message",
-    ["crc", "magic", "attributes", "key", "value"])
+    ["magic", "attributes", "key", "value"])
 
 BrokerMetadata = namedtuple("BrokerMetadata",
     ["nodeId", "host", "port"])
