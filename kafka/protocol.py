@@ -163,7 +163,7 @@ class KafkaProtocol(object):
         codec = att & ATTRIBUTE_CODEC_MASK
 
         if codec == CODEC_NONE:
-            yield (offset, Message(magic, att, key, value))
+            yield (offset, Message(crc, magic, att, key, value))
 
         elif codec == CODEC_GZIP:
             gz = gzip_decode(value)
@@ -543,7 +543,7 @@ def create_message(payload, key=None):
         key: bytes, a key used for partition routing (optional)
 
     """
-    return Message(0, 0, key, payload)
+    return Message(crc=None, magic=0, attributes=0, key=key, value=payload)
 
 
 def create_gzip_message(payloads, key=None):
@@ -564,7 +564,7 @@ def create_gzip_message(payloads, key=None):
     gzipped = gzip_encode(message_set)
     codec = ATTRIBUTE_CODEC_MASK & CODEC_GZIP
 
-    return Message(0, 0x00 | codec, key, gzipped)
+    return Message(crc=None, magic=0, attributes=(0x00 | codec), key=key, value=gzipped)
 
 
 def create_snappy_message(payloads, key=None):
@@ -585,7 +585,7 @@ def create_snappy_message(payloads, key=None):
     snapped = snappy_encode(message_set)
     codec = ATTRIBUTE_CODEC_MASK & CODEC_SNAPPY
 
-    return Message(0, 0x00 | codec, key, snapped)
+    return Message(crc=None, magic=0, attributes=(0x00 | codec), key=key, value=snapped)
 
 
 def create_message_set(messages, codec=CODEC_NONE, key=None):

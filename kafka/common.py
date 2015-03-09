@@ -47,6 +47,9 @@ OffsetFetchResponse = namedtuple("OffsetFetchResponse",
 
 
 # Other useful structs
+Message = namedtuple("Message",
+    ["crc", "magic", "attributes", "key", "value"])
+
 BrokerMetadata = namedtuple("BrokerMetadata",
     ["nodeId", "host", "port"])
 
@@ -58,9 +61,6 @@ PartitionMetadata = namedtuple("PartitionMetadata",
 
 OffsetAndMessage = namedtuple("OffsetAndMessage",
     ["offset", "message"])
-
-Message = namedtuple("Message",
-    ["magic", "attributes", "key", "value"])
 
 TopicAndPartition = namedtuple("TopicAndPartition",
     ["topic", "partition"])
