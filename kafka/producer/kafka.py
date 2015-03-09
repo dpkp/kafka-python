@@ -15,8 +15,9 @@ import six
 from kafka.client import KafkaClient
 from kafka.common import (
     ProduceRequest, ConnectionError, RequestTimedOutError,
-    LeaderNotAvailableError, UnknownTopicOrPartitionError,
-    FailedPayloadsError, KafkaUnavailableError, KafkaConfigurationError
+    NotLeaderForPartitionError, LeaderNotAvailableError,
+    UnknownTopicOrPartitionError, FailedPayloadsError, KafkaUnavailableError,
+    KafkaConfigurationError
 )
 from kafka.protocol import (
     CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY,
@@ -219,8 +220,26 @@ class KafkaProducer(object):
                     break
 
                 # Catch errors that indicate we need to refresh topic metadata
-                except (LeaderNotAvailableError, UnknownTopicOrPartitionError,
-                        FailedPayloadsError, ConnectionError) as e:
+                except (
+                    # We sent the produce request to a non-leader broker
+                    NotLeaderForPartitionError,
+
+                    # Leader-election is underway -- topic has no leader yet
+                    LeaderNotAvailableError,
+
+                    # We sent the produce request to a non-replica broker
+                    # this also occurs when the topic does not exist at all
+                    # and auto-topic-creation is not enabled
+                    UnknownTopicOrPartitionError,
+
+                    # Network connection error -- broker may be offline
+                    ConnectionError,
+
+                    # Internal kafka-python error
+                    # currently means there was a ConnectionError
+                    # FailedPayloadsError needs a refactor...
+                    FailedPayloadsError
+                ) as e:
                     logger.warning("_producer_loop caught exception type %s, "
                                    "refreshing metadata", type(e))
                     try:
