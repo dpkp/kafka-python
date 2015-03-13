@@ -48,7 +48,7 @@ class Consumer(object):
         self.client.load_metadata_for_topics(topic)
         self.offsets = {}
 
-        if not partitions:
+        if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(topic)
         else:
             assert all(isinstance(x, numbers.Integral) for x in partitions)
@@ -74,7 +74,7 @@ class Consumer(object):
                 self.offsets[partition] = 0
 
     def fetch_last_known_offsets(self, partitions=None):
-        if not partitions:
+        if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
 
         def get_or_init_offset(resp):
@@ -112,7 +112,7 @@ class Consumer(object):
                 return
 
             reqs = []
-            if not partitions:  # commit all partitions
+            if partitions is None:  # commit all partitions
                 partitions = self.offsets.keys()
 
             for partition in partitions:
@@ -154,7 +154,7 @@ class Consumer(object):
         Keyword Arguments:
             partitions (list): list of partitions to check for, default is to check all
         """
-        if not partitions:
+        if partitions is None:
             partitions = self.offsets.keys()
 
         total = 0
