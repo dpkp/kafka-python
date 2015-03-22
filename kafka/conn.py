@@ -62,6 +62,9 @@ class KafkaConnection(local):
 
         self.reinit()
 
+    def __getnewargs__(self):
+        return (self.host, self.port, self.timeout)
+
     def __repr__(self):
         return "<KafkaConnection host=%s port=%d>" % (self.host, self.port)
 
