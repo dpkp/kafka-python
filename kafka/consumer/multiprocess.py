@@ -18,7 +18,7 @@ from .simple import Consumer, SimpleConsumer
 log = logging.getLogger("kafka")
 
 
-def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
+def _mp_consume(client, group, topic, chunk, start_from_beginning, queue, start, exit, pause, size):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -37,7 +37,8 @@ def _mp_consume(client, group, topic, chunk, queue, start, exit, pause, size):
                               partitions=chunk,
                               auto_commit=False,
                               auto_commit_every_n=None,
-                              auto_commit_every_t=None)
+                              auto_commit_every_t=None,
+                              start_from_beginning=start_from_beginning)
 
     # Ensure that the consumer provides the partition information
     consumer.provide_partition_info()
@@ -105,7 +106,7 @@ class MultiProcessConsumer(Consumer):
     def __init__(self, client, group, topic, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0):
+                 num_procs=1, partitions_per_proc=0, start_from_beginning=True):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -113,7 +114,8 @@ class MultiProcessConsumer(Consumer):
             partitions=None,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
-            auto_commit_every_t=auto_commit_every_t)
+            auto_commit_every_t=auto_commit_every_t,
+            start_from_beginning=start_from_beginning)
 
         # Variables for managing and controlling the data flow from
         # consumer child process to master
@@ -141,10 +143,17 @@ class MultiProcessConsumer(Consumer):
         # The final set of chunks
         chunks = [partitions[proc::num_procs] for proc in range(num_procs)]
 
+        # though the child workers will not auto commit, they should
+        # not start from offset = 0 if it is set.
+        child_start_from_beginning = start_from_beginning
+        if auto_commit:
+            child_start_from_beginning = False
+
         self.procs = []
         for chunk in chunks:
             args = (client.copy(),
                     group, topic, chunk,
+                    child_start_from_beginning,
                     self.queue, self.start, self.exit,
                     self.pause, self.size)
 
