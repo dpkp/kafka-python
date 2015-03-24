@@ -4,7 +4,7 @@ import logging
 import time
 
 from collections import namedtuple
-from multiprocessing import Process, Queue as MPQueue, Event, Value
+from multiprocessing import Process, Manager as MPManager
 
 try:
     from Queue import Empty
@@ -121,12 +121,13 @@ class MultiProcessConsumer(Consumer):
 
         # Variables for managing and controlling the data flow from
         # consumer child process to master
-        self.queue = MPQueue(1024)  # Child consumers dump messages into this
+        manager = MPManager()
+        self.queue = manager.Queue(1024)  # Child consumers dump messages into this
         self.events = Events(
-            start = Event(),        # Indicates the consumers to start fetch
-            exit  = Event(),        # Requests the consumers to shutdown
-            pause = Event())        # Requests the consumers to pause fetch
-        self.size = Value('i', 0)   # Indicator of number of messages to fetch
+            start = manager.Event(),        # Indicates the consumers to start fetch
+            exit  = manager.Event(),        # Requests the consumers to shutdown
+            pause = manager.Event())        # Requests the consumers to pause fetch
+        self.size = manager.Value('i', 0)   # Indicator of number of messages to fetch
 
         # dict.keys() returns a view in py3 + it's not a thread-safe operation
         # http://blog.labix.org/2008/06/27/watch-out-for-listdictkeys-in-python-3
