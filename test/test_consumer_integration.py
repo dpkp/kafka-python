@@ -61,10 +61,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         group = kwargs.pop('group', self.id().encode('utf-8'))
         topic = kwargs.pop('topic', self.topic)
 
-        if consumer_class == SimpleConsumer:
+        if consumer_class in [SimpleConsumer, MultiProcessConsumer]:
             kwargs.setdefault('iter_timeout', 0)
-        elif consumer_class == MultiProcessConsumer:
-            kwargs.setdefault('simple_consumer_options', {'iter_timeout': 0})
 
         return consumer_class(self.client, group, topic, **kwargs)
 
@@ -245,8 +243,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
 
-        consumer = MultiProcessConsumer(self.client, "group1", self.topic, auto_commit=False,
-                                        simple_consumer_options={'iter_timeout': 0})
+        consumer = MultiProcessConsumer(self.client, "group1", self.topic,
+                                        auto_commit=False, iter_timeout=0)
 
         self.assertEqual(consumer.pending(), 20)
         self.assertEqual(consumer.pending(partitions=[0]), 10)

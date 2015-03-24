@@ -109,7 +109,7 @@ class MultiProcessConsumer(Consumer):
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
                  num_procs=1, partitions_per_proc=0,
-                 simple_consumer_options=None):
+                 **simple_consumer_options):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
@@ -150,6 +150,7 @@ class MultiProcessConsumer(Consumer):
         for chunk in chunks:
             options = {'partitions': list(chunk)}
             if simple_consumer_options:
+                simple_consumer_options.pop('partitions', None)
                 options.update(simple_consumer_options)
 
             args = (client.copy(), group, topic, self.queue,
