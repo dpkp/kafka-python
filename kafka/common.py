@@ -6,7 +6,6 @@ from collections import namedtuple
 #   Structs   #
 ###############
 
-<<<<<<< HEAD
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-MetadataAPI
 MetadataRequest = namedtuple("MetadataRequest",
     ["topics"])
