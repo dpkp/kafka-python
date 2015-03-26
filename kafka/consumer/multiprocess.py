@@ -115,7 +115,8 @@ class MultiProcessConsumer(Consumer):
             partitions=None,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
-            auto_commit_every_t=auto_commit_every_t)
+            auto_commit_every_t=auto_commit_every_t,
+            load_initial_offsets=child_loads_initial_offsets)
 
         # Variables for managing and controlling the data flow from
         # consumer child process to master
