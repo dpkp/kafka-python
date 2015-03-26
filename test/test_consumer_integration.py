@@ -127,7 +127,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         with self.assertRaises(OffsetOutOfRangeError):
             consumer.get_message()
 
-    @kafka_versions('all')
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
     def test_simple_consumer_load_initial_offsets(self):
         self.send_messages(0, range(0, 100))
         self.send_messages(1, range(100, 200))
@@ -269,7 +269,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
-    @kafka_versions("all")
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
     def test_multi_process_consumer_load_initial_offsets(self):
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
