@@ -69,7 +69,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
     def kafka_consumer(self, **configs):
         brokers = '%s:%d' % (self.server.host, self.server.port)
         consumer = KafkaConsumer(self.topic,
-                                 metadata_broker_list=brokers,
+                                 bootstrap_servers=brokers,
                                  **configs)
         return consumer
 
