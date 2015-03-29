@@ -114,13 +114,16 @@ class SimpleConsumer(Consumer):
                  buffer_size=FETCH_BUFFER_SIZE_BYTES,
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
                  iter_timeout=None,
-                 auto_offset_reset='largest'):
+                 auto_offset_reset='largest',
+                 load_initial_offsets=False):
+
         super(SimpleConsumer, self).__init__(
             client, group, topic,
             partitions=partitions,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
-            auto_commit_every_t=auto_commit_every_t)
+            auto_commit_every_t=auto_commit_every_t,
+            load_initial_offsets=load_initial_offsets)
 
         if max_buffer_size is not None and buffer_size > max_buffer_size:
             raise ValueError("buffer_size (%d) is greater than "
