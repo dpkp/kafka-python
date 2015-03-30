@@ -93,6 +93,8 @@ class MultiProcessConsumer(Consumer):
     Arguments:
         client: a connected KafkaClient
         group: a name for this consumer, used for offset storage and must be unique
+            If you are connecting to a server that does not support offset
+            commit/fetch (any prior to 0.8.1.1), then you *must* set this to None
         topic: the topic to consume
 
     Keyword Arguments:

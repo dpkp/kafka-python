@@ -53,6 +53,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
     def consumer(self, **kwargs):
         if os.environ['KAFKA_VERSION'] == "0.8.0":
             # Kafka 0.8.0 simply doesn't support offset requests, so hard code it being off
+            kwargs['group'] = None
             kwargs['auto_commit'] = False
         else:
             kwargs.setdefault('auto_commit', True)
@@ -260,7 +261,9 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
 
-        consumer = MultiProcessConsumer(self.client, "group1", self.topic,
+        # set group to None and auto_commit to False to avoid interactions w/
+        # offset commit/fetch apis
+        consumer = MultiProcessConsumer(self.client, None, self.topic,
                                         auto_commit=False, iter_timeout=0)
 
         self.assertEqual(consumer.pending(), 20)

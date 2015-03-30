@@ -183,7 +183,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
         client = KafkaClient(hosts)
         group = random_string(10)
-        consumer = SimpleConsumer(client, group, topic,
+        consumer = SimpleConsumer(client, None, topic,
                                   partitions=partitions,
                                   auto_commit=False,
                                   iter_timeout=timeout)
