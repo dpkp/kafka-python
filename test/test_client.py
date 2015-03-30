@@ -401,3 +401,11 @@ class TestKafkaClient(unittest.TestCase):
                 with self.assertRaises(ConnectionError):
                     KafkaConnection("nowhere", 1234, 1.0)
             self.assertGreaterEqual(t.interval, 1.0)
+
+    def test_correlation_rollover(self):
+        with patch.object(KafkaClient, 'load_metadata_for_topics'):
+            big_num = 2**31 - 3
+            client = KafkaClient(hosts=[], correlation_id=big_num)
+            self.assertEqual(big_num + 1, client._next_id())
+            self.assertEqual(big_num + 2, client._next_id())
+            self.assertEqual(0, client._next_id())
