@@ -143,6 +143,9 @@ class Consumer(object):
         if self.count_since_commit >= self.auto_commit_every_n:
             self.commit()
 
+    def __del__(self):
+        self.stop()
+
     def stop(self):
         if self.commit_timer is not None:
             self.commit_timer.stop()
