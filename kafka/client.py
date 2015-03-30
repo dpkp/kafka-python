@@ -2,11 +2,11 @@ import binascii
 import collections
 import copy
 import functools
-import itertools
 import logging
 import time
 import kafka.common
 
+from ctypes import c_uint32
 from kafka.common import (TopicAndPartition, BrokerMetadata,
                           ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
@@ -23,7 +23,7 @@ log = logging.getLogger("kafka")
 class KafkaClient(object):
 
     CLIENT_ID = b"kafka-python"
-    ID_GEN = itertools.count()
+    ID_GEN = 0
 
     # NOTE: The timeout given to the client should always be greater than the
     # one passed to SimpleConsumer.get_message(), otherwise you can get a
@@ -101,7 +101,8 @@ class KafkaClient(object):
         """
         Generate a new correlation id
         """
-        return next(KafkaClient.ID_GEN)
+        KafkaClient.ID_GEN = c_uint32(KafkaClient.ID_GEN + 1).value
+        return KafkaClient.ID_GEN
 
     def _send_broker_unaware_request(self, payloads, encoder_fn, decoder_fn):
         """

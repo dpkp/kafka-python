@@ -52,7 +52,7 @@ class KafkaProtocol(object):
         """
         Encode the common request envelope
         """
-        return struct.pack('>hhih%ds' % len(client_id),
+        return struct.pack('>hhIh%ds' % len(client_id),
                            request_key,          # ApiKey
                            0,                    # ApiVersion
                            correlation_id,       # CorrelationId
