@@ -3,6 +3,8 @@ from __future__ import absolute_import
 import logging
 
 from kafka.partitioner import HashedPartitioner
+from kafka.util import kafka_bytestring
+
 from .base import (
     Producer, BATCH_SEND_DEFAULT_INTERVAL,
     BATCH_SEND_MSG_COUNT
@@ -57,10 +59,12 @@ class KeyedProducer(Producer):
         return partitioner.partition(key)
 
     def send_messages(self,topic,key,*msg):
+        topic = kafka_bytestring(topic)
         partition = self._next_partition(topic, key)
         return self._send_messages(topic, partition, *msg,key=key)
 
     def send(self, topic, key, msg):
+        topic = kafka_bytestring(topic)
         partition = self._next_partition(topic, key)
         return self._send_messages(topic, partition, msg, key=key)
 

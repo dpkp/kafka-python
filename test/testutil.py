@@ -12,6 +12,7 @@ from . import unittest
 
 from kafka import KafkaClient
 from kafka.common import OffsetRequest
+from kafka.util import kafka_bytestring
 
 __all__ = [
     'random_string',
@@ -50,6 +51,7 @@ def get_open_port():
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
+    bytes_topic = None
     server = None
 
     def setUp(self):
@@ -59,7 +61,8 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
         if not self.topic:
             topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10).decode('utf-8'))
-            self.topic = topic.encode('utf-8')
+            self.topic = topic
+            self.bytes_topic = topic.encode('utf-8')
 
         if self.create_client:
             self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
@@ -77,7 +80,8 @@ class KafkaIntegrationTestCase(unittest.TestCase):
             self.client.close()
 
     def current_offset(self, topic, partition):
-        offsets, = self.client.send_offset_request([ OffsetRequest(topic, partition, -1, 1) ])
+        offsets, = self.client.send_offset_request([ OffsetRequest(kafka_bytestring(topic),
+            partition, -1, 1) ])
         return offsets.offsets[0]
 
     def msgs(self, iterable):
