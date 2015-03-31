@@ -7,7 +7,7 @@ from threading import Lock
 import kafka.common
 from kafka.common import (
     OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
-    UnknownTopicOrPartitionError
+    UnknownTopicOrPartitionError, check_error
 )
 
 from kafka.util import ReentrantTimer
@@ -68,29 +68,43 @@ class Consumer(object):
                                                self.commit)
             self.commit_timer.start()
 
-        if auto_commit:
+        # Set initial offsets
+        if self.group is not None:
             self.fetch_last_known_offsets(partitions)
         else:
             for partition in partitions:
                 self.offsets[partition] = 0
 
+
     def fetch_last_known_offsets(self, partitions=None):
+        if self.group is None:
+            raise ValueError('KafkaClient.group must not be None')
+
         if not partitions:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
 
-        def get_or_init_offset(resp):
-            try:
-                kafka.common.check_error(resp)
-                return resp.offset
-            except UnknownTopicOrPartitionError:
-                return 0
+        responses = self.client.send_offset_fetch_request(
+            self.group,
+            [OffsetFetchRequest(self.topic, p) for p in partitions],
+            fail_on_error=False
+        )
 
-        for partition in partitions:
-            req = OffsetFetchRequest(self.topic, partition)
-            (resp,) = self.client.send_offset_fetch_request(self.group, [req],
-                          fail_on_error=False)
-            self.offsets[partition] = get_or_init_offset(resp)
-        self.fetch_offsets = self.offsets.copy()
+        for resp in responses:
+            try:
+                check_error(resp)
+            # API spec says server wont set an error here
+            # but 0.8.1.1 does actually...
+            except UnknownTopicOrPartitionError:
+                pass
+
+            # -1 offset signals no commit is currently stored
+            if resp.offset == -1:
+                self.offsets[resp.partition] = 0
+
+            # Otherwise we committed the stored offset
+            # and need to fetch the next one
+            else:
+                self.offsets[resp.partition] = resp.offset
 
     def commit(self, partitions=None):
         """
