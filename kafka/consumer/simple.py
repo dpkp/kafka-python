@@ -277,6 +277,9 @@ class SimpleConsumer(Consumer):
         If get_partition_info is True, returns (partition, message)
         If get_partition_info is False, returns message
         """
+        if get_partition_info is None:
+            get_partition_info = self.partition_info
+
         if self.queue.empty():
             # We're out of messages, go grab some more.
             with FetchContext(self, block, timeout):
@@ -292,14 +295,16 @@ class SimpleConsumer(Consumer):
                 self.count_since_commit += 1
                 self._auto_commit()
 
-            if get_partition_info is None:
-                get_partition_info = self.partition_info
             if get_partition_info:
                 return partition, message
             else:
                 return message
+
         except Empty:
-            return None
+            if get_partition_info:
+                return None, None
+            else:
+                return None
 
     def __iter__(self):
         if self.iter_timeout is None:
