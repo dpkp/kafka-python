@@ -224,7 +224,7 @@ class KafkaConsumer(object):
                         topic = kafka_bytestring(key[0])
                         partition = key[1]
                         self._consume_topic_partition(topic, partition)
-                        self._offsets.fetch[key] = value
+                        self._offsets.fetch[(topic, partition)] = value
 
             else:
                 raise KafkaConfigurationError('Unknown topic type (%s)' % type(arg))
