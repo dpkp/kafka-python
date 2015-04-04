@@ -258,12 +258,14 @@ class KafkaClient(object):
         self.topic_partitions.clear()
 
     def has_metadata_for_topic(self, topic):
+        topic = kafka_bytestring(topic)
         return (
           topic in self.topic_partitions
           and len(self.topic_partitions[topic]) > 0
         )
 
     def get_partition_ids_for_topic(self, topic):
+        topic = kafka_bytestring(topic)
         if topic not in self.topic_partitions:
             return []
 
@@ -312,6 +314,7 @@ class KafkaClient(object):
         Partition-level errors will also not be raised here
         (a single partition w/o a leader, for example)
         """
+        topics = [kafka_bytestring(t) for t in topics]
         resp = self.send_metadata_request(topics)
 
         log.debug("Broker metadata: %s", resp.brokers)

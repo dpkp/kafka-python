@@ -163,7 +163,7 @@ class MultiProcessConsumer(Consumer):
                 simple_consumer_options.pop('partitions', None)
                 options.update(simple_consumer_options)
 
-            args = (client.copy(), group, topic, self.queue,
+            args = (client.copy(), self.group, self.topic, self.queue,
                     self.size, self.events)
             proc = Process(target=_mp_consume, args=args, kwargs=options)
             proc.daemon = True
