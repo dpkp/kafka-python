@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import atexit
 import logging
 import time
 
@@ -153,7 +154,11 @@ class Producer(object):
             self.thread.daemon = True
             self.thread.start()
 
-
+            def cleanup(obj):
+                if obj.stopped:
+                    obj.stop()
+            self._cleanup_func = cleanup
+            atexit.register(cleanup, self)
 
     def send_messages(self, topic, partition, *msg):
         """
@@ -219,6 +224,26 @@ class Producer(object):
 
             if self.thread.is_alive():
                 self.thread_stop_event.set()
+
+        if hasattr(self, '_cleanup_func'):
+            # Remove cleanup handler now that we've stopped
+
+            # py3 supports unregistering
+            if hasattr(atexit, 'unregister'):
+                atexit.unregister(self._cleanup_func) # pylint: disable=no-member
+
+            # py2 requires removing from private attribute...
+            else:
+
+                # ValueError on list.remove() if the exithandler no longer exists
+                # but that is fine here
+                try:
+                    atexit._exithandlers.remove((self._cleanup_func, (self,), {}))
+                except ValueError:
+                    pass
+
+            del self._cleanup_func
+
         self.stopped = True
 
     def __del__(self):
