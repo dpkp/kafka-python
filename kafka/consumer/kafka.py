@@ -194,10 +194,10 @@ class KafkaConsumer(object):
             elif isinstance(arg, tuple):
                 topic = kafka_bytestring(arg[0])
                 partition = arg[1]
+                self._consume_topic_partition(topic, partition)
                 if len(arg) == 3:
                     offset = arg[2]
                     self._offsets.fetch[(topic, partition)] = offset
-                self._consume_topic_partition(topic, partition)
 
             # { topic: partitions, ... } dict
             elif isinstance(arg, dict):
