@@ -320,8 +320,8 @@ class KafkaClient(object):
 
         resp = self.send_metadata_request(topics)
 
-        log.debug("Broker metadata: %s", resp.brokers)
-        log.debug("Topic metadata: %s", resp.topics)
+        log.debug("Received new broker metadata: %s", resp.brokers)
+        log.debug("Received new topic metadata: %s", resp.topics)
 
         self.brokers = dict([(broker.nodeId, broker)
                              for broker in resp.brokers])
