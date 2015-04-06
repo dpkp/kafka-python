@@ -311,6 +311,13 @@ class KafkaClient(object):
         (a single partition w/o a leader, for example)
         """
         topics = [kafka_bytestring(t) for t in topics]
+
+        if topics:
+            for topic in topics:
+                self.reset_topic_metadata(topic)
+        else:
+            self.reset_all_metadata()
+
         resp = self.send_metadata_request(topics)
 
         log.debug("Broker metadata: %s", resp.brokers)
@@ -322,8 +329,6 @@ class KafkaClient(object):
         for topic_metadata in resp.topics:
             topic = topic_metadata.topic
             partitions = topic_metadata.partitions
-
-            self.reset_topic_metadata(topic)
 
             # Errors expected for new topics
             try:
