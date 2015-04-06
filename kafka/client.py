@@ -150,6 +150,8 @@ class KafkaClient(object):
         List of response objects in the same order as the supplied payloads
         """
 
+        log.debug("Sending Payloads: %s" % payloads)
+
         # Group the requests by topic+partition
         brokers_for_payloads = []
         payloads_by_broker = collections.defaultdict(list)
@@ -220,6 +222,7 @@ class KafkaClient(object):
         # Return responses in the same order as provided
         responses_by_payload = [responses_by_broker[broker].pop(0)
                                 for broker in brokers_for_payloads]
+        log.debug('Responses: %s' % responses_by_payload)
         return responses_by_payload
 
     def __repr__(self):
