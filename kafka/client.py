@@ -420,14 +420,25 @@ class KafkaClient(object):
         same order as the list of payloads specified
 
         Arguments:
-            payloads: list of ProduceRequest
-            fail_on_error: boolean, should we raise an Exception if we
-                           encounter an API error?
-            callback: function, instead of returning the ProduceResponse,
-                      first pass it through this function
+            payloads (list of ProduceRequest): produce requests to send to kafka
+            acks (int, optional): how many acks the servers should receive from replica
+                brokers before responding to the request. If it is 0, the server
+                will not send any response. If it is 1, the server will wait
+                until the data is written to the local log before sending a
+                response.  If it is -1, the server will wait until the message
+                is committed by all in-sync replicas before sending a response.
+                For any value > 1, the server will wait for this number of acks to
+                occur (but the server will never wait for more acknowledgements than
+                there are in-sync replicas). defaults to 1.
+            timeout (int, optional): maximum time in milliseconds the server can
+                await the receipt of the number of acks, defaults to 1000.
+            fail_on_error (bool, optional): raise exceptions on connection and
+                server response errors, defaults to True.
+            callback (function, optional): instead of returning the ProduceResponse,
+                first pass it through this function, defaults to None.
 
         Returns:
-            list of ProduceResponse or callback(ProduceResponse), in the
+            list of ProduceResponses, or callback results if supplied, in the
             order of input payloads
         """
 
