@@ -243,15 +243,11 @@ class KafkaClient(object):
 
     def reset_topic_metadata(self, *topics):
         for topic in topics:
-            try:
-                partitions = self.topic_partitions[topic]
-            except KeyError:
-                continue
-
-            for partition in partitions:
-                self.topics_to_brokers.pop(TopicAndPartition(topic, partition), None)
-
-            del self.topic_partitions[topic]
+            for topic_partition in list(self.topics_to_brokers.keys()):
+                if topic_partition.topic == topic:
+                    del self.topics_to_brokers[topic_partition]
+            if topic in self.topic_partitions:
+                del self.topic_partitions[topic]
 
     def reset_all_metadata(self):
         self.topics_to_brokers.clear()
