@@ -230,8 +230,7 @@ class SimpleConsumer(Consumer):
             count: Indicates the maximum number of messages to be fetched
             block: If True, the API will block till some messages are fetched.
             timeout: If block is True, the function will block for the specified
-                time (in seconds) until count messages is fetched. If None,
-                it will block forever.
+                time (in seconds). If None, it will block forever.
         """
         messages = []
         if timeout is not None:
