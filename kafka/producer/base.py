@@ -5,9 +5,9 @@ import logging
 import time
 
 try:
-    from queue import Empty, Queue
+    from queue import Empty, Full, Queue
 except ImportError:
-    from Queue import Empty, Queue
+    from Queue import Empty, Full, Queue
 from collections import defaultdict
 
 from threading import Thread, Event
@@ -16,7 +16,8 @@ import six
 
 from kafka.common import (
     ProduceRequest, TopicAndPartition, RetryOptions,
-    UnsupportedCodecError, FailedPayloadsError, RequestTimedOutError
+    UnsupportedCodecError, FailedPayloadsError,
+    RequestTimedOutError, AsyncProducerQueueFull
 )
 from kafka.common import (
     RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES)
@@ -187,11 +188,8 @@ class Producer(object):
         self.codec = codec
 
         if self.async:
-            log.warning("async producer does not guarantee message delivery!")
-            log.warning("Current implementation does not retry Failed messages")
-            log.warning("Use at your own risk! (or help improve with a PR!)")
             # Messages are sent through this queue
-            self.queue = Queue(async_queue_maxsize)  
+            self.queue = Queue(async_queue_maxsize)
             self.thread_stop_event = Event()
             self.thread = Thread(target=_send_upstream,
                                  args=(self.queue,
@@ -258,8 +256,8 @@ class Producer(object):
                     item = (TopicAndPartition(topic, partition), m, key)
                     self.queue.put_nowait(item)
                 except Full:
-                    raise BatchQueueOverfilledError(
-                        'Producer batch send queue overfilled. '
+                    raise AsyncProducerQueueFull(
+                        'Producer async queue overfilled. '
                         'Current queue size %d.' % self.queue.qsize())
             resp = []
         else:

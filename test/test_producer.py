@@ -7,7 +7,7 @@ from mock import MagicMock, patch
 from . import unittest
 
 from kafka.common import TopicAndPartition, FailedPayloadsError, RetryOptions
-from kafka.common import BatchQueueOverfilledError
+from kafka.common import AsyncProducerQueueFull
 from kafka.producer.base import Producer
 from kafka.producer.base import _send_upstream
 from kafka.protocol import CODEC_NONE
@@ -52,8 +52,7 @@ class TestKafkaProducer(unittest.TestCase):
         producer.send_messages(topic, b'hi')
         assert client.send_produce_request.called
 
-    @patch('kafka.producer.base.Process')
-    def test_producer_async_queue_overfilled_batch_send(self, process_mock):
+    def test_producer_async_queue_overfilled_batch_send(self):
         queue_size = 2
         producer = Producer(MagicMock(), batch_send=True,
                             async_queue_maxsize=queue_size)
@@ -62,12 +61,11 @@ class TestKafkaProducer(unittest.TestCase):
         partition = 0
         message = b'test-message'
 
-        with self.assertRaises(BatchQueueOverfilledError):
+        with self.assertRaises(AsyncProducerQueueFull):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
 
-    @patch('kafka.producer.base.Process')
-    def test_producer_async_queue_overfilled(self, process_mock):
+    def test_producer_async_queue_overfilled(self):
         queue_size = 2
         producer = Producer(MagicMock(), async=True,
                             async_queue_maxsize=queue_size)
@@ -76,7 +74,7 @@ class TestKafkaProducer(unittest.TestCase):
         partition = 0
         message = b'test-message'
 
-        with self.assertRaises(BatchQueueOverfilledError):
+        with self.assertRaises(AsyncProducerQueueFull):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
 
