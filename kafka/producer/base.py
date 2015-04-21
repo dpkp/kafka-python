@@ -29,7 +29,7 @@ log = logging.getLogger("kafka")
 BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
 BATCH_RETRY_OPTIONS = RetryOptions(
-    limit=0, backoff_ms=300, retry_on_timeouts=True)
+    limit=0, backoff_ms=300, retry_on_timeouts=False)
 
 STOP_ASYNC_PRODUCER = -1
 
