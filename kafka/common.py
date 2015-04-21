@@ -78,6 +78,9 @@ TopicAndPartition = namedtuple("TopicAndPartition",
 KafkaMessage = namedtuple("KafkaMessage",
     ["topic", "partition", "offset", "key", "value"])
 
+RetryOptions = namedtuple("RetryOptions",
+    ["limit", "backoff_ms", "retry_on_timeouts"])
+
 
 #################
 #   Exceptions  #

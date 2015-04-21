@@ -6,7 +6,7 @@ import logging
 from mock import MagicMock
 from . import unittest
 
-from kafka.common import TopicAndPartition, FailedPayloadsError
+from kafka.common import TopicAndPartition, FailedPayloadsError, RetryOptions
 from kafka.producer.base import Producer
 from kafka.producer.base import _send_upstream
 from kafka.protocol import CODEC_NONE
@@ -68,8 +68,8 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                   3, # batch length
                   Producer.ACK_AFTER_LOCAL_WRITE,
                   Producer.DEFAULT_ACK_TIMEOUT,
-                  50, # retry backoff (ms)
-                  retries_limit,
+                  RetryOptions(limit=retries_limit, backoff_ms=50,
+                               retry_on_timeouts=True),
                   stop_event))
         self.thread.daemon = True
         self.thread.start()

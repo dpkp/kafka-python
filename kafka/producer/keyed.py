@@ -7,8 +7,7 @@ from kafka.util import kafka_bytestring
 
 from .base import (
     Producer, BATCH_SEND_DEFAULT_INTERVAL,
-    BATCH_SEND_MSG_COUNT,
-    BATCH_RETRY_BACKOFF_MS, BATCH_RETRIES_LIMIT
+    BATCH_SEND_MSG_COUNT, BATCH_RETRY_OPTIONS
 )
 
 log = logging.getLogger("kafka")
@@ -39,8 +38,7 @@ class KeyedProducer(Producer):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 batch_retry_backoff_ms=BATCH_RETRY_BACKOFF_MS,
-                 batch_retries_limit=BATCH_RETRIES_LIMIT):
+                 batch_retry_options=BATCH_RETRY_OPTIONS):
         if not partitioner:
             partitioner = HashedPartitioner
         self.partitioner_class = partitioner
