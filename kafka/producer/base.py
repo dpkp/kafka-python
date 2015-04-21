@@ -224,8 +224,7 @@ class Producer(object):
                                        batch_send_every_n,
                                        self.req_acks,
                                        self.ack_timeout,
-                                       batch_retry_backoff_ms,
-                                       batch_retries_limit,
+                                       batch_retry_options,
                                        self.thread_stop_event))
 
             # Thread will die if main thread exits

@@ -48,8 +48,7 @@ class KeyedProducer(Producer):
                                             ack_timeout, codec, batch_send,
                                             batch_send_every_n,
                                             batch_send_every_t,
-                                            batch_retry_backoff_ms,
-                                            batch_retries_limit)
+                                            batch_retry_options)
 
     def _next_partition(self, topic, key):
         if topic not in self.partitioners:
