@@ -15,12 +15,12 @@ from threading import Thread, Event
 import six
 
 from kafka.common import (
-    ProduceRequest, TopicAndPartition,
-    UnsupportedCodecError, FailedPayloadsError, RetryOptions,
-    RequestTimedOutError, KafkaUnavailableError, LeaderNotAvailableError,
-    UnknownTopicOrPartitionError, NotLeaderForPartitionError, ConnectionError,
-    InvalidMessageError, MessageSizeTooLargeError
+    ProduceRequest, TopicAndPartition, RetryOptions,
+    UnsupportedCodecError, FailedPayloadsError, RequestTimedOutError
 )
+from kafka.common import (
+    RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES)
+
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 from kafka.util import kafka_bytestring
 
@@ -88,36 +88,33 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                         acks=req_acks,
                                         timeout=ack_timeout)
 
-        except RequestTimedOutError as ex:
-            # should retry only if user is fine with duplicates
-            if retry_options.retry_on_timeouts:
-                reqs_to_retry = reqs
+        except tuple(RETRY_ERROR_TYPES) as ex:
 
-        except KafkaUnavailableError as ex:
-            # backoff + retry
-            do_backoff(retry_options)
-            reqs_to_retry = get_requests_for_retry(reqs, retry_options)
+            # by default, retry all sent messages
+            reqs_to_retry = reqs
 
-        except (NotLeaderForPartitionError, UnknownTopicOrPartitionError) as ex:
-            # refresh + retry
-            client.load_metadata_for_topics()
-            reqs_to_retry = get_requests_for_retry(reqs, retry_options)
+            if type(ex) == FailedPayloadsError:
+                reqs_to_retry = ex.failed_payloads
 
-        except (LeaderNotAvailableError, ConnectionError) as ex:
-            # backoff + refresh + retry
-            do_backoff(retry_options)
-            client.load_metadata_for_topics()
-            reqs_to_retry = get_requests_for_retry(reqs, retry_options)
+            elif (type(ex) == RequestTimedOutError and
+                    not retry_options.retry_on_timeouts):
+                reqs_to_retry = []
 
-        except FailedPayloadsError as ex:
-            # retry only failed messages with backoff
-            failed_reqs = ex.failed_payloads
-            do_backoff(retry_options)
-            reqs_to_retry = get_requests_for_retry(failed_reqs, retry_options)
+            # filter reqs_to_retry if there's a retry limit
+            if retry_options.limit and retry_options.limit > 0:
+                reqs_to_retry = [req._replace(retries=req.retries+1)
+                    for req in reqs_to_retry
+                    if req.retries < retry_options.limit]
 
-        except (InvalidMessageError, MessageSizeTooLargeError) as ex:
-            # "bad" messages, doesn't make sense to retry
-            log.exception("Message error when sending: %s" % type(ex))
+            # doing backoff before next retry
+            if (reqs_to_retry and type(ex) in RETRY_BACKOFF_ERROR_TYPES
+                    and retry_options.backoff_ms):
+                log.warning("Doing backoff for %s(ms)." % retry_options.backoff_ms)
+                time.sleep(float(retry_options.backoff_ms) / 1000)
+
+            # refresh topic metadata before next retry
+            if reqs_to_retry and type(ex) in RETRY_REFRESH_ERROR_TYPES:
+                client.load_metadata_for_topics()
 
         except Exception as ex:
             log.exception("Unable to send message: %s" % type(ex))
@@ -127,31 +124,6 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         if reqs_to_retry:
             reqs = reqs_to_retry
-
-
-def get_requests_for_retry(requests, retry_options):
-    log.exception("Failed payloads count %s" % len(requests))
-
-    # if no limit, retry all failed messages until success
-    if retry_options.limit is None:
-        return requests
-
-    # makes sense to check failed reqs only if we have a limit > 0
-    reqs_to_retry = []
-    if retry_options.limit > 0:
-        for req in requests:
-            if req.retries < retry_options.limit:
-                updated_req = req._replace(retries=req.retries+1)
-                reqs_to_retry.append(updated_req)
-
-    return reqs_to_retry
-
-
-def do_backoff(retry_options):
-    if retry_options.backoff_ms:
-        log.warning("Doing backoff for %s(ms)." % retry_options.backoff_ms)
-        time.sleep(float(retry_options.backoff_ms) / 1000)
-
 
 
 class Producer(object):

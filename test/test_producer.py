@@ -61,6 +61,9 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
     def _run_process(self, retries_limit=3, sleep_timeout=1):
         # run _send_upstream process with the queue
         stop_event = threading.Event()
+        retry_options = RetryOptions(limit=retries_limit,
+                                     backoff_ms=50,
+                                     retry_on_timeouts=False)
         self.thread = threading.Thread(
             target=_send_upstream,
             args=(self.queue, self.client, CODEC_NONE,
@@ -68,8 +71,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                   3, # batch length
                   Producer.ACK_AFTER_LOCAL_WRITE,
                   Producer.DEFAULT_ACK_TIMEOUT,
-                  RetryOptions(limit=retries_limit, backoff_ms=50,
-                               retry_on_timeouts=True),
+                  retry_options,
                   stop_event))
         self.thread.daemon = True
         self.thread.start()
@@ -121,7 +123,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # lets create a queue and add 10 messages for 10 different partitions
         # to show how retries should work ideally
         for i in range(10):
-            self.queue.put((TopicAndPartition("test", i), "msg %i", "key %i"))
+            self.queue.put((TopicAndPartition("test", i), "msg %i" % i, "key %i" % i))
 
         def send_side_effect(reqs, *args, **kwargs):
             raise FailedPayloadsError(reqs)

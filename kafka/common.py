@@ -82,6 +82,8 @@ RetryOptions = namedtuple("RetryOptions",
     ["limit", "backoff_ms", "retry_on_timeouts"])
 
 
+
+
 #################
 #   Exceptions  #
 #################
@@ -228,3 +230,18 @@ def check_error(response):
     if response.error:
         error_class = kafka_errors.get(response.error, UnknownError)
         raise error_class(response)
+
+
+RETRY_BACKOFF_ERROR_TYPES = (
+    KafkaUnavailableError, LeaderNotAvailableError,
+    ConnectionError, FailedPayloadsError
+)
+
+
+RETRY_REFRESH_ERROR_TYPES = (
+    NotLeaderForPartitionError, UnknownTopicOrPartitionError,
+    LeaderNotAvailableError, ConnectionError
+)
+
+
+RETRY_ERROR_TYPES = list(set(RETRY_BACKOFF_ERROR_TYPES + RETRY_REFRESH_ERROR_TYPES))
