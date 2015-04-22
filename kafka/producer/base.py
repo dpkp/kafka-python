@@ -29,11 +29,13 @@ log = logging.getLogger("kafka")
 
 BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
-BATCH_RETRY_OPTIONS = RetryOptions(
-    limit=0, backoff_ms=300, retry_on_timeouts=False)
 
 # unlimited
 ASYNC_QUEUE_MAXSIZE = 0
+ASYNC_QUEUE_PUT_TIMEOUT = 0
+# no retries by default
+ASYNC_RETRY_OPTIONS = RetryOptions(
+    limit=0, backoff_ms=0, retry_on_timeouts=False)
 STOP_ASYNC_PRODUCER = -1
 
 
@@ -108,7 +110,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         finally:
             reqs = []
 
-        if not reqs_to_retry:
+        if not reqs_to_retry or retry_options.limit == 0:
             continue
 
         # doing backoff before next retry
@@ -120,11 +122,10 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         if error_type in RETRY_REFRESH_ERROR_TYPES:
             client.load_metadata_for_topics()
 
-        reqs = reqs_to_retry
-        # filter reqs_to_retry if there's a retry limit
-        if retry_options.limit and retry_options.limit > 0:
-            reqs = [req._replace(retries=req.retries+1)
-                for req in reqs if req.retries < retry_options.limit]
+        reqs = [req._replace(retries=req.retries+1)
+                for req in reqs_to_retry
+                if not retry_options.limit or
+                (retry_options.limit and req.retries < retry_options.limit)]
 
 
 class Producer(object):
@@ -160,8 +161,9 @@ class Producer(object):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 batch_retry_options=BATCH_RETRY_OPTIONS,
-                 async_queue_maxsize=ASYNC_QUEUE_MAXSIZE):
+                 async_retry_options=ASYNC_RETRY_OPTIONS,
+                 async_queue_maxsize=ASYNC_QUEUE_MAXSIZE,
+                 async_queue_put_timeout=ASYNC_QUEUE_PUT_TIMEOUT):
 
         if batch_send:
             async = True
@@ -188,6 +190,7 @@ class Producer(object):
         if self.async:
             # Messages are sent through this queue
             self.queue = Queue(async_queue_maxsize)
+            self.async_queue_put_timeout = async_queue_put_timeout
             self.thread_stop_event = Event()
             self.thread = Thread(target=_send_upstream,
                                  args=(self.queue,
@@ -197,7 +200,7 @@ class Producer(object):
                                        batch_send_every_n,
                                        self.req_acks,
                                        self.ack_timeout,
-                                       batch_retry_options,
+                                       async_retry_options,
                                        self.thread_stop_event))
 
             # Thread will die if main thread exits
@@ -249,10 +252,11 @@ class Producer(object):
             raise TypeError("the key must be type bytes")
 
         if self.async:
+            put_timeout = self.async_queue_put_timeout
             for m in msg:
                 try:
                     item = (TopicAndPartition(topic, partition), m, key)
-                    self.queue.put_nowait(item)
+                    self.queue.put(item, bool(put_timeout), put_timeout)
                 except Full:
                     raise AsyncProducerQueueFull(
                         'Producer async queue overfilled. '

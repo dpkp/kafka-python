@@ -78,10 +78,10 @@ TopicAndPartition = namedtuple("TopicAndPartition",
 KafkaMessage = namedtuple("KafkaMessage",
     ["topic", "partition", "offset", "key", "value"])
 
+# Define retry policy for async producer
+# Limit corner values: None - infinite retries, 0 - no retries
 RetryOptions = namedtuple("RetryOptions",
     ["limit", "backoff_ms", "retry_on_timeouts"])
-
-
 
 
 #################
