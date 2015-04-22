@@ -158,7 +158,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
 
         self.client.send_produce_request.side_effect = send_side_effect
 
-        self._run_process(3, 2)
+        self._run_process(3, 3)
 
         # the queue should be void at the end of the test
         self.assertEqual(self.queue.empty(), True)
