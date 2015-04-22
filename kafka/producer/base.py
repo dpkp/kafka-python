@@ -115,7 +115,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # doing backoff before next retry
         if error_type in RETRY_BACKOFF_ERROR_TYPES and retry_options.backoff_ms:
-            log.warning("Doing backoff for %s(ms)." % retry_options.backoff_ms)
+            log.info("Doing backoff for %s(ms)." % retry_options.backoff_ms)
             time.sleep(float(retry_options.backoff_ms) / 1000)
 
         # refresh topic metadata before next retry
