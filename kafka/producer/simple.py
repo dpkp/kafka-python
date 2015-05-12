@@ -24,6 +24,7 @@ class SimpleProducer(Producer):
         client: The Kafka client instance to use
 
     Keyword Arguments:
+        maxsize: sets the upper-bound limit on the number of items that can be placed in the queue
         async: If True, the messages are sent asynchronously via another
             thread (process). We will not wait for a response to these
         req_acks: A value indicating the acknowledgements that the server must
@@ -45,13 +46,15 @@ class SimpleProducer(Producer):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 random_start=True):
+                 random_start=True,
+                 maxsize=None):
         self.partition_cycles = {}
         self.random_start = random_start
         super(SimpleProducer, self).__init__(client, async, req_acks,
                                              ack_timeout, codec, batch_send,
                                              batch_send_every_n,
-                                             batch_send_every_t)
+                                             batch_send_every_t,
+                                             maxsize)
 
     def _next_partition(self, topic):
         if topic not in self.partition_cycles:

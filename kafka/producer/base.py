@@ -5,9 +5,9 @@ import logging
 import time
 
 try:
-    from queue import Empty, Queue
+    from queue import Empty, Queue, Full
 except ImportError:
-    from Queue import Empty, Queue
+    from Queue import Empty, Queue, Full
 from collections import defaultdict
 
 from threading import Thread, Event
@@ -26,6 +26,8 @@ BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20
 
 STOP_ASYNC_PRODUCER = -1
+
+ASYNC_QUEUE_MAXSIZE = 65536
 
 
 def _send_upstream(queue, client, codec, batch_time, batch_size,
@@ -64,7 +66,9 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # Send collected requests upstream
         reqs = []
+        topics = set()
         for topic_partition, msg in msgset.items():
+            topics.add(topic_partition.topic)
             messages = create_message_set(msg, codec, key)
             req = ProduceRequest(topic_partition.topic,
                                  topic_partition.partition,
@@ -97,6 +101,7 @@ class Producer(object):
         batch_send: If True, messages are send in batches
         batch_send_every_n: If set, messages are send in batches of this size
         batch_send_every_t: If set, messages are send after this timeout
+        maxsize: sets the upper-bound limit on the number of items that can be placed in the queue
     """
 
     ACK_NOT_REQUIRED = 0            # No ack is required
@@ -111,12 +116,20 @@ class Producer(object):
                  codec=None,
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
-                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL):
+                 batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
+                 maxsize=None):
 
         if batch_send:
             async = True
-            assert batch_send_every_n > 0
-            assert batch_send_every_t > 0
+            if batch_send_every_n <= 0:
+                log.exception('Batch send message count lower than zero.')
+                raise ValueError
+            if batch_send_every_t <= 0:
+                log.exception('Batch send message interval lower than zero.')
+                raise ValueError
+            if maxsize < 0:
+                log.exception('Queue size upper bound lower than zero.')
+                raise ValueError
         else:
             batch_send_every_n = 1
             batch_send_every_t = 3600
@@ -126,6 +139,9 @@ class Producer(object):
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
         self.stopped = False
+
+        if maxsize is None:
+            maxsize = ASYNC_QUEUE_MAXSIZE
 
         if codec is None:
             codec = CODEC_NONE
@@ -138,7 +154,7 @@ class Producer(object):
             log.warning("async producer does not guarantee message delivery!")
             log.warning("Current implementation does not retry Failed messages")
             log.warning("Use at your own risk! (or help improve with a PR!)")
-            self.queue = Queue()  # Messages are sent through this queue
+            self.queue = Queue(maxsize)  # Messages are sent through this queue
             self.thread_stop_event = Event()
             self.thread = Thread(target=_send_upstream,
                                  args=(self.queue,
@@ -200,7 +216,12 @@ class Producer(object):
 
         if self.async:
             for m in msg:
-                self.queue.put((TopicAndPartition(topic, partition), m, key))
+                try:
+                    item = (TopicAndPartition(topic, partition), m, key)
+                    self.queue.put_nowait(item)
+                except Full:
+                    log.exception('Async queue is full')
+                    raise
             resp = []
         else:
             messages = create_message_set([(m, key) for m in msg], self.codec, key)

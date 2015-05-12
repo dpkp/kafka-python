@@ -2,6 +2,10 @@
 
 import logging
 
+try:
+    from queue import Full
+except ImportError:
+    from Queue import Full
 from mock import MagicMock
 from . import unittest
 
@@ -40,3 +44,45 @@ class TestKafkaProducer(unittest.TestCase):
         topic = b"test-topic"
         producer.send_messages(topic, b'hi')
         assert client.send_produce_request.called
+
+    def test_producer_async_queue_overfilled_batch_send(self):
+        queue_size = 2
+        producer = Producer(MagicMock(), batch_send=True, maxsize=queue_size)
+
+        topic = b'test-topic'
+        partition = 0
+        message = b'test-message'
+
+        with self.assertRaises(Full):
+            message_list = [message] * (queue_size + 1)
+            producer.send_messages(topic, partition, *message_list)
+        self.assertEqual(producer.queue.qsize(), queue_size)
+
+    def test_producer_async_queue_overfilled(self):
+        queue_size = 2
+        producer = Producer(MagicMock(), async=True, maxsize=queue_size)
+
+        topic = b'test-topic'
+        partition = 0
+        message = b'test-message'
+
+        with self.assertRaises(Full):
+            message_list = [message] * (queue_size + 1)
+            producer.send_messages(topic, partition, *message_list)
+        self.assertEqual(producer.queue.qsize(), queue_size)
+
+    def test_producer_async_queue_normal(self):
+        queue_size = 4
+        producer = Producer(MagicMock(), async=True, maxsize=queue_size)
+
+        topic = b'test-topic'
+        partition = 0
+        message = b'test-message'
+
+        acceptable_size = (queue_size / 2 + 1)
+
+        message_list = [message] * acceptable_size
+        resp = producer.send_messages(topic, partition, *message_list)
+        self.assertEqual(type(resp), list)
+        self.assertEqual(producer.queue.qsize(), acceptable_size)
+        self.assertFalse(producer.queue.full())
