@@ -121,15 +121,9 @@ class Producer(object):
 
         if batch_send:
             async = True
-            if batch_send_every_n <= 0:
-                log.exception('Batch send message count lower than zero.')
-                raise ValueError
-            if batch_send_every_t <= 0:
-                log.exception('Batch send message interval lower than zero.')
-                raise ValueError
-            if maxsize < 0:
-                log.exception('Queue size upper bound lower than zero.')
-                raise ValueError
+            assert batch_send_every_n > 0
+            assert batch_send_every_t > 0
+            assert maxsize >= 0
         else:
             batch_send_every_n = 1
             batch_send_every_t = 3600
