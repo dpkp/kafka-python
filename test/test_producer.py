@@ -6,9 +6,9 @@ try:
     from queue import Full
 except ImportError:
     from Queue import Full
-from mock import MagicMock
+from mock import MagicMock, patch
 from . import unittest
-
+from six.moves import xrange
 from kafka.producer.base import Producer
 
 
@@ -45,7 +45,8 @@ class TestKafkaProducer(unittest.TestCase):
         producer.send_messages(topic, b'hi')
         assert client.send_produce_request.called
 
-    def test_producer_async_queue_overfilled_batch_send(self):
+    @patch('kafka.producer.base._send_upstream')
+    def test_producer_async_queue_overfilled_batch_send(self, mock):
         queue_size = 2
         producer = Producer(MagicMock(), batch_send=True, maxsize=queue_size)
 
@@ -57,6 +58,8 @@ class TestKafkaProducer(unittest.TestCase):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
         self.assertEqual(producer.queue.qsize(), queue_size)
+        for _ in xrange(producer.queue.qsize()):
+            producer.queue.get()
 
     def test_producer_async_queue_overfilled(self):
         queue_size = 2
