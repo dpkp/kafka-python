@@ -344,7 +344,7 @@ class KafkaConsumer(object):
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
                                topic, partition,
-                               self.offsets._fetch[(topic, partition)],
+                               self._offsets.fetch[(topic, partition)],
                                resp.highwaterMark)
                 # Reset offset
                 self._offsets.fetch[(topic, partition)] = (
