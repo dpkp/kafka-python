@@ -126,8 +126,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         if error_type in RETRY_REFRESH_ERROR_TYPES:
             client.load_metadata_for_topics()
 
-        reqs = {key: count + 1 for key, count in reqs.items()
-                if key in reqs_to_retry and count < retry_options.limit}
+        reqs = dict((key, count + 1) for (key, count) in reqs.items()
+                if key in reqs_to_retry and count < retry_options.limit)
 
 
 class Producer(object):
