@@ -17,6 +17,10 @@ try:
     from queue import Empty, Queue
 except ImportError:
     from Queue import Empty, Queue
+try:
+    xrange
+except NameError:
+    xrange = range
 
 
 class TestKafkaProducer(unittest.TestCase):
@@ -52,7 +56,8 @@ class TestKafkaProducer(unittest.TestCase):
         producer.send_messages(topic, b'hi')
         assert client.send_produce_request.called
 
-    def test_producer_async_queue_overfilled_batch_send(self):
+    @patch('kafka.producer.base._send_upstream')
+    def test_producer_async_queue_overfilled_batch_send(self, mock):
         queue_size = 2
         producer = Producer(MagicMock(), batch_send=True,
                             async_queue_maxsize=queue_size)
@@ -64,8 +69,12 @@ class TestKafkaProducer(unittest.TestCase):
         with self.assertRaises(AsyncProducerQueueFull):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
+        self.assertEqual(producer.queue.qsize(), queue_size)
+        for _ in xrange(producer.queue.qsize()):
+            producer.queue.get()
 
-    def test_producer_async_queue_overfilled(self):
+    @patch('kafka.producer.base._send_upstream')
+    def test_producer_async_queue_overfilled(self, mock):
         queue_size = 2
         producer = Producer(MagicMock(), async=True,
                             async_queue_maxsize=queue_size)
@@ -77,7 +86,9 @@ class TestKafkaProducer(unittest.TestCase):
         with self.assertRaises(AsyncProducerQueueFull):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
-
+        self.assertEqual(producer.queue.qsize(), queue_size)
+        for _ in xrange(producer.queue.qsize()):
+            producer.queue.get()
 
 
 class TestKafkaProducerSendUpstream(unittest.TestCase):
@@ -121,7 +132,6 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # 3 batches of 3 msgs each + 1 batch of 1 message
         self.assertEqual(self.client.send_produce_request.call_count, 4)
 
-
     def test_first_send_failed(self):
 
         # lets create a queue and add 10 messages for 10 different partitions
@@ -133,7 +143,8 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         def send_side_effect(reqs, *args, **kwargs):
             if self.client.is_first_time:
                 self.client.is_first_time = False
-                raise FailedPayloadsError(reqs)
+                return [[FailedPayloadsError(reqs)]]
+            return []
 
         self.client.send_produce_request.side_effect = send_side_effect
 
@@ -154,7 +165,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
             self.queue.put((TopicAndPartition("test", i), "msg %i" % i, "key %i" % i))
 
         def send_side_effect(reqs, *args, **kwargs):
-            raise FailedPayloadsError(reqs)
+            return [[FailedPayloadsError(reqs)]]
 
         self.client.send_produce_request.side_effect = send_side_effect
 
@@ -168,30 +179,6 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # 3 retries of the batches above = 4 + 3 * 4 = 16, all failed
         self.assertEqual(self.client.send_produce_request.call_count, 16)
 
-    def test_with_unlimited_retries(self):
-
-        # lets create a queue and add 10 messages for 10 different partitions
-        # to show how retries should work ideally
-        for i in range(10):
-            self.queue.put((TopicAndPartition("test", i), "msg %i", "key %i"))
-
-        def send_side_effect(reqs, *args, **kwargs):
-            raise FailedPayloadsError(reqs)
-
-        self.client.send_produce_request.side_effect = send_side_effect
-
-        self._run_process(None)
-
-        # the queue should have 7 elements
-        # 3 batches of 1 msg each were retried all this time
-        self.assertEqual(self.queue.empty(), False)
-        try:
-            for i in range(7):
-                self.queue.get(timeout=0.01)
-        except Empty:
-            self.fail("Should be 7 elems in the queue")
-        self.assertEqual(self.queue.empty(), True)
-
-        # 1s / 50ms of backoff = 20 times max
-        calls = self.client.send_produce_request.call_count
-        self.assertTrue(calls > 10 & calls <= 20)
+    def tearDown(self):
+        for _ in xrange(self.queue.qsize()):
+            self.queue.get()

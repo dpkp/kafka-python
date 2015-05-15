@@ -7,8 +7,8 @@ from kafka.util import kafka_bytestring
 
 from .base import (
     Producer, BATCH_SEND_DEFAULT_INTERVAL,
-    BATCH_SEND_MSG_COUNT, ASYNC_RETRY_OPTIONS,
-    ASYNC_QUEUE_MAXSIZE, ASYNC_QUEUE_PUT_TIMEOUT
+    BATCH_SEND_MSG_COUNT, ASYNC_QUEUE_MAXSIZE, ASYNC_QUEUE_PUT_TIMEOUT,
+    ASYNC_RETRY_LIMIT, ASYNC_RETRY_BACKOFF_MS, ASYNC_RETRY_ON_TIMEOUTS
 )
 
 log = logging.getLogger("kafka")
@@ -39,7 +39,9 @@ class KeyedProducer(Producer):
                  batch_send=False,
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
-                 async_retry_options=ASYNC_RETRY_OPTIONS,
+                 async_retry_limit=ASYNC_RETRY_LIMIT,
+                 async_retry_backoff_ms=ASYNC_RETRY_BACKOFF_MS,
+                 async_retry_on_timeouts=ASYNC_RETRY_ON_TIMEOUTS,
                  async_queue_maxsize=ASYNC_QUEUE_MAXSIZE,
                  async_queue_put_timeout=ASYNC_QUEUE_PUT_TIMEOUT):
         if not partitioner:
@@ -51,7 +53,9 @@ class KeyedProducer(Producer):
                                             ack_timeout, codec, batch_send,
                                             batch_send_every_n,
                                             batch_send_every_t,
-                                            async_retry_options,
+                                            async_retry_limit,
+                                            async_retry_backoff_ms,
+                                            async_retry_on_timeouts,
                                             async_queue_maxsize,
                                             async_queue_put_timeout)
 

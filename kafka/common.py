@@ -14,15 +14,8 @@ MetadataResponse = namedtuple("MetadataResponse",
     ["brokers", "topics"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ProduceAPI
-_ProduceRequest = namedtuple("ProduceRequest",
-    ["topic", "partition", "messages", "retries"])
-
-
-class ProduceRequest(_ProduceRequest):
-    def __new__(cls, topic, partition, messages, retries=0):
-        return super(ProduceRequest, cls).__new__(
-            cls, topic, partition, messages, retries)
-
+ProduceRequest = namedtuple("ProduceRequest",
+    ["topic", "partition", "messages"])
 
 ProduceResponse = namedtuple("ProduceResponse",
     ["topic", "partition", "error", "offset"])
@@ -79,7 +72,7 @@ KafkaMessage = namedtuple("KafkaMessage",
     ["topic", "partition", "offset", "key", "value"])
 
 # Define retry policy for async producer
-# Limit corner values: None - infinite retries, 0 - no retries
+# Limit value: int >= 0, 0 means no retries
 RetryOptions = namedtuple("RetryOptions",
     ["limit", "backoff_ms", "retry_on_timeouts"])
 
@@ -218,7 +211,9 @@ class KafkaConfigurationError(KafkaError):
 
 
 class AsyncProducerQueueFull(KafkaError):
-    pass
+    def __init__(self, failed_msgs, *args):
+        super(AsyncProducerQueueFull, self).__init__(*args)
+        self.failed_msgs = failed_msgs
 
 
 def _iter_broker_errors():
