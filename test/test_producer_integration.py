@@ -332,10 +332,10 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offsets = [self.current_offset(self.topic, p) for p in partitions]
 
         producer = KeyedProducer(self.client, partitioner=RoundRobinPartitioner)
-        resp1 = producer.send(self.topic, self.key("key1"), self.msg("one"))
-        resp2 = producer.send(self.topic, self.key("key2"), self.msg("two"))
-        resp3 = producer.send(self.topic, self.key("key3"), self.msg("three"))
-        resp4 = producer.send(self.topic, self.key("key4"), self.msg("four"))
+        resp1 = producer.send_messages(self.topic, self.key("key1"), self.msg("one"))
+        resp2 = producer.send_messages(self.topic, self.key("key2"), self.msg("two"))
+        resp3 = producer.send_messages(self.topic, self.key("key3"), self.msg("three"))
+        resp4 = producer.send_messages(self.topic, self.key("key4"), self.msg("four"))
 
         self.assert_produce_response(resp1, start_offsets[0]+0)
         self.assert_produce_response(resp2, start_offsets[1]+0)
@@ -353,11 +353,11 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offsets = [self.current_offset(self.topic, p) for p in partitions]
 
         producer = KeyedProducer(self.client, partitioner=HashedPartitioner)
-        resp1 = producer.send(self.topic, self.key("1"), self.msg("one"))
-        resp2 = producer.send(self.topic, self.key("2"), self.msg("two"))
-        resp3 = producer.send(self.topic, self.key("3"), self.msg("three"))
-        resp4 = producer.send(self.topic, self.key("3"), self.msg("four"))
-        resp5 = producer.send(self.topic, self.key("4"), self.msg("five"))
+        resp1 = producer.send_messages(self.topic, self.key("1"), self.msg("one"))
+        resp2 = producer.send_messages(self.topic, self.key("2"), self.msg("two"))
+        resp3 = producer.send_messages(self.topic, self.key("3"), self.msg("three"))
+        resp4 = producer.send_messages(self.topic, self.key("3"), self.msg("four"))
+        resp5 = producer.send_messages(self.topic, self.key("4"), self.msg("five"))
 
         offsets = {partitions[0]: start_offsets[0], partitions[1]: start_offsets[1]}
         messages = {partitions[0]: [], partitions[1]: []}
@@ -386,7 +386,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer = KeyedProducer(self.client, partitioner = RoundRobinPartitioner, async=True)
 
-        resp = producer.send(self.topic, self.key("key1"), self.msg("one"))
+        resp = producer.send_messages(self.topic, self.key("key1"), self.msg("one"))
         self.assertEqual(len(resp), 0)
 
         # wait for the server to report a new highwatermark
