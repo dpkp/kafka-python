@@ -98,6 +98,7 @@ class MultiProcessConsumer(Consumer):
         topic: the topic to consume
 
     Keyword Arguments:
+        partitions: An optional list of partitions to consume the data from
         auto_commit: default True. Whether or not to auto commit the offsets
         auto_commit_every_n: default 100. How many messages to consume
             before a commit
@@ -114,16 +115,19 @@ class MultiProcessConsumer(Consumer):
     commit method on this class. A manual call to commit will also reset
     these triggers
     """
-    def __init__(self, client, group, topic, auto_commit=True,
+    def __init__(self, client, group, topic,
+                 partitions=None,
+                 auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
-                 num_procs=1, partitions_per_proc=0,
+                 num_procs=1,
+                 partitions_per_proc=0,
                  **simple_consumer_options):
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(
             client, group, topic,
-            partitions=None,
+            partitions=partitions,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
             auto_commit_every_t=auto_commit_every_t)
