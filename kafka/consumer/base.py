@@ -50,7 +50,7 @@ class Consumer(object):
         self.client.load_metadata_for_topics(topic)
         self.offsets = {}
 
-        if not partitions:
+        if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(topic)
         else:
             assert all(isinstance(x, numbers.Integral) for x in partitions)
@@ -86,7 +86,7 @@ class Consumer(object):
         if self.group is None:
             raise ValueError('KafkaClient.group must not be None')
 
-        if not partitions:
+        if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
 
         responses = self.client.send_offset_fetch_request(
@@ -133,7 +133,7 @@ class Consumer(object):
                 return
 
             reqs = []
-            if not partitions:  # commit all partitions
+            if partitions is None:  # commit all partitions
                 partitions = self.offsets.keys()
 
             for partition in partitions:
@@ -194,7 +194,7 @@ class Consumer(object):
         Keyword Arguments:
             partitions (list): list of partitions to check for, default is to check all
         """
-        if not partitions:
+        if partitions is None:
             partitions = self.offsets.keys()
 
         total = 0
