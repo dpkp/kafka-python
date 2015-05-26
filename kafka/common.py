@@ -105,9 +105,10 @@ class UnknownTopicOrPartitionError(BrokerResponseError):
     message = 'UNKNOWN_TOPIC_OR_PARTITON'
 
 
-class InvalidFetchRequestError(BrokerResponseError):
+# Formerly known (incorrectly) as InvalidFetchRequestError
+class InvalidMessageSizeError(BrokerResponseError):
     errno = 4
-    message = 'INVALID_FETCH_SIZE'
+    message = 'INVALID_MESSAGE_SIZE'
 
 
 class LeaderNotAvailableError(BrokerResponseError):
