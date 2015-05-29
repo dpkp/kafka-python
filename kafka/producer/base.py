@@ -82,20 +82,20 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                 
                 # Set connection state as available
                 connection_state_lock.acquire()
-                connection_exc = None
+                connection_exc[0] = None
                 connection_state_lock.release()
             except Exception as e:
                 log.exception("Unable to send message")
                 
                 # Set connection state as unavailable
                 connection_state_lock.acquire()
-                connection_exc = e
+                connection_exc[0] = e
                 connection_state_lock.release()
                 
                 # Exponential back-off with min 0.1s, max 12.8s
                 attempt = min(attempt + 1, 7)
                 sleep_time = 0.1*(2**attempt)
-                log.warning("sleeping for {0}s".format(sleep_time))
+                log.warning("Sleeping for {0}s before retrying".format(sleep_time))
                 time.sleep(sleep_time)
 
 
@@ -161,7 +161,7 @@ class Producer(object):
             self.queue = Queue()  # Messages are sent through this queue
             self.thread_stop_event = Event()
             self.connection_state_lock = Lock()
-            self.connection_exc = None
+            self.connection_exc = [None]
             self.thread = Thread(target=_send_upstream,
                                  args=(self.queue,
                                        self.client.copy(),
@@ -225,7 +225,7 @@ class Producer(object):
         if self.async:
             # Check if connection is available, otherwise fail to add message
             self.connection_state_lock.acquire()
-            exc = self.connection_exc
+            exc = self.connection_exc[0]
             self.connection_state_lock.release()
             if exc != None:
                 raise exc
