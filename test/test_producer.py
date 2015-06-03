@@ -143,7 +143,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         def send_side_effect(reqs, *args, **kwargs):
             if self.client.is_first_time:
                 self.client.is_first_time = False
-                return [[FailedPayloadsError(reqs)]]
+                return [FailedPayloadsError(reqs)]
             return []
 
         self.client.send_produce_request.side_effect = send_side_effect
@@ -165,7 +165,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
             self.queue.put((TopicAndPartition("test", i), "msg %i" % i, "key %i" % i))
 
         def send_side_effect(reqs, *args, **kwargs):
-            return [[FailedPayloadsError(reqs)]]
+            return [FailedPayloadsError(reqs)]
 
         self.client.send_produce_request.side_effect = send_side_effect
 
