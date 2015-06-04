@@ -17,10 +17,9 @@ import six
 from kafka.common import (
     ProduceRequest, ProduceResponse, TopicAndPartition, RetryOptions,
     kafka_errors, UnsupportedCodecError, FailedPayloadsError,
-    RequestTimedOutError, AsyncProducerQueueFull, UnknownError
+    RequestTimedOutError, AsyncProducerQueueFull, UnknownError,
+    RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES
 )
-from kafka.common import (
-    RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES)
 
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 from kafka.util import kafka_bytestring
