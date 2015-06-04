@@ -32,10 +32,10 @@ BATCH_SEND_MSG_COUNT = 20
 # unlimited
 ASYNC_QUEUE_MAXSIZE = 0
 ASYNC_QUEUE_PUT_TIMEOUT = 0
-# no retries by default
-ASYNC_RETRY_LIMIT = 0
-ASYNC_RETRY_BACKOFF_MS = 0
-ASYNC_RETRY_ON_TIMEOUTS = False
+# unlimited retries by default
+ASYNC_RETRY_LIMIT = None
+ASYNC_RETRY_BACKOFF_MS = 100
+ASYNC_RETRY_ON_TIMEOUTS = True
 
 STOP_ASYNC_PRODUCER = -1
 
@@ -131,8 +131,10 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         if retry_state['do_refresh']:
             client.load_metadata_for_topics()
 
-        reqs = dict((key, count + 1) for (key, count) in reqs.items()
-                if key in reqs_to_retry and count < retry_options.limit)
+        reqs = dict((key, count + 1)
+                    for (key, count) in reqs.items()
+                        if key in reqs_to_retry
+                            and (retry_options.limit is None or (count < retry_options.limit)))
 
 
 class Producer(object):
