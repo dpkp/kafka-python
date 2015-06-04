@@ -93,14 +93,14 @@ class TestFailover(KafkaIntegrationTestCase):
         self.assert_message_count(topic, 201, partitions=(partition,))
 
 
-    #@kafka_versions("all")
-    @unittest.skip("async producer does not support reliable failover yet")
+    @kafka_versions("all")
     def test_switch_leader_async(self):
         topic = self.topic
         partition = 0
 
         # Test the base class Producer -- send_messages to a specific partition
-        producer = Producer(self.client, async=True)
+        producer = Producer(self.client, async=True,
+                            req_acks=Producer.ACK_AFTER_CLUSTER_COMMIT)
 
         # Send 10 random messages
         self._send_random_messages(producer, topic, partition, 10)
@@ -111,15 +111,21 @@ class TestFailover(KafkaIntegrationTestCase):
         logging.debug("attempting to send 'success' message after leader killed")
 
         # in async mode, this should return immediately
-        producer.send_messages(topic, partition, 'success')
+        producer.send_messages(topic, partition, b'success')
 
         # send to new leader
         self._send_random_messages(producer, topic, partition, 10)
 
-        # wait until producer queue is empty
-        while not producer.queue.empty():
-            time.sleep(0.1)
+        # Stop the producer and wait for it to shutdown
         producer.stop()
+        started = time.time()
+        timeout = 60
+        while (time.time() - started) < timeout:
+            if not producer.thread.is_alive():
+                break
+            time.sleep(0.1)
+        else:
+            self.fail('timeout waiting for producer queue to empty')
 
         # count number of messages
         # Should be equal to 10 before + 1 recovery + 10 after
