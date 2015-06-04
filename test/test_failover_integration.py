@@ -201,6 +201,7 @@ class TestFailover(KafkaIntegrationTestCase):
         # Keep checking if it isn't immediately correct, subject to timeout
         while pending < check_count and (time.time() - started_at < timeout):
             pending = consumer.pending(partitions)
+            time.sleep(0.5)
 
         consumer.stop()
         client.close()
