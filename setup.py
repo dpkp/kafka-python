@@ -2,9 +2,9 @@ import sys
 import os
 from setuptools import setup, Command
 
-with open('VERSION', 'r') as v:
-    __version__ = v.read().rstrip()
-
+# Pull version from source without importing
+# since we can't import something we haven't built yet :)
+exec(open('kafka/version.py').read())
 
 class Tox(Command):
 
