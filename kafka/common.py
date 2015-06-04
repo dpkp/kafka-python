@@ -71,6 +71,11 @@ TopicAndPartition = namedtuple("TopicAndPartition",
 KafkaMessage = namedtuple("KafkaMessage",
     ["topic", "partition", "offset", "key", "value"])
 
+# Define retry policy for async producer
+# Limit value: int >= 0, 0 means no retries
+RetryOptions = namedtuple("RetryOptions",
+    ["limit", "backoff_ms", "retry_on_timeouts"])
+
 
 #################
 #   Exceptions  #
@@ -205,6 +210,12 @@ class KafkaConfigurationError(KafkaError):
     pass
 
 
+class AsyncProducerQueueFull(KafkaError):
+    def __init__(self, failed_msgs, *args):
+        super(AsyncProducerQueueFull, self).__init__(*args)
+        self.failed_msgs = failed_msgs
+
+
 def _iter_broker_errors():
     for name, obj in inspect.getmembers(sys.modules[__name__]):
         if inspect.isclass(obj) and issubclass(obj, BrokerResponseError) and obj != BrokerResponseError:
@@ -218,3 +229,18 @@ def check_error(response):
     if response.error:
         error_class = kafka_errors.get(response.error, UnknownError)
         raise error_class(response)
+
+
+RETRY_BACKOFF_ERROR_TYPES = (
+    KafkaUnavailableError, LeaderNotAvailableError,
+    ConnectionError, FailedPayloadsError
+)
+
+
+RETRY_REFRESH_ERROR_TYPES = (
+    NotLeaderForPartitionError, UnknownTopicOrPartitionError,
+    LeaderNotAvailableError, ConnectionError
+)
+
+
+RETRY_ERROR_TYPES = RETRY_BACKOFF_ERROR_TYPES + RETRY_REFRESH_ERROR_TYPES
