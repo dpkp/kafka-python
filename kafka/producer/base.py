@@ -124,11 +124,12 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # doing backoff before next retry
         if retry_state['do_backoff'] and retry_options.backoff_ms:
-            log.info("Doing backoff for %s(ms)." % retry_options.backoff_ms)
+            log.warn('Async producer backoff for %s(ms) before retrying', retry_options.backoff_ms)
             time.sleep(float(retry_options.backoff_ms) / 1000)
 
         # refresh topic metadata before next retry
         if retry_state['do_refresh']:
+            log.warn('Async producer forcing metadata refresh metadata before retrying')
             client.load_metadata_for_topics()
 
         reqs = dict((key, count + 1)
