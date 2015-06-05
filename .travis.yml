@@ -12,7 +12,7 @@ env:
     - KAFKA_VERSION=0.8.0
     - KAFKA_VERSION=0.8.1
     - KAFKA_VERSION=0.8.1.1
-    - KAFKA_VERSION=0.8.2.0
+    - KAFKA_VERSION=0.8.2.1
 
 before_install:
     - sudo apt-get install libsnappy-dev
