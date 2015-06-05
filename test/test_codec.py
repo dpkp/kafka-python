@@ -13,16 +13,16 @@ from test.testutil import random_string
 class TestCodec(unittest.TestCase):
     def test_gzip(self):
         for i in xrange(1000):
-            s1 = random_string(100)
-            s2 = gzip_decode(gzip_encode(s1))
-            self.assertEqual(s1, s2)
+            b1 = random_string(100).encode('utf-8')
+            b2 = gzip_decode(gzip_encode(b1))
+            self.assertEqual(b1, b2)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy(self):
         for i in xrange(1000):
-            s1 = random_string(100)
-            s2 = snappy_decode(snappy_encode(s1))
-            self.assertEqual(s1, s2)
+            b1 = random_string(100).encode('utf-8')
+            b2 = snappy_decode(snappy_encode(b1))
+            self.assertEqual(b1, b2)
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_snappy_detect_xerial(self):

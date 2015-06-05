@@ -23,8 +23,7 @@ __all__ = [
 ]
 
 def random_string(l):
-    s = "".join(random.choice(string.ascii_letters) for i in xrange(l))
-    return s.encode('utf-8')
+    return "".join(random.choice(string.ascii_letters) for i in xrange(l))
 
 def kafka_versions(*versions):
     def kafka_versions(func):
@@ -60,7 +59,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
             return
 
         if not self.topic:
-            topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10).decode('utf-8'))
+            topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
             self.topic = topic
             self.bytes_topic = topic.encode('utf-8')
 

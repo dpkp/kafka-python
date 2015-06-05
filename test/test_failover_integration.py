@@ -133,8 +133,8 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # Send 10 random messages
         for _ in range(10):
-            key = random_string(3)
-            msg = random_string(10)
+            key = random_string(3).encode('utf-8')
+            msg = random_string(10).encode('utf-8')
             producer.send_messages(topic, key, msg)
 
         # kill leader for partition 0
@@ -145,8 +145,8 @@ class TestFailover(KafkaIntegrationTestCase):
         timeout = 60
         while not recovered and (time.time() - started) < timeout:
             try:
-                key = random_string(3)
-                msg = random_string(10)
+                key = random_string(3).encode('utf-8')
+                msg = random_string(10).encode('utf-8')
                 producer.send_messages(topic, key, msg)
                 if producer.partitioners[kafka_bytestring(topic)].partition(key) == 0:
                     recovered = True
@@ -159,15 +159,15 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # send some more messages just to make sure no more exceptions
         for _ in range(10):
-            key = random_string(3)
-            msg = random_string(10)
+            key = random_string(3).encode('utf-8')
+            msg = random_string(10).encode('utf-8')
             producer.send_messages(topic, key, msg)
 
 
     def _send_random_messages(self, producer, topic, partition, n):
         for j in range(n):
             logging.debug('_send_random_message to %s:%d -- try %d', topic, partition, j)
-            resp = producer.send_messages(topic, partition, random_string(10))
+            resp = producer.send_messages(topic, partition, random_string(10).encode('utf-8'))
             if len(resp) > 0:
                 self.assertEqual(resp[0].error, 0)
             logging.debug('_send_random_message to %s:%d -- try %d success', topic, partition, j)
