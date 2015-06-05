@@ -251,6 +251,16 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         # Batch mode is async. No ack
         self.assertEqual(len(resp), 0)
 
+        # Wait until producer has pulled all messages from internal queue
+        # this should signal that the first batch was sent, and the producer
+        # is now waiting for enough messages to batch again (or a timeout)
+        timeout = 5
+        start = time.time()
+        while not producer.queue.empty():
+            if time.time() - start > timeout:
+                self.fail('timeout waiting for producer queue to empty')
+            time.sleep(0.1)
+
         # send messages groups all *msgs in a single call to the same partition
         # so we should see all messages from the first call in one partition
         self.assert_fetch_offset(partitions[0], start_offsets[0], [
