@@ -49,8 +49,8 @@ class KeyedProducer(Producer):
         self.partitioner_class = partitioner
         self.partitioners = {}
 
-        super(KeyedProducer, self).__init__(client, async, req_acks,
-                                            ack_timeout, codec, batch_send,
+        super(KeyedProducer, self).__init__(client, req_acks, ack_timeout,
+                                            codec, async, batch_send,
                                             batch_send_every_n,
                                             batch_send_every_t,
                                             async_retry_limit,

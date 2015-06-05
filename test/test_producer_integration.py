@@ -221,7 +221,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         batch_interval = 5
         producer = SimpleProducer(
             self.client,
-            batch_send=True,
+            async=True,
             batch_send_every_n=batch_messages,
             batch_send_every_t=batch_interval,
             random_start=False)
@@ -287,7 +287,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         batch_interval = 5
         producer = SimpleProducer(
             self.client,
-            batch_send=True,
+            async=True,
             batch_send_every_n=100,
             batch_send_every_t=batch_interval,
             random_start=False)
