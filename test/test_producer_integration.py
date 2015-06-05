@@ -227,7 +227,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
             random_start=False)
 
         # Send 4 messages -- should not trigger a batch
-        resp = producer.send_messages(self.topic,
+        resp = producer.send_messages(
+            self.topic,
             self.msg("one"),
             self.msg("two"),
             self.msg("three"),
@@ -242,7 +243,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         self.assert_fetch_offset(partitions[1], start_offsets[1], [])
 
         # send 3 more messages -- should trigger batch on first 5
-        resp = producer.send_messages(self.topic,
+        resp = producer.send_messages(
+            self.topic,
             self.msg("five"),
             self.msg("six"),
             self.msg("seven"),
@@ -283,14 +285,16 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         start_offsets = [self.current_offset(self.topic, p) for p in partitions]
 
         batch_interval = 5
-        producer = SimpleProducer(self.client,
+        producer = SimpleProducer(
+            self.client,
             batch_send=True,
             batch_send_every_n=100,
             batch_send_every_t=batch_interval,
             random_start=False)
 
         # Send 5 messages and do a fetch
-        resp = producer.send_messages(self.topic,
+        resp = producer.send_messages(
+            self.topic,
             self.msg("one"),
             self.msg("two"),
             self.msg("three"),
