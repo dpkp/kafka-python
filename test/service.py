@@ -11,9 +11,13 @@ __all__ = [
 
 ]
 
+
+log = logging.getLogger(__name__)
+
+
 class ExternalService(object):
     def __init__(self, host, port):
-        logging.info("Using already running service at %s:%d", host, port)
+        log.info("Using already running service at %s:%d", host, port)
         self.host = host
         self.port = port
 
@@ -73,13 +77,13 @@ class SpawnedService(threading.Thread):
                     raise RuntimeError("Subprocess has died. Aborting. (args=%s)" % ' '.join(str(x) for x in self.args))
 
     def dump_logs(self):
-        logging.critical('stderr')
+        log.critical('stderr')
         for line in self.captured_stderr:
-            logging.critical(line.rstrip())
+            log.critical(line.rstrip())
 
-        logging.critical('stdout')
+        log.critical('stdout')
         for line in self.captured_stdout:
-            logging.critical(line.rstrip())
+            log.critical(line.rstrip())
 
     def wait_for(self, pattern, timeout=30):
         t1 = time.time()
@@ -89,16 +93,16 @@ class SpawnedService(threading.Thread):
                 try:
                     self.child.kill()
                 except:
-                    logging.exception("Received exception when killing child process")
+                    log.exception("Received exception when killing child process")
                 self.dump_logs()
 
                 raise RuntimeError("Waiting for %r timed out after %d seconds" % (pattern, timeout))
 
             if re.search(pattern, '\n'.join(self.captured_stdout), re.IGNORECASE) is not None:
-                logging.info("Found pattern %r in %d seconds via stdout", pattern, (t2 - t1))
+                log.info("Found pattern %r in %d seconds via stdout", pattern, (t2 - t1))
                 return
             if re.search(pattern, '\n'.join(self.captured_stderr), re.IGNORECASE) is not None:
-                logging.info("Found pattern %r in %d seconds via stderr", pattern, (t2 - t1))
+                log.info("Found pattern %r in %d seconds via stderr", pattern, (t2 - t1))
                 return
             time.sleep(0.1)
 
