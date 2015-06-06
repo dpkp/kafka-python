@@ -108,7 +108,6 @@ class UtilTest(unittest.TestCase):
 
         l = [
             t("a", 1),
-            t("a", 1),
             t("a", 2),
             t("a", 3),
             t("b", 3),
@@ -124,3 +123,8 @@ class UtilTest(unittest.TestCase):
                 3: t("b", 3),
             }
         })
+
+        # should not be able to group duplicate topic-partitions
+        t1 = t("a", 1)
+        with self.assertRaises(AssertionError):
+            kafka.util.group_by_topic_and_partition([t1, t1])

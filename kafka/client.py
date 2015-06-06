@@ -423,6 +423,8 @@ class KafkaClient(object):
 
         Arguments:
             payloads (list of ProduceRequest): produce requests to send to kafka
+                ProduceRequest payloads must not contain duplicates for any
+                topic-partition.
             acks (int, optional): how many acks the servers should receive from replica
                 brokers before responding to the request. If it is 0, the server
                 will not send any response. If it is 1, the server will wait

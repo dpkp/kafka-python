@@ -82,6 +82,9 @@ def relative_unpack(fmt, data, cur):
 def group_by_topic_and_partition(tuples):
     out = collections.defaultdict(dict)
     for t in tuples:
+        assert t.topic not in out or t.partition not in out[t.topic], \
+               'Duplicate {0}s for {1} {2}'.format(t.__class__.__name__,
+                                                   t.topic, t.partition)
         out[t.topic][t.partition] = t
     return out
 
