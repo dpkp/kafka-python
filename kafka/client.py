@@ -16,7 +16,8 @@ from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SE
 from kafka.protocol import KafkaProtocol
 from kafka.util import kafka_bytestring
 
-log = logging.getLogger("kafka")
+
+log = logging.getLogger(__name__)
 
 
 class KafkaClient(object):

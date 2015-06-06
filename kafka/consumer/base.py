@@ -13,7 +13,8 @@ from kafka.common import (
 
 from kafka.util import kafka_bytestring, ReentrantTimer
 
-log = logging.getLogger("kafka")
+
+log = logging.getLogger('kafka.consumer')
 
 AUTO_COMMIT_MSG_COUNT = 100
 AUTO_COMMIT_INTERVAL = 5000

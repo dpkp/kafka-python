@@ -9,7 +9,8 @@ import six
 
 from kafka.common import ConnectionError
 
-log = logging.getLogger("kafka")
+
+log = logging.getLogger(__name__)
 
 DEFAULT_SOCKET_TIMEOUT_SECONDS = 120
 DEFAULT_KAFKA_PORT = 9092

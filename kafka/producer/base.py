@@ -25,7 +25,7 @@ from kafka.common import (
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 from kafka.util import kafka_bytestring
 
-log = logging.getLogger("kafka")
+log = logging.getLogger('kafka.producer')
 
 BATCH_SEND_DEFAULT_INTERVAL = 20
 BATCH_SEND_MSG_COUNT = 20

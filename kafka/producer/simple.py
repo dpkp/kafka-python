@@ -14,7 +14,7 @@ from .base import (
     ASYNC_RETRY_LIMIT, ASYNC_RETRY_BACKOFF_MS, ASYNC_RETRY_ON_TIMEOUTS
 )
 
-log = logging.getLogger("kafka")
+log = logging.getLogger(__name__)
 
 
 class SimpleProducer(Producer):

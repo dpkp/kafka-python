@@ -34,7 +34,9 @@ from .base import (
     NO_MESSAGES_WAIT_TIME_SECONDS
 )
 
-log = logging.getLogger("kafka")
+
+log = logging.getLogger(__name__)
+
 
 class FetchContext(object):
     """

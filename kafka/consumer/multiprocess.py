@@ -18,9 +18,11 @@ from .base import (
 )
 from .simple import Consumer, SimpleConsumer
 
+
+log = logging.getLogger(__name__)
+
 Events = namedtuple("Events", ["start", "pause", "exit"])
 
-log = logging.getLogger("kafka")
 
 def _mp_consume(client, group, topic, queue, size, events, **consumer_options):
     """
