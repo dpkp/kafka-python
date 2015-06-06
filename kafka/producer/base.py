@@ -73,7 +73,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
     request_tries = {}
     client.reinit()
 
-    while not stop_event.is_set():
+    while not (stop_event.is_set() and queue.empty() and not request_tries):
         timeout = batch_time
         count = batch_size
         send_at = time.time() + timeout
