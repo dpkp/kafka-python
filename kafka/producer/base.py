@@ -15,7 +15,7 @@ from threading import Thread, Event
 import six
 
 from kafka.common import (
-    ProduceRequest, TopicAndPartition, RetryOptions,
+    ProduceRequest, ProduceResponse, TopicAndPartition, RetryOptions,
     kafka_errors, UnsupportedCodecError, FailedPayloadsError,
     RequestTimedOutError, AsyncProducerQueueFull, UnknownError
 )
