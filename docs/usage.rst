@@ -47,7 +47,7 @@ SimpleProducer
     # Notes:
     # * If the producer dies before the messages are sent, there will be losses
     # * Call producer.stop() to send the messages and cleanup
-    producer = SimpleProducer(kafka, batch_send=True,
+    producer = SimpleProducer(kafka, async=True,
                               batch_send_every_n=20,
                               batch_send_every_t=60)
 

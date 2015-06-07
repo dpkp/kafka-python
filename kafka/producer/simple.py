@@ -54,8 +54,8 @@ class SimpleProducer(Producer):
                  async_queue_put_timeout=ASYNC_QUEUE_PUT_TIMEOUT):
         self.partition_cycles = {}
         self.random_start = random_start
-        super(SimpleProducer, self).__init__(client, async, req_acks,
-                                             ack_timeout, codec, batch_send,
+        super(SimpleProducer, self).__init__(client, req_acks, ack_timeout,
+                                             codec, async, batch_send,
                                              batch_send_every_n,
                                              batch_send_every_t,
                                              async_retry_limit,
