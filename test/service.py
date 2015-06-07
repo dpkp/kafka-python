@@ -40,19 +40,37 @@ class SpawnedService(threading.Thread):
         self.captured_stderr = []
 
         self.should_die = threading.Event()
+        self.child = None
+        self.alive = False
 
     def run(self):
         self.run_with_handles()
 
-    def run_with_handles(self):
+    def _spawn(self):
+        if self.alive: return
+        if self.child and self.child.poll() is None: return
+
         self.child = subprocess.Popen(
             self.args,
             env=self.env,
             bufsize=1,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
-        alive = True
+        self.alive = True
 
+    def _despawn(self):
+        self.child.terminate()
+        self.alive = False
+        for _ in range(50):
+            if self.child.poll() is not None:
+                self.child = None
+                break
+            time.sleep(0.1)
+        else:
+            self.child.kill()
+
+    def run_with_handles(self):
+        self._spawn()
         while True:
             (rds, _, _) = select.select([self.child.stdout, self.child.stderr], [], [], 1)
 
@@ -64,17 +82,13 @@ class SpawnedService(threading.Thread):
                 line = self.child.stderr.readline()
                 self.captured_stderr.append(line.decode('utf-8'))
 
-            if self.should_die.is_set():
-                self.child.terminate()
-                alive = False
+            if self.child.poll() is not None:
+                self.dump_logs()
+                self._spawn()
 
-            poll_results = self.child.poll()
-            if poll_results is not None:
-                if not alive:
-                    break
-                else:
-                    self.dump_logs()
-                    raise RuntimeError("Subprocess has died. Aborting. (args=%s)" % ' '.join(str(x) for x in self.args))
+            if self.should_die.is_set():
+                self._despawn()
+                break
 
     def dump_logs(self):
         log.critical('stderr')
