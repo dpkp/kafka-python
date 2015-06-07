@@ -173,7 +173,8 @@ class TestFailover(KafkaIntegrationTestCase):
     def _send_random_messages(self, producer, topic, partition, n):
         for j in range(n):
             logging.debug('_send_random_message to %s:%d -- try %d', topic, partition, j)
-            resp = producer.send_messages(topic, partition, 'msg {0}: {1}'.format(j, random_string(10)))
+            msg = 'msg {0}: {1}'.format(j, random_string(10))
+            resp = producer.send_messages(topic, partition, msg.encode('utf-8'))
             if len(resp) > 0:
                 self.assertEqual(resp[0].error, 0)
             logging.debug('_send_random_message to %s:%d -- try %d success', topic, partition, j)
