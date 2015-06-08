@@ -169,6 +169,14 @@ class TestFailover(KafkaIntegrationTestCase):
             msg = random_string(10).encode('utf-8')
             producer.send_messages(topic, key, msg)
 
+    @kafka_versions("all")
+    def test_switch_leader_simple_consumer(self):
+        producer = Producer(self.client, async=False)
+        consumer = SimpleConsumer(self.client, None, self.topic, partitions=None, auto_commit=False, iter_timeout=10)
+        self._send_random_messages(producer, self.topic, 0, 2)
+        consumer.get_messages()
+        self._kill_leader(self.topic, 0)
+        consumer.get_messages()
 
     def _send_random_messages(self, producer, topic, partition, n):
         for j in range(n):
