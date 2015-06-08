@@ -63,8 +63,8 @@ Keyed messages
 
     # HashedPartitioner is default
     producer = KeyedProducer(kafka)
-    producer.send("my-topic", "key1", "some message")
-    producer.send("my-topic", "key2", "this methode")
+    producer.send_messages("my-topic", "key1", "some message")
+    producer.send_messages("my-topic", "key2", "this methode")
 
     producer = KeyedProducer(kafka, partitioner=RoundRobinPartitioner)
 

@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import logging
+import warnings
 
 from kafka.partitioner import HashedPartitioner
 from kafka.util import kafka_bytestring
@@ -69,15 +70,15 @@ class KeyedProducer(Producer):
         partitioner = self.partitioners[topic]
         return partitioner.partition(key)
 
-    def send_messages(self,topic,key,*msg):
+    def send_messages(self, topic, key, *msg):
         topic = kafka_bytestring(topic)
         partition = self._next_partition(topic, key)
-        return self._send_messages(topic, partition, *msg,key=key)
+        return self._send_messages(topic, partition, *msg, key=key)
 
+    # DEPRECATED
     def send(self, topic, key, msg):
-        topic = kafka_bytestring(topic)
-        partition = self._next_partition(topic, key)
-        return self._send_messages(topic, partition, msg, key=key)
+        warnings.warn("KeyedProducer.send is deprecated in favor of send_messages", DeprecationWarning)
+        return self.send_messages(topic, key, msg)
 
     def __repr__(self):
         return '<KeyedProducer batch=%s>' % self.async
