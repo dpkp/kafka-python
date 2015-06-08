@@ -344,9 +344,12 @@ class SimpleConsumer(Consumer):
 
                 try:
                     check_error(resp)
-                except (UnknownTopicOrPartitionError, NotLeaderForPartitionError):
+                except UnknownTopicOrPartitionError:
                     self.client.reset_topic_metadata(resp.topic)
                     raise
+                except NotLeaderForPartitionError:
+                    self.client.reset_topic_metadata(resp.topic)
+                    continue
                 except OffsetOutOfRangeError:
                     log.warning("OffsetOutOfRangeError for %s - %d. "
                                 "Resetting partition offset...",
