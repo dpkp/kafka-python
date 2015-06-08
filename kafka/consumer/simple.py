@@ -19,7 +19,7 @@ from kafka.common import (
     FetchRequest, OffsetRequest,
     ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
     UnknownTopicOrPartitionError, NotLeaderForPartitionError,
-    OffsetOutOfRangeError, check_error
+    OffsetOutOfRangeError, FailedPayloadsError, check_error
 )
 from .base import (
     Consumer,
@@ -354,6 +354,13 @@ class SimpleConsumer(Consumer):
                     self.reset_partition_offset(resp.partition)
                     # Retry this partition
                     retry_partitions[resp.partition] = partitions[resp.partition]
+                    continue
+                except FailedPayloadsError as e:
+                    log.warning("Failed payloads of %s"
+                                "Resetting partition offset...",
+                                e.payload)
+                    # Retry this partition
+                    retry_partitions[e.payload.partition] = partitions[e.payload.partition]
                     continue
 
                 partition = resp.partition
