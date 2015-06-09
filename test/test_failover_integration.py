@@ -4,10 +4,9 @@ import time
 
 from . import unittest
 
-from kafka import KafkaClient, SimpleConsumer
+from kafka import KafkaClient, SimpleConsumer, KeyedProducer
 from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
 from kafka.producer.base import Producer
-from kafka.producer import KeyedProducer
 from kafka.util import kafka_bytestring
 
 from test.fixtures import ZookeeperFixture, KafkaFixture

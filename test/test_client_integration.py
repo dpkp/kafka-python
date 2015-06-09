@@ -6,9 +6,8 @@ from kafka.common import (
 )
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions
-)
+from test.testutil import KafkaIntegrationTestCase, kafka_versions
+
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @classmethod

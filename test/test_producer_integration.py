@@ -19,6 +19,7 @@ from kafka.producer.base import Producer
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions
 
+
 class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
     @classmethod
