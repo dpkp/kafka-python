@@ -4,8 +4,8 @@ import copy
 import functools
 import logging
 import time
-import kafka.common
 
+import kafka.common
 from kafka.common import (TopicAndPartition, BrokerMetadata,
                           ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,

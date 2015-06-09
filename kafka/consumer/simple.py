@@ -2,25 +2,18 @@ from __future__ import absolute_import
 
 try:
     from itertools import zip_longest as izip_longest, repeat  # pylint: disable-msg=E0611
-except ImportError:  # python 2
-    from itertools import izip_longest as izip_longest, repeat
+except ImportError:
+    from itertools import izip_longest as izip_longest, repeat # python 2
 import logging
+try:
+    from Queue import Empty, Queue # python 3
+except ImportError:
+    from queue import Empty, Queue # python 2
+import sys
 import time
 
 import six
-import sys
 
-try:
-    from Queue import Empty, Queue
-except ImportError:  # python 2
-    from queue import Empty, Queue
-
-from kafka.common import (
-    FetchRequest, OffsetRequest,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
-    UnknownTopicOrPartitionError, NotLeaderForPartitionError,
-    OffsetOutOfRangeError, FailedPayloadsError, check_error
-)
 from .base import (
     Consumer,
     FETCH_DEFAULT_BLOCK_TIMEOUT,
@@ -32,6 +25,12 @@ from .base import (
     FETCH_MAX_WAIT_TIME,
     ITER_TIMEOUT_SECONDS,
     NO_MESSAGES_WAIT_TIME_SECONDS
+)
+from ..common import (
+    FetchRequest, OffsetRequest,
+    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
+    UnknownTopicOrPartitionError, NotLeaderForPartitionError,
+    OffsetOutOfRangeError, FailedPayloadsError, check_error
 )
 
 
