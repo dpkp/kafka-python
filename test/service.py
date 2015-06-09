@@ -110,14 +110,15 @@ class SpawnedService(threading.Thread):
                     log.exception("Received exception when killing child process")
                 self.dump_logs()
 
-                raise RuntimeError("Waiting for %r timed out after %d seconds" % (pattern, timeout))
+                log.error("Waiting for %r timed out after %d seconds", pattern, timeout)
+                return False
 
             if re.search(pattern, '\n'.join(self.captured_stdout), re.IGNORECASE) is not None:
                 log.info("Found pattern %r in %d seconds via stdout", pattern, (t2 - t1))
-                return
+                return True
             if re.search(pattern, '\n'.join(self.captured_stderr), re.IGNORECASE) is not None:
                 log.info("Found pattern %r in %d seconds via stderr", pattern, (t2 - t1))
-                return
+                return True
             time.sleep(0.1)
 
     def start(self):

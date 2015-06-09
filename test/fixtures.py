@@ -126,8 +126,11 @@ class ZookeeperFixture(Fixture):
 
         # Party!
         self.out("Starting...")
-        self.child.start()
-        self.child.wait_for(r"binding to port")
+        while True:
+            self.child.start()
+            if self.child.wait_for(r"binding to port", timeout=5):
+                break
+            self.child.stop()
         self.out("Done!")
 
     def close(self):
@@ -222,8 +225,11 @@ class KafkaFixture(Fixture):
         self.out("Done!")
 
         self.out("Starting...")
-        self.child.start()
-        self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id)
+        while True:
+            self.child.start()
+            if self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id, timeout=5):
+                break
+            self.child.stop()
         self.out("Done!")
         self.running = True
 
