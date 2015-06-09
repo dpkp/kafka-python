@@ -111,6 +111,7 @@ class KafkaClient(object):
         """
         for (host, port) in self.hosts:
             requestId = self._next_id()
+            log.debug('Request %s: %s', requestId, payloads)
             try:
                 conn = self._get_conn(host, port)
                 request = encoder_fn(client_id=self.client_id,
@@ -119,7 +120,9 @@ class KafkaClient(object):
 
                 conn.send(requestId, request)
                 response = conn.recv(requestId)
-                return decoder_fn(response)
+                decoded = decoder_fn(response)
+                log.debug('Response %s: %s', requestId, decoded)
+                return decoded
 
             except Exception:
                 log.exception('Error sending request [%s] to server %s:%s, '
@@ -150,9 +153,6 @@ class KafkaClient(object):
 
         List of response objects in the same order as the supplied payloads
         """
-
-        log.debug("Sending Payloads: %s" % payloads)
-
         # Group the requests by topic+partition
         brokers_for_payloads = []
         payloads_by_broker = collections.defaultdict(list)
@@ -170,6 +170,7 @@ class KafkaClient(object):
         broker_failures = []
         for broker, payloads in payloads_by_broker.items():
             requestId = self._next_id()
+            log.debug('Request %s to %s: %s', requestId, broker, payloads)
             request = encoder_fn(client_id=self.client_id,
                                  correlation_id=requestId, payloads=payloads)
 
@@ -222,7 +223,6 @@ class KafkaClient(object):
         # Return responses in the same order as provided
         responses_by_payload = [responses_by_broker[broker].pop(0)
                                 for broker in brokers_for_payloads]
-        log.debug('Responses: %s' % responses_by_payload)
         return responses_by_payload
 
     def __repr__(self):
