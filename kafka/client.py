@@ -306,6 +306,10 @@ class KafkaClient(object):
 
         return sorted(list(self.topic_partitions[topic]))
 
+    @property
+    def topics(self):
+        return list(self.topic_partitions.keys())
+
     def ensure_topic_exists(self, topic, timeout = 30):
         start_time = time.time()
 
