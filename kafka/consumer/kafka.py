@@ -448,10 +448,16 @@ class KafkaConsumer(object):
             message (KafkaMessage): the message to mark as complete
 
         Returns:
-            Nothing
-
+            True, unless the topic-partition for this message has not
+            been configured for the consumer. In normal operation, this
+            should not happen. But see github issue 364.
         """
         topic_partition = (message.topic, message.partition)
+        if topic_partition not in self._topics:
+            logger.warning('Unrecognized topic/partition in task_done message: '
+                           '{0}:{1}'.format(*topic_partition))
+            return False
+
         offset = message.offset
 
         # Warn on non-contiguous offsets
@@ -475,6 +481,8 @@ class KafkaConsumer(object):
 
         if self._should_auto_commit():
             self.commit()
+
+        return True
 
     def commit(self):
         """Store consumed message offsets (marked via task_done())
