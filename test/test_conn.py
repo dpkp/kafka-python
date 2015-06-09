@@ -1,3 +1,4 @@
+import logging
 import socket
 import struct
 from threading import Thread
@@ -10,6 +11,10 @@ from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SE
 
 class ConnTest(unittest.TestCase):
     def setUp(self):
+
+        # kafka.conn debug logging is verbose, so only enable in conn tests
+        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
+
         self.config = {
             'host': 'localhost',
             'port': 9090,
