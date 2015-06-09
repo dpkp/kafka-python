@@ -122,11 +122,11 @@ class ZookeeperFixture(Fixture):
         # Configure Zookeeper child process
         args = self.kafka_run_class_args("org.apache.zookeeper.server.quorum.QuorumPeerMain", properties)
         env = self.kafka_run_class_env()
-        self.child = SpawnedService(args, env)
 
         # Party!
         self.out("Starting...")
         while True:
+            self.child = SpawnedService(args, env)
             self.child.start()
             if self.child.wait_for(r"binding to port", timeout=5):
                 break
@@ -202,11 +202,6 @@ class KafkaFixture(Fixture):
         properties = os.path.join(self.tmp_dir, "kafka.properties")
         self.render_template(template, properties, vars(self))
 
-        # Configure Kafka child process
-        args = self.kafka_run_class_args("kafka.Kafka", properties)
-        env = self.kafka_run_class_env()
-        self.child = SpawnedService(args, env)
-
         # Party!
         self.out("Creating Zookeeper chroot node...")
         args = self.kafka_run_class_args("org.apache.zookeeper.ZooKeeperMain",
@@ -225,7 +220,13 @@ class KafkaFixture(Fixture):
         self.out("Done!")
 
         self.out("Starting...")
+
+        # Configure Kafka child process
+        args = self.kafka_run_class_args("kafka.Kafka", properties)
+        env = self.kafka_run_class_env()
+
         while True:
+            self.child = SpawnedService(args, env)
             self.child.start()
             if self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id, timeout=5):
                 break
