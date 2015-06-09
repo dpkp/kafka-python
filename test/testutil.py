@@ -79,9 +79,15 @@ class KafkaIntegrationTestCase(unittest.TestCase):
             self.client.close()
 
     def current_offset(self, topic, partition):
-        offsets, = self.client.send_offset_request([ OffsetRequest(kafka_bytestring(topic),
-            partition, -1, 1) ])
-        return offsets.offsets[0]
+        try:
+            offsets, = self.client.send_offset_request([ OffsetRequest(kafka_bytestring(topic), partition, -1, 1) ])
+        except:
+            # XXX: We've seen some UnknownErrors here and cant debug w/o server logs
+            self.zk.child.dump_logs()
+            self.server.child.dump_logs()
+            raise
+        else:
+            return offsets.offsets[0]
 
     def msgs(self, iterable):
         return [ self.msg(x) for x in iterable ]
