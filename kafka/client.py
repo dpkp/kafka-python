@@ -254,8 +254,11 @@ class KafkaClient(object):
 
     def copy(self):
         """
-        Create an inactive copy of the client object
-        A reinit() has to be done on the copy before it can be used again
+        Create an inactive copy of the client object, suitable for passing
+        to a separate thread.
+
+        Note that the copied connections are not initialized, so reinit() must
+        be called on the returned copy.
         """
         c = copy.deepcopy(self)
         for key in c.conns:

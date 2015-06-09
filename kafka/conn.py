@@ -161,9 +161,11 @@ class KafkaConnection(local):
 
     def copy(self):
         """
-        Create an inactive copy of the connection object
-        A reinit() has to be done on the copy before it can be used again
-        return a new KafkaConnection object
+        Create an inactive copy of the connection object, suitable for
+        passing to a background thread.
+
+        The returned copy is not connected; you must call reinit() before
+        using.
         """
         c = copy.deepcopy(self)
         # Python 3 doesn't copy custom attributes of the threadlocal subclass
