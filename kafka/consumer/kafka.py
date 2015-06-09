@@ -323,19 +323,21 @@ class KafkaConsumer(object):
                                 max_bytes)
                    for (topic, partition) in self._topics]
 
-        # client.send_fetch_request will collect topic/partition requests by leader
-        # and send each group as a single FetchRequest to the correct broker
-        try:
-            responses = self._client.send_fetch_request(fetches,
-                                                        max_wait_time=max_wait_time,
-                                                        min_bytes=min_bytes,
-                                                        fail_on_error=False)
-        except FailedPayloadsError:
-            logger.warning('FailedPayloadsError attempting to fetch data from kafka')
-            self._refresh_metadata_on_error()
-            return
+        # send_fetch_request will batch topic/partition requests by leader
+        responses = self._client.send_fetch_request(
+            fetches,
+            max_wait_time=max_wait_time,
+            min_bytes=min_bytes,
+            fail_on_error=False
+        )
 
         for resp in responses:
+
+            if isinstance(resp, FailedPayloadsError):
+                logger.warning('FailedPayloadsError attempting to fetch data')
+                self._refresh_metadata_on_error()
+                continue
+
             topic = kafka_bytestring(resp.topic)
             partition = resp.partition
             try:
