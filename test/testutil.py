@@ -51,6 +51,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
     bytes_topic = None
+    zk = None
     server = None
 
     def setUp(self):
