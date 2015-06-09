@@ -20,7 +20,7 @@ The current stable version of this package is `0.9.3 <https://github.com/mumrah/
 
 Kafka broker versions
 
-* 0.8.2.0 [offset management currently ZK only -- does not support ConsumerCoordinator offset management APIs]
+* 0.8.2.1 [offset management currently ZK only -- does not support ConsumerCoordinator offset management APIs]
 * 0.8.1.1
 * 0.8.1
 * 0.8.0
@@ -31,7 +31,7 @@ Python versions
 * 2.7 (tested on 2.7.9)
 * 3.3 (tested on 3.3.5)
 * 3.4 (tested on 3.4.2)
-* pypy (tested on pypy 2.4.0 / python 2.7.8)
+* pypy (tested on pypy 2.5.0 / python 2.7.8)
 
 License
 -------
