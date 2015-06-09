@@ -206,6 +206,8 @@ class Producer(object):
 
     Arguments:
         client (KafkaClient): instance to use for broker communications.
+            If async=True, the background thread will use client.copy(),
+            which is expected to return a thread-safe object.
         codec (kafka.protocol.ALL_CODECS): compression codec to use.
         req_acks (int, optional): A value indicating the acknowledgements that
             the server must receive before responding to the request,

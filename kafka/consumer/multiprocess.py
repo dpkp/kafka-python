@@ -1,22 +1,21 @@
 from __future__ import absolute_import
 
+from collections import namedtuple
 import logging
+from multiprocessing import Process, Manager as MPManager
+try:
+    from Queue import Empty, Full # python 3
+except ImportError:
+    from queue import Empty, Full # python 2
 import time
 
-from collections import namedtuple
-from multiprocessing import Process, Manager as MPManager
-
-try:
-    from Queue import Empty, Full
-except ImportError:  # python 2
-    from queue import Empty, Full
-
 from .base import (
+    Consumer,
     AUTO_COMMIT_MSG_COUNT, AUTO_COMMIT_INTERVAL,
     NO_MESSAGES_WAIT_TIME_SECONDS,
     FULL_QUEUE_WAIT_TIME_SECONDS
 )
-from .simple import Consumer, SimpleConsumer
+from .simple import SimpleConsumer
 
 
 log = logging.getLogger(__name__)
