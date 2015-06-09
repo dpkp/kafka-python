@@ -59,7 +59,8 @@ class SpawnedService(threading.Thread):
         self.alive = True
 
     def _despawn(self):
-        self.child.terminate()
+        if self.child.poll() is None:
+            self.child.terminate()
         self.alive = False
         for _ in range(50):
             if self.child.poll() is not None:
