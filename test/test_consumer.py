@@ -4,7 +4,7 @@ from . import unittest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer
 from kafka.common import (
-    KafkaConfigurationError, FetchResponse,
+    KafkaConfigurationError, FetchResponse, OffsetFetchResponse,
     FailedPayloadsError, OffsetAndMessage,
     NotLeaderForPartitionError, UnknownTopicOrPartitionError
 )
@@ -104,6 +104,21 @@ class TestSimpleConsumer(unittest.TestCase):
 
         # This should not raise an exception
         self.assertFalse(consumer.commit(partitions=[0, 1]))
+
+    def test_simple_consumer_reset_partition_offset(self):
+        client = MagicMock()
+
+        def mock_offset_request(payloads, **kwargs):
+            raise FailedPayloadsError(payloads[0])
+
+        client.send_offset_request.side_effect = mock_offset_request
+
+        consumer = SimpleConsumer(client, group='foobar',
+                                  topic='topic', partitions=[0, 1],
+                                  auto_commit=False)
+
+        # This should not raise an exception
+        self.assertEqual(consumer.reset_partition_offset(0), None)
 
     @staticmethod
     def fail_requests_factory(error_factory):
