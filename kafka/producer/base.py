@@ -166,8 +166,9 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
             if error_cls:
                 _handle_error(error_cls, orig_req)
-                log.error('Error sending ProduceRequest (#%d of %d) to %s:%d '
-                          'with msgs %s', i + 1, len(requests),
+                log.error('%s sending ProduceRequest (#%d of %d) '
+                          'to %s:%d with msgs %s',
+                          error_cls.__name__, (i + 1), len(requests),
                           orig_req.topic, orig_req.partition,
                           orig_req.messages if log_messages_on_error
                                             else hash(orig_req.messages))
