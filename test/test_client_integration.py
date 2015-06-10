@@ -83,7 +83,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     #   Offset Tests   #
     ####################
 
-    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1")
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
         (resp,) = self.client.send_offset_commit_request(b"group", [req])
