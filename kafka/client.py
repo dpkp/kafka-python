@@ -189,10 +189,12 @@ class KafkaClient(object):
             # No exception, try to get response
             else:
 
-                # decoder_fn=None signal that the server  is expected to not
+                # decoder_fn=None signal that the server is expected to not
                 # send a response.  This probably only applies to
                 # ProduceRequest w/ acks = 0
                 if decoder_fn is None:
+                    log.debug('Request %s does not expect a response '
+                              '(skipping conn.recv)', requestId)
                     for payload in payloads:
                         responses_by_broker[broker].append(None)
                     continue
@@ -211,6 +213,7 @@ class KafkaClient(object):
                 else:
                     for payload_response in decoder_fn(response):
                         responses_by_broker[broker].append(payload_response)
+                    log.debug('Response %s: %s', requestId, responses_by_broker[broker])
 
         # Connection errors generally mean stale metadata
         # although sometimes it means incorrect api request
