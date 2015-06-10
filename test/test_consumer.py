@@ -81,6 +81,30 @@ class TestSimpleConsumer(unittest.TestCase):
         with self.assertRaises(UnknownTopicOrPartitionError):
             consumer.get_messages(20)
 
+    def test_simple_consumer_commit_does_not_raise(self):
+        client = MagicMock()
+        client.get_partition_ids_for_topic.return_value = [0, 1]
+
+        def mock_offset_fetch_request(group, payloads, **kwargs):
+            return [OffsetFetchResponse(p.topic, p.partition, 0, b'', 0) for p in payloads]
+
+        client.send_offset_fetch_request.side_effect = mock_offset_fetch_request
+
+        def mock_offset_commit_request(group, payloads, **kwargs):
+            raise FailedPayloadsError(payloads[0])
+
+        client.send_offset_commit_request.side_effect = mock_offset_commit_request
+
+        consumer = SimpleConsumer(client, group='foobar',
+                                  topic='topic', partitions=[0, 1],
+                                  auto_commit=False)
+
+        # Mock internal commit check
+        consumer.count_since_commit = 10
+
+        # This should not raise an exception
+        self.assertFalse(consumer.commit(partitions=[0, 1]))
+
     @staticmethod
     def fail_requests_factory(error_factory):
         # Mock so that only the first request gets a valid response
