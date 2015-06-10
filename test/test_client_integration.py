@@ -53,8 +53,8 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     @kafka_versions('all')
     def test_send_produce_request_maintains_request_response_order(self):
 
-        self.client.ensure_topic_exists(b'foo', timeout=1)
-        self.client.ensure_topic_exists(b'bar', timeout=1)
+        self.client.ensure_topic_exists(b'foo')
+        self.client.ensure_topic_exists(b'bar')
 
         requests = [
             ProduceRequest(
