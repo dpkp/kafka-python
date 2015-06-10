@@ -344,23 +344,26 @@ class SimpleConsumer(Consumer):
                 try:
                     check_error(resp)
                 except UnknownTopicOrPartitionError:
+                    log.error('UnknownTopicOrPartitionError for %s:%d',
+                              resp.topic, resp.partition)
                     self.client.reset_topic_metadata(resp.topic)
                     raise
                 except NotLeaderForPartitionError:
+                    log.error('NotLeaderForPartitionError for %s:%d',
+                              resp.topic, resp.partition)
                     self.client.reset_topic_metadata(resp.topic)
                     continue
                 except OffsetOutOfRangeError:
-                    log.warning("OffsetOutOfRangeError for %s - %d. "
-                                "Resetting partition offset...",
+                    log.warning('OffsetOutOfRangeError for %s:%d. '
+                                'Resetting partition offset...',
                                 resp.topic, resp.partition)
                     self.reset_partition_offset(resp.partition)
                     # Retry this partition
                     retry_partitions[resp.partition] = partitions[resp.partition]
                     continue
                 except FailedPayloadsError as e:
-                    log.warning("Failed payloads of %s"
-                                "Resetting partition offset...",
-                                e.payload)
+                    log.warning('FailedPayloadsError for %s:%d',
+                                e.payload.topic, e.payload.partition)
                     # Retry this partition
                     retry_partitions[e.payload.partition] = partitions[e.payload.partition]
                     continue
