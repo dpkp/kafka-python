@@ -2,8 +2,9 @@ import os
 
 from kafka.common import (
     FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
-    KafkaTimeoutError
+    KafkaTimeoutError, ProduceRequest
 )
+from kafka.protocol import create_message
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions
@@ -48,6 +49,35 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         # ensure_topic_exists should fail with KafkaTimeoutError
         with self.assertRaises(KafkaTimeoutError):
             self.client.ensure_topic_exists(b"this_topic_doesnt_exist", timeout=0)
+
+    @kafka_versions('all')
+    def test_send_produce_request_maintains_request_response_order(self):
+
+        self.client.ensure_topic_exists(b'foo', timeout=1)
+        self.client.ensure_topic_exists(b'bar', timeout=1)
+
+        requests = [
+            ProduceRequest(
+                b'foo', 0,
+                [create_message(b'a'), create_message(b'b')]),
+            ProduceRequest(
+                b'bar', 1,
+                [create_message(b'a'), create_message(b'b')]),
+            ProduceRequest(
+                b'foo', 1,
+                [create_message(b'a'), create_message(b'b')]),
+            ProduceRequest(
+                b'bar', 0,
+                [create_message(b'a'), create_message(b'b')]),
+        ]
+
+        responses = self.client.send_produce_request(requests)
+        while len(responses):
+            request = requests.pop()
+            response = responses.pop()
+            self.assertEqual(request.topic, response.topic)
+            self.assertEqual(request.partition, response.partition)
+
 
     ####################
     #   Offset Tests   #
