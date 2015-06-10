@@ -50,6 +50,11 @@ class ConnTest(unittest.TestCase):
         # Reset any mock counts caused by __init__
         self.MockCreateConn.reset_mock()
 
+    def tearDown(self):
+        # Return connection logging to INFO
+        logging.getLogger('kafka.conn').setLevel(logging.INFO)
+
+
     def test_collect_hosts__happy_path(self):
         hosts = "localhost:1234,localhost"
         results = collect_hosts(hosts)
@@ -171,6 +176,14 @@ class ConnTest(unittest.TestCase):
 
 
 class TestKafkaConnection(unittest.TestCase):
+
+    def setUp(self):
+        # kafka.conn debug logging is verbose, so only enable in conn tests
+        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
+
+    def tearDown(self):
+        # Return connection logging to INFO
+        logging.getLogger('kafka.conn').setLevel(logging.INFO)
 
     @mock.patch('socket.create_connection')
     def test_copy(self, socket):
