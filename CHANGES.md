@@ -1,3 +1,72 @@
+# 0.9.4 (June 11, 2015)
+
+Consumers
+* Refactor SimpleConsumer internal fetch handling (dpkp PR 399)
+* Handle exceptions in SimpleConsumer commit() and reset_partition_offset() (dpkp PR 404)
+* Improve FailedPayloadsError handling in KafkaConsumer (dpkp PR 398)
+* KafkaConsumer: avoid raising KeyError in task_done (dpkp PR 389)
+* MultiProcessConsumer -- support configured partitions list (dpkp PR 380)
+* Fix SimpleConsumer leadership change handling (dpkp PR 393) 
+* Fix SimpleConsumer connection error handling (reAsOn2010 PR 392)
+* Improve Consumer handling of 'falsy' partition values (wting PR 342)
+* Fix _offsets call error in KafkaConsumer (hellais PR 376)
+* Fix str/bytes bug in KafkaConsumer (dpkp PR 365)
+* Register atexit handlers for consumer and producer thread/multiprocess cleanup (dpkp PR 360)
+* Always fetch commit offsets in base consumer unless group is None (dpkp PR 356)
+* Stop consumer threads on delete (dpkp PR 357)
+* Deprecate metadata_broker_list in favor of bootstrap_servers in KafkaConsumer (dpkp PR 340)
+* Support pass-through parameters in multiprocess consumer (scrapinghub PR 336)
+* Enable offset commit on SimpleConsumer.seek (ecanzonieri PR 350)
+* Improve multiprocess consumer partition distribution (scrapinghub PR 335)
+* Ignore messages with offset less than requested (wkiser PR 328)
+* Handle OffsetOutOfRange in SimpleConsumer (ecanzonieri PR 296)
+
+Producers
+* Add Murmur2Partitioner (dpkp PR 378)
+* Log error types in SimpleProducer and SimpleConsumer (dpkp PR 405)
+* SimpleProducer support configuration of fail_on_error (dpkp PR 396)
+* Deprecate KeyedProducer.send() (dpkp PR 379)
+* Further improvements to async producer code (dpkp PR 388)
+* Add more configuration parameters for async producer (dpkp)
+* Deprecate SimpleProducer batch_send=True in favor of async (dpkp)
+* Improve async producer error handling and retry logic (vshlapakov PR 331)
+* Support message keys in async producer (vshlapakov PR 329)
+* Use threading instead of multiprocessing for Async Producer (vshlapakov PR 330)
+* Stop threads on __del__ (chmduquesne PR 324)
+* Fix leadership failover handling in KeyedProducer (dpkp PR 314)
+
+KafkaClient
+* Add .topics property for list of known topics (dpkp)
+* Fix request / response order guarantee bug in KafkaClient (dpkp PR 403)
+* Improve KafkaClient handling of connection failures in _get_conn (dpkp)
+* Client clears local metadata cache before updating from server (dpkp PR 367)
+* KafkaClient should return a response or error for each request - enable better retry handling (dpkp PR 366)
+* Improve str/bytes conversion in KafkaClient and KafkaConsumer (dpkp PR 332)
+* Always return sorted partition ids in client.get_partition_ids_for_topic() (dpkp PR 315)
+
+Documentation
+* Cleanup Usage Documentation
+* Improve KafkaConsumer documentation (dpkp PR 341)
+* Update consumer documentation (sontek PR 317)
+* Add doc configuration for tox (sontek PR 316)
+* Switch to .rst doc format (sontek PR 321)
+* Fixup google groups link in README (sontek PR 320)
+* Automate documentation at kafka-python.readthedocs.org
+
+Internals
+* Switch integration testing from 0.8.2.0 to 0.8.2.1 (dpkp PR 402)
+* Fix most flaky tests, improve debug logging, improve fixture handling (dpkp)
+* General style cleanups (dpkp PR 394)
+* Raise error on duplicate topic-partition payloads in protocol grouping (dpkp)
+* Use module-level loggers instead of simply 'kafka' (dpkp)
+* Remove pkg_resources check for __version__ at runtime (dpkp PR 387)
+* Make external API consistently support python3 strings for topic (kecaps PR 361)
+* Fix correlation id overflow (dpkp PR 355)
+* Cleanup kafka/common structs (dpkp PR 338)
+* Use context managers in gzip_encode / gzip_decode (dpkp PR 337)
+* Save failed request as FailedPayloadsError attribute (jobevers PR 302)
+* Remove unused kafka.queue (mumrah)
+
 # 0.9.3 (Feb 3, 2015)
 
 * Add coveralls.io support (sontek PR 307)
