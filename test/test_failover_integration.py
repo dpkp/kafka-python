@@ -90,7 +90,9 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # count number of messages
         # Should be equal to 100 before + 1 recovery + 100 after
-        self.assert_message_count(topic, 201, partitions=(partition,))
+        # at_least=True because exactly once delivery isn't really a thing
+        self.assert_message_count(topic, 201, partitions=(partition,),
+                                  at_least=True)
 
     @kafka_versions("all")
     def test_switch_leader_async(self):
@@ -134,6 +136,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # count number of messages
         # Should be equal to 10 before + 1 recovery + 10 after
+        # at_least=True because exactly once delivery isn't really a thing
         self.assert_message_count(topic, 21, partitions=(partition,),
                                   at_least=True)
         self.assert_message_count(topic, 21, partitions=(partition + 1,),
