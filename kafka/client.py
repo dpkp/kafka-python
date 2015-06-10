@@ -1,4 +1,3 @@
-import binascii
 import collections
 import copy
 import functools
@@ -181,8 +180,8 @@ class KafkaClient(object):
 
             except ConnectionError as e:
                 broker_failures.append(broker)
-                log.warning('Could not send request [%s] to server %s: %s',
-                            binascii.b2a_hex(request), broker, e)
+                log.warning('ConnectionError attempting to send request %s '
+                            'to server %s: %s', requestId, broker, e)
 
                 for payload in payloads:
                     responses_by_broker[broker].append(FailedPayloadsError(payload))
@@ -202,9 +201,9 @@ class KafkaClient(object):
                     response = conn.recv(requestId)
                 except ConnectionError as e:
                     broker_failures.append(broker)
-                    log.warning('Could not receive response to request [%s] '
-                                'from server %s: %s',
-                                binascii.b2a_hex(request), conn, e)
+                    log.warning('ConnectionError attempting to receive a '
+                                'response to request %s from server %s: %s',
+                                requestId, broker, e)
 
                     for payload in payloads:
                         responses_by_broker[broker].append(FailedPayloadsError(payload))
