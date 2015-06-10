@@ -23,10 +23,10 @@ class TestFailover(KafkaIntegrationTestCase):
             return
 
         zk_chroot = random_string(10)
-        replicas = 2
-        partitions = 2
+        replicas = 3
+        partitions = 3
 
-        # mini zookeeper, 2 kafka brokers
+        # mini zookeeper, 3 kafka brokers
         self.zk = ZookeeperFixture.instance()
         kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
         self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
