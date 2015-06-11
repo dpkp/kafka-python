@@ -1,6 +1,7 @@
 from .roundrobin import RoundRobinPartitioner
-from .hashed import HashedPartitioner
+from .hashed import HashedPartitioner, Murmur2Partitioner, LegacyPartitioner
 
 __all__ = [
-    'RoundRobinPartitioner', 'HashedPartitioner'
+    'RoundRobinPartitioner', 'HashedPartitioner', 'Murmur2Partitioner',
+    'LegacyPartitioner'
 ]
