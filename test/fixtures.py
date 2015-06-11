@@ -4,6 +4,7 @@ import os.path
 import shutil
 import subprocess
 import tempfile
+import time
 from six.moves import urllib
 import uuid
 
@@ -125,12 +126,18 @@ class ZookeeperFixture(Fixture):
 
         # Party!
         self.out("Starting...")
+        timeout = 5
+        max_timeout = 30
+        backoff = 1
         while True:
             self.child = SpawnedService(args, env)
             self.child.start()
-            if self.child.wait_for(r"binding to port", timeout=5):
+            timeout = min(timeout, max_timeout)
+            if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
             self.child.stop()
+            timeout *= 2
+            time.sleep(backoff)
         self.out("Done!")
 
     def close(self):
@@ -225,12 +232,19 @@ class KafkaFixture(Fixture):
         args = self.kafka_run_class_args("kafka.Kafka", properties)
         env = self.kafka_run_class_env()
 
+        timeout = 5
+        max_timeout = 30
+        backoff = 1
         while True:
             self.child = SpawnedService(args, env)
             self.child.start()
-            if self.child.wait_for(r"\[Kafka Server %d\], Started" % self.broker_id, timeout=5):
+            timeout = min(timeout, max_timeout)
+            if self.child.wait_for(r"\[Kafka Server %d\], Started" %
+                                   self.broker_id, timeout=timeout):
                 break
             self.child.stop()
+            timeout *= 2
+            time.sleep(backoff)
         self.out("Done!")
         self.running = True
 
