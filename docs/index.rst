@@ -16,7 +16,7 @@ see https://groups.google.com/forum/m/#!forum/kafka-clients
 Status
 ------
 
-The current stable version of this package is `0.9.3 <https://github.com/mumrah/kafka-python/releases/tag/v0.9.3>`_ and is compatible with:
+The current stable version of this package is `0.9.4 <https://github.com/mumrah/kafka-python/releases/tag/v0.9.4>`_ and is compatible with:
 
 Kafka broker versions
 
