@@ -32,7 +32,7 @@ Copyright 2015, David Arthur under Apache License, v2.0. See `LICENSE`
 
 Status
 ----------
-The current stable version of this package is `0.9.3`_ and is compatible with:
+The current stable version of this package is `0.9.4`_ and is compatible with:
 
 Kafka broker versions
 
@@ -50,4 +50,4 @@ Python versions
 - pypy (tested on pypy 2.5.0 / python 2.7.8)
 
 .. _Full documentation available on ReadTheDocs: http://kafka-python.readthedocs.org/en/latest/
-.. _0.9.3: https://github.com/mumrah/kafka-python/releases/tag/v0.9.3
+.. _0.9.4: https://github.com/mumrah/kafka-python/releases/tag/v0.9.4
