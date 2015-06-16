@@ -355,7 +355,7 @@ class Producer(object):
             raise TypeError("msg is not a list or tuple!")
 
         # Raise TypeError if any message is not encoded as bytes
-        if any(not isinstance(m, six.binary_type) for m in msg):
+        if any(m is not None and not isinstance(m, six.binary_type) for m in msg):
             raise TypeError("all produce message payloads must be type bytes")
 
         # Raise TypeError if topic is not encoded as bytes
