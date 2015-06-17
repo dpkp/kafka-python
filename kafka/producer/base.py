@@ -354,9 +354,15 @@ class Producer(object):
         if not isinstance(msg, (list, tuple)):
             raise TypeError("msg is not a list or tuple!")
 
-        # Raise TypeError if any message is not encoded as bytes
-        if any(m is not None and not isinstance(m, six.binary_type) for m in msg):
-            raise TypeError("all produce message payloads must be type bytes")
+        for m in msg:
+            # The protocol allows to have key & payload with null values both,
+            # (https://goo.gl/o694yN) but having (null,null) pair doesn't make sense.
+            if m is None:
+                if key is None:
+                    raise TypeError("key and payload can't be null in one")
+            # Raise TypeError if any non-null message is not encoded as bytes
+            elif not isinstance(m, six.binary_type):
+                raise TypeError("all produce message payloads must be null or type bytes")
 
         # Raise TypeError if topic is not encoded as bytes
         if not isinstance(topic, six.binary_type):
