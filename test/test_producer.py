@@ -50,7 +50,7 @@ class TestKafkaProducer(unittest.TestCase):
         client.get_partition_ids_for_topic.return_value = [0, 1]
         producer = KeyedProducer(client)
         topic = b"test-topic"
-        key = 'testkey'
+        key = b"testkey"
 
         bad_data_types = (u'你怎么样?', 12, ['a', 'list'],
                           ('a', 'tuple'), {'a': 'dict'},)
