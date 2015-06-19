@@ -409,7 +409,7 @@ class KafkaClient(object):
                 # this error code is provided for admin purposes only
                 # we never talk to replicas, only the leader
                 except ReplicaNotAvailableError:
-                    log.warning('Some (non-leader) replicas not available for topic %s partition %d', topic, partition)
+                    log.debug('Some (non-leader) replicas not available for topic %s partition %d', topic, partition)
 
                 # If Known Broker, topic_partition -> BrokerMetadata
                 if leader in self.brokers:
