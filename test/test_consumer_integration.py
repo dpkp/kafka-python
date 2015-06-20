@@ -164,6 +164,20 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer.seek(-13, 2)
         self.assert_message_count([ message for message in consumer ], 13)
 
+        # Set absolute offset
+        consumer.seek(100)
+        self.assert_message_count([ message for message in consumer ], 0)
+        consumer.seek(100, partition=0)
+        self.assert_message_count([ message for message in consumer ], 0)
+        consumer.seek(101, partition=1)
+        self.assert_message_count([ message for message in consumer ], 0)
+        consumer.seek(90, partition=0)
+        self.assert_message_count([ message for message in consumer ], 10)
+        consumer.seek(20, partition=1)
+        self.assert_message_count([ message for message in consumer ], 80)
+        consumer.seek(0, partition=1)
+        self.assert_message_count([ message for message in consumer ], 100)
+
         consumer.stop()
 
     @kafka_versions("all")
