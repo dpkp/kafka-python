@@ -585,7 +585,7 @@ class TestProtocol(unittest.TestCase):
 
         results = KafkaProtocol.decode_consumer_metadata_response(encoded)
         self.assertEqual(results,
-            ConsumerMetadataResponse(error = 0, node = 1, host = b'brokers1.kafka.rdio.com', port = 1000)
+            ConsumerMetadataResponse(error = 0, nodeId = 1, host = b'brokers1.kafka.rdio.com', port = 1000)
         )
 
     def test_encode_offset_request(self):
