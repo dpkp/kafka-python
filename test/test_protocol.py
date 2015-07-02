@@ -13,7 +13,7 @@ from kafka.common import (
     ProduceResponse, FetchResponse, OffsetAndMessage,
     BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,
     KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
-    ProtocolError
+    ProtocolError, ConsumerMetadataResponse
 )
 from kafka.protocol import (
     ATTRIBUTE_CODEC_MASK, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, KafkaProtocol,
