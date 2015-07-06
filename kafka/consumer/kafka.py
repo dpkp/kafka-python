@@ -38,6 +38,8 @@ DEFAULT_CONSUMER_CONFIG = {
     'auto_commit_interval_messages': None,
     'consumer_timeout_ms': -1,
 
+    'enable_metrics': False,
+
     # Currently unused
     'socket_receive_buffer_bytes': 64 * 1024,
     'num_consumer_fetchers': 1,
@@ -135,10 +137,23 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
+        if self._config['enable_metrics']:
+            from greplin import scales
+            metrics = scales.collection('kafka',
+                    scales.PmfStat('metadata_request_timer'),
+                    scales.PmfStat('produce_request_timer'),
+                    scales.PmfStat('fetch_request_timer'),
+                    scales.PmfStat('offset_request_timer'),
+                    scales.PmfStat('offset_commit_request_timer'),
+                    scales.PmfStat('offset_fetch_request_timer'))
+        else:
+            metrics = None
+
         self._client = KafkaClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
-            timeout=(self._config['socket_timeout_ms'] / 1000.0)
+            timeout=(self._config['socket_timeout_ms'] / 1000.0),
+            metrics=metrics
         )
 
     def set_topic_partitions(self, *topics):
@@ -565,6 +580,10 @@ class KafkaConsumer(object):
         else:
             logger.info('No new offsets found to commit in group %s', self._config['group_id'])
             return False
+
+    @property
+    def metrics(self):
+        return self._client.metrics
 
     #
     # Topic/partition management private methods

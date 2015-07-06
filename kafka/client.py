@@ -19,6 +19,22 @@ from kafka.util import kafka_bytestring
 log = logging.getLogger(__name__)
 
 
+def time_metric(metric_name):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            start_time = time.time()
+            ret = fn(self, *args, **kwargs)
+
+            if self.metrics:
+                metric = getattr(self.metrics, metric_name)
+                metric.addValue(time.time() - start_time)
+
+            return ret
+        return wrapper
+    return decorator
+
+
 class KafkaClient(object):
 
     CLIENT_ID = b'kafka-python'
@@ -28,12 +44,14 @@ class KafkaClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0):
+                 correlation_id=0,
+                 metrics=None):
         # We need one connection to bootstrap
         self.client_id = kafka_bytestring(client_id)
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
+        self.metrics = metrics
 
         # create connections only when we need them
         self.conns = {}
@@ -47,6 +65,7 @@ class KafkaClient(object):
     ##################
     #   Private API  #
     ##################
+
 
     def _get_conn(self, host, port):
         """Get or create a connection to a broker using host and port"""
@@ -422,6 +441,7 @@ class KafkaClient(object):
                         leader, None, None
                     )
 
+    @time_metric('metadata_request_timer')
     def send_metadata_request(self, payloads=[], fail_on_error=True,
                               callback=None):
         encoder = KafkaProtocol.encode_metadata_request
@@ -429,6 +449,7 @@ class KafkaClient(object):
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
+    @time_metric('produce_request_timer')
     def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
         """
@@ -479,6 +500,7 @@ class KafkaClient(object):
                 if resp is not None and
                 (not fail_on_error or not self._raise_on_response_error(resp))]
 
+    @time_metric('fetch_request_timer')
     def send_fetch_request(self, payloads=[], fail_on_error=True,
                            callback=None, max_wait_time=100, min_bytes=4096):
         """
@@ -499,6 +521,7 @@ class KafkaClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
+    @time_metric('offset_request_timer')
     def send_offset_request(self, payloads=[], fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
@@ -509,6 +532,7 @@ class KafkaClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
+    @time_metric('offset_commit_request_timer')
     def send_offset_commit_request(self, group, payloads=[],
                                    fail_on_error=True, callback=None):
         encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
@@ -519,6 +543,7 @@ class KafkaClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
+    @time_metric('offset_fetch_request_timer')
     def send_offset_fetch_request(self, group, payloads=[],
                                   fail_on_error=True, callback=None):
 
