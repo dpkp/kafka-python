@@ -139,21 +139,26 @@ class KafkaConsumer(object):
 
         if self._config['enable_metrics']:
             from greplin import scales
-            metrics = scales.collection('kafka',
+            self.metrics = scales.collection('kafka',
                     scales.PmfStat('metadata_request_timer'),
                     scales.PmfStat('produce_request_timer'),
                     scales.PmfStat('fetch_request_timer'),
                     scales.PmfStat('offset_request_timer'),
                     scales.PmfStat('offset_commit_request_timer'),
-                    scales.PmfStat('offset_fetch_request_timer'))
+                    scales.PmfStat('offset_fetch_request_timer'),
+
+                    scales.IntStat('failed_payloads_count'),
+                    scales.IntStat('offset_out_of_range_count'),
+                    scales.IntStat('not_leader_for_partition_count'),
+                    scales.IntStat('request_timed_out_count'))
         else:
-            metrics = None
+            self.metrics = None
 
         self._client = KafkaClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0),
-            metrics=metrics
+            metrics=self.metrics
         )
 
     def set_topic_partitions(self, *topics):
@@ -359,6 +364,9 @@ class KafkaConsumer(object):
         for resp in responses:
 
             if isinstance(resp, FailedPayloadsError):
+                if self.metrics:
+                    self.metrics.failed_payloads_count += 1
+
                 logger.warning('FailedPayloadsError attempting to fetch data')
                 self._refresh_metadata_on_error()
                 continue
@@ -368,6 +376,9 @@ class KafkaConsumer(object):
             try:
                 check_error(resp)
             except OffsetOutOfRangeError:
+                if self.metrics:
+                    self.metrics.offset_out_of_range_count += 1
+
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
                                topic, partition,
@@ -380,6 +391,9 @@ class KafkaConsumer(object):
                 continue
 
             except NotLeaderForPartitionError:
+                if self.metrics:
+                    self.metrics.not_leader_for_partition_count += 1
+
                 logger.warning("NotLeaderForPartitionError for %s - %d. "
                                "Metadata may be out of date",
                                topic, partition)
@@ -387,6 +401,9 @@ class KafkaConsumer(object):
                 continue
 
             except RequestTimedOutError:
+                if self.metrics:
+                    self.metrics.request_timed_out_count += 1
+
                 logger.warning("RequestTimedOutError for %s - %d",
                                topic, partition)
                 continue
@@ -580,10 +597,6 @@ class KafkaConsumer(object):
         else:
             logger.info('No new offsets found to commit in group %s', self._config['group_id'])
             return False
-
-    @property
-    def metrics(self):
-        return self._client.metrics
 
     #
     # Topic/partition management private methods
