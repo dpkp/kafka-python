@@ -38,7 +38,7 @@ DEFAULT_CONSUMER_CONFIG = {
     'auto_commit_interval_messages': None,
     'consumer_timeout_ms': -1,
 
-    'enable_metrics': False,
+    'metrics_responder': None,
 
     # Currently unused
     'socket_receive_buffer_bytes': 64 * 1024,
@@ -137,28 +137,13 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
-        if self._config['enable_metrics']:
-            from greplin import scales
-            self.metrics = scales.collection('kafka',
-                    scales.PmfStat('metadata_request_timer'),
-                    scales.PmfStat('produce_request_timer'),
-                    scales.PmfStat('fetch_request_timer'),
-                    scales.PmfStat('offset_request_timer'),
-                    scales.PmfStat('offset_commit_request_timer'),
-                    scales.PmfStat('offset_fetch_request_timer'),
-
-                    scales.IntStat('failed_payloads_count'),
-                    scales.IntStat('offset_out_of_range_count'),
-                    scales.IntStat('not_leader_for_partition_count'),
-                    scales.IntStat('request_timed_out_count'))
-        else:
-            self.metrics = None
+        self.metrics_responder = self._config['metrics_responder']
 
         self._client = KafkaClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0),
-            metrics=self.metrics
+            metrics_responder=self.metrics_responder
         )
 
     def set_topic_partitions(self, *topics):
@@ -364,8 +349,8 @@ class KafkaConsumer(object):
         for resp in responses:
 
             if isinstance(resp, FailedPayloadsError):
-                if self.metrics:
-                    self.metrics.failed_payloads_count += 1
+                if self.metrics_responder:
+                    self.metrics_responder('failed_payloads_count', 1)
 
                 logger.warning('FailedPayloadsError attempting to fetch data')
                 self._refresh_metadata_on_error()
@@ -376,8 +361,8 @@ class KafkaConsumer(object):
             try:
                 check_error(resp)
             except OffsetOutOfRangeError:
-                if self.metrics:
-                    self.metrics.offset_out_of_range_count += 1
+                if self.metrics_responder:
+                    self.metrics_responder('offset_out_of_range_count', 1)
 
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
@@ -391,8 +376,8 @@ class KafkaConsumer(object):
                 continue
 
             except NotLeaderForPartitionError:
-                if self.metrics:
-                    self.metrics.not_leader_for_partition_count += 1
+                if self.metrics_responder:
+                    self.metrics_responder('not_leader_for_partition_count', 1)
 
                 logger.warning("NotLeaderForPartitionError for %s - %d. "
                                "Metadata may be out of date",
@@ -401,8 +386,8 @@ class KafkaConsumer(object):
                 continue
 
             except RequestTimedOutError:
-                if self.metrics:
-                    self.metrics.request_timed_out_count += 1
+                if self.metrics_responder:
+                    self.metrics_responder('request_timed_out_count', 1)
 
                 logger.warning("RequestTimedOutError for %s - %d",
                                topic, partition)

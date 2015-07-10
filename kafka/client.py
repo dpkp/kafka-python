@@ -26,9 +26,8 @@ def time_metric(metric_name):
             start_time = time.time()
             ret = fn(self, *args, **kwargs)
 
-            if self.metrics:
-                metric = getattr(self.metrics, metric_name)
-                metric.addValue(time.time() - start_time)
+            if self.metrics_responder:
+                self.metrics_responder(metric_name, time.time() - start_time)
 
             return ret
         return wrapper
@@ -45,13 +44,13 @@ class KafkaClient(object):
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
                  correlation_id=0,
-                 metrics=None):
+                 metrics_responder=None):
         # We need one connection to bootstrap
         self.client_id = kafka_bytestring(client_id)
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
-        self.metrics = metrics
+        self.metrics_responder = metrics_responder
 
         # create connections only when we need them
         self.conns = {}
