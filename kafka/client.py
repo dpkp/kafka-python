@@ -171,7 +171,7 @@ class KafkaClient(object):
                 log.warning('KafkaUnavailableError attempting to send request '
                             'on topic %s partition %d', payload.topic, payload.partition)
                 topic_partition = (payload.topic, payload.partition)
-                responses[topic_partition] = FailedPayloadsErrors(payload)
+                responses[topic_partition] = FailedPayloadsError(payload)
 
         # For each broker, send the list of request payloads
         # and collect the responses and errors
