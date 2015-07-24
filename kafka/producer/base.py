@@ -322,7 +322,7 @@ class Producer(object):
             self.thread.start()
 
             def cleanup(obj):
-                if obj.stopped:
+                if not obj.stopped:
                     obj.stop()
             self._cleanup_func = cleanup
             atexit.register(cleanup, self)
