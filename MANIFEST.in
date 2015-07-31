@@ -1,1 +1,2 @@
 recursive-include kafka *.py
+include LICENSE
