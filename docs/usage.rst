@@ -66,8 +66,8 @@ Keyed messages
 
     # HashedPartitioner is default (currently uses python hash())
     producer = KeyedProducer(kafka)
-    producer.send_messages(b'my-topic', b'key1', b'some message')
-    producer.send_messages(b'my-topic', b'key2', b'this methode')
+    producer.send_messages(b'my-topic', b'some message', key=b'key1')
+    producer.send_messages(b'my-topic', b'this methode', key=b'key2')
 
     # Murmur2Partitioner attempts to mirror the java client hashing
     producer = KeyedProducer(kafka, partitioner=Murmur2Partitioner)

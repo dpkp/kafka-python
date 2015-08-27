@@ -329,7 +329,7 @@ class Producer(object):
         else:
             self.sync_fail_on_error = sync_fail_on_error
 
-    def send_messages(self, topic, partition, *msg):
+    def send_messages(self, topic, partition, *msg, **kwargs):
         """
         Helper method to send produce requests
         @param: topic, name of topic for produce request -- type str
@@ -346,7 +346,7 @@ class Producer(object):
         All messages produced via this method will set the message 'key' to Null
         """
         topic = kafka_bytestring(topic)
-        return self._send_messages(topic, partition, *msg)
+        return self._send_messages(topic, partition, *msg, **kwargs)
 
     def _send_messages(self, topic, partition, *msg, **kwargs):
         key = kwargs.pop('key', None)

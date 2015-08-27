@@ -45,13 +45,13 @@ class SimpleProducer(Producer):
 
         return next(self.partition_cycles[topic])
 
-    def send_messages(self, topic, *msg):
+    def send_messages(self, topic, *msg, **kwargs):
         if not isinstance(topic, six.binary_type):
             topic = topic.encode('utf-8')
 
         partition = self._next_partition(topic)
         return super(SimpleProducer, self).send_messages(
-            topic, partition, *msg
+            topic, partition, *msg, **kwargs
         )
 
     def __repr__(self):
