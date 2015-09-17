@@ -28,12 +28,22 @@ class KafkaClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0):
+                 correlation_id=0,
+                 ca="/etc/ssl/certs/ca-bundle.crt",
+                 certfile=None,
+                 keyfile=None,
+                 ssl=False,
+                 verify_hostname=False):
         # We need one connection to bootstrap
         self.client_id = kafka_bytestring(client_id)
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
+        self.ca = ca
+        self.certfile = certfile
+        self.keyfile = keyfile
+        self.ssl = ssl
+        self.verify_hostname = verify_hostname
 
         # create connections only when we need them
         self.conns = {}
@@ -55,7 +65,12 @@ class KafkaClient(object):
             self.conns[host_key] = KafkaConnection(
                 host,
                 port,
-                timeout=self.timeout
+                timeout=self.timeout,
+                ca=self.ca,
+                certfile=self.certfile,
+                keyfile=self.keyfile,
+                ssl=self.ssl,
+                verify_hostname=self.verify_hostname
             )
 
         return self.conns[host_key]
