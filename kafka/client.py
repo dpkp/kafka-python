@@ -7,7 +7,7 @@ import time
 import kafka.common
 from kafka.common import (TopicAndPartition, BrokerMetadata,
                           ConnectionError, FailedPayloadsError,
-                          KafkaTimeoutError, KafkaUnavailableError,
+                          KafkaTimeoutError, KafkaUnavailableError, KafkaError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
                           NotLeaderForPartitionError, ReplicaNotAvailableError)
 
@@ -168,9 +168,8 @@ class KafkaClient(object):
                                                         payload.partition)
                 payloads_by_broker[leader].append(payload)
                 brokers_for_payloads.append(leader)
-            except KafkaUnavailableError as e:
-                log.warning('KafkaUnavailableError attempting to send request '
-                            'on topic %s partition %d', payload.topic, payload.partition)
+            except KafkaError as e:
+                log.warning('Error attempting to send request: ' + e.message)
                 topic_partition = (payload.topic, payload.partition)
                 responses[topic_partition] = FailedPayloadsError(payload)
 
