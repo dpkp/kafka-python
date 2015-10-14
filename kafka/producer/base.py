@@ -185,7 +185,10 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         # refresh topic metadata before next retry
         if retry_state['do_refresh']:
             log.warn('Async producer forcing metadata refresh metadata before retrying')
-            client.load_metadata_for_topics()
+            try:
+                client.load_metadata_for_topics()
+            except Exception as e:
+                log.error("Async producer couldn't reload topic metadata: " + e.message)
 
         # Apply retry limit, dropping messages that are over
         request_tries = dict(
