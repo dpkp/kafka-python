@@ -28,13 +28,14 @@ class KafkaClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0):
+                 correlation_id=0,
+                 sslopts=None):
         # We need one connection to bootstrap
         self.client_id = kafka_bytestring(client_id)
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
-
+        self.sslopts = sslopts
         # create connections only when we need them
         self.conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
@@ -55,6 +56,7 @@ class KafkaClient(object):
             self.conns[host_key] = KafkaConnection(
                 host,
                 port,
+                sslopts=self.sslopts,
                 timeout=self.timeout
             )
 

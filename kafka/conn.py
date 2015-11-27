@@ -4,6 +4,8 @@ from random import shuffle
 import socket
 import struct
 from threading import local
+import ssl
+import sys
 
 import six
 
@@ -54,13 +56,13 @@ class KafkaConnection(local):
         timeout: default 120. The socket timeout for sending and receiving data
             in seconds. None means no timeout, so a request can block forever.
     """
-    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
+    def __init__(self, host, port, sslopts,timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
         self.timeout = timeout
         self._sock = None
-
+        self.sslopts = sslopts
         self.reinit()
 
     def __getnewargs__(self):
@@ -209,6 +211,19 @@ class KafkaConnection(local):
 
         try:
             self._sock = socket.create_connection((self.host, self.port), self.timeout)
+            # http://code.activestate.com/recipes/577548-https-httplib-client-connection-with-certificate-v/
+            # if self.ca_file:
+            #   self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, ca_certs=self.ca_file, cert_reqs=ssl.CERT_REQUIRED)
+            # else:
+            #    self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, cert_reqs=ssl.CERT_NONE)
+            # arguments for ssl.wrap_socket:
+            # ssl.wrap_socket(sock, keyfile=None, certfile=None, server_side=False, cert_reqs=CERT_NONE, ssl_version={see docs}, ca_certs=None, do_handshake_on_connect=True, suppress_ragged_eofs=True, ciphers=None)
+            if self.sslopts and 'security.protocol' in self.sslopts:
+              if self.sslopts['security.protocol'] == 'SSL':
+                if 'ssl.truststore.location' in self.sslopts:
+                   print "ssl sock"
+                   self._sock = ssl.wrap_socket(self._sock,ca_certs=self.sslopts['ssl.truststore.location'])
+            print "conn.py GEURT sock is %s" % self._sock
         except socket.error:
             log.exception('Unable to connect to kafka broker at %s:%d' % (self.host, self.port))
             self._raise_connection_error()
