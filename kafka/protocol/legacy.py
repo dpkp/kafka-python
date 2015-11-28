@@ -106,7 +106,7 @@ class KafkaProtocol(object):
                 write_int_string(message.value)
             ])
             crc = crc32(msg)
-            msg = struct.pack('>I%ds' % len(msg), crc, msg)
+            msg = struct.pack('>i%ds' % len(msg), crc, msg)
         else:
             raise ProtocolError("Unexpected magic number: %d" % message.magic)
         return msg
@@ -156,7 +156,7 @@ class KafkaProtocol(object):
         The offset is actually read from decode_message_set_iter (it is part
         of the MessageSet payload).
         """
-        ((crc, magic, att), cur) = relative_unpack('>IBB', data, 0)
+        ((crc, magic, att), cur) = relative_unpack('>iBB', data, 0)
         if crc != crc32(data[4:]):
             raise ChecksumError("Message checksum failed")
 
