@@ -1,24 +1,26 @@
-from .message import MessageSet
 from .struct import Struct
-from .types import Int8, Int16, Int32, Int64, Bytes, String, Array, Schema
+from .types import Array, Int16, Int32, Int64, Schema, String
 
 
-class ProduceRequest(Struct):
-    API_KEY = 0
+class OffsetRequest(Struct):
+    API_KEY = 2
     API_VERSION = 0
     SCHEMA = Schema(
-        ('required_acks', Int16),
-        ('timeout', Int32),
+        ('replica_id', Int32),
         ('topics', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('messages', MessageSet)))))
+                ('time', Int64),
+                ('max_offsets', Int32)))))
     )
+    DEFAULTS = {
+        'replica_id': -1
+    }
 
 
-class ProduceResponse(Struct):
-    API_KEY = 0
+class OffsetResponse(Struct):
+    API_KEY = 2
     API_VERSION = 0
     SCHEMA = Schema(
         ('topics', Array(
@@ -26,5 +28,5 @@ class ProduceResponse(Struct):
             ('partitions', Array(
                 ('partition', Int32),
                 ('error_code', Int16),
-                ('offset', Int64)))))
+                ('offsets', Array(Int64))))))
     )

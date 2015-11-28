@@ -1,45 +1,73 @@
-from struct import pack
+from __future__ import absolute_import
+
+import abc
+from struct import pack, unpack
+
+from .abstract import AbstractType
 
 
-class AbstractField(object):
-    def __init__(self, name):
-        self.name = name
-
-
-class Int8(AbstractField):
+class Int8(AbstractType):
     @classmethod
     def encode(cls, value):
         return pack('>b', value)
 
+    @classmethod
+    def decode(cls, data):
+        (value,) = unpack('>b', data.read(1))
+        return value
 
-class Int16(AbstractField):
+
+class Int16(AbstractType):
     @classmethod
     def encode(cls, value):
         return pack('>h', value)
 
+    @classmethod
+    def decode(cls, data):
+        (value,) = unpack('>h', data.read(2))
+        return value
 
-class Int32(AbstractField):
+
+class Int32(AbstractType):
     @classmethod
     def encode(cls, value):
         return pack('>i', value)
 
+    @classmethod
+    def decode(cls, data):
+        (value,) = unpack('>i', data.read(4))
+        return value
 
-class Int64(AbstractField):
+
+class Int64(AbstractType):
     @classmethod
     def encode(cls, value):
         return pack('>q', value)
 
-
-class String(AbstractField):
     @classmethod
-    def encode(cls, value):
+    def decode(cls, data):
+        (value,) = unpack('>q', data.read(8))
+        return value
+
+
+class String(AbstractType):
+    def __init__(self, encoding='utf-8'):
+        self.encoding = encoding
+
+    def encode(self, value):
         if value is None:
             return Int16.encode(-1)
-        else:
-            return Int16.encode(len(value)) + value
+        value = str(value).encode(self.encoding)
+        return Int16.encode(len(value)) + value
+
+    def decode(self, data):
+        length = Int16.decode(data)
+        if length < 0:
+            return None
+        return data.read(length).decode(self.encoding)
 
 
-class Bytes(AbstractField):
+class Bytes(AbstractType):
     @classmethod
     def encode(cls, value):
         if value is None:
@@ -47,9 +75,52 @@ class Bytes(AbstractField):
         else:
             return Int32.encode(len(value)) + value
 
-
-class Array(object):
     @classmethod
-    def encode(cls, values):
-        # Assume that values are already encoded
-        return Int32.encode(len(values)) + b''.join(values)
+    def decode(cls, data):
+        length = Int32.decode(data)
+        if length < 0:
+            return None
+        return data.read(length)
+
+
+class Schema(AbstractType):
+    def __init__(self, *fields):
+        if fields:
+            self.names, self.fields = zip(*fields)
+        else:
+            self.names, self.fields = (), ()
+
+    def encode(self, item):
+        if len(item) != len(self.fields):
+            raise ValueError('Item field count does not match Schema')
+        return b''.join([
+            field.encode(item[i])
+            for i, field in enumerate(self.fields)
+        ])
+
+    def decode(self, data):
+        return tuple([field.decode(data) for field in self.fields])
+
+    def __len__(self):
+        return len(self.fields)
+
+
+class Array(AbstractType):
+    def __init__(self, *array_of):
+        if len(array_of) > 1:
+            self.array_of = Schema(*array_of)
+        elif len(array_of) == 1 and (isinstance(array_of[0], AbstractType) or
+                                     issubclass(array_of[0], AbstractType)):
+            self.array_of = array_of[0]
+        else:
+            raise ValueError('Array instantiated with no array_of type')
+
+    def encode(self, items):
+        return b''.join(
+            [Int32.encode(len(items))] +
+            [self.array_of.encode(item) for item in items]
+        )
+
+    def decode(self, data):
+        length = Int32.decode(data)
+        return [self.array_of.decode(data) for _ in range(length)]
