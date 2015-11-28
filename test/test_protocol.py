@@ -752,11 +752,11 @@ class TestProtocol(unittest.TestCase):
     @contextmanager
     def mock_create_message_fns(self):
         import kafka.protocol
-        with patch.object(kafka.protocol, "create_message",
+        with patch.object(kafka.protocol.legacy, "create_message",
                                return_value=sentinel.message):
-            with patch.object(kafka.protocol, "create_gzip_message",
+            with patch.object(kafka.protocol.legacy, "create_gzip_message",
                                    return_value=sentinel.gzip_message):
-                with patch.object(kafka.protocol, "create_snappy_message",
+                with patch.object(kafka.protocol.legacy, "create_snappy_message",
                                        return_value=sentinel.snappy_message):
                     yield
 
