@@ -10,7 +10,13 @@ from kafka.common import BufferUnderflowError
 
 
 def crc32(data):
-    return binascii.crc32(data) & 0xffffffff
+    crc = binascii.crc32(data)
+    # py2 and py3 behave a little differently
+    # CRC is encoded as a signed int in kafka protocol
+    # so we'll convert the py3 unsigned result to signed
+    if six.PY3 and crc >= 2**31:
+        crc -= 2**32
+    return crc
 
 
 def write_int_string(s):
