@@ -30,10 +30,10 @@ There are a few levels of abstraction:
         print msg
 
 # SSL-support
-    # see https://docs.python.org/3/library/ssl.html for details:
+    See https://docs.python.org/3/library/ssl.html for details.
     'security.protocol' is used to determine which security-protocol
-    is used.
-    Usually, you'll only need 'keyfile' and 'certfile', just leave out the 
+    is used, 'SSL' in this case.
+    Usually, you'll only need 'security.protocol', 'keyfile' and 'certfile', just leave out the 
     other options. 
 
     client = KafkaClient('localhost:9093', sslopts={
