@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-import abc
 from struct import pack, unpack
 
 from .abstract import AbstractType
@@ -104,6 +103,16 @@ class Schema(AbstractType):
     def __len__(self):
         return len(self.fields)
 
+    def repr(self, value):
+        key_vals = []
+        for i in range(len(self)):
+            try:
+                field_val = getattr(value, self.names[i])
+            except AttributeError:
+                field_val = value[i]
+            key_vals.append('%s=%s' % (self.names[i], self.fields[i].repr(field_val)))
+        return '(' + ', '.join(key_vals) + ')'
+
 
 class Array(AbstractType):
     def __init__(self, *array_of):
@@ -124,3 +133,6 @@ class Array(AbstractType):
     def decode(self, data):
         length = Int32.decode(data)
         return [self.array_of.decode(data) for _ in range(length)]
+
+    def repr(self, list_of_items):
+        return '[' + ', '.join([self.array_of.repr(item) for item in list_of_items]) + ']'

@@ -1,6 +1,6 @@
 from .struct import Struct
 from .types import (
-    Int8, Int16, Int32, Int64, Bytes, String, Array, Schema, AbstractType
+    Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
 from ..util import crc32
 
@@ -67,3 +67,7 @@ class MessageSet(AbstractType):
             msg_size = items[-1][1]
             bytes_read += (8 + 4 + msg_size)
         return items
+
+    @classmethod
+    def repr(cls, messages):
+        return '[' + ', '.join([cls.ITEM.repr(m) for m in messages]) + ']'

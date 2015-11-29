@@ -11,3 +11,7 @@ class AbstractType(object):
     @abc.abstractmethod
     def decode(cls, data):
         pass
+
+    @classmethod
+    def repr(cls, value):
+        return repr(value)
