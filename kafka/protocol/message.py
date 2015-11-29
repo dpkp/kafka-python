@@ -60,8 +60,10 @@ class MessageSet(AbstractType):
     @classmethod
     def decode(cls, data):
         size = Int32.decode(data)
-        end = data.tell() + size
+        bytes_read = 0
         items = []
-        while data.tell() < end:
+        while bytes_read < size:
             items.append(cls.ITEM.decode(data))
+            msg_size = items[-1][1]
+            bytes_read += (8 + 4 + msg_size)
         return items
