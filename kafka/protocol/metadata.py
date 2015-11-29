@@ -2,14 +2,6 @@ from .struct import Struct
 from .types import Array, Int16, Int32, Schema, String
 
 
-class MetadataRequest(Struct):
-    API_KEY = 3
-    API_VERSION = 0
-    SCHEMA = Schema(
-        ('topics', Array(String('utf-8')))
-    )
-
-
 class MetadataResponse(Struct):
     SCHEMA = Schema(
         ('brokers', Array(
@@ -25,4 +17,13 @@ class MetadataResponse(Struct):
                 ('leader', Int32),
                 ('replicas', Array(Int32)),
                 ('isr', Array(Int32))))))
+    )
+
+
+class MetadataRequest(Struct):
+    API_KEY = 3
+    API_VERSION = 0
+    RESPONSE_TYPE = MetadataResponse
+    SCHEMA = Schema(
+        ('topics', Array(String('utf-8')))
     )
