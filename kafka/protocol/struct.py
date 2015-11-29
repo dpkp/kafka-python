@@ -1,4 +1,4 @@
-from collections import namedtuple
+#from collections import namedtuple
 from io import BytesIO
 
 from .abstract import AbstractType
@@ -39,9 +39,11 @@ class Struct(AbstractType):
         return cls(*[field.decode(data) for field in cls.SCHEMA.fields])
 
     def __repr__(self):
-        key_vals =['%s=%r' % (name, self.__dict__[name])
-                   for name in self.SCHEMA.names] 
+        key_vals = []
+        for name, field in zip(self.SCHEMA.names, self.SCHEMA.fields):
+            key_vals.append('%s=%s' % (name, field.repr(self.__dict__[name])))
         return self.__class__.__name__ + '(' + ', '.join(key_vals) + ')'
+
 
 """
 class MetaStruct(type):
