@@ -31,6 +31,11 @@ There are a few levels of abstraction:
 
 # SSL-support
     # see https://docs.python.org/3/library/ssl.html for details:
+    'security.protocol' is used to determine which security-protocol
+    is used.
+    Usually, you'll only need 'keyfile' and 'certfile', just leave out the 
+    other options. 
+
     client = KafkaClient('localhost:9093', sslopts={
      'security.protocol': 'SSL',
      'keyfile': 'mykeyfile',
@@ -38,5 +43,5 @@ There are a few levels of abstraction:
      'ca_certs': 'myca_certs',
      'cert_reqs': ssl.CERT_NONE,
      'ssl_version': ssl.PROTOCOL_TLSv1,
-     'ciphers': '<check the ssl-docs>',
+     'ciphers': '<string of ciphers, check the openssl-docs>',
      })
