@@ -29,4 +29,14 @@ There are a few levels of abstraction:
     for msg in consumer.iter_messages():
         print msg
 
-
+# SSL-support
+    # see https://docs.python.org/3/library/ssl.html for details:
+    client = KafkaClient('localhost:9093', sslopts={
+     'security.protocol': 'SSL',
+     'keyfile': 'mykeyfile',
+     'certfile': 'mycertfile',
+     'ca_certs': 'myca_certs',
+     'cert_reqs': ssl.CERT_NONE,
+     'ssl_version': ssl.PROTOCOL_TLSv1,
+     'ciphers': '<check the ssl-docs>',
+     })

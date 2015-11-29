@@ -246,14 +246,6 @@ class KafkaConnection(local):
             self._sock = socket.create_connection((self.host,
                     self.port), self.timeout)
 
-            # http://code.activestate.com/recipes/577548-https-httplib-client-connection-with-certificate-v/
-            # if self.ca_file:
-            #   self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, ca_certs=self.ca_file, cert_reqs=ssl.CERT_REQUIRED)
-            # else:
-            #    self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, cert_reqs=ssl.CERT_NONE)
-            # arguments for ssl.wrap_socket:
-            # ssl.wrap_socket(sock, keyfile=None, certfile=None, server_side=False, cert_reqs=ssl.CERT_NONE, ssl_version={see docs}, ca_certs=None, do_handshake_on_connect=True, suppress_ragged_eofs=True, ciphers=None)
-
             if self.sslopts and 'security.protocol' in self.sslopts:
                 if self.sslopts['security.protocol'] == 'SSL':
                     supported = [
@@ -301,6 +293,7 @@ class KafkaConnection(local):
                         server_side=False,
                         cert_reqs=cert_reqs,
                         ssl_version=ssl_version,
+                        ciphers=ciphers
                         )
             log.debug('sock is %s' % self._sock)
         except socket.error:
