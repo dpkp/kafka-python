@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+
 import copy
 import logging
 from random import shuffle
@@ -66,6 +67,7 @@ class KafkaConnection(local):
         sslopts,
         timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
         ):
+
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port
@@ -228,6 +230,64 @@ class KafkaConnection(local):
         else:
             log.debug('No socket found to close!')
 
+    def ssl_wrapper(self):
+        supported = [
+            'security.protocol',
+            'keyfile',
+            'certfile',
+            'cert_reqs',
+            'ssl_version',
+            'ca_certs',
+            ]
+
+            # 'ciphers' not supported yet
+            # 'ciphers',
+
+        for key in self.sslopts:
+            if key not in supported:
+                log.exception('ssl-option "%s" not supported' % key)
+                sys.exit(1)
+        keyfile = None
+        if 'keyfile' in self.sslopts:
+            keyfile = self.sslopts['keyfile']
+        certfile = None
+        if 'certfile' in self.sslopts:
+            certfile = self.sslopts['certfile']
+        cert_reqs = ssl.CERT_NONE
+        if 'cert_reqs' in self.sslopts:
+            cert_reqs = self.sslopts['ca_reqs']
+        ssl_version = ssl.PROTOCOL_TLSv1
+        if 'ssl_version' in self.sslopts:
+            ssl_version = self.sslopts['ssl_version']
+        ca_certs = None
+        if 'ca_certs' in self.sslopts:
+            ca_certs = self.sslopts['ca_certs']
+        ciphers = None
+        if 'ciphers' in self.sslopts:
+            ciphers = self.sslopts['ciphers']
+        log.debug('keyfile     : %s' % keyfile)
+        log.debug('certfile    : %s' % certfile)
+        log.debug('ssl_version : %s' % ssl_version)
+        log.debug('ca_certs    : %s' % ca_certs)
+        log.debug('ciphers     : %s' % ciphers)
+        log.debug('cert_reqs   : %s' % cert_reqs)
+
+        # ciphers not supported yet:
+
+        try:
+            self._sock = ssl.wrap_socket(
+                self._sock,
+                keyfile=keyfile,
+                certfile=certfile,
+                ca_certs=ca_certs,
+                server_side=False,
+                cert_reqs=cert_reqs,
+                ssl_version=ssl_version,
+                )
+        except Exception, e:
+            print 'foutje: %s' % e
+        log.info('sock is %s' % self._sock)
+
     def reinit(self):
         """
         Re-initialize the socket connection
@@ -245,57 +305,9 @@ class KafkaConnection(local):
         try:
             self._sock = socket.create_connection((self.host,
                     self.port), self.timeout)
-
             if self.sslopts and 'security.protocol' in self.sslopts:
-                if self.sslopts['security.protocol'] == 'SSL':
-                    supported = [
-                        'security.protocol',
-                        'keyfile',
-                        'certfile',
-                        'cert_reqs',
-                        'ssl_version',
-                        'ca_certs',
-                        'ciphers',
-                        ]
-                    for key in self.sslopts:
-                        if key not in supported:
-                            log.exception('ssl-option "%s" not supported' % key)
-                            sys.exit(1)
-                    keyfile = None
-                    if 'keyfile' in self.sslopts:
-                        keyfile = self.sslopts['keyfile']
-                    certfile = None
-                    if 'certfile' in self.sslopts:
-                        certfile = self.sslopts['certfile']
-                    cert_reqs = ssl.CERT_NONE
-                    if 'cert_reqs' in self.sslopts:
-                        cert_reqs = self.sslopts['ca_reqs']
-                    ssl_version = ssl.PROTOCOL_TLSv1
-                    if 'ssl_version' in self.sslopts:
-                        ssl_version = self.sslopts['ssl_version']
-                    ca_certs = None
-                    if 'ca_certs' in self.sslopts:
-                        ca_certs = self.sslopts['ca_certs']
-                    ciphers = None
-                    if 'ciphers' in self.sslopts:
-                        ciphers = self.sslopts['ciphers']
-                    log.debug('keyfile     : %s' % keyfile)
-                    log.debug('certfile    : %s' % certfile)
-                    log.debug('ssl_version : %s' % ssl_version)
-                    log.debug('ca_certs    : %s' % ca_certs)
-                    log.debug('ciphers     : %s' % ciphers)
-                    log.debug('cert_reqs   : %s' % cert_reqs)
-                    self._sock = ssl.wrap_socket(
-                        self._sock,
-                        keyfile=keyfile,
-                        certfile=certfile,
-                        ca_certs=ca_certs,
-                        server_side=False,
-                        cert_reqs=cert_reqs,
-                        ssl_version=ssl_version,
-                        ciphers=ciphers
-                        )
-            log.debug('sock is %s' % self._sock)
+                if self.sslopts['security.protocol'].upper() == 'SSL':
+                    self.ssl_wrapper()
         except socket.error:
 
             log.exception('Unable to connect to kafka broker at %s:%d'
