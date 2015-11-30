@@ -284,8 +284,8 @@ class KafkaConnection(local):
                 ssl_version=ssl_version,
                 )
         except ssl.SSLError as e:
-            print("foutje: %s" % e)
-        log.info('sock is %s' % self._sock)
+            log.error(e)
+        log.debug('sock is %s' % self._sock)
 
     def reinit(self):
         """
