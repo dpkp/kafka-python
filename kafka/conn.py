@@ -132,7 +132,7 @@ class KafkaConnection(local):
                       - bytes_left, num_bytes)
             responses.append(data)
 
-        return ''.join(responses)
+        return b''.join(responses)
 
     # #################
     #   Public API   #
