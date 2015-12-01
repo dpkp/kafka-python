@@ -131,8 +131,13 @@ class KafkaConnection(local):
             log.debug('Read %d/%d bytes from Kafka', num_bytes
                       - bytes_left, num_bytes)
             responses.append(data)
-
-        return b''.join(responses)
+        """
+        for Python2, ''.join(responses) works,
+        but for Python3, we'll need str.encode('').join(responses)
+        The latter method works both for Python2 and Python3, and is much
+        faster than 'if python2...' else ...
+        """
+        return str.encode('').join(responses)
 
     # #################
     #   Public API   #
@@ -240,8 +245,8 @@ class KafkaConnection(local):
             'ca_certs',
             ]
 
-            # 'ciphers' not supported yet
-            # 'ciphers',
+        if six.PY3:
+            supported.append('ciphers')
 
         for key in self.sslopts:
             if key not in supported:
@@ -262,27 +267,40 @@ class KafkaConnection(local):
         ca_certs = None
         if 'ca_certs' in self.sslopts:
             ca_certs = self.sslopts['ca_certs']
-        #ciphers = None
-        #if 'ciphers' in self.sslopts:
-        #    ciphers = self.sslopts['ciphers']
+        if six.PY3:
+            ciphers = None
+            if 'ciphers' in self.sslopts:
+                ciphers = self.sslopts['ciphers']
         log.debug('keyfile     : %s' % keyfile)
         log.debug('certfile    : %s' % certfile)
         log.debug('ssl_version : %s' % ssl_version)
         log.debug('ca_certs    : %s' % ca_certs)
-        #log.debug('ciphers     : %s' % ciphers)
+        if six.PY3:
+            log.debug('ciphers     : %s' % ciphers)
         log.debug('cert_reqs   : %s' % cert_reqs)
 
-        # ciphers not supported yet:
         try:
-            self._sock = ssl.wrap_socket(
-                self._sock,
-                keyfile=keyfile,
-                certfile=certfile,
-                ca_certs=ca_certs,
-                server_side=False,
-                cert_reqs=cert_reqs,
-                ssl_version=ssl_version,
-                )
+            if six.PY3:
+                self._sock = ssl.wrap_socket(
+                    self._sock,
+                    keyfile=keyfile,
+                    certfile=certfile,
+                    ca_certs=ca_certs,
+                    server_side=False,
+                    cert_reqs=cert_reqs,
+                    ssl_version=ssl_version,
+                    ciphers=ciphers,
+                    )
+            else:
+                self._sock = ssl.wrap_socket(
+                    self._sock,
+                    keyfile=keyfile,
+                    certfile=certfile,
+                    ca_certs=ca_certs,
+                    server_side=False,
+                    cert_reqs=cert_reqs,
+                    ssl_version=ssl_version,
+                    )
         except ssl.SSLError as e:
             log.error(e)
         log.debug('sock is %s' % self._sock)

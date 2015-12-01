@@ -45,3 +45,5 @@ There are a few levels of abstraction:
      'ssl_version': ssl.PROTOCOL_TLSv1,
      'ciphers': '<string of ciphers, check the openssl-docs>',
      })
+   
+     The argument 'ciphers' is supported by Python3 only.
