@@ -131,7 +131,6 @@ class SimpleConsumer(Consumer):
                              (buffer_size, max_buffer_size))
         self.buffer_size = buffer_size
         self.max_buffer_size = max_buffer_size
-        self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_offsets = self.offsets.copy()
@@ -181,12 +180,6 @@ class SimpleConsumer(Consumer):
             self.offsets[partition] = resp.offsets[0]
             self.fetch_offsets[partition] = resp.offsets[0]
             return resp.offsets[0]
-
-    def provide_partition_info(self):
-        """
-        Indicates that partition info must be returned by the consumer
-        """
-        self.partition_info = True
 
     def seek(self, offset, whence=None, partition=None):
         """

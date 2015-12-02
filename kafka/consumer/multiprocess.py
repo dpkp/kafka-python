@@ -257,7 +257,8 @@ class MultiProcessConsumer(Consumer):
             except Empty:
                 break
 
-            messages.append(message)
+            _msg = (partition, message) if self.partition_info else message
+            messages.append(_msg)
             new_offsets[partition] = message.offset + 1
             count -= 1
             if timeout is not None:
