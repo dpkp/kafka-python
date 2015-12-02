@@ -265,10 +265,12 @@ class SimpleConsumer(Consumer):
 
         Keyword Arguments:
             count: Indicates the maximum number of messages to be fetched
-            block: If True, the API will block till some messages are fetched.
-            timeout: If block is True, the function will block for the specified
-                time (in seconds) until count messages is fetched. If None,
-                it will block forever.
+            block: If True, the API will block till all messages are fetched.
+                If block is a positive integer the API will block until that
+                many messages are fetched.
+            timeout: When blocking is requested the function will block for
+                the specified time (in seconds) until count messages is
+                fetched. If None, it will block forever.
         """
         messages = []
         if timeout is not None:
@@ -279,12 +281,13 @@ class SimpleConsumer(Consumer):
         while len(messages) < count:
             block_time = timeout - time.time()
             log.debug('calling _get_message block=%s timeout=%s', block, block_time)
-            result = self._get_message(block, block_time,
+            block_next_call = block is True or block > len(messages)
+            result = self._get_message(block_next_call, block_time,
                                        get_partition_info=True,
                                        update_offset=False)
             log.debug('got %s from _get_messages', result)
             if not result:
-                if block and (timeout is None or time.time() <= timeout):
+                if block_next_call and (timeout is None or time.time() <= timeout):
                     continue
                 break
 
