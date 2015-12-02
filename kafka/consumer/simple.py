@@ -6,9 +6,9 @@ except ImportError:
     from itertools import izip_longest as izip_longest, repeat # python 2
 import logging
 try:
-    from Queue import Empty, Queue # python 3
+    import queue # python 3
 except ImportError:
-    from queue import Empty, Queue # python 2
+    import Queue as queue # python 2
 import sys
 import time
 
@@ -136,7 +136,7 @@ class SimpleConsumer(Consumer):
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
         self.auto_offset_reset = auto_offset_reset
-        self.queue = Queue()
+        self.queue = queue.Queue()
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -257,7 +257,7 @@ class SimpleConsumer(Consumer):
         if self.auto_commit:
             self.commit()
 
-        self.queue = Queue()
+        self.queue = queue.Queue()
 
     def get_messages(self, count=1, block=True, timeout=0.1):
         """
@@ -341,7 +341,7 @@ class SimpleConsumer(Consumer):
                 return partition, message
             else:
                 return message
-        except Empty:
+        except queue.Empty:
             log.debug('internal queue empty after fetch - returning None')
             return None
 
