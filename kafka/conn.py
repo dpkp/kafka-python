@@ -118,6 +118,11 @@ class KafkaConnection(local):
 
     # TODO multiplex socket communication to allow for multi-threaded clients
 
+    def get_connected_socket(self):
+        if not self._sock:
+            self.reinit()
+        return self._sock
+
     def send(self, request_id, payload):
         """
         Send a request to Kafka

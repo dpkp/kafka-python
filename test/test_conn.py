@@ -165,6 +165,23 @@ class ConnTest(unittest.TestCase):
         self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload'])
         self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload2'])
 
+    def test_get_connected_socket(self):
+        s = self.conn.get_connected_socket()
+
+        self.assertEqual(s, self.MockCreateConn())
+
+    def test_get_connected_socket_on_dirty_conn(self):
+        # Dirty the connection
+        try:
+            self.conn._raise_connection_error()
+        except ConnectionError:
+            pass
+
+        # Test that get_connected_socket tries to connect
+        self.assertEqual(self.MockCreateConn.call_count, 0)
+        self.conn.get_connected_socket()
+        self.assertEqual(self.MockCreateConn.call_count, 1)
+
     def test_close__object_is_reusable(self):
 
         # test that sending to a closed connection

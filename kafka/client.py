@@ -2,6 +2,7 @@ import collections
 import copy
 import functools
 import logging
+import select
 import time
 
 import kafka.common
@@ -177,6 +178,10 @@ class KafkaClient(object):
         # For each broker, send the list of request payloads
         # and collect the responses and errors
         broker_failures = []
+
+        # For each KafkaConnection keep the real socket so that we can use
+        # a select to perform unblocking I/O
+        connections_by_socket = {}
         for broker, payloads in payloads_by_broker.items():
             requestId = self._next_id()
             log.debug('Request %s to %s: %s', requestId, broker, payloads)
@@ -210,27 +215,34 @@ class KafkaClient(object):
                         topic_partition = (payload.topic, payload.partition)
                         responses[topic_partition] = None
                     continue
-
-                try:
-                    response = conn.recv(requestId)
-                except ConnectionError as e:
-                    broker_failures.append(broker)
-                    log.warning('ConnectionError attempting to receive a '
-                                'response to request %s from server %s: %s',
-                                requestId, broker, e)
-
-                    for payload in payloads:
-                        topic_partition = (payload.topic, payload.partition)
-                        responses[topic_partition] = FailedPayloadsError(payload)
-
                 else:
-                    _resps = []
-                    for payload_response in decoder_fn(response):
-                        topic_partition = (payload_response.topic,
-                                           payload_response.partition)
-                        responses[topic_partition] = payload_response
-                        _resps.append(payload_response)
-                    log.debug('Response %s: %s', requestId, _resps)
+                    connections_by_socket[conn.get_connected_socket()] = (conn, broker)
+
+        conn = None
+        while connections_by_socket:
+            sockets = connections_by_socket.keys()
+            rlist, _, _ = select.select(sockets, [], [], None)
+            conn, broker = connections_by_socket.pop(rlist[0])
+            try:
+                response = conn.recv(requestId)
+            except ConnectionError as e:
+                broker_failures.append(broker)
+                log.warning('ConnectionError attempting to receive a '
+                            'response to request %s from server %s: %s',
+                            requestId, broker, e)
+
+                for payload in payloads_by_broker[broker]:
+                    topic_partition = (payload.topic, payload.partition)
+                    responses[topic_partition] = FailedPayloadsError(payload)
+
+            else:
+                _resps = []
+                for payload_response in decoder_fn(response):
+                    topic_partition = (payload_response.topic,
+                                       payload_response.partition)
+                    responses[topic_partition] = payload_response
+                    _resps.append(payload_response)
+                log.debug('Response %s: %s', requestId, _resps)
 
         # Connection errors generally mean stale metadata
         # although sometimes it means incorrect api request
