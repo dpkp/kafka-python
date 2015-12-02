@@ -53,6 +53,7 @@ DEPRECATED_CONFIG_KEYS = {
 
 class KafkaConsumer(object):
     """A simpler kafka consumer"""
+    DEFAULT_CONFIG = deepcopy(DEFAULT_CONSUMER_CONFIG)
 
     def __init__(self, *topics, **configs):
         self.configure(**configs)
@@ -111,8 +112,8 @@ class KafkaConsumer(object):
         """
         configs = self._deprecate_configs(**configs)
         self._config = {}
-        for key in DEFAULT_CONSUMER_CONFIG:
-            self._config[key] = configs.pop(key, DEFAULT_CONSUMER_CONFIG[key])
+        for key in self.DEFAULT_CONFIG:
+            self._config[key] = configs.pop(key, self.DEFAULT_CONFIG[key])
 
         if configs:
             raise KafkaConfigurationError('Unknown configuration key(s): ' +
