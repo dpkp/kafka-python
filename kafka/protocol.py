@@ -547,7 +547,7 @@ def create_message(payload, key=None):
     return Message(0, 0, key, payload)
 
 
-def create_gzip_message(payloads, key=None):
+def create_gzip_message(payloads, key=None, compresslevel=None):
     """
     Construct a Gzipped Message containing multiple Messages
 
@@ -562,7 +562,7 @@ def create_gzip_message(payloads, key=None):
     message_set = KafkaProtocol._encode_message_set(
         [create_message(payload, pl_key) for payload, pl_key in payloads])
 
-    gzipped = gzip_encode(message_set)
+    gzipped = gzip_encode(message_set, compresslevel=compresslevel)
     codec = ATTRIBUTE_CODEC_MASK & CODEC_GZIP
 
     return Message(0, 0x00 | codec, key, gzipped)
@@ -589,7 +589,7 @@ def create_snappy_message(payloads, key=None):
     return Message(0, 0x00 | codec, key, snapped)
 
 
-def create_message_set(messages, codec=CODEC_NONE, key=None):
+def create_message_set(messages, codec=CODEC_NONE, key=None, compresslevel=None):
     """Create a message set using the given codec.
 
     If codec is CODEC_NONE, return a list of raw Kafka messages. Otherwise,
@@ -598,7 +598,7 @@ def create_message_set(messages, codec=CODEC_NONE, key=None):
     if codec == CODEC_NONE:
         return [create_message(m, k) for m, k in messages]
     elif codec == CODEC_GZIP:
-        return [create_gzip_message(messages, key)]
+        return [create_gzip_message(messages, key, compresslevel)]
     elif codec == CODEC_SNAPPY:
         return [create_snappy_message(messages, key)]
     else:
