@@ -65,7 +65,7 @@ class MessageSet(AbstractType):
         while bytes_read < size:
             items.append(cls.ITEM.decode(data))
             msg_size = items[-1][1]
-            bytes_read += (8 + 4 + msg_size)
+            bytes_read += (8 + 4 + msg_size) # item size = 8 byte offset, 4 byte message_size, plus message bytes
         return items
 
     @classmethod
