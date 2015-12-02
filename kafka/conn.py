@@ -56,6 +56,7 @@ class KafkaConnection(local):
     Arguments:
         host: the host name or IP address of a kafka broker
         port: the port number the kafka broker is listening on
+        sslopts: hash of ssl options
         timeout: default 120. The socket timeout for sending and receiving data
             in seconds. None means no timeout, so a request can block forever.
     """
@@ -64,7 +65,7 @@ class KafkaConnection(local):
         self,
         host,
         port,
-        sslopts,
+        sslopts=None,
         timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
         ):
 
@@ -241,7 +242,6 @@ class KafkaConnection(local):
             'keyfile',
             'certfile',
             'cert_reqs',
-            'ssl_version',
             'ca_certs',
             ]
 
@@ -261,9 +261,6 @@ class KafkaConnection(local):
         cert_reqs = ssl.CERT_NONE
         if 'cert_reqs' in self.sslopts:
             cert_reqs = self.sslopts['ca_reqs']
-        ssl_version = ssl.PROTOCOL_TLSv1
-        if 'ssl_version' in self.sslopts:
-            ssl_version = self.sslopts['ssl_version']
         ca_certs = None
         if 'ca_certs' in self.sslopts:
             ca_certs = self.sslopts['ca_certs']
@@ -273,7 +270,6 @@ class KafkaConnection(local):
                 ciphers = self.sslopts['ciphers']
         log.debug('keyfile     : %s' % keyfile)
         log.debug('certfile    : %s' % certfile)
-        log.debug('ssl_version : %s' % ssl_version)
         log.debug('ca_certs    : %s' % ca_certs)
         if six.PY3:
             log.debug('ciphers     : %s' % ciphers)
@@ -288,7 +284,6 @@ class KafkaConnection(local):
                     ca_certs=ca_certs,
                     server_side=False,
                     cert_reqs=cert_reqs,
-                    ssl_version=ssl_version,
                     ciphers=ciphers,
                     )
             else:
@@ -299,7 +294,6 @@ class KafkaConnection(local):
                     ca_certs=ca_certs,
                     server_side=False,
                     cert_reqs=cert_reqs,
-                    ssl_version=ssl_version,
                     )
         except ssl.SSLError as e:
             log.error(e)
