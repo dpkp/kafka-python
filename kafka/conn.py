@@ -88,12 +88,13 @@ class BrokerConnection(local):
         # instead we read directly from the socket fd buffer
         # alternatively, we could read size bytes into a separate buffer
         # and decode from that buffer (and verify buffer is empty afterwards)
-        size = Int32.decode(self._read_fd)
-        recv_correlation_id = Int32.decode(self._read_fd)
-        assert correlation_id == recv_correlation_id
         try:
+            size = Int32.decode(self._read_fd)
+            recv_correlation_id = Int32.decode(self._read_fd)
+            if correlation_id != recv_correlation_id:
+                raise RuntimeError('Correlation ids do not match!')
             response = response_type.decode(self._read_fd)
-        except socket.error as e:
+        except (RuntimeError, socket.error) as e:
             log.exception("Error in BrokerConnection.recv()")
             self.close()
             return None
