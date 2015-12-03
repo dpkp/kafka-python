@@ -166,7 +166,7 @@ class SimpleConsumer(Consumer):
             # Otherwise we should re-raise the upstream exception
             # b/c it typically includes additional data about
             # the request that triggered it, and we do not want to drop that
-            raise
+            raise # pylint: disable-msg=E0704
 
         # send_offset_request
         log.info('Resetting topic-partition offset to %s for %s:%d',
