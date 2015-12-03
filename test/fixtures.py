@@ -8,7 +8,7 @@ import time
 from six.moves import urllib
 import uuid
 
-from six.moves.urllib.parse import urlparse  # pylint: disable-msg=E0611
+from six.moves.urllib.parse import urlparse # pylint: disable-msg=E0611,F0401
 from test.service import ExternalService, SpawnedService
 from test.testutil import get_open_port
 

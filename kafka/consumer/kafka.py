@@ -661,7 +661,7 @@ class KafkaConsumer(object):
             # Otherwise we should re-raise the upstream exception
             # b/c it typically includes additional data about
             # the request that triggered it, and we do not want to drop that
-            raise
+            raise # pylint: disable-msg=E0704
 
         (offset, ) = self.get_partition_offsets(topic, partition,
                                                 request_time_ms, max_num_offsets=1)
