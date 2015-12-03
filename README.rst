@@ -1,11 +1,11 @@
 Kafka Python client
 ------------------------
-.. image:: https://api.travis-ci.org/mumrah/kafka-python.png?branch=master
-    :target: https://travis-ci.org/mumrah/kafka-python
+.. image:: https://api.travis-ci.org/dpkp/kafka-python.png?branch=master
+    :target: https://travis-ci.org/dpkp/kafka-python
     :alt: Build Status
 
-.. image:: https://coveralls.io/repos/mumrah/kafka-python/badge.svg?branch=master
-    :target: https://coveralls.io/r/mumrah/kafka-python?branch=master
+.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master
+    :target: https://coveralls.io/r/dpkp/kafka-python?branch=master
     :alt: Coverage Status
 
 .. image:: https://readthedocs.org/projects/kafka-python/badge/?version=latest
@@ -50,4 +50,4 @@ Python versions
 - pypy (tested on pypy 2.5.0 / python 2.7.8)
 
 .. _Full documentation available on ReadTheDocs: http://kafka-python.readthedocs.org/en/latest/
-.. _0.9.4: https://github.com/mumrah/kafka-python/releases/tag/v0.9.4
+.. _0.9.4: https://github.com/dpkp/kafka-python/releases/tag/v0.9.4

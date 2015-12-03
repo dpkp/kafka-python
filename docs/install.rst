@@ -11,7 +11,7 @@ Pip:
 
     pip install kafka-python
 
-Releases are also listed at https://github.com/mumrah/kafka-python/releases
+Releases are also listed at https://github.com/dpkp/kafka-python/releases
 
 
 Bleeding-Edge
@@ -19,21 +19,21 @@ Bleeding-Edge
 
 .. code:: bash
 
-    git clone https://github.com/mumrah/kafka-python
+    git clone https://github.com/dpkp/kafka-python
     pip install ./kafka-python
 
 Setuptools:
 
 .. code:: bash
 
-    git clone https://github.com/mumrah/kafka-python
+    git clone https://github.com/dpkp/kafka-python
     easy_install ./kafka-python
 
 Using `setup.py` directly:
 
 .. code:: bash
 
-    git clone https://github.com/mumrah/kafka-python
+    git clone https://github.com/dpkp/kafka-python
     cd kafka-python
     python setup.py install
 
