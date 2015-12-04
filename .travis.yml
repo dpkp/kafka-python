@@ -13,7 +13,8 @@ env:
     - KAFKA_VERSION=0.8.0
     - KAFKA_VERSION=0.8.1
     - KAFKA_VERSION=0.8.1.1
-    - KAFKA_VERSION=0.8.2.1
+    - KAFKA_VERSION=0.8.2.2
+    - KAFKA_VERSION=0.9.0.0
 
 sudo: false
 
