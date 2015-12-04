@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class Cluster(object):
     def __init__(self, **kwargs):
         if 'bootstrap_servers' not in kwargs:
-            kargs['bootstrap_servers'] = 'localhost'
+            kwargs['bootstrap_servers'] = 'localhost'
 
         self._brokers = {}
         self._topics = {}

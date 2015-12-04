@@ -30,12 +30,6 @@ class JoinGroupRequest(Struct):
     )
 
 
-class ProtocolName(Struct):
-    SCHEMA = Schema(
-        ('assignment_strategy', String('utf-8'))
-    )
-
-
 class ProtocolMetadata(Struct):
     SCHEMA = Schema(
         ('version', Int16),

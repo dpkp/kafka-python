@@ -21,7 +21,7 @@ class Struct(AbstractType):
         self.encode = self._encode_self
 
     @classmethod
-    def encode(cls, item):
+    def encode(cls, item): # pylint: disable-msg=E0202
         bits = []
         for i, field in enumerate(cls.SCHEMA.fields):
             bits.append(field.encode(item[i]))
