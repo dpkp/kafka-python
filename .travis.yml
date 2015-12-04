@@ -22,6 +22,11 @@ addons:
     packages:
       - libsnappy-dev
 
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - servers/
+
 before_install:
     - ./build_integration.sh
 
