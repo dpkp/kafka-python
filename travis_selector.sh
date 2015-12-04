@@ -3,6 +3,8 @@
 
 if [ $1 == "pypy" ]; then
     echo "pypy"
+elif [ $1 == "3.5" ]; then
+    echo "py35"
 elif [ $1 == "3.4" ]; then
     echo "py34"
 elif [ $1 == "3.3" ]; then
