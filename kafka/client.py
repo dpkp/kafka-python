@@ -236,13 +236,13 @@ class KafkaClient(object):
                         responses[topic_partition] = None
                     continue
                 else:
-                    connections_by_socket[conn.get_connected_socket()] = (conn, broker)
+                    connections_by_socket[conn.get_connected_socket()] = (conn, broker, requestId)
 
         conn = None
         while connections_by_socket:
             sockets = connections_by_socket.keys()
             rlist, _, _ = select.select(sockets, [], [], None)
-            conn, broker = connections_by_socket.pop(rlist[0])
+            conn, broker, requestId = connections_by_socket.pop(rlist[0])
             try:
                 response = conn.recv(requestId)
             except ConnectionError as e:
