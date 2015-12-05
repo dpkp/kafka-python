@@ -111,19 +111,19 @@ class TestKafkaProducer(unittest.TestCase):
                     with self.assertRaises(FailedPayloadsError):
                         producer.send_messages('foobar', b'test message')
 
-    def test_cleanup_stop_is_called_on_not_stopped_object(self):
+    def test_cleanup_is_not_called_on_stopped_producer(self):
         producer = Producer(MagicMock(), async=True)
         producer.stopped = True
-        with patch('kafka.producer.base.Producer.stop') as base_stop:
+        with patch.object(producer, 'stop') as mocked_stop:
             producer._cleanup_func(producer)
-        self.assertEqual(base_stop.call_count, 0)
+            self.assertEqual(mocked_stop.call_count, 0)
 
-    def test_cleanup_stop_is_not_called_on_stopped_object(self):
+    def test_cleanup_is_called_on_running_producer(self):
         producer = Producer(MagicMock(), async=True)
         producer.stopped = False
-        with patch('kafka.producer.base.Producer.stop') as base_stop:
+        with patch.object(producer, 'stop') as mocked_stop:
             producer._cleanup_func(producer)
-        self.assertEqual(base_stop.call_count, 1)
+            self.assertEqual(mocked_stop.call_count, 1)
 
 
 class TestKafkaProducerSendUpstream(unittest.TestCase):
