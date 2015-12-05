@@ -607,11 +607,7 @@ class KafkaClient(object):
         else:
             decoder = KafkaProtocol.decode_produce_response
 
-        try:
-            resps = self._send_broker_aware_request(payloads, encoder, decoder)
-        except Exception:
-            if fail_on_error:
-                raise
+        resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if resp is not None and
