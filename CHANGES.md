@@ -1,4 +1,4 @@
-# 0.9.5 (Unreleased)
+# 0.9.5 (Dec 6, 2015)
 
 Consumers
 * Initial support for consumer coordinator [offsets only] (toddpalino PR 420)
