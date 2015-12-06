@@ -415,16 +415,20 @@ class Producer(object):
                 raise
         return resp
 
-    def stop(self):
+    def stop(self, timeout=None):
         """
         Stop the producer (async mode). Blocks until async thread completes.
         """
+        if timeout is not None:
+            log.warning('timeout argument to stop() is deprecated - '
+                        'it will be removed in future release')
+
         if not self.async:
-            log.warning("producer.stop() called, but producer is not async")
+            log.warning('producer.stop() called, but producer is not async')
             return
 
         if self.stopped:
-            log.warning("producer.stop() called, but producer is already stopped")
+            log.warning('producer.stop() called, but producer is already stopped')
             return
 
         if self.async:
