@@ -204,13 +204,11 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         resp = producer.send_messages(self.topic, self.msg("one"))
         self.assertEqual(len(resp), 0)
 
-        # wait for the server to report a new highwatermark
-        while self.current_offset(self.topic, partition) == start_offset:
-          time.sleep(0.1)
+        # flush messages
+        producer.stop()
 
         self.assert_fetch_offset(partition, start_offset, [ self.msg("one") ])
 
-        producer.stop()
 
     @kafka_versions("all")
     def test_batched_simple_producer__triggers_by_message(self):
