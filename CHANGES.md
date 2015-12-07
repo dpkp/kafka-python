@@ -1,7 +1,7 @@
 # 0.9.5 (Dec 6, 2015)
 
 Consumers
-* Initial support for consumer coordinator [offsets only] (toddpalino PR 420)
+* Initial support for consumer coordinator: offsets only (toddpalino PR 420)
 * Allow blocking until some messages are received in SimpleConsumer (saaros PR 457)
 * Support subclass config changes in KafkaConsumer (zackdever PR 446)
 * Support retry semantics in MultiProcessConsumer (barricadeio PR 456)
