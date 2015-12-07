@@ -10,7 +10,7 @@ Consumers
 * Add KafkaConsumer.close() (ucarion PR 426)
 
 Producers
-* Cath client.reinit() exceptions in async producer (dpkp)
+* Catch client.reinit() exceptions in async producer (dpkp)
 * Producer.stop() now blocks until async thread completes (dpkp PR 485)
 * Catch errors during load_metadata_for_topics in async producer (bschopman PR 467)
 * Add compression-level support for codecs that support it (trbs PR 454)

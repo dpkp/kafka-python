@@ -32,7 +32,7 @@ License
 ----------
 Apache License, v2.0. See `LICENSE <https://github.com/dpkp/kafka-python/blob/master/LICENSE>`_
 Copyright 2015, David Arthur, Dana Powers, and Contributors
-(See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_
+(See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_)
 
 Status
 ----------
