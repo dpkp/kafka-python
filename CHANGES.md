@@ -7,6 +7,7 @@ Consumers
 * Support retry semantics in MultiProcessConsumer (barricadeio PR 456)
 * Support partition_info in MultiProcessConsumer (scrapinghub PR 418)
 * Enable seek() to an absolute offset in SimpleConsumer (haosdent PR 412)
+* Add KafkaConsumer.close() (ucarion PR 426)
 
 Producers
 * Cath client.reinit() exceptions in async producer (dpkp)
