@@ -1,3 +1,41 @@
+# 0.9.5 (Dec 6, 2015)
+
+Consumers
+* Initial support for consumer coordinator: offsets only (toddpalino PR 420)
+* Allow blocking until some messages are received in SimpleConsumer (saaros PR 457)
+* Support subclass config changes in KafkaConsumer (zackdever PR 446)
+* Support retry semantics in MultiProcessConsumer (barricadeio PR 456)
+* Support partition_info in MultiProcessConsumer (scrapinghub PR 418)
+* Enable seek() to an absolute offset in SimpleConsumer (haosdent PR 412)
+* Add KafkaConsumer.close() (ucarion PR 426)
+
+Producers
+* Catch client.reinit() exceptions in async producer (dpkp)
+* Producer.stop() now blocks until async thread completes (dpkp PR 485)
+* Catch errors during load_metadata_for_topics in async producer (bschopman PR 467)
+* Add compression-level support for codecs that support it (trbs PR 454)
+* Fix translation of Java murmur2 code, fix byte encoding for Python 3 (chrischamberlin PR 439)
+* Only call stop() on not-stopped producer objects (docker-hub PR 435)
+* Allow null payload for deletion feature (scrapinghub PR 409)
+
+Clients
+* Use non-blocking io for broker aware requests (ecanzonieri PR 473)
+* Use debug logging level for metadata request (ecanzonieri PR 415)
+* Catch KafkaUnavailableError in _send_broker_aware_request (mutability PR 436)
+* Lower logging level on replica not available and commit (ecanzonieri PR 415)
+
+Documentation
+* Update docs and links wrt maintainer change (mumrah -> dpkp)
+
+Internals
+* Add py35 to tox testing
+* Update travis config to use container infrastructure
+* Add 0.8.2.2 and 0.9.0.0 resources for integration tests; update default official releases
+* new pylint disables for pylint 1.5.1 (zackdever PR 481)
+* Fix python3 / python2 comments re queue/Queue (dpkp)
+* Add Murmur2Partitioner to kafka __all__ imports (dpkp Issue 471)
+* Include LICENSE in PyPI sdist (koobs PR 441)
+
 # 0.9.4 (June 11, 2015)
 
 Consumers

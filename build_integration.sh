@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Versions available for testing via binary distributions
-OFFICIAL_RELEASES="0.8.0 0.8.1 0.8.1.1 0.8.2.1"
+OFFICIAL_RELEASES="0.8.1.1 0.8.2.2 0.9.0.0"
 
 # Useful configuration vars, with sensible defaults
 if [ -z "$SCALA_VERSION" ]; then
