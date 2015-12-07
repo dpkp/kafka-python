@@ -10,7 +10,7 @@ from kafka.common import (
     OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
     OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
     ProduceRequest, FetchRequest, Message, ChecksumError,
-    ProduceResponse, FetchResponse, OffsetAndMessage,
+    ProduceResponse, FetchResponse, MessageSetItem,
     BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,
     KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
     ProtocolError, ConsumerMetadataResponse
@@ -173,7 +173,7 @@ class TestProtocol(unittest.TestCase):
 
         self.assertEqual(encoded, expect)
 
-    def test_decode_message(self):
+    def test_decode_message_set_item(self):
         encoded = b"".join([
             struct.pack(">i", -1427009701), # CRC
             struct.pack(">bb", 0, 0),       # Magic, flags
@@ -184,10 +184,11 @@ class TestProtocol(unittest.TestCase):
         ])
 
         offset = 10
-        (returned_offset, decoded_message) = list(KafkaProtocol._decode_message(encoded, offset))[0]
+        msg_iter = KafkaProtocol._decode_message_set_item(encoded, offset)
+        msg_set_item = msg_iter.next()
 
-        self.assertEqual(returned_offset, offset)
-        self.assertEqual(decoded_message, create_message(b"test", b"key"))
+        self.assertEqual(msg_set_item.offset, offset)
+        self.assertEqual(msg_set_item.message, create_message(b"test", b"key"))
 
     def test_encode_message_failure(self):
         with self.assertRaises(ProtocolError):
@@ -243,18 +244,14 @@ class TestProtocol(unittest.TestCase):
             b"v2",                         # Value
         ])
 
-        msgs = list(KafkaProtocol._decode_message_set_iter(encoded))
+        msgs = list(KafkaProtocol._decode_message_set(encoded))
         self.assertEqual(len(msgs), 2)
-        msg1, msg2 = msgs
 
-        returned_offset1, decoded_message1 = msg1
-        returned_offset2, decoded_message2 = msg2
+        self.assertEqual(msgs[0].offset, 0)
+        self.assertEqual(msgs[0].message, create_message(b"v1", b"k1"))
 
-        self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message(b"v1", b"k1"))
-
-        self.assertEqual(returned_offset2, 1)
-        self.assertEqual(decoded_message2, create_message(b"v2", b"k2"))
+        self.assertEqual(msgs[1].offset, 1)
+        self.assertEqual(msgs[1].message, create_message(b"v2", b"k2"))
 
     def test_decode_message_gzip(self):
         gzip_encoded = (b'\xc0\x11\xb2\xf0\x00\x01\xff\xff\xff\xff\x00\x00\x000'
@@ -263,18 +260,16 @@ class TestProtocol(unittest.TestCase):
                         b'\x80$wu\x1aW\x05\x92\x9c\x11\x00z\xc0h\x888\x00\x00'
                         b'\x00')
         offset = 11
-        messages = list(KafkaProtocol._decode_message(gzip_encoded, offset))
+        msg_iter = KafkaProtocol._decode_message_set_item(gzip_encoded, offset)
+        msgs = list(msg_iter)
 
-        self.assertEqual(len(messages), 2)
-        msg1, msg2 = messages
+        self.assertEqual(len(msgs), 2)
 
-        returned_offset1, decoded_message1 = msg1
-        self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message(b"v1"))
+        self.assertEqual(msgs[0].offset, 0)
+        self.assertEqual(msgs[0].message, create_message(b"v1"))
 
-        returned_offset2, decoded_message2 = msg2
-        self.assertEqual(returned_offset2, 0)
-        self.assertEqual(decoded_message2, create_message(b"v2"))
+        self.assertEqual(msgs[1].offset, 0)
+        self.assertEqual(msgs[1].message, create_message(b"v2"))
 
     @unittest.skipUnless(has_snappy(), "Snappy not available")
     def test_decode_message_snappy(self):
@@ -283,29 +278,25 @@ class TestProtocol(unittest.TestCase):
                           b'\xff\xff\xff\x00\x00\x00\x02v1\x19\x1bD\x00\x10\xd5'
                           b'\x96\nx\x00\x00\xff\xff\xff\xff\x00\x00\x00\x02v2')
         offset = 11
-        messages = list(KafkaProtocol._decode_message(snappy_encoded, offset))
-        self.assertEqual(len(messages), 2)
+        msg_iter = KafkaProtocol._decode_message_set_item(snappy_encoded, offset)
+        msgs = list(msg_iter)
 
-        msg1, msg2 = messages
+        self.assertEqual(len(msgs), 2)
 
-        returned_offset1, decoded_message1 = msg1
-        self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message(b"v1"))
+        self.assertEqual(msgs[0].offset, 0)
+        self.assertEqual(msgs[0].message, create_message(b"v1"))
 
-        returned_offset2, decoded_message2 = msg2
-        self.assertEqual(returned_offset2, 0)
-        self.assertEqual(decoded_message2, create_message(b"v2"))
+        self.assertEqual(msgs[1].offset, 0)
+        self.assertEqual(msgs[1].message, create_message(b"v2"))
 
     def test_decode_message_checksum_error(self):
-        invalid_encoded_message = b"This is not a valid encoded message"
-        iter = KafkaProtocol._decode_message(invalid_encoded_message, 0)
-        self.assertRaises(ChecksumError, list, iter)
+        bad_msg = b"This is not a valid encoded message"
+        msg_iter = KafkaProtocol._decode_message_set_item(bad_msg, 0)
+        self.assertRaises(ChecksumError, list, msg_iter)
 
-    # NOTE: The error handling in _decode_message_set_iter() is questionable.
-    # If it's modified, the next two tests might need to be fixed.
     def test_decode_message_set_fetch_size_too_small(self):
         with self.assertRaises(ConsumerFetchSizeTooSmall):
-            list(KafkaProtocol._decode_message_set_iter('a'))
+            list(KafkaProtocol._decode_message_set('a'))
 
     def test_decode_message_set_stop_iteration(self):
         encoded = b"".join([
@@ -326,21 +317,18 @@ class TestProtocol(unittest.TestCase):
             b"k2",                         # Key
             struct.pack(">i", 2),          # Length of value
             b"v2",                         # Value
-            b"@1$%(Y!",                    # Random padding
+
+            b"@1$%(Y!",                    # Random padding -- should be ignored
         ])
 
-        msgs = list(KafkaProtocol._decode_message_set_iter(encoded))
+        msgs = list(KafkaProtocol._decode_message_set(encoded))
         self.assertEqual(len(msgs), 2)
-        msg1, msg2 = msgs
 
-        returned_offset1, decoded_message1 = msg1
-        returned_offset2, decoded_message2 = msg2
+        self.assertEqual(msgs[0].offset, 0)
+        self.assertEqual(msgs[0].message, create_message(b"v1", b"k1"))
 
-        self.assertEqual(returned_offset1, 0)
-        self.assertEqual(decoded_message1, create_message(b"v1", b"k1"))
-
-        self.assertEqual(returned_offset2, 1)
-        self.assertEqual(decoded_message2, create_message(b"v2", b"k2"))
+        self.assertEqual(msgs[1].offset, 1)
+        self.assertEqual(msgs[1].message, create_message(b"v2", b"k2"))
 
     def test_encode_produce_request(self):
         requests = [
@@ -475,11 +463,11 @@ class TestProtocol(unittest.TestCase):
                                  list(response.messages))
 
         expanded_responses = list(map(expand_messages, responses))
-        expect = [FetchResponse(t1, 0, 0, 10, [OffsetAndMessage(0, msgs[0]),
-                                               OffsetAndMessage(0, msgs[1])]),
-                  FetchResponse(t1, 1, 1, 20, [OffsetAndMessage(0, msgs[2])]),
-                  FetchResponse(t2, 0, 0, 30, [OffsetAndMessage(0, msgs[3]),
-                                               OffsetAndMessage(0, msgs[4])])]
+        expect = [FetchResponse(t1, 0, 0, 10, [MessageSetItem(0, msgs[0]),
+                                               MessageSetItem(0, msgs[1])]),
+                  FetchResponse(t1, 1, 1, 20, [MessageSetItem(0, msgs[2])]),
+                  FetchResponse(t2, 0, 0, 30, [MessageSetItem(0, msgs[3]),
+                                               MessageSetItem(0, msgs[4])])]
         self.assertEqual(expanded_responses, expect)
 
     def test_encode_metadata_request_no_topics(self):

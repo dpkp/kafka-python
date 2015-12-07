@@ -9,7 +9,7 @@ from kafka.codec import (
     gzip_encode, gzip_decode, snappy_encode, snappy_decode
 )
 from kafka.common import (
-    Message, OffsetAndMessage, TopicAndPartition,
+    Message, MessageSetItem, TopicAndPartition,
     BrokerMetadata, TopicMetadata, PartitionMetadata,
     MetadataResponse, ProduceResponse, FetchResponse,
     OffsetResponse, OffsetCommitResponse, OffsetFetchResponse,
@@ -113,12 +113,12 @@ class KafkaProtocol(object):
         return msg
 
     @classmethod
-    def _decode_message_set_iter(cls, data):
+    def _decode_message_set(cls, data):
         """
         Iteratively decode a MessageSet
 
-        Reads repeated elements of (offset, message), calling decode_message
-        to decode a single message. Since compressed messages contain futher
+        Reads repeated elements of MessageSetItem, calling _decode_message_set_item
+        to decode a single message. Since compressed messages contain further
         MessageSets, these two methods have been decoupled so that they may
         recurse easily.
         """
@@ -127,34 +127,33 @@ class KafkaProtocol(object):
         while cur < len(data):
             try:
                 ((offset, ), cur) = relative_unpack('>q', data, cur)
-                (msg, cur) = read_int_string(data, cur)
-                for (offset, message) in KafkaProtocol._decode_message(msg, offset):
+                (msg_data, cur) = read_int_string(data, cur)
+                for msg_set_item in KafkaProtocol._decode_message_set_item(msg_data, offset):
+                    yield msg_set_item
                     read_message = True
-                    yield OffsetAndMessage(offset, message)
             except BufferUnderflowError:
-                # NOTE: Not sure this is correct error handling:
-                # Is it possible to get a BUE if the message set is somewhere
-                # in the middle of the fetch response? If so, we probably have
-                # an issue that's not fetch size too small.
-                # Aren't we ignoring errors if we fail to unpack data by
-                # raising StopIteration()?
-                # If _decode_message() raises a ChecksumError, couldn't that
-                # also be due to the fetch size being too small?
-                if read_message is False:
-                    # If we get a partial read of a message, but haven't
-                    # yielded anything there's a problem
-                    raise ConsumerFetchSizeTooSmall()
-                else:
+                # As an optimization the server is allowed to return a
+                # partial message at the end of the message set.
+                # In order to handle this, we catch the BufferUnderflowError
+                #
+                # TODO: verify that this is indeed the end of the buffer
+                if read_message:
                     raise StopIteration()
 
+                # If we get a partial read of a message, but haven't
+                # yielded anything there's a problem
+                else:
+                    raise ConsumerFetchSizeTooSmall()
+
+
     @classmethod
-    def _decode_message(cls, data, offset):
+    def _decode_message_set_item(cls, data, offset):
         """
         Decode a single Message
 
-        The only caller of this method is decode_message_set_iter.
+        The only caller of this method is decode_message_set.
         They are decoupled to support nested messages (compressed MessageSets).
-        The offset is actually read from decode_message_set_iter (it is part
+        The offset is actually read from decode_message_set (it is part
         of the MessageSet payload).
         """
         ((crc, magic, att), cur) = relative_unpack('>IBB', data, 0)
@@ -167,17 +166,18 @@ class KafkaProtocol(object):
         codec = att & ATTRIBUTE_CODEC_MASK
 
         if codec == CODEC_NONE:
-            yield (offset, Message(magic, att, key, value))
+            message = Message(magic, att, key, value)
+            yield MessageSetItem(offset, message)
 
         elif codec == CODEC_GZIP:
             gz = gzip_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(gz):
-                yield (offset, msg)
+            for msg_set_item in KafkaProtocol._decode_message_set(gz):
+                yield msg_set_item
 
         elif codec == CODEC_SNAPPY:
             snp = snappy_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(snp):
-                yield (offset, msg)
+            for msg_set_item in KafkaProtocol._decode_message_set(snp):
+                yield msg_set_item
 
     ##################
     #   Public API   #
@@ -305,7 +305,7 @@ class KafkaProtocol(object):
                 yield FetchResponse(
                     topic, partition, error,
                     highwater_mark_offset,
-                    KafkaProtocol._decode_message_set_iter(message_set))
+                    KafkaProtocol._decode_message_set(message_set))
 
     @classmethod
     def encode_offset_request(cls, client_id, correlation_id, payloads=None):
