@@ -269,6 +269,10 @@ class KafkaConsumer(object):
         # Reset message iterator in case we were in the middle of one
         self._reset_message_iterator()
 
+    def close(self):
+        """Close this consumer's underlying client."""
+        self._client.close()
+
     def next(self):
         """Return the next available message
 
