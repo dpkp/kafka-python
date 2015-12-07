@@ -12,14 +12,14 @@ Kafka Python client
     :target: http://kafka-python.readthedocs.org/en/latest/
     :alt: Full documentation available on ReadTheDocs
 
-[Full documentation available on ReadTheDocs](https://kafka-python.readthedocs.org/en/latest/)
-
 This module provides low-level protocol support for Apache Kafka as well as
 high-level consumer and producer classes. Request batching is supported by the
 protocol as well as broker-aware request routing. Gzip and Snappy compression
 is also supported for message sets.
 
 Coordinated Consumer Group support is under development - see Issue #38.
+
+Full documentation available on `Read the Docs <https://kafka-python.readthedocs.org/en/latest/>`_
 
 On Freenode IRC at #kafka-python, as well as #apache-kafka
 
@@ -30,14 +30,14 @@ For information about Apache Kafka generally, see https://kafka.apache.org/
 
 License
 ----------
-Apache License, v2.0. See [LICENSE](https://github.com/dpkp/kafka-python/blob/master/LICENSE)
+Apache License, v2.0. See `LICENSE <https://github.com/dpkp/kafka-python/blob/master/LICENSE>`_
 Copyright 2015, David Arthur, Dana Powers, and Contributors
-(See [AUTHORS](https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md))
+(See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_
 
 Status
 ----------
 The current stable version of this package is
-[0.9.5](https://github.com/dpkp/kafka-python/releases/tag/v0.9.5)
+`0.9.5 <https://github.com/dpkp/kafka-python/releases/tag/v0.9.5>`_
 and is compatible with:
 
 Kafka broker versions
@@ -57,4 +57,3 @@ Python versions
 - 2.7 (tested on 2.7.9)
 - 2.6 (tested on 2.6.9)
 - pypy (tested on pypy 2.5.0 / python 2.7.8)
-
