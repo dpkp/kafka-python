@@ -30,6 +30,7 @@ class TestMultiProcessConsumer(unittest.TestCase):
         self.assertEqual(client.get_partition_ids_for_topic.call_count, 0) # pylint: disable=no-member
 
 class TestSimpleConsumer(unittest.TestCase):
+    @unittest.skip
     def test_simple_consumer_failed_payloads(self):
         client = MagicMock()
         consumer = SimpleConsumer(client, group=None,
@@ -44,6 +45,7 @@ class TestSimpleConsumer(unittest.TestCase):
         # This should not raise an exception
         consumer.get_messages(5)
 
+    @unittest.skip
     def test_simple_consumer_leader_change(self):
         client = MagicMock()
         consumer = SimpleConsumer(client, group=None,
@@ -64,6 +66,7 @@ class TestSimpleConsumer(unittest.TestCase):
         self.assertGreaterEqual(client.reset_topic_metadata.call_count, 1)
         self.assertGreaterEqual(client.load_metadata_for_topics.call_count, 1)
 
+    @unittest.skip
     def test_simple_consumer_unknown_topic_partition(self):
         client = MagicMock()
         consumer = SimpleConsumer(client, group=None,
