@@ -105,6 +105,14 @@ class BrokerConnection(local):
             return None
         return response
 
+    def next_correlation_id_recv(self):
+        if len(self.in_flight_requests) == 0:
+            return None
+        return self.in_flight_requests[0][0]
+
+    def next_correlation_id_send(self):
+        return self.correlation_id + 1
+
     def __getnewargs__(self):
         return (self.host, self.port, self.timeout)
 
