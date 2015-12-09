@@ -4,7 +4,7 @@ from . import unittest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer
 from kafka.common import (
-    KafkaConfigurationError, FetchResponse, OffsetFetchResponse,
+    KafkaConfigurationError, FetchResponsePayload, OffsetFetchResponse,
     FailedPayloadsError, OffsetAndMessage,
     NotLeaderForPartitionError, UnknownTopicOrPartitionError
 )
@@ -54,7 +54,7 @@ class TestSimpleConsumer(unittest.TestCase):
 
         # Mock so that only the first request gets a valid response
         def not_leader(request):
-            return FetchResponse(request.topic, request.partition,
+            return FetchResponsePayload(request.topic, request.partition,
                                  NotLeaderForPartitionError.errno, -1, ())
 
         client.send_fetch_request.side_effect = self.fail_requests_factory(not_leader)
@@ -75,7 +75,7 @@ class TestSimpleConsumer(unittest.TestCase):
 
         # Mock so that only the first request gets a valid response
         def unknown_topic_partition(request):
-            return FetchResponse(request.topic, request.partition,
+            return FetchResponsePayload(request.topic, request.partition,
                                  UnknownTopicOrPartitionError.errno, -1, ())
 
         client.send_fetch_request.side_effect = self.fail_requests_factory(unknown_topic_partition)
@@ -128,7 +128,7 @@ class TestSimpleConsumer(unittest.TestCase):
         # Mock so that only the first request gets a valid response
         def fail_requests(payloads, **kwargs):
             responses = [
-                FetchResponse(payloads[0].topic, payloads[0].partition, 0, 0,
+                FetchResponsePayload(payloads[0].topic, payloads[0].partition, 0, 0,
                               (OffsetAndMessage(
                                   payloads[0].offset + i,
                                   "msg %d" % (payloads[0].offset + i))
