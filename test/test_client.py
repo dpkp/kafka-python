@@ -7,14 +7,15 @@ from . import unittest
 
 from kafka import KafkaClient
 from kafka.common import (
-    ProduceRequest, MetadataResponse,
-    BrokerMetadata, TopicMetadata, PartitionMetadata,
+    ProduceRequestPayload,
+    BrokerMetadata,
     TopicAndPartition, KafkaUnavailableError,
     LeaderNotAvailableError, UnknownTopicOrPartitionError,
     KafkaTimeoutError, ConnectionError
 )
 from kafka.conn import KafkaConnection
 from kafka.protocol import KafkaProtocol, create_message
+from kafka.protocol.metadata import MetadataResponse
 
 from test.testutil import Timer
 
@@ -48,16 +49,14 @@ class TestKafkaClient(unittest.TestCase):
             sorted(client.hosts))
 
     def test_send_broker_unaware_request_fail(self):
-        'Tests that call fails when all hosts are unavailable'
-
         mocked_conns = {
             ('kafka01', 9092): MagicMock(),
             ('kafka02', 9092): MagicMock()
         }
 
         # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
-        mocked_conns[('kafka02', 9092)].send.side_effect = RuntimeError("Kafka02 went away (unittest)")
+        mocked_conns[('kafka01', 9092)].send.return_value = None
+        mocked_conns[('kafka02', 9092)].send.return_value = None
 
         def mock_get_conn(host, port):
             return mocked_conns[(host, port)]
@@ -67,27 +66,25 @@ class TestKafkaClient(unittest.TestCase):
             with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
                 client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
 
-                req = KafkaProtocol.encode_metadata_request(b'client', 0)
+                req = KafkaProtocol.encode_metadata_request()
                 with self.assertRaises(KafkaUnavailableError):
                     client._send_broker_unaware_request(payloads=['fake request'],
                                                         encoder_fn=MagicMock(return_value='fake encoded message'),
                                                         decoder_fn=lambda x: x)
 
                 for key, conn in six.iteritems(mocked_conns):
-                    conn.send.assert_called_with(ANY, 'fake encoded message')
+                    conn.send.assert_called_with('fake encoded message')
 
     def test_send_broker_unaware_request(self):
-        'Tests that call works when at least one of the host is available'
-
         mocked_conns = {
             ('kafka01', 9092): MagicMock(),
             ('kafka02', 9092): MagicMock(),
             ('kafka03', 9092): MagicMock()
         }
         # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.side_effect = RuntimeError("kafka01 went away (unittest)")
+        mocked_conns[('kafka01', 9092)].send.return_value = None
         mocked_conns[('kafka02', 9092)].recv.return_value = 'valid response'
-        mocked_conns[('kafka03', 9092)].send.side_effect = RuntimeError("kafka03 went away (unittest)")
+        mocked_conns[('kafka03', 9092)].send.return_value = None
 
         def mock_get_conn(host, port):
             return mocked_conns[(host, port)]
@@ -95,17 +92,16 @@ class TestKafkaClient(unittest.TestCase):
         # patch to avoid making requests before we want it
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
             with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
-                with patch.object(KafkaClient, '_next_id', return_value=1):
-                    client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
 
-                    resp = client._send_broker_unaware_request(payloads=['fake request'],
-                                                               encoder_fn=MagicMock(),
-                                                               decoder_fn=lambda x: x)
+                client = KafkaClient(hosts='kafka01:9092,kafka02:9092')
+                resp = client._send_broker_unaware_request(payloads=['fake request'],
+                                                           encoder_fn=MagicMock(),
+                                                           decoder_fn=lambda x: x)
 
-                    self.assertEqual('valid response', resp)
-                    mocked_conns[('kafka02', 9092)].recv.assert_called_with(1)
+                self.assertEqual('valid response', resp)
+                mocked_conns[('kafka02', 9092)].recv.assert_called_once_with()
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_load_metadata(self, protocol, conn):
 
@@ -117,21 +113,19 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata(b'topic_1', NO_ERROR, [
-                PartitionMetadata(b'topic_1', 0, 1, [1, 2], [1, 2], NO_ERROR)
+            (NO_ERROR, 'topic_1', [
+                (NO_ERROR, 0, 1, [1, 2], [1, 2])
             ]),
-            TopicMetadata(b'topic_noleader', NO_ERROR, [
-                PartitionMetadata(b'topic_noleader', 0, -1, [], [],
-                                  NO_LEADER),
-                PartitionMetadata(b'topic_noleader', 1, -1, [], [],
-                                  NO_LEADER),
+            (NO_ERROR, 'topic_noleader', [
+                (NO_LEADER, 0, -1, [], []),
+                (NO_LEADER, 1, -1, [], []),
             ]),
-            TopicMetadata(b'topic_no_partitions', NO_LEADER, []),
-            TopicMetadata(b'topic_unknown', UNKNOWN_TOPIC_OR_PARTITION, []),
-            TopicMetadata(b'topic_3', NO_ERROR, [
-                PartitionMetadata(b'topic_3', 0, 0, [0, 1], [0, 1], NO_ERROR),
-                PartitionMetadata(b'topic_3', 1, 1, [1, 0], [1, 0], NO_ERROR),
-                PartitionMetadata(b'topic_3', 2, 0, [0, 1], [0, 1], NO_ERROR)
+            (NO_LEADER, 'topic_no_partitions', []),
+            (UNKNOWN_TOPIC_OR_PARTITION, 'topic_unknown', []),
+            (NO_ERROR, 'topic_3', [
+                (NO_ERROR, 0, 0, [0, 1], [0, 1]),
+                (NO_ERROR, 1, 1, [1, 0], [1, 0]),
+                (NO_ERROR, 2, 0, [0, 1], [0, 1])
             ])
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
@@ -158,7 +152,7 @@ class TestKafkaClient(unittest.TestCase):
         client.load_metadata_for_topics('topic_no_leader')
         client.load_metadata_for_topics(b'topic_no_leader')
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_has_metadata_for_topic(self, protocol, conn):
 
@@ -170,11 +164,11 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata(b'topic_still_creating', NO_LEADER, []),
-            TopicMetadata(b'topic_doesnt_exist', UNKNOWN_TOPIC_OR_PARTITION, []),
-            TopicMetadata(b'topic_noleaders', NO_ERROR, [
-                PartitionMetadata(b'topic_noleaders', 0, -1, [], [], NO_LEADER),
-                PartitionMetadata(b'topic_noleaders', 1, -1, [], [], NO_LEADER),
+            (NO_LEADER, 'topic_still_creating', []),
+            (UNKNOWN_TOPIC_OR_PARTITION, 'topic_doesnt_exist', []),
+            (NO_ERROR, 'topic_noleaders', [
+                (NO_LEADER, 0, -1, [], []),
+                (NO_LEADER, 1, -1, [], []),
             ]),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
@@ -188,7 +182,7 @@ class TestKafkaClient(unittest.TestCase):
         # Topic with partition metadata, but no leaders return True
         self.assertTrue(client.has_metadata_for_topic('topic_noleaders'))
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol.decode_metadata_response')
     def test_ensure_topic_exists(self, decode_metadata_response, conn):
 
@@ -200,11 +194,11 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata(b'topic_still_creating', NO_LEADER, []),
-            TopicMetadata(b'topic_doesnt_exist', UNKNOWN_TOPIC_OR_PARTITION, []),
-            TopicMetadata(b'topic_noleaders', NO_ERROR, [
-                PartitionMetadata(b'topic_noleaders', 0, -1, [], [], NO_LEADER),
-                PartitionMetadata(b'topic_noleaders', 1, -1, [], [], NO_LEADER),
+            (NO_LEADER, 'topic_still_creating', []),
+            (UNKNOWN_TOPIC_OR_PARTITION, 'topic_doesnt_exist', []),
+            (NO_ERROR, 'topic_noleaders', [
+                (NO_LEADER, 0, -1, [], []),
+                (NO_LEADER, 1, -1, [], []),
             ]),
         ]
         decode_metadata_response.return_value = MetadataResponse(brokers, topics)
@@ -219,9 +213,8 @@ class TestKafkaClient(unittest.TestCase):
 
         # This should not raise
         client.ensure_topic_exists('topic_noleaders', timeout=1)
-        client.ensure_topic_exists(b'topic_noleaders', timeout=1)
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_for_partitions_reloads_metadata(self, protocol, conn):
         "Get leader for partitions reload metadata if it is not available"
@@ -234,7 +227,7 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata('topic_no_partitions', NO_LEADER, [])
+            (NO_LEADER, 'topic_no_partitions', [])
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
 
@@ -244,8 +237,8 @@ class TestKafkaClient(unittest.TestCase):
         self.assertDictEqual({}, client.topics_to_brokers)
 
         topics = [
-            TopicMetadata('topic_one_partition', NO_ERROR, [
-                PartitionMetadata('topic_no_partition', 0, 0, [0, 1], [0, 1], NO_ERROR)
+            (NO_ERROR, 'topic_one_partition', [
+                (NO_ERROR, 0, 0, [0, 1], [0, 1])
             ])
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
@@ -259,7 +252,7 @@ class TestKafkaClient(unittest.TestCase):
             TopicAndPartition('topic_one_partition', 0): brokers[0]},
             client.topics_to_brokers)
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_for_unassigned_partitions(self, protocol, conn):
 
@@ -271,8 +264,8 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata(b'topic_no_partitions', NO_LEADER, []),
-            TopicMetadata(b'topic_unknown', UNKNOWN_TOPIC_OR_PARTITION, []),
+            (NO_LEADER, 'topic_no_partitions', []),
+            (UNKNOWN_TOPIC_OR_PARTITION, 'topic_unknown', []),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
 
@@ -286,7 +279,7 @@ class TestKafkaClient(unittest.TestCase):
         with self.assertRaises(UnknownTopicOrPartitionError):
             client._get_leader_for_partition(b'topic_unknown', 0)
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_exceptions_when_noleader(self, protocol, conn):
 
@@ -298,11 +291,9 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata('topic_noleader', NO_ERROR, [
-                PartitionMetadata('topic_noleader', 0, -1, [], [],
-                                  NO_LEADER),
-                PartitionMetadata('topic_noleader', 1, -1, [], [],
-                                  NO_LEADER),
+            (NO_ERROR, 'topic_noleader', [
+                (NO_LEADER, 0, -1, [], []),
+                (NO_LEADER, 1, -1, [], []),
             ]),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
@@ -326,20 +317,18 @@ class TestKafkaClient(unittest.TestCase):
             self.assertIsNone(client._get_leader_for_partition('topic_noleader', 2))
 
         topics = [
-            TopicMetadata('topic_noleader', NO_ERROR, [
-                PartitionMetadata('topic_noleader', 0, 0, [0, 1], [0, 1], NO_ERROR),
-                PartitionMetadata('topic_noleader', 1, 1, [1, 0], [1, 0], NO_ERROR)
+            (NO_ERROR, 'topic_noleader', [
+                (NO_ERROR, 0, 0, [0, 1], [0, 1]),
+                (NO_ERROR, 1, 1, [1, 0], [1, 0])
             ]),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
         self.assertEqual(brokers[0], client._get_leader_for_partition('topic_noleader', 0))
         self.assertEqual(brokers[1], client._get_leader_for_partition('topic_noleader', 1))
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_send_produce_request_raises_when_noleader(self, protocol, conn):
-        "Send producer request raises LeaderNotAvailableError if leader is not available"
-
         conn.recv.return_value = 'response'  # anything but None
 
         brokers = [
@@ -348,25 +337,23 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata('topic_noleader', NO_ERROR, [
-                PartitionMetadata('topic_noleader', 0, -1, [], [],
-                                  NO_LEADER),
-                PartitionMetadata('topic_noleader', 1, -1, [], [],
-                                  NO_LEADER),
+            (NO_ERROR, 'topic_noleader', [
+                (NO_LEADER, 0, -1, [], []),
+                (NO_LEADER, 1, -1, [], []),
             ]),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
 
         client = KafkaClient(hosts=['broker_1:4567'])
 
-        requests = [ProduceRequest(
+        requests = [ProduceRequestPayload(
             "topic_noleader", 0,
             [create_message("a"), create_message("b")])]
 
         with self.assertRaises(LeaderNotAvailableError):
             client.send_produce_request(requests)
 
-    @patch('kafka.client.KafkaConnection')
+    @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
     def test_send_produce_request_raises_when_topic_unknown(self, protocol, conn):
 
@@ -378,13 +365,13 @@ class TestKafkaClient(unittest.TestCase):
         ]
 
         topics = [
-            TopicMetadata('topic_doesnt_exist', UNKNOWN_TOPIC_OR_PARTITION, []),
+            (UNKNOWN_TOPIC_OR_PARTITION, 'topic_doesnt_exist', []),
         ]
         protocol.decode_metadata_response.return_value = MetadataResponse(brokers, topics)
 
         client = KafkaClient(hosts=['broker_1:4567'])
 
-        requests = [ProduceRequest(
+        requests = [ProduceRequestPayload(
             "topic_doesnt_exist", 0,
             [create_message("a"), create_message("b")])]
 
