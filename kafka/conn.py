@@ -61,7 +61,7 @@ class BrokerConnection(local):
             self._write_fd = None
         self.in_flight_requests.clear()
 
-    def send(self, request):
+    def send(self, request, expect_response=True):
         if not self.connected() and not self.connect():
             return None
         self.correlation_id += 1
@@ -78,7 +78,8 @@ class BrokerConnection(local):
             log.exception("Error in BrokerConnection.send()")
             self.close()
             return None
-        self.in_flight_requests.append((self.correlation_id, request.RESPONSE_TYPE))
+        if expect_response:
+            self.in_flight_requests.append((self.correlation_id, request.RESPONSE_TYPE))
         return self.correlation_id
 
     def recv(self, timeout=None):
