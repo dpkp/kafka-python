@@ -7,7 +7,7 @@ from threading import Lock
 
 import kafka.common
 from kafka.common import (
-    OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
+    OffsetRequestPayload, OffsetCommitRequest, OffsetFetchRequest,
     UnknownTopicOrPartitionError, check_error, KafkaError
 )
 
@@ -217,7 +217,7 @@ class Consumer(object):
         reqs = []
 
         for partition in partitions:
-            reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+            reqs.append(OffsetRequestPayload(self.topic, partition, -1, 1))
 
         resps = self.client.send_offset_request(reqs)
         for resp in resps:

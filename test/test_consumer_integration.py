@@ -7,7 +7,7 @@ from kafka import (
     KafkaConsumer, MultiProcessConsumer, SimpleConsumer, create_message
 )
 from kafka.common import (
-    ProduceRequest, ConsumerFetchSizeTooSmall, ConsumerTimeout,
+    ProduceRequestPayload, ConsumerFetchSizeTooSmall, ConsumerTimeout,
     OffsetOutOfRangeError
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
@@ -41,7 +41,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     def send_messages(self, partition, messages):
         messages = [ create_message(self.msg(str(msg))) for msg in messages ]
-        produce = ProduceRequest(self.bytes_topic, partition, messages = messages)
+        produce = ProduceRequestPayload(self.bytes_topic, partition, messages = messages)
         resp, = self.client.send_produce_request([produce])
         self.assertEqual(resp.error, 0)
 

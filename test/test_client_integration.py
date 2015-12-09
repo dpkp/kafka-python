@@ -1,8 +1,8 @@
 import os
 
 from kafka.common import (
-    FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
-    KafkaTimeoutError, ProduceRequest
+    FetchRequestPayload, OffsetCommitRequest, OffsetFetchRequest,
+    KafkaTimeoutError, ProduceRequestPayload
 )
 from kafka.protocol import create_message
 
@@ -29,7 +29,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("all")
     def test_consume_none(self):
-        fetch = FetchRequest(self.bytes_topic, 0, 0, 1024)
+        fetch = FetchRequestPayload(self.bytes_topic, 0, 0, 1024)
 
         fetch_resp, = self.client.send_fetch_request([fetch])
         self.assertEqual(fetch_resp.error, 0)
@@ -57,16 +57,16 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         self.client.ensure_topic_exists(b'bar')
 
         requests = [
-            ProduceRequest(
+            ProduceRequestPayload(
                 b'foo', 0,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
+            ProduceRequestPayload(
                 b'bar', 1,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
+            ProduceRequestPayload(
                 b'foo', 1,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
+            ProduceRequestPayload(
                 b'bar', 0,
                 [create_message(b'a'), create_message(b'b')]),
         ]

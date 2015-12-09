@@ -11,7 +11,7 @@ from six.moves import xrange
 from . import unittest
 
 from kafka import KafkaClient
-from kafka.common import OffsetRequest
+from kafka.common import OffsetRequestPayload
 from kafka.util import kafka_bytestring
 
 __all__ = [
@@ -81,7 +81,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
     def current_offset(self, topic, partition):
         try:
-            offsets, = self.client.send_offset_request([ OffsetRequest(kafka_bytestring(topic), partition, -1, 1) ])
+            offsets, = self.client.send_offset_request([OffsetRequestPayload(kafka_bytestring(topic), partition, -1, 1)])
         except:
             # XXX: We've seen some UnknownErrors here and cant debug w/o server logs
             self.zk.child.dump_logs()

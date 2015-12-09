@@ -10,7 +10,7 @@ from . import unittest
 from kafka import KafkaClient, SimpleProducer, KeyedProducer
 from kafka.common import (
     AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError,
-    ProduceResponse, RetryOptions, TopicAndPartition
+    ProduceResponsePayload, RetryOptions, TopicAndPartition
 )
 from kafka.producer.base import Producer, _send_upstream
 from kafka.protocol import CODEC_NONE
@@ -186,7 +186,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                 offset = offsets[req.topic][req.partition]
                 offsets[req.topic][req.partition] += len(req.messages)
                 responses.append(
-                    ProduceResponse(req.topic, req.partition, 0, offset)
+                    ProduceResponsePayload(req.topic, req.partition, 0, offset)
                 )
             return responses
 
@@ -234,8 +234,8 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         def send_side_effect(reqs, *args, **kwargs):
             if self.client.is_first_time:
                 self.client.is_first_time = False
-                return [ProduceResponse(req.topic, req.partition,
-                                        NotLeaderForPartitionError.errno, -1)
+                return [ProduceResponsePayload(req.topic, req.partition,
+                                               NotLeaderForPartitionError.errno, -1)
                         for req in reqs]
 
             responses = []
@@ -243,7 +243,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                 offset = offsets[req.topic][req.partition]
                 offsets[req.topic][req.partition] += len(req.messages)
                 responses.append(
-                    ProduceResponse(req.topic, req.partition, 0, offset)
+                    ProduceResponsePayload(req.topic, req.partition, 0, offset)
                 )
             return responses
 
