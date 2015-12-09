@@ -60,10 +60,11 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             kwargs['group'] = None
             kwargs['auto_commit'] = False
         else:
-            kwargs.setdefault('auto_commit', True)
+            kwargs.setdefault('group', None)
+            kwargs.setdefault('auto_commit', False)
 
         consumer_class = kwargs.pop('consumer', SimpleConsumer)
-        group = kwargs.pop('group', self.id().encode('utf-8'))
+        group = kwargs.pop('group', None)
         topic = kwargs.pop('topic', self.topic)
 
         if consumer_class in [SimpleConsumer, MultiProcessConsumer]:
