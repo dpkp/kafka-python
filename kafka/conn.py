@@ -21,14 +21,16 @@ DEFAULT_KAFKA_PORT = 9092
 
 
 class BrokerConnection(local):
-    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
+    def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
+                 client_id='kafka-python-0.10.0', correlation_id=0):
         super(BrokerConnection, self).__init__()
         self.host = host
         self.port = port
         self.timeout = timeout
         self._write_fd = None
         self._read_fd = None
-        self.correlation_id = 0
+        self.correlation_id = correlation_id
+        self.client_id = client_id
         self.in_flight_requests = deque()
 
     def connect(self):
@@ -63,7 +65,9 @@ class BrokerConnection(local):
         if not self.connected() and not self.connect():
             return None
         self.correlation_id += 1
-        header = RequestHeader(request, correlation_id=self.correlation_id)
+        header = RequestHeader(request,
+                               correlation_id=self.correlation_id,
+                               client_id=self.client_id)
         message = b''.join([header.encode(), request.encode()])
         size = Int32.encode(len(message))
         try:
