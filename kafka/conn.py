@@ -40,7 +40,7 @@ class BrokerConnection(local):
             sock = socket.create_connection((self.host, self.port), self.timeout)
             self._write_fd = sock.makefile('wb')
             self._read_fd = sock.makefile('rb')
-        except socket.error as e:
+        except socket.error:
             log.exception("Error in BrokerConnection.connect()")
             return None
         self.in_flight_requests.clear()
@@ -54,7 +54,7 @@ class BrokerConnection(local):
             try:
                 self._read_fd.close()
                 self._write_fd.close()
-            except socket.error as e:
+            except socket.error:
                 log.exception("Error in BrokerConnection.close()")
                 pass
             self._read_fd = None
@@ -74,7 +74,7 @@ class BrokerConnection(local):
             self._write_fd.write(size)
             self._write_fd.write(message)
             self._write_fd.flush()
-        except socket.error as e:
+        except socket.error:
             log.exception("Error in BrokerConnection.send()")
             self.close()
             return None
@@ -98,7 +98,7 @@ class BrokerConnection(local):
             if correlation_id != recv_correlation_id:
                 raise RuntimeError('Correlation ids do not match!')
             response = response_type.decode(self._read_fd)
-        except (RuntimeError, socket.error) as e:
+        except (RuntimeError, socket.error, struct.error):
             log.exception("Error in BrokerConnection.recv()")
             self.close()
             return None
