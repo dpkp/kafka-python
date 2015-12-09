@@ -105,13 +105,16 @@ class Schema(AbstractType):
 
     def repr(self, value):
         key_vals = []
-        for i in range(len(self)):
-            try:
-                field_val = getattr(value, self.names[i])
-            except AttributeError:
-                field_val = value[i]
-            key_vals.append('%s=%s' % (self.names[i], self.fields[i].repr(field_val)))
-        return '(' + ', '.join(key_vals) + ')'
+        try:
+            for i in range(len(self)):
+                try:
+                    field_val = getattr(value, self.names[i])
+                except AttributeError:
+                    field_val = value[i]
+                key_vals.append('%s=%s' % (self.names[i], self.fields[i].repr(field_val)))
+            return '(' + ', '.join(key_vals) + ')'
+        except:
+            return repr(value)
 
 
 class Array(AbstractType):
