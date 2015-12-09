@@ -31,6 +31,14 @@ class Message(Struct):
         self.crc = crc32(message[4:])
         return self.SCHEMA.fields[0].encode(self.crc) + message[4:]
 
+    @classmethod
+    def decode(cls, data):
+        if isinstance(data, bytes):
+            data = BytesIO(data)
+        fields = [field.decode(data) for field in cls.SCHEMA.fields]
+        return cls(fields[4], key=fields[3],
+                   magic=fields[1], attributes=fields[2], crc=fields[0])
+
 
 class MessageSet(AbstractType):
     ITEM = Schema(
