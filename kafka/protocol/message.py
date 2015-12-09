@@ -1,3 +1,5 @@
+import io
+
 from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
@@ -34,7 +36,7 @@ class Message(Struct):
     @classmethod
     def decode(cls, data):
         if isinstance(data, bytes):
-            data = BytesIO(data)
+            data = io.BytesIO(data)
         fields = [field.decode(data) for field in cls.SCHEMA.fields]
         return cls(fields[4], key=fields[3],
                    magic=fields[1], attributes=fields[2], crc=fields[0])
