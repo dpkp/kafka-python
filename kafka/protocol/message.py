@@ -1,5 +1,6 @@
 import io
 
+from . import pickle
 from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
