@@ -7,8 +7,8 @@ from . import unittest
 
 from kafka.codec import has_snappy, gzip_decode, snappy_decode
 from kafka.common import (
-    OffsetRequestPayload, OffsetCommitRequest, OffsetFetchRequest,
-    OffsetResponsePayload, OffsetCommitResponse, OffsetFetchResponse,
+    OffsetRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
+    OffsetResponsePayload, OffsetCommitResponsePayload, OffsetFetchResponsePayload,
     ProduceRequestPayload, FetchRequestPayload, Message, ChecksumError,
     ProduceResponsePayload, FetchResponsePayload, OffsetAndMessage,
     BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,

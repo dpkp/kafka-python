@@ -11,7 +11,7 @@ import six
 
 from kafka.client import KafkaClient
 from kafka.common import (
-    OffsetFetchRequest, OffsetCommitRequest,
+    OffsetFetchRequestPayload, OffsetCommitRequestPayload,
     OffsetRequestPayload, FetchRequestPayload,
     check_error, NotLeaderForPartitionError, UnknownTopicOrPartitionError,
     OffsetOutOfRangeError, RequestTimedOutError, KafkaMessage, ConsumerTimeout,
@@ -546,7 +546,7 @@ class KafkaConsumer(object):
                 continue
 
             commits.append(
-                OffsetCommitRequest(topic_partition[0], topic_partition[1],
+                OffsetCommitRequestPayload(topic_partition[0], topic_partition[1],
                                     commit_offset, metadata)
             )
 
@@ -618,7 +618,7 @@ class KafkaConsumer(object):
         for topic_partition in self._topics:
             (resp,) = self._client.send_offset_fetch_request(
                 kafka_bytestring(self._config['group_id']),
-                [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
+                [OffsetFetchRequestPayload(topic_partition[0], topic_partition[1])],
                 fail_on_error=False)
             try:
                 check_error(resp)

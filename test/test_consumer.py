@@ -4,7 +4,7 @@ from . import unittest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer
 from kafka.common import (
-    KafkaConfigurationError, FetchResponsePayload, OffsetFetchResponse,
+    KafkaConfigurationError, FetchResponsePayload, OffsetFetchResponsePayload,
     FailedPayloadsError, OffsetAndMessage,
     NotLeaderForPartitionError, UnknownTopicOrPartitionError
 )
@@ -86,7 +86,7 @@ class TestSimpleConsumer(unittest.TestCase):
         client.get_partition_ids_for_topic.return_value = [0, 1]
 
         def mock_offset_fetch_request(group, payloads, **kwargs):
-            return [OffsetFetchResponse(p.topic, p.partition, 0, b'', 0) for p in payloads]
+            return [OffsetFetchResponsePayload(p.topic, p.partition, 0, b'', 0) for p in payloads]
 
         client.send_offset_fetch_request.side_effect = mock_offset_fetch_request
 

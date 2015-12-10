@@ -28,30 +28,30 @@ ProduceResponsePayload = namedtuple("ProduceResponsePayload",
     ["topic", "partition", "error", "offset"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-FetchAPI
-FetchRequestPayload = namedtuple("FetchRequest",
+FetchRequestPayload = namedtuple("FetchRequestPayload",
     ["topic", "partition", "offset", "max_bytes"])
 
-FetchResponsePayload = namedtuple("FetchResponse",
+FetchResponsePayload = namedtuple("FetchResponsePayload",
     ["topic", "partition", "error", "highwaterMark", "messages"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetAPI
-OffsetRequestPayload = namedtuple("OffsetRequest",
+OffsetRequestPayload = namedtuple("OffsetRequestPayload",
     ["topic", "partition", "time", "max_offsets"])
 
-OffsetResponsePayload = namedtuple("OffsetResponse",
+OffsetResponsePayload = namedtuple("OffsetResponsePayload",
     ["topic", "partition", "error", "offsets"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
-OffsetCommitRequest = namedtuple("OffsetCommitRequest",
+OffsetCommitRequestPayload = namedtuple("OffsetCommitRequestPayload",
     ["topic", "partition", "offset", "metadata"])
 
-OffsetCommitResponse = namedtuple("OffsetCommitResponse",
+OffsetCommitResponsePayload = namedtuple("OffsetCommitResponsePayload",
     ["topic", "partition", "error"])
 
-OffsetFetchRequest = namedtuple("OffsetFetchRequest",
+OffsetFetchRequestPayload = namedtuple("OffsetFetchRequestPayload",
     ["topic", "partition"])
 
-OffsetFetchResponse = namedtuple("OffsetFetchResponse",
+OffsetFetchResponsePayload = namedtuple("OffsetFetchResponsePayload",
     ["topic", "partition", "offset", "metadata", "error"])
 
 

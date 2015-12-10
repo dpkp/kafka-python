@@ -1,7 +1,7 @@
 import os
 
 from kafka.common import (
-    FetchRequestPayload, OffsetCommitRequest, OffsetFetchRequest,
+    FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
     KafkaTimeoutError, ProduceRequestPayload
 )
 from kafka.protocol import create_message
@@ -85,11 +85,11 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1")
     def test_commit_fetch_offsets(self):
-        req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
+        req = OffsetCommitRequestPayload(self.bytes_topic, 0, 42, b"metadata")
         (resp,) = self.client.send_offset_commit_request(b"group", [req])
         self.assertEqual(resp.error, 0)
 
-        req = OffsetFetchRequest(self.bytes_topic, 0)
+        req = OffsetFetchRequestPayload(self.bytes_topic, 0)
         (resp,) = self.client.send_offset_fetch_request(b"group", [req])
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.offset, 42)
