@@ -8,9 +8,7 @@ from kafka.producer.base import Producer
 from kafka.util import kafka_bytestring
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions, random_string
-)
+from test.testutil import KafkaIntegrationTestCase, random_string
 
 
 log = logging.getLogger(__name__)
@@ -21,7 +19,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
     def setUp(self):
         if not os.environ.get('KAFKA_VERSION'):
-            return
+            self.skipTest('integration test requires KAFKA_VERSION')
 
         zk_chroot = random_string(10)
         replicas = 3
@@ -46,7 +44,6 @@ class TestFailover(KafkaIntegrationTestCase):
             broker.close()
         self.zk.close()
 
-    @kafka_versions("all")
     def test_switch_leader(self):
         topic = self.topic
         partition = 0
@@ -94,7 +91,6 @@ class TestFailover(KafkaIntegrationTestCase):
         self.assert_message_count(topic, 201, partitions=(partition,),
                                   at_least=True)
 
-    @kafka_versions("all")
     def test_switch_leader_async(self):
         topic = self.topic
         partition = 0
@@ -142,7 +138,6 @@ class TestFailover(KafkaIntegrationTestCase):
         self.assert_message_count(topic, 21, partitions=(partition + 1,),
                                   at_least=True)
 
-    @kafka_versions("all")
     def test_switch_leader_keyed_producer(self):
         topic = self.topic
 
@@ -180,7 +175,6 @@ class TestFailover(KafkaIntegrationTestCase):
             msg = random_string(10).encode('utf-8')
             producer.send_messages(topic, key, msg)
 
-    @kafka_versions("all")
     def test_switch_leader_simple_consumer(self):
         producer = Producer(self.client, async=False)
         consumer = SimpleConsumer(self.client, None, self.topic, partitions=None, auto_commit=False, iter_timeout=10)

@@ -27,7 +27,6 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         cls.server.close()
         cls.zk.close()
 
-    @kafka_versions("all")
     def test_consume_none(self):
         fetch = FetchRequest(self.bytes_topic, 0, 0, 1024)
 
@@ -39,7 +38,6 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         messages = list(fetch_resp.messages)
         self.assertEqual(len(messages), 0)
 
-    @kafka_versions("all")
     def test_ensure_topic_exists(self):
 
         # assume that self.topic was created by setUp
@@ -50,7 +48,6 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         with self.assertRaises(KafkaTimeoutError):
             self.client.ensure_topic_exists(b"this_topic_doesnt_exist", timeout=0)
 
-    @kafka_versions('all')
     def test_send_produce_request_maintains_request_response_order(self):
 
         self.client.ensure_topic_exists(b'foo')
@@ -83,7 +80,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     #   Offset Tests   #
     ####################
 
-    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1")
+    @kafka_versions('>=0.8.1')
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
         (resp,) = self.client.send_offset_commit_request(b"group", [req])
