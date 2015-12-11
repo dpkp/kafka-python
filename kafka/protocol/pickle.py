@@ -1,6 +1,10 @@
 from __future__ import absolute_import
 
-import copy_reg
+try:
+    import copyreg
+except ImportError:
+    import copy_reg as copyreg # python2
+
 import types
 
 
@@ -22,4 +26,4 @@ def _unpickle_method(func_name, obj, cls):
         return func.__get__(obj, cls)
 
 # https://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
-copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method)
+copyreg.pickle(types.MethodType, _pickle_method, _unpickle_method)
