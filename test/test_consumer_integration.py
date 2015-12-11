@@ -193,13 +193,14 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             self.assert_message_count(messages, 0)
         self.assertGreaterEqual(t.interval, 1)
 
-        self.send_messages(0, range(0, 10))
+        self.send_messages(0, range(0, 5))
+        self.send_messages(1, range(5, 10))
 
         # Ask for 5 messages, 10 in queue. Get 5 back, no blocking
         with Timer() as t:
-            messages = consumer.get_messages(count=5, block=True, timeout=5)
+            messages = consumer.get_messages(count=5, block=True, timeout=3)
             self.assert_message_count(messages, 5)
-        self.assertLessEqual(t.interval, 1)
+        self.assertLess(t.interval, 3)
 
         # Ask for 10 messages, get 5 back, block 1 second
         with Timer() as t:
@@ -209,7 +210,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Ask for 10 messages, 5 in queue, ask to block for 1 message or 1
         # second, get 5 back, no blocking
-        self.send_messages(0, range(0, 5))
+        self.send_messages(0, range(0, 3))
+        self.send_messages(1, range(3, 5))
         with Timer() as t:
             messages = consumer.get_messages(count=10, block=1, timeout=1)
             self.assert_message_count(messages, 5)
