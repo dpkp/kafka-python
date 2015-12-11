@@ -118,38 +118,6 @@ class KafkaProtocol(object):
             raise ProtocolError("Unexpected magic number: %d" % message.magic)
         return msg
 
-    @classmethod
-    def _decode_message(cls, data, offset):
-        """
-        Decode a single Message
-
-        The only caller of this method is decode_message_set_iter.
-        They are decoupled to support nested messages (compressed MessageSets).
-        The offset is actually read from decode_message_set_iter (it is part
-        of the MessageSet payload).
-        """
-        ((crc, magic, att), cur) = relative_unpack('>iBB', data, 0)
-        if crc != crc32(data[4:]):
-            raise ChecksumError("Message checksum failed")
-
-        (key, cur) = read_int_string(data, cur)
-        (value, cur) = read_int_string(data, cur)
-
-        codec = att & ATTRIBUTE_CODEC_MASK
-
-        if codec == CODEC_NONE:
-            yield (offset, kafka.common.Message(magic, att, key, value))
-
-        elif codec == CODEC_GZIP:
-            gz = gzip_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(gz):
-                yield (offset, msg)
-
-        elif codec == CODEC_SNAPPY:
-            snp = snappy_decode(value)
-            for (offset, msg) in KafkaProtocol._decode_message_set_iter(snp):
-                yield (offset, msg)
-
     ##################
     #   Public API   #
     ##################
