@@ -112,6 +112,3 @@ class Timer(object):
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger('test.fixtures').setLevel(logging.ERROR)
 logging.getLogger('test.service').setLevel(logging.ERROR)
-
-# kafka.conn debug logging is verbose, disable in tests by default
-logging.getLogger('kafka.conn').setLevel(logging.INFO)

@@ -144,7 +144,6 @@ class KafkaClient(object):
             response = conn.recv()
             if response is not None:
                 decoded = decoder_fn(response)
-                log.debug('Response %s: %s', correlation_id, decoded)
                 return decoded
 
         raise KafkaUnavailableError('All servers failed to process request')
@@ -250,7 +249,6 @@ class KafkaClient(object):
                             'from server %s', correlation_id, broker)
                 continue
 
-            log.debug('Response %s: %s', correlation_id, response)
             for payload_response in decoder_fn(response):
                 topic_partition = (str(payload_response.topic),
                                    payload_response.partition)

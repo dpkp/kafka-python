@@ -1,4 +1,3 @@
-import logging
 import socket
 import struct
 from threading import Thread
@@ -11,9 +10,6 @@ from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SE
 
 class ConnTest(unittest.TestCase):
     def setUp(self):
-
-        # kafka.conn debug logging is verbose, so only enable in conn tests
-        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
 
         self.config = {
             'host': 'localhost',
@@ -49,11 +45,6 @@ class ConnTest(unittest.TestCase):
 
         # Reset any mock counts caused by __init__
         self.MockCreateConn.reset_mock()
-
-    def tearDown(self):
-        # Return connection logging to INFO
-        logging.getLogger('kafka.conn').setLevel(logging.INFO)
-
 
     def test_collect_hosts__happy_path(self):
         hosts = "localhost:1234,localhost"
@@ -193,15 +184,6 @@ class ConnTest(unittest.TestCase):
 
 
 class TestKafkaConnection(unittest.TestCase):
-
-    def setUp(self):
-        # kafka.conn debug logging is verbose, so only enable in conn tests
-        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
-
-    def tearDown(self):
-        # Return connection logging to INFO
-        logging.getLogger('kafka.conn').setLevel(logging.INFO)
-
     @mock.patch('socket.create_connection')
     def test_copy(self, socket):
         """KafkaConnection copies work as expected"""

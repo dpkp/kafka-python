@@ -75,11 +75,12 @@ class BrokerConnection(local):
             self._write_fd.write(message)
             self._write_fd.flush()
         except socket.error:
-            log.exception("Error in BrokerConnection.send()")
+            log.exception("Error in BrokerConnection.send(): %s", request)
             self.close()
             return None
         if expect_response:
             self.in_flight_requests.append((self.correlation_id, request.RESPONSE_TYPE))
+        log.debug('Request %d: %s', self.correlation_id, request)
         return self.correlation_id
 
     def recv(self, timeout=None):
@@ -100,9 +101,10 @@ class BrokerConnection(local):
                 raise RuntimeError('Correlation ids do not match!')
             response = response_type.decode(self._read_fd)
         except (RuntimeError, socket.error, struct.error):
-            log.exception("Error in BrokerConnection.recv()")
+            log.exception("Error in BrokerConnection.recv() for request %d", correlation_id)
             self.close()
             return None
+        log.debug('Response %d: %s', correlation_id, response)
         return response
 
     def next_correlation_id_recv(self):
