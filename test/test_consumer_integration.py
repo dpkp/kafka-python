@@ -525,7 +525,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1")
     def test_kafka_consumer__offset_commit_resume(self):
-        GROUP_ID = random_string(10).encode('utf-8')
+        GROUP_ID = random_string(10)
 
         self.send_messages(0, range(0, 100))
         self.send_messages(1, range(100, 200))
