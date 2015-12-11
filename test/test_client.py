@@ -133,12 +133,12 @@ class TestKafkaClient(unittest.TestCase):
         # client loads metadata at init
         client = KafkaClient(hosts=['broker_1:4567'])
         self.assertDictEqual({
-            TopicAndPartition(b'topic_1', 0): brokers[1],
-            TopicAndPartition(b'topic_noleader', 0): None,
-            TopicAndPartition(b'topic_noleader', 1): None,
-            TopicAndPartition(b'topic_3', 0): brokers[0],
-            TopicAndPartition(b'topic_3', 1): brokers[1],
-            TopicAndPartition(b'topic_3', 2): brokers[0]},
+            TopicAndPartition('topic_1', 0): brokers[1],
+            TopicAndPartition('topic_noleader', 0): None,
+            TopicAndPartition('topic_noleader', 1): None,
+            TopicAndPartition('topic_3', 0): brokers[0],
+            TopicAndPartition('topic_3', 1): brokers[1],
+            TopicAndPartition('topic_3', 2): brokers[0]},
             client.topics_to_brokers)
 
         # if we ask for metadata explicitly, it should raise errors
@@ -150,7 +150,6 @@ class TestKafkaClient(unittest.TestCase):
 
         # This should not raise
         client.load_metadata_for_topics('topic_no_leader')
-        client.load_metadata_for_topics(b'topic_no_leader')
 
     @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')
@@ -274,10 +273,10 @@ class TestKafkaClient(unittest.TestCase):
         self.assertDictEqual({}, client.topics_to_brokers)
 
         with self.assertRaises(LeaderNotAvailableError):
-            client._get_leader_for_partition(b'topic_no_partitions', 0)
+            client._get_leader_for_partition('topic_no_partitions', 0)
 
         with self.assertRaises(UnknownTopicOrPartitionError):
-            client._get_leader_for_partition(b'topic_unknown', 0)
+            client._get_leader_for_partition('topic_unknown', 0)
 
     @patch('kafka.client.BrokerConnection')
     @patch('kafka.client.KafkaProtocol')

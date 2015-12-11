@@ -12,7 +12,6 @@ from . import unittest
 
 from kafka import KafkaClient
 from kafka.common import OffsetRequestPayload
-from kafka.util import kafka_bytestring
 
 __all__ = [
     'random_string',
@@ -50,7 +49,6 @@ def get_open_port():
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
-    bytes_topic = None
     zk = None
     server = None
 
@@ -62,7 +60,6 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         if not self.topic:
             topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
             self.topic = topic
-            self.bytes_topic = topic.encode('utf-8')
 
         if self.create_client:
             self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
@@ -81,7 +78,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
     def current_offset(self, topic, partition):
         try:
-            offsets, = self.client.send_offset_request([OffsetRequestPayload(kafka_bytestring(topic), partition, -1, 1)])
+            offsets, = self.client.send_offset_request([OffsetRequestPayload(topic, partition, -1, 1)])
         except:
             # XXX: We've seen some UnknownErrors here and cant debug w/o server logs
             self.zk.child.dump_logs()

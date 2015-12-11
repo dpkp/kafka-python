@@ -488,7 +488,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
     def assert_produce_request(self, messages, initial_offset, message_ct,
                                partition=0):
-        produce = ProduceRequestPayload(self.bytes_topic, partition, messages=messages)
+        produce = ProduceRequestPayload(self.topic, partition, messages=messages)
 
         # There should only be one response message from the server.
         # This will throw an exception if there's more than one.
@@ -506,7 +506,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         # There should only be one response message from the server.
         # This will throw an exception if there's more than one.
 
-        resp, = self.client.send_fetch_request([FetchRequestPayload(self.bytes_topic, partition, start_offset, 1024)])
+        resp, = self.client.send_fetch_request([FetchRequestPayload(self.topic, partition, start_offset, 1024)])
 
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.partition, partition)

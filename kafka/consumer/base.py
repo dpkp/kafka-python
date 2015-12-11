@@ -11,7 +11,7 @@ from kafka.common import (
     UnknownTopicOrPartitionError, check_error, KafkaError
 )
 
-from kafka.util import kafka_bytestring, ReentrantTimer
+from kafka.util import ReentrantTimer
 
 
 log = logging.getLogger('kafka.consumer')
@@ -47,8 +47,8 @@ class Consumer(object):
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
 
         self.client = client
-        self.topic = kafka_bytestring(topic)
-        self.group = None if group is None else kafka_bytestring(group)
+        self.topic = topic
+        self.group = group
         self.client.load_metadata_for_topics(topic)
         self.offsets = {}
 

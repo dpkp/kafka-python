@@ -22,7 +22,6 @@ from kafka.common import (
 )
 
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
-from kafka.util import kafka_bytestring
 
 log = logging.getLogger('kafka.producer')
 
@@ -361,7 +360,6 @@ class Producer(object):
 
         All messages produced via this method will set the message 'key' to Null
         """
-        topic = kafka_bytestring(topic)
         return self._send_messages(topic, partition, *msg)
 
     def _send_messages(self, topic, partition, *msg, **kwargs):
@@ -380,10 +378,6 @@ class Producer(object):
             # Raise TypeError if any non-null message is not encoded as bytes
             elif not isinstance(m, six.binary_type):
                 raise TypeError("all produce message payloads must be null or type bytes")
-
-        # Raise TypeError if topic is not encoded as bytes
-        if not isinstance(topic, six.binary_type):
-            raise TypeError("the topic must be type bytes")
 
         # Raise TypeError if the key is not encoded as bytes
         if key is not None and not isinstance(key, six.binary_type):

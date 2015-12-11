@@ -5,7 +5,6 @@ import time
 from kafka import KafkaClient, SimpleConsumer, KeyedProducer
 from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
 from kafka.producer.base import Producer
-from kafka.util import kafka_bytestring
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (
@@ -165,7 +164,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 key = random_string(3).encode('utf-8')
                 msg = random_string(10).encode('utf-8')
                 producer.send_messages(topic, key, msg)
-                if producer.partitioners[kafka_bytestring(topic)].partition(key) == 0:
+                if producer.partitioners[topic].partition(key) == 0:
                     recovered = True
             except (FailedPayloadsError, ConnectionError):
                 log.debug("caught exception sending message -- will retry")
@@ -203,7 +202,7 @@ class TestFailover(KafkaIntegrationTestCase):
                     break
 
     def _kill_leader(self, topic, partition):
-        leader = self.client.topics_to_brokers[TopicAndPartition(kafka_bytestring(topic), partition)]
+        leader = self.client.topics_to_brokers[TopicAndPartition(topic, partition)]
         broker = self.brokers[leader.nodeId]
         broker.close()
         return broker
