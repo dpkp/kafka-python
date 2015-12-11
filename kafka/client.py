@@ -473,7 +473,7 @@ class KafkaClient(object):
         resp = self.send_metadata_request(topics)
 
         log.debug('Updating broker metadata: %s', resp.brokers)
-        log.debug('Updating topic metadata: %s', resp.topics)
+        log.debug('Updating topic metadata: %s', [topic for _, topic, _ in resp.topics])
 
         self.brokers = dict([(nodeId, BrokerMetadata(nodeId, host, port))
                              for nodeId, host, port in resp.brokers])
