@@ -1,3 +1,4 @@
+#pylint: skip-file
 from contextlib import contextmanager
 import struct
 

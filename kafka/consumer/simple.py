@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 try:
-    from itertools import zip_longest as izip_longest, repeat  # pylint: disable-msg=E0611
+    from itertools import zip_longest as izip_longest, repeat  # pylint: disable=E0611
 except ImportError:
     from itertools import izip_longest as izip_longest, repeat # python 2
 import logging
@@ -167,7 +167,7 @@ class SimpleConsumer(Consumer):
             # Otherwise we should re-raise the upstream exception
             # b/c it typically includes additional data about
             # the request that triggered it, and we do not want to drop that
-            raise # pylint: disable-msg=E0704
+            raise # pylint: disable=E0704
 
         # send_offset_request
         log.info('Resetting topic-partition offset to %s for %s:%d',
