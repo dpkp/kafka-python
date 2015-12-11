@@ -89,6 +89,9 @@ class BrokerConnection(local):
         readable, _, _ = select([self._read_fd], [], [], timeout)
         if not readable:
             return None
+        if not self.in_flight_requests:
+            log.warning('No in-flight-requests to recv')
+            return None
         correlation_id, response_type = self.in_flight_requests.popleft()
         # Current implementation does not use size
         # instead we read directly from the socket fd buffer
