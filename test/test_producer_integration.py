@@ -166,7 +166,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions("all")
     def test_produce__new_topic_fails_with_reasonable_error(self):
-        new_topic = 'new_topic_{guid}'.format(guid = str(uuid.uuid4())).encode('utf-8')
+        new_topic = 'new_topic_{guid}'.format(guid = str(uuid.uuid4()))
         producer = SimpleProducer(self.client, random_start=False)
 
         # At first it doesn't exist
