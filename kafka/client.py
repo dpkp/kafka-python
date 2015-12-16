@@ -103,10 +103,10 @@ class KafkaClient(object):
         """
         Returns the coordinator broker for a consumer group.
 
-        ConsumerCoordinatorNotAvailableCode will be raised if the coordinator
+        GroupCoordinatorNotAvailableError will be raised if the coordinator
         does not currently exist for the group.
 
-        OffsetsLoadInProgressCode is raised if the coordinator is available
+        GroupLoadInProgressError is raised if the coordinator is available
         but is still loading offsets from the internal topic
         """
 
