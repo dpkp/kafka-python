@@ -97,19 +97,20 @@ class TestKafkaProducer(unittest.TestCase):
     def test_producer_sync_fail_on_error(self):
         error = FailedPayloadsError('failure')
         with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            with patch.object(KafkaClient, 'get_partition_ids_for_topic', return_value=[0, 1]):
-                with patch.object(KafkaClient, '_send_broker_aware_request', return_value = [error]):
+            with patch.object(KafkaClient, 'ensure_topic_exists'):
+                with patch.object(KafkaClient, 'get_partition_ids_for_topic', return_value=[0, 1]):
+                    with patch.object(KafkaClient, '_send_broker_aware_request', return_value = [error]):
 
-                    client = KafkaClient(MagicMock())
-                    producer = SimpleProducer(client, async=False, sync_fail_on_error=False)
+                        client = KafkaClient(MagicMock())
+                        producer = SimpleProducer(client, async=False, sync_fail_on_error=False)
 
-                    # This should not raise
-                    (response,) = producer.send_messages('foobar', b'test message')
-                    self.assertEqual(response, error)
+                        # This should not raise
+                        (response,) = producer.send_messages('foobar', b'test message')
+                        self.assertEqual(response, error)
 
-                    producer = SimpleProducer(client, async=False, sync_fail_on_error=True)
-                    with self.assertRaises(FailedPayloadsError):
-                        producer.send_messages('foobar', b'test message')
+                        producer = SimpleProducer(client, async=False, sync_fail_on_error=True)
+                        with self.assertRaises(FailedPayloadsError):
+                            producer.send_messages('foobar', b'test message')
 
     def test_cleanup_is_not_called_on_stopped_producer(self):
         producer = Producer(MagicMock(), async=True)
