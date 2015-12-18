@@ -33,7 +33,7 @@ class SimpleProducer(Producer):
     def _next_partition(self, topic):
         if topic not in self.partition_cycles:
             if not self.client.has_metadata_for_topic(topic):
-                self.client.load_metadata_for_topics(topic)
+                self.client.ensure_topic_exists(topic)
 
             self.partition_cycles[topic] = cycle(self.client.get_partition_ids_for_topic(topic))
 

@@ -133,6 +133,12 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
     #   SimpleProducer Tests   #
     ############################
 
+    def test_simple_producer_new_topic(self):
+        producer = SimpleProducer(self.client)
+        resp = producer.send_messages('new_topic', self.msg('foobar'))
+        self.assert_produce_response(resp, 0)
+        producer.stop()
+
     def test_simple_producer(self):
         partitions = self.client.get_partition_ids_for_topic(self.topic)
         start_offsets = [self.current_offset(self.topic, p) for p in partitions]
@@ -156,15 +162,6 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         self.assert_fetch_offset(partitions[0], start_offsets[0], [ self.msg("one"), self.msg("two"), self.msg("four"), self.msg("five") ])
 
         producer.stop()
-
-    def test_produce__new_topic_fails_with_reasonable_error(self):
-        new_topic = 'new_topic_{guid}'.format(guid = str(uuid.uuid4())).encode('utf-8')
-        producer = SimpleProducer(self.client, random_start=False)
-
-        # At first it doesn't exist
-        with self.assertRaises((UnknownTopicOrPartitionError,
-                                LeaderNotAvailableError)):
-            producer.send_messages(new_topic, self.msg("one"))
 
     def test_producer_random_order(self):
         producer = SimpleProducer(self.client, random_start=True)
