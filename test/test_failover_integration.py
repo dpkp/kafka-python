@@ -214,11 +214,12 @@ class TestFailover(KafkaIntegrationTestCase):
                                   iter_timeout=timeout)
 
         started_at = time.time()
-        pending = consumer.pending(partitions)
-
-        # Keep checking if it isn't immediately correct, subject to timeout
+        pending = -1
         while pending < check_count and (time.time() - started_at < timeout):
-            pending = consumer.pending(partitions)
+            try:
+                pending = consumer.pending(partitions)
+            except FailedPayloadsError:
+                pass
             time.sleep(0.5)
 
         consumer.stop()
