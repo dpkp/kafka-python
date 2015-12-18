@@ -69,7 +69,7 @@ def snappy_encode(payload, xerial_compatible=False, xerial_blocksize=32 * 1024):
         |  16 bytes   |  BE int32  | snappy bytes |  BE int32  | snappy bytes |
         +-------------+------------+--------------+------------+--------------+
 
-        It is important to not that the blocksize is the amount of uncompressed
+        It is important to note that the blocksize is the amount of uncompressed
         data presented to snappy at each block, whereas the blocklen is the
         number of bytes that will be present in the stream, that is the
         length will always be <= blocksize.
