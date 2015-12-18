@@ -51,14 +51,15 @@ pushd servers
         else
           KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}"
         fi
-        wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
-        echo
-        if [ ! -d "../$kafka/kafka-bin" ]; then
-          echo "Extracting kafka binaries for ${kafka}"
+        if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
+          echo "Downloading kafka ${kafka} tarball"
+          wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
+          echo
+          echo "Extracting kafka ${kafka} binaries"
           tar xzvf ${KAFKA_ARTIFACT}.t* -C ../$kafka/
           mv ../$kafka/${KAFKA_ARTIFACT} ../$kafka/kafka-bin
         else
-          echo "$kafka/kafka-bin directory already exists -- skipping tgz extraction"
+          echo "$kafka is already installed in servers/$kafka/ -- skipping"
         fi
       fi
       echo
