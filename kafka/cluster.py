@@ -73,7 +73,7 @@ class Cluster(object):
 
     def _bootstrap(self, hosts, timeout=2):
         for host, port in hosts:
-            conn = BrokerConnection(host, port, timeout)
+            conn = BrokerConnection(host, port)
             if not conn.connect():
                 continue
             self._brokers['bootstrap'] = conn

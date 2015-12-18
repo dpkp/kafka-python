@@ -93,6 +93,22 @@ class KafkaError(RuntimeError):
     pass
 
 
+class IllegalStateError(KafkaError):
+    pass
+
+
+class RetriableError(KafkaError):
+    pass
+
+
+class DisconnectError(KafkaError):
+    pass
+
+
+class CorrelationIdError(KafkaError):
+    pass
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None

@@ -14,6 +14,7 @@ from kafka.common import (
     KafkaTimeoutError, ConnectionError
 )
 from kafka.conn import KafkaConnection
+from kafka.future import Future
 from kafka.protocol import KafkaProtocol, create_message
 from kafka.protocol.metadata import MetadataResponse
 
@@ -22,6 +23,17 @@ from test.testutil import Timer
 NO_ERROR = 0
 UNKNOWN_TOPIC_OR_PARTITION = 3
 NO_LEADER = 5
+
+
+def mock_conn(conn, success=True):
+    mocked = MagicMock()
+    mocked.connected.return_value = True
+    if success:
+        mocked.send.return_value = Future().success(True)
+    else:
+        mocked.send.return_value = Future().failure(Exception())
+    conn.return_value = mocked
+
 
 class TestKafkaClient(unittest.TestCase):
     def test_init_with_list(self):
@@ -48,32 +60,30 @@ class TestKafkaClient(unittest.TestCase):
             sorted([('kafka01', 9092), ('kafka02', 9092), ('kafka03', 9092)]),
             sorted(client.hosts))
 
-    def test_send_broker_unaware_request_fail(self):
+    @patch.object(KafkaClient, '_get_conn')
+    @patch.object(KafkaClient, 'load_metadata_for_topics')
+    def test_send_broker_unaware_request_fail(self, load_metadata, conn):
         mocked_conns = {
             ('kafka01', 9092): MagicMock(),
             ('kafka02', 9092): MagicMock()
         }
-
-        # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.return_value = None
-        mocked_conns[('kafka02', 9092)].send.return_value = None
+        for val in mocked_conns.values():
+            mock_conn(val, success=False)
 
         def mock_get_conn(host, port):
             return mocked_conns[(host, port)]
+        conn.side_effect = mock_get_conn
 
-        # patch to avoid making requests before we want it
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            with patch.object(KafkaClient, '_get_conn', side_effect=mock_get_conn):
-                client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
+        client = KafkaClient(hosts=['kafka01:9092', 'kafka02:9092'])
 
-                req = KafkaProtocol.encode_metadata_request()
-                with self.assertRaises(KafkaUnavailableError):
-                    client._send_broker_unaware_request(payloads=['fake request'],
-                                                        encoder_fn=MagicMock(return_value='fake encoded message'),
-                                                        decoder_fn=lambda x: x)
+        req = KafkaProtocol.encode_metadata_request()
+        with self.assertRaises(KafkaUnavailableError):
+            client._send_broker_unaware_request(payloads=['fake request'],
+                                                encoder_fn=MagicMock(return_value='fake encoded message'),
+                                                decoder_fn=lambda x: x)
 
-                for key, conn in six.iteritems(mocked_conns):
-                    conn.send.assert_called_with('fake encoded message')
+        for key, conn in six.iteritems(mocked_conns):
+            conn.send.assert_called_with('fake encoded message')
 
     def test_send_broker_unaware_request(self):
         mocked_conns = {
@@ -82,9 +92,11 @@ class TestKafkaClient(unittest.TestCase):
             ('kafka03', 9092): MagicMock()
         }
         # inject KafkaConnection side effects
-        mocked_conns[('kafka01', 9092)].send.return_value = None
-        mocked_conns[('kafka02', 9092)].recv.return_value = 'valid response'
-        mocked_conns[('kafka03', 9092)].send.return_value = None
+        mock_conn(mocked_conns[('kafka01', 9092)], success=False)
+        mock_conn(mocked_conns[('kafka03', 9092)], success=False)
+        future = Future()
+        mocked_conns[('kafka02', 9092)].send.return_value = future
+        mocked_conns[('kafka02', 9092)].recv.side_effect = lambda: future.success('valid response')
 
         def mock_get_conn(host, port):
             return mocked_conns[(host, port)]
@@ -101,11 +113,11 @@ class TestKafkaClient(unittest.TestCase):
                 self.assertEqual('valid response', resp)
                 mocked_conns[('kafka02', 9092)].recv.assert_called_once_with()
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_load_metadata(self, protocol, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -151,11 +163,11 @@ class TestKafkaClient(unittest.TestCase):
         # This should not raise
         client.load_metadata_for_topics('topic_no_leader')
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_has_metadata_for_topic(self, protocol, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -181,11 +193,11 @@ class TestKafkaClient(unittest.TestCase):
         # Topic with partition metadata, but no leaders return True
         self.assertTrue(client.has_metadata_for_topic('topic_noleaders'))
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol.decode_metadata_response')
     def test_ensure_topic_exists(self, decode_metadata_response, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -213,12 +225,12 @@ class TestKafkaClient(unittest.TestCase):
         # This should not raise
         client.ensure_topic_exists('topic_noleaders', timeout=1)
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_for_partitions_reloads_metadata(self, protocol, conn):
         "Get leader for partitions reload metadata if it is not available"
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -251,11 +263,11 @@ class TestKafkaClient(unittest.TestCase):
             TopicAndPartition('topic_one_partition', 0): brokers[0]},
             client.topics_to_brokers)
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_for_unassigned_partitions(self, protocol, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -278,11 +290,11 @@ class TestKafkaClient(unittest.TestCase):
         with self.assertRaises(UnknownTopicOrPartitionError):
             client._get_leader_for_partition('topic_unknown', 0)
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_get_leader_exceptions_when_noleader(self, protocol, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -325,10 +337,10 @@ class TestKafkaClient(unittest.TestCase):
         self.assertEqual(brokers[0], client._get_leader_for_partition('topic_noleader', 0))
         self.assertEqual(brokers[1], client._get_leader_for_partition('topic_noleader', 1))
 
-    @patch('kafka.client.BrokerConnection')
+    @patch.object(KafkaClient, '_get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_send_produce_request_raises_when_noleader(self, protocol, conn):
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
@@ -352,11 +364,11 @@ class TestKafkaClient(unittest.TestCase):
         with self.assertRaises(LeaderNotAvailableError):
             client.send_produce_request(requests)
 
-    @patch('kafka.client.BrokerConnection')
+    @patch('kafka.client.KafkaClient._get_conn')
     @patch('kafka.client.KafkaProtocol')
     def test_send_produce_request_raises_when_topic_unknown(self, protocol, conn):
 
-        conn.recv.return_value = 'response'  # anything but None
+        mock_conn(conn)
 
         brokers = [
             BrokerMetadata(0, 'broker_1', 4567),
