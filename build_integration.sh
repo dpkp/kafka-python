@@ -40,6 +40,7 @@ pushd servers
         # Not sure how to construct the .tgz name accurately, so use a wildcard (ugh)
         tar xzvf $kafka/core/build/distributions/kafka_*.tgz -C ../$kafka/
         rm $kafka/core/build/distributions/kafka_*.tgz
+        rm -rf ../$kafka/kafka-bin
         mv ../$kafka/kafka_* ../$kafka/kafka-bin
       else
         echo "-------------------------------------"
@@ -57,7 +58,12 @@ pushd servers
           echo
           echo "Extracting kafka ${kafka} binaries"
           tar xzvf ${KAFKA_ARTIFACT}.t* -C ../$kafka/
+          rm -rf ../$kafka/kafka-bin
           mv ../$kafka/${KAFKA_ARTIFACT} ../$kafka/kafka-bin
+          if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
+            echo "Extraction Failed ($kafka/kafka-bin/bin/kafka-run-class.sh does not exist)!"
+            exit 1
+          fi
         else
           echo "$kafka is already installed in servers/$kafka/ -- skipping"
         fi
