@@ -97,6 +97,10 @@ class IllegalStateError(KafkaError):
     pass
 
 
+class IllegalArgumentError(KafkaError):
+    pass
+
+
 class RetriableError(KafkaError):
     pass
 
@@ -106,6 +110,10 @@ class DisconnectError(KafkaError):
 
 
 class CorrelationIdError(KafkaError):
+    pass
+
+
+class Cancelled(KafkaError):
     pass
 
 
