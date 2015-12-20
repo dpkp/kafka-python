@@ -109,6 +109,10 @@ class CorrelationIdError(KafkaError):
     pass
 
 
+class TooManyInFlightRequests(KafkaError):
+    pass
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None
