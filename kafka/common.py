@@ -425,6 +425,10 @@ def _iter_broker_errors():
 kafka_errors = dict([(x.errno, x) for x in _iter_broker_errors()])
 
 
+def for_code(error_code):
+    return kafka_errors.get(error_code, UnknownError)
+
+
 def check_error(response):
     if isinstance(response, Exception):
         raise response
