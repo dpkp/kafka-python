@@ -15,7 +15,7 @@ from threading import Thread, Event
 import six
 
 from kafka.common import (
-    ProduceRequestPayload, ProduceResponsePayload, TopicAndPartition, RetryOptions,
+    ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions,
     kafka_errors, UnsupportedCodecError, FailedPayloadsError,
     RequestTimedOutError, AsyncProducerQueueFull, UnknownError,
     RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES
@@ -386,7 +386,7 @@ class Producer(object):
         if self.async:
             for idx, m in enumerate(msg):
                 try:
-                    item = (TopicAndPartition(topic, partition), m, key)
+                    item = (TopicPartition(topic, partition), m, key)
                     if self.async_queue_put_timeout == 0:
                         self.queue.put_nowait(item)
                     else:

@@ -3,7 +3,7 @@ import os
 import time
 
 from kafka import KafkaClient, SimpleConsumer, KeyedProducer
-from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
+from kafka.common import TopicPartition, FailedPayloadsError, ConnectionError
 from kafka.producer.base import Producer
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -202,7 +202,7 @@ class TestFailover(KafkaIntegrationTestCase):
                     break
 
     def _kill_leader(self, topic, partition):
-        leader = self.client.topics_to_brokers[TopicAndPartition(topic, partition)]
+        leader = self.client.topics_to_brokers[TopicPartition(topic, partition)]
         broker = self.brokers[leader.nodeId]
         broker.close()
         return broker

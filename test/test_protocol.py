@@ -12,7 +12,7 @@ from kafka.common import (
     OffsetResponsePayload, OffsetCommitResponsePayload, OffsetFetchResponsePayload,
     ProduceRequestPayload, FetchRequestPayload, Message, ChecksumError,
     ProduceResponsePayload, FetchResponsePayload, OffsetAndMessage,
-    BrokerMetadata, TopicMetadata, PartitionMetadata, TopicAndPartition,
+    BrokerMetadata, TopicMetadata, PartitionMetadata,
     KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
     ProtocolError, ConsumerMetadataResponse
 )

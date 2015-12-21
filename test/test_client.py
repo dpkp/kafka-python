@@ -9,7 +9,7 @@ from kafka import KafkaClient
 from kafka.common import (
     ProduceRequestPayload,
     BrokerMetadata,
-    TopicAndPartition, KafkaUnavailableError,
+    TopicPartition, KafkaUnavailableError,
     LeaderNotAvailableError, UnknownTopicOrPartitionError,
     KafkaTimeoutError, ConnectionError
 )
@@ -145,12 +145,12 @@ class TestKafkaClient(unittest.TestCase):
         # client loads metadata at init
         client = KafkaClient(hosts=['broker_1:4567'])
         self.assertDictEqual({
-            TopicAndPartition('topic_1', 0): brokers[1],
-            TopicAndPartition('topic_noleader', 0): None,
-            TopicAndPartition('topic_noleader', 1): None,
-            TopicAndPartition('topic_3', 0): brokers[0],
-            TopicAndPartition('topic_3', 1): brokers[1],
-            TopicAndPartition('topic_3', 2): brokers[0]},
+            TopicPartition('topic_1', 0): brokers[1],
+            TopicPartition('topic_noleader', 0): None,
+            TopicPartition('topic_noleader', 1): None,
+            TopicPartition('topic_3', 0): brokers[0],
+            TopicPartition('topic_3', 1): brokers[1],
+            TopicPartition('topic_3', 2): brokers[0]},
             client.topics_to_brokers)
 
         # if we ask for metadata explicitly, it should raise errors
@@ -260,7 +260,7 @@ class TestKafkaClient(unittest.TestCase):
 
         self.assertEqual(brokers[0], leader)
         self.assertDictEqual({
-            TopicAndPartition('topic_one_partition', 0): brokers[0]},
+            TopicPartition('topic_one_partition', 0): brokers[0]},
             client.topics_to_brokers)
 
     @patch('kafka.client.KafkaClient._get_conn')
@@ -312,8 +312,8 @@ class TestKafkaClient(unittest.TestCase):
         client = KafkaClient(hosts=['broker_1:4567'])
         self.assertDictEqual(
             {
-                TopicAndPartition('topic_noleader', 0): None,
-                TopicAndPartition('topic_noleader', 1): None
+                TopicPartition('topic_noleader', 0): None,
+                TopicPartition('topic_noleader', 1): None
             },
             client.topics_to_brokers)
 

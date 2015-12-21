@@ -72,7 +72,7 @@ OffsetAndMessage = namedtuple("OffsetAndMessage",
 Message = namedtuple("Message",
     ["magic", "attributes", "key", "value"])
 
-TopicAndPartition = namedtuple("TopicAndPartition",
+TopicPartition = namedtuple("TopicPartition",
     ["topic", "partition"])
 
 KafkaMessage = namedtuple("KafkaMessage",

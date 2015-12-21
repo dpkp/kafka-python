@@ -104,7 +104,7 @@ class UtilTest(unittest.TestCase):
             kafka.util.relative_unpack('>hh', '\x00', 0)
 
     def test_group_by_topic_and_partition(self):
-        t = kafka.common.TopicAndPartition
+        t = kafka.common.TopicPartition
 
         l = [
             t("a", 1),

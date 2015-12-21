@@ -8,7 +8,7 @@ import time
 import six
 
 import kafka.common
-from kafka.common import (TopicAndPartition, BrokerMetadata, UnknownError,
+from kafka.common import (TopicPartition, BrokerMetadata, UnknownError,
                           ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
@@ -41,7 +41,7 @@ class KafkaClient(object):
 
         self._conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
-        self.topics_to_brokers = {}  # TopicAndPartition -> BrokerMetadata
+        self.topics_to_brokers = {}  # TopicPartition -> BrokerMetadata
         self.topic_partitions = {}   # topic -> partition -> PartitionMetadata
 
         self.load_metadata_for_topics()  # bootstrap with all metadata
@@ -77,7 +77,7 @@ class KafkaClient(object):
         no current leader
         """
 
-        key = TopicAndPartition(topic, partition)
+        key = TopicPartition(topic, partition)
 
         # Use cached metadata if it is there
         if self.topics_to_brokers.get(key) is not None:
@@ -511,7 +511,7 @@ class KafkaClient(object):
                 self.topic_partitions[topic][partition] = leader
 
                 # Populate topics_to_brokers dict
-                topic_part = TopicAndPartition(topic, partition)
+                topic_part = TopicPartition(topic, partition)
 
                 # Check for partition errors
                 if error:
