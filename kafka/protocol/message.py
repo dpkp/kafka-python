@@ -42,6 +42,13 @@ class Message(Struct):
         return cls(fields[4], key=fields[3],
                    magic=fields[1], attributes=fields[2], crc=fields[0])
 
+    def validate_crc(self):
+        raw_msg = self._encode_self(recalc_crc=False)
+        crc = crc32(raw_msg[4:])
+        if crc == self.crc:
+            return True
+        return False
+
 
 class PartialMessage(bytes):
     def __repr__(self):
