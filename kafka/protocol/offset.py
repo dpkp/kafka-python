@@ -1,6 +1,11 @@
 from .struct import Struct
 from .types import Array, Int16, Int32, Int64, Schema, String
 
+class OffsetResetStrategy(object):
+    LATEST = -1
+    EARLIEST = -2
+    NONE = 0
+
 
 class OffsetResponse(Struct):
     SCHEMA = Schema(
