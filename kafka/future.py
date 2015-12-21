@@ -1,4 +1,4 @@
-from kafka.common import RetriableError, IllegalStateError
+from kafka.common import IllegalStateError
 
 
 class Future(object):
@@ -16,7 +16,10 @@ class Future(object):
         return self.is_done and self.exception
 
     def retriable(self):
-        return isinstance(self.exception, RetriableError)
+        try:
+            return self.exception.retriable
+        except AttributeError:
+            return False
 
     def success(self, value):
         if self.is_done:
