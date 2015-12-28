@@ -1,4 +1,9 @@
-from kafka.common import IllegalStateError
+import functools
+import logging
+
+import kafka.common as Errors
+
+log = logging.getLogger(__name__)
 
 
 class Future(object):
@@ -23,32 +28,56 @@ class Future(object):
 
     def success(self, value):
         if self.is_done:
-            raise IllegalStateError('Invalid attempt to complete a request future which is already complete')
+            raise Errors.IllegalStateError('Invalid attempt to complete a'
+                                           ' request future which is already'
+                                           ' complete')
         self.value = value
         self.is_done = True
         for f in self._callbacks:
-            f(value)
+            try:
+                f(value)
+            except Exception:
+                log.exception('Error processing callback')
         return self
 
     def failure(self, e):
         if self.is_done:
-            raise IllegalStateError('Invalid attempt to complete a request future which is already complete')
-        self.exception = e
+            raise Errors.IllegalStateError('Invalid attempt to complete a'
+                                           ' request future which is already'
+                                           ' complete')
+        self.exception = e if type(e) is not type else e()
         self.is_done = True
         for f in self._errbacks:
-            f(e)
+            try:
+                f(e)
+            except Exception:
+                log.exception('Error processing errback')
         return self
 
-    def add_callback(self, f):
+    def add_callback(self, f, *args, **kwargs):
+        if args or kwargs:
+            f = functools.partial(f, *args, **kwargs)
         if self.is_done and not self.exception:
             f(self.value)
         else:
             self._callbacks.append(f)
         return self
 
-    def add_errback(self, f):
+    def add_errback(self, f, *args, **kwargs):
+        if args or kwargs:
+            f = functools.partial(f, *args, **kwargs)
         if self.is_done and self.exception:
             f(self.exception)
         else:
             self._errbacks.append(f)
+        return self
+
+    def add_both(self, f, *args, **kwargs):
+        self.add_callback(f, *args, **kwargs)
+        self.add_errback(f, *args, **kwargs)
+        return self
+
+    def chain(self, future):
+        self.add_callback(future.success)
+        self.add_errback(future.failure)
         return self
