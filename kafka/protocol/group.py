@@ -28,6 +28,7 @@ class JoinGroupRequest(Struct):
             ('protocol_name', String('utf-8')),
             ('protocol_metadata', Bytes)))
     )
+    UNKNOWN_MEMBER_ID = ''
 
 
 class ProtocolMetadata(Struct):
