@@ -111,6 +111,11 @@ class DisconnectError(KafkaError):
     invalid_metadata = True
 
 
+class NoBrokersAvailable(KafkaError):
+    retriable = True
+    invalid_metadata = True
+
+
 class NodeNotReadyError(KafkaError):
     retriable = True
 
