@@ -28,6 +28,8 @@ class OffsetCommitRequest_v2(Struct):
                 ('offset', Int64),
                 ('metadata', String('utf-8'))))))
     )
+    DEFAULT_GENERATION_ID = -1
+    DEFAULT_RETENTION_TIME = -1
 
 
 class OffsetCommitRequest_v1(Struct):
