@@ -574,7 +574,7 @@ class HeartbeatTask(object):
 
     def _handle_heartbeat_success(self, v):
         log.debug("Received successful heartbeat")
-        self.request_in_flight = False
+        self._request_in_flight = False
         self._heartbeat.received_heartbeat()
         ttl = self._heartbeat.ttl()
         self._client.schedule(self, time.time() + ttl)
