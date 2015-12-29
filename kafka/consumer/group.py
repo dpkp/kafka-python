@@ -288,7 +288,7 @@ class KafkaConsumer(object):
         Returns:
             The last committed offset, or None if there was no prior commit.
         """
-        if self._subscription.is_assigned:
+        if self._subscription.is_assigned(partition):
             committed = self._subscription.assignment[partition].committed
             if committed is None:
                 self._coordinator.refresh_committed_offsets_if_needed()
