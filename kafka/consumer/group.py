@@ -156,6 +156,8 @@ class KafkaConsumer(object):
             self._client, self._subscription, **kwargs)
         self._coordinator = ConsumerCoordinator(
             self._client, self._group_id, self._subscription,
+            enable_auto_commit=self._enable_auto_commit,
+            auto_commit_interval_ms=self._auto_commit_interval_ms,
             assignors=self._partition_assignment_strategy,
             **kwargs)
         self._closed = False

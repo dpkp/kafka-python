@@ -46,7 +46,7 @@ class ConsumerProtocol(object):
 class ConsumerCoordinator(AbstractCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     _enable_auto_commit = True
-    _auto_commit_interval_ms = 60 * 1000
+    _auto_commit_interval_ms = 5000
     _default_offset_commit_callback = lambda offsets, error: True
     _assignors = ()
     #_heartbeat_interval_ms = 3000
