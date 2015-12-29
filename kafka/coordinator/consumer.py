@@ -182,9 +182,10 @@ class ConsumerCoordinator(AbstractCoordinator):
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes
         # will eventually be seen
+        # Because assignment typically happens within response callbacks,
+        # we cannot block on metadata updates here (no recursion into poll())
         self._subscription.group_subscribe(all_subscribed_topics)
-        future = self._client.set_topics(self._subscription.group_subscription())
-        self._client.poll(future=future)
+        self._client.set_topics(self._subscription.group_subscription())
 
         log.debug("Performing %s assignment for subscriptions %s",
                   assignor.name, member_metadata)
