@@ -162,25 +162,7 @@ class KafkaClient(object):
             log.warning("Node %s not found in current connection list; skipping", node_id)
             return
 
-    def connection_delay(self, node_id):
-        """
-        Returns the number of milliseconds to wait, based on the connection
-        state, before attempting to send data. When disconnected, this respects
-        the reconnect backoff time. When connecting or connected, this handles
-        slow/stalled connections.
 
-        @param node_id The id of the node to check
-        @return The number of milliseconds to wait.
-        """
-        if node_id not in self._conns:
-            return 0
-
-        conn = self._conns[node_id]
-        time_waited_ms = time.time() - (conn.last_attempt or 0)
-        if conn.state is ConnectionStates.DISCONNECTED:
-            return max(self.config['reconnect_backoff_ms'] - time_waited_ms, 0)
-        else:
-            return sys.maxint
 
     def connection_failed(self, node_id):
         """
