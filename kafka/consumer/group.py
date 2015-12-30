@@ -114,6 +114,10 @@ class KafkaConsumer(object):
                 periodically committed in the background. Default: True.
             auto_commit_interval_ms (int): milliseconds between automatic
                 offset commits, if enable_auto_commit is True. Default: 5000.
+            default_offset_commit_callback (callable): called as
+                callback(offsets, response) response will be either an Exception
+                or a OffsetCommitResponse struct. This callback can be used to
+                trigger custom actions when a commit request completes.
             check_crcs (bool): Automatically check the CRC32 of the records
                 consumed. This ensures no on-the-wire or on-disk corruption to
                 the messages occurred. This check adds some overhead, so it may
@@ -438,13 +442,17 @@ class KafkaConsumer(object):
             self._subscription.resume(partition)
 
     def seek(self, partition, offset):
-        """Manually specify the fetch offset for a TopicPartition
+        """Manually specify the fetch offset for a TopicPartition.
 
         Overrides the fetch offsets that the consumer will use on the next
         poll(). If this API is invoked for the same partition more than once,
         the latest offset will be used on the next poll(). Note that you may
         lose data if this API is arbitrarily used in the middle of consumption,
         to reset the fetch offsets.
+
+        Arguments:
+            partition (TopicPartition): partition for seek operation
+            offset (int): message offset in partition
         """
         if offset < 0:
             raise Errors.IllegalStateError("seek offset must not be a negative number")
