@@ -540,7 +540,7 @@ class AutoCommitTask(object):
         try:
             self._client.unschedule(self)
         except KeyError:
-            log.warning("AutoCommitTask was not previously scheduled")
+            pass
 
     def _reschedule(self, at):
         if self._enabled:
