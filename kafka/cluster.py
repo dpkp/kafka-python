@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import copy
 import logging
 import random
 import time
@@ -12,10 +13,12 @@ log = logging.getLogger(__name__)
 
 
 class ClusterMetadata(object):
-    _retry_backoff_ms = 100
-    _metadata_max_age_ms = 300000
+    DEFAULT_CONFIG = {
+        'retry_backoff_ms': 100,
+        'metadata_max_age_ms': 300000,
+    }
 
-    def __init__(self, **kwargs):
+    def __init__(self, **configs):
         self._brokers = {}
         self._partitions = {}
         self._groups = {}
@@ -26,9 +29,10 @@ class ClusterMetadata(object):
         self._future = None
         self._listeners = set()
 
-        for config in ('retry_backoff_ms', 'metadata_max_age_ms'):
-            if config in kwargs:
-                setattr(self, '_' + config, kwargs.pop(config))
+        self.config = copy.copy(self.DEFAULT_CONFIG)
+        for key in self.config:
+            if key in configs:
+                self.config[key] = configs[key]
 
     def brokers(self):
         return set(self._brokers.values())
@@ -55,8 +59,8 @@ class ClusterMetadata(object):
         if self._need_update:
             ttl = 0
         else:
-            ttl = self._last_successful_refresh_ms + self._metadata_max_age_ms - now
-        retry = self._last_refresh_ms + self._retry_backoff_ms - now
+            ttl = self._last_successful_refresh_ms + self.config['metadata_max_age_ms'] - now
+        retry = self._last_refresh_ms + self.config['retry_backoff_ms'] - now
         return max(ttl, retry, 0)
 
     def request_update(self):

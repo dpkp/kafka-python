@@ -1,23 +1,27 @@
+import copy
 import time
 
 import kafka.common as Errors
 
 
 class Heartbeat(object):
-    _heartbeat_interval_ms = 3000
-    _session_timeout_ms = 30000
+    DEFAULT_CONFIG = {
+        'heartbeat_interval_ms': 3000,
+        'session_timeout_ms': 30000,
+    }
 
-    def __init__(self, **kwargs):
-        for config in ('heartbeat_interval_ms', 'session_timeout_ms'):
-            if config in kwargs:
-                setattr(self, '_' + config, kwargs.pop(config))
+    def __init__(self, **configs):
+        self.config = copy.copy(self.DEFAULT_CONFIG)
+        for key in self.config:
+            if key in configs:
+                self.config[key] = configs[key]
 
-        if self._heartbeat_interval_ms > self._session_timeout_ms:
+        if self.config['heartbeat_interval_ms'] > self.config['session_timeout_ms']:
             raise Errors.IllegalArgumentError("Heartbeat interval must be set"
                                               " lower than the session timeout")
 
-        self.interval = self._heartbeat_interval_ms / 1000.0
-        self.timeout = self._session_timeout_ms / 1000.0
+        self.interval = self.config['heartbeat_interval_ms'] / 1000.0
+        self.timeout = self.config['session_timeout_ms'] / 1000.0
         self.last_send = 0
         self.last_receive = 0
         self.last_reset = time.time()
