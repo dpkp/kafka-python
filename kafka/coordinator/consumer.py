@@ -69,7 +69,7 @@ class ConsumerCoordinator(AbstractCoordinator):
             raise Errors.IllegalStateError('Coordinator requires assignors')
 
         self._cluster.request_update()
-        self._cluster.add_listener(self._handle_metadata_update) #TODO
+        self._cluster.add_listener(self._handle_metadata_update)
 
         if self._enable_auto_commit:
             interval = self._auto_commit_interval_ms / 1000.0

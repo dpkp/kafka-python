@@ -329,7 +329,6 @@ class AbstractCoordinator(object):
                                                         response.group_protocol,
                                                         response.members)
         except Exception as e:
-            raise
             return Future().failure(e)
 
         request = SyncGroupRequest(
