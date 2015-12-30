@@ -264,22 +264,22 @@ class KafkaClient(object):
 
     def _poll(self, timeout):
         # select on reads across all connected sockets, blocking up to timeout
-        sockets = [conn._sock for conn in six.itervalues(self._conns)
-                   if (conn.state is ConnectionStates.CONNECTED and
-                       conn.in_flight_requests)]
-        if sockets:
-            select.select(sockets, [], [], timeout)
+        sockets = dict([(conn._sock, conn)
+                        for conn in six.itervalues(self._conns)
+                        if (conn.state is ConnectionStates.CONNECTED
+                            and conn.in_flight_requests)])
+        if not sockets:
+            return []
+
+        ready, _, _ = select.select(list(sockets.keys()), [], [], timeout)
 
         responses = []
         # list, not iterator, because inline callbacks may add to self._conns
-        for conn in list(self._conns.values()):
-            if conn.state is ConnectionStates.CONNECTING:
-                conn.connect()
-
-            if conn.in_flight_requests:
-                response = conn.recv() # This will run callbacks / errbacks
-                if response:
-                    responses.append(response)
+        for sock in ready:
+            conn = sockets[sock]
+            response = conn.recv() # Note: conn.recv runs callbacks / errbacks
+            if response:
+                responses.append(response)
         return responses
 
     def in_flight_request_count(self, node_id=None):
