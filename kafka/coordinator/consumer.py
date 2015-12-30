@@ -443,7 +443,7 @@ class ConsumerCoordinator(AbstractCoordinator):
                     return
                 else:
                     log.error("OffsetCommit failed for group % on partition %s"
-                              " with offset %s: %s", tp, offset,
+                              " with offset %s: %s", self.group_id, tp, offset,
                               error_type.__name__)
                     future.failure(error_type())
                     return
