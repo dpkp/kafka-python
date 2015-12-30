@@ -440,7 +440,7 @@ class AbstractCoordinator(object):
             # start sending heartbeats only if we have a valid generation
             if self.generation > 0:
                 self.heartbeat_task.reset()
-            future.success(None)
+            future.success(self.coordinator_id)
         elif error_type is Errors.GroupAuthorizationFailedError:
             error = error_type(self.group_id)
             log.error("Group Coordinator Request failed: %s", error)
