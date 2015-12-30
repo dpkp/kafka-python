@@ -151,9 +151,16 @@ class SubscriptionState(object):
         self.needs_partition_assignment = False
 
     def assign_from_subscribed(self, assignments):
-        """
-        Change the assignment to the specified partitions returned from the coordinator,
-        note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs
+        """Update the assignment to the specified partitions
+
+        This method is called by the coordinator to dynamically assign
+        partitions based on the consumer's topic subscription. This is different
+        from assign_from_user() which directly sets the assignment from a
+        user-supplied TopicPartition list.
+
+        Arguments:
+            assignments (list of TopicPartition): partitions to assign to this
+                consumer instance.
         """
         if self.subscription is None:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
