@@ -300,10 +300,6 @@ class KafkaConsumer(object):
                 committed = None
         return committed
 
-    def _ensure_not_closed(self):
-        if self._closed:
-            raise Errors.IllegalStateError("This consumer has already been closed.")
-
     def topics(self):
         """Get all topic metadata topics the user is authorized to view.
 
