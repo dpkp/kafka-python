@@ -143,7 +143,7 @@ class SubscriptionState(object):
 
         for partition in partitions:
             if partition not in self.assignment:
-                self.add_assigned_partition(partition)
+                self._add_assigned_partition(partition)
 
         for tp in set(self.assignment.keys()) - self._user_assignment:
             del self.assignment[tp]
@@ -163,7 +163,7 @@ class SubscriptionState(object):
                 raise ValueError("Assigned partition %s for non-subscribed topic." % tp)
         self.assignment.clear()
         for tp in assignments:
-            self.add_assigned_partition(tp)
+            self._add_assigned_partition(tp)
         self.needs_partition_assignment = False
 
     def unsubscribe(self):
@@ -250,7 +250,7 @@ class SubscriptionState(object):
     def resume(self, partition):
         self.assignment[partition].resume()
 
-    def add_assigned_partition(self, partition):
+    def _add_assigned_partition(self, partition):
         self.assignment[partition] = TopicPartitionState()
 
 
