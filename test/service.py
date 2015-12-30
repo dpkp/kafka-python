@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import select
 import subprocess
@@ -52,6 +53,7 @@ class SpawnedService(threading.Thread):
 
         self.child = subprocess.Popen(
             self.args,
+            preexec_fn=os.setsid, # to avoid propagating signals
             env=self.env,
             bufsize=1,
             stdout=subprocess.PIPE,
