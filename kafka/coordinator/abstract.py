@@ -157,7 +157,7 @@ class AbstractCoordinator(object):
         if self.coordinator_id is None:
             return True
 
-        if self._client.connection_failed(self.coordinator_id):
+        if self._client.is_disconnected(self.coordinator_id):
             self.coordinator_dead()
             return True
 

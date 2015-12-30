@@ -162,9 +162,9 @@ class KafkaClient(object):
             log.warning("Node %s not found in current connection list; skipping", node_id)
             return
 
+    def is_disconnected(self, node_id):
 
 
-    def connection_failed(self, node_id):
         """
         Check if the connection of the node has failed, based on the connection
         state. Such connection failures are usually transient and can be resumed
