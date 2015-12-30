@@ -165,7 +165,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, socket.error) as e:
             log.exception("Error sending %s to %s", request, self)
-            self.close(error=e)
+            self.close(error=Errors.ConnectionError(e))
             return future.failure(e)
         log.debug('%s Request %d: %s', self, correlation_id, request)
 
@@ -230,7 +230,7 @@ class BrokerConnection(object):
                     return None
                 log.exception('%s: Error receiving 4-byte payload header -'
                               ' closing socket', self)
-                self.close(error=e)
+                self.close(error=Errors.ConnectionError(e))
                 return None
 
             if self._rbuffer.tell() == 4:
@@ -253,7 +253,7 @@ class BrokerConnection(object):
                 if e.errno == errno.EWOULDBLOCK:
                     return None
                 log.exception('%s: Error in recv', self)
-                self.close(error=e)
+                self.close(error=Errors.ConnectionError(e))
                 return None
 
             staged_bytes = self._rbuffer.tell()
