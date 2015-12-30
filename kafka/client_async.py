@@ -465,8 +465,11 @@ class DelayedTaskQueue(object):
 
     def pop_ready(self):
         """Pop and return a list of all ready (task, future) tuples"""
-        self._drop_removed()
         ready_tasks = []
         while self._tasks and self._tasks[0][0] < time.time():
-            ready_tasks.append(self._pop_next())
+            try:
+                task = self._pop_next()
+            except KeyError:
+                break
+            ready_tasks.append(task)
         return ready_tasks
