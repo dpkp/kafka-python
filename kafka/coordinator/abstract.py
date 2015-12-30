@@ -264,13 +264,16 @@ class AbstractCoordinator(object):
     def _handle_join_group_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
-            log.debug("Joined group: %s", response)
             self.member_id = response.member_id
             self.generation = response.generation_id
             self.rejoin_needed = False
             self.protocol = response.group_protocol
+            log.info("Joined group '%s' (generation %s) with member_id %s",
+                     self.group_id, self.generation, self.member_id)
             #self.sensors.join_latency.record(response.requestLatencyMs())
             if response.leader_id == response.member_id:
+                log.info("Elected group leader -- performing partition"
+                         " assignments using %s", self.protocol)
                 self._on_join_leader(response).chain(future)
             else:
                 self._on_join_follower().chain(future)

@@ -172,6 +172,7 @@ class SubscriptionState(object):
         for tp in assignments:
             self._add_assigned_partition(tp)
         self.needs_partition_assignment = False
+        log.info("Updated partition assignment: %s", assignments)
 
     def unsubscribe(self):
         self.subscription = None
