@@ -470,6 +470,9 @@ class AbstractCoordinator(object):
             if self.generation > 0:
                 self.heartbeat_task.reset()
             future.success(self.coordinator_id)
+        elif error_type is Errors.GroupCoordinatorNotAvailableError:
+            log.debug("Group Coordinator Not Available; retry")
+            future.failure(error_type())
         elif error_type is Errors.GroupAuthorizationFailedError:
             error = error_type(self.group_id)
             log.error("Group Coordinator Request failed: %s", error)
