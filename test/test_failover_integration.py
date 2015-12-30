@@ -3,7 +3,9 @@ import os
 import time
 
 from kafka import KafkaClient, SimpleConsumer, KeyedProducer
-from kafka.common import TopicPartition, FailedPayloadsError, ConnectionError
+from kafka.common import (
+    TopicPartition, FailedPayloadsError, ConnectionError, RequestTimedOutError
+)
 from kafka.producer.base import Producer
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -77,7 +79,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, b'success')
                 log.debug("success!")
                 recovered = True
-            except (FailedPayloadsError, ConnectionError):
+            except (FailedPayloadsError, ConnectionError, RequestTimedOutError):
                 log.debug("caught exception sending message -- will retry")
                 continue
 
