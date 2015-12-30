@@ -46,17 +46,15 @@ class AbstractCoordinator(object):
     """
 
     DEFAULT_CONFIG = {
+        'group_id': 'kafka-python-default-group',
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
     }
 
-    def __init__(self, client, group_id, **configs):
+    def __init__(self, client, **configs):
         if not client:
             raise Errors.IllegalStateError('a client is required to use'
-                                           ' Group Coordinator')
-        if not group_id:
-            raise Errors.IllegalStateError('a group_id is required to use'
                                            ' Group Coordinator')
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -67,7 +65,7 @@ class AbstractCoordinator(object):
         self._client = client
         self.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID
         self.member_id = JoinGroupRequest.UNKNOWN_MEMBER_ID
-        self.group_id = group_id
+        self.group_id = self.config['group_id']
         self.coordinator_id = None
         self.rejoin_needed = True
         self.needs_join_prepare = True

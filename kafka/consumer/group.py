@@ -154,7 +154,7 @@ class KafkaConsumer(object):
         self._fetcher = Fetcher(
             self._client, self._subscription, **self.config)
         self._coordinator = ConsumerCoordinator(
-            self._client, self.config['group_id'], self._subscription,
+            self._client, self._subscription,
             assignors=self.config['partition_assignment_strategy'],
             **self.config)
         self._closed = False

@@ -47,6 +47,7 @@ class ConsumerProtocol(object):
 class ConsumerCoordinator(AbstractCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     DEFAULT_CONFIG = {
+        'group_id': 'kafka-python-default-group',
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': lambda offsets, error: True,
@@ -56,9 +57,8 @@ class ConsumerCoordinator(AbstractCoordinator):
         'retry_backoff_ms': 100,
     }
 
-    def __init__(self, client, group_id, subscription, **configs):
         """Initialize the coordination manager."""
-        super(ConsumerCoordinator, self).__init__(client, group_id, **configs)
+        super(ConsumerCoordinator, self).__init__(client, **configs)
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
