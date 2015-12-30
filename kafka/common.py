@@ -106,11 +106,6 @@ class IllegalArgumentError(KafkaError):
     pass
 
 
-class DisconnectError(KafkaError):
-    retriable = True
-    invalid_metadata = True
-
-
 class NoBrokersAvailable(KafkaError):
     retriable = True
     invalid_metadata = True
@@ -412,7 +407,8 @@ class FailedPayloadsError(KafkaError):
 
 
 class ConnectionError(KafkaError):
-    pass
+    retriable = True
+    invalid_metadata = True
 
 
 class BufferUnderflowError(KafkaError):

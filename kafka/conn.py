@@ -128,7 +128,7 @@ class BrokerConnection(object):
         self._rbuffer.seek(0)
         self._rbuffer.truncate()
         if error is None:
-            error = Errors.DisconnectError()
+            error = Errors.ConnectionError()
         while self.in_flight_requests:
             ifr = self.in_flight_requests.popleft()
             ifr.future.failure(error)
@@ -140,7 +140,7 @@ class BrokerConnection(object):
         """
         future = Future()
         if not self.connected():
-            return future.failure(Errors.DisconnectError())
+            return future.failure(Errors.ConnectionError())
         if not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests())
         self._correlation_id += 1
