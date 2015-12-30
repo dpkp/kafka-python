@@ -324,7 +324,7 @@ class KafkaClient(object):
         # if we found no connected node, return a disconnected one
         log.debug("No connected nodes found. Trying disconnected nodes.")
         for node_id in nodes:
-            if not self._conns[node_id].is_blacked_out():
+            if not self._conns[node_id].blacked_out():
                 return node_id
 
         # if still no luck, look for a node not in self._conns yet
