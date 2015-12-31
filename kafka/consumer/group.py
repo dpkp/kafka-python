@@ -4,10 +4,6 @@ import copy
 import logging
 import time
 
-import six
-
-import kafka.common as Errors
-
 from kafka.client_async import KafkaClient
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
@@ -570,7 +566,6 @@ class KafkaConsumer(object):
 
     def __iter__(self):
         while True:
-            # records = self._poll_once(self.config['request_timeout_ms'])
             self._coordinator.ensure_coordinator_known()
 
             # ensure we have partitions assigned if we expect to
