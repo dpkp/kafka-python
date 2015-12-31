@@ -13,12 +13,12 @@ from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
                                   LeaveGroupRequest, SyncGroupRequest)
 from .heartbeat import Heartbeat
 
-log = logging.getLogger(__name__)
+log = logging.getLogger('kafka.coordinator')
 
 
-class AbstractCoordinator(object):
+class BaseCoordinator(object):
     """
-    AbstractCoordinator implements group management for a single group member
+    BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group
     semantics are provided by extending this class.  See ConsumerCoordinator
     for example usage.

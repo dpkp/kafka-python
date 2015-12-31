@@ -5,7 +5,7 @@ import time
 
 import six
 
-from .abstract import AbstractCoordinator
+from .base import BaseCoordinator
 import kafka.common as Errors
 from kafka.common import OffsetAndMetadata, TopicPartition
 from kafka.future import Future
@@ -44,7 +44,7 @@ class ConsumerProtocol(object):
     ASSIGNMENT = ConsumerProtocolMemberAssignment
 
 
-class ConsumerCoordinator(AbstractCoordinator):
+class ConsumerCoordinator(BaseCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
