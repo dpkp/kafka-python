@@ -16,9 +16,9 @@ class Heartbeat(object):
             if key in configs:
                 self.config[key] = configs[key]
 
-        if self.config['heartbeat_interval_ms'] > self.config['session_timeout_ms']:
-            raise Errors.IllegalArgumentError("Heartbeat interval must be set"
-                                              " lower than the session timeout")
+        assert (self.config['heartbeat_interval_ms']
+                <= self.config['session_timeout_ms'],
+                'Heartbeat interval must be lower than the session timeout')
 
         self.interval = self.config['heartbeat_interval_ms'] / 1000.0
         self.timeout = self.config['session_timeout_ms'] / 1000.0

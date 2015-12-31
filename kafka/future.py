@@ -27,10 +27,7 @@ class Future(object):
             return False
 
     def success(self, value):
-        if self.is_done:
-            raise Errors.IllegalStateError('Invalid attempt to complete a'
-                                           ' request future which is already'
-                                           ' complete')
+        assert not self.is_done, 'Future is already complete'
         self.value = value
         self.is_done = True
         for f in self._callbacks:
@@ -41,11 +38,10 @@ class Future(object):
         return self
 
     def failure(self, e):
-        if self.is_done:
-            raise Errors.IllegalStateError('Invalid attempt to complete a'
-                                           ' request future which is already'
-                                           ' complete')
+        assert not self.is_done, 'Future is already complete'
         self.exception = e if type(e) is not type else e()
+        assert isinstance(self.exception, BaseException), (
+            'future failed without an exception')
         self.is_done = True
         for f in self._errbacks:
             try:

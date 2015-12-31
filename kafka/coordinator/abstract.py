@@ -72,10 +72,6 @@ class AbstractCoordinator(object):
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
         """
-        if not client:
-            raise Errors.IllegalStateError('a client is required to use'
-                                           ' Group Coordinator')
-
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:

@@ -190,9 +190,7 @@ class BrokerConnection(object):
 
         Return response if available
         """
-        if self._processing:
-            raise Errors.IllegalStateError('Recursive connection processing'
-                                           ' not supported')
+        assert not self._processing, 'Recursion not supported'
         if not self.connected():
             log.warning('%s cannot recv: socket not connected', self)
             # If requests are pending, we should close the socket and
@@ -272,11 +270,8 @@ class BrokerConnection(object):
             return response
 
     def _process_response(self, read_buffer):
-        if self._processing:
-            raise Errors.IllegalStateError('Recursive connection processing'
-                                           ' not supported')
-        else:
-            self._processing = True
+        assert not self._processing, 'Recursion not supported'
+        self._processing = True
         ifr = self.in_flight_requests.popleft()
 
         # verify send/recv correlation ids match

@@ -103,8 +103,7 @@ class SubscriptionState(object):
         """
         if self._user_assignment or (topics and pattern):
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
-        if not (topics or pattern):
-            raise IllegalStateError('Must provide topics or a pattern')
+        assert topics or pattern, 'Must provide topics or pattern'
 
         if pattern:
             log.info('Subscribing to pattern: /%s/', pattern)
@@ -341,8 +340,7 @@ class TopicPartitionState(object):
         self._fetched = None # current fetch position
 
     def _set_fetched(self, offset):
-        if not self.has_valid_position:
-            raise IllegalStateError("Cannot update fetch position without valid consumed/fetched positions")
+        assert self.has_valid_position, 'Valid consumed/fetch position required'
         self._fetched = offset
 
     def _get_fetched(self):
@@ -351,8 +349,7 @@ class TopicPartitionState(object):
     fetched = property(_get_fetched, _set_fetched, None, "current fetch position")
 
     def _set_consumed(self, offset):
-        if not self.has_valid_position:
-            raise IllegalStateError("Cannot update consumed position without valid consumed/fetched positions")
+        assert self.has_valid_position, 'Valid consumed/fetch position required'
         self._consumed = offset
 
     def _get_consumed(self):
