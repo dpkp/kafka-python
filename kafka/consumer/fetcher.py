@@ -299,15 +299,7 @@ class Fetcher(object):
                           " and update consumed position to %s", tp, next_offset)
                 self._subscriptions.assignment[tp].consumed = next_offset
 
-                # TODO: handle compressed messages
-                for offset, size, msg in messages:
-                    if msg.attributes:
-                        raise Errors.KafkaError('Compressed messages not supported yet')
-                    elif self.config['check_crcs'] and not msg.validate_crc():
-                        raise Errors.InvalidMessageError(msg)
-
-                    key, value = self._deserialize(msg)
-                    record = ConsumerRecord(tp.topic, tp.partition, offset, key, value)
+                for record in self._unpack_message_set(tp, messages):
                     drained[tp].append(record)
             else:
                 # these records aren't next in line based on the last consumed
@@ -315,6 +307,17 @@ class Fetcher(object):
                 log.debug("Ignoring fetched records for %s at offset %s",
                           tp, fetch_offset)
         return dict(drained)
+
+    def _unpack_message_set(self, tp, messages):
+        for offset, size, msg in messages:
+            if self.config['check_crcs'] and not msg.validate_crc():
+                raise Errors.InvalidMessageError(msg)
+            elif msg.is_compressed():
+                for record in self._unpack_message_set(tp, msg.decompress()):
+                    yield record
+            else:
+                key, value = self._deserialize(msg)
+                yield ConsumerRecord(tp.topic, tp.partition, offset, key, value)
 
     def __iter__(self):
         """Iterate over fetched_records"""
@@ -349,16 +352,9 @@ class Fetcher(object):
                 self._subscriptions.assignment[tp].fetched = consumed
 
             elif fetch_offset == consumed:
-                # TODO: handle compressed messages
-                for offset, size, msg in messages:
-                    if msg.attributes:
-                        raise Errors.KafkaError('Compressed messages not supported yet')
-                    elif self.config['check_crcs'] and not msg.validate_crc():
-                        raise Errors.InvalidMessageError(msg)
-
-                    self._subscriptions.assignment[tp].consumed = offset + 1
-                    key, value = self._deserialize(msg)
-                    yield ConsumerRecord(tp.topic, tp.partition, offset, key, value)
+                for msg in self._unpack_message_set(tp, messages):
+                    self._subscriptions.assignment[tp].consumed = msg.offset + 1
+                    yield msg
             else:
                 # these records aren't next in line based on the last consumed
                 # position, ignore them they must be from an obsolete request
