@@ -585,5 +585,8 @@ class KafkaConsumer(object):
             # init any new fetches (won't resend pending fetches)
             self._fetcher.init_fetches()
             self._client.poll(self.config['request_timeout_ms'] / 1000.0)
+            timeout = time.time() + self.config['heartbeat_interval_ms'] / 1000.0
             for msg in self._fetcher:
                 yield msg
+                if time.time() > timeout:
+                    break
