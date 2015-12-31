@@ -29,4 +29,21 @@ There are a few levels of abstraction:
     for msg in consumer.iter_messages():
         print msg
 
+# SSL-support
+    See https://docs.python.org/3/library/ssl.html for details.
+    'security.protocol' is used to determine which security-protocol
+    is used, 'SSL' in this case.
+    Usually, you'll only need 'security.protocol', 'keyfile' and 'certfile', just leave out the 
+    other options. 
 
+    client = KafkaClient('localhost:9093', sslopts={
+     'security.protocol': 'SSL',
+     'keyfile': 'mykeyfile',
+     'certfile': 'mycertfile',
+     'ca_certs': 'myca_certs',
+     'cert_reqs': ssl.CERT_NONE,
+     'ssl_version': ssl.PROTOCOL_TLSv1,
+     'ciphers': '<string of ciphers, check the openssl-docs>',
+     })
+   
+     The argument 'ciphers' is supported by Python3 only.
