@@ -17,7 +17,7 @@ class Heartbeat(object):
                 self.config[key] = configs[key]
 
         assert (self.config['heartbeat_interval_ms']
-                <= self.config['session_timeout_ms'],
+                <= self.config['session_timeout_ms']), (
                 'Heartbeat interval must be lower than the session timeout')
 
         self.interval = self.config['heartbeat_interval_ms'] / 1000.0
