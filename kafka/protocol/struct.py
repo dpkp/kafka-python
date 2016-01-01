@@ -44,6 +44,13 @@ class Struct(AbstractType):
             key_vals.append('%s=%s' % (name, field.repr(self.__dict__[name])))
         return self.__class__.__name__ + '(' + ', '.join(key_vals) + ')'
 
+    def __eq__(self, other):
+        if self.SCHEMA != other.SCHEMA:
+            return False
+        for attr in self.SCHEMA.names:
+            if self.__dict__[attr] != other.__dict__[attr]:
+                return False
+        return True
 
 """
 class MetaStruct(type):
