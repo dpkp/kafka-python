@@ -48,7 +48,7 @@ deploy:
     # branch: master
 
 script:
-  - if [ -n "$UNIT_AND_LINT_ONLY" ]; then tox -e lint,`./travis_selector.sh $TRAVIS_PYTHON_VERSION`; else tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`; fi
+  - tox -e ${TRAVIS_PYTHON_VERSION/./}
 
 after_success:
   - coveralls
