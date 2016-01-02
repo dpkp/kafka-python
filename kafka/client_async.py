@@ -4,7 +4,6 @@ import itertools
 import logging
 import random
 import select
-import sys
 import time
 
 import six
@@ -360,7 +359,7 @@ class KafkaClient(object):
         """
         nodes = list(self._conns.keys())
         random.shuffle(nodes)
-        inflight = sys.maxint
+        inflight = float('inf')
         found = None
         for node_id in nodes:
             conn = self._conns[node_id]
@@ -421,7 +420,7 @@ class KafkaClient(object):
             return ttl
 
         if self._metadata_refresh_in_progress:
-            return sys.maxint
+            return 9999999999
 
         node_id = self.least_loaded_node()
 
@@ -530,7 +529,7 @@ class DelayedTaskQueue(object):
         """Number of seconds until next task is ready."""
         self._drop_removed()
         if not self._tasks:
-            return sys.maxint
+            return 9999999999
         else:
             return max(self._tasks[0][0] - time.time(), 0)
 
