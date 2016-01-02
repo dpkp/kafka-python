@@ -36,14 +36,14 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
 
         member_iter = itertools.cycle(sorted(member_metadata.keys()))
         for partition in all_topic_partitions:
-            member_id = member_iter.next()
+            member_id = next(member_iter)
 
             # Because we constructed all_topic_partitions from the set of
             # member subscribed topics, we should be safe assuming that
             # each topic in all_topic_partitions is in at least one member
             # subscription; otherwise this could yield an infinite loop
             while partition.topic not in member_metadata[member_id].subscription:
-                member_id = member_iter.next()
+                member_id = next(member_iter)
             assignment[member_id][partition.topic].append(partition.partition)
 
         protocol_assignment = {}
