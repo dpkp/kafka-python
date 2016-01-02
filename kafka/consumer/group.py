@@ -151,7 +151,10 @@ class KafkaConsumer(six.Iterator):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
-                self.config[key] = configs[key]
+                self.config[key] = configs.pop(key)
+
+        # Only check for extra config keys in top-level class
+        assert not configs, 'Unrecognized configs: %s' % configs
 
         self._client = KafkaClient(**self.config)
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
