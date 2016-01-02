@@ -3,7 +3,7 @@ from __future__ import absolute_import
 try:
     from itertools import zip_longest as izip_longest, repeat  # pylint: disable=E0611
 except ImportError:
-    from itertools import izip_longest as izip_longest, repeat # python 2
+    from itertools import izip_longest as izip_longest, repeat  # pylint: disable=E0611
 import logging
 try:
     import queue # python 3

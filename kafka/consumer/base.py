@@ -197,7 +197,8 @@ class Consumer(object):
                 # ValueError on list.remove() if the exithandler no longer
                 # exists is fine here
                 try:
-                    atexit._exithandlers.remove((self._cleanup_func, (self,), {}))
+                    atexit._exithandlers.remove(  # pylint: disable=no-member
+                        (self._cleanup_func, (self,), {}))
                 except ValueError:
                     pass
 

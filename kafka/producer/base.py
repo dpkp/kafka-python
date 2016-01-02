@@ -5,9 +5,9 @@ import logging
 import time
 
 try:
-    from queue import Empty, Full, Queue
+    from queue import Empty, Full, Queue  # pylint: disable=import-error
 except ImportError:
-    from Queue import Empty, Full, Queue
+    from Queue import Empty, Full, Queue  # pylint: disable=import-error
 from collections import defaultdict
 
 from threading import Thread, Event
@@ -444,7 +444,8 @@ class Producer(object):
                 # ValueError on list.remove() if the exithandler no longer exists
                 # but that is fine here
                 try:
-                    atexit._exithandlers.remove((self._cleanup_func, (self,), {}))
+                    atexit._exithandlers.remove(  # pylint: disable=no-member
+                        (self._cleanup_func, (self,), {}))
                 except ValueError:
                     pass
 

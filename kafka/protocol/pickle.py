@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
 try:
-    import copyreg
+    import copyreg  # pylint: disable=import-error
 except ImportError:
-    import copy_reg as copyreg # python2
+    import copy_reg as copyreg  # pylint: disable=import-error
 
 import types
 
