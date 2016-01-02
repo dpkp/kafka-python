@@ -165,8 +165,9 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, socket.error) as e:
             log.exception("Error sending %s to %s", request, self)
-            self.close(error=Errors.ConnectionError(e))
-            return future.failure(e)
+            error = Errors.ConnectionError(e)
+            self.close(error=error)
+            return future.failure(error)
         log.debug('%s Request %d: %s', self, correlation_id, request)
 
         if expect_response:
