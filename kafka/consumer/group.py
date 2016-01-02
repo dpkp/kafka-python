@@ -343,7 +343,7 @@ class KafkaConsumer(six.Iterator):
                 records that are available now. Must not be negative. Default: 0
 
         Returns:
-            dict: topic to deque of records since the last fetch for the
+            dict: topic to list of records since the last fetch for the
                 subscribed list of topics and partitions
         """
         assert timeout_ms >= 0, 'Timeout must not be negative'
@@ -377,7 +377,7 @@ class KafkaConsumer(six.Iterator):
             timeout_ms (int): The maximum time in milliseconds to block
 
         Returns:
-            dict: map of topic to deque of records (may be empty)
+            dict: map of topic to list of records (may be empty)
         """
         # TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
         self._coordinator.ensure_coordinator_known()

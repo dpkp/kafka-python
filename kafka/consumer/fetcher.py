@@ -267,14 +267,14 @@ class Fetcher(six.Iterator):
             AssertionError: if used with iterator (incompatible)
 
         Returns:
-            dict: {TopicPartition: deque([messages])}
+            dict: {TopicPartition: [messages]}
         """
         assert self._iterator is None, (
             'fetched_records is incompatible with message iterator')
         if self._subscriptions.needs_partition_assignment:
             return {}
 
-        drained = collections.defaultdict(collections.deque)
+        drained = collections.defaultdict(list)
         self._raise_if_offset_out_of_range()
         self._raise_if_unauthorized_topics()
         self._raise_if_record_too_large()
