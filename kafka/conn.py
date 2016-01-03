@@ -98,14 +98,15 @@ class BrokerConnection(object):
                 self.close() # error=TimeoutError ?
                 self.last_failure = time.time()
 
-            ret = self._sock.connect_ex((self.host, self.port))
-            if not ret or ret is errno.EISCONN:
-                self.state = ConnectionStates.CONNECTED
-            elif ret is not errno.EALREADY:
-                log.error('Connect attempt to %s returned error %s.'
-                          ' Disconnecting.', self, ret)
-                self.close()
-                self.last_failure = time.time()
+            else:
+                ret = self._sock.connect_ex((self.host, self.port))
+                if not ret or ret is errno.EISCONN:
+                    self.state = ConnectionStates.CONNECTED
+                elif ret is not errno.EALREADY:
+                    log.error('Connect attempt to %s returned error %s.'
+                              ' Disconnecting.', self, ret)
+                    self.close()
+                    self.last_failure = time.time()
         return self.state
 
     def blacked_out(self):
