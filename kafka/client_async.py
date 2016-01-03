@@ -131,10 +131,10 @@ class KafkaClient(object):
 
     def _initiate_connect(self, node_id):
         """Initiate a connection to the given node (must be in metadata)"""
-        broker = self.cluster.broker_metadata(node_id)
-        assert broker, 'Broker id %s not in current metadata' % node_id
-
         if node_id not in self._conns:
+            broker = self.cluster.broker_metadata(node_id)
+            assert broker, 'Broker id %s not in current metadata' % node_id
+
             log.debug("Initiating connection to node %s at %s:%s",
                       node_id, broker.host, broker.port)
             self._conns[node_id] = BrokerConnection(broker.host, broker.port,
