@@ -475,8 +475,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.send_messages(1, range(100, 200))
 
         # Start a consumer
-        consumer = self.kafka_consumer(auto_offset_reset='earliest',
-                                       consumer_timeout_ms=5000)
+        consumer = self.kafka_consumer(auto_offset_reset='earliest')
         n = 0
         messages = {0: set(), 1: set()}
         for m in consumer:
