@@ -167,6 +167,13 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % configs
 
+        deprecated = {'smallest': 'earliest', 'largest': 'latest' }
+        if self.config['auto_offset_reset'] in deprecated:
+            new_config = deprecated[self.config['auto_offset_reset']]
+            log.warning('use auto_offset_reset=%s (%s is deprecated)',
+                        new_config, self.config['auto_offset_reset'])
+            self.config['auto_offset_reset'] = new_config
+
         self._client = KafkaClient(**self.config)
 
         # Check Broker Version if not set explicitly
