@@ -17,6 +17,10 @@ from .protocol.metadata import MetadataRequest
 from .protocol.produce import ProduceRequest
 from .version import __version__
 
+if six.PY2:
+    ConnectionError = None
+
+
 log = logging.getLogger(__name__)
 
 
@@ -503,7 +507,6 @@ class KafkaClient(object):
             ('0.8.0', MetadataRequest([])),
         ]
 
-
         for version, request in test_cases:
             connect()
             f = self.send(node_id, request)
@@ -517,8 +520,11 @@ class KafkaClient(object):
                 log.info('Broker version identifed as %s', version)
                 return version
 
-            assert isinstance(f.exception.message, socket.error)
-            assert f.exception.message.errno in (32, 54)
+            if six.PY2:
+                assert isinstance(f.exception.args[0], socket.error)
+                assert f.exception.args[0].errno in (32, 54)
+            else:
+                assert isinstance(f.exception.args[0], ConnectionError)
             log.info("Broker is not v%s -- it did not recognize %s",
                      version, request.__class__.__name__)
             continue
