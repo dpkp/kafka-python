@@ -48,7 +48,7 @@ deploy:
     # branch: master
 
 script:
-  - tox -e ${TRAVIS_PYTHON_VERSION/./}
+  - tox -e py${TRAVIS_PYTHON_VERSION/./}
 
 after_success:
   - coveralls
