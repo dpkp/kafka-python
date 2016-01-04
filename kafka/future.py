@@ -45,7 +45,7 @@ class Future(object):
         self.is_done = True
         for f in self._errbacks:
             try:
-                f(e)
+                f(self.exception)
             except Exception:
                 log.exception('Error processing errback')
         return self
