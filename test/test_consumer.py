@@ -15,10 +15,6 @@ class TestKafkaConsumer(unittest.TestCase):
         with self.assertRaises(AssertionError):
             SimpleConsumer(MagicMock(), 'group', 'topic', partitions = [ '0' ])
 
-    def test_broker_list_required(self):
-        with self.assertRaises(KafkaConfigurationError):
-            KafkaConsumer()
-
 
 class TestMultiProcessConsumer(unittest.TestCase):
     def test_partition_list(self):
