@@ -236,6 +236,7 @@ class BaseCoordinator(object):
                 self.needs_join_prepare = True
                 self.heartbeat_task.reset()
             else:
+                assert future.failed()
                 exception = future.exception
                 if isinstance(exception, (Errors.UnknownMemberIdError,
                                           Errors.RebalanceInProgressError,

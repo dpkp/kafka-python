@@ -292,14 +292,14 @@ class KafkaClient(object):
             metadata_timeout = self._maybe_refresh_metadata()
 
             # Send scheduled tasks
-            for task, future in self._delayed_tasks.pop_ready():
+            for task, task_future in self._delayed_tasks.pop_ready():
                 try:
                     result = task()
                 except Exception as e:
                     log.error("Task %s failed: %s", task, e)
-                    future.failure(e)
+                    task_future.failure(e)
                 else:
-                    future.success(result)
+                    task_future.success(result)
 
             timeout = min(timeout_ms, metadata_timeout,
                           self.config['request_timeout_ms'])
