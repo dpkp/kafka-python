@@ -651,3 +651,34 @@ class KafkaConsumer(six.Iterator):
         except StopIteration:
             self._iterator = None
             raise
+
+    # old KafkaConsumer methods are deprecated
+    def configure(self, **configs):
+        """DEPRECATED -- initialize a new consumer"""
+        raise NotImplementedError(
+            'deprecated -- initialize a new consumer')
+
+    def set_topic_partitions(self, *topics):
+        """DEPRECATED -- use subscribe() or assign()"""
+        raise NotImplementedError(
+            'deprecated -- use subscribe() or assign()')
+
+    def fetch_messages(self):
+        """DEPRECATED -- use poll() or iterator interface"""
+        raise NotImplementedError(
+            'deprecated -- use poll() or iterator interface')
+
+    def get_partition_offsets(self, topic, partition,
+                              request_time_ms, max_num_offsets):
+        """DEPRECATED -- send OffsetRequest with KafkaClient"""
+        raise NotImplementedError(
+            'deprecated -- send an OffsetRequest with KafkaClient')
+
+    def offsets(self, group=None):
+        """DEPRECATED -- use committed(partition)"""
+        raise NotImplementedError('deprecated -- use committed(partition)')
+
+    def task_done(self, message):
+        """DEPRECATED -- commit manually if needed"""
+        raise NotImplementedError(
+            'deprecated -- commit offsets manually if needed')
