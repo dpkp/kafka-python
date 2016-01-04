@@ -377,7 +377,7 @@ class Fetcher(six.Iterator):
             # fetch multiple partitions in bulk when they are on the same broker
             self.init_fetches()
 
-    def __iter__(self):
+    def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
 
     def __next__(self):

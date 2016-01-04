@@ -634,7 +634,7 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout:
                     break
 
-    def __iter__(self):
+    def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
 
     def __next__(self):
