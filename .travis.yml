@@ -46,7 +46,7 @@ deploy:
     # branch: master
 
 script:
-  - tox -e py${TRAVIS_PYTHON_VERSION/./}
+  - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
 after_success:
   - coveralls
