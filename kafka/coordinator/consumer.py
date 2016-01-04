@@ -303,11 +303,6 @@ class ConsumerCoordinator(BaseCoordinator):
 
             time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
-    def ensure_partition_assignment(self):
-        """Ensure that we have a valid partition assignment from the coordinator."""
-        if self._subscription.partitions_auto_assigned():
-            self.ensure_active_group()
-
     def close(self):
         try:
             self._maybe_auto_commit_offsets_sync()
