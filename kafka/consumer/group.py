@@ -394,7 +394,7 @@ class KafkaConsumer(six.Iterator):
             remaining = timeout_ms - elapsed_ms
 
             if remaining <= 0:
-                break
+                return {}
 
     def _poll_once(self, timeout_ms):
         """
