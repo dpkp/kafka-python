@@ -94,6 +94,7 @@ def test_group(kafka_broker, topic):
         stop[i] = threading.Event()
         consumers[i] = KafkaConsumer(topic,
                                      bootstrap_servers=connect_str,
+                                     heartbeat_interval_ms=500,
                                      request_timeout_ms=1000)
         while not stop[i].is_set():
             for tp, records in six.itervalues(consumers[i].poll()):
