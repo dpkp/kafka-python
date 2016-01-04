@@ -34,7 +34,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
 
         hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
-        self.client = KafkaClient(hosts)
+        self.client = KafkaClient(hosts, timeout=2)
         super(TestFailover, self).setUp()
 
     def tearDown(self):
