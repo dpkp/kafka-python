@@ -3,11 +3,9 @@ from __future__ import absolute_import
 from collections import namedtuple
 import logging
 from multiprocessing import Process, Manager as MPManager
-try:
-    import queue # python 3
-except ImportError:
-    import Queue as queue # python 2
 import time
+
+from six.moves import queue
 
 from ..common import KafkaError
 from .base import (

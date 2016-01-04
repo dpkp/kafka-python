@@ -2,6 +2,7 @@
 
 import collections
 import logging
+import threading
 import time
 
 from mock import MagicMock, patch
@@ -15,15 +16,7 @@ from kafka.common import (
 from kafka.producer.base import Producer, _send_upstream
 from kafka.protocol import CODEC_NONE
 
-import threading
-try:
-    from queue import Empty, Queue
-except ImportError:
-    from Queue import Empty, Queue
-try:
-    xrange
-except NameError:
-    xrange = range
+from six.moves import queue, xrange
 
 
 class TestKafkaProducer(unittest.TestCase):
@@ -130,7 +123,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
 
     def setUp(self):
         self.client = MagicMock()
-        self.queue = Queue()
+        self.queue = queue.Queue()
 
     def _run_process(self, retries_limit=3, sleep_timeout=1):
         # run _send_upstream process with the queue

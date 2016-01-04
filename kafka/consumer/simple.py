@@ -5,14 +5,11 @@ try:
 except ImportError:
     from itertools import izip_longest as izip_longest, repeat  # pylint: disable=E0611
 import logging
-try:
-    import queue # python 3
-except ImportError:
-    import Queue as queue # python 2
 import sys
 import time
 
 import six
+from six.moves import queue
 
 from .base import (
     Consumer,
