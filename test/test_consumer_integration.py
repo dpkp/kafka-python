@@ -539,7 +539,6 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             enable_auto_commit=True,
             auto_commit_interval_ms=100,
             auto_offset_reset='earliest',
-            consumer_timeout_ms=100
         )
 
         # Grab the first 180 messages
@@ -556,14 +555,12 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             enable_auto_commit=True,
             auto_commit_interval_ms=100,
             auto_offset_reset='earliest',
-            consumer_timeout_ms=100
         )
 
         # 181-200
         output_msgs2 = []
-        with self.assertRaises(StopIteration):
-            while True:
-                m = next(consumer2)
-                output_msgs2.append(m)
+        for _ in xrange(20):
+            m = next(consumer2)
+            output_msgs2.append(m)
         self.assert_message_count(output_msgs2, 20)
-        #self.assertEqual(len(set(output_msgs1) & set(output_msgs2)), 15)
+        self.assertEqual(len(set(output_msgs1) | set(output_msgs2)), 200)
