@@ -22,6 +22,8 @@ class Message(Struct):
     CODEC_SNAPPY = 0x02
 
     def __init__(self, value, key=None, magic=0, attributes=0, crc=0):
+        assert isinstance(value, bytes), 'value must be bytes'
+        assert key is None or isinstance(key, bytes), 'key must be bytes'
         self.crc = crc
         self.magic = magic
         self.attributes = attributes
