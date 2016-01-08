@@ -334,6 +334,14 @@ class KafkaClient(object):
                         if (conn.state is ConnectionStates.CONNECTED
                             and conn.in_flight_requests)])
         if not sockets:
+            # if sockets are connecting, we can wake when they are writeable
+            if self._connecting:
+                sockets = [self._conns[node]._sock for node in self._connecting]
+                select.select([], sockets, [], timeout)
+            # otherwise just sleep to prevent CPU spinning
+            else:
+                log.debug('Nothing to do in _poll -- sleeping for %s', timeout)
+                time.sleep(timeout)
             return []
 
         ready, _, _ = select.select(list(sockets.keys()), [], [], timeout)
