@@ -163,7 +163,6 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
-    @kafka_versions("all")
     def test_producer_random_order(self):
         producer = SimpleProducer(self.client, random_start=True)
         resp1 = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
