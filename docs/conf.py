@@ -32,7 +32,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
-    'sphinxcontrib.napoleon',
+    'sphinx.ext.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -49,7 +49,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'kafka-python'
-copyright = u'2015 - David Arthur, Dana Powers, and Contributors'
+copyright = u'2016 -- Dana Powes, David Arthur, and Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

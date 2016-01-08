@@ -11,7 +11,7 @@ from kafka import (
 )
 from kafka.codec import has_snappy
 from kafka.common import (
-    FetchRequest, ProduceRequest,
+    FetchRequestPayload, ProduceRequestPayload,
     UnknownTopicOrPartitionError, LeaderNotAvailableError
 )
 from kafka.producer.base import Producer
@@ -163,6 +163,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer.stop()
 
+    @kafka_versions("all")
     def test_producer_random_order(self):
         producer = SimpleProducer(self.client, random_start=True)
         resp1 = producer.send_messages(self.topic, self.msg("one"), self.msg("two"))
@@ -466,7 +467,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
     def assert_produce_request(self, messages, initial_offset, message_ct,
                                partition=0):
-        produce = ProduceRequest(self.bytes_topic, partition, messages=messages)
+        produce = ProduceRequestPayload(self.topic, partition, messages=messages)
 
         # There should only be one response message from the server.
         # This will throw an exception if there's more than one.
@@ -484,7 +485,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         # There should only be one response message from the server.
         # This will throw an exception if there's more than one.
 
-        resp, = self.client.send_fetch_request([ FetchRequest(self.bytes_topic, partition, start_offset, 1024) ])
+        resp, = self.client.send_fetch_request([FetchRequestPayload(self.topic, partition, start_offset, 1024)])
 
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.partition, partition)

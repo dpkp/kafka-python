@@ -11,9 +11,8 @@ import uuid
 from six.moves import xrange
 from . import unittest
 
-from kafka import KafkaClient
-from kafka.common import OffsetRequest
-from kafka.util import kafka_bytestring
+from kafka import SimpleClient
+from kafka.common import OffsetRequestPayload
 
 __all__ = [
     'random_string',
@@ -84,7 +83,6 @@ def get_open_port():
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
-    bytes_topic = None
     zk = None
     server = None
 
@@ -96,10 +94,9 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         if not self.topic:
             topic = "%s-%s" % (self.id()[self.id().rindex(".") + 1:], random_string(10))
             self.topic = topic
-            self.bytes_topic = topic.encode('utf-8')
 
         if self.create_client:
-            self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
+            self.client = SimpleClient('%s:%d' % (self.server.host, self.server.port))
 
         self.client.ensure_topic_exists(self.topic)
 
@@ -115,7 +112,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
     def current_offset(self, topic, partition):
         try:
-            offsets, = self.client.send_offset_request([ OffsetRequest(kafka_bytestring(topic), partition, -1, 1) ])
+            offsets, = self.client.send_offset_request([OffsetRequestPayload(topic, partition, -1, 1)])
         except:
             # XXX: We've seen some UnknownErrors here and cant debug w/o server logs
             self.zk.child.dump_logs()
@@ -149,6 +146,3 @@ class Timer(object):
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger('test.fixtures').setLevel(logging.ERROR)
 logging.getLogger('test.service').setLevel(logging.ERROR)
-
-# kafka.conn debug logging is verbose, disable in tests by default
-logging.getLogger('kafka.conn').setLevel(logging.INFO)

@@ -55,24 +55,30 @@ def gzip_decode(payload):
     return result
 
 
-def snappy_encode(payload, xerial_compatible=False, xerial_blocksize=32 * 1024):
-    """Encodes the given data with snappy if xerial_compatible is set then the
-       stream is encoded in a fashion compatible with the xerial snappy library
+def snappy_encode(payload, xerial_compatible=False, xerial_blocksize=32*1024):
+    """Encodes the given data with snappy compression.
 
-       The block size (xerial_blocksize) controls how frequent the blocking
-       occurs 32k is the default in the xerial library.
+    If xerial_compatible is set then the stream is encoded in a fashion
+    compatible with the xerial snappy library.
 
-       The format winds up being
+    The block size (xerial_blocksize) controls how frequent the blocking occurs
+    32k is the default in the xerial library.
+
+    The format winds up being:
+
+
         +-------------+------------+--------------+------------+--------------+
         |   Header    | Block1 len | Block1 data  | Blockn len | Blockn data  |
-        |-------------+------------+--------------+------------+--------------|
+        +-------------+------------+--------------+------------+--------------+
         |  16 bytes   |  BE int32  | snappy bytes |  BE int32  | snappy bytes |
         +-------------+------------+--------------+------------+--------------+
 
-        It is important to note that the blocksize is the amount of uncompressed
-        data presented to snappy at each block, whereas the blocklen is the
-        number of bytes that will be present in the stream, that is the
-        length will always be <= blocksize.
+
+    It is important to note that the blocksize is the amount of uncompressed
+    data presented to snappy at each block, whereas the blocklen is the number
+    of bytes that will be present in the stream; so the length will always be
+    <= blocksize.
+
     """
 
     if not has_snappy():
@@ -109,9 +115,9 @@ def _detect_xerial_stream(payload):
         This mode writes a magic header of the format:
             +--------+--------------+------------+---------+--------+
             | Marker | Magic String | Null / Pad | Version | Compat |
-            |--------+--------------+------------+---------+--------|
+            +--------+--------------+------------+---------+--------+
             |  byte  |   c-string   |    byte    |  int32  | int32  |
-            |--------+--------------+------------+---------+--------|
+            +--------+--------------+------------+---------+--------+
             |  -126  |   'SNAPPY'   |     \0     |         |        |
             +--------+--------------+------------+---------+--------+
 

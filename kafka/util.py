@@ -10,7 +10,13 @@ from kafka.common import BufferUnderflowError
 
 
 def crc32(data):
-    return binascii.crc32(data) & 0xffffffff
+    crc = binascii.crc32(data)
+    # py2 and py3 behave a little differently
+    # CRC is encoded as a signed int in kafka protocol
+    # so we'll convert the py3 unsigned result to signed
+    if six.PY3 and crc >= 2**31:
+        crc -= 2**32
+    return crc
 
 
 def write_int_string(s):
@@ -87,18 +93,6 @@ def group_by_topic_and_partition(tuples):
                                                    t.topic, t.partition)
         out[t.topic][t.partition] = t
     return out
-
-
-def kafka_bytestring(s):
-    """
-    Takes a string or bytes instance
-    Returns bytes, encoding strings in utf-8 as necessary
-    """
-    if isinstance(s, six.binary_type):
-        return s
-    if isinstance(s, six.string_types):
-        return s.encode('utf-8')
-    raise TypeError(s)
 
 
 class ReentrantTimer(object):

@@ -4,7 +4,7 @@ from . import unittest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer
 from kafka.common import (
-    KafkaConfigurationError, FetchResponse, OffsetFetchResponse,
+    KafkaConfigurationError, FetchResponsePayload, OffsetFetchResponsePayload,
     FailedPayloadsError, OffsetAndMessage,
     NotLeaderForPartitionError, UnknownTopicOrPartitionError
 )
@@ -14,10 +14,6 @@ class TestKafkaConsumer(unittest.TestCase):
     def test_non_integer_partitions(self):
         with self.assertRaises(AssertionError):
             SimpleConsumer(MagicMock(), 'group', 'topic', partitions = [ '0' ])
-
-    def test_broker_list_required(self):
-        with self.assertRaises(KafkaConfigurationError):
-            KafkaConsumer()
 
 
 class TestMultiProcessConsumer(unittest.TestCase):
@@ -52,7 +48,7 @@ class TestSimpleConsumer(unittest.TestCase):
 
         # Mock so that only the first request gets a valid response
         def not_leader(request):
-            return FetchResponse(request.topic, request.partition,
+            return FetchResponsePayload(request.topic, request.partition,
                                  NotLeaderForPartitionError.errno, -1, ())
 
         client.send_fetch_request.side_effect = self.fail_requests_factory(not_leader)
@@ -72,7 +68,7 @@ class TestSimpleConsumer(unittest.TestCase):
 
         # Mock so that only the first request gets a valid response
         def unknown_topic_partition(request):
-            return FetchResponse(request.topic, request.partition,
+            return FetchResponsePayload(request.topic, request.partition,
                                  UnknownTopicOrPartitionError.errno, -1, ())
 
         client.send_fetch_request.side_effect = self.fail_requests_factory(unknown_topic_partition)
@@ -86,7 +82,7 @@ class TestSimpleConsumer(unittest.TestCase):
         client.get_partition_ids_for_topic.return_value = [0, 1]
 
         def mock_offset_fetch_request(group, payloads, **kwargs):
-            return [OffsetFetchResponse(p.topic, p.partition, 0, b'', 0) for p in payloads]
+            return [OffsetFetchResponsePayload(p.topic, p.partition, 0, b'', 0) for p in payloads]
 
         client.send_offset_fetch_request.side_effect = mock_offset_fetch_request
 
@@ -125,11 +121,11 @@ class TestSimpleConsumer(unittest.TestCase):
         # Mock so that only the first request gets a valid response
         def fail_requests(payloads, **kwargs):
             responses = [
-                FetchResponse(payloads[0].topic, payloads[0].partition, 0, 0,
-                              (OffsetAndMessage(
+                FetchResponsePayload(payloads[0].topic, payloads[0].partition, 0, 0,
+                              [OffsetAndMessage(
                                   payloads[0].offset + i,
                                   "msg %d" % (payloads[0].offset + i))
-                               for i in range(10))),
+                               for i in range(10)]),
             ]
             for failure in payloads[1:]:
                 responses.append(error_factory(failure))

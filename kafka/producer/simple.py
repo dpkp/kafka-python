@@ -46,9 +46,6 @@ class SimpleProducer(Producer):
         return next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
-        if not isinstance(topic, six.binary_type):
-            topic = topic.encode('utf-8')
-
         partition = self._next_partition(topic)
         return super(SimpleProducer, self).send_messages(
             topic, partition, *msg

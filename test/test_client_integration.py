@@ -1,8 +1,8 @@
 import os
 
 from kafka.common import (
-    FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
-    KafkaTimeoutError, ProduceRequest
+    FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
+    KafkaTimeoutError, ProduceRequestPayload
 )
 from kafka.protocol import create_message
 
@@ -28,11 +28,11 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         cls.zk.close()
 
     def test_consume_none(self):
-        fetch = FetchRequest(self.bytes_topic, 0, 0, 1024)
+        fetch = FetchRequestPayload(self.topic, 0, 0, 1024)
 
         fetch_resp, = self.client.send_fetch_request([fetch])
         self.assertEqual(fetch_resp.error, 0)
-        self.assertEqual(fetch_resp.topic, self.bytes_topic)
+        self.assertEqual(fetch_resp.topic, self.topic)
         self.assertEqual(fetch_resp.partition, 0)
 
         messages = list(fetch_resp.messages)
@@ -46,25 +46,25 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
         # ensure_topic_exists should fail with KafkaTimeoutError
         with self.assertRaises(KafkaTimeoutError):
-            self.client.ensure_topic_exists(b"this_topic_doesnt_exist", timeout=0)
+            self.client.ensure_topic_exists('this_topic_doesnt_exist', timeout=0)
 
     def test_send_produce_request_maintains_request_response_order(self):
 
-        self.client.ensure_topic_exists(b'foo')
-        self.client.ensure_topic_exists(b'bar')
+        self.client.ensure_topic_exists('foo')
+        self.client.ensure_topic_exists('bar')
 
         requests = [
-            ProduceRequest(
-                b'foo', 0,
+            ProduceRequestPayload(
+                'foo', 0,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
-                b'bar', 1,
+            ProduceRequestPayload(
+                'bar', 1,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
-                b'foo', 1,
+            ProduceRequestPayload(
+                'foo', 1,
                 [create_message(b'a'), create_message(b'b')]),
-            ProduceRequest(
-                b'bar', 0,
+            ProduceRequestPayload(
+                'bar', 0,
                 [create_message(b'a'), create_message(b'b')]),
         ]
 
@@ -82,12 +82,12 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions('>=0.8.1')
     def test_commit_fetch_offsets(self):
-        req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
-        (resp,) = self.client.send_offset_commit_request(b"group", [req])
+        req = OffsetCommitRequestPayload(self.topic, 0, 42, 'metadata')
+        (resp,) = self.client.send_offset_commit_request('group', [req])
         self.assertEqual(resp.error, 0)
 
-        req = OffsetFetchRequest(self.bytes_topic, 0)
-        (resp,) = self.client.send_offset_fetch_request(b"group", [req])
+        req = OffsetFetchRequestPayload(self.topic, 0)
+        (resp,) = self.client.send_offset_fetch_request('group', [req])
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.offset, 42)
-        self.assertEqual(resp.metadata, b"")  # Metadata isn't stored for now
+        self.assertEqual(resp.metadata, '')  # Metadata isn't stored for now

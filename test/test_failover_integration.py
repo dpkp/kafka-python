@@ -2,10 +2,11 @@ import logging
 import os
 import time
 
-from kafka import KafkaClient, SimpleConsumer, KeyedProducer
-from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
+from kafka import SimpleClient, SimpleConsumer, KeyedProducer
+from kafka.common import (
+    TopicPartition, FailedPayloadsError, ConnectionError, RequestTimedOutError
+)
 from kafka.producer.base import Producer
-from kafka.util import kafka_bytestring
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, random_string
@@ -31,7 +32,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
 
         hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
-        self.client = KafkaClient(hosts)
+        self.client = SimpleClient(hosts, timeout=2)
         super(TestFailover, self).setUp()
 
     def tearDown(self):
@@ -75,7 +76,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, b'success')
                 log.debug("success!")
                 recovered = True
-            except (FailedPayloadsError, ConnectionError):
+            except (FailedPayloadsError, ConnectionError, RequestTimedOutError):
                 log.debug("caught exception sending message -- will retry")
                 continue
 
@@ -160,7 +161,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 key = random_string(3).encode('utf-8')
                 msg = random_string(10).encode('utf-8')
                 producer.send_messages(topic, key, msg)
-                if producer.partitioners[kafka_bytestring(topic)].partition(key) == 0:
+                if producer.partitioners[topic].partition(key) == 0:
                     recovered = True
             except (FailedPayloadsError, ConnectionError):
                 log.debug("caught exception sending message -- will retry")
@@ -197,7 +198,7 @@ class TestFailover(KafkaIntegrationTestCase):
                     break
 
     def _kill_leader(self, topic, partition):
-        leader = self.client.topics_to_brokers[TopicAndPartition(kafka_bytestring(topic), partition)]
+        leader = self.client.topics_to_brokers[TopicPartition(topic, partition)]
         broker = self.brokers[leader.nodeId]
         broker.close()
         return broker
@@ -207,7 +208,7 @@ class TestFailover(KafkaIntegrationTestCase):
         hosts = ','.join(['%s:%d' % (broker.host, broker.port)
                           for broker in self.brokers])
 
-        client = KafkaClient(hosts)
+        client = SimpleClient(hosts)
         consumer = SimpleConsumer(client, None, topic,
                                   partitions=partitions,
                                   auto_commit=False,

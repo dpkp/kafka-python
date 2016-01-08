@@ -3,7 +3,7 @@ Context manager to commit/rollback consumer offsets.
 """
 from logging import getLogger
 
-from kafka.common import check_error, OffsetCommitRequest, OffsetOutOfRangeError
+from kafka.common import check_error, OffsetCommitRequestPayload, OffsetOutOfRangeError
 
 
 class OffsetCommitContext(object):
@@ -139,7 +139,7 @@ class OffsetCommitContext(object):
         self.logger.debug("Committing partition offsets: %s", partition_offsets)
 
         commit_requests = [
-            OffsetCommitRequest(self.consumer.topic, partition, offset, None)
+            OffsetCommitRequestPayload(self.consumer.topic, partition, offset, None)
             for partition, offset in partition_offsets.items()
         ]
         commit_responses = self.consumer.client.send_offset_commit_request(

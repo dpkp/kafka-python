@@ -9,9 +9,7 @@ python:
     - pypy
 
 env:
-    - UNIT_AND_LINT_ONLY=true
     - KAFKA_VERSION=0.8.0
-    - KAFKA_VERSION=0.8.1
     - KAFKA_VERSION=0.8.1.1
     - KAFKA_VERSION=0.8.2.2
     - KAFKA_VERSION=0.9.0.0
@@ -48,7 +46,7 @@ deploy:
     # branch: master
 
 script:
-  - if [ -n "$UNIT_AND_LINT_ONLY" ]; then tox -e lint,`./travis_selector.sh $TRAVIS_PYTHON_VERSION`; else tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`; fi
+  - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
 after_success:
   - coveralls

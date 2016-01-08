@@ -3,11 +3,9 @@ from __future__ import absolute_import
 from collections import namedtuple
 import logging
 from multiprocessing import Process, Manager as MPManager
-try:
-    import queue # python 3
-except ImportError:
-    import Queue as queue # python 2
 import time
+
+from six.moves import queue
 
 from ..common import KafkaError
 from .base import (
@@ -104,7 +102,7 @@ class MultiProcessConsumer(Consumer):
     parallel using multiple processes
 
     Arguments:
-        client: a connected KafkaClient
+        client: a connected SimpleClient
         group: a name for this consumer, used for offset storage and must be unique
             If you are connecting to a server that does not support offset
             commit/fetch (any prior to 0.8.1.1), then you *must* set this to None
