@@ -8,7 +8,7 @@ import time
 from mock import MagicMock, patch
 from . import unittest
 
-from kafka import KafkaClient, SimpleProducer, KeyedProducer
+from kafka import SimpleClient, SimpleProducer, KeyedProducer
 from kafka.common import (
     AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError,
     ProduceResponsePayload, RetryOptions, TopicPartition
@@ -89,11 +89,11 @@ class TestKafkaProducer(unittest.TestCase):
 
     def test_producer_sync_fail_on_error(self):
         error = FailedPayloadsError('failure')
-        with patch.object(KafkaClient, 'load_metadata_for_topics'):
-            with patch.object(KafkaClient, 'get_partition_ids_for_topic', return_value=[0, 1]):
-                with patch.object(KafkaClient, '_send_broker_aware_request', return_value = [error]):
+        with patch.object(SimpleClient, 'load_metadata_for_topics'):
+            with patch.object(SimpleClient, 'get_partition_ids_for_topic', return_value=[0, 1]):
+                with patch.object(SimpleClient, '_send_broker_aware_request', return_value = [error]):
 
-                    client = KafkaClient(MagicMock())
+                    client = SimpleClient(MagicMock())
                     producer = SimpleProducer(client, async=False, sync_fail_on_error=False)
 
                     # This should not raise

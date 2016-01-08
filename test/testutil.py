@@ -10,7 +10,7 @@ import uuid
 from six.moves import xrange
 from . import unittest
 
-from kafka import KafkaClient
+from kafka import SimpleClient
 from kafka.common import OffsetRequestPayload
 
 __all__ = [
@@ -62,7 +62,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
             self.topic = topic
 
         if self.create_client:
-            self.client = KafkaClient('%s:%d' % (self.server.host, self.server.port))
+            self.client = SimpleClient('%s:%d' % (self.server.host, self.server.port))
 
         self.client.ensure_topic_exists(self.topic)
 

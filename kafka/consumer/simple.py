@@ -70,7 +70,7 @@ class SimpleConsumer(Consumer):
     for a topic
 
     Arguments:
-        client: a connected KafkaClient
+        client: a connected SimpleClient
         group: a name for this consumer, used for offset storage and must be unique
             If you are connecting to a server that does not support offset
             commit/fetch (any prior to 0.8.1.1), then you *must* set this to None

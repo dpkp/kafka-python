@@ -7,7 +7,7 @@ import time
 import pytest
 import six
 
-from kafka import KafkaClient, SimpleProducer
+from kafka import SimpleClient, SimpleProducer
 from kafka.common import TopicPartition
 from kafka.conn import BrokerConnection, ConnectionStates
 from kafka.consumer.group import KafkaConsumer
@@ -47,7 +47,7 @@ def kafka_broker(version, zookeeper, request):
 @pytest.fixture
 def simple_client(kafka_broker):
     connect_str = 'localhost:' + str(kafka_broker.port)
-    return KafkaClient(connect_str)
+    return SimpleClient(connect_str)
 
 
 @pytest.fixture

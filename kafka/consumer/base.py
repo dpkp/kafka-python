@@ -94,7 +94,7 @@ class Consumer(object):
 
     def fetch_last_known_offsets(self, partitions=None):
         if self.group is None:
-            raise ValueError('KafkaClient.group must not be None')
+            raise ValueError('SimpleClient.group must not be None')
 
         if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)

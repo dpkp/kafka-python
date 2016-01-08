@@ -9,7 +9,7 @@ import time
 
 import six
 
-from kafka.client import KafkaClient
+from kafka import SimpleClient
 from kafka.common import (
     OffsetFetchRequestPayload, OffsetCommitRequestPayload,
     OffsetRequestPayload, FetchRequestPayload,
@@ -136,7 +136,7 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
-        self._client = KafkaClient(
+        self._client = SimpleClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0)

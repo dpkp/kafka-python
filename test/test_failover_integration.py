@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from kafka import KafkaClient, SimpleConsumer, KeyedProducer
+from kafka import SimpleClient, SimpleConsumer, KeyedProducer
 from kafka.common import (
     TopicPartition, FailedPayloadsError, ConnectionError, RequestTimedOutError
 )
@@ -34,7 +34,7 @@ class TestFailover(KafkaIntegrationTestCase):
         self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
 
         hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
-        self.client = KafkaClient(hosts, timeout=2)
+        self.client = SimpleClient(hosts, timeout=2)
         super(TestFailover, self).setUp()
 
     def tearDown(self):
@@ -214,7 +214,7 @@ class TestFailover(KafkaIntegrationTestCase):
         hosts = ','.join(['%s:%d' % (broker.host, broker.port)
                           for broker in self.brokers])
 
-        client = KafkaClient(hosts)
+        client = SimpleClient(hosts)
         consumer = SimpleConsumer(client, None, topic,
                                   partitions=partitions,
                                   auto_commit=False,
