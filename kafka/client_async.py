@@ -40,6 +40,8 @@ class KafkaClient(object):
         'max_in_flight_requests_per_connection': 5,
         'receive_buffer_bytes': 32768,
         'send_buffer_bytes': 131072,
+        'retry_backoff_ms': 100,
+        'metadata_max_age_ms': 300000,
     }
 
     def __init__(self, **configs):
@@ -69,6 +71,12 @@ class KafkaClient(object):
                 (SO_SNDBUF) to use when sending data. Default: 131072
             receive_buffer_bytes (int): The size of the TCP receive buffer
                 (SO_RCVBUF) to use when reading data. Default: 32768
+            metadata_max_age_ms (int): The period of time in milliseconds after
+                which we force a refresh of metadata even if we haven't seen any
+                partition leadership changes to proactively discover any new
+                brokers or partitions. Default: 300000
+            retry_backoff_ms (int): Milliseconds to backoff when retrying on
+                errors. Default: 100.
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
