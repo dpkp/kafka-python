@@ -1,66 +1,86 @@
 kafka-python
-============
+############
 
-This module provides low-level protocol support for Apache Kafka as well as
-high-level consumer and producer classes. Request batching is supported by the
-protocol as well as broker-aware request routing. Gzip and Snappy compression
-is also supported for message sets.
+.. image:: https://img.shields.io/badge/kafka-0.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.org/compatibility.html
+.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
+    :target: https://pypi.python.org/pypi/kafka-python
+.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
+.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
+    :target: https://travis-ci.org/dpkp/kafka-python
+.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
+    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
 
-Coordinated Consumer Group support is under development - see Issue #38.
+>>> pip install kafka-python
 
-On Freenode IRC at #kafka-python, as well as #apache-kafka
-
-For general discussion of kafka-client design and implementation (not python specific),
-see https://groups.google.com/forum/m/#!forum/kafka-clients
-
-For information about Apache Kafka generally, see https://kafka.apache.org/
-
-Status
-------
-
-The current stable version of this package is `0.9.5 <https://github.com/dpkp/kafka-python/releases/tag/v0.9.5>`_ and is compatible with:
-
-Kafka broker versions
-
-* 0.9.0.0
-* 0.8.2.2
-* 0.8.2.1
-* 0.8.1.1
-* 0.8.1
-* 0.8.0
-
-Python versions
-
-* 3.5 (tested on 3.5.0)
-* 3.4 (tested on 3.4.2)
-* 3.3 (tested on 3.3.5)
-* 2.7 (tested on 2.7.9)
-* 2.6 (tested on 2.6.9)
-* pypy (tested on pypy 2.5.0 / python 2.7.8)
-
-License
--------
-
-Apache License, v2.0. See `LICENSE <https://github.com/dpkp/kafka-python/blob/master/LICENSE>`_.
-
-Copyright 2015, David Arthur, Dana Powers, and Contributors
-(See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_).
+kafka-python is a client for the Apache Kafka distributed stream processing
+system. It is designed to function much like the official java client, with a
+sprinkling of pythonic interfaces (e.g., iterators).
 
 
-Contents
---------
+KafkaConsumer
+*************
+
+>>> from kafka import KafkaConsumer
+>>> consumer = KafkaConsumer('my_favorite_topic')
+>>> for msg in consumer:
+...     print (msg)
+
+:class:`~kafka.consumer.KafkaConsumer` is a full-featured,
+high-level message consumer class that is similar in design and function to the
+new 0.9 java consumer. Most configuration parameters defined by the official
+java client are supported as optional kwargs, with generally similar behavior.
+Gzip and Snappy compressed messages are supported transparently.
+
+In addition to the standard
+:meth:`~kafka.consumer.KafkaConsumer.poll` interface (which returns
+micro-batches of messages, grouped by topic-partition), kafka-python supports
+single-message iteration, yielding :class:`~kafka.consumer.ConsumerRecord`
+namedtuples, which include the topic, partition, offset, key, and value of each
+message.
+
+By default, :class:`~kafka.consumer.KafkaConsumer` will attempt to auto-commit
+message offsets every 5 seconds. When used with 0.9 kafka brokers,
+:class:`~kafka.consumer.KafkaConsumer` will dynamically assign partitions using
+the kafka GroupCoordinator APIs and a
+:class:`~kafka.coordinator.assignors.roundrobin.RoundRobinPartitionAssignor`
+partitioning strategy, enabling relatively straightforward parallel consumption
+patterns. See :doc:`usage` for examples.
+
+
+KafkaProducer
+*************
+
+TBD
+
+
+Protocol
+********
+
+A secondary goal of kafka-python is to provide an easy-to-use protocol layer
+for interacting with kafka brokers via the python repl. This is useful for
+testing, probing, and general experimentation. The protocol support is
+leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
+method that probes a kafka broker and
+attempts to identify which version it is running (0.8.0 to 0.9).
+
+
+Low-level
+*********
+
+Legacy support is maintained for low-level consumer and producer classes,
+SimpleConsumer and SimpleProducer.
+
 
 .. toctree::
+   :hidden:
    :maxdepth: 2
 
-   usage
+   Usage Overview <usage>
+   API </apidoc/modules>
    install
    tests
-   API reference </apidoc/modules>
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   compatibility
+   support
+   license
