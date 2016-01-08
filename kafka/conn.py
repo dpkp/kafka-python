@@ -126,9 +126,17 @@ class BrokerConnection(object):
         return False
 
     def connected(self):
+        """Return True iff socket is connected."""
         return self.state is ConnectionStates.CONNECTED
 
     def close(self, error=None):
+        """Close socket and fail all in-flight-requests.
+
+        Arguments:
+            error (Exception, optional): pending in-flight-requests
+                will be failed with this exception.
+                Default: kafka.common.ConnectionError.
+        """
         if self._sock:
             self._sock.close()
             self._sock = None
@@ -189,11 +197,12 @@ class BrokerConnection(object):
         return future
 
     def can_send_more(self):
+        """Return True unless there are max_in_flight_requests."""
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
     def recv(self, timeout=0):
-        """Non-blocking network receive
+        """Non-blocking network receive.
 
         Return response if available
         """

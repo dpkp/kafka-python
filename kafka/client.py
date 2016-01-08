@@ -455,31 +455,28 @@ class KafkaClient(object):
             time.sleep(.5)
 
     def load_metadata_for_topics(self, *topics):
-        """
-        Fetch broker and topic-partition metadata from the server,
-        and update internal data:
-        broker list, topic/partition list, and topic/parition -> broker map
+        """Fetch broker and topic-partition metadata from the server.
 
-        This method should be called after receiving any error
+        Updates internal data: broker list, topic/partition list, and
+        topic/parition -> broker map. This method should be called after
+        receiving any error.
+
+        Note: Exceptions *will not* be raised in a full refresh (i.e. no topic
+        list). In this case, error codes will be logged as errors.
+        Partition-level errors will also not be raised here (a single partition
+        w/o a leader, for example).
 
         Arguments:
             *topics (optional): If a list of topics is provided,
-                the metadata refresh will be limited to the specified topics only.
+                the metadata refresh will be limited to the specified topics
+                only.
 
-        Exceptions:
-        ----------
-        If the broker is configured to not auto-create topics,
-        expect UnknownTopicOrPartitionError for topics that don't exist
-
-        If the broker is configured to auto-create topics,
-        expect LeaderNotAvailableError for new topics
-        until partitions have been initialized.
-
-        Exceptions *will not* be raised in a full refresh (i.e. no topic list)
-        In this case, error codes will be logged as errors
-
-        Partition-level errors will also not be raised here
-        (a single partition w/o a leader, for example)
+        Raises:
+            UnknownTopicOrPartitionError: Raised for topics that do not exist,
+                unless the broker is configured to auto-create topics.
+            LeaderNotAvailableError: Raised for topics that do not exist yet,
+                when the broker is configured to auto-create topics. Retry
+                after a short backoff (topics/partitions are initializing).
         """
         if topics:
             self.reset_topic_metadata(*topics)
