@@ -161,6 +161,11 @@ class KafkaClient(object):
         elif node_id in self._connecting:
             log.debug("Node %s connection state is %s", node_id, state)
             self._connecting.remove(node_id)
+
+        if state is ConnectionStates.DISCONNECTED:
+            log.warning("Node %s connect failed -- refreshing metadata", node_id)
+            self.cluster.request_update()
+
         return state
 
     def ready(self, node_id):
