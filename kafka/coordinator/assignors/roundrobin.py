@@ -6,7 +6,7 @@ import six
 
 from .abstract import AbstractPartitionAssignor
 from ...common import TopicPartition
-from ..consumer import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from ..protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
 
 log = logging.getLogger(__name__)
 
