@@ -8,6 +8,7 @@ import time
 import six
 
 from .base import BaseCoordinator
+from .assignors.roundrobin import RoundRobinPartitionAssignor
 from .protocol import (
     ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment,
     ConsumerProtocol)
@@ -29,7 +30,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': lambda offsets, response: True,
-        'assignors': (),
+        'assignors': (RoundRobinPartitionAssignor,),
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
@@ -100,6 +101,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def group_protocols(self):
         """Returns list of preferred (protocols, metadata)"""
         topics = self._subscription.subscription
+        assert topics is not None, 'Consumer has not subscribed to topics'
         metadata_list = []
         for assignor in self.config['assignors']:
             metadata = assignor.metadata(topics)
@@ -111,7 +113,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # if we encounter any unauthorized topics, raise an exception
         # TODO
         #if self._cluster.unauthorized_topics:
-        #    raise Errors.TopicAuthorizationError(self._cluster.unauthorized_topics)
+        #    raise TopicAuthorizationError(self._cluster.unauthorized_topics)
 
         if self._subscription.subscribed_pattern:
             topics = []
@@ -122,7 +124,8 @@ class ConsumerCoordinator(BaseCoordinator):
             self._subscription.change_subscription(topics)
             self._client.set_topics(self._subscription.group_subscription())
 
-        # check if there are any changes to the metadata which should trigger a rebalance
+        # check if there are any changes to the metadata which should trigger
+        # a rebalance
         if self._subscription_metadata_changed():
             if self.config['api_version'] >= (0, 9):
                 self._subscription.mark_for_reassignment()
@@ -182,7 +185,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # execute the user's callback after rebalance
         if self._subscription.listener:
             try:
-                self._subscriptions.listener.on_partitions_assigned(assigned)
+                self._subscription.listener.on_partitions_assigned(assigned)
             except Exception:
                 log.exception("User provided listener failed on partition"
                               " assignment: %s", assigned)
@@ -263,6 +266,9 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             dict: {TopicPartition: OffsetAndMetadata}
         """
+        if not partitions:
+            return {}
+
         while True:
             if self.config['api_version'] >= (0, 8, 2):
                 self.ensure_coordinator_known()
@@ -297,11 +303,16 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: indicating whether the commit was successful or not
         """
+        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
+        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
+                       offsets.values()))
         if callback is None:
             callback = self.config['default_offset_commit_callback']
         self._subscription.needs_fetch_committed_offsets = True
         future = self._send_offset_commit_request(offsets)
         future.add_both(callback, offsets)
+        return future
 
     def commit_offsets_sync(self, offsets):
         """Commit specific offsets synchronously.
@@ -314,6 +325,10 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Raises error on failure
         """
+        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
+        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
+                       offsets.values()))
         if not offsets:
             return
 
@@ -325,7 +340,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._client.poll(future=future)
 
             if future.succeeded():
-                return
+                return future.value
 
             if not future.retriable():
                 raise future.exception # pylint: disable-msg=raising-bad-type
@@ -369,15 +384,19 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: indicating whether the commit was successful or not
         """
+        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
+        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
+                       offsets.values()))
+        if not offsets:
+            return Future().success(None)
+
         if self.config['api_version'] >= (0, 8, 2):
             if self.coordinator_unknown():
                 return Future().failure(Errors.GroupCoordinatorNotAvailableError)
             node_id = self.coordinator_id
         else:
             node_id = self._client.least_loaded_node()
-
-        if not offsets:
-            return Future().failure(None)
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -428,7 +447,7 @@ class ConsumerCoordinator(BaseCoordinator):
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_offset_commit_response, offsets, future)
-        _f.add_errback(self._failed_request, future)
+        _f.add_errback(self._failed_request, node_id, request, future)
         return future
 
     def _handle_offset_commit_response(self, offsets, future, response):
@@ -513,6 +532,11 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: resolves to dict of offsets: {TopicPartition: int}
         """
+        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
+        if not partitions:
+            return Future().success({})
+
         if self.config['api_version'] >= (0, 8, 2):
             if self.coordinator_unknown():
                 return Future().failure(Errors.GroupCoordinatorNotAvailableError)
@@ -541,7 +565,7 @@ class ConsumerCoordinator(BaseCoordinator):
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_offset_fetch_response, future)
-        _f.add_errback(self._failed_request, future)
+        _f.add_errback(self._failed_request, node_id, request, future)
         return future
 
     def _handle_offset_fetch_response(self, future, response):

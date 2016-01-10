@@ -621,7 +621,7 @@ class HeartbeatTask(object):
         etd = time.time() + self._coordinator.config['retry_backoff_ms'] / 1000.0
         self._client.schedule(self, etd)
 
-
+'''
 class GroupCoordinatorMetrics(object):
     def __init__(self, metrics, prefix, tags=None):
         self.metrics = metrics
@@ -674,5 +674,4 @@ class GroupCoordinatorMetrics(object):
             "The number of seconds since the last controller heartbeat",
             tags), lastHeartbeat)
         """
-
-
+'''
