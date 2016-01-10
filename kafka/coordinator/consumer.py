@@ -146,7 +146,8 @@ class ConsumerCoordinator(BaseCoordinator):
         old_partitions_per_topic = self._partitions_per_topic
         self._partitions_per_topic = {}
         for topic in self._subscription.group_subscription():
-            self._partitions_per_topic[topic] = set(self._cluster.partitions_for_topic(topic))
+            partitions = self._cluster.partitions_for_topic(topic) or []
+            self._partitions_per_topic[topic] = set(partitions)
 
         if self._partitions_per_topic != old_partitions_per_topic:
             return True
