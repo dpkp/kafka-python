@@ -403,7 +403,7 @@ class KafkaConnection(local):
 
     def _read_bytes(self, num_bytes):
         bytes_left = num_bytes
-        responses = []
+        result_buffer = six.BytesIO()
 
         log.debug("About to read %d bytes from Kafka", num_bytes)
 
@@ -428,9 +428,9 @@ class KafkaConnection(local):
 
             bytes_left -= len(data)
             log.debug("Read %d/%d bytes from Kafka", num_bytes - bytes_left, num_bytes)
-            responses.append(data)
+            result_buffer.write(data)
 
-        return b''.join(responses)
+        return result_buffer.getvalue()
 
     ##################
     #   Public API   #
