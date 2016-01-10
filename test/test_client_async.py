@@ -1,3 +1,4 @@
+import time
 
 import pytest
 
@@ -242,8 +243,33 @@ def test_send(conn):
     assert conn.send.called_with(request, expect_response=True)
 
 
-def test_poll():
-    pass
+def test_poll(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    metadata = mocker.patch.object(KafkaClient, '_maybe_refresh_metadata')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+    cli = KafkaClient()
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+
+    # metadata timeout wins
+    metadata.return_value = 1000
+    tasks.return_value = time.time() + 2  # 2 seconds from now
+    cli.poll()
+    _poll.assert_called_with(1.0)
+
+    # user timeout wins
+    cli.poll(250)
+    _poll.assert_called_with(0.25)
+
+    # tasks timeout wins
+    tasks.return_value = time.time()  # next task is now
+    cli.poll(250)
+    _poll.assert_called_with(0)
+
+    # default is request_timeout_ms
+    metadata.return_value = 1000000
+    tasks.return_value = time.time() + 10000
+    cli.poll()
+    _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
 
 
 def test__poll():
