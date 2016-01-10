@@ -157,6 +157,9 @@ class SubscriptionState(object):
         self._group_subscription.update(topics)
 
     def mark_for_reassignment(self):
+        if self._user_assignment:
+            raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
+        assert self.subscription is not None, 'Subscription required'
         self._group_subscription.intersection_update(self.subscription)
         self.needs_partition_assignment = True
 
