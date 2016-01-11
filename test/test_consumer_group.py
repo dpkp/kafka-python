@@ -116,7 +116,10 @@ def test_group(kafka_broker, topic):
                     break
             else:
                 for c in range(num_consumers):
-                    logging.info("%s: %s", c, consumers[c].assignment())
+                    logging.info("[%s] %s %s: %s", c,
+                                 consumers[c]._coordinator.generation,
+                                 consumers[c]._coordinator.member_id,
+                                 consumers[c].assignment())
                 break
             assert time.time() < timeout, "timeout waiting for assignments"
 
