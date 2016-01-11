@@ -626,8 +626,6 @@ class KafkaConsumer(six.Iterator):
                 partitions = self._subscription.missing_fetch_positions()
                 self._update_fetch_positions(partitions)
 
-            # init any new fetches (won't resend pending fetches)
-            self._fetcher.init_fetches()
             self._client.poll(
                 max(0, self._consumer_timeout - time.time()) * 1000)
 
@@ -641,6 +639,8 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout_at:
                     log.debug("internal iterator timeout - breaking for poll")
                     break
+            else:
+                self._fetcher.init_fetches()
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
@@ -648,6 +648,7 @@ class KafkaConsumer(six.Iterator):
     def __next__(self):
         if not self._iterator:
             self._iterator = self._message_generator()
+            self._fetcher.init_fetches()
 
         # consumer_timeout_ms can be used to stop iteration early
         if self.config['consumer_timeout_ms'] >= 0:
