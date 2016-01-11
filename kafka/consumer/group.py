@@ -628,11 +628,14 @@ class KafkaConsumer(six.Iterator):
 
             # init any new fetches (won't resend pending fetches)
             self._fetcher.init_fetches()
-            self._client.poll()
+            self._client.poll(
+                max(0, self._consumer_timeout - time.time()) * 1000)
 
             timeout_at = min(self._consumer_timeout,
                              self._client._delayed_tasks.next_at() + time.time(),
                              self._client.cluster.ttl() / 1000.0 + time.time())
+            if time.time() > timeout_at:
+                continue
             for msg in self._fetcher:
                 yield msg
                 if time.time() > timeout_at:
