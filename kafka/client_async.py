@@ -314,14 +314,21 @@ class KafkaClient(object):
                 else:
                     task_future.success(result)
 
-            timeout = min(
-                timeout_ms,
-                metadata_timeout_ms,
-                self._delayed_tasks.next_at() * 1000,
-                self.config['request_timeout_ms'])
-            timeout = max(0, timeout / 1000.0)
+            # If we got a future that is already done, dont block in _poll
+            if future and future.is_done:
+                timeout = 0
+            else:
+                timeout = min(
+                    timeout_ms,
+                    metadata_timeout_ms,
+                    self._delayed_tasks.next_at() * 1000,
+                    self.config['request_timeout_ms'])
+                timeout = max(0, timeout / 1000.0) # avoid negative timeouts
 
             responses.extend(self._poll(timeout))
+
+            # If all we had was a timeout (future is None) - only do one poll
+            # If we do have a future, we keep looping until it is done
             if not future or future.is_done:
                 break
 
@@ -334,16 +341,25 @@ class KafkaClient(object):
                         if (conn.state is ConnectionStates.CONNECTED
                             and conn.in_flight_requests)])
         if not sockets:
+            # if sockets are connecting, we can wake when they are writeable
+            if self._connecting:
+                sockets = [self._conns[node]._sock for node in self._connecting]
+                select.select([], sockets, [], timeout)
+            # otherwise just sleep to prevent CPU spinning
+            else:
+                log.debug('Nothing to do in _poll -- sleeping for %s', timeout)
+                time.sleep(timeout)
             return []
 
         ready, _, _ = select.select(list(sockets.keys()), [], [], timeout)
 
         responses = []
-        # list, not iterator, because inline callbacks may add to self._conns
         for sock in ready:
             conn = sockets[sock]
-            response = conn.recv() # Note: conn.recv runs callbacks / errbacks
-            if response:
+            while conn.in_flight_requests:
+                response = conn.recv() # Note: conn.recv runs callbacks / errbacks
+                if not response:
+                    break
                 responses.append(response)
         return responses
 
