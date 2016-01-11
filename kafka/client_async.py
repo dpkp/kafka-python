@@ -314,11 +314,12 @@ class KafkaClient(object):
                 else:
                     task_future.success(result)
 
-            task_timeout_ms = max(0, 1000 * (
-              self._delayed_tasks.next_at() - time.time()))
-            timeout = min(timeout_ms, metadata_timeout_ms, task_timeout_ms,
-                          self.config['request_timeout_ms'])
-            timeout /= 1000.0
+            timeout = min(
+                timeout_ms,
+                metadata_timeout_ms,
+                self._delayed_tasks.next_at() * 1000,
+                self.config['request_timeout_ms'])
+            timeout = max(0, timeout / 1000.0)
 
             responses.extend(self._poll(timeout))
             if not future or future.is_done:

@@ -631,7 +631,7 @@ class KafkaConsumer(six.Iterator):
             self._client.poll()
 
             timeout_at = min(self._consumer_timeout,
-                             self._client._delayed_tasks.next_at(),
+                             self._client._delayed_tasks.next_at() + time.time(),
                              self._client.cluster.ttl() / 1000.0 + time.time())
             for msg in self._fetcher:
                 yield msg

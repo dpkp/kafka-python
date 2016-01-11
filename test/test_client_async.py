@@ -252,7 +252,7 @@ def test_poll(mocker):
 
     # metadata timeout wins
     metadata.return_value = 1000
-    tasks.return_value = time.time() + 2  # 2 seconds from now
+    tasks.return_value = 2
     cli.poll()
     _poll.assert_called_with(1.0)
 
@@ -261,13 +261,13 @@ def test_poll(mocker):
     _poll.assert_called_with(0.25)
 
     # tasks timeout wins
-    tasks.return_value = time.time()  # next task is now
+    tasks.return_value = 0
     cli.poll(250)
     _poll.assert_called_with(0)
 
     # default is request_timeout_ms
     metadata.return_value = 1000000
-    tasks.return_value = time.time() + 10000
+    tasks.return_value = 10000
     cli.poll()
     _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
 
