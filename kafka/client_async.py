@@ -302,7 +302,7 @@ class KafkaClient(object):
                 self._finish_connect(node_id)
 
             # Send a metadata request if needed
-            metadata_timeout = self._maybe_refresh_metadata()
+            metadata_timeout_ms = self._maybe_refresh_metadata()
 
             # Send scheduled tasks
             for task, task_future in self._delayed_tasks.pop_ready():
@@ -314,7 +314,9 @@ class KafkaClient(object):
                 else:
                     task_future.success(result)
 
-            timeout = min(timeout_ms, metadata_timeout,
+            task_timeout_ms = max(0, 1000 * (
+              self._delayed_tasks.next_at() - time.time()))
+            timeout = min(timeout_ms, metadata_timeout_ms, task_timeout_ms,
                           self.config['request_timeout_ms'])
             timeout /= 1000.0
 

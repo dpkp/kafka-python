@@ -59,9 +59,13 @@ class ClusterMetadata(object):
         if self._need_update:
             ttl = 0
         else:
-            ttl = self._last_successful_refresh_ms + self.config['metadata_max_age_ms'] - now
-        retry = self._last_refresh_ms + self.config['retry_backoff_ms'] - now
-        return max(ttl, retry, 0)
+            metadata_age = now - self._last_successful_refresh_ms
+            ttl = self.config['metadata_max_age_ms'] - metadata_age
+
+        retry_age = now - self._last_refresh_ms
+        next_retry = self.config['retry_backoff_ms'] - retry_age
+
+        return max(ttl, next_retry, 0)
 
     def request_update(self):
         """
