@@ -84,7 +84,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         async.producer.stop(unsent_messages)
         async.producer.queue.pop(topic_partition, msg, key)
         async.producer.request.send(requests)
-        async.producer.request.succeed(request)
+        async.producer.request.succeed
         async.producer.request.error(error_cls, request)
         async.producer.request.retry(request)
         async.producer.backoff(time_in_ms)
@@ -205,7 +205,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                           orig_req.messages if log_messages_on_error
                                             else hash(orig_req.messages))
             else:
-                event_registrar.emit('async.producer.request.succeed', orig_req)
+                event_registrar.emit('async.producer.request.succeed')
 
         if not reqs_to_retry:
             request_tries = {}
