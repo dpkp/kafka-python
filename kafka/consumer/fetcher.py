@@ -496,7 +496,7 @@ class Fetcher(six.Iterator):
                     self.config['max_partition_fetch_bytes']
                 )
                 fetchable[node_id][partition.topic].append(partition_info)
-                log.debug("Adding fetch request for partition %d at offset %d",
+                log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
 
         requests = {}
