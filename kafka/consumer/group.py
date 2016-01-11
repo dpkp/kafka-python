@@ -441,7 +441,7 @@ class KafkaConsumer(six.Iterator):
             return records
 
         self._fetcher.init_fetches()
-        self._client.poll(timeout_ms / 1000.0)
+        self._client.poll(timeout_ms)
         return self._fetcher.fetched_records()
 
     def position(self, partition):
