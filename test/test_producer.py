@@ -13,6 +13,7 @@ from kafka.common import (
     AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError,
     ProduceResponsePayload, RetryOptions, TopicPartition
 )
+from kafka.util import EventRegistrar
 from kafka.producer.base import Producer, _send_upstream
 from kafka.protocol import CODEC_NONE
 
@@ -140,7 +141,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                   Producer.ACK_AFTER_LOCAL_WRITE,
                   Producer.DEFAULT_ACK_TIMEOUT,
                   retry_options,
-                  stop_event))
+                  stop_event, EventRegistrar()))
         self.thread.daemon = True
         self.thread.start()
         time.sleep(sleep_timeout)

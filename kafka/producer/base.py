@@ -20,6 +20,7 @@ from kafka.common import (
     RequestTimedOutError, AsyncProducerQueueFull, UnknownError,
     RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES
 )
+from kafka.util import EventRegistrar
 
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 
@@ -45,7 +46,7 @@ SYNC_FAIL_ON_ERROR_DEFAULT = True
 
 def _send_upstream(queue, client, codec, batch_time, batch_size,
                    req_acks, ack_timeout, retry_options, stop_event,
-                   log_messages_on_error=ASYNC_LOG_MESSAGES_ON_ERROR,
+                   event_registrar, log_messages_on_error=ASYNC_LOG_MESSAGES_ON_ERROR,
                    stop_timeout=ASYNC_STOP_TIMEOUT_SECS,
                    codec_compresslevel=None):
     """Private method to manage producing messages asynchronously
@@ -76,6 +77,20 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
             defaults to True.
         stop_timeout (int or float, optional): number of seconds to continue
             retrying messages after stop_event is set, defaults to 30.
+
+    Events emitted (no args unless specified):
+        async.producer.connect.succeed
+        async.producer.connect.fail
+        async.producer.stop(unsent_messages)
+        async.producer.queue.pop(topic_partition, msg, key)
+        async.producer.request.send(requests)
+        async.producer.request.succeed(request)
+        async.producer.request.error(error_cls, request)
+        async.producer.request.retry(request)
+        async.producer.backoff(time_in_ms)
+        async.producer.metadata.refresh
+        async.producer.metadata.refresh.fail
+
     """
     request_tries = {}
 
@@ -84,9 +99,12 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
             client.reinit()
         except Exception as e:
             log.warn('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms)
+            event_registrar.emit('async.producer.connect.fail')
             time.sleep(float(retry_options.backoff_ms) / 1000)
         else:
             break
+
+    event_registrar.emit('async.producer.connect.succeed')
 
     stop_at = None
     while not (stop_event.is_set() and queue.empty() and not request_tries):
@@ -119,6 +137,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                 topic_partition, msg, key = queue.get(timeout=timeout)
             except Empty:
                 break
+
+            event_registrar.emit('async.producer.queue.pop', topic_partition, msg, key)
 
             # Check if the controller has requested us to stop
             if topic_partition == STOP_ASYNC_PRODUCER:
@@ -158,6 +178,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         requests = list(request_tries.keys())
         log.debug('Sending: %s', requests)
+        event_registrar.emit('async.producer.request.send', requests)
         responses = client.send_produce_request(requests,
                                                 acks=req_acks,
                                                 timeout=ack_timeout,
@@ -175,6 +196,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                 orig_req = requests[i]
 
             if error_cls:
+                event_registrar.emit('async.producer.request.error', error_cls, orig_req)
                 _handle_error(error_cls, orig_req)
                 log.error('%s sending ProduceRequestPayload (#%d of %d) '
                           'to %s:%d with msgs %s',
@@ -182,6 +204,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                           orig_req.topic, orig_req.partition,
                           orig_req.messages if log_messages_on_error
                                             else hash(orig_req.messages))
+            else:
+                event_registrar.emit('async.producer.request.succeed', orig_req)
 
         if not reqs_to_retry:
             request_tries = {}
@@ -190,15 +214,18 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         # doing backoff before next retry
         if retry_state['do_backoff'] and retry_options.backoff_ms:
             log.warn('Async producer backoff for %s(ms) before retrying', retry_options.backoff_ms)
+            event_registrar.emit('async.producer.backoff', retry_options.backoff_ms)
             time.sleep(float(retry_options.backoff_ms) / 1000)
 
         # refresh topic metadata before next retry
         if retry_state['do_refresh']:
             log.warn('Async producer forcing metadata refresh metadata before retrying')
+            event_registrar.emit('async.producer.metadata.refresh')
             try:
                 client.load_metadata_for_topics()
             except Exception:
                 log.exception("Async producer couldn't reload topic metadata.")
+                event_registrar.emit('async.producer.metadata.refresh.fail')
 
         # Apply retry limit, dropping messages that are over
         request_tries = dict(
@@ -211,15 +238,16 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # Log messages we are going to retry
         for orig_req in request_tries.keys():
+            event_registrar.emit('async.producer.request.retry', orig_req)
             log.info('Retrying ProduceRequestPayload to %s:%d with msgs %s',
                      orig_req.topic, orig_req.partition,
                      orig_req.messages if log_messages_on_error
                                        else hash(orig_req.messages))
 
-    if request_tries or not queue.empty():
-        log.error('Stopped producer with {0} unsent messages'
-                  .format(len(request_tries) + queue.qsize()))
-
+    unsent_messages = len(request_tries) + queue.qsize()
+    if unsent_messages:
+        log.error('Stopped producer with {0} unsent messages'.format(unsent_messages))
+    event_registrar.emit('async.producer.stop', unsent_messages)
 
 class Producer(object):
     """
@@ -303,6 +331,7 @@ class Producer(object):
         self.async = async
         self.req_acks = req_acks
         self.ack_timeout = ack_timeout
+        self.registrar = EventRegistrar()
         self.stopped = False
 
         if codec is None:
@@ -327,7 +356,8 @@ class Producer(object):
                 args=(self.queue, self.client.copy(), self.codec,
                       batch_send_every_t, batch_send_every_n,
                       self.req_acks, self.ack_timeout,
-                      async_retry_options, self.thread_stop_event),
+                      async_retry_options, self.thread_stop_event,
+                      self.registrar),
                 kwargs={'log_messages_on_error': async_log_messages_on_error,
                         'stop_timeout': async_stop_timeout,
                         'codec_compresslevel': self.codec_compresslevel}
