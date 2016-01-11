@@ -354,11 +354,12 @@ class KafkaClient(object):
         ready, _, _ = select.select(list(sockets.keys()), [], [], timeout)
 
         responses = []
-        # list, not iterator, because inline callbacks may add to self._conns
         for sock in ready:
             conn = sockets[sock]
-            response = conn.recv() # Note: conn.recv runs callbacks / errbacks
-            if response:
+            while conn.in_flight_requests:
+                response = conn.recv() # Note: conn.recv runs callbacks / errbacks
+                if not response:
+                    break
                 responses.append(response)
         return responses
 
