@@ -639,6 +639,7 @@ class KafkaConsumer(six.Iterator):
             for msg in self._fetcher:
                 yield msg
                 if time.time() > timeout_at:
+                    log.debug("internal iterator timeout - breaking for poll")
                     break
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
