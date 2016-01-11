@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 
-from mock import MagicMock, patch
+from mock import Mock, MagicMock, patch
 from . import unittest
 
 from kafka import SimpleClient, SimpleProducer, KeyedProducer
@@ -126,6 +126,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
     def setUp(self):
         self.client = MagicMock()
         self.queue = queue.Queue()
+        self.registrar = EventRegistrar()
 
     def _run_process(self, retries_limit=3, sleep_timeout=1):
         # run _send_upstream process with the queue
@@ -141,7 +142,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
                   Producer.ACK_AFTER_LOCAL_WRITE,
                   Producer.DEFAULT_ACK_TIMEOUT,
                   retry_options,
-                  stop_event, EventRegistrar()))
+                  stop_event, self.registrar))
         self.thread.daemon = True
         self.thread.start()
         time.sleep(sleep_timeout)
@@ -153,7 +154,10 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         for i in range(10):
             self.queue.put((TopicPartition("test", 0), "msg %i", "key %i"))
 
+        event_mock = Mock()
+        self.registrar.register('async.producer.connect.succeed', event_mock)
         self._run_process()
+        self.assertTrue(event_mock.called_once_with())
 
         # the queue should be void at the end of the test
         self.assertEqual(self.queue.empty(), True)
