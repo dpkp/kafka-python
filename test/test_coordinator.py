@@ -269,6 +269,7 @@ def test_fetch_committed_offsets(mocker, coordinator):
 def test_close(mocker, coordinator):
     mocker.patch.object(coordinator, '_maybe_auto_commit_offsets_sync')
     mocker.patch.object(coordinator, '_handle_leave_group_response')
+    mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
     coordinator.coordinator_id = 0
     coordinator.generation = 1
     cli = coordinator._client
