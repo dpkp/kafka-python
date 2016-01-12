@@ -36,6 +36,7 @@ class Fetcher(six.Iterator):
         'fetch_max_wait_ms': 500,
         'max_partition_fetch_bytes': 1048576,
         'check_crcs': True,
+        'iterator_refetch_records': 1, # undocumented -- interface may change
     }
 
     def __init__(self, client, subscriptions, **configs):
@@ -369,7 +370,7 @@ class Fetcher(six.Iterator):
 
             # Send additional FetchRequests when the internal queue is low
             # this should enable moderate pipelining
-            if len(self._records) == 1:
+            if len(self._records) <= self.config['iterator_refetch_records']:
                 self._init_fetches()
 
             (fetch_offset, tp, messages) = self._records.popleft()
