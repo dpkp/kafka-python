@@ -650,16 +650,18 @@ class KafkaConsumer(six.Iterator):
             self._iterator = self._message_generator()
             self._fetcher.init_fetches()
 
-        # consumer_timeout_ms can be used to stop iteration early
-        if self.config['consumer_timeout_ms'] >= 0:
-            self._consumer_timeout = time.time() + (
-                self.config['consumer_timeout_ms'] / 1000.0)
-
+        self._set_consumer_timeout()
         try:
             return next(self._iterator)
         except StopIteration:
             self._iterator = None
             raise
+
+    def _set_consumer_timeout(self):
+        # consumer_timeout_ms can be used to stop iteration early
+        if self.config['consumer_timeout_ms'] >= 0:
+            self._consumer_timeout = time.time() + (
+                self.config['consumer_timeout_ms'] / 1000.0)
 
     # old KafkaConsumer methods are deprecated
     def configure(self, **configs):
