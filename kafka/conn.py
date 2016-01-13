@@ -9,6 +9,7 @@ import socket
 import struct
 from threading import local
 import time
+import warnings
 
 import six
 
@@ -375,6 +376,8 @@ class KafkaConnection(local):
             in seconds. None means no timeout, so a request can block forever.
     """
     def __init__(self, host, port, timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS):
+        warnings.warn('KafkaConnection has been deprecated and will be'
+                      ' removed in a future release', DeprecationWarning)
         super(KafkaConnection, self).__init__()
         self.host = host
         self.port = port

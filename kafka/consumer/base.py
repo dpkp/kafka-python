@@ -4,6 +4,7 @@ import atexit
 import logging
 import numbers
 from threading import Lock
+import warnings
 
 import kafka.common
 from kafka.common import (
@@ -46,6 +47,9 @@ class Consumer(object):
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL):
 
+        warnings.warn('deprecated -- this class will be removed in a future'
+                      ' release. Use KafkaConsumer instead.',
+                      DeprecationWarning)
         self.client = client
         self.topic = topic
         self.group = group
