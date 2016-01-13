@@ -4,6 +4,7 @@ from collections import namedtuple
 import logging
 from multiprocessing import Process, Manager as MPManager
 import time
+import warnings
 
 from six.moves import queue
 
@@ -134,6 +135,10 @@ class MultiProcessConsumer(Consumer):
                  num_procs=1,
                  partitions_per_proc=0,
                  **simple_consumer_options):
+
+        warnings.warn('This class has been deprecated and will be removed in a'
+                      ' future release. Use KafkaConsumer instead',
+                      DeprecationWarning)
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(

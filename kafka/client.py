@@ -19,11 +19,17 @@ from kafka.conn import (
     ConnectionStates)
 from kafka.protocol import KafkaProtocol
 
+# New KafkaClient
+# this is not exposed in top-level imports yet,
+# due to conflicts with legacy SimpleConsumer / SimpleProducer usage
+from kafka.client_async import KafkaClient
+
 
 log = logging.getLogger(__name__)
 
 
-class KafkaClient(object):
+# Legacy KafkaClient interface -- will be deprecated soon
+class SimpleClient(object):
 
     CLIENT_ID = b'kafka-python'
 

@@ -7,6 +7,7 @@ except ImportError:
 import logging
 import sys
 import time
+import warnings
 
 import six
 from six.moves import queue
@@ -40,6 +41,8 @@ class FetchContext(object):
     Class for managing the state of a consumer during fetch
     """
     def __init__(self, consumer, block, timeout):
+        warnings.warn('deprecated - this class will be removed in a future'
+                      ' release', DeprecationWarning)
         self.consumer = consumer
         self.block = block
 
@@ -116,6 +119,9 @@ class SimpleConsumer(Consumer):
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
                  iter_timeout=None,
                  auto_offset_reset='largest'):
+        warnings.warn('deprecated - this class will be removed in a future'
+                      ' release. Use KafkaConsumer instead.',
+                      DeprecationWarning)
         super(SimpleConsumer, self).__init__(
             client, group, topic,
             partitions=partitions,
