@@ -338,17 +338,16 @@ class KafkaClient(object):
         # select on reads across all connected sockets, blocking up to timeout
         sockets = dict([(conn._sock, conn)
                         for conn in six.itervalues(self._conns)
-                        if (conn.state is ConnectionStates.CONNECTED
-                            and conn.in_flight_requests)])
+                        if conn.state is ConnectionStates.CONNECTED
+                        and conn.in_flight_requests])
         if not sockets:
             # if sockets are connecting, we can wake when they are writeable
             if self._connecting:
                 sockets = [self._conns[node]._sock for node in self._connecting]
                 select.select([], sockets, [], timeout)
-            # otherwise just sleep to prevent CPU spinning
-            else:
-                log.debug('Nothing to do in _poll -- sleeping for %s', timeout)
-                time.sleep(timeout)
+            elif timeout:
+                log.warning('_poll called with a timeout, but nothing to do'
+                            ' -- this can cause high CPU usage during idle')
             return []
 
         ready, _, _ = select.select(list(sockets.keys()), [], [], timeout)
