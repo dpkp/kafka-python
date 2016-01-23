@@ -88,6 +88,13 @@ class MessageSet(AbstractType):
 
     @classmethod
     def encode(cls, items, size=True, recalc_message_size=True):
+        # RecordAccumulator encodes messagesets internally
+        if isinstance(items, io.BytesIO):
+            size = Int32.decode(items)
+            # rewind and return all the bytes
+            items.seek(-4, 1)
+            return items.read(size + 4)
+
         encoded_values = []
         for (offset, message_size, message) in items:
             if isinstance(message, Message):
@@ -143,4 +150,9 @@ class MessageSet(AbstractType):
 
     @classmethod
     def repr(cls, messages):
+        if isinstance(messages, io.BytesIO):
+            offset = messages.tell()
+            decoded = cls.decode(messages)
+            messages.seek(offset)
+            messages = decoded
         return '[' + ', '.join([cls.ITEM.repr(m) for m in messages]) + ']'
