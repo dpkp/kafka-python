@@ -200,7 +200,10 @@ class BaseCoordinator(object):
             self._client.poll(future=future)
 
             if future.failed():
-                if future.retriable():
+                if isinstance(future.exception,
+                              Errors.GroupCoordinatorNotAvailableError):
+                    continue
+                elif future.retriable():
                     metadata_update = self._client.cluster.request_update()
                     self._client.poll(future=metadata_update)
                 else:
