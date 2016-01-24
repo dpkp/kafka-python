@@ -5,6 +5,7 @@ __license__ = 'Apache License 2.0'
 __copyright__ = 'Copyright 2016 Dana Powers, David Arthur, and Contributors'
 
 from kafka.consumer import KafkaConsumer
+from kafka.producer import KafkaProducer
 from kafka.conn import BrokerConnection
 from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message)
@@ -28,7 +29,7 @@ class KafkaClient(SimpleClient):
 
 
 __all__ = [
-    'KafkaConsumer', 'KafkaClient', 'BrokerConnection',
+    'KafkaConsumer', 'KafkaProducer', 'KafkaClient', 'BrokerConnection',
     'SimpleClient', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner',
     'create_message', 'create_gzip_message', 'create_snappy_message',
