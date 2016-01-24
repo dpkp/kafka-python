@@ -254,22 +254,23 @@ def test_poll(mocker):
     metadata.return_value = 1000
     tasks.return_value = 2
     cli.poll()
-    _poll.assert_called_with(1.0)
+    _poll.assert_called_with(1.0, sleep=False)
 
     # user timeout wins
     cli.poll(250)
-    _poll.assert_called_with(0.25)
+    _poll.assert_called_with(0.25, sleep=False)
 
     # tasks timeout wins
     tasks.return_value = 0
     cli.poll(250)
-    _poll.assert_called_with(0)
+    _poll.assert_called_with(0, sleep=False)
 
     # default is request_timeout_ms
     metadata.return_value = 1000000
     tasks.return_value = 10000
     cli.poll()
-    _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
+    _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0,
+                             sleep=False)
 
 
 def test__poll():
