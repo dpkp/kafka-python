@@ -616,7 +616,7 @@ class KafkaClient(object):
             continue
 
     def wakeup(self):
-        os.write(self._wake_w, 'x')
+        os.write(self._wake_w, b'x')
 
     def _clear_wake_fd(self):
         while True:
