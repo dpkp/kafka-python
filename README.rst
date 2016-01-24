@@ -50,7 +50,34 @@ for examples.
 KafkaProducer
 *************
 
-<`in progress - see SimpleProducer for legacy producer implementation`>
+KafkaProducer is a high-level, asynchronous message producer. The class is
+intended to operate as similarly as possible to the official java client.
+See `ReadTheDocs <http://kafka-python.readthedocs.org/en/master/apidoc/KafkaProducer.html>`_
+for more details.
+
+>>> from kafka import KafkaProducer
+>>> producer = KafkaProducer(bootstrap_servers='localhost:1234')
+>>> producer.send('foobar', b'some_message_bytes')
+
+>>> # Blocking send
+>>> producer.send('foobar', b'another_message').get(timeout=60)
+
+>>> # Use a key for hashed-partitioning
+>>> producer.send('foobar', key=b'foo', value=b'bar')
+
+>>> # Serialize json messages
+>>> import json
+>>> producer = KafkaProducer(value_serializer=json.loads)
+>>> producer.send('fizzbuzz', {'foo': 'bar'})
+
+>>> # Serialize string keys
+>>> producer = KafkaProducer(key_serializer=str.encode)
+>>> producer.send('flipflap', key='ping', value=b'1234')
+
+>>> # Compress messages
+>>> producer = KafkaProducer(compression_type='gzip')
+>>> for i in range(1000):
+...     producer.send('foobar', b'msg %d' % i)
 
 
 Protocol
