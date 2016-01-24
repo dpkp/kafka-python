@@ -305,9 +305,12 @@ class BrokerConnection(object):
         # 0.8.2 quirk
         if (self.config['api_version'] == (0, 8, 2) and
             ifr.response_type is GroupCoordinatorResponse and
+            ifr.correlation_id != 0 and
             recv_correlation_id == 0):
-            raise Errors.KafkaError(
-                'Kafka 0.8.2 quirk -- try creating a topic first')
+            log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
+                        ' coorelation id does not match request. This'
+                        ' should go away once at least one topic has been'
+                        ' initialized on the broker')
 
         elif ifr.correlation_id != recv_correlation_id:
 
