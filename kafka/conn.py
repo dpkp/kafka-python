@@ -417,6 +417,7 @@ class KafkaConnection(local):
         while bytes_left:
 
             try:
+                # pylint: disable-msg=no-member
                 data = self._sock.recv(min(bytes_left, 4096))
 
                 # Receiving empty string from recv signals
@@ -462,6 +463,7 @@ class KafkaConnection(local):
             self.reinit()
 
         try:
+            # pylint: disable-msg=no-member
             self._sock.sendall(payload)
         except socket.error:
             log.exception('Unable to send payload to Kafka')
@@ -517,6 +519,7 @@ class KafkaConnection(local):
             # But expect an error if the socket has already been
             # closed by the server
             try:
+                # pylint: disable-msg=no-member
                 self._sock.shutdown(socket.SHUT_RDWR)
             except socket.error:
                 pass
