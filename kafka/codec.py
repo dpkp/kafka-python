@@ -13,6 +13,15 @@ try:
 except ImportError:
     _HAS_SNAPPY = False
 
+try:
+    import lz4
+    from lz4 import compress as lz4_encode
+    from lz4 import decompress as lz4_decode
+except ImportError:
+    lz4 = None
+    lz4_encode = None
+    lz4_decode = None
+
 
 def has_gzip():
     return True
@@ -20,6 +29,10 @@ def has_gzip():
 
 def has_snappy():
     return _HAS_SNAPPY
+
+
+def has_lz4():
+    return lz4 is not None
 
 
 def gzip_encode(payload, compresslevel=None):

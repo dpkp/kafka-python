@@ -5,8 +5,8 @@ import io
 import threading
 import time
 
-from ..codec import (has_gzip, has_snappy,
-                     gzip_encode, snappy_encode)
+from ..codec import (has_gzip, has_snappy, has_lz4,
+                     gzip_encode, snappy_encode, lz4_encode)
 from ..protocol.types import Int32, Int64
 from ..protocol.message import MessageSet, Message
 
@@ -27,6 +27,7 @@ class MessageSetBuffer(object):
     _COMPRESSORS = {
         'gzip': (has_gzip, gzip_encode, Message.CODEC_GZIP),
         'snappy': (has_snappy, snappy_encode, Message.CODEC_SNAPPY),
+        'lz4': (has_lz4, lz4_encode, Message.CODEC_LZ4),
     }
     def __init__(self, buf, batch_size, compression_type=None):
         assert batch_size > 0, 'batch_size must be > 0'

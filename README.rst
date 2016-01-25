@@ -79,6 +79,14 @@ for more details.
 >>> for i in range(1000):
 ...     producer.send('foobar', b'msg %d' % i)
 
+Compression
+***********
+
+kafka-python supports gzip compression/decompression natively. To produce or
+consume snappy and lz4 compressed messages, you must install `lz4` (`lz4-cffi`
+if using pypy) and/or `python-snappy` (also requires snappy library).
+See `Installation <http://kafka-python.readthedocs.org/en/master/install.html#optional-snappy-install>`_
+for more information.
 
 Protocol
 ********

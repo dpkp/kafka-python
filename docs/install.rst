@@ -37,6 +37,17 @@ Using `setup.py` directly:
     cd kafka-python
     python setup.py install
 
+Optional LZ4 install
+********************
+
+To enable LZ4 compression/decompression, install `lz4`:
+
+>>> pip install lz4
+
+Or `lz4-cffi` if using pypy:
+
+>>> pip install lz4-cffi
+
 
 Optional Snappy install
 ***********************
