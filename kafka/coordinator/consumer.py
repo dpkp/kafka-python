@@ -75,18 +75,24 @@ class ConsumerCoordinator(BaseCoordinator):
             if key in configs:
                 self.config[key] = configs[key]
 
-        self._cluster = client.cluster
+        if self.config['api_version'] >= (0, 9) and self.config['group_id'] is not None:
+            assert self.config['assignors'], 'Coordinator requires assignors'
+
         self._subscription = subscription
         self._partitions_per_topic = {}
-        self._auto_commit_task = None
-        if self.config['api_version'] >= (0, 9):
-            assert self.config['assignors'], 'Coordinator require assignors'
-
+        self._cluster = client.cluster
         self._cluster.request_update()
         self._cluster.add_listener(self._handle_metadata_update)
 
-        if self.config['api_version'] >= (0, 8, 1):
-            if self.config['enable_auto_commit']:
+        self._auto_commit_task = None
+        if self.config['enable_auto_commit']:
+            if self.config['api_version'] < (0, 8, 1):
+                log.warning('Broker version (%s) does not support offset'
+                            ' commits; disabling auto-commit.',
+                            self.config['api_version'])
+            elif self.config['group_id'] is None:
+                log.warning('group_id is None: disabling auto-commit.')
+            else:
                 interval = self.config['auto_commit_interval_ms'] / 1000.0
                 self._auto_commit_task = AutoCommitTask(self, interval)
 
@@ -127,7 +133,10 @@ class ConsumerCoordinator(BaseCoordinator):
         # check if there are any changes to the metadata which should trigger
         # a rebalance
         if self._subscription_metadata_changed():
-            if self.config['api_version'] >= (0, 9):
+
+            if (self.config['api_version'] >= (0, 9)
+                and self.config['group_id'] is not None):
+
                 self._subscription.mark_for_reassignment()
 
             # If we haven't got group coordinator support,
