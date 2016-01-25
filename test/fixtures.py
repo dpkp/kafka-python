@@ -5,10 +5,11 @@ import shutil
 import subprocess
 import tempfile
 import time
-from six.moves import urllib
 import uuid
 
+from six.moves import urllib
 from six.moves.urllib.parse import urlparse # pylint: disable=E0611,F0401
+
 from test.service import ExternalService, SpawnedService
 from test.testutil import get_open_port
 
