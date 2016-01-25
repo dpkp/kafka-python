@@ -132,6 +132,10 @@ class StaleMetadata(KafkaError):
     invalid_metadata = True
 
 
+class UnrecognizedBrokerVersion(KafkaError):
+    pass
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None
