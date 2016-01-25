@@ -12,6 +12,7 @@ def test_end_to_end(kafka_broker):
                              max_block_ms=10000,
                              value_serializer=str.encode)
     consumer = KafkaConsumer(bootstrap_servers=connect_str,
+                             group_id=None,
                              consumer_timeout_ms=10000,
                              auto_offset_reset='earliest',
                              value_deserializer=bytes.decode)
