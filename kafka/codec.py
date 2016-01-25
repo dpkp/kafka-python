@@ -38,33 +38,29 @@ def gzip_encode(payload, compresslevel=None):
     if not compresslevel:
         compresslevel = 9
 
-    with BytesIO() as buf:
+    buf = BytesIO()
 
-        # Gzip context manager introduced in python 2.6
-        # so old-fashioned way until we decide to not support 2.6
-        gzipper = gzip.GzipFile(fileobj=buf, mode="w", compresslevel=compresslevel)
-        try:
-            gzipper.write(payload)
-        finally:
-            gzipper.close()
+    # Gzip context manager introduced in python 2.7
+    # so old-fashioned way until we decide to not support 2.6
+    gzipper = gzip.GzipFile(fileobj=buf, mode="w", compresslevel=compresslevel)
+    try:
+        gzipper.write(payload)
+    finally:
+        gzipper.close()
 
-        result = buf.getvalue()
-
-    return result
+    return buf.getvalue()
 
 
 def gzip_decode(payload):
-    with BytesIO(payload) as buf:
+    buf = BytesIO(payload)
 
-        # Gzip context manager introduced in python 2.6
-        # so old-fashioned way until we decide to not support 2.6
-        gzipper = gzip.GzipFile(fileobj=buf, mode='r')
-        try:
-            result = gzipper.read()
-        finally:
-            gzipper.close()
-
-    return result
+    # Gzip context manager introduced in python 2.7
+    # so old-fashioned way until we decide to not support 2.6
+    gzipper = gzip.GzipFile(fileobj=buf, mode='r')
+    try:
+        return gzipper.read()
+    finally:
+        gzipper.close()
 
 
 def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
