@@ -24,7 +24,7 @@ if six.PY2:
     ConnectionError = None
 
 
-log = logging.getLogger(__name__)
+log = logging.getLogger('kafka.client')
 
 
 class KafkaClient(object):
