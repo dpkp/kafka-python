@@ -217,7 +217,7 @@ class Fetcher(six.Iterator):
 
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
-                self._client.poll(future=refresh_future)
+                self._client.poll(future=refresh_future, sleep=True)
 
     def _raise_if_offset_out_of_range(self):
         """Check FetchResponses for offset out of range.
