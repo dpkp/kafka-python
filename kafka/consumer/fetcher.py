@@ -512,7 +512,7 @@ class Fetcher(six.Iterator):
         FetchRequests skipped if no leader, or node has requests in flight
 
         Returns:
-            dict: {node_id: [FetchRequest,...]}
+            dict: {node_id: FetchRequest, ...}
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
