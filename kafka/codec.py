@@ -2,6 +2,7 @@ import gzip
 from io import BytesIO
 import struct
 
+import six
 from six.moves import xrange
 
 _XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
@@ -100,10 +101,15 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
         out.write(struct.pack('!' + fmt, dat))
 
     # Chunk through buffers to avoid creating intermediate slice copies
-    for chunk in (buffer(payload, i, xerial_blocksize)
+    if six.PY2:
+        chunker = lambda payload, i, size: buffer(payload, i, size)
+    else:
+        chunker = lambda payload, i, size: memoryview(payload)[i:size+i].tobytes()
+
+    for chunk in (chunker(payload, i, xerial_blocksize)
                   for i in xrange(0, len(payload), xerial_blocksize)):
 
-        block = snappy.compress(chunk)
+        block = snappy.compress(chunk) # this wont accept a raw memoryview...?
         block_size = len(block)
         out.write(struct.pack('!i', block_size))
         out.write(block)
