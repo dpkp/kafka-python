@@ -1,5 +1,5 @@
 import gzip
-from io import BytesIO
+import io
 import platform
 import struct
 
@@ -41,7 +41,7 @@ def gzip_encode(payload, compresslevel=None):
     if not compresslevel:
         compresslevel = 9
 
-    buf = BytesIO()
+    buf = io.BytesIO()
 
     # Gzip context manager introduced in python 2.7
     # so old-fashioned way until we decide to not support 2.6
@@ -55,7 +55,7 @@ def gzip_encode(payload, compresslevel=None):
 
 
 def gzip_decode(payload):
-    buf = BytesIO(payload)
+    buf = io.BytesIO(payload)
 
     # Gzip context manager introduced in python 2.7
     # so old-fashioned way until we decide to not support 2.6
@@ -98,7 +98,7 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
     if not xerial_compatible:
         return snappy.compress(payload)
 
-    out = BytesIO()
+    out = io.BytesIO()
     for fmt, dat in zip(_XERIAL_V1_FORMAT, _XERIAL_V1_HEADER):
         out.write(struct.pack('!' + fmt, dat))
 
@@ -163,7 +163,7 @@ def snappy_decode(payload):
 
     if _detect_xerial_stream(payload):
         # TODO ? Should become a fileobj ?
-        out = BytesIO()
+        out = io.BytesIO()
         byt = payload[16:]
         length = len(byt)
         cursor = 0
