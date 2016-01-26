@@ -579,7 +579,7 @@ class KafkaClient(object):
         # so we can send a test request and then follow immediately with a
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
-        # socket.error (32 or 54)
+        # socket.error (32, 54, or 104)
         import socket
         from .protocol.admin import ListGroupsRequest
         from .protocol.commit import (
@@ -619,7 +619,7 @@ class KafkaClient(object):
 
             if six.PY2:
                 assert isinstance(f.exception.args[0], socket.error)
-                assert f.exception.args[0].errno in (32, 54)
+                assert f.exception.args[0].errno in (32, 54, 104)
             else:
                 assert isinstance(f.exception.args[0], ConnectionError)
             log.info("Broker is not v%s -- it did not recognize %s",
