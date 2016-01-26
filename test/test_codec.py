@@ -35,13 +35,15 @@ def test_snappy_detect_xerial():
 
     header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01Some extra bytes'
     false_header = b'\x01SNAPPY\x00\x00\x00\x01\x00\x00\x00\x01'
-    random_snappy = snappy_encode(b'SNAPPY' * 50)
+    default_snappy = snappy_encode(b'foobar' * 50)
+    random_snappy = snappy_encode(b'SNAPPY' * 50, xerial_compatible=False)
     short_data = b'\x01\x02\x03\x04'
 
     assert _detect_xerial_stream(header) is True
     assert _detect_xerial_stream(b'') is False
     assert _detect_xerial_stream(b'\x00') is False
     assert _detect_xerial_stream(false_header) is False
+    assert _detect_xerial_stream(default_snappy) is True
     assert _detect_xerial_stream(random_snappy) is False
     assert _detect_xerial_stream(short_data) is False
 
@@ -49,9 +51,9 @@ def test_snappy_detect_xerial():
 @pytest.mark.skipif(not has_snappy(), reason="Snappy not available")
 def test_snappy_decode_xerial():
     header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01'
-    random_snappy = snappy_encode(b'SNAPPY' * 50)
+    random_snappy = snappy_encode(b'SNAPPY' * 50, xerial_compatible=False)
     block_len = len(random_snappy)
-    random_snappy2 = snappy_encode(b'XERIAL' * 50)
+    random_snappy2 = snappy_encode(b'XERIAL' * 50, xerial_compatible=False)
     block_len2 = len(random_snappy2)
 
     to_test = header \
