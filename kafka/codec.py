@@ -102,8 +102,10 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
 
     # Chunk through buffers to avoid creating intermediate slice copies
     if six.PY2:
+        # pylint: disable-msg=undefined-variable
         chunker = lambda payload, i, size: buffer(payload, i, size)
     else:
+        # pylint: disable-msg=undefined-variable
         chunker = lambda payload, i, size: memoryview(payload)[i:size+i].tobytes()
 
     for chunk in (chunker(payload, i, xerial_blocksize)
