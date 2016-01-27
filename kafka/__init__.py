@@ -4,6 +4,18 @@ __author__ = 'Dana Powers'
 __license__ = 'Apache License 2.0'
 __copyright__ = 'Copyright 2016 Dana Powers, David Arthur, and Contributors'
 
+# Set default logging handler to avoid "No handler found" warnings.
+import logging
+try:  # Python 2.7+
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
+
+logging.getLogger(__name__).addHandler(NullHandler())
+
+
 from kafka.consumer import KafkaConsumer
 from kafka.producer import KafkaProducer
 from kafka.conn import BrokerConnection
