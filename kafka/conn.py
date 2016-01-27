@@ -82,7 +82,10 @@ class BrokerConnection(object):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
                                   self.config['send_buffer_bytes'])
             self._sock.setblocking(False)
-            ret = self._sock.connect_ex((self.host, self.port))
+            try:
+                ret = self._sock.connect_ex((self.host, self.port))
+            except socket.error as ret:
+                pass
             self.last_attempt = time.time()
 
             if not ret or ret is errno.EISCONN:
@@ -105,7 +108,10 @@ class BrokerConnection(object):
                 self.last_failure = time.time()
 
             else:
-                ret = self._sock.connect_ex((self.host, self.port))
+                try:
+                    ret = self._sock.connect_ex((self.host, self.port))
+                except socket.error as ret:
+                    pass
                 if not ret or ret is errno.EISCONN:
                     self.state = ConnectionStates.CONNECTED
                 elif ret is not errno.EALREADY:
