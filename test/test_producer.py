@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -9,9 +11,13 @@ from test.testutil import random_string
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
 def test_end_to_end(kafka_broker, compression):
 
-    # LZ4 requires 0.8.2
-    if compression == 'lz4' and version() < (0, 8, 2):
-        return
+    if compression == 'lz4':
+        # LZ4 requires 0.8.2
+        if version() < (0, 8, 2):
+            return
+        # LZ4 python libs dont work on python2.6
+        elif sys.version_info < (2, 7):
+            return
 
     connect_str = 'localhost:' + str(kafka_broker.port)
     producer = KafkaProducer(bootstrap_servers=connect_str,

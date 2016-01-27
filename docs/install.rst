@@ -40,14 +40,12 @@ Using `setup.py` directly:
 Optional LZ4 install
 ********************
 
-To enable LZ4 compression/decompression, install `lz4`:
+To enable LZ4 compression/decompression, install lz4tools and xxhash:
 
->>> pip install lz4
+>>> pip install lz4tools
+>>> pip install xxhash
 
-Or `lz4-cffi` if using pypy:
-
->>> pip install lz4-cffi
-
+*Note*: these modules do not support python2.6
 
 Optional Snappy install
 ***********************
