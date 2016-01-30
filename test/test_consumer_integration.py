@@ -240,6 +240,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEquals(set([0, 1]), set([pending_part1, pending_part2]))
         consumer.stop()
 
+    @unittest.skip('MultiProcessConsumer deprecated and these tests are flaky')
     def test_multi_process_consumer(self):
         # Produce 100 messages to partitions 0 and 1
         self.send_messages(0, range(0, 100))
@@ -251,6 +252,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @unittest.skip('MultiProcessConsumer deprecated and these tests are flaky')
     def test_multi_process_consumer_blocking(self):
         consumer = self.consumer(consumer = MultiProcessConsumer)
 
@@ -288,6 +290,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @unittest.skip('MultiProcessConsumer deprecated and these tests are flaky')
     def test_multi_proc_pending(self):
         self.send_messages(0, range(0, 10))
         self.send_messages(1, range(10, 20))
@@ -303,6 +306,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @unittest.skip('MultiProcessConsumer deprecated and these tests are flaky')
     @kafka_versions('>=0.8.1')
     def test_multi_process_consumer_load_initial_offsets(self):
         self.send_messages(0, range(0, 10))
@@ -399,6 +403,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer1.stop()
         consumer2.stop()
 
+    @unittest.skip('MultiProcessConsumer deprecated and these tests are flaky')
     @kafka_versions('>=0.8.1')
     def test_multi_process_offset_behavior__resuming_behavior(self):
         self.send_messages(0, range(0, 100))
