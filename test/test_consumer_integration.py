@@ -3,6 +3,7 @@ import os
 
 from six.moves import xrange
 
+from . import unittest
 from kafka import (
     KafkaConsumer, MultiProcessConsumer, SimpleConsumer, create_message
 )
