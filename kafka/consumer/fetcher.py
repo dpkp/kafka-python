@@ -574,11 +574,13 @@ class Fetcher(six.Iterator):
                     # consumption paused while fetch is still in-flight
                     log.debug("Ignoring fetched records for partition %s"
                               " since it is no longer fetchable", tp)
+
                 elif error_type is Errors.NoError:
-                    fetch_offset = fetch_offsets[tp]
+                    self._subscriptions.assignment[tp].highwater = highwater
 
                     # we are interested in this fetch only if the beginning
                     # offset matches the current consumed position
+                    fetch_offset = fetch_offsets[tp]
                     position = self._subscriptions.assignment[tp].position
                     if position is None or position != fetch_offset:
                         log.debug("Discarding fetch response for partition %s"
