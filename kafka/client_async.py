@@ -514,8 +514,12 @@ class KafkaClient(object):
 
         node_id = self.least_loaded_node()
 
+        topics = list(self._topics)
+        if self.cluster.need_all_topic_metadata:
+            topics = []
+
         if self._can_send_request(node_id):
-            request = MetadataRequest(list(self._topics))
+            request = MetadataRequest(topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request)
             future.add_callback(self.cluster.update_metadata)

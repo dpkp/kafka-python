@@ -32,6 +32,7 @@ class ClusterMetadata(object):
         self._need_update = False
         self._future = None
         self._listeners = set()
+        self.need_all_topic_metadata = False
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -86,11 +87,12 @@ class ClusterMetadata(object):
         return max(ttl, next_retry, 0)
 
     def request_update(self):
-        """
-        Flags metadata for update, return Future()
+        """Flags metadata for update, return Future()
 
         Actual update must be handled separately. This method will only
         change the reported ttl()
+
+        Returns: Future (value will be this cluster object after update)
         """
         self._need_update = True
         if not self._future or self._future.is_done:
