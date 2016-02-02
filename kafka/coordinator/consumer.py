@@ -399,7 +399,8 @@ class ConsumerCoordinator(BaseCoordinator):
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
         if not offsets:
-            return Future().success(None)
+            log.debug('No offsets to commit')
+            return Future().success(True)
 
         if self.config['api_version'] >= (0, 8, 2):
             if self.coordinator_unknown():
