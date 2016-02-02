@@ -97,6 +97,7 @@ class Sender(threading.Thread):
         # if there are any partitions whose leaders are not known yet, force
         # metadata update
         if unknown_leaders_exist:
+            log.debug('Unknown leaders exist, requesting metadata update')
             with self._lock:
                 self._metadata.request_update()
 
@@ -104,6 +105,7 @@ class Sender(threading.Thread):
         not_ready_timeout = 999999999
         for node in list(ready_nodes):
             if not self._client.ready(node):
+                log.debug('Node %s not ready; delaying produce of accumulated batch', node)
                 ready_nodes.remove(node)
                 not_ready_timeout = min(not_ready_timeout,
                                         self._client.connection_delay(node))
