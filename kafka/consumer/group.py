@@ -53,7 +53,7 @@ class KafkaConsumer(six.Iterator):
             raw message value and returns a deserialized value.
         fetch_min_bytes (int): Minimum amount of data the server should
             return for a fetch request, otherwise wait up to
-            fetch_max_wait_ms for more data to accumulate. Default: 1024.
+            fetch_max_wait_ms for more data to accumulate. Default: 1.
         fetch_max_wait_ms (int): The maximum amount of time in milliseconds
             the server will block before answering the fetch request if
             there isn't sufficient data to immediately satisfy the
@@ -135,7 +135,7 @@ class KafkaConsumer(six.Iterator):
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
-        'fetch_min_bytes': 1024,
+        'fetch_min_bytes': 1,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
         'request_timeout_ms': 40 * 1000,
         'retry_backoff_ms': 100,

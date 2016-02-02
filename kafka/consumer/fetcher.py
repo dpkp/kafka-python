@@ -32,7 +32,7 @@ class Fetcher(six.Iterator):
     DEFAULT_CONFIG = {
         'key_deserializer': None,
         'value_deserializer': None,
-        'fetch_min_bytes': 1024,
+        'fetch_min_bytes': 1,
         'fetch_max_wait_ms': 500,
         'max_partition_fetch_bytes': 1048576,
         'check_crcs': True,
@@ -49,7 +49,7 @@ class Fetcher(six.Iterator):
                 raw message value and returns a deserialized value.
             fetch_min_bytes (int): Minimum amount of data the server should
                 return for a fetch request, otherwise wait up to
-                fetch_max_wait_ms for more data to accumulate. Default: 1024.
+                fetch_max_wait_ms for more data to accumulate. Default: 1.
             fetch_max_wait_ms (int): The maximum amount of time in milliseconds
                 the server will block before answering the fetch request if
                 there isn't sufficient data to immediately satisfy the
