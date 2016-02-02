@@ -243,6 +243,7 @@ class RecordAccumulator(object):
             list of RecordBatch that were expired
         """
         expired_batches = []
+        to_remove = []
         count = 0
         for tp, dq in six.iteritems(self._batches):
             assert tp in self._tp_locks, 'TopicPartition not in locks dict'
@@ -254,10 +255,19 @@ class RecordAccumulator(object):
                     if batch.maybe_expire(request_timeout_ms,
                                           self.config['linger_ms']):
                         expired_batches.append(batch)
+                        to_remove.append(batch)
                         count += 1
                         self.deallocate(batch)
                     elif not batch.in_retry():
                         break
+
+                # Python does not allow us to mutate the dq during iteration
+                # Assuming expired batches are infrequent, this is better than
+                # creating a new copy of the deque for iteration on every loop
+                if to_remove:
+                    for batch in to_remove:
+                        dq.remove(batch)
+                    to_remove = []
 
         if expired_batches:
             log.debug("Expired %d batches in accumulator", count) # trace
