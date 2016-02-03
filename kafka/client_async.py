@@ -22,6 +22,8 @@ from .version import __version__
 
 if six.PY2:
     ConnectionError = None
+else:
+    ConnectionError = Errors.RequestTimedOutError
 
 
 log = logging.getLogger('kafka.client')
@@ -625,7 +627,7 @@ class KafkaClient(object):
                 assert isinstance(f.exception.args[0], socket.error)
                 assert f.exception.args[0].errno in (32, 54, 104)
             else:
-                assert isinstance(f.exception.args[0], ConnectionError)
+                assert isinstance(f.exception, ConnectionError)
             log.info("Broker is not v%s -- it did not recognize %s",
                      version, request.__class__.__name__)
             continue
