@@ -268,7 +268,9 @@ class KafkaConsumer(six.Iterator):
         This commits offsets only to Kafka. The offsets committed using this API
         will be used on the first fetch after every rebalance and also on
         startup. As such, if you need to store offsets in anything other than
-        Kafka, this API should not be used.
+        Kafka, this API should not be used. To avoid re-processing the last
+        message read if a consumer is restarted, the committed offset should be
+        the next message your application should consume, i.e.: last_offset + 1.
 
         This is an asynchronous call and will not block. Any errors encountered
         are either passed to the callback (if provided) or discarded.
@@ -300,7 +302,9 @@ class KafkaConsumer(six.Iterator):
         This commits offsets only to Kafka. The offsets committed using this API
         will be used on the first fetch after every rebalance and also on
         startup. As such, if you need to store offsets in anything other than
-        Kafka, this API should not be used.
+        Kafka, this API should not be used. To avoid re-processing the last
+        message read if a consumer is restarted, the committed offset should be
+        the next message your application should consume, i.e.: last_offset + 1.
 
         Blocks until either the commit succeeds or an unrecoverable error is
         encountered (in which case it is thrown to the caller).
