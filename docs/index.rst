@@ -52,7 +52,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 ...     print (msg)
 
 >>> # manually assign the partition list for the consumer
->>> from kafka import TopicPartition
+>>> from kafka.common import TopicPartition
 >>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234')
 >>> consumer.assign([TopicPartition('foobar', 2)])
 >>> msg = next(consumer)
