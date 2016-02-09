@@ -466,6 +466,8 @@ class KafkaProducer(object):
             partitions = self._metadata.partitions_for_topic(topic)
             if partitions:
                 return partitions
+            if future.is_done:
+                future = request_update(self, event)
         else:
             raise Errors.KafkaTimeoutError(
                 "Failed to update metadata after %s secs.", max_wait)
