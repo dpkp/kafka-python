@@ -250,7 +250,7 @@ class Producer(object):
         async_retry_backoff_ms (int, optional): milliseconds to backoff on
             failed messages, defaults to 100.
         async_retry_on_timeouts (bool, optional): whether to retry on
-            RequestTimeoutError, defaults to True.
+            RequestTimedOutError, defaults to True.
         async_queue_maxsize (int, optional): limit to the size of the
             internal message queue in number of messages (not size), defaults
             to 0 (no limit).

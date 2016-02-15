@@ -633,7 +633,7 @@ class KafkaClient(object):
                 # If the socket flush hack did not work (which should force the
                 # connection to close and fail all pending requests), then we
                 # get a basic Request Timeout. Thisisn
-                if isinstance(f.exception, Errors.RequestTimeoutError):
+                if isinstance(f.exception, Errors.RequestTimedOutError):
                     pass
                 elif six.PY2:
                     assert isinstance(f.exception.args[0], socket.error)
