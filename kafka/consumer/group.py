@@ -393,9 +393,10 @@ class KafkaConsumer(six.Iterator):
         Incompatible with iterator interface -- use one or the other, not both.
 
         Arguments:
-            timeout_ms (int, optional): milliseconds to spend waiting in poll if
-                data is not available. If 0, returns immediately with any
-                records that are available now. Must not be negative. Default: 0
+            timeout_ms (int, optional): milliseconds spent waiting in poll if
+                data is not available in the buffer. If 0, returns immediately
+                with any records that are available currently in the buffer,
+                else returns empty. Must not be negative. Default: 0
 
         Returns:
             dict: topic to list of records since the last fetch for the
