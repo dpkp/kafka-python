@@ -2,8 +2,8 @@ Simple APIs (DEPRECATED)
 ************************
 
 
-SimpleConsumer
-==============
+SimpleConsumer (DEPRECATED)
+===========================
 
 .. code:: python
 
@@ -37,8 +37,8 @@ SimpleConsumer
     client.close()
 
 
-SimpleProducer
-==============
+SimpleProducer (DEPRECATED)
+===========================
 
 Asynchronous Mode
 -----------------
@@ -98,8 +98,8 @@ Synchronous Mode
         logging.info(r.offset)
 
 
-KeyedProducer
-=============
+KeyedProducer (DEPRECATED)
+==========================
 
 .. code:: python
 
@@ -121,24 +121,43 @@ KeyedProducer
     producer = KeyedProducer(kafka, partitioner=RoundRobinPartitioner)
 
 
-SimpleClient
-============
+SimpleClient (DEPRECATED)
+=========================
 
 
 .. code:: python
 
-    from kafka import SimpleClient, create_message
-    from kafka.protocol import KafkaProtocol
-    from kafka.common import ProduceRequest
+    import time
+    from kafka import SimpleClient
+    from kafka.common import (
+        LeaderNotAvailableError, NotLeaderForPartitionError,
+        ProduceRequestPayload)
+    from kafka.protocol import create_message
 
-    kafka = SimpleClient("localhost:9092")
+    kafka = SimpleClient('localhost:9092')
+    payload = ProduceRequestPayload(topic='my-topic', partition=0,
+                                    messages=[create_message("some message")])
 
-    req = ProduceRequest(topic="my-topic", partition=1,
-                         messages=[create_message("some message")])
-    resps = kafka.send_produce_request(payloads=[req], fail_on_error=True)
+    retries = 5
+    resps = []
+    while retries and not resps:
+        retries -= 1
+        try:
+            resps = kafka.send_produce_request(
+                payloads=[payload], fail_on_error=True)
+        except LeaderNotAvailableError, NotLeaderForPartitionError:
+            kafka.load_metadata_for_topics()
+            time.sleep(1)
+
+        # Other exceptions you might consider handling:
+        # UnknownTopicOrPartitionError, TopicAuthorizationFailedError,
+        # RequestTimedOutError, MessageSizeTooLargeError, InvalidTopicError,
+        # RecordListTooLargeError, InvalidRequiredAcksError,
+        # NotEnoughReplicasError, NotEnoughReplicasAfterAppendError
+
     kafka.close()
 
-    resps[0].topic      # "my-topic"
-    resps[0].partition  # 1
-    resps[0].error      # 0 (hopefully)
+    resps[0].topic      # 'my-topic'
+    resps[0].partition  # 0
+    resps[0].error      # 0
     resps[0].offset     # offset of the first message sent in this request
