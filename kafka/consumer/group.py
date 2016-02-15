@@ -483,7 +483,7 @@ class KafkaConsumer(six.Iterator):
         message that is produced. It may be useful for calculating lag, by
         comparing with the reported position. Note that both position and
         highwater refer to the *next* offset -- i.e., highwater offset is
-        one greater than the newest availabel message.
+        one greater than the newest available message.
 
         Highwater offsets are returned in FetchResponse messages, so will
         not be available if not FetchRequests have been sent for this partition

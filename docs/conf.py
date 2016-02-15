@@ -49,7 +49,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'kafka-python'
-copyright = u'2016 -- Dana Powes, David Arthur, and Contributors'
+copyright = u'2016 -- Dana Powers, David Arthur, and Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
