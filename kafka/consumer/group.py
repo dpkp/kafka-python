@@ -49,7 +49,7 @@ class KafkaConsumer(six.Iterator):
             Default: 'kafka-python-default-group'
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
-        value_deserializer (callable, optional): Any callable that takes a
+        value_deserializer (callable): Any callable that takes a
             raw message value and returns a deserialized value.
         fetch_min_bytes (int): Minimum amount of data the server should
             return for a fetch request, otherwise wait up to
