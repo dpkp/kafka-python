@@ -32,6 +32,7 @@ class ClusterMetadata(object):
         self._future = None
         self._listeners = set()
         self.need_all_topic_metadata = False
+        self.unauthorized_topics = set()
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -129,6 +130,7 @@ class ClusterMetadata(object):
         # but retain LeaderNotAvailable because it means topic is initializing
         self._partitions.clear()
         self._broker_partitions.clear()
+        self.unauthorized_topics.clear()
 
         for error_code, topic, partitions in metadata.topics:
             error_type = Errors.for_code(error_code)
@@ -147,6 +149,7 @@ class ClusterMetadata(object):
                 log.error("Topic %s not found in cluster metadata", topic)
             elif error_type is Errors.TopicAuthorizationFailedError:
                 log.error("Topic %s is not authorized for this client", topic)
+                self.unauthorized_topics.add(topic)
             elif error_type is Errors.InvalidTopicError:
                 log.error("'%s' is not a valid topic name", topic)
             else:
