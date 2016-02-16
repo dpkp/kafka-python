@@ -32,7 +32,7 @@ class Sender(threading.Thread):
         'client_id': 'kafka-python-' + __version__,
     }
 
-    def __init__(self, client, metadata, lock, accumulator, **configs):
+    def __init__(self, client, metadata, accumulator, **configs):
         super(Sender, self).__init__()
         self.config = copy.copy(self._DEFAULT_CONFIG)
         for key in self.config:
@@ -43,7 +43,6 @@ class Sender(threading.Thread):
         self._client = client
         self._accumulator = accumulator
         self._metadata = client.cluster
-        self._lock = lock
         self._running = True
         self._force_close = False
         self._topics_to_add = []
@@ -98,8 +97,7 @@ class Sender(threading.Thread):
         # metadata update
         if unknown_leaders_exist:
             log.debug('Unknown leaders exist, requesting metadata update')
-            with self._lock:
-                self._metadata.request_update()
+            self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
         not_ready_timeout = 999999999
@@ -131,23 +129,22 @@ class Sender(threading.Thread):
             log.debug("Created %d produce requests: %s", len(requests), requests) # trace
             poll_timeout_ms = 0
 
-        with self._lock:
-            for node_id, request in six.iteritems(requests):
-                batches = batches_by_node[node_id]
-                log.debug('Sending Produce Request: %r', request)
-                (self._client.send(node_id, request)
-                     .add_callback(
-                         self._handle_produce_response, batches)
-                     .add_errback(
-                         self._failed_produce, batches, node_id))
+        for node_id, request in six.iteritems(requests):
+            batches = batches_by_node[node_id]
+            log.debug('Sending Produce Request: %r', request)
+            (self._client.send(node_id, request)
+                 .add_callback(
+                     self._handle_produce_response, batches)
+                 .add_errback(
+                     self._failed_produce, batches, node_id))
 
-            # if some partitions are already ready to be sent, the select time
-            # would be 0; otherwise if some partition already has some data
-            # accumulated but not ready yet, the select time will be the time
-            # difference between now and its linger expiry time; otherwise the
-            # select time will be the time difference between now and the
-            # metadata expiry time
-            self._client.poll(poll_timeout_ms, sleep=True)
+        # if some partitions are already ready to be sent, the select time
+        # would be 0; otherwise if some partition already has some data
+        # accumulated but not ready yet, the select time will be the time
+        # difference between now and its linger expiry time; otherwise the
+        # select time will be the time difference between now and the
+        # metadata expiry time
+        self._client.poll(poll_timeout_ms, sleep=True)
 
     def initiate_close(self):
         """Start closing the sender (won't complete until all data is sent)."""

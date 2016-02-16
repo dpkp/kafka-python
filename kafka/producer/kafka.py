@@ -254,9 +254,8 @@ class KafkaProducer(object):
 
         self._accumulator = RecordAccumulator(**self.config)
         self._metadata = client.cluster
-        self._metadata_lock = threading.Condition()
-        self._sender = Sender(client, self._metadata, self._metadata_lock,
-                              self._accumulator, **self.config)
+        self._sender = Sender(client, self._metadata, self._accumulator,
+                              **self.config)
         self._sender.daemon = True
         self._sender.start()
         self._closed = False
