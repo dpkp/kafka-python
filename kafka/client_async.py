@@ -440,6 +440,13 @@ class KafkaClient(object):
         """
         nodes = list(self._conns.keys())
         random.shuffle(nodes)
+
+        # If there's a lingering bootstrap node, always try it last
+        # really we should just kill this connection
+        if 'bootstrap' in nodes:
+            nodes.remove('bootstrap')
+            nodes.append('bootstrap')
+
         inflight = float('inf')
         found = None
         for node_id in nodes:
