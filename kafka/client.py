@@ -48,7 +48,7 @@ class SimpleClient(object):
         self._conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
         self.topics_to_brokers = {}  # TopicPartition -> BrokerMetadata
-        self.topic_partitions = {}   # topic -> partition -> PartitionMetadata
+        self.topic_partitions = {}   # topic -> partition -> leader
 
         self.load_metadata_for_topics()  # bootstrap with all metadata
 
