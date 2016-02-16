@@ -143,8 +143,8 @@ class ClusterMetadata(object):
                             TopicPartition(topic, partition))
 
             elif error_type is Errors.LeaderNotAvailableError:
-                log.error("Topic %s is not available during auto-create"
-                          " initialization", topic)
+                log.warning("Topic %s is not available during auto-create"
+                            " initialization", topic)
             elif error_type is Errors.UnknownTopicOrPartitionError:
                 log.error("Topic %s not found in cluster metadata", topic)
             elif error_type is Errors.TopicAuthorizationFailedError:
