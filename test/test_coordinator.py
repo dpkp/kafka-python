@@ -7,6 +7,7 @@ from kafka.client_async import KafkaClient
 from kafka.common import TopicPartition, OffsetAndMetadata
 from kafka.consumer.subscription_state import (
     SubscriptionState, ConsumerRebalanceListener)
+from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
@@ -72,13 +73,16 @@ def test_group_protocols(coordinator):
         assert False, 'Exception not raised when expected'
 
     coordinator._subscription.subscribe(topics=['foobar'])
-    assert coordinator.group_protocols() == [(
-        'roundrobin',
-        ConsumerProtocolMemberMetadata(
+    assert coordinator.group_protocols() == [
+        ('range', ConsumerProtocolMemberMetadata(
+            RangePartitionAssignor.version,
+            ['foobar'],
+            b'')),
+        ('roundrobin', ConsumerProtocolMemberMetadata(
             RoundRobinPartitionAssignor.version,
             ['foobar'],
-            b'')
-    )]
+            b'')),
+    ]
 
 
 @pytest.mark.parametrize('api_version', [(0, 8), (0, 8, 1), (0, 8, 2), (0, 9)])
@@ -113,8 +117,8 @@ def test_pattern_subscription(coordinator, api_version):
 
 
 def test_lookup_assignor(coordinator):
-    assignor = coordinator._lookup_assignor('roundrobin')
-    assert assignor is RoundRobinPartitionAssignor
+    assert coordinator._lookup_assignor('roundrobin') is RoundRobinPartitionAssignor
+    assert coordinator._lookup_assignor('range') is RangePartitionAssignor
     assert coordinator._lookup_assignor('foobar') is None
 
 
