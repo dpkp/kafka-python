@@ -7,4 +7,3 @@ kafka-python API
    KafkaProducer
    KafkaClient
    BrokerConnection
-   SimpleProducer

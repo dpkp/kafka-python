@@ -130,10 +130,11 @@ SimpleConsumer and SimpleProducer.
    :maxdepth: 2
 
    Usage Overview <usage>
-   Simple Clients [deprecated] <simple>
    API </apidoc/modules>
+   Simple Clients [deprecated] <simple>
    install
    tests
    compatibility
    support
    license
+   changelog
