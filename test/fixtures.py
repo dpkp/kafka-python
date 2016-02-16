@@ -151,7 +151,8 @@ class ZookeeperFixture(Fixture):
 
 class KafkaFixture(Fixture):
     @classmethod
-    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None, replicas=1, partitions=2):
+    def instance(cls, broker_id, zk_host, zk_port,
+                 zk_chroot=None, port=None, replicas=1, partitions=2):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
         if "KAFKA_URI" in os.environ:
@@ -159,8 +160,11 @@ class KafkaFixture(Fixture):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("127.0.0.1", get_open_port())
-            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot, replicas, partitions)
+            if port is None:
+                port = get_open_port()
+            host = "127.0.0.1"
+            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot,
+                                   replicas=replicas, partitions=partitions)
             fixture.open()
         return fixture
 

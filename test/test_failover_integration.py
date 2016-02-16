@@ -28,8 +28,11 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # mini zookeeper, 3 kafka brokers
         self.zk = ZookeeperFixture.instance()
-        kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
-        self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
+        kk_args = [self.zk.host, self.zk.port]
+        kk_kwargs = {'zk_chroot': zk_chroot, 'replicas': replicas,
+                     'partitions': partitions}
+        self.brokers = [KafkaFixture.instance(i, *kk_args, **kk_kwargs)
+                        for i in range(replicas)]
 
         hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
         self.client = SimpleClient(hosts, timeout=2)

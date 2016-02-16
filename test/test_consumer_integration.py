@@ -27,8 +27,10 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         cls.zk = ZookeeperFixture.instance()
         chroot = random_string(10)
-        cls.server1 = KafkaFixture.instance(0, cls.zk.host, cls.zk.port, chroot)
-        cls.server2 = KafkaFixture.instance(1, cls.zk.host, cls.zk.port, chroot)
+        cls.server1 = KafkaFixture.instance(0, cls.zk.host, cls.zk.port,
+                                            zk_chroot=chroot)
+        cls.server2 = KafkaFixture.instance(1, cls.zk.host, cls.zk.port,
+                                            zk_chroot=chroot)
 
         cls.server = cls.server1 # Bootstrapping server
 
