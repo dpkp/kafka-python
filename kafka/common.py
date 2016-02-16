@@ -2,9 +2,8 @@ import inspect
 import sys
 from collections import namedtuple
 
-###############
-#   Structs   #
-###############
+
+#  SimpleClient Payload Structs - Deprecated
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-MetadataAPI
 MetadataRequest = namedtuple("MetadataRequest",
@@ -57,29 +56,29 @@ OffsetFetchResponsePayload = namedtuple("OffsetFetchResponsePayload",
 
 
 # Other useful structs
+TopicPartition = namedtuple("TopicPartition",
+    ["topic", "partition"])
+
 BrokerMetadata = namedtuple("BrokerMetadata",
     ["nodeId", "host", "port"])
-
-TopicMetadata = namedtuple("TopicMetadata",
-    ["topic", "error", "partitions"])
 
 PartitionMetadata = namedtuple("PartitionMetadata",
     ["topic", "partition", "leader", "replicas", "isr", "error"])
 
+OffsetAndMetadata = namedtuple("OffsetAndMetadata",
+    ["offset", "metadata"])
+
+
+# Deprecated structs
 OffsetAndMessage = namedtuple("OffsetAndMessage",
     ["offset", "message"])
 
 Message = namedtuple("Message",
     ["magic", "attributes", "key", "value"])
 
-TopicPartition = namedtuple("TopicPartition",
-    ["topic", "partition"])
-
 KafkaMessage = namedtuple("KafkaMessage",
     ["topic", "partition", "offset", "key", "value"])
 
-OffsetAndMetadata = namedtuple("OffsetAndMetadata",
-    ["offset", "metadata"])
 
 # Define retry policy for async producer
 # Limit value: int >= 0, 0 means no retries
