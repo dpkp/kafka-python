@@ -26,7 +26,6 @@ class ClusterMetadata(object):
         self._partitions = {}
         self._broker_partitions = collections.defaultdict(set)
         self._groups = {}
-        self._version = 0
         self._last_refresh_ms = 0
         self._last_successful_refresh_ms = 0
         self._need_update = False
@@ -158,12 +157,10 @@ class ClusterMetadata(object):
             self._future.success(self)
         self._future = None
         self._need_update = False
-        self._version += 1
         now = time.time() * 1000
         self._last_refresh_ms = now
         self._last_successful_refresh_ms = now
-        log.debug("Updated cluster metadata version %d to %s",
-                  self._version, self)
+        log.debug("Updated cluster metadata to %s", self)
 
         for listener in self._listeners:
             listener(self)
