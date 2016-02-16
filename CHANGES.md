@@ -1,3 +1,72 @@
+# 1.0.0 (Feb 15, 2016)
+
+This release includes significant code changes. Users of older kafka-python
+versions are encouraged to test upgrades before deploying to production as
+some interfaces and configuration options have changed.
+
+Users of SimpleConsumer / SimpleProducer / SimpleClient (formerly KafkaClient)
+from prior releases should migrate to KafkaConsumer / KafkaProducer. Low-level
+APIs (Simple*) are no longer being actively maintained and will be removed in a
+future release.
+
+For comprehensive API documentation, please see python help() / docstrings,
+kafka-python.readthedocs.org, or run `tox -e docs` from source to build
+documentation locally.
+
+Consumers
+* KafkaConsumer re-written to emulate the new 0.9 kafka consumer (java client)
+  and support coordinated consumer groups (feature requires >= 0.9.0.0 brokers)
+
+  * Methods no longer available:
+
+    * configure [initialize a new consumer instead]
+    * set_topic_partitions [use subscribe() or assign()]
+    * fetch_messages [use poll() or iterator interface]
+    * get_partition_offsets
+    * offsets [use committed(partition)]
+    * task_done [handled internally by auto-commit; or commit offsets manually]
+
+  * Configuration changes (consistent with updated java client):
+
+    * lots of new configuration parameters -- see docs for details
+    * auto_offset_reset: previously values were 'smallest' or 'largest', now
+      values are 'earliest' or 'latest'
+    * fetch_wait_max_ms is now fetch_max_wait_ms
+    * max_partition_fetch_bytes is now max_partition_fetch_bytes
+    * deserializer_class is now value_deserializer and key_deserializer
+    * auto_commit_enable is now enable_auto_commit
+    * auto_commit_interval_messages was removed
+    * socket_timeout_ms was removed
+    * refresh_leader_backoff_ms was removed
+
+* SimpleConsumer and MultiProcessConsumer are now deprecated and will be removed
+  in a future release. Users are encouraged to migrate to KafkaConsumer.
+
+Producers
+* new producer class: KafkaProducer. Exposes the same interface as official java client.
+  Async by default; returned future.get() can be called for synchronous blocking
+* SimpleProducer is now deprecated and will be removed in a future release. Users are
+  encouraged to migrate to KafkaProducer.
+
+Clients
+* synchronous KafkaClient renamed to SimpleClient. For backwards compatibility, you
+  will get a SimpleClient via `from kafka import KafkaClient`. This will change in
+  a future release.
+* All client calls use non-blocking IO under the hood.
+* Add probe method check_version() to infer broker versions.
+
+Documentation
+* Updated README and sphinx documentation to address new classes.
+* Docstring improvements to make python help() easier to use.
+
+Internals
+* Old protocol stack is deprecated. It has been moved to kafka.protocol.legacy
+  and may be removed in a future release.
+* Protocol layer re-written using Type classes, Schemas and Structs (modeled on
+  the java client).
+* Add support for LZ4 compression (including broken framing header checksum).
+
+
 # 0.9.5 (Dec 6, 2015)
 
 Consumers
