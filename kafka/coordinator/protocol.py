@@ -28,6 +28,6 @@ class ConsumerProtocolMemberAssignment(Struct):
 
 class ConsumerProtocol(object):
     PROTOCOL_TYPE = 'consumer'
-    ASSIGNMENT_STRATEGIES = ('roundrobin',)
+    ASSIGNMENT_STRATEGIES = ('range', 'roundrobin')
     METADATA = ConsumerProtocolMemberMetadata
     ASSIGNMENT = ConsumerProtocolMemberAssignment

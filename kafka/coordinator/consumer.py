@@ -8,6 +8,7 @@ import time
 import six
 
 from .base import BaseCoordinator
+from .assignors.range import RangePartitionAssignor
 from .assignors.roundrobin import RoundRobinPartitionAssignor
 from .protocol import (
     ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment,
@@ -30,7 +31,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': lambda offsets, response: True,
-        'assignors': (RoundRobinPartitionAssignor,),
+        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
@@ -54,7 +55,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 trigger custom actions when a commit request completes.
             assignors (list): List of objects to use to distribute partition
                 ownership amongst consumer instances when group management is
-                used. Default: [RoundRobinPartitionAssignor]
+                used. Default: [RangePartitionAssignor, RoundRobinPartitionAssignor]
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure

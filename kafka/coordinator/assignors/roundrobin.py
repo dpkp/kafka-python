@@ -12,6 +12,22 @@ log = logging.getLogger(__name__)
 
 
 class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
+    """
+    The roundrobin assignor lays out all the available partitions and all the
+    available consumers. It then proceeds to do a roundrobin assignment from
+    partition to consumer. If the subscriptions of all consumer instances are
+    identical, then the partitions will be uniformly distributed. (i.e., the
+    partition ownership counts will be within a delta of exactly one across all
+    consumers.)
+
+    For example, suppose there are two consumers C0 and C1, two topics t0 and
+    t1, and each topic has 3 partitions, resulting in partitions t0p0, t0p1,
+    t0p2, t1p0, t1p1, and t1p2.
+
+    The assignment will be:
+        C0: [t0p0, t0p2, t1p1]
+        C1: [t0p1, t1p0, t1p2]
+    """
     name = 'roundrobin'
     version = 0
 
@@ -50,7 +66,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         for member_id in member_metadata:
             protocol_assignment[member_id] = ConsumerProtocolMemberAssignment(
                 cls.version,
-                assignment[member_id].items(),
+                sorted(assignment[member_id].items()),
                 b'')
         return protocol_assignment
 
