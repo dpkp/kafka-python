@@ -2,6 +2,7 @@ import abc
 import copy
 import logging
 import time
+import weakref
 
 import six
 
@@ -85,8 +86,11 @@ class BaseCoordinator(object):
         self.rejoin_needed = True
         self.needs_join_prepare = True
         self.heartbeat = Heartbeat(**self.config)
-        self.heartbeat_task = HeartbeatTask(self)
+        self.heartbeat_task = HeartbeatTask(weakref.proxy(self))
         #self.sensors = GroupCoordinatorMetrics(metrics, metric_group_prefix, metric_tags)
+
+    def __del__(self):
+        self.heartbeat_task.disable()
 
     @abc.abstractmethod
     def protocol_type(self):
@@ -571,6 +575,12 @@ class HeartbeatTask(object):
         self._heartbeat = coordinator.heartbeat
         self._client = coordinator._client
         self._request_in_flight = False
+
+    def disable(self):
+        try:
+            self._client.unschedule(self)
+        except KeyError:
+            pass
 
     def reset(self):
         # start or restart the heartbeat task to be executed at the next chance

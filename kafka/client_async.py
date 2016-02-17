@@ -97,6 +97,10 @@ class KafkaClient(object):
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
         self._wake_r, self._wake_w = os.pipe()
 
+    def __del__(self):
+        os.close(self._wake_r)
+        os.close(self._wake_w)
+
     def _bootstrap(self, hosts):
         # Exponential backoff if bootstrap fails
         backoff_ms = self.config['reconnect_backoff_ms'] * 2 ** self._bootstrap_fails

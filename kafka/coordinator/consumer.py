@@ -4,20 +4,20 @@ import copy
 import collections
 import logging
 import time
+import weakref
 
 import six
 
 from .base import BaseCoordinator
 from .assignors.range import RangePartitionAssignor
 from .assignors.roundrobin import RoundRobinPartitionAssignor
-from .protocol import (
-    ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment,
-    ConsumerProtocol)
+from .protocol import ConsumerProtocol
 from ..common import OffsetAndMetadata, TopicPartition
 from ..future import Future
 from ..protocol.commit import (
     OffsetCommitRequest_v2, OffsetCommitRequest_v1, OffsetCommitRequest_v0,
     OffsetFetchRequest_v0, OffsetFetchRequest_v1)
+from ..util import WeakMethod
 
 import kafka.common as Errors
 
@@ -83,7 +83,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self._partitions_per_topic = {}
         self._cluster = client.cluster
         self._cluster.request_update()
-        self._cluster.add_listener(self._handle_metadata_update)
+        self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
 
         self._auto_commit_task = None
         if self.config['enable_auto_commit']:
@@ -95,12 +95,17 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.warning('group_id is None: disabling auto-commit.')
             else:
                 interval = self.config['auto_commit_interval_ms'] / 1000.0
-                self._auto_commit_task = AutoCommitTask(self, interval)
+                self._auto_commit_task = AutoCommitTask(weakref.proxy(self), interval)
 
         # metrics=None,
         # metric_group_prefix=None,
         # metric_tags=None,
         # self.sensors = ConsumerCoordinatorMetrics(metrics, metric_group_prefix, metric_tags)
+
+    def __del__(self):
+        if self._auto_commit_task:
+            self._auto_commit_task.disable()
+        self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
 
     def protocol_type(self):
         return ConsumerProtocol.PROTOCOL_TYPE
