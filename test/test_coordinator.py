@@ -19,6 +19,7 @@ from kafka.protocol.commit import (
     OffsetCommitResponse, OffsetFetchRequest_v0, OffsetFetchRequest_v1,
     OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
+from kafka.util import WeakMethod
 
 import kafka.common as Errors
 
@@ -46,7 +47,7 @@ def test_init(conn):
 
     # metadata update on init 
     assert cli.cluster._need_update is True
-    assert coordinator._handle_metadata_update in cli.cluster._listeners
+    assert WeakMethod(coordinator._handle_metadata_update) in cli.cluster._listeners
 
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
