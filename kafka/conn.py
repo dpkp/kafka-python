@@ -47,8 +47,8 @@ class BrokerConnection(object):
         'request_timeout_ms': 40000,
         'reconnect_backoff_ms': 50,
         'max_in_flight_requests_per_connection': 5,
-        'receive_buffer_bytes': 32768,
-        'send_buffer_bytes': 131072,
+        'receive_buffer_bytes': None,
+        'send_buffer_bytes': None,
         'api_version': (0, 8, 2),  # default to most restrictive
     }
 
@@ -77,10 +77,12 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.DISCONNECTED:
             self.close()
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
-                                  self.config['receive_buffer_bytes'])
-            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
-                                  self.config['send_buffer_bytes'])
+            if self.config['receive_buffer_bytes'] is not None:
+                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
+                                      self.config['receive_buffer_bytes'])
+            if self.config['send_buffer_bytes'] is not None:
+                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
+                                      self.config['send_buffer_bytes'])
             self._sock.setblocking(False)
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
