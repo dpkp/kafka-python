@@ -111,9 +111,11 @@ class KafkaConsumer(six.Iterator):
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group managementment facilities. Default: 30000
         send_buffer_bytes (int): The size of the TCP send buffer
-            (SO_SNDBUF) to use when sending data. Default: 131072
+            (SO_SNDBUF) to use when sending data. Default: None (relies on
+            system defaults). The java client defaults to 131072.
         receive_buffer_bytes (int): The size of the TCP receive buffer
-            (SO_RCVBUF) to use when reading data. Default: 32768
+            (SO_RCVBUF) to use when reading data. Default: None (relies on
+            system defaults). The java client defaults to 32768.
         consumer_timeout_ms (int): number of millisecond to throw a timeout
             exception to the consumer if no message is available for
             consumption. Default: -1 (dont throw exception)
@@ -149,8 +151,8 @@ class KafkaConsumer(six.Iterator):
         'partition_assignment_strategy': (RoundRobinPartitionAssignor,),
         'heartbeat_interval_ms': 3000,
         'session_timeout_ms': 30000,
-        'send_buffer_bytes': 128 * 1024,
-        'receive_buffer_bytes': 32 * 1024,
+        'send_buffer_bytes': None,
+        'receive_buffer_bytes': None,
         'consumer_timeout_ms': -1,
         'api_version': 'auto',
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet

@@ -180,9 +180,11 @@ class KafkaProducer(object):
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
-            (SO_RCVBUF) to use when reading data. Default: 32768
+            (SO_RCVBUF) to use when reading data. Default: None (relies on
+            system defaults). Java client defaults to 32768.
         send_buffer_bytes (int): The size of the TCP send buffer
-            (SO_SNDBUF) to use when sending data. Default: 131072
+            (SO_SNDBUF) to use when sending data. Default: None (relies on
+            system defaults). Java client defaults to 131072.
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
@@ -215,8 +217,8 @@ class KafkaProducer(object):
         'metadata_max_age_ms': 300000,
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
-        'receive_buffer_bytes': 32768,
-        'send_buffer_bytes': 131072,
+        'receive_buffer_bytes': None,
+        'send_buffer_bytes': None,
         'reconnect_backoff_ms': 50,
         'max_in_flight_requests_per_connection': 5,
         'api_version': 'auto',

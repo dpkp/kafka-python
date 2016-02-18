@@ -41,8 +41,8 @@ class KafkaClient(object):
         'request_timeout_ms': 40000,
         'reconnect_backoff_ms': 50,
         'max_in_flight_requests_per_connection': 5,
-        'receive_buffer_bytes': 32768,
-        'send_buffer_bytes': 131072,
+        'receive_buffer_bytes': None,
+        'send_buffer_bytes': None,
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
     }
@@ -71,9 +71,11 @@ class KafkaClient(object):
                 to kafka brokers up to this number of maximum requests per
                 broker connection. Default: 5.
             send_buffer_bytes (int): The size of the TCP send buffer
-                (SO_SNDBUF) to use when sending data. Default: 131072
+                (SO_SNDBUF) to use when sending data. Default: None (relies on
+                system defaults). Java client defaults to 131072.
             receive_buffer_bytes (int): The size of the TCP receive buffer
-                (SO_RCVBUF) to use when reading data. Default: 32768
+                (SO_RCVBUF) to use when reading data. Default: None (relies on
+                system defaults). Java client defaults to 32768.
             metadata_max_age_ms (int): The period of time in milliseconds after
                 which we force a refresh of metadata even if we haven't seen any
                 partition leadership changes to proactively discover any new
