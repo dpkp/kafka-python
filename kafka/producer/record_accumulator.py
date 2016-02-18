@@ -200,7 +200,7 @@ class RecordAccumulator(object):
 
             size = max(self.config['batch_size'], message_size)
             log.debug("Allocating a new %d byte message buffer for %s", size, tp) # trace
-            buf = self._free.allocate(max_time_to_block_ms)
+            buf = self._free.allocate(size, max_time_to_block_ms)
             with self._tp_locks[tp]:
                 # Need to check if producer is closed again after grabbing the
                 # dequeue lock.
