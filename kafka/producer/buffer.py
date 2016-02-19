@@ -158,15 +158,16 @@ class SimpleBufferPool(object):
                 # enough memory to allocate one
                 while buf is None:
                     start_wait = time.time()
-                    if not more_memory.wait(max_time_to_block_ms / 1000.0):
-                        raise Errors.KafkaTimeoutError(
-                            "Failed to allocate memory within the configured"
-                            " max blocking time")
+                    more_memory.wait(max_time_to_block_ms / 1000.0)
                     end_wait = time.time()
                     #this.waitTime.record(endWait - startWait, time.milliseconds());
 
                     if self._free:
                         buf = self._free.popleft()
+                    else:
+                        raise Errors.KafkaTimeoutError(
+                            "Failed to allocate memory within the configured"
+                            " max blocking time")
 
                 # remove the condition for this thread to let the next thread
                 # in line start getting memory
