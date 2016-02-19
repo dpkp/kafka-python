@@ -1,4 +1,4 @@
-# 1.0.1 (Unreleased)
+# 1.0.1 (Feb 19, 2016)
 
 Consumers
 * Add RangePartitionAssignor (and use as default); add assignor tests (dpkp PR 550)

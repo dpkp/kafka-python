@@ -1,7 +1,7 @@
 Changelog
 =========
 
-1.0.1 (Unreleased)
+1.0.1 (Feb 19, 2016)
 ####################
 
 Consumers
