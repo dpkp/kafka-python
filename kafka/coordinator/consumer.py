@@ -563,7 +563,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
         # Verify node is ready
         if not self._client.ready(node_id):
-            log.debug("Node %s not ready -- failing offset fetch request")
+            log.debug("Node %s not ready -- failing offset fetch request",
+                      node_id)
             return Future().failure(Errors.NodeNotReadyError)
 
         log.debug("Fetching committed offsets for partitions: %s", partitions)

@@ -385,6 +385,7 @@ def patched_coord(mocker, coordinator):
     coordinator.coordinator_id = 0
     mocker.patch.object(coordinator._client, 'least_loaded_node',
                         return_value=1)
+    mocker.patch.object(coordinator._client, 'ready', return_value=True)
     mocker.patch.object(coordinator._client, 'send')
     mocker.spy(coordinator, '_failed_request')
     mocker.spy(coordinator, '_handle_offset_commit_response')
