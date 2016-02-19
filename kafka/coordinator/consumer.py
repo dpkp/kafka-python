@@ -561,6 +561,11 @@ class ConsumerCoordinator(BaseCoordinator):
         else:
             node_id = self._client.least_loaded_node()
 
+        # Verify node is ready
+        if not self._client.ready(node_id):
+            log.debug("Node %s not ready -- failing offset fetch request")
+            return Future().failure(Errors.NodeNotReadyError)
+
         log.debug("Fetching committed offsets for partitions: %s", partitions)
         # construct the request
         topic_partitions = collections.defaultdict(set)
