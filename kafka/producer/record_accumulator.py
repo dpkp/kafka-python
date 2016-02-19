@@ -68,7 +68,10 @@ class RecordBatch(object):
         log.debug("Produced messages to topic-partition %s with base offset"
                   " %s and error %s.", self.topic_partition, base_offset,
                   exception) # trace
-        if exception is None:
+        if self.produce_future.is_done:
+            log.warning('Batch is already closed -- ignoring batch.done()')
+            return
+        elif exception is None:
             self.produce_future.success(base_offset)
         else:
             self.produce_future.failure(exception)
