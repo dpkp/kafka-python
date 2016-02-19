@@ -270,7 +270,7 @@ class KafkaProducer(object):
 
     def close(self, timeout=None):
         """Close this producer."""
-        if self._closed:
+        if not hasattr(self, '_closed') or self._closed:
             log.info('Kafka producer closed')
             return
         if timeout is None:

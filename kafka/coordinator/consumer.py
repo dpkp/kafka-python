@@ -103,7 +103,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # self.sensors = ConsumerCoordinatorMetrics(metrics, metric_group_prefix, metric_tags)
 
     def __del__(self):
-        if self._auto_commit_task:
+        if hasattr(self, '_auto_commit_task') and self._auto_commit_task:
             self._auto_commit_task.disable()
         self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
 
