@@ -1,6 +1,39 @@
 Changelog
 =========
 
+1.0.1 (Unreleased)
+####################
+
+Consumers
+---------
+* Add RangePartitionAssignor (and use as default); add assignor tests (dpkp PR 550)
+* Make sure all consumers are in same generation before stopping group test
+* Verify node ready before sending offset fetch request from coordinator
+* Improve warning when offset fetch request returns unknown topic / partition
+
+Producers
+---------
+* Warn if pending batches failed during flush
+* Fix concurrency bug in RecordAccumulator.ready()
+* Fix bug in SimpleBufferPool memory condition waiting / timeout
+* Support batch_size = 0 in producer buffers (dpkp PR 558)
+* Catch duplicate batch.done() calls [e.g., maybe_expire then a response errback]
+
+Clients
+-------
+
+Documentation
+-------------
+* Improve kafka.cluster docstrings
+* Migrate load_example.py to KafkaProducer / KafkaConsumer
+
+Internals
+---------
+* Dont override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
+* Some attributes may not exist in __del__ if we failed assertions
+* Break up some circular references and close client wake pipes on __del__ (aisch PR 554)
+
+
 1.0.0 (Feb 15, 2016)
 ####################
 
