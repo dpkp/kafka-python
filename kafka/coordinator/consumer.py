@@ -612,7 +612,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         self._subscription.mark_for_reassignment()
                         future.failure(error)
                     elif error_type is Errors.UnknownTopicOrPartitionError:
-                        log.warning("OffsetFetchRequest -- unknown topic %s",
+                        log.warning("OffsetFetchRequest -- unknown topic %s"
+                                    " (have you committed any offsets yet?)",
                                     topic)
                         continue
                     else:
