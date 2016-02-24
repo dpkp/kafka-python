@@ -56,6 +56,7 @@ KafkaProducer
 .. code:: python
 
     from kafka import KafkaProducer
+    from kafka.common import KafkaError
 
     producer = KafkaProducer(bootstrap_servers=['broker1:1234'])
 
