@@ -326,7 +326,7 @@ class BrokerConnection(object):
             error = Errors.CorrelationIdError(
                 'Correlation ids do not match: sent %d, recv %d'
                 % (ifr.correlation_id, recv_correlation_id))
-            ifr.future.fail(error)
+            ifr.future.failure(error)
             self.close()
             self._processing = False
             return None
