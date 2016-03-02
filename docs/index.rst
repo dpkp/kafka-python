@@ -58,7 +58,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> msg = next(consumer)
 
 >>> # Deserialize msgpack-encoded values
->>> consumer = KafkaConsumer(value_deserializer=msgpack.dumps)
+>>> consumer = KafkaConsumer(value_deserializer=msgpack.loads)
 >>> consumer.subscribe(['msgpackfoo'])
 >>> for msg in consumer:
 ...     msg = next(consumer)
