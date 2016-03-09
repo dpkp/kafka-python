@@ -471,5 +471,5 @@ class Producer(object):
         self.stopped = True
 
     def __del__(self):
-        if not self.stopped:
+        if self.async and not self.stopped:
             self.stop()
