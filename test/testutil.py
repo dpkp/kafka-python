@@ -143,6 +143,7 @@ class Timer(object):
         self.end = time.time()
         self.interval = self.end - self.start
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)-15s %(name)-20s %(levelname)-10s %(message)s")
 logging.getLogger('test.fixtures').setLevel(logging.ERROR)
 logging.getLogger('test.service').setLevel(logging.ERROR)
