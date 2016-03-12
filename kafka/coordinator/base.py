@@ -594,12 +594,16 @@ class HeartbeatTask(object):
 
     def __call__(self):
         if (self._coordinator.generation < 0 or
-            self._coordinator.need_rejoin() or
-            self._coordinator.coordinator_unknown()):
+            self._coordinator.need_rejoin()):
             # no need to send the heartbeat we're not using auto-assignment
             # or if we are awaiting a rebalance
             log.debug("Skipping heartbeat: no auto-assignment"
                       " or waiting on rebalance")
+            return
+
+        if self._coordinator.coordinator_unknown():
+            log.warning("Coordinator unknown during heartbeat -- will retry")
+            self._handle_heartbeat_failure(Errors.GroupCoordinatorNotAvailableError())
             return
 
         if self._heartbeat.session_expired():
