@@ -536,7 +536,7 @@ class BaseCoordinator(object):
         #self.sensors.heartbeat_latency.record(response.requestLatencyMs())
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
-            log.debug("Received successful heartbeat response.")
+            log.info("Heartbeat successful")
             future.success(None)
         elif error_type in (Errors.GroupCoordinatorNotAvailableError,
                             Errors.NotCoordinatorForGroupError):
@@ -545,17 +545,18 @@ class BaseCoordinator(object):
             self.coordinator_dead()
             future.failure(error_type())
         elif error_type is Errors.RebalanceInProgressError:
-            log.info("Heartbeat failed: group is rebalancing; re-joining group")
+            log.info("Heartbeat: group is rebalancing; this consumer needs to"
+                     " re-join")
             self.rejoin_needed = True
             future.failure(error_type())
         elif error_type is Errors.IllegalGenerationError:
-            log.info("Heartbeat failed: local generation id is not current;"
-                     " re-joining group")
+            log.info("Heartbeat: generation id is not current; this consumer"
+                     " needs to re-join")
             self.rejoin_needed = True
             future.failure(error_type())
         elif error_type is Errors.UnknownMemberIdError:
-            log.info("Heartbeat failed: local member_id was not recognized;"
-                     " resetting and re-joining group")
+            log.info("Heartbeat: local member_id was not recognized;"
+                     " this consumer needs to re-join")
             self.member_id = JoinGroupRequest.UNKNOWN_MEMBER_ID
             self.rejoin_needed = True
             future.failure(error_type)
