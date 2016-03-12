@@ -84,6 +84,14 @@ class Fixture(object):
             template = handle.read()
         with open(target_file, "w") as handle:
             handle.write(template.format(**binding))
+            handle.flush()
+            os.fsync(handle)
+
+        # fsync directory for durability
+        # https://blog.gocept.com/2013/07/15/reliable-file-updates-with-python/
+        dirfd = os.open(os.path.dirname(target_file), os.O_DIRECTORY)
+        os.fsync(dirfd)
+        os.close(dirfd)
 
 
 class ZookeeperFixture(Fixture):
