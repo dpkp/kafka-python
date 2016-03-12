@@ -43,6 +43,7 @@ class SpawnedService(threading.Thread):
         self.should_die = threading.Event()
         self.child = None
         self.alive = False
+        self.daemon = True
 
     def run(self):
         self.run_with_handles()

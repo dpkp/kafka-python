@@ -1,3 +1,4 @@
+import atexit
 import logging
 import os
 import os.path
@@ -130,23 +131,32 @@ class ZookeeperFixture(Fixture):
         timeout = 5
         max_timeout = 30
         backoff = 1
-        while True:
+        end_at = time.time() + max_timeout
+        while time.time() < end_at:
             self.child = SpawnedService(args, env)
             self.child.start()
-            timeout = min(timeout, max_timeout)
+            timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+        else:
+            raise Exception('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
+        atexit.register(self.close)
 
     def close(self):
+        if self.child is None:
+            return
         self.out("Stopping...")
         self.child.stop()
         self.child = None
         self.out("Done!")
         shutil.rmtree(self.tmp_dir)
+
+    def __del__(self):
+        self.close()
 
 
 class KafkaFixture(Fixture):
@@ -240,18 +250,25 @@ class KafkaFixture(Fixture):
         timeout = 5
         max_timeout = 30
         backoff = 1
-        while True:
+        end_at = time.time() + max_timeout
+        while time.time() < end_at:
             self.child = SpawnedService(args, env)
             self.child.start()
-            timeout = min(timeout, max_timeout)
+            timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"\[Kafka Server %d\], Started" %
                                    self.broker_id, timeout=timeout):
                 break
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+        else:
+            raise Exception('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
         self.running = True
+        atexit.register(self.close)
+
+    def __del__(self):
+        self.close()
 
     def close(self):
         if not self.running:
