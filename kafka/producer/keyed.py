@@ -29,7 +29,7 @@ class KeyedProducer(Producer):
     def _next_partition(self, topic, key):
         if topic not in self.partitioners:
             if not self.client.has_metadata_for_topic(topic):
-                self.client.load_metadata_for_topics(topic)
+                self.client.load_metadata_for_topics(topic, ignore_leadernotavailable=True)
 
             self.partitioners[topic] = self.partitioner_class(self.client.get_partition_ids_for_topic(topic))
 
