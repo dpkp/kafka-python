@@ -454,16 +454,20 @@ class RecordAccumulator(object):
         """
         self._flushes_in_progress.increment()
 
-    def await_flush_completion(self):
+    def await_flush_completion(self, timeout=None):
         """
         Mark all partitions as ready to send and block until the send is complete
         """
-        for batch in self._incomplete.all():
-            batch.produce_future.await()
-            assert batch.produce_future.is_done
-            if batch.produce_future.failed():
-                log.warning(batch.produce_future.exception)
-        self._flushes_in_progress.decrement()
+        try:
+            for batch in self._incomplete.all():
+                log.debug('Waiting on produce to %s',
+                          batch.produce_future.topic_partition)
+                assert batch.produce_future.await(timeout=timeout), 'Timeout waiting for future'
+                assert batch.produce_future.is_done, 'Future not done?'
+                if batch.produce_future.failed():
+                    log.warning(batch.produce_future.exception)
+        finally:
+            self._flushes_in_progress.decrement()
 
     def abort_incomplete_batches(self):
         """

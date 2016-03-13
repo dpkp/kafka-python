@@ -391,7 +391,7 @@ class KafkaProducer(object):
                 FutureProduceResult(TopicPartition(topic, partition)),
                 -1).failure(e)
 
-    def flush(self):
+    def flush(self, timeout=None):
         """
         Invoking this method makes all buffered records immediately available
         to send (even if linger_ms is greater than 0) and blocks on the
@@ -408,7 +408,7 @@ class KafkaProducer(object):
         log.debug("Flushing accumulated records in producer.") # trace
         self._accumulator.begin_flush()
         self._sender.wakeup()
-        self._accumulator.await_flush_completion()
+        self._accumulator.await_flush_completion(timeout=timeout)
 
     def _ensure_valid_record_size(self, size):
         """Validate that the record size isn't too large."""
