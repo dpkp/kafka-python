@@ -191,19 +191,12 @@ class SimpleBufferPool(object):
             buffer_ (io.BytesIO): The buffer to return
         """
         with self._lock:
-            capacity = buf.seek(0, 2)
-
-            # free extra memory if needed
-            if capacity > self._poolable_size:
-                # BytesIO (cpython) only frees memory if 2x reduction or more
-                trunc_to = int(min(capacity / 2, self._poolable_size))
-                buf.truncate(trunc_to)
-
-            buf.seek(0)
-            #buf.write(bytearray(12))
-            #buf.seek(0)
+            # BytesIO.truncate here makes the pool somewhat pointless
+            # but we stick with the BufferPool API until migrating to
+            # bytesarray / memoryview. The buffer we return must not
+            # expose any prior data on read().
+            buf.truncate(0)
             self._free.append(buf)
-
             if self._waiters:
                 self._waiters[0].notify()
 
