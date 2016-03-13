@@ -3,8 +3,21 @@ import sys
 import pytest
 
 from kafka import KafkaConsumer, KafkaProducer
+from kafka.producer.buffer import SimpleBufferPool
 from test.conftest import version
 from test.testutil import random_string
+
+
+def test_buffer_pool():
+    pool = SimpleBufferPool(1000, 1000)
+
+    buf1 = pool.allocate(1000, 1000)
+    message = ''.join(map(str, range(100)))
+    buf1.write(message.encode('utf-8'))
+    pool.deallocate(buf1)
+
+    buf2 = pool.allocate(1000, 1000)
+    assert buf2.read() == b''
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
