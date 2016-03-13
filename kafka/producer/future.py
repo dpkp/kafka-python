@@ -25,7 +25,8 @@ class FutureProduceResult(Future):
         return ret
 
     def await(self, timeout=None):
-        return self._latch.wait(timeout)
+        # wait() on python2.6 returns None instead of the flag value
+        return self._latch.wait(timeout) or self._latch.is_set()
 
 
 class FutureRecordMetadata(Future):
