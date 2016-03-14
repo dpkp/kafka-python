@@ -36,8 +36,11 @@ class SubscriptionState(object):
     the assigned partitions. This is updated through committed() and can be used
     to set the initial fetch position (e.g. Fetcher._reset_offset() ).
     """
-    _SUBSCRIPTION_EXCEPTION_MESSAGE = ("Subscription to topics, partitions and"
-                                       " pattern are mutually exclusive")
+    _SUBSCRIPTION_EXCEPTION_MESSAGE = (
+        "You must choose only one way to configure your consumer:"
+        " (1) subscribe to specific topics by name,"
+        " (2) subscribe to topics matching a regex pattern,"
+        " (3) assign itself specific topic-partitions.")
 
     def __init__(self, offset_reset_strategy='earliest'):
         """Initialize a SubscriptionState instance
