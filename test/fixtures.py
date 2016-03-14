@@ -148,6 +148,11 @@ class ZookeeperFixture(Fixture):
         tries = 1
         while time.time() < end_at:
             self.out('Attempting to start (try #%d)' % tries)
+            try:
+                os.stat(properties)
+            except:
+                log.warning('Config %s not found -- re-rendering', properties)
+                self.render_template(template, properties, vars(self))
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
@@ -273,6 +278,11 @@ class KafkaFixture(Fixture):
         tries = 1
         while time.time() < end_at:
             self.out('Attempting to start (try #%d)' % tries)
+            try:
+                os.stat(properties)
+            except:
+                log.warning('Config %s not found -- re-rendering', properties)
+                self.render_template(template, properties, vars(self))
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
