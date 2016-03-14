@@ -4,7 +4,6 @@ import collections
 import copy
 import logging
 import threading
-import time
 
 import six
 
