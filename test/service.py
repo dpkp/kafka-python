@@ -99,10 +99,6 @@ class SpawnedService(threading.Thread):
         while True:
             elapsed = time.time() - start
             if elapsed >= timeout:
-                try:
-                    self.child.kill()
-                except:
-                    log.exception("Received exception when killing child process")
                 log.error("Waiting for %r timed out after %d seconds", pattern, timeout)
                 return False
 

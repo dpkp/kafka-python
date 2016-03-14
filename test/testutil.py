@@ -142,6 +142,3 @@ class Timer(object):
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
-
-logging.getLogger('test.fixtures').setLevel(logging.ERROR)
-logging.getLogger('test.service').setLevel(logging.ERROR)

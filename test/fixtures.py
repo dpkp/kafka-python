@@ -79,8 +79,10 @@ class Fixture(object):
 
     @classmethod
     def render_template(cls, source_file, target_file, binding):
+        log.info('Rendering %s from template %s', target_file, source_file)
         with open(source_file, "r") as handle:
             template = handle.read()
+            assert len(template) > 0, 'Empty template %s' % source_file
         with open(target_file, "w") as handle:
             handle.write(template.format(**binding))
             handle.flush()
@@ -139,22 +141,22 @@ class ZookeeperFixture(Fixture):
         env = self.kafka_run_class_env()
 
         # Party!
-        self.out("Starting...")
         timeout = 5
         max_timeout = 30
         backoff = 1
         end_at = time.time() + max_timeout
+        tries = 1
         while time.time() < end_at:
-            log.critical('Starting Zookeeper instance')
+            self.out('Attempting to start (try #%d)' % tries)
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
-            log.critical('Zookeeper did not start within timeout %s secs', timeout)
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+            tries += 1
         else:
             raise Exception('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
@@ -260,8 +262,6 @@ class KafkaFixture(Fixture):
             raise RuntimeError("Failed to create Zookeeper chroot node")
         self.out("Done!")
 
-        self.out("Starting...")
-
         # Configure Kafka child process
         args = self.kafka_run_class_args("kafka.Kafka", properties)
         env = self.kafka_run_class_env()
@@ -270,18 +270,19 @@ class KafkaFixture(Fixture):
         max_timeout = 30
         backoff = 1
         end_at = time.time() + max_timeout
+        tries = 1
         while time.time() < end_at:
-            log.critical('Starting Kafka instance')
+            self.out('Attempting to start (try #%d)' % tries)
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"\[Kafka Server %d\], Started" %
                                    self.broker_id, timeout=timeout):
                 break
-            log.critical('Kafka did not start within timeout %s secs', timeout)
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+            tries += 1
         else:
             raise Exception('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
