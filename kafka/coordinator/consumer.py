@@ -414,6 +414,8 @@ class ConsumerCoordinator(BaseCoordinator):
             node_id = self.coordinator_id
         else:
             node_id = self._client.least_loaded_node()
+            if node_id is None:
+                return Future().failure(Errors.NoBrokersAvailable)
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -560,6 +562,8 @@ class ConsumerCoordinator(BaseCoordinator):
             node_id = self.coordinator_id
         else:
             node_id = self._client.least_loaded_node()
+            if node_id is None:
+                return Future().failure(Errors.NoBrokersAvailable)
 
         # Verify node is ready
         if not self._client.ready(node_id):

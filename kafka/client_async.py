@@ -532,6 +532,8 @@ class KafkaClient(object):
             return 9999999999
 
         node_id = self.least_loaded_node()
+        if node_id is None:
+            return 0
 
         topics = list(self._topics)
         if self.cluster.need_all_topic_metadata:
@@ -588,6 +590,8 @@ class KafkaClient(object):
         """Attempt to guess the broker version"""
         if node_id is None:
             node_id = self.least_loaded_node()
+            if node_id is None:
+                raise Errors.NoBrokersAvailable()
 
         def connect(node_id):
             timeout_at = time.time() + timeout
