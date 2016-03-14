@@ -72,10 +72,10 @@ class Fixture(object):
         result.extend(args)
         return result
 
-    @classmethod
-    def kafka_run_class_env(cls):
+    def kafka_run_class_env(self):
         env = os.environ.copy()
-        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties")
+        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
+        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % self.test_resource("log4j.properties")
         return env
 
     @classmethod
@@ -141,11 +141,13 @@ class ZookeeperFixture(Fixture):
         backoff = 1
         end_at = time.time() + max_timeout
         while time.time() < end_at:
+            log.critical('Starting Zookeeper instance')
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
+            log.critical('Zookeeper did not start within timeout %s secs', timeout)
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
@@ -260,12 +262,14 @@ class KafkaFixture(Fixture):
         backoff = 1
         end_at = time.time() + max_timeout
         while time.time() < end_at:
+            log.critical('Starting Kafka instance')
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"\[Kafka Server %d\], Started" %
                                    self.broker_id, timeout=timeout):
                 break
+            log.critical('Kafka did not start within timeout %s secs', timeout)
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
