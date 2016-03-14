@@ -74,7 +74,6 @@ class Fixture(object):
 
     def kafka_run_class_env(self):
         env = os.environ.copy()
-        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
         env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % self.test_resource("log4j.properties")
         return env
 
@@ -114,6 +113,11 @@ class ZookeeperFixture(Fixture):
 
         self.tmp_dir = None
         self.child = None
+
+    def kafka_run_class_env(self):
+        env = super(ZookeeperFixture, self).kafka_run_class_env()
+        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
+        return env
 
     def out(self, message):
         log.info("*** Zookeeper [%s:%d]: %s", self.host, self.port, message)
@@ -204,6 +208,11 @@ class KafkaFixture(Fixture):
         self.tmp_dir = None
         self.child = None
         self.running = False
+
+    def kafka_run_class_env(self):
+        env = super(KafkaFixture, self).kafka_run_class_env()
+        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
+        return env
 
     def out(self, message):
         log.info("*** Kafka [%s:%d]: %s", self.host, self.port, message)

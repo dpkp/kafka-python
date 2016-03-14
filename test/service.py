@@ -3,6 +3,7 @@ import os
 import re
 import select
 import subprocess
+import sys
 import threading
 import time
 
