@@ -1,6 +1,43 @@
 Changelog
 =========
 
+1.0.2 (Mar 14, 2016)
+####################
+
+Consumers
+---------
+* Improve KafkaConsumer Heartbeat handling (dpkp PR 583)
+* Fix KafkaConsumer.position bug (stefanth PR 578)
+* Raise TypeError when partition is not a TopicPartition (dpkp PR 587)
+* KafkaConsumer.poll should sleep to prevent tight-loops (dpkp PR 597)
+
+Producers
+---------
+* Fix producer threading bug that can crash sender (dpkp PR 590)
+* Fix bug in producer buffer pool reallocation (dpkp PR 585)
+* Remove spurious warnings when closing sync SimpleProducer (twm PR 567)
+* Fix FutureProduceResult.await() on python2.6 (dpkp)
+* Add optional timeout parameter to KafkaProducer.flush() (dpkp)
+* KafkaProducer optimizations (zackdever PR 598)
+
+Clients
+-------
+* Improve error handling in SimpleClient.load_metadata_for_topics (dpkp)
+* Improve handling of KafkaClient.least_loaded_node failure (dpkp PR 588)
+
+Documentation
+-------------
+* Fix KafkaError import error in docs (shichao-an PR 564)
+* Fix serializer / deserializer examples (scribu PR 573)
+
+Internals
+---------
+* Update to Kafka 0.9.0.1 for integration testing
+* Fix ifr.future.failure in conn.py (mortenlj PR 566)
+* Improve Zookeeper / Kafka Fixture management (dpkp)
+
+
+
 1.0.1 (Feb 19, 2016)
 ####################
 
