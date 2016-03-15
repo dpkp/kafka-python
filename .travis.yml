@@ -41,9 +41,7 @@ deploy:
     secure: TIZNKxktOm42/LHLDCuKuPqmAfYKekyHL4MqEFpnqDI5T5sHzG9IQaOwppYfQNggHiILUBzk1j6w/FPJunJyd62AFtydkKtIccqENIIAio78afeCRMQDynstNXjDefmt0s90xLGSlLzDMxCEWB4F6frEtPl/8KpNSFB2fvj+HXY=
   on:
     tags: true
-    all_branches: true
-    # TODO replace all_branches with "branch: master" after https://github.com/travis-ci/travis-ci/issues/1675 is fixed
-    # branch: master
+    branch: master
 
 script:
   - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
