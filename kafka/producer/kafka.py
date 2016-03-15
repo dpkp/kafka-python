@@ -443,11 +443,14 @@ class KafkaProducer(object):
         self._sender.add_topic(topic)
         begin = time.time()
         elapsed = 0.0
-        metadata_event = threading.Event()
+        metadata_event = None
         while True:
             partitions = self._metadata.partitions_for_topic(topic)
             if partitions is not None:
                 return partitions
+
+            if not metadata_event:
+                metadata_event = threading.Event()
 
             log.debug("Requesting metadata update for topic %s", topic)
 
