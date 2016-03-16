@@ -527,6 +527,14 @@ class KafkaConsumer(six.Iterator):
             log.debug("Pausing partition %s", partition)
             self._subscription.pause(partition)
 
+    def paused(self):
+        """Get the partitions that were previously paused by a call to pause().
+
+        Returns:
+            set: {partition (TopicPartition), ...}
+        """
+        return self._subscription.paused_partitions()
+
     def resume(self, *partitions):
         """Resume fetching from the specified (paused) partitions.
 

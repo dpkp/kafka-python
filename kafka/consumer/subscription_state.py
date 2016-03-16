@@ -265,6 +265,11 @@ class SubscriptionState(object):
         """Return set of TopicPartitions in current assignment."""
         return set(self.assignment.keys())
 
+    def paused_partitions(self):
+        """Return current set of paused TopicPartitions."""
+        return set(partition for partition in self.assignment
+                   if self.is_paused(partition))
+
     def fetchable_partitions(self):
         """Return set of TopicPartitions that should be Fetched."""
         fetchable = set()
