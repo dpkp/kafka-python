@@ -90,9 +90,10 @@ class BrokerConnection(object):
                 pass
             self.last_attempt = time.time()
 
-            if not ret or ret is errno.EISCONN:
+            if not ret or ret == errno.EISCONN:
                 self.state = ConnectionStates.CONNECTED
-            elif ret in (errno.EINPROGRESS, errno.EALREADY):
+            # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
+            elif ret in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 self.state = ConnectionStates.CONNECTING
             else:
                 log.error('Connect attempt to %s returned error %s.'
@@ -114,9 +115,10 @@ class BrokerConnection(object):
                     ret = self._sock.connect_ex((self.host, self.port))
                 except socket.error as ret:
                     pass
-                if not ret or ret is errno.EISCONN:
+                if not ret or ret == errno.EISCONN:
                     self.state = ConnectionStates.CONNECTED
-                elif ret is not errno.EALREADY:
+                # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
+                elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                     log.error('Connect attempt to %s returned error %s.'
                               ' Disconnecting.', self, ret)
                     self.close()
