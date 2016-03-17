@@ -149,6 +149,7 @@ class KafkaConsumer(six.Iterator):
         'auto_offset_reset': 'latest',
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
+        'default_offset_commit_callback': lambda offsets, response: True,
         'check_crcs': True,
         'metadata_max_age_ms': 5 * 60 * 1000,
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
