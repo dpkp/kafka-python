@@ -169,7 +169,8 @@ class SimpleClient(object):
         for payload in payloads:
             try:
                 leader = self._get_leader_for_partition(payload.topic, payload.partition)
-            except KafkaUnavailableError:
+            except (KafkaUnavailableError, LeaderNotAvailableError,
+                    UnknownTopicOrPartitionError):
                 leader = None
             payloads_by_broker[leader].append(payload)
         return dict(payloads_by_broker)
