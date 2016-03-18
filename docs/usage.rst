@@ -87,5 +87,12 @@ KafkaProducer
     producer = KafkaProducer(value_serializer=lambda m: json.dumps(m).encode('ascii'))
     producer.send('json-topic', {'key': 'value'})
 
+    # produce asynchronously
+    for _ in range(100):
+        producer.send('my-topic', b'msg')
+
+    # block until all async messages are sent
+    producer.flush()
+
     # configure multiple retries
     producer = KafkaProducer(retries=5)
