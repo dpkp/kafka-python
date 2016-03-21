@@ -204,13 +204,11 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         resp = producer.send_messages(self.topic, self.msg("one"))
         self.assertEqual(len(resp), 0)
 
-        # wait for the server to report a new highwatermark
-        while self.current_offset(self.topic, partition) == start_offset:
-          time.sleep(0.1)
+        # flush messages
+        producer.stop()
 
         self.assert_fetch_offset(partition, start_offset, [ self.msg("one") ])
 
-        producer.stop()
 
     @kafka_versions("all")
     def test_batched_simple_producer__triggers_by_message(self):
@@ -340,6 +338,28 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
     ############################
     #   KeyedProducer Tests    #
     ############################
+
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.0")
+    def test_keyedproducer_null_payload(self):
+        partitions = self.client.get_partition_ids_for_topic(self.topic)
+        start_offsets = [self.current_offset(self.topic, p) for p in partitions]
+
+        producer = KeyedProducer(self.client, partitioner=RoundRobinPartitioner)
+        key = "test"
+
+        resp = producer.send_messages(self.topic, self.key("key1"), self.msg("one"))
+        self.assert_produce_response(resp, start_offsets[0])
+        resp = producer.send_messages(self.topic, self.key("key2"), None)
+        self.assert_produce_response(resp, start_offsets[1])
+        resp = producer.send_messages(self.topic, self.key("key3"), None)
+        self.assert_produce_response(resp, start_offsets[0]+1)
+        resp = producer.send_messages(self.topic, self.key("key4"), self.msg("four"))
+        self.assert_produce_response(resp, start_offsets[1]+1)
+
+        self.assert_fetch_offset(partitions[0], start_offsets[0], [ self.msg("one"), None ])
+        self.assert_fetch_offset(partitions[1], start_offsets[1], [ None, self.msg("four") ])
+
+        producer.stop()
 
     @kafka_versions("all")
     def test_round_robin_partitioner(self):

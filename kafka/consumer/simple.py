@@ -6,9 +6,9 @@ except ImportError:
     from itertools import izip_longest as izip_longest, repeat # python 2
 import logging
 try:
-    from Queue import Empty, Queue # python 3
+    import queue # python 3
 except ImportError:
-    from queue import Empty, Queue # python 2
+    import Queue as queue # python 2
 import sys
 import time
 
@@ -131,13 +131,12 @@ class SimpleConsumer(Consumer):
                              (buffer_size, max_buffer_size))
         self.buffer_size = buffer_size
         self.max_buffer_size = max_buffer_size
-        self.partition_info = False     # Do not return partition info in msgs
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
         self.auto_offset_reset = auto_offset_reset
-        self.queue = Queue()
+        self.queue = queue.Queue()
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -167,7 +166,7 @@ class SimpleConsumer(Consumer):
             # Otherwise we should re-raise the upstream exception
             # b/c it typically includes additional data about
             # the request that triggered it, and we do not want to drop that
-            raise
+            raise # pylint: disable-msg=E0704
 
         # send_offset_request
         log.info('Resetting topic-partition offset to %s for %s:%d',
@@ -181,12 +180,6 @@ class SimpleConsumer(Consumer):
             self.offsets[partition] = resp.offsets[0]
             self.fetch_offsets[partition] = resp.offsets[0]
             return resp.offsets[0]
-
-    def provide_partition_info(self):
-        """
-        Indicates that partition info must be returned by the consumer
-        """
-        self.partition_info = True
 
     def seek(self, offset, whence=None, partition=None):
         """
@@ -264,7 +257,7 @@ class SimpleConsumer(Consumer):
         if self.auto_commit:
             self.commit()
 
-        self.queue = Queue()
+        self.queue = queue.Queue()
 
     def get_messages(self, count=1, block=True, timeout=0.1):
         """
@@ -272,10 +265,12 @@ class SimpleConsumer(Consumer):
 
         Keyword Arguments:
             count: Indicates the maximum number of messages to be fetched
-            block: If True, the API will block till some messages are fetched.
-            timeout: If block is True, the function will block for the specified
-                time (in seconds) until count messages is fetched. If None,
-                it will block forever.
+            block: If True, the API will block till all messages are fetched.
+                If block is a positive integer the API will block until that
+                many messages are fetched.
+            timeout: When blocking is requested the function will block for
+                the specified time (in seconds) until count messages is
+                fetched. If None, it will block forever.
         """
         messages = []
         if timeout is not None:
@@ -286,12 +281,13 @@ class SimpleConsumer(Consumer):
         while len(messages) < count:
             block_time = timeout - time.time()
             log.debug('calling _get_message block=%s timeout=%s', block, block_time)
-            result = self._get_message(block, block_time,
+            block_next_call = block is True or block > len(messages)
+            result = self._get_message(block_next_call, block_time,
                                        get_partition_info=True,
                                        update_offset=False)
             log.debug('got %s from _get_messages', result)
             if not result:
-                if block and (timeout is None or time.time() <= timeout):
+                if block_next_call and (timeout is None or time.time() <= timeout):
                     continue
                 break
 
@@ -345,7 +341,7 @@ class SimpleConsumer(Consumer):
                 return partition, message
             else:
                 return message
-        except Empty:
+        except queue.Empty:
             log.debug('internal queue empty after fetch - returning None')
             return None
 

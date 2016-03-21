@@ -1,1 +1,5 @@
 recursive-include kafka *.py
+include README.rst
+include LICENSE
+include AUTHORS.md
+include CHANGES.md

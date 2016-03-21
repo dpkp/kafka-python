@@ -47,7 +47,8 @@ SYNC_FAIL_ON_ERROR_DEFAULT = True
 def _send_upstream(queue, client, codec, batch_time, batch_size,
                    req_acks, ack_timeout, retry_options, stop_event,
                    log_messages_on_error=ASYNC_LOG_MESSAGES_ON_ERROR,
-                   stop_timeout=ASYNC_STOP_TIMEOUT_SECS):
+                   stop_timeout=ASYNC_STOP_TIMEOUT_SECS,
+                   codec_compresslevel=None):
     """Private method to manage producing messages asynchronously
 
     Listens on the queue for a specified number of messages or until
@@ -77,9 +78,17 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
             retrying messages after stop_event is set, defaults to 30.
     """
     request_tries = {}
-    client.reinit()
-    stop_at = None
 
+    while not stop_event.is_set():
+        try:
+            client.reinit()
+        except Exception as e:
+            log.warn('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms)
+            time.sleep(float(retry_options.backoff_ms) / 1000)
+        else:
+            break
+
+    stop_at = None
     while not (stop_event.is_set() and queue.empty() and not request_tries):
 
         # Handle stop_timeout
@@ -123,7 +132,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # Send collected requests upstream
         for topic_partition, msg in msgset.items():
-            messages = create_message_set(msg, codec, key)
+            messages = create_message_set(msg, codec, key, codec_compresslevel)
             req = ProduceRequest(topic_partition.topic,
                                  topic_partition.partition,
                                  tuple(messages))
@@ -185,7 +194,10 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         # refresh topic metadata before next retry
         if retry_state['do_refresh']:
             log.warn('Async producer forcing metadata refresh metadata before retrying')
-            client.load_metadata_for_topics()
+            try:
+                client.load_metadata_for_topics()
+            except Exception as e:
+                log.error("Async producer couldn't reload topic metadata. Error: `%s`", e.message)
 
         # Apply retry limit, dropping messages that are over
         request_tries = dict(
@@ -267,6 +279,7 @@ class Producer(object):
                  req_acks=ACK_AFTER_LOCAL_WRITE,
                  ack_timeout=DEFAULT_ACK_TIMEOUT,
                  codec=None,
+                 codec_compresslevel=None,
                  sync_fail_on_error=SYNC_FAIL_ON_ERROR_DEFAULT,
                  async=False,
                  batch_send=False, # deprecated, use async
@@ -297,6 +310,7 @@ class Producer(object):
             raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)
 
         self.codec = codec
+        self.codec_compresslevel = codec_compresslevel
 
         if self.async:
             # Messages are sent through this queue
@@ -314,7 +328,8 @@ class Producer(object):
                       self.req_acks, self.ack_timeout,
                       async_retry_options, self.thread_stop_event),
                 kwargs={'log_messages_on_error': async_log_messages_on_error,
-                        'stop_timeout': async_stop_timeout}
+                        'stop_timeout': async_stop_timeout,
+                        'codec_compresslevel': self.codec_compresslevel}
             )
 
             # Thread will die if main thread exits
@@ -322,7 +337,7 @@ class Producer(object):
             self.thread.start()
 
             def cleanup(obj):
-                if obj.stopped:
+                if not obj.stopped:
                     obj.stop()
             self._cleanup_func = cleanup
             atexit.register(cleanup, self)
@@ -355,9 +370,15 @@ class Producer(object):
         if not isinstance(msg, (list, tuple)):
             raise TypeError("msg is not a list or tuple!")
 
-        # Raise TypeError if any message is not encoded as bytes
-        if any(not isinstance(m, six.binary_type) for m in msg):
-            raise TypeError("all produce message payloads must be type bytes")
+        for m in msg:
+            # The protocol allows to have key & payload with null values both,
+            # (https://goo.gl/o694yN) but having (null,null) pair doesn't make sense.
+            if m is None:
+                if key is None:
+                    raise TypeError("key and payload can't be null in one")
+            # Raise TypeError if any non-null message is not encoded as bytes
+            elif not isinstance(m, six.binary_type):
+                raise TypeError("all produce message payloads must be null or type bytes")
 
         # Raise TypeError if topic is not encoded as bytes
         if not isinstance(topic, six.binary_type):
@@ -382,7 +403,7 @@ class Producer(object):
                         'Current queue size %d.' % self.queue.qsize())
             resp = []
         else:
-            messages = create_message_set([(m, key) for m in msg], self.codec, key)
+            messages = create_message_set([(m, key) for m in msg], self.codec, key, self.codec_compresslevel)
             req = ProduceRequest(topic, partition, messages)
             try:
                 resp = self.client.send_produce_request(
@@ -394,17 +415,26 @@ class Producer(object):
                 raise
         return resp
 
-    def stop(self, timeout=1):
+    def stop(self, timeout=None):
         """
-        Stop the producer. Optionally wait for the specified timeout before
-        forcefully cleaning up.
+        Stop the producer (async mode). Blocks until async thread completes.
         """
+        if timeout is not None:
+            log.warning('timeout argument to stop() is deprecated - '
+                        'it will be removed in future release')
+
+        if not self.async:
+            log.warning('producer.stop() called, but producer is not async')
+            return
+
+        if self.stopped:
+            log.warning('producer.stop() called, but producer is already stopped')
+            return
+
         if self.async:
             self.queue.put((STOP_ASYNC_PRODUCER, None, None))
-            self.thread.join(timeout)
-
-            if self.thread.is_alive():
-                self.thread_stop_event.set()
+            self.thread_stop_event.set()
+            self.thread.join()
 
         if hasattr(self, '_cleanup_func'):
             # Remove cleanup handler now that we've stopped

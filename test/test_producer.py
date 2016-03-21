@@ -7,7 +7,7 @@ import time
 from mock import MagicMock, patch
 from . import unittest
 
-from kafka import KafkaClient, SimpleProducer
+from kafka import KafkaClient, SimpleProducer, KeyedProducer
 from kafka.common import (
     AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError,
     ProduceResponse, RetryOptions, TopicAndPartition
@@ -33,7 +33,8 @@ class TestKafkaProducer(unittest.TestCase):
         topic = b"test-topic"
         partition = 0
 
-        bad_data_types = (u'你怎么样?', 12, ['a', 'list'], ('a', 'tuple'), {'a': 'dict'})
+        bad_data_types = (u'你怎么样?', 12, ['a', 'list'],
+                          ('a', 'tuple'), {'a': 'dict'}, None,)
         for m in bad_data_types:
             with self.assertRaises(TypeError):
                 logging.debug("attempting to send message of type %s", type(m))
@@ -43,6 +44,25 @@ class TestKafkaProducer(unittest.TestCase):
         for m in good_data_types:
             # This should not raise an exception
             producer.send_messages(topic, partition, m)
+
+    def test_keyedproducer_message_types(self):
+        client = MagicMock()
+        client.get_partition_ids_for_topic.return_value = [0, 1]
+        producer = KeyedProducer(client)
+        topic = b"test-topic"
+        key = b"testkey"
+
+        bad_data_types = (u'你怎么样?', 12, ['a', 'list'],
+                          ('a', 'tuple'), {'a': 'dict'},)
+        for m in bad_data_types:
+            with self.assertRaises(TypeError):
+                logging.debug("attempting to send message of type %s", type(m))
+                producer.send_messages(topic, key, m)
+
+        good_data_types = (b'a string!', None,)
+        for m in good_data_types:
+            # This should not raise an exception
+            producer.send_messages(topic, key, m)
 
     def test_topic_message_types(self):
         client = MagicMock()
@@ -90,6 +110,20 @@ class TestKafkaProducer(unittest.TestCase):
                     producer = SimpleProducer(client, async=False, sync_fail_on_error=True)
                     with self.assertRaises(FailedPayloadsError):
                         producer.send_messages('foobar', b'test message')
+
+    def test_cleanup_is_not_called_on_stopped_producer(self):
+        producer = Producer(MagicMock(), async=True)
+        producer.stopped = True
+        with patch.object(producer, 'stop') as mocked_stop:
+            producer._cleanup_func(producer)
+            self.assertEqual(mocked_stop.call_count, 0)
+
+    def test_cleanup_is_called_on_running_producer(self):
+        producer = Producer(MagicMock(), async=True)
+        producer.stopped = False
+        with patch.object(producer, 'stop') as mocked_stop:
+            producer._cleanup_func(producer)
+            self.assertEqual(mocked_stop.call_count, 1)
 
 
 class TestKafkaProducerSendUpstream(unittest.TestCase):

@@ -13,6 +13,13 @@ MetadataRequest = namedtuple("MetadataRequest",
 MetadataResponse = namedtuple("MetadataResponse",
     ["brokers", "topics"])
 
+# https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ConsumerMetadataRequest
+ConsumerMetadataRequest = namedtuple("ConsumerMetadataRequest",
+    ["groups"])
+
+ConsumerMetadataResponse = namedtuple("ConsumerMetadataResponse",
+    ["error", "nodeId", "host", "port"])
+
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ProduceAPI
 ProduceRequest = namedtuple("ProduceRequest",
     ["topic", "partition", "messages"])
@@ -158,6 +165,21 @@ class OffsetMetadataTooLargeError(BrokerResponseError):
 class StaleLeaderEpochCodeError(BrokerResponseError):
     errno = 13
     message = 'STALE_LEADER_EPOCH_CODE'
+
+
+class OffsetsLoadInProgressCode(BrokerResponseError):
+    errno = 14
+    message = 'OFFSETS_LOAD_IN_PROGRESS_CODE'
+
+
+class ConsumerCoordinatorNotAvailableCode(BrokerResponseError):
+    errno = 15
+    message = 'CONSUMER_COORDINATOR_NOT_AVAILABLE_CODE'
+
+
+class NotCoordinatorForConsumerCode(BrokerResponseError):
+    errno = 16
+    message = 'NOT_COORDINATOR_FOR_CONSUMER_CODE'
 
 
 class KafkaUnavailableError(KafkaError):

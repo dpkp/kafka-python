@@ -156,6 +156,10 @@ class KafkaConnection(local):
         """
         log.debug("Reading response %d from Kafka" % request_id)
 
+        # Make sure we have a connection
+        if not self._sock:
+            self.reinit()
+
         # Read the size off of the header
         resp = self._read_bytes(4)
         (size,) = struct.unpack('>i', resp)
