@@ -62,7 +62,6 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> consumer = KafkaConsumer(value_deserializer=msgpack.dumps)
 >>> consumer.subscribe(['msgpackfoo'])
 >>> for msg in consumer:
-...     msg = next(consumer)
 ...     assert isinstance(msg.value, dict)
 
 
