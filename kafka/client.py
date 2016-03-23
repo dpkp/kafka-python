@@ -668,11 +668,18 @@ class KafkaClient(object):
 
     @time_metric('offset_commit_request_timer')
     def send_offset_commit_request(self, group, payloads=[],
-                                   fail_on_error=True, callback=None):
+                                   fail_on_error=True, callback=None, dual_commit=True):
         encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
-                          group=group)
+                                    group=group)
         decoder = KafkaProtocol.decode_offset_commit_response
         resps = self._send_broker_aware_request(payloads, encoder, decoder)
+
+        if dual_commit:
+            encoder = functools.partial(
+                KafkaProtocol.encode_offset_commit_request_kafka,
+                group=group,
+            )
+            resps += self._send_consumer_aware_request(group, payloads, encoder, decoder)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
