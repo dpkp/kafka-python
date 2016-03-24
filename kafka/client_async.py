@@ -4,9 +4,9 @@ import copy
 import heapq
 import itertools
 import logging
-import os
 import random
 import select
+import socket
 import time
 
 import six
@@ -18,6 +18,7 @@ from .conn import BrokerConnection, ConnectionStates, collect_hosts
 from .future import Future
 from .protocol.metadata import MetadataRequest
 from .protocol.produce import ProduceRequest
+from . import socketpair
 from .version import __version__
 
 if six.PY2:
@@ -97,11 +98,11 @@ class KafkaClient(object):
         self._last_bootstrap = 0
         self._bootstrap_fails = 0
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
-        self._wake_r, self._wake_w = os.pipe()
+        self._wake_r, self._wake_w = socket.socketpair()
 
     def __del__(self):
-        os.close(self._wake_r)
-        os.close(self._wake_w)
+        self._wake_r.close()
+        self._wake_w.close()
 
     def _bootstrap(self, hosts):
         # Exponential backoff if bootstrap fails
@@ -674,14 +675,15 @@ class KafkaClient(object):
         return version
 
     def wakeup(self):
-        os.write(self._wake_w, b'x')
+        if self._wake_w.send(b'x') != 1:
+            log.warning('Unable to send to wakeup socket!')
 
     def _clear_wake_fd(self):
         while True:
             fds, _, _ = select.select([self._wake_r], [], [], 0)
             if not fds:
                 break
-            os.read(self._wake_r, 1)
+            self._wake_r.recv(1)
 
 
 class DelayedTaskQueue(object):

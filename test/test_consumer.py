@@ -1,3 +1,4 @@
+import sys
 
 from mock import MagicMock, patch
 from . import unittest
@@ -17,6 +18,7 @@ class TestKafkaConsumer(unittest.TestCase):
 
 
 class TestMultiProcessConsumer(unittest.TestCase):
+    @unittest.skipIf(sys.platform.startswith('win'), 'test mocking fails on windows')
     def test_partition_list(self):
         client = MagicMock()
         partitions = (0,)
