@@ -51,21 +51,37 @@ class ConnTest(unittest.TestCase):
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
+            ('localhost', 1234, socket.AF_INET),
+            ('localhost', 9092, socket.AF_INET),
+        ]))
+
+    def test_collect_hosts__ipv6(self):
+        hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
+        results = collect_hosts(hosts)
+
+        self.assertEqual(set(results), set([
+            ('localhost', 1234, socket.AF_INET6),
+            ('2001:1000:2000::1', 9092, socket.AF_INET6),
+            ('2001:1000:2000::1', 1234, socket.AF_INET6),
         ]))
 
     def test_collect_hosts__string_list(self):
         hosts = [
             'localhost:1234',
             'localhost',
+            '[localhost]',
+            '2001::1',
+            '[2001::1]:1234',
         ]
 
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
+            ('localhost', 1234, socket.AF_INET),
+            ('localhost', 9092, socket.AF_INET),
+            ('localhost', 9092, socket.AF_INET6),
+            ('2001::1', 9092, socket.AF_INET6),
+            ('2001::1', 1234, socket.AF_INET6),
         ]))
 
     def test_collect_hosts__with_spaces(self):
@@ -73,9 +89,10 @@ class ConnTest(unittest.TestCase):
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
+            ('localhost', 1234, socket.AF_INET),
+            ('localhost', 9092, socket.AF_INET),
         ]))
+
 
     def test_send(self):
         self.conn.send(self.config['request_id'], self.config['payload'])
