@@ -374,7 +374,8 @@ def get_ip_port_afi(host_and_port_str):
     if host_and_port_str.strip()[0] == '[':
         afi = socket.AF_INET6
         res = host_and_port_str.split("]:")
-        res[0] = res[0].translate(None, "[]")
+        res[0] = res[0].replace("[", "")
+        res[0] = res[0].replace("]", "")
 
     elif host_and_port_str.count(":") > 1:
         afi = socket.AF_INET6
