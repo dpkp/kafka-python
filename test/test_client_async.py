@@ -1,4 +1,5 @@
 import time
+import socket
 
 import pytest
 
@@ -12,11 +13,11 @@ from kafka.protocol.produce import ProduceRequest
 
 
 @pytest.mark.parametrize("bootstrap,expected_hosts", [
-    (None, [('localhost', 9092)]),
-    ('foobar:1234', [('foobar', 1234)]),
-    ('fizzbuzz', [('fizzbuzz', 9092)]),
-    ('foo:12,bar:34', [('foo', 12), ('bar', 34)]),
-    (['fizz:56', 'buzz'], [('fizz', 56), ('buzz', 9092)]),
+    (None, [('localhost', 9092, socket.AF_INET)]),
+    ('foobar:1234', [('foobar', 1234, socket.AF_INET)]),
+    ('fizzbuzz', [('fizzbuzz', 9092, socket.AF_INET)]),
+    ('foo:12,bar:34', [('foo', 12, socket.AF_INET), ('bar', 34, socket.AF_INET)]),
+    (['fizz:56', 'buzz'], [('fizz', 56, socket.AF_INET), ('buzz', 9092, socket.AF_INET)]),
 ])
 def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
     mocker.patch.object(KafkaClient, '_bootstrap')
@@ -47,7 +48,7 @@ def conn(mocker):
 def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, **cli.config)
+    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
     conn.connect.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest([]))
     assert cli._bootstrap_fails == 0
@@ -57,7 +58,7 @@ def test_bootstrap_success(conn):
 def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, **cli.config)
+    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
     conn.connect.assert_called_with()
     conn.close.assert_called_with()
     assert cli._bootstrap_fails == 1
