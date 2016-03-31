@@ -10,7 +10,7 @@ from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message
 )
 from kafka.producer import SimpleProducer, KeyedProducer
-from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner
+from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner, Murmur2Partitioner
 from kafka.consumer import SimpleConsumer, MultiProcessConsumer, KafkaConsumer
 
 __all__ = [

@@ -29,6 +29,7 @@ ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
 FULL_QUEUE_WAIT_TIME_SECONDS = 0.1
 
+MAX_BACKOFF_SECONDS = 60
 
 class Consumer(object):
     """
@@ -82,6 +83,14 @@ class Consumer(object):
             obj.stop()
         self._cleanup_func = cleanup
         atexit.register(cleanup, self)
+
+        self.partition_info = False     # Do not return partition info in msgs
+
+    def provide_partition_info(self):
+        """
+        Indicates that partition info must be returned by the consumer
+        """
+        self.partition_info = True
 
     def fetch_last_known_offsets(self, partitions=None):
         if self.group is None:

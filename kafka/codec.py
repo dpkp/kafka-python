@@ -22,12 +22,15 @@ def has_snappy():
     return _HAS_SNAPPY
 
 
-def gzip_encode(payload):
+def gzip_encode(payload, compresslevel=None):
+    if not compresslevel:
+        compresslevel = 9
+
     with BytesIO() as buf:
 
         # Gzip context manager introduced in python 2.6
         # so old-fashioned way until we decide to not support 2.6
-        gzipper = gzip.GzipFile(fileobj=buf, mode="w")
+        gzipper = gzip.GzipFile(fileobj=buf, mode="w", compresslevel=compresslevel)
         try:
             gzipper.write(payload)
         finally:

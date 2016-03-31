@@ -5,6 +5,7 @@ python:
     - 2.7
     - 3.3
     - 3.4
+    - 3.5
     - pypy
 
 env:
@@ -12,18 +13,27 @@ env:
     - KAFKA_VERSION=0.8.0
     - KAFKA_VERSION=0.8.1
     - KAFKA_VERSION=0.8.1.1
-    - KAFKA_VERSION=0.8.2.1
+    - KAFKA_VERSION=0.8.2.2
+    - KAFKA_VERSION=0.9.0.0
+
+sudo: false
+
+addons:
+  apt:
+    packages:
+      - libsnappy-dev
+
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - servers/
 
 before_install:
-    - sudo apt-get install libsnappy-dev
     - ./build_integration.sh
 
 install:
     - pip install tox coveralls
     - pip install .
-    # Deal with issue on Travis builders re: multiprocessing.Queue :(
-    # See https://github.com/travis-ci/travis-cookbooks/issues/155
-    - sudo rm -rf /dev/shm && sudo ln -s /run/shm /dev/shm
 
 deploy:
   provider: pypi
