@@ -52,12 +52,16 @@ def test_init(conn):
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
 def test_autocommit_enable_api_version(conn, api_version):
-    coordinator = ConsumerCoordinator(
-        KafkaClient(), SubscriptionState(), api_version=api_version)
+    coordinator = ConsumerCoordinator(KafkaClient(), SubscriptionState(),
+                                      enable_auto_commit=True,
+                                      group_id='foobar',
+                                      api_version=api_version)
     if api_version < (0, 8, 1):
         assert coordinator._auto_commit_task is None
+        assert coordinator.config['enable_auto_commit'] is False
     else:
         assert coordinator._auto_commit_task is not None
+        assert coordinator.config['enable_auto_commit'] is True
 
 
 def test_protocol_type(coordinator):
@@ -349,28 +353,40 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
 
 
 @pytest.mark.parametrize(
-    'api_version,enable,error,task_disable,commit_offsets,warn,exc', [
-        ((0, 8), True, None, False, False, False, False),
-        ((0, 9), False, None, False, False, False, False),
-        ((0, 9), True, Errors.UnknownMemberIdError(), True, True, True, False),
-        ((0, 9), True, Errors.IllegalGenerationError(), True, True, True, False),
-        ((0, 9), True, Errors.RebalanceInProgressError(), True, True, True, False),
-        ((0, 9), True, Exception(), True, True, False, True),
-        ((0, 9), True, None, True, True, False, False),
+    'api_version,group_id,enable,error,has_auto_commit,commit_offsets,warn,exc', [
+        ((0, 8), 'foobar', True, None, False, False, True, False),
+        ((0, 9), 'foobar', False, None, False, False, False, False),
+        ((0, 9), 'foobar', True, Errors.UnknownMemberIdError(), True, True, True, False),
+        ((0, 9), 'foobar', True, Errors.IllegalGenerationError(), True, True, True, False),
+        ((0, 9), 'foobar', True, Errors.RebalanceInProgressError(), True, True, True, False),
+        ((0, 9), 'foobar', True, Exception(), True, True, False, True),
+        ((0, 9), 'foobar', True, None, True, True, False, False),
+        ((0, 9), None, True, None, False, False, True, False),
     ])
-def test_maybe_auto_commit_offsets_sync(mocker, coordinator,
-                                        api_version, enable, error, task_disable,
-                                        commit_offsets, warn, exc):
-    auto_commit_task = mocker.patch.object(coordinator, '_auto_commit_task')
-    commit_sync = mocker.patch.object(coordinator, 'commit_offsets_sync',
-                                      side_effect=error)
+def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
+                                        error, has_auto_commit, commit_offsets,
+                                        warn, exc):
     mock_warn = mocker.patch('kafka.coordinator.consumer.log.warning')
     mock_exc = mocker.patch('kafka.coordinator.consumer.log.exception')
+    coordinator = ConsumerCoordinator(KafkaClient(), SubscriptionState(),
+                                      api_version=api_version,
+                                      enable_auto_commit=enable,
+                                      group_id=group_id)
+    commit_sync = mocker.patch.object(coordinator, 'commit_offsets_sync',
+                                      side_effect=error)
+    if has_auto_commit:
+        assert coordinator._auto_commit_task is not None
+        coordinator._auto_commit_task.enable()
+        assert coordinator._auto_commit_task._enabled is True
+    else:
+        assert coordinator._auto_commit_task is None
 
-    coordinator.config['api_version'] = api_version
-    coordinator.config['enable_auto_commit'] = enable
     assert coordinator._maybe_auto_commit_offsets_sync() is None
-    assert auto_commit_task.disable.call_count == (1 if task_disable else 0)
+
+    if has_auto_commit:
+        assert coordinator._auto_commit_task is not None
+        assert coordinator._auto_commit_task._enabled is False
+
     assert commit_sync.call_count == (1 if commit_offsets else 0)
     assert mock_warn.call_count == (1 if warn else 0)
     assert mock_exc.call_count == (1 if exc else 0)
