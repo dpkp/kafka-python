@@ -479,9 +479,6 @@ class Fetcher(six.Iterator):
         # so create a separate future and attach a callback to update it
         # based on response error codes
         future = Future()
-        if not self._client.ready(node_id):
-            return future.failure(Errors.NodeNotReadyError(node_id))
-
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_offset_response, partition, future)
         _f.add_errback(lambda e: future.failure(e))

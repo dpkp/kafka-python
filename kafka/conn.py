@@ -106,24 +106,22 @@ class BrokerConnection(object):
             # in non-blocking mode, use repeated calls to socket.connect_ex
             # to check connection status
             request_timeout = self.config['request_timeout_ms'] / 1000.0
-            if time.time() > request_timeout + self.last_attempt:
+            try:
+                ret = self._sock.connect_ex((self.host, self.port))
+            except socket.error as ret:
+                pass
+            if not ret or ret == errno.EISCONN:
+                self.state = ConnectionStates.CONNECTED
+            elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
+                log.error('Connect attempt to %s returned error %s.'
+                          ' Disconnecting.', self, ret)
+                self.close()
+                self.last_failure = time.time()
+            elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
                 self.close() # error=TimeoutError ?
                 self.last_failure = time.time()
 
-            else:
-                try:
-                    ret = self._sock.connect_ex((self.host, self.port))
-                except socket.error as ret:
-                    pass
-                if not ret or ret == errno.EISCONN:
-                    self.state = ConnectionStates.CONNECTED
-                # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
-                elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
-                    log.error('Connect attempt to %s returned error %s.'
-                              ' Disconnecting.', self, ret)
-                    self.close()
-                    self.last_failure = time.time()
         return self.state
 
     def blacked_out(self):
@@ -140,6 +138,10 @@ class BrokerConnection(object):
     def connected(self):
         """Return True iff socket is connected."""
         return self.state is ConnectionStates.CONNECTED
+
+    def connecting(self):
+        """Return True iff socket is in intermediate connecting state."""
+        return self.state is ConnectionStates.CONNECTING
 
     def close(self, error=None):
         """Close socket and fail all in-flight-requests.
@@ -158,7 +160,7 @@ class BrokerConnection(object):
         self._rbuffer.seek(0)
         self._rbuffer.truncate()
         if error is None:
-            error = Errors.ConnectionError()
+            error = Errors.ConnectionError(str(self))
         while self.in_flight_requests:
             ifr = self.in_flight_requests.popleft()
             ifr.future.failure(error)
@@ -169,10 +171,12 @@ class BrokerConnection(object):
         Can block on network if request is larger than send_buffer_bytes
         """
         future = Future()
-        if not self.connected():
-            return future.failure(Errors.ConnectionError())
-        if not self.can_send_more():
-            return future.failure(Errors.TooManyInFlightRequests())
+        if self.connecting():
+            return future.failure(Errors.NodeNotReadyError(str(self)))
+        elif not self.connected():
+            return future.failure(Errors.ConnectionError(str(self)))
+        elif not self.can_send_more():
+            return future.failure(Errors.TooManyInFlightRequests(str(self)))
         correlation_id = self._next_correlation_id()
         header = RequestHeader(request,
                                correlation_id=correlation_id,
@@ -191,7 +195,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("Error sending %s to %s", request, self)
-            error = Errors.ConnectionError(e)
+            error = Errors.ConnectionError("%s: %s" % (str(self), e))
             self.close(error=error)
             return future.failure(error)
         log.debug('%s Request %d: %s', self, correlation_id, request)
@@ -324,11 +328,9 @@ class BrokerConnection(object):
                         ' initialized on the broker')
 
         elif ifr.correlation_id != recv_correlation_id:
-
-
             error = Errors.CorrelationIdError(
-                'Correlation ids do not match: sent %d, recv %d'
-                % (ifr.correlation_id, recv_correlation_id))
+                '%s: Correlation ids do not match: sent %d, recv %d'
+                % (str(self), ifr.correlation_id, recv_correlation_id))
             ifr.future.failure(error)
             self.close()
             self._processing = False
