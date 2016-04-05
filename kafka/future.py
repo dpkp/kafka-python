@@ -15,10 +15,10 @@ class Future(object):
         self._errbacks = []
 
     def succeeded(self):
-        return self.is_done and not self.exception
+        return self.is_done and not bool(self.exception)
 
     def failed(self):
-        return self.is_done and self.exception
+        return self.is_done and bool(self.exception)
 
     def retriable(self):
         try:
