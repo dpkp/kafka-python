@@ -8,14 +8,14 @@ import threading
 import time
 
 from ..client_async import KafkaClient
-from ..common import TopicPartition
+from ..structs import TopicPartition
 from ..partitioner.default import DefaultPartitioner
 from ..protocol.message import Message, MessageSet
+from .. import errors as Errors
 from .future import FutureRecordMetadata, FutureProduceResult
 from .record_accumulator import AtomicInteger, RecordAccumulator
 from .sender import Sender
 
-import kafka.common as Errors
 
 log = logging.getLogger(__name__)
 PRODUCER_CLIENT_ID_SEQUENCE = AtomicInteger()

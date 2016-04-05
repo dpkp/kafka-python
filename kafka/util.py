@@ -7,7 +7,7 @@ import weakref
 
 import six
 
-from kafka.common import BufferUnderflowError
+from kafka.errors import BufferUnderflowError
 
 
 def crc32(data):

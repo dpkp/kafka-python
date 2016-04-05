@@ -6,8 +6,9 @@ import re
 
 import six
 
-from kafka.common import IllegalStateError, OffsetAndMetadata
+from kafka.errors import IllegalStateError
 from kafka.protocol.offset import OffsetResetStrategy
+from kafka.structs import OffsetAndMetadata
 
 log = logging.getLogger(__name__)
 

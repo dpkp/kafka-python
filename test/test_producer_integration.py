@@ -10,11 +10,9 @@ from kafka import (
     RoundRobinPartitioner, HashedPartitioner
 )
 from kafka.codec import has_snappy
-from kafka.common import (
-    FetchRequestPayload, ProduceRequestPayload,
-    UnknownTopicOrPartitionError, LeaderNotAvailableError
-)
+from kafka.errors import UnknownTopicOrPartitionError, LeaderNotAvailableError
 from kafka.producer.base import Producer
+from kafka.structs import FetchRequestPayload, ProduceRequestPayload
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions

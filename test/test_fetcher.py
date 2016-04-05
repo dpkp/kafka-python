@@ -4,13 +4,12 @@ from __future__ import absolute_import
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.common import TopicPartition, OffsetAndMetadata
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.fetch import FetchRequest
-
-import kafka.common as Errors
+from kafka.structs import TopicPartition, OffsetAndMetadata
 
 
 @pytest.fixture

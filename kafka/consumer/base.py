@@ -6,12 +6,10 @@ import numbers
 from threading import Lock
 import warnings
 
-import kafka.common
-from kafka.common import (
-    OffsetRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
-    UnknownTopicOrPartitionError, check_error, KafkaError
-)
-
+from kafka.errors import (
+    UnknownTopicOrPartitionError, check_error, KafkaError)
+from kafka.structs import (
+    OffsetRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload)
 from kafka.util import ReentrantTimer
 
 

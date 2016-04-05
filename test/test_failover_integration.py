@@ -3,10 +3,10 @@ import os
 import time
 
 from kafka import SimpleClient, SimpleConsumer, KeyedProducer
-from kafka.common import (
-    TopicPartition, FailedPayloadsError, ConnectionError, RequestTimedOutError
-)
+from kafka.errors import (
+    FailedPayloadsError, ConnectionError, RequestTimedOutError)
 from kafka.producer.base import Producer
+from kafka.structs import TopicPartition
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, random_string

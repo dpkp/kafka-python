@@ -13,7 +13,7 @@ import warnings
 
 import six
 
-import kafka.common as Errors
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.commit import GroupCoordinatorResponse
@@ -149,7 +149,7 @@ class BrokerConnection(object):
         Arguments:
             error (Exception, optional): pending in-flight-requests
                 will be failed with this exception.
-                Default: kafka.common.ConnectionError.
+                Default: kafka.errors.ConnectionError.
         """
         if self._sock:
             self._sock.close()

@@ -9,9 +9,9 @@ import time
 
 import six
 
-import kafka.common as Errors
-from kafka.common import BrokerMetadata, PartitionMetadata, TopicPartition
+from . import errors as Errors
 from .future import Future
+from .structs import BrokerMetadata, PartitionMetadata, TopicPartition
 
 log = logging.getLogger(__name__)
 

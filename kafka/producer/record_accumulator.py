@@ -8,12 +8,12 @@ import time
 
 import six
 
-from ..common import TopicPartition
+from .. import errors as Errors
+from ..structs import TopicPartition
 from ..protocol.message import Message, MessageSet
 from .buffer import MessageSetBuffer, SimpleBufferPool
 from .future import FutureRecordMetadata, FutureProduceResult
 
-import kafka.common as Errors
 
 
 log = logging.getLogger(__name__)

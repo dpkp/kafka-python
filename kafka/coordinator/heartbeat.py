@@ -1,7 +1,7 @@
 import copy
 import time
 
-import kafka.common as Errors
+import kafka.errors as Errors
 
 
 class Heartbeat(object):

@@ -4,8 +4,9 @@ import struct
 import six
 from . import unittest
 
-import kafka.common
+import kafka.errors
 import kafka.util
+import kafka.structs
 
 
 class UtilTest(unittest.TestCase):
@@ -48,7 +49,7 @@ class UtilTest(unittest.TestCase):
         self.assertEqual(kafka.util.read_int_string(b'\x00\x00\x00\x0bsome string', 0), (b'some string', 15))
 
     def test_read_int_string__insufficient_data(self):
-        with self.assertRaises(kafka.common.BufferUnderflowError):
+        with self.assertRaises(kafka.errors.BufferUnderflowError):
             kafka.util.read_int_string(b'\x00\x00\x00\x021', 0)
 
     def test_write_short_string(self):
@@ -90,7 +91,7 @@ class UtilTest(unittest.TestCase):
         self.assertEqual(kafka.util.read_short_string(b'\x00\x0bsome string', 0), (b'some string', 13))
 
     def test_read_int_string__insufficient_data2(self):
-        with self.assertRaises(kafka.common.BufferUnderflowError):
+        with self.assertRaises(kafka.errors.BufferUnderflowError):
             kafka.util.read_int_string('\x00\x021', 0)
 
     def test_relative_unpack2(self):
@@ -100,11 +101,11 @@ class UtilTest(unittest.TestCase):
         )
 
     def test_relative_unpack3(self):
-        with self.assertRaises(kafka.common.BufferUnderflowError):
+        with self.assertRaises(kafka.errors.BufferUnderflowError):
             kafka.util.relative_unpack('>hh', '\x00', 0)
 
     def test_group_by_topic_and_partition(self):
-        t = kafka.common.TopicPartition
+        t = kafka.structs.TopicPartition
 
         l = [
             t("a", 1),

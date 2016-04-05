@@ -9,12 +9,12 @@ from mock import MagicMock, patch
 from . import unittest
 
 from kafka import SimpleClient, SimpleProducer, KeyedProducer
-from kafka.common import (
-    AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError,
-    ProduceResponsePayload, RetryOptions, TopicPartition
-)
+from kafka.errors import (
+    AsyncProducerQueueFull, FailedPayloadsError, NotLeaderForPartitionError)
 from kafka.producer.base import Producer, _send_upstream
 from kafka.protocol import CODEC_NONE
+from kafka.structs import (
+    ProduceResponsePayload, RetryOptions, TopicPartition)
 
 from six.moves import queue, xrange
 

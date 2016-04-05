@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.common import TopicPartition, OffsetAndMetadata
+from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.consumer.subscription_state import (
     SubscriptionState, ConsumerRebalanceListener)
 from kafka.coordinator.assignors.range import RangePartitionAssignor
@@ -13,6 +13,7 @@ from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
     ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment)
 from kafka.conn import ConnectionStates
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.commit import (
     OffsetCommitRequest_v0, OffsetCommitRequest_v1, OffsetCommitRequest_v2,
@@ -20,8 +21,6 @@ from kafka.protocol.commit import (
     OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
 from kafka.util import WeakMethod
-
-import kafka.common as Errors
 
 
 @pytest.fixture

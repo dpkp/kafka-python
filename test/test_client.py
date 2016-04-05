@@ -6,17 +6,14 @@ import six
 from . import unittest
 
 from kafka import SimpleClient
-from kafka.common import (
-    ProduceRequestPayload,
-    BrokerMetadata,
-    TopicPartition, KafkaUnavailableError,
-    LeaderNotAvailableError, UnknownTopicOrPartitionError,
-    KafkaTimeoutError, ConnectionError, FailedPayloadsError
-)
 from kafka.conn import KafkaConnection
+from kafka.errors import (
+    KafkaUnavailableError, LeaderNotAvailableError, KafkaTimeoutError,
+    UnknownTopicOrPartitionError, ConnectionError, FailedPayloadsError)
 from kafka.future import Future
 from kafka.protocol import KafkaProtocol, create_message
 from kafka.protocol.metadata import MetadataResponse
+from kafka.structs import ProduceRequestPayload, BrokerMetadata, TopicPartition
 
 from test.testutil import Timer
 

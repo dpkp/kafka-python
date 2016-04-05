@@ -11,10 +11,9 @@ import time
 
 import six
 
-import kafka.common as Errors # TODO: make Errors a separate class
-
 from .cluster import ClusterMetadata
 from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
+from . import errors as Errors
 from .future import Future
 from .protocol.metadata import MetadataRequest
 from .protocol.produce import ProduceRequest

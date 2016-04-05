@@ -7,12 +7,12 @@ import time
 
 import six
 
-import kafka.common
-from kafka.common import (TopicPartition, BrokerMetadata, UnknownError,
-                          ConnectionError, FailedPayloadsError,
+import kafka.errors
+from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
                           NotLeaderForPartitionError, ReplicaNotAvailableError)
+from kafka.structs import TopicPartition, BrokerMetadata
 
 from kafka.conn import (
     collect_hosts, BrokerConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS,
@@ -123,7 +123,7 @@ class SimpleClient(object):
 
         # If there's a problem with finding the coordinator, raise the
         # provided error
-        kafka.common.check_error(resp)
+        kafka.errors.check_error(resp)
 
         # Otherwise return the BrokerMetadata
         return BrokerMetadata(resp.nodeId, resp.host, resp.port)
@@ -389,7 +389,7 @@ class SimpleClient(object):
 
         # Or a server api error response
         try:
-            kafka.common.check_error(resp)
+            kafka.errors.check_error(resp)
         except (UnknownTopicOrPartitionError, NotLeaderForPartitionError):
             self.reset_topic_metadata(resp.topic)
             raise
@@ -509,7 +509,7 @@ class SimpleClient(object):
         for error, topic, partitions in resp.topics:
             # Errors expected for new topics
             if error:
-                error_type = kafka.common.kafka_errors.get(error, UnknownError)
+                error_type = kafka.errors.kafka_errors.get(error, UnknownError)
                 if error_type in (UnknownTopicOrPartitionError, LeaderNotAvailableError):
                     log.error('Error loading topic metadata for %s: %s (%s)',
                               topic, error_type, error)
@@ -530,7 +530,7 @@ class SimpleClient(object):
 
                 # Check for partition errors
                 if error:
-                    error_type = kafka.common.kafka_errors.get(error, UnknownError)
+                    error_type = kafka.errors.kafka_errors.get(error, UnknownError)
 
                     # If No Leader, topics_to_brokers topic_partition -> None
                     if error_type is LeaderNotAvailableError:

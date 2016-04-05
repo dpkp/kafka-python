@@ -3,7 +3,8 @@ Context manager to commit/rollback consumer offsets.
 """
 from logging import getLogger
 
-from kafka.common import check_error, OffsetCommitRequestPayload, OffsetOutOfRangeError
+from kafka.errors import check_error, OffsetOutOfRangeError
+from kafka.structs import OffsetCommitRequestPayload
 
 
 class OffsetCommitContext(object):

@@ -7,11 +7,11 @@ import pytest
 import six
 
 from kafka import SimpleClient
-from kafka.common import TopicPartition
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse
+from kafka.structs import TopicPartition
 
 from test.conftest import version
 from test.testutil import random_string

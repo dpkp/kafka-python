@@ -7,21 +7,21 @@ from mock import patch, sentinel
 from . import unittest
 
 from kafka.codec import has_snappy, gzip_decode, snappy_decode
-from kafka.common import (
+from kafka.errors import (
+    ChecksumError, KafkaUnavailableError, UnsupportedCodecError,
+    ConsumerFetchSizeTooSmall, ProtocolError)
+from kafka.protocol import (
+    ATTRIBUTE_CODEC_MASK, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, KafkaProtocol,
+    create_message, create_gzip_message, create_snappy_message,
+    create_message_set)
+from kafka.structs import (
     OffsetRequestPayload, OffsetResponsePayload,
     OffsetCommitRequestPayload, OffsetCommitResponsePayload,
     OffsetFetchRequestPayload, OffsetFetchResponsePayload,
     ProduceRequestPayload, ProduceResponsePayload,
     FetchRequestPayload, FetchResponsePayload,
-    Message, ChecksumError, OffsetAndMessage, BrokerMetadata,
-    KafkaUnavailableError, UnsupportedCodecError, ConsumerFetchSizeTooSmall,
-    ProtocolError, ConsumerMetadataResponse
-)
-from kafka.protocol import (
-    ATTRIBUTE_CODEC_MASK, CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, KafkaProtocol,
-    create_message, create_gzip_message, create_snappy_message,
-    create_message_set
-)
+    Message, OffsetAndMessage, BrokerMetadata, ConsumerMetadataResponse)
+
 
 class TestProtocol(unittest.TestCase):
     def test_create_message(self):

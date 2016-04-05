@@ -7,11 +7,11 @@ import threading
 
 import six
 
-from ..common import TopicPartition
+from .. import errors as Errors
+from ..structs import TopicPartition
 from ..version import __version__
 from ..protocol.produce import ProduceRequest
 
-import kafka.common as Errors
 
 
 log = logging.getLogger(__name__)

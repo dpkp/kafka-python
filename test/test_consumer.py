@@ -4,11 +4,11 @@ from mock import MagicMock, patch
 from . import unittest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer
-from kafka.common import (
-    KafkaConfigurationError, FetchResponsePayload, OffsetFetchResponsePayload,
-    FailedPayloadsError, OffsetAndMessage,
-    NotLeaderForPartitionError, UnknownTopicOrPartitionError
-)
+from kafka.errors import (
+    FailedPayloadsError, KafkaConfigurationError, NotLeaderForPartitionError,
+    UnknownTopicOrPartitionError)
+from kafka.structs import (
+    FetchResponsePayload, OffsetAndMessage, OffsetFetchResponsePayload)
 
 
 class TestKafkaConsumer(unittest.TestCase):

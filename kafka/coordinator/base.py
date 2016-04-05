@@ -6,7 +6,7 @@ import weakref
 
 import six
 
-import kafka.common as Errors
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.commit import (GroupCoordinatorRequest,
                                    OffsetCommitRequest_v2 as OffsetCommitRequest)

@@ -7,13 +7,13 @@ import time
 import six
 
 from kafka.client_async import KafkaClient
-from kafka.common import TopicPartition
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.protocol.offset import OffsetResetStrategy
+from kafka.structs import TopicPartition
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)

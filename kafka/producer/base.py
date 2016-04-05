@@ -14,13 +14,12 @@ from threading import Thread, Event
 
 import six
 
-from kafka.common import (
-    ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions,
+from kafka.structs import (
+    ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions)
+from kafka.errors import (
     kafka_errors, UnsupportedCodecError, FailedPayloadsError,
     RequestTimedOutError, AsyncProducerQueueFull, UnknownError,
-    RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES
-)
-
+    RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES)
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
 
 log = logging.getLogger('kafka.producer')

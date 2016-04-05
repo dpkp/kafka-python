@@ -12,14 +12,14 @@ from .base import BaseCoordinator
 from .assignors.range import RangePartitionAssignor
 from .assignors.roundrobin import RoundRobinPartitionAssignor
 from .protocol import ConsumerProtocol
-from ..common import OffsetAndMetadata, TopicPartition
+from .. import errors as Errors
 from ..future import Future
 from ..protocol.commit import (
     OffsetCommitRequest_v2, OffsetCommitRequest_v1, OffsetCommitRequest_v0,
     OffsetFetchRequest_v0, OffsetFetchRequest_v1)
+from ..structs import OffsetAndMetadata, TopicPartition
 from ..util import WeakMethod
 
-import kafka.common as Errors
 
 log = logging.getLogger(__name__)
 

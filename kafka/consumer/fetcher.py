@@ -6,12 +6,12 @@ import logging
 
 import six
 
-import kafka.common as Errors
-from kafka.common import TopicPartition
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.message import PartialMessage
 from kafka.protocol.offset import OffsetRequest, OffsetResetStrategy
+from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
 

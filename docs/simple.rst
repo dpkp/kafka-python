@@ -129,10 +129,9 @@ SimpleClient (DEPRECATED)
 
     import time
     from kafka import SimpleClient
-    from kafka.common import (
-        LeaderNotAvailableError, NotLeaderForPartitionError,
-        ProduceRequestPayload)
+    from kafka.errors import LeaderNotAvailableError, NotLeaderForPartitionError
     from kafka.protocol import create_message
+    from kafka.structs import ProduceRequestPayload
 
     kafka = SimpleClient('localhost:9092')
     payload = ProduceRequestPayload(topic='my-topic', partition=0,

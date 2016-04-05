@@ -7,11 +7,9 @@ from . import unittest
 from kafka import (
     KafkaConsumer, MultiProcessConsumer, SimpleConsumer, create_message
 )
-from kafka.common import (
-    ProduceRequestPayload, ConsumerFetchSizeTooSmall,
-    OffsetOutOfRangeError, TopicPartition
-)
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
+from kafka.errors import ConsumerFetchSizeTooSmall, OffsetOutOfRangeError
+from kafka.structs import ProduceRequestPayload, TopicPartition
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (

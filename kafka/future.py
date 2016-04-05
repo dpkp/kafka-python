@@ -1,7 +1,7 @@
 import functools
 import logging
 
-import kafka.common as Errors
+import kafka.errors as Errors
 
 log = logging.getLogger(__name__)
 

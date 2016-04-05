@@ -4,12 +4,12 @@ import socket
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.common import BrokerMetadata
-import kafka.common as Errors
 from kafka.conn import ConnectionStates
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse, MetadataRequest
 from kafka.protocol.produce import ProduceRequest
+from kafka.structs import BrokerMetadata
 
 
 @pytest.mark.parametrize("bootstrap,expected_hosts", [

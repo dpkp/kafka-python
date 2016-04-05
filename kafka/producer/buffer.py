@@ -7,10 +7,10 @@ import time
 
 from ..codec import (has_gzip, has_snappy, has_lz4,
                      gzip_encode, snappy_encode, lz4_encode)
+from .. import errors as Errors
 from ..protocol.types import Int32, Int64
 from ..protocol.message import MessageSet, Message
 
-import kafka.common as Errors
 
 
 class MessageSetBuffer(object):

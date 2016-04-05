@@ -5,8 +5,9 @@ from threading import Thread
 import mock
 from . import unittest
 
-from kafka.common import ConnectionError
+from kafka.errors import ConnectionError
 from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SECONDS
+
 
 class ConnTest(unittest.TestCase):
     def setUp(self):

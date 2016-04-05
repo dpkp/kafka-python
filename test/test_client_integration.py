@@ -1,10 +1,10 @@
 import os
 
-from kafka.common import (
-    FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
-    KafkaTimeoutError, ProduceRequestPayload
-)
+from kafka.errors import KafkaTimeoutError
 from kafka.protocol import create_message
+from kafka.structs import (
+    FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
+    ProduceRequestPayload)
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions
