@@ -31,21 +31,6 @@ def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
     assert sorted(hosts) == sorted(expected_hosts)
 
 
-@pytest.fixture
-def conn(mocker):
-    conn = mocker.patch('kafka.client_async.BrokerConnection')
-    conn.return_value = conn
-    conn.state = ConnectionStates.CONNECTED
-    conn.send.return_value = Future().success(
-        MetadataResponse[0](
-            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
-            []))  # topics
-    conn.blacked_out.return_value = False
-    conn.connect.side_effect = lambda: conn.state
-    conn.connected = lambda: conn.connect() is ConnectionStates.CONNECTED
-    return conn
-
-
 def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
