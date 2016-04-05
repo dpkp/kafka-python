@@ -53,6 +53,12 @@ class KafkaClient(object):
         'send_buffer_bytes': None,
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
+        'security_protocol': 'PLAINTEXT',
+        'ssl_context': None,
+        'ssl_check_hostname': True,
+        'ssl_cafile': None,
+        'ssl_certfile': None,
+        'ssl_keyfile': None,
     }
 
     def __init__(self, **configs):
@@ -90,6 +96,21 @@ class KafkaClient(object):
                 brokers or partitions. Default: 300000
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
+            security_protocol (str): Protocol used to communicate with brokers.
+                Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+            ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+                socket connections. If provided, all other ssl_* configurations
+                will be ignored. Default: None.
+            ssl_check_hostname (bool): flag to configure whether ssl handshake
+                should verify that the certificate matches the brokers hostname.
+                default: true.
+            ssl_cafile (str): optional filename of ca file to use in certificate
+                veriication. default: none.
+            ssl_certfile (str): optional filename of file in pem format containing
+                the client certificate, as well as any ca certificates needed to
+                establish the certificate's authenticity. default: none.
+            ssl_keyfile (str): optional filename containing the client private key.
+                default: none.
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:

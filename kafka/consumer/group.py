@@ -122,6 +122,21 @@ class KafkaConsumer(six.Iterator):
         consumer_timeout_ms (int): number of millisecond to throw a timeout
             exception to the consumer if no message is available for
             consumption. Default: -1 (dont throw exception)
+        security_protocol (str): Protocol used to communicate with brokers.
+            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+            socket connections. If provided, all other ssl_* configurations
+            will be ignored. Default: None.
+        ssl_check_hostname (bool): flag to configure whether ssl handshake
+            should verify that the certificate matches the brokers hostname.
+            default: true.
+        ssl_cafile (str): optional filename of ca file to use in certificate
+            veriication. default: none.
+        ssl_certfile (str): optional filename of file in pem format containing
+            the client certificate, as well as any ca certificates needed to
+            establish the certificate's authenticity. default: none.
+        ssl_keyfile (str): optional filename containing the client private key.
+            default: none.
         api_version (str): specify which kafka API version to use.
             0.9 enables full group coordination features; 0.8.2 enables
             kafka-storage offset commits; 0.8.1 enables zookeeper-storage
@@ -158,6 +173,12 @@ class KafkaConsumer(six.Iterator):
         'send_buffer_bytes': None,
         'receive_buffer_bytes': None,
         'consumer_timeout_ms': -1,
+        'security_protocol': 'PLAINTEXT',
+        'ssl_context': None,
+        'ssl_check_hostname': True,
+        'ssl_cafile': None,
+        'ssl_certfile': None,
+        'ssl_keyfile': None,
         'api_version': 'auto',
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
         #'metric_reporters': None,
