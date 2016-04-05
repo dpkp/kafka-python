@@ -511,13 +511,13 @@ class Fetcher(six.Iterator):
             future.success(offset)
         elif error_type in (Errors.NotLeaderForPartitionError,
                        Errors.UnknownTopicOrPartitionError):
-            log.warning("Attempt to fetch offsets for partition %s failed due"
-                        " to obsolete leadership information, retrying.",
-                        partition)
+            log.debug("Attempt to fetch offsets for partition %s failed due"
+                      " to obsolete leadership information, retrying.",
+                      partition)
             future.failure(error_type(partition))
         else:
-            log.error("Attempt to fetch offsets for partition %s failed due to:"
-                      " %s", partition, error_type)
+            log.warning("Attempt to fetch offsets for partition %s failed due to:"
+                        " %s", partition, error_type)
             future.failure(error_type(partition))
 
     def _create_fetch_requests(self):
