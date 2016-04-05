@@ -6,6 +6,7 @@ dist
 MANIFEST
 env
 servers/*/kafka-bin*
+servers/*/resources/ssl*
 .coverage*
 .noseids
 docs/_build

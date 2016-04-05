@@ -182,8 +182,8 @@ class ZookeeperFixture(Fixture):
 
 class KafkaFixture(Fixture):
     @classmethod
-    def instance(cls, broker_id, zk_host, zk_port,
-                 zk_chroot=None, port=None, replicas=1, partitions=2):
+    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None, port=None,
+                 transport='PLAINTEXT', replicas=1, partitions=2):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
         if "KAFKA_URI" in os.environ:
@@ -194,16 +194,21 @@ class KafkaFixture(Fixture):
             if port is None:
                 port = get_open_port()
             host = "127.0.0.1"
-            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot,
+            fixture = KafkaFixture(host, port, broker_id,
+                                   zk_host, zk_port, zk_chroot,
+                                   transport=transport,
                                    replicas=replicas, partitions=partitions)
             fixture.open()
         return fixture
 
-    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot, replicas=1, partitions=2):
+    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot,
+                 replicas=1, partitions=2, transport='PLAINTEXT'):
         self.host = host
         self.port = port
 
         self.broker_id = broker_id
+        self.transport = transport.upper()
+        self.ssl_dir = self.test_resource('ssl')
 
         self.zk_host = zk_host
         self.zk_port = zk_port
@@ -233,6 +238,7 @@ class KafkaFixture(Fixture):
         self.out("Running local instance...")
         log.info("  host       = %s", self.host)
         log.info("  port       = %s", self.port)
+        log.info("  transport  = %s", self.transport)
         log.info("  broker_id  = %s", self.broker_id)
         log.info("  zk_host    = %s", self.zk_host)
         log.info("  zk_port    = %s", self.zk_port)
