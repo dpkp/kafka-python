@@ -6,14 +6,11 @@ import logging
 import threading
 import time
 
-import six
-
 from .. import errors as Errors
-from ..structs import TopicPartition
 from ..protocol.message import Message, MessageSet
 from .buffer import MessageSetBuffer, SimpleBufferPool
 from .future import FutureRecordMetadata, FutureProduceResult
-
+from ..structs import TopicPartition
 
 
 log = logging.getLogger(__name__)
@@ -81,7 +78,10 @@ class RecordBatch(object):
         if ((self.records.is_full() and request_timeout_ms < since_append_ms)
             or (request_timeout_ms < (since_append_ms + linger_ms))):
             self.records.close()
-            self.done(-1, Errors.KafkaTimeoutError('Batch Expired'))
+            self.done(-1, Errors.KafkaTimeoutError(
+                "Batch containing %s record(s) expired due to timeout while"
+                " requesting metadata from brokers for %s", self.record_count,
+                self.topic_partition))
             return True
         return False
 

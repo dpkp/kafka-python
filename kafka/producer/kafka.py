@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import atexit
 import copy
 import logging
-import signal
 import threading
 import time
 

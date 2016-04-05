@@ -1,8 +1,6 @@
 import copy
 import time
 
-import kafka.errors as Errors
-
 
 class Heartbeat(object):
     DEFAULT_CONFIG = {

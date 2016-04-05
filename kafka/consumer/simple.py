@@ -26,7 +26,7 @@ from .base import (
 )
 from ..common import (
     FetchRequestPayload, KafkaError, OffsetRequestPayload,
-    ConsumerFetchSizeTooSmall, ConsumerNoMoreData,
+    ConsumerFetchSizeTooSmall,
     UnknownTopicOrPartitionError, NotLeaderForPartitionError,
     OffsetOutOfRangeError, FailedPayloadsError, check_error
 )

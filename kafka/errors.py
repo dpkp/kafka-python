@@ -46,6 +46,10 @@ class UnrecognizedBrokerVersion(KafkaError):
     pass
 
 
+class CommitFailedError(KafkaError):
+    pass
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None
