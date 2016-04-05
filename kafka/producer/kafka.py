@@ -162,9 +162,11 @@ class KafkaProducer(object):
             will block up to max_block_ms, raising an exception on timeout.
             In the current implementation, this setting is an approximation.
             Default: 33554432 (32MB)
-        max_block_ms (int): Number of milliseconds to block during send()
-            when attempting to allocate additional memory before raising an
-            exception. Default: 60000.
+        max_block_ms (int): Number of milliseconds to block during send() and
+            partitions_for(). These methods can be blocked either because the
+            buffer is full or metadata unavailable. Blocking in the
+            user-supplied serializers or partitioner will not be counted against
+            this timeout. Default: 60000.
         max_request_size (int): The maximum size of a request. This is also
             effectively a cap on the maximum record size. Note that the server
             has its own cap on record size which may be different from this.
