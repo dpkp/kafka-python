@@ -6,14 +6,11 @@ import logging
 import threading
 import time
 
-import six
-
 from .. import errors as Errors
-from ..structs import TopicPartition
 from ..protocol.message import Message, MessageSet
 from .buffer import MessageSetBuffer, SimpleBufferPool
 from .future import FutureRecordMetadata, FutureProduceResult
-
+from ..structs import TopicPartition
 
 
 log = logging.getLogger(__name__)
