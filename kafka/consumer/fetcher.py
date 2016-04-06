@@ -537,15 +537,24 @@ class Fetcher(six.Iterator):
         # which can be passed to FetchRequest() via .items()
         fetchable = collections.defaultdict(lambda: collections.defaultdict(list))
 
+        # avoid re-fetching pending offsets
+        pending = set()
+        for fetch_offset, tp, _ in self._records:
+            pending.add((tp, fetch_offset))
+
         for partition in self._subscriptions.fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
+            position = self._subscriptions.assignment[partition].position
+
+            # fetch if there is a leader, no in-flight requests, and no _records
             if node_id is None or node_id == -1:
                 log.debug("No leader found for partition %s."
                           " Requesting metadata update", partition)
                 self._client.cluster.request_update()
-            elif self._client.in_flight_request_count(node_id) == 0:
-                # fetch if there is a leader and no in-flight requests
-                position = self._subscriptions.assignment[partition].position
+
+            elif ((partition, position) not in pending and
+                  self._client.in_flight_request_count(node_id) == 0):
+
                 partition_info = (
                     partition.partition,
                     position,
