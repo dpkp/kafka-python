@@ -146,7 +146,7 @@ def conn(mocker):
     conn.return_value = conn
     conn.state = ConnectionStates.CONNECTED
     conn.send.return_value = Future().success(
-        MetadataResponse(
+        MetadataResponse[0](
             [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
             []))  # topics
     return conn

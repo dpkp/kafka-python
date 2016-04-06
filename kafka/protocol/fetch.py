@@ -3,7 +3,9 @@ from .struct import Struct
 from .types import Array, Int16, Int32, Int64, Schema, String
 
 
-class FetchResponse(Struct):
+class FetchResponse_v0(Struct):
+    API_KEY = 1
+    API_VERSION = 0
     SCHEMA = Schema(
         ('topics', Array(
             ('topics', String('utf-8')),
@@ -15,10 +17,10 @@ class FetchResponse(Struct):
     )
 
 
-class FetchRequest(Struct):
+class FetchRequest_v0(Struct):
     API_KEY = 1
     API_VERSION = 0
-    RESPONSE_TYPE = FetchResponse
+    RESPONSE_TYPE = FetchResponse_v0
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -30,3 +32,7 @@ class FetchRequest(Struct):
                 ('offset', Int64),
                 ('max_bytes', Int32)))))
     )
+
+
+FetchRequest = [FetchRequest_v0]
+FetchResponse = [FetchResponse_v0]

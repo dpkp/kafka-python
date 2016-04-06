@@ -2,7 +2,9 @@ from .struct import Struct
 from .types import Array, Bytes, Int16, Schema, String
 
 
-class ListGroupsResponse(Struct):
+class ListGroupsResponse_v0(Struct):
+    API_KEY = 16
+    API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
         ('groups', Array(
@@ -11,14 +13,20 @@ class ListGroupsResponse(Struct):
     )
 
 
-class ListGroupsRequest(Struct):
+class ListGroupsRequest_v0(Struct):
     API_KEY = 16
     API_VERSION = 0
-    RESPONSE_TYPE = ListGroupsResponse
+    RESPONSE_TYPE = ListGroupsResponse_v0
     SCHEMA = Schema()
 
 
-class DescribeGroupsResponse(Struct):
+ListGroupsRequest = [ListGroupsRequest_v0]
+ListGroupsResponse = [ListGroupsResponse_v0]
+
+
+class DescribeGroupsResponse_v0(Struct):
+    API_KEY = 15
+    API_VERSION = 0
     SCHEMA = Schema(
         ('groups', Array(
             ('error_code', Int16),
@@ -35,10 +43,14 @@ class DescribeGroupsResponse(Struct):
     )
 
 
-class DescribeGroupsRequest(Struct):
+class DescribeGroupsRequest_v0(Struct):
     API_KEY = 15
     API_VERSION = 0
-    RESPONSE_TYPE = DescribeGroupsResponse
+    RESPONSE_TYPE = DescribeGroupsResponse_v0
     SCHEMA = Schema(
         ('groups', Array(String('utf-8')))
     )
+
+
+DescribeGroupsRequest = [DescribeGroupsRequest_v0]
+DescribeGroupsResponse = [DescribeGroupsResponse_v0]

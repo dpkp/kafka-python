@@ -321,7 +321,7 @@ class BrokerConnection(object):
 
         # 0.8.2 quirk
         if (self.config['api_version'] == (0, 8, 2) and
-            ifr.response_type is GroupCoordinatorResponse and
+            ifr.response_type is GroupCoordinatorResponse[0] and
             ifr.correlation_id != 0 and
             recv_correlation_id == 0):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'

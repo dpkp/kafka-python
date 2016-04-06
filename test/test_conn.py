@@ -111,7 +111,7 @@ def test_send_max_ifr(conn):
 def test_send_no_response(socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = MetadataRequest([])
+    req = MetadataRequest[0]([])
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
@@ -128,7 +128,7 @@ def test_send_no_response(socket, conn):
 def test_send_response(socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = MetadataRequest([])
+    req = MetadataRequest[0]([])
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
@@ -144,7 +144,7 @@ def test_send_response(socket, conn):
 def test_send_error(socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = MetadataRequest([])
+    req = MetadataRequest[0]([])
     header = RequestHeader(req, client_id=conn.config['client_id'])
     try:
         error = ConnectionError

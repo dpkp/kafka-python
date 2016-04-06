@@ -34,17 +34,19 @@ def fetcher(client, subscription_state):
 
 def test_init_fetches(fetcher, mocker):
     fetch_requests = [
-        FetchRequest(-1, fetcher.config['fetch_max_wait_ms'],
-                     fetcher.config['fetch_min_bytes'],
-                     [('foobar', [
-                         (0, 0, fetcher.config['max_partition_fetch_bytes']),
-                         (1, 0, fetcher.config['max_partition_fetch_bytes']),
-                     ])]),
-        FetchRequest(-1, fetcher.config['fetch_max_wait_ms'],
-                     fetcher.config['fetch_min_bytes'],
-                     [('foobar', [
-                         (2, 0, fetcher.config['max_partition_fetch_bytes']),
-                     ])])
+        FetchRequest[0](
+            -1, fetcher.config['fetch_max_wait_ms'],
+            fetcher.config['fetch_min_bytes'],
+            [('foobar', [
+                (0, 0, fetcher.config['max_partition_fetch_bytes']),
+                (1, 0, fetcher.config['max_partition_fetch_bytes']),
+            ])]),
+        FetchRequest[0](
+            -1, fetcher.config['fetch_max_wait_ms'],
+            fetcher.config['fetch_min_bytes'],
+            [('foobar', [
+                (2, 0, fetcher.config['max_partition_fetch_bytes']),
+            ])])
     ]
 
     mocker.patch.object(fetcher, '_create_fetch_requests',

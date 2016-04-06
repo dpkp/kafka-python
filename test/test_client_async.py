@@ -37,7 +37,7 @@ def conn(mocker):
     conn.return_value = conn
     conn.state = ConnectionStates.CONNECTED
     conn.send.return_value = Future().success(
-        MetadataResponse(
+        MetadataResponse[0](
             [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
             []))  # topics
     conn.blacked_out.return_value = False
@@ -51,7 +51,7 @@ def test_bootstrap_success(conn):
     cli = KafkaClient()
     conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
     conn.connect.assert_called_with()
-    conn.send.assert_called_once_with(MetadataRequest([]))
+    conn.send.assert_called_once_with(MetadataRequest[0]([]))
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12),
                                          BrokerMetadata(1, 'bar', 34)])
@@ -230,12 +230,12 @@ def test_send(conn):
     conn.state = ConnectionStates.CONNECTED
     cli._maybe_connect(0)
     # ProduceRequest w/ 0 required_acks -> no response
-    request = ProduceRequest(0, 0, [])
+    request = ProduceRequest[0](0, 0, [])
     ret = cli.send(0, request)
     assert conn.send.called_with(request, expect_response=False)
     assert isinstance(ret, Future)
 
-    request = MetadataRequest([])
+    request = MetadataRequest[0]([])
     cli.send(0, request)
     assert conn.send.called_with(request, expect_response=True)
 
