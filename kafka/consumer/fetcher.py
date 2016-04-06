@@ -472,7 +472,7 @@ class Fetcher(six.Iterator):
                       " wait for metadata refresh", partition)
             return Future().failure(Errors.LeaderNotAvailableError(partition))
 
-        request = OffsetRequest(
+        request = OffsetRequest[0](
             -1, [(partition.topic, [(partition.partition, timestamp, 1)])]
         )
         # Client returns a future that only fails on network issues
@@ -552,7 +552,7 @@ class Fetcher(six.Iterator):
 
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
-            requests[node_id] = FetchRequest(
+            requests[node_id] = FetchRequest[0](
                 -1, # replica_id
                 self.config['fetch_max_wait_ms'],
                 self.config['fetch_min_bytes'],

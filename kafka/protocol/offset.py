@@ -1,13 +1,16 @@
 from .struct import Struct
 from .types import Array, Int16, Int32, Int64, Schema, String
 
+
 class OffsetResetStrategy(object):
     LATEST = -1
     EARLIEST = -2
     NONE = 0
 
 
-class OffsetResponse(Struct):
+class OffsetResponse_v0(Struct):
+    API_KEY = 2
+    API_VERSION = 0
     SCHEMA = Schema(
         ('topics', Array(
             ('topic', String('utf-8')),
@@ -18,10 +21,10 @@ class OffsetResponse(Struct):
     )
 
 
-class OffsetRequest(Struct):
+class OffsetRequest_v0(Struct):
     API_KEY = 2
     API_VERSION = 0
-    RESPONSE_TYPE = OffsetResponse
+    RESPONSE_TYPE = OffsetResponse_v0
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -34,3 +37,7 @@ class OffsetRequest(Struct):
     DEFAULTS = {
         'replica_id': -1
     }
+
+
+OffsetRequest = [OffsetRequest_v0]
+OffsetResponse = [OffsetResponse_v0]

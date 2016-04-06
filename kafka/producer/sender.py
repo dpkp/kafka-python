@@ -12,8 +12,6 @@ from ..structs import TopicPartition
 from ..version import __version__
 from ..protocol.produce import ProduceRequest
 
-
-
 log = logging.getLogger(__name__)
 
 
@@ -258,7 +256,7 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        return ProduceRequest(
+        return ProduceRequest[0](
             required_acks=acks,
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))

@@ -2,7 +2,9 @@ from .struct import Struct
 from .types import Array, Int16, Int32, Schema, String
 
 
-class MetadataResponse(Struct):
+class MetadataResponse_v0(Struct):
+    API_KEY = 3
+    API_VERSION = 0
     SCHEMA = Schema(
         ('brokers', Array(
             ('node_id', Int32),
@@ -20,10 +22,14 @@ class MetadataResponse(Struct):
     )
 
 
-class MetadataRequest(Struct):
+class MetadataRequest_v0(Struct):
     API_KEY = 3
     API_VERSION = 0
-    RESPONSE_TYPE = MetadataResponse
+    RESPONSE_TYPE = MetadataResponse_v0
     SCHEMA = Schema(
         ('topics', Array(String('utf-8')))
     )
+
+
+MetadataRequest = [MetadataRequest_v0]
+MetadataResponse = [MetadataResponse_v0]
