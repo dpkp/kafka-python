@@ -202,7 +202,7 @@ class BaseCoordinator(object):
                     continue
                 elif future.retriable():
                     metadata_update = self._client.cluster.request_update()
-                    self._client.poll(future=metadata_update, sleep=True)
+                    self._client.poll(future=metadata_update)
                 else:
                     raise future.exception # pylint: disable-msg=raising-bad-type
 

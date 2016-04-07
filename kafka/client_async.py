@@ -313,7 +313,7 @@ class KafkaClient(object):
 
         return self._conns[node_id].send(request, expect_response=expect_response)
 
-    def poll(self, timeout_ms=None, future=None, sleep=False):
+    def poll(self, timeout_ms=None, future=None, sleep=True):
         """Try to read and write to sockets.
 
         This method will also attempt to complete node connections, refresh

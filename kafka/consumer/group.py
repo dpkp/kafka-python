@@ -743,7 +743,7 @@ class KafkaConsumer(six.Iterator):
             poll_ms = 1000 * (self._consumer_timeout - time.time())
             if not self._fetcher.in_flight_fetches():
                 poll_ms = 0
-            self._client.poll(poll_ms)
+            self._client.poll(timeout_ms=poll_ms, sleep=True)
 
             # We need to make sure we at least keep up with scheduled tasks,
             # like heartbeats, auto-commits, and metadata refreshes
