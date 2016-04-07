@@ -59,7 +59,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> msg = next(consumer)
 
 >>> # Deserialize msgpack-encoded values
->>> consumer = KafkaConsumer(value_deserializer=msgpack.dumps)
+>>> consumer = KafkaConsumer(value_deserializer=msgpack.loads)
 >>> consumer.subscribe(['msgpackfoo'])
 >>> for msg in consumer:
 ...     assert isinstance(msg.value, dict)
@@ -89,7 +89,7 @@ for more details.
 
 >>> # Serialize json messages
 >>> import json
->>> producer = KafkaProducer(value_serializer=json.loads)
+>>> producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 >>> producer.send('fizzbuzz', {'foo': 'bar'})
 
 >>> # Serialize string keys
