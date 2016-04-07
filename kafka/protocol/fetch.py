@@ -17,6 +17,21 @@ class FetchResponse_v0(Struct):
     )
 
 
+class FetchResponse_v1(Struct):
+    API_KEY = 1
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('topics', Array(
+            ('topics', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('error_code', Int16),
+                ('highwater_offset', Int64),
+                ('message_set', MessageSet)))))
+    )
+
+
 class FetchRequest_v0(Struct):
     API_KEY = 1
     API_VERSION = 0
@@ -34,5 +49,12 @@ class FetchRequest_v0(Struct):
     )
 
 
-FetchRequest = [FetchRequest_v0]
-FetchResponse = [FetchResponse_v0]
+class FetchRequest_v1(Struct):
+    API_KEY = 1
+    API_VERSION = 1
+    RESPONSE_TYPE = FetchResponse_v1
+    SCHEMA = FetchRequest_v0.SCHEMA
+
+
+FetchRequest = [FetchRequest_v0, FetchRequest_v1]
+FetchResponse = [FetchResponse_v0, FetchResponse_v1]

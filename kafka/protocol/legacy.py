@@ -336,11 +336,7 @@ class KafkaProtocol(object):
             payloads: list of OffsetFetchRequestPayload
             from_kafka: bool, default False, set True for Kafka-committed offsets
         """
-        if from_kafka:
-            version = 1
-        else:
-            version = 0
-
+        version = 1 if from_kafka else 0
         return kafka.protocol.commit.OffsetFetchRequest[version](
             consumer_group=group,
             topics=[(

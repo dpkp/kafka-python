@@ -27,6 +27,7 @@ class Sender(threading.Thread):
         'retries': 0,
         'request_timeout_ms': 30000,
         'client_id': 'kafka-python-' + __version__,
+        'api_version': (0, 8, 0),
     }
 
     def __init__(self, client, metadata, accumulator, **configs):
@@ -232,7 +233,7 @@ class Sender(threading.Thread):
             collated: {node_id: [RecordBatch]}
 
         Returns:
-            dict: {node_id: ProduceRequest}
+            dict: {node_id: ProduceRequest} (version depends on api_version)
         """
         requests = {}
         for node_id, batches in six.iteritems(collated):
@@ -245,7 +246,7 @@ class Sender(threading.Thread):
         """Create a produce request from the given record batches.
 
         Returns:
-            ProduceRequest
+            ProduceRequest (version depends on api_version)
         """
         produce_records_by_partition = collections.defaultdict(dict)
         for batch in batches:
@@ -256,7 +257,8 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        return ProduceRequest[0](
+        version = 1 if self.config['api_version'] >= (0, 9) else 0
+        return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
