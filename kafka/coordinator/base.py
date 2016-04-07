@@ -193,12 +193,6 @@ class BaseCoordinator(object):
         """
         while self.coordinator_unknown():
 
-            # Dont look for a new coordinator node if we are just waiting
-            # for connection to finish
-            if self.coordinator_id is not None:
-                self._client.poll()
-                continue
-
             future = self._send_group_coordinator_request()
             self._client.poll(future=future)
 
