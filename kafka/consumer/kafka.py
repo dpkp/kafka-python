@@ -38,7 +38,7 @@ DEFAULT_CONSUMER_CONFIG = {
     'auto_commit_interval_messages': None,
     'consumer_timeout_ms': -1,
     'metrics_responder': None,
-    'dual_commit': False,
+    'offset_storage': False,
 
     # Currently unused
     'socket_receive_buffer_bytes': 64 * 1024,
@@ -571,7 +571,7 @@ class KafkaConsumer(object):
             resps = self._client.send_offset_commit_request(
                 kafka_bytestring(self._config['group_id']), commits,
                 fail_on_error=False,
-                dual_commit=self._config['dual_commit'],
+                offset_storage=self._config['offset_storage'],
             )
 
             for r in resps:

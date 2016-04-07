@@ -668,13 +668,17 @@ class KafkaClient(object):
 
     @time_metric('offset_commit_request_timer')
     def send_offset_commit_request(self, group, payloads=[],
-                                   fail_on_error=True, callback=None, dual_commit=False):
-        encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
-                                    group=group)
+                                   fail_on_error=True, callback=None, offset_storage='zookeeper'):
+        resps = []
         decoder = KafkaProtocol.decode_offset_commit_response
-        resps = self._send_broker_aware_request(payloads, encoder, decoder)
+        if offset_storage in ['zookeeper', 'dual']:
+            encoder = functools.partial(
+                KafkaProtocol.encode_offset_commit_request,
+                group=group,
+            )
+            resps += self._send_broker_aware_request(payloads, encoder, decoder)
 
-        if dual_commit:
+        if offset_storage in ['kafka', 'dual']:
             encoder = functools.partial(
                 KafkaProtocol.encode_offset_commit_request_kafka,
                 group=group,

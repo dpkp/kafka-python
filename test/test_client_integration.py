@@ -110,7 +110,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         (resp_zk, resp_kafka,) = self.client.send_offset_commit_request(
             b"group",
             [req],
-            dual_commit=True,
+            offset_storage='dual',
         )
         self.assertEqual(resp_zk.error, 0)
         self.assertEqual(resp_kafka.error, 0)
