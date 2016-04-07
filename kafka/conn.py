@@ -77,6 +77,7 @@ class BrokerConnection(object):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
             self.close()
+            log.debug('%s: creating new socket', str(self))
             self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
             if self.config['receive_buffer_bytes'] is not None:
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
@@ -85,22 +86,8 @@ class BrokerConnection(object):
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
                                       self.config['send_buffer_bytes'])
             self._sock.setblocking(False)
-            try:
-                ret = self._sock.connect_ex((self.host, self.port))
-            except socket.error as ret:
-                pass
+            self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
-
-            if not ret or ret == errno.EISCONN:
-                self.state = ConnectionStates.CONNECTED
-            # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
-            elif ret in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
-                self.state = ConnectionStates.CONNECTING
-            else:
-                log.error('Connect attempt to %s returned error %s.'
-                          ' Disconnecting.', self, ret)
-                self.close()
-                self.last_failure = time.time()
 
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
@@ -110,17 +97,27 @@ class BrokerConnection(object):
                 ret = self._sock.connect_ex((self.host, self.port))
             except socket.error as ret:
                 pass
+
+            # Connection succeeded
             if not ret or ret == errno.EISCONN:
+                log.debug('%s: established TCP connection', str(self))
                 self.state = ConnectionStates.CONNECTED
+
+            # Connection failed
+            # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
                 self.close()
-                self.last_failure = time.time()
+
+            # Connection timedout
             elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
                 self.close() # error=TimeoutError ?
-                self.last_failure = time.time()
+
+            # Needs retry
+            else:
+                pass
 
         return self.state
 
@@ -155,6 +152,7 @@ class BrokerConnection(object):
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
+        self.last_failure = time.time()
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)

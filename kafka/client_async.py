@@ -118,7 +118,7 @@ class KafkaClient(object):
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
             bootstrap = BrokerConnection(host, port, afi, **self.config)
             bootstrap.connect()
-            while bootstrap.state is ConnectionStates.CONNECTING:
+            while bootstrap.connecting():
                 bootstrap.connect()
             if bootstrap.state is not ConnectionStates.CONNECTED:
                 bootstrap.close()
@@ -164,7 +164,7 @@ class KafkaClient(object):
             self._conns[node_id] = BrokerConnection(host, broker.port, afi,
                                                     **self.config)
         state = self._conns[node_id].connect()
-        if state is ConnectionStates.CONNECTING:
+        if self._conns[node_id].connecting():
             self._connecting.add(node_id)
 
         # Whether CONNECTED or DISCONNECTED, we need to remove from connecting
@@ -251,7 +251,7 @@ class KafkaClient(object):
         time_waited_ms = time.time() - (conn.last_attempt or 0)
         if conn.state is ConnectionStates.DISCONNECTED:
             return max(self.config['reconnect_backoff_ms'] - time_waited_ms, 0)
-        elif conn.state is ConnectionStates.CONNECTING:
+        elif conn.connecting():
             return 0
         else:
             return 999999999

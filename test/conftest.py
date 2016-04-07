@@ -31,3 +31,22 @@ def kafka_broker(version, zookeeper, request):
         k.close()
     request.addfinalizer(fin)
     return k
+
+
+@pytest.fixture
+def conn(mocker):
+    from kafka.conn import ConnectionStates
+    from kafka.future import Future
+    from kafka.protocol.metadata import MetadataResponse
+    conn = mocker.patch('kafka.client_async.BrokerConnection')
+    conn.return_value = conn
+    conn.state = ConnectionStates.CONNECTED
+    conn.send.return_value = Future().success(
+        MetadataResponse[0](
+            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
+            []))  # topics
+    conn.blacked_out.return_value = False
+    conn.connect.side_effect = lambda: conn.state
+    conn.connecting = lambda: conn.connect() is ConnectionStates.CONNECTING
+    conn.connected = lambda: conn.connect() is ConnectionStates.CONNECTED
+    return conn

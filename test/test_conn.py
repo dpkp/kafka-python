@@ -24,7 +24,7 @@ def socket(mocker):
 @pytest.fixture
 def conn(socket):
     from socket import AF_INET
-    conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    conn = BrokerConnection('localhost', 9092, AF_INET)
     return conn
 
 

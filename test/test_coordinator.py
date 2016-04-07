@@ -12,7 +12,6 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
     ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment)
-from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.commit import (
@@ -20,18 +19,6 @@ from kafka.protocol.commit import (
     OffsetFetchRequest, OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
 from kafka.util import WeakMethod
-
-
-@pytest.fixture
-def conn(mocker):
-    conn = mocker.patch('kafka.client_async.BrokerConnection')
-    conn.return_value = conn
-    conn.state = ConnectionStates.CONNECTED
-    conn.send.return_value = Future().success(
-        MetadataResponse[0](
-            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
-            []))  # topics
-    return conn
 
 
 @pytest.fixture

@@ -9,8 +9,6 @@ import six
 from kafka import SimpleClient
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
-from kafka.future import Future
-from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import TopicPartition
 
 from test.conftest import version
@@ -138,18 +136,6 @@ def test_paused(kafka_broker, topic):
 
     consumer.unsubscribe()
     assert set() == consumer.paused()
-
-
-@pytest.fixture
-def conn(mocker):
-    conn = mocker.patch('kafka.client_async.BrokerConnection')
-    conn.return_value = conn
-    conn.state = ConnectionStates.CONNECTED
-    conn.send.return_value = Future().success(
-        MetadataResponse[0](
-            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
-            []))  # topics
-    return conn
 
 
 def test_heartbeat_timeout(conn, mocker):
