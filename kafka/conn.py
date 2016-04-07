@@ -109,13 +109,11 @@ class BrokerConnection(object):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
                 self.close()
-                self.last_failure = time.time()
 
             # Connection timedout
             elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
                 self.close() # error=TimeoutError ?
-                self.last_failure = time.time()
 
             # Needs retry
             else:
@@ -154,6 +152,7 @@ class BrokerConnection(object):
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
+        self.last_failure = time.time()
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)
