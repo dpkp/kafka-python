@@ -4,7 +4,6 @@ import errno
 import logging
 import io
 from random import shuffle
-from select import select
 import socket
 import struct
 from threading import local
@@ -217,7 +216,7 @@ class BrokerConnection(object):
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
-    def recv(self, timeout=0):
+    def recv(self):
         """Non-blocking network receive.
 
         Return response if available
@@ -243,10 +242,6 @@ class BrokerConnection(object):
                 self.config['request_timeout_ms']))
             return None
 
-        readable, _, _ = select([self._sock], [], [], timeout)
-        if not readable:
-            return None
-
         # Not receiving is the state of reading the payload header
         if not self._receiving:
             try:
@@ -255,8 +250,6 @@ class BrokerConnection(object):
                 self._rbuffer.write(self._sock.recv(4 - self._rbuffer.tell()))
             except ConnectionError as e:
                 if six.PY2 and e.errno == errno.EWOULDBLOCK:
-                    # This shouldn't happen after selecting above
-                    # but just in case
                     return None
                 log.exception('%s: Error receiving 4-byte payload header -'
                               ' closing socket', self)
