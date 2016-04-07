@@ -85,21 +85,20 @@ def test_maybe_connect(conn):
 
     assert 0 not in cli._conns
     conn.state = ConnectionStates.DISCONNECTED
-    conn.connect.side_effect = lambda: ConnectionStates.CONNECTING
+    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTING)
     assert cli._maybe_connect(0) is False
     assert cli._conns[0] is conn
     assert 0 in cli._connecting
 
-    conn.state = ConnectionStates.CONNECTING
-    conn.connect.side_effect = lambda: ConnectionStates.CONNECTED
+    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTED)
     assert cli._maybe_connect(0) is True
     assert 0 not in cli._connecting
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
-    cli._connecting.add(0)
     conn.state = ConnectionStates.CONNECTING
-    conn.connect.side_effect = lambda: ConnectionStates.DISCONNECTED
+    cli._connecting.add(0)
+    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.DISCONNECTED)
     assert cli._maybe_connect(0) is False
     assert 0 not in cli._connecting
     assert cli.cluster._need_update is True
@@ -155,7 +154,7 @@ def test_ready(conn):
     # connecting node connects
     cli._connecting.add(0)
     conn.state = ConnectionStates.CONNECTING
-    conn.connect.side_effect = lambda: ConnectionStates.CONNECTED
+    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTED)
     cli.ready(0)
     assert 0 not in cli._connecting
     assert cli._conns[0].connect.called_with()

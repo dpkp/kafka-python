@@ -46,7 +46,12 @@ def conn(mocker):
             [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
             []))  # topics
     conn.blacked_out.return_value = False
+    def _set_conn_state(state):
+        conn.state = state
+        return state
+    conn._set_conn_state = _set_conn_state
     conn.connect.side_effect = lambda: conn.state
-    conn.connecting = lambda: conn.connect() is ConnectionStates.CONNECTING
-    conn.connected = lambda: conn.connect() is ConnectionStates.CONNECTED
+    conn.connecting = lambda: conn.state is ConnectionStates.CONNECTING
+    conn.connected = lambda: conn.state is ConnectionStates.CONNECTED
+    conn.disconnected = lambda: conn.state is ConnectionStates.DISCONNECTED
     return conn
