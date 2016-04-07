@@ -668,7 +668,7 @@ class KafkaClient(object):
 
     @time_metric('offset_commit_request_timer')
     def send_offset_commit_request(self, group, payloads=[],
-                                   fail_on_error=True, callback=None, dual_commit=True):
+                                   fail_on_error=True, callback=None, dual_commit=False):
         encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
                                     group=group)
         decoder = KafkaProtocol.decode_offset_commit_response

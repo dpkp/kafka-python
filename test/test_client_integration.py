@@ -1,8 +1,9 @@
 import os
+import time
 
 from kafka.common import (
     FetchRequest, OffsetCommitRequest, OffsetFetchRequest,
-    KafkaTimeoutError, ProduceRequest
+    KafkaTimeoutError, ProduceRequest, ConsumerCoordinatorNotAvailableCode
 )
 from kafka.protocol import create_message
 
@@ -83,7 +84,7 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     #   Offset Tests   #
     ####################
 
-    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1")
+    @kafka_versions("0.8.1", "0.8.1.1", "0.8.2.1", "0.9.0.0")
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
         (resp,) = self.client.send_offset_commit_request(b"group", [req])
@@ -94,3 +95,34 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.offset, 42)
         self.assertEqual(resp.metadata, b"")  # Metadata isn't stored for now
+
+    @kafka_versions("0.9.0.0")
+    def test_commit_fetch_offsets_dual(self):
+        for _ in range(10):
+            try:
+                self.client._get_coordinator_for_group(b"group")
+            except ConsumerCoordinatorNotAvailableCode:
+                time.sleep(.5)
+                continue
+            break
+
+        req = OffsetCommitRequest(self.bytes_topic, 0, 42, b"metadata")
+        (resp_zk, resp_kafka,) = self.client.send_offset_commit_request(
+            b"group",
+            [req],
+            dual_commit=True,
+        )
+        self.assertEqual(resp_zk.error, 0)
+        self.assertEqual(resp_kafka.error, 0)
+
+        req = OffsetFetchRequest(self.bytes_topic, 0)
+        (resp,) = self.client.send_offset_fetch_request(b"group", [req])
+        self.assertEqual(resp.error, 0)
+        self.assertEqual(resp.offset, 42)
+        self.assertEqual(resp.metadata, b"")  # Metadata isn't stored for now
+
+        (resp,) = self.client.send_offset_fetch_request_kafka(b"group", [req])
+        self.assertEqual(resp.error, 0)
+        self.assertEqual(resp.offset, 42)
+        # Metadata is stored in kafka
+        self.assertEqual(resp.metadata, b"metadata")
