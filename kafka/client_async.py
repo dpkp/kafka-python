@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import copy
+import functools
 import heapq
 import itertools
 import logging
@@ -152,6 +153,22 @@ class KafkaClient(object):
         conn = self._conns[node_id]
         return conn.state is ConnectionStates.DISCONNECTED and not conn.blacked_out()
 
+    def _conn_state_change(self, node_id, conn):
+        if conn.connecting():
+            self._connecting.add(node_id)
+
+        elif conn.connected():
+            log.debug("Node %s connected", node_id)
+            if node_id in self._connecting:
+                self._connecting.remove(node_id)
+
+        # Connection failures imply that our metadata is stale, so let's refresh
+        elif conn.state is ConnectionStates.DISCONNECTING:
+            log.warning("Node %s connect failed -- refreshing metadata", node_id)
+            if node_id in self._connecting:
+                self._connecting.remove(node_id)
+            self.cluster.request_update()
+
     def _maybe_connect(self, node_id):
         """Idempotent non-blocking connection attempt to the given node id."""
         if node_id not in self._conns:
@@ -160,32 +177,15 @@ class KafkaClient(object):
 
             log.debug("Initiating connection to node %s at %s:%s",
                       node_id, broker.host, broker.port)
-            
             host, port, afi = get_ip_port_afi(broker.host)
+            cb = functools.partial(self._conn_state_change, node_id)
             self._conns[node_id] = BrokerConnection(host, broker.port, afi,
+                                                    state_change_callback=cb,
                                                     **self.config)
         conn = self._conns[node_id]
         if conn.connected():
             return True
-
         conn.connect()
-
-        if conn.connecting():
-            if node_id not in self._connecting:
-                self._connecting.add(node_id)
-
-        # Whether CONNECTED or DISCONNECTED, we need to remove from connecting
-        elif node_id in self._connecting:
-            self._connecting.remove(node_id)
-
-        if conn.connected():
-            log.debug("Node %s connected", node_id)
-
-        # Connection failures imply that our metadata is stale, so let's refresh
-        elif conn.disconnected():
-            log.warning("Node %s connect failed -- refreshing metadata", node_id)
-            self.cluster.request_update()
-
         return conn.connected()
 
     def ready(self, node_id):

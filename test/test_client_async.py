@@ -1,5 +1,5 @@
-import time
 import socket
+import time
 
 import pytest
 
@@ -83,25 +83,39 @@ def test_maybe_connect(conn):
     else:
         assert False, 'Exception not raised'
 
+    # New node_id creates a conn object
     assert 0 not in cli._conns
     conn.state = ConnectionStates.DISCONNECTED
     conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTING)
     assert cli._maybe_connect(0) is False
     assert cli._conns[0] is conn
-    assert 0 in cli._connecting
 
-    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTED)
-    assert cli._maybe_connect(0) is True
-    assert 0 not in cli._connecting
+
+def test_conn_state_change(mocker, conn):
+    cli = KafkaClient()
+
+    node_id = 0
+    conn.state = ConnectionStates.CONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id in cli._connecting
+
+    conn.state = ConnectionStates.CONNECTED
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
-    conn.state = ConnectionStates.CONNECTING
-    cli._connecting.add(0)
-    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.DISCONNECTED)
-    assert cli._maybe_connect(0) is False
-    assert 0 not in cli._connecting
+    conn.state = ConnectionStates.DISCONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
     assert cli.cluster._need_update is True
+
+    conn.state = ConnectionStates.CONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id in cli._connecting
+    conn.state = ConnectionStates.DISCONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
 
 
 def test_ready(mocker, conn):
