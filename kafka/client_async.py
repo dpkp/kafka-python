@@ -119,7 +119,10 @@ class KafkaClient(object):
         metadata_request = MetadataRequest[0]([])
         for host, port, afi in hosts:
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
-            bootstrap = BrokerConnection(host, port, afi, **self.config)
+            cb = functools.partial(self._conn_state_change, 'bootstrap')
+            bootstrap = BrokerConnection(host, port, afi,
+                                         state_change_callback=cb,
+                                         **self.config)
             bootstrap.connect()
             while bootstrap.connecting():
                 bootstrap.connect()

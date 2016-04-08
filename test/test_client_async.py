@@ -34,7 +34,10 @@ def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
 def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_INET)
+    kwargs.pop('state_change_callback')
+    assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest[0]([]))
     assert cli._bootstrap_fails == 0
@@ -44,7 +47,10 @@ def test_bootstrap_success(conn):
 def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_INET)
+    kwargs.pop('state_change_callback')
+    assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.close.assert_called_with()
     assert cli._bootstrap_fails == 1
