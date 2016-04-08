@@ -398,14 +398,17 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         partition = self.client.get_partition_ids_for_topic(self.topic)[0]
         start_offset = self.current_offset(self.topic, partition)
 
-        producer = KeyedProducer(self.client, partitioner = RoundRobinPartitioner, async=True)
+        producer = KeyedProducer(self.client,
+                                 partitioner=RoundRobinPartitioner,
+                                 async=True,
+                                 batch_send_every_t=1)
 
         resp = producer.send_messages(self.topic, self.key("key1"), self.msg("one"))
         self.assertEqual(len(resp), 0)
 
         # wait for the server to report a new highwatermark
         while self.current_offset(self.topic, partition) == start_offset:
-          time.sleep(0.1)
+            time.sleep(0.1)
 
         self.assert_fetch_offset(partition, start_offset, [ self.msg("one") ])
 
