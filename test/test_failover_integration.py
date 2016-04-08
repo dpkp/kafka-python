@@ -214,7 +214,7 @@ class TestFailover(KafkaIntegrationTestCase):
         hosts = ','.join(['%s:%d' % (broker.host, broker.port)
                           for broker in self.brokers])
 
-        client = SimpleClient(hosts)
+        client = SimpleClient(hosts, timeout=2)
         consumer = SimpleConsumer(client, None, topic,
                                   partitions=partitions,
                                   auto_commit=False,
