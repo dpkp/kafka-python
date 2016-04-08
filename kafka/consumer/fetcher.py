@@ -681,7 +681,7 @@ class FetchManagerMetrics(object):
         self.fetch_latency.add(metrics.metricName("fetch-latency-max", self.group_name,
             "The max time taken for any fetch request."), metrics.Max())
         self.fetch_latency.add(metrics.metricName("fetch-rate", self.group_name,
-            "The number of fetch requests per second."), metrics.Rate(metrics.Count()))
+            "The number of fetch requests per second."), metrics.Rate(sampled_stat=metrics.Count()))
 
         self.records_fetch_lag = metrics.sensor("records-lag")
         self.records_fetch_lag.add(metrics.metricName("records-lag-max", self.group_name,

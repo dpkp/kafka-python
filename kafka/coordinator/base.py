@@ -658,7 +658,7 @@ class GroupCoordinatorMetrics(object):
         self.heartbeat_latency.add(metrics.metricName(
             "heartbeat-rate", self.group_name,
             "The average number of heartbeats per second",
-            tags), metrics.Rate(metrics.Count()))
+            tags), metrics.Rate(sampled_stat=metrics.Count()))
 
         self.join_latency = metrics.sensor("join-latency")
         self.join_latency.add(metrics.metricName(
@@ -672,7 +672,7 @@ class GroupCoordinatorMetrics(object):
         self.join_latency.add(metrics.metricName(
             "join-rate", self.group_name,
             "The number of group joins per second",
-            tags), metrics.Rate(metrics.Count()))
+            tags), metrics.Rate(sampled_stat=metrics.Count()))
 
         self.sync_latency = metrics.sensor("sync-latency")
         self.sync_latency.add(metrics.metricName(
@@ -686,7 +686,7 @@ class GroupCoordinatorMetrics(object):
         self.sync_latency.add(metrics.metricName(
             "sync-rate", self.group_name,
             "The number of group syncs per second",
-            tags), metrics.Rate(metrics.Count()))
+            tags), metrics.Rate(sampled_stat=metrics.Count()))
 
         """
         lastHeartbeat = Measurable(
