@@ -162,6 +162,12 @@ class KafkaClient(object):
             log.debug("Node %s connected", node_id)
             if node_id in self._connecting:
                 self._connecting.remove(node_id)
+            if 'bootstrap' in self._conns and node_id != 'bootstrap':
+                bootstrap = self._conns.pop('bootstrap')
+                # XXX: make conn.close() require error to cause refresh
+                self._refresh_on_disconnects = False
+                bootstrap.close()
+                self._refresh_on_disconnects = True
 
         # Connection failures imply that our metadata is stale, so let's refresh
         elif conn.state is ConnectionStates.DISCONNECTING:
