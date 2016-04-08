@@ -4,7 +4,7 @@ import time
 import pytest
 
 from kafka.errors import QuotaViolationError
-from kafka.metrics import MetricConfig, MetricName, Metrics, Quota
+from kafka.metrics import DictReporter, MetricConfig, MetricName, Metrics, Quota
 from kafka.metrics.measurable import AbstractMeasurable
 from kafka.metrics.stats import (Avg, Count, Max, Min, Percentile, Percentiles,
                                  Rate, Total)
@@ -25,8 +25,13 @@ def config():
 
 
 @pytest.fixture
-def metrics(request, config):
-    metrics = Metrics(config, None, enable_expiration=True)
+def reporter():
+    return DictReporter()
+
+
+@pytest.fixture
+def metrics(request, config, reporter):
+    metrics = Metrics(config, [reporter], enable_expiration=True)
     request.addfinalizer(lambda: metrics.close())
     return metrics
 
@@ -438,6 +443,34 @@ def test_rate_windowing(mocker, time_keeper, metrics):
             'Rate(0...2) = 2.666'
     assert abs(elapsed_secs - (kafka_metric.measurable.window_size(config, time.time() * 1000) / 1000.0)) \
             < EPS, 'Elapsed Time = 75 seconds'
+
+
+def test_reporter(metrics):
+    reporter = DictReporter()
+    foo_reporter = DictReporter(prefix='foo')
+    metrics.add_reporter(reporter)
+    metrics.add_reporter(foo_reporter)
+    sensor = metrics.sensor('kafka.requests')
+    sensor.add(metrics.metric_name('pack.bean1.avg', 'grp1'), Avg())
+    sensor.add(metrics.metric_name('pack.bean2.total', 'grp2'), Total())
+    sensor2 = metrics.sensor('kafka.blah')
+    sensor2.add(metrics.metric_name('pack.bean1.some', 'grp1'), Total())
+    sensor2.add(metrics.metric_name('pack.bean2.some', 'grp1',
+                                    tags={'a': 42, 'b': 'bar'}), Total())
+
+    # kafka-metrics-count > count is the total number of metrics and automatic
+    expected = {
+        'kafka-metrics-count': {'count': 5.0},
+        'grp2': {'pack.bean2.total': 0.0},
+        'grp1': {'pack.bean1.avg': 0.0, 'pack.bean1.some': 0.0},
+        'grp1.a=42,b=bar': {'pack.bean2.some': 0.0},
+    }
+    assert expected == reporter.snapshot()
+
+    for key in list(expected.keys()):
+        metrics = expected.pop(key)
+        expected['foo.%s' % key] = metrics
+    assert expected == foo_reporter.snapshot()
 
 
 class ConstantMeasurable(AbstractMeasurable):
