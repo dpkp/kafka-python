@@ -104,60 +104,47 @@ def test_maybe_connect(conn):
     assert cli.cluster._need_update is True
 
 
-def test_ready(conn):
+def test_ready(mocker, conn):
     cli = KafkaClient()
+    maybe_connect = mocker.patch.object(cli, '_maybe_connect')
+    node_id = 1
+    cli.ready(node_id)
+    maybe_connect.assert_called_with(node_id)
 
-    # Node not in metadata raises Exception
-    try:
-        cli.ready(2)
-        assert False, 'Exception not raised'
-    except AssertionError:
-        pass
 
-    # Node in metadata will connect
-    assert 0 not in cli._conns
-    assert cli.ready(0)
-    assert 0 in cli._conns
-    assert cli._conns[0].state is ConnectionStates.CONNECTED
+def test_is_ready(mocker, conn):
+    cli = KafkaClient()
+    cli._maybe_connect(0)
+    cli._maybe_connect(1)
 
     # metadata refresh blocks ready nodes
-    assert cli.ready(0)
-    assert cli.ready(1)
+    assert cli.is_ready(0)
+    assert cli.is_ready(1)
     cli._metadata_refresh_in_progress = True
-    assert not cli.ready(0)
-    assert not cli.ready(1)
+    assert not cli.is_ready(0)
+    assert not cli.is_ready(1)
 
     # requesting metadata update also blocks ready nodes
     cli._metadata_refresh_in_progress = False
-    assert cli.ready(0)
-    assert cli.ready(1)
+    assert cli.is_ready(0)
+    assert cli.is_ready(1)
     cli.cluster.request_update()
     cli.cluster.config['retry_backoff_ms'] = 0
     assert not cli._metadata_refresh_in_progress
-    assert not cli.ready(0)
-    assert not cli.ready(1)
+    assert not cli.is_ready(0)
+    assert not cli.is_ready(1)
     cli.cluster._need_update = False
 
     # if connection can't send more, not ready
-    assert cli.ready(0)
-    assert cli.ready(1)
+    assert cli.is_ready(0)
     conn.can_send_more.return_value = False
-    assert not cli.ready(0)
+    assert not cli.is_ready(0)
     conn.can_send_more.return_value = True
 
     # disconnected nodes, not ready
-    assert cli.ready(0)
-    assert cli.ready(1)
+    assert cli.is_ready(0)
     conn.state = ConnectionStates.DISCONNECTED
-    assert not cli.ready(0)
-
-    # connecting node connects
-    cli._connecting.add(0)
-    conn.state = ConnectionStates.CONNECTING
-    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTED)
-    cli.ready(0)
-    assert 0 not in cli._connecting
-    assert cli._conns[0].connect.called_with()
+    assert not cli.is_ready(0)
 
 
 def test_close(conn):
