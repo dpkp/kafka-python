@@ -168,8 +168,10 @@ class KafkaClient(object):
 
     def _conn_state_change(self, node_id, conn):
         if conn.connecting():
-            self._connecting.add(node_id)
-            self._selector.register(conn._sock, selectors.EVENT_WRITE)
+            # SSL connections can enter this state 2x (second during Handshake)
+            if node_id not in self._connecting:
+                self._connecting.add(node_id)
+                self._selector.register(conn._sock, selectors.EVENT_WRITE)
 
         elif conn.connected():
             log.debug("Node %s connected", node_id)
