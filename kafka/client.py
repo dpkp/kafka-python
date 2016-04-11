@@ -10,11 +10,20 @@ from kafka.common import (TopicAndPartition, BrokerMetadata,
                           ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
-                          NotLeaderForPartitionError, ReplicaNotAvailableError)
+                          NotLeaderForPartitionError, ReplicaNotAvailableError,
+                          ConsumerCoordinatorNotAvailableCode, OffsetsLoadInProgressCode,
+)
 
 from kafka.conn import collect_hosts, KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
 from kafka.protocol import KafkaProtocol
 from kafka.util import kafka_bytestring
+
+
+# If the __consumer_offsets topic is missing, the first consumer coordinator
+# request will fail and it will trigger the creation of the topic; for this
+# reason, we will retry few times until the creation is completed.
+CONSUMER_OFFSET_TOPIC_CREATION_RETRIES = 20
+CONSUMER_OFFSET_RETRY_INTERVAL_SEC = 0.5
 
 
 log = logging.getLogger(__name__)
@@ -322,7 +331,16 @@ class KafkaClient(object):
         # so we need to keep this so we can rebuild order before returning
         original_ordering = [(p.topic, p.partition) for p in payloads]
 
-        broker = self._get_coordinator_for_group(group)
+        retries = 0
+        broker = None
+        while not broker:
+            try:
+                broker = self._get_coordinator_for_group(group)
+            except (ConsumerCoordinatorNotAvailableCode, OffsetsLoadInProgressCode) as e:
+                if retries == CONSUMER_OFFSET_TOPIC_CREATION_RETRIES:
+                    raise e
+                time.sleep(CONSUMER_OFFSET_RETRY_INTERVAL_SEC)
+                retries += 1
 
         # Send the list of request payloads and collect the responses and
         # errors
@@ -668,22 +686,26 @@ class KafkaClient(object):
 
     @time_metric('offset_commit_request_timer')
     def send_offset_commit_request(self, group, payloads=[],
-                                   fail_on_error=True, callback=None, offset_storage='zookeeper'):
-        resps = []
+                                   fail_on_error=True, callback=None):
+        encoder = functools.partial(
+            KafkaProtocol.encode_offset_commit_request,
+            group=group,
+        )
         decoder = KafkaProtocol.decode_offset_commit_response
-        if offset_storage in ['zookeeper', 'dual']:
-            encoder = functools.partial(
-                KafkaProtocol.encode_offset_commit_request,
-                group=group,
-            )
-            resps += self._send_broker_aware_request(payloads, encoder, decoder)
+        resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
-        if offset_storage in ['kafka', 'dual']:
-            encoder = functools.partial(
-                KafkaProtocol.encode_offset_commit_request_kafka,
-                group=group,
-            )
-            resps += self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        return [resp if not callback else callback(resp) for resp in resps
+                if not fail_on_error or not self._raise_on_response_error(resp)]
+
+    @time_metric('offset_commit_request_timer_kafka')
+    def send_offset_commit_request_kafka(self, group, payloads=[],
+                                         fail_on_error=True, callback=None):
+        encoder = functools.partial(
+            KafkaProtocol.encode_offset_commit_request_kafka,
+            group=group,
+        )
+        decoder = KafkaProtocol.decode_offset_commit_response
+        resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
@@ -700,6 +722,7 @@ class KafkaClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
+    @time_metric('offset_fetch_request_timer_kafka')
     def send_offset_fetch_request_kafka(self, group, payloads=[],
                                   fail_on_error=True, callback=None):
 

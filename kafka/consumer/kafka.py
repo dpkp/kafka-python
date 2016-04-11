@@ -38,7 +38,7 @@ DEFAULT_CONSUMER_CONFIG = {
     'auto_commit_interval_messages': None,
     'consumer_timeout_ms': -1,
     'metrics_responder': None,
-    'offset_storage': False,
+    'offset_storage': 'zookeeper',
 
     # Currently unused
     'socket_receive_buffer_bytes': 64 * 1024,
@@ -568,11 +568,18 @@ class KafkaConsumer(object):
 
         if commits:
             logger.info('committing consumer offsets to group %s', self._config['group_id'])
-            resps = self._client.send_offset_commit_request(
-                kafka_bytestring(self._config['group_id']), commits,
-                fail_on_error=False,
-                offset_storage=self._config['offset_storage'],
-            )
+
+            resps = []
+            if self._config['offset_storage'] in ['zookeeper', 'dual']:
+                resps += self._client.send_offset_commit_request(
+                    kafka_bytestring(self._config['group_id']), commits,
+                    fail_on_error=False,
+                )
+            if self._config['offset_storage'] in ['kafka', 'dual']:
+                resps += self._client.send_offset_commit_request_kafka(
+                    kafka_bytestring(self._config['group_id']), commits,
+                    fail_on_error=False,
+                )
 
             for r in resps:
                 check_error(r)
@@ -633,25 +640,34 @@ class KafkaConsumer(object):
     def _get_commit_offsets(self):
         logger.info("Consumer fetching stored offsets")
         for topic_partition in self._topics:
-            (resp,) = self._client.send_offset_fetch_request(
-                kafka_bytestring(self._config['group_id']),
-                [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
-                fail_on_error=False)
+            resps = []
+            if self._config['offset_storage'] in ['zookeeper', 'dual']:
+                resps += self._client.send_offset_fetch_request(
+                    kafka_bytestring(self._config['group_id']),
+                    [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
+                    fail_on_error=False)
+            if self._config['offset_storage'] in ['kafka', 'dual']:
+                resps += self._client.send_offset_fetch_request_kafka(
+                    kafka_bytestring(self._config['group_id']),
+                    [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
+                    fail_on_error=False)
             try:
-                check_error(resp)
+                for r in resps:
+                  check_error(r)
             # API spec says server wont set an error here
             # but 0.8.1.1 does actually...
             except UnknownTopicOrPartitionError:
                 pass
 
             # -1 offset signals no commit is currently stored
-            if resp.offset == -1:
+            max_offset = max(r.offset for r in resps)
+            if max_offset == -1:
                 self._offsets.commit[topic_partition] = None
 
             # Otherwise we committed the stored offset
             # and need to fetch the next one
             else:
-                self._offsets.commit[topic_partition] = resp.offset
+                self._offsets.commit[topic_partition] = max_offset
 
     def _reset_highwater_offsets(self):
         for topic_partition in self._topics:
