@@ -97,13 +97,42 @@ class BrokerConnection(object):
         self.last_failure = 0
         self._processing = False
         self._correlation_id = 0
+        self._gai = None
+        self._gai_index = 0
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
             self.close()
             log.debug('%s: creating new socket', str(self))
-            self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
+            # if self.afi is set to AF_UNSPEC, then we need to do a name
+            # resolution and try all available address families
+            if self.afi == socket.AF_UNSPEC:
+                if self._gai is None:
+                    # XXX: all DNS functions in Python are blocking. If we really
+                    # want to be non-blocking here, we need to use a 3rd-party
+                    # library like python-adns, or move resolution onto its
+                    # own thread. This will be subject to the default libc
+                    # name resolution timeout (5s on most Linux boxes)
+                    self._gai = socket.getaddrinfo(self.host, self.port,
+                                                   socket.AF_UNSPEC,
+                                                   socket.SOCK_STREAM)
+                    self._gai_index = 0
+                else:
+                    # if self._gai already exists, then we should try the next
+                    # name
+                    self._gai_index += 1
+                if self._gai_index >= len(self._gai):
+                    log.error('Unable to connect to any of the names for {0}:{1}'.format(
+                        self.host, self.port
+                    ))
+                    self.close()
+                    return
+                afi, _, __, ___, sockaddr = self._gai[self._gai_index]
+                self.host, self.port = sockaddr
+                self._sock = socket.socket(afi, socket.SOCK_STREAM)
+            else:
+                self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
             if self.config['receive_buffer_bytes'] is not None:
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
                                       self.config['receive_buffer_bytes'])
@@ -123,6 +152,11 @@ class BrokerConnection(object):
             request_timeout = self.config['request_timeout_ms'] / 1000.0
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
+                # if we got here through a host lookup, we've found a host,port,af tuple
+                # that works save it so we don't do a GAI lookup again
+                if self._gai is not None:
+                    self.afi = self._sock.family
+                    self._gai = None
             except socket.error as ret:
                 pass
 
@@ -548,37 +582,47 @@ class BrokerConnection(object):
         return "<BrokerConnection host=%s port=%d>" % (self.host, self.port)
 
 
+def _address_family(address):
+    """
+        Attempt to determine the family of an address (or hostname)
+
+        :return: either socket.AF_INET or socket.AF_INET6 or socket.AF_UNSPEC if the address family
+                 could not be determined
+    """
+    for af in (socket.AF_INET, socket.AF_INET6):
+        try:
+            socket.inet_pton(address, af)
+            return af
+        except socket.error:
+            continue
+    return socket.AF_UNSPEC
+
+
 def get_ip_port_afi(host_and_port_str):
     """
         Parse the IP and port from a string in the format of:
 
             * host_or_ip          <- Can be either IPv4 or IPv6 address or hostname/fqdn
-            * host_or_ip:port     <- This is only for IPv4
+            * host_or_ip:port     <- Can be either IPv4 or IPv6 address or hostname/fqdn
             * [host_or_ip]:port.  <- This is only for IPv6
 
         .. note:: If the port is not specified, default will be returned.
 
-        :return: tuple (host, port, afi), afi will be socket.AF_INET or socket.AF_INET6
+        :return: tuple (host, port, afi), afi will be socket.AF_INET or socket.AF_INET6 or socket.AF_UNSPEC
     """
-    afi = socket.AF_INET
-
-    if host_and_port_str.strip()[0] == '[':
-        afi = socket.AF_INET6
-        res = host_and_port_str.split("]:")
-        res[0] = res[0].replace("[", "")
-        res[0] = res[0].replace("]", "")
-
-    elif host_and_port_str.count(":") > 1:
-        afi = socket.AF_INET6
-        res = [host_and_port_str]
-
+    host_and_port_str = host_and_port_str.strip()
+    if ':' not in host_and_port_str:
+        af = _address_family(host_and_port_str)
+        return host_and_port_str, DEFAULT_KAFKA_PORT, af
     else:
-        res = host_and_port_str.split(':')
+        host, port = host_and_port_str.rsplit(':', 1)
+        port = int(port)
 
-    host = res[0]
-    port = int(res[1]) if len(res) > 1 else DEFAULT_KAFKA_PORT
-
-    return host.strip(), port, afi
+        if ':' in host:
+            return host, port, socket.AF_INET6
+        else:
+            af = _address_family(host)
+            return host, port, af
 
 
 def collect_hosts(hosts, randomize=True):
