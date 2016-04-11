@@ -2,13 +2,13 @@ import time
 
 
 class KafkaMetric(object):
-    def __init__(self, lock, metric_name, measurable, config):
+    # NOTE java constructor takes a lock instance
+    def __init__(self, metric_name, measurable, config):
         if not metric_name:
             raise ValueError('metric_name must be non-empty')
         if not measurable:
             raise ValueError('measurable must be non-empty')
         self._metric_name = metric_name
-        self._lock = lock
         self._measurable = measurable
         self._config = config
 
@@ -26,11 +26,9 @@ class KafkaMetric(object):
 
     @config.setter
     def config(self, config):
-        with self._lock:
-            self._config = config
+        self._config = config
 
     def value(self, time_ms=None):
         if time_ms is None:
-            # with (self._lock): This doesn't seem necessary?
             time_ms = time.time() * 1000
         return self.measurable.measure(self.config, time_ms)

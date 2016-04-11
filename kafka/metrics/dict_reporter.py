@@ -12,7 +12,7 @@ class DictReporter(AbstractMetricsReporter):
     Store all metrics in a two level dictionary of category > name > metric.
     """
     def __init__(self, prefix=''):
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
         self._prefix = prefix if prefix else ''  # never allow None
         self._store = {}
 
@@ -28,14 +28,13 @@ class DictReporter(AbstractMetricsReporter):
         }
         """
         return dict((category, dict((name, metric.value())
-                                    for name, metric in metrics.items()))
+                                    for name, metric in list(metrics.items())))
                     for category, metrics in
-                    self._store.items())
+                    list(self._store.items()))
 
     def init(self, metrics):
-        with self._lock:
-            for metric in metrics:
-                self.metric_change(metric)
+        for metric in metrics:
+            self.metric_change(metric)
 
     def metric_change(self, metric):
         with self._lock:

@@ -134,6 +134,10 @@ class Metrics(object):
         Returns:
             Sensor: The sensor that is created
         """
+        sensor = self.get_sensor(name)
+        if sensor:
+            return sensor
+
         with self._lock:
             sensor = self.get_sensor(name)
             if not sensor:
@@ -185,10 +189,9 @@ class Metrics(object):
             config (MetricConfig, optional): The configuration to use when
                 measuring this measurable
         """
-        with self._lock:
-            metric = KafkaMetric(threading.Lock(), metric_name, measurable,
-                                 config or self.config)
-            self.register_metric(metric)
+        # NOTE there was a lock here, but i don't think it's needed
+        metric = KafkaMetric(metric_name, measurable, config or self.config)
+        self.register_metric(metric)
 
     def remove_metric(self, metric_name):
         """

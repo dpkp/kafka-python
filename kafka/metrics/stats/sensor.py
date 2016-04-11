@@ -103,8 +103,8 @@ class Sensor(object):
             raise ValueError('compound stat must be non-empty')
         self._stats.append(compound_stat)
         for named_measurable in compound_stat.stats():
-            metric = KafkaMetric(self._lock, named_measurable.name,
-                                 named_measurable.stat, config or self._config)
+            metric = KafkaMetric(named_measurable.name, named_measurable.stat,
+                                 config or self._config)
             self._registry.register_metric(metric)
             self._metrics.append(metric)
 
@@ -119,8 +119,7 @@ class Sensor(object):
                 If None use the sensor default configuration.
         """
         with self._lock:
-            metric = KafkaMetric(threading.Lock(), metric_name, stat,
-                                 config or self._config)
+            metric = KafkaMetric(metric_name, stat, config or self._config)
             self._registry.register_metric(metric)
             self._metrics.append(metric)
             self._stats.append(stat)
