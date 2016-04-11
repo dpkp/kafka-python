@@ -38,7 +38,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     def test_init_with_csv(self):
@@ -46,7 +47,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts='kafka01:9092,kafka02:9092,kafka03:9092')
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     def test_init_with_unicode_csv(self):
@@ -54,7 +56,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts=u'kafka01:9092,kafka02:9092,kafka03:9092')
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     @patch.object(SimpleClient, '_get_conn')

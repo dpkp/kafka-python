@@ -9,7 +9,7 @@ import time
 import uuid
 
 from six.moves import urllib
-from six.moves.urllib.parse import urlparse # pylint: disable=E0611,F0401
+from six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from test.service import ExternalService, SpawnedService
 from test.testutil import get_open_port
@@ -193,7 +193,21 @@ class KafkaFixture(Fixture):
         else:
             if port is None:
                 port = get_open_port()
-            host = "127.0.0.1"
+            # force IPv6 here because of a confusing point:
+            #
+            #  - if the string "localhost" is passed, Kafka will *only* bind to the IPv4 address of localhost
+            #    (127.0.0.1); however, kafka-python will attempt to connect on ::1 and fail
+            #
+            #  - if the address literal 127.0.0.1 is passed, the metadata request during bootstrap will return
+            #    the name "localhost" and we'll go back to the first case. This is odd!
+            #
+            # Ideally, Kafka would bind to all loopback addresses when we tell it to listen on "localhost" the
+            # way it makes an IPv6 socket bound to both 0.0.0.0/0 and ::/0 when we tell it to bind to "" (that is
+            # to say, when we make a listener of PLAINTEXT://:port.
+            #
+            # Note that even though we specify the bind host in bracket notation, Kafka responds to the bootstrap
+            # metadata request without square brackets later.
+            host = "[::1]"
             fixture = KafkaFixture(host, port, broker_id,
                                    zk_host, zk_port, zk_chroot,
                                    transport=transport,
