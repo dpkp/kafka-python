@@ -246,7 +246,8 @@ class KafkaProducer(object):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
-            self.config['api_version'] = client.check_version()
+            request_timeout_seconds = int(self.config['request_timeout_ms'] / 1000)
+            self.config['api_version'] = client.check_version(timeout=request_timeout_seconds)
         assert self.config['api_version'] in ('0.9', '0.8.2', '0.8.1', '0.8.0')
 
         # Convert api_version config to tuple for easy comparisons
