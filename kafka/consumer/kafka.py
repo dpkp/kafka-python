@@ -641,12 +641,12 @@ class KafkaConsumer(object):
         logger.info("Consumer fetching stored offsets")
         for topic_partition in self._topics:
             resps = []
-            if self._config['offset_storage'] in ['zookeeper', 'dual']:
+            if self._config['offset_storage'] in ('zookeeper', 'dual'):
                 resps += self._client.send_offset_fetch_request(
                     kafka_bytestring(self._config['group_id']),
                     [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
                     fail_on_error=False)
-            if self._config['offset_storage'] in ['kafka', 'dual']:
+            if self._config['offset_storage'] in ('kafka', 'dual'):
                 resps += self._client.send_offset_fetch_request_kafka(
                     kafka_bytestring(self._config['group_id']),
                     [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
