@@ -48,12 +48,12 @@ class ConnTest(unittest.TestCase):
         self.MockCreateConn.reset_mock()
 
     def test_collect_hosts__happy_path(self):
-        hosts = "localhost:1234,localhost"
+        hosts = "127.0.0.1:1234,127.0.0.1"
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_INET),
-            ('localhost', 9092, socket.AF_INET),
+            ('127.0.0.1', 1234, socket.AF_INET),
+            ('127.0.0.1', 9092, socket.AF_INET),
         ]))
 
     def test_collect_hosts__ipv6(self):
@@ -71,16 +71,18 @@ class ConnTest(unittest.TestCase):
             'localhost:1234',
             'localhost',
             '[localhost]',
-            '2001::1',
+            '2001::1:3234',
+            '[2001::1]',
             '[2001::1]:1234',
         ]
 
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_INET),
-            ('localhost', 9092, socket.AF_INET),
+            ('localhost', 1234, socket.AF_UNSPEC),
+            ('localhost', 9092, socket.AF_UNSPEC),
             ('localhost', 9092, socket.AF_INET6),
+            ('2001::1', 3234, socket.AF_INET6),
             ('2001::1', 9092, socket.AF_INET6),
             ('2001::1', 1234, socket.AF_INET6),
         ]))
@@ -90,8 +92,8 @@ class ConnTest(unittest.TestCase):
         results = collect_hosts(hosts)
 
         self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_INET),
-            ('localhost', 9092, socket.AF_INET),
+            ('localhost', 1234, socket.AF_UNSPEC),
+            ('localhost', 9092, socket.AF_UNSPEC),
         ]))
 
 

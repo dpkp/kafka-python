@@ -1,7 +1,7 @@
 import socket
 from time import sleep
 
-from mock import ANY, MagicMock, patch
+from mock import MagicMock, patch
 import six
 from . import unittest
 
@@ -38,7 +38,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts=['kafka01:9092', 'kafka02:9092', 'kafka03:9092'])
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     def test_init_with_csv(self):
@@ -46,7 +47,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts='kafka01:9092,kafka02:9092,kafka03:9092')
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     def test_init_with_unicode_csv(self):
@@ -54,7 +56,8 @@ class TestSimpleClient(unittest.TestCase):
             client = SimpleClient(hosts=u'kafka01:9092,kafka02:9092,kafka03:9092')
 
         self.assertEqual(
-            sorted([('kafka01', 9092, socket.AF_INET), ('kafka02', 9092, socket.AF_INET), ('kafka03', 9092, socket.AF_INET)]),
+            sorted([('kafka01', 9092, socket.AF_UNSPEC), ('kafka02', 9092, socket.AF_UNSPEC),
+                    ('kafka03', 9092, socket.AF_UNSPEC)]),
             sorted(client.hosts))
 
     @patch.object(SimpleClient, '_get_conn')
@@ -73,7 +76,7 @@ class TestSimpleClient(unittest.TestCase):
 
         client = SimpleClient(hosts=['kafka01:9092', 'kafka02:9092'])
 
-        req = KafkaProtocol.encode_metadata_request()
+        KafkaProtocol.encode_metadata_request()
         with self.assertRaises(KafkaUnavailableError):
             client._send_broker_unaware_request(payloads=['fake request'],
                                                 encoder_fn=MagicMock(return_value='fake encoded message'),
@@ -406,4 +409,3 @@ class TestSimpleClient(unittest.TestCase):
             self.assertEqual(big_num + 1, client._next_id())
             self.assertEqual(big_num + 2, client._next_id())
             self.assertEqual(0, client._next_id())
-
