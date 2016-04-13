@@ -117,7 +117,6 @@ class BrokerConnection(object):
                     self._gai = socket.getaddrinfo(self.host, self.port,
                                                    socket.AF_UNSPEC,
                                                    socket.SOCK_STREAM)
-                    print(self._gai, self.host, self.port)
                     self._gai_index = 0
                 else:
                     # if self._gai already exists, then we should try the next

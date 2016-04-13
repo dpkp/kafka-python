@@ -103,7 +103,7 @@ class ZookeeperFixture(Fixture):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("127.0.0.1", get_open_port())
+            (host, port) = ("::1", get_open_port())
             fixture = cls(host, port)
 
         fixture.open()
@@ -193,7 +193,7 @@ class KafkaFixture(Fixture):
         else:
             if port is None:
                 port = get_open_port()
-            host = "127.0.0.1"
+            host = "::1"
             fixture = KafkaFixture(host, port, broker_id,
                                    zk_host, zk_port, zk_chroot,
                                    transport=transport,
