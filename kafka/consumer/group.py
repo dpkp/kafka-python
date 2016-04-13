@@ -218,7 +218,7 @@ class KafkaConsumer(six.Iterator):
         reporters.append(DictReporter('kafka.consumer'))
         self._metrics = Metrics(metric_config, reporters)
         metric_group_prefix = 'consumer'
-        # TODO _metrics likely needs to be passed to KafkaClient, Fetcher, etc.
+        # TODO _metrics likely needs to be passed to KafkaClient, etc.
 
         self._client = KafkaClient(**self.config)
 
@@ -233,7 +233,7 @@ class KafkaConsumer(six.Iterator):
 
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
-            self._client, self._subscription, **self.config)
+            self._client, self._subscription, self._metrics, metric_group_prefix, **self.config)
         self._coordinator = ConsumerCoordinator(
             self._client, self._subscription, self._metrics, metric_group_prefix,
             assignors=self.config['partition_assignment_strategy'],

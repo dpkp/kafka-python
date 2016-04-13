@@ -8,6 +8,7 @@ from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata
 
@@ -29,7 +30,7 @@ def fetcher(client, subscription_state):
     subscription_state.assign_from_subscribed(assignment)
     for tp in assignment:
         subscription_state.seek(tp, 0)
-    return Fetcher(client, subscription_state)
+    return Fetcher(client, subscription_state, Metrics(), 'test_fetcher')
 
 
 def test_init_fetches(fetcher, mocker):
