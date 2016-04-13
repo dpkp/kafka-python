@@ -591,9 +591,9 @@ def _address_family(address):
     """
     for af in (socket.AF_INET, socket.AF_INET6):
         try:
-            socket.inet_pton(address, af)
+            socket.inet_pton(af, address)
             return af
-        except socket.error:
+        except (ValueError, socket.error):
             continue
     return socket.AF_UNSPEC
 
