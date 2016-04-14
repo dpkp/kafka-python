@@ -155,6 +155,7 @@ class BrokerConnection(object):
             # in non-blocking mode, use repeated calls to socket.connect_ex
             # to check connection status
             request_timeout = self.config['request_timeout_ms'] / 1000.0
+            ret = None
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
                 # if we got here through a host lookup, we've found a host,port,af tuple
@@ -162,8 +163,8 @@ class BrokerConnection(object):
                 if self._gai is not None:
                     self.afi = self._sock.family
                     self._gai = None
-            except socket.error as ret:
-                pass
+            except socket.error as err:
+                ret = err
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
