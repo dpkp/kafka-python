@@ -71,7 +71,7 @@ class ConnTest(unittest.TestCase):
             'localhost:1234',
             'localhost',
             '[localhost]',
-            '2001::1:3234',
+            '2001::1',
             '[2001::1]',
             '[2001::1]:1234',
         ]
@@ -82,7 +82,7 @@ class ConnTest(unittest.TestCase):
             ('localhost', 1234, socket.AF_UNSPEC),
             ('localhost', 9092, socket.AF_UNSPEC),
             ('localhost', 9092, socket.AF_INET6),
-            ('2001::1', 3234, socket.AF_INET6),
+            ('2001::1', 9092, socket.AF_INET6),
             ('2001::1', 9092, socket.AF_INET6),
             ('2001::1', 1234, socket.AF_INET6),
         ]))

@@ -613,12 +613,12 @@ def get_ip_port_afi(host_and_port_str):
     """
         Parse the IP and port from a string in the format of:
 
-            * host_or_ip          <- Can be either IPv4 or IPv6 address or hostname/fqdn
-            * host_or_ip:port     <- Can be either IPv4 or IPv6 address or hostname/fqdn
-            * [host_or_ip]        <- Force IPv6
-            * [host_or_ip]:port.  <- Force IPv6
+            * host_or_ip          <- Can be either IPv4 address literal or hostname/fqdn
+            * host_or_ipv4:port   <- Can be either IPv4 address literal or hostname/fqdn
+            * [host_or_ip]        <- IPv6 address literal
+            * [host_or_ip]:port.  <- IPv6 address literal
 
-        .. note:: Bare IPv6 addresses cannot be used. Either append the port to them, or wrap them in `[...]`
+        .. note:: IPv6 address literals with ports *must* be enclosed in brackets
 
         .. note:: If the port is not specified, default will be returned.
 
@@ -638,12 +638,17 @@ def get_ip_port_afi(host_and_port_str):
             af = _address_family(host_and_port_str)
             return host_and_port_str, DEFAULT_KAFKA_PORT, af
         else:
-            host, port = host_and_port_str.rsplit(':', 1)
-            port = int(port)
+            # now we have something with a colon in it and no square brackets. It could be
+            # either an IPv6 address literal (e.g., "::1") or an IP:port pair or a host:port pair
+            try:
+                # if it decodes as an IPv6 address, use that
+                socket.inet_pton(socket.AF_INET6, host_and_port_str)
+                return host_and_port_str, DEFAULT_KAFKA_PORT, socket.AF_INET6
+            except (ValueError, socket.error):
+                # it's a host:port pair
+                host, port = host_and_port_str.rsplit(':', 1)
+                port = int(port)
 
-            if ':' in host:
-                return host, port, socket.AF_INET6
-            else:
                 af = _address_family(host)
                 return host, port, af
 
