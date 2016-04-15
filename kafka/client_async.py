@@ -134,9 +134,9 @@ class KafkaClient(object):
 
     def __del__(self):
         if hasattr(self, '_wake_r'):
-            os.close(self._wake_r)
+            self._wake_r.close()
         if hasattr(self, '_wake_w'):
-            os.close(self._wake_w)
+            self._wake_w.close()
 
     def _bootstrap(self, hosts):
         # Exponential backoff if bootstrap fails
