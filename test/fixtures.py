@@ -103,7 +103,7 @@ class ZookeeperFixture(Fixture):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("localhost", get_open_port())
+            (host, port) = ("127.0.0.1", get_open_port())
             fixture = cls(host, port)
 
         fixture.open()
