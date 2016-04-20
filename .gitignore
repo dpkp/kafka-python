@@ -10,3 +10,4 @@ servers/*/kafka-bin*
 .noseids
 docs/_build
 .cache*
+.idea/
