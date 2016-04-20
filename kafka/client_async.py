@@ -637,7 +637,7 @@ class KafkaClient(object):
         """
         self._delayed_tasks.remove(task)
 
-    def check_version(self, node_id=None, timeout=2, strict=False):
+    def check_version(self, node_id=None, timeout_ms=2000, strict=False):
         """Attempt to guess the broker version"""
         if node_id is None:
             node_id = self.least_loaded_node()
@@ -649,7 +649,7 @@ class KafkaClient(object):
         self._refresh_on_disconnects = False
         self._maybe_connect(node_id)
         conn = self._conns[node_id]
-        version = conn.check_version()
+        version = conn.check_version(timeout_ms=timeout_ms)
         self._refresh_on_disconnects = True
         return version
 

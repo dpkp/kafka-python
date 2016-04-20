@@ -448,14 +448,14 @@ class BrokerConnection(object):
         self._correlation_id = (self._correlation_id + 1) % 2**31
         return self._correlation_id
 
-    def check_version(self, timeout=2, strict=False):
+    def check_version(self, timeout_ms=2000, strict=False):
         """Attempt to guess the broker version. This is a blocking call."""
 
         # Monkeypatch the connection request timeout
         # Generally this timeout should not get triggered
         # but in case it does, we want it to be reasonably short
         stashed_request_timeout_ms = self.config['request_timeout_ms']
-        self.config['request_timeout_ms'] = timeout * 1000
+        self.config['request_timeout_ms'] = timeout_ms
 
         # kafka kills the connection when it doesnt recognize an API request
         # so we can send a test request and then follow immediately with a
@@ -487,7 +487,7 @@ class BrokerConnection(object):
             self.connect()
             if self.connected():
                 return
-            timeout_at = time.time() + timeout
+            timeout_at = time.time() + (timeout_ms/1000)
             while time.time() < timeout_at and self.connecting():
                 if self.connect() is ConnectionStates.CONNECTED:
                     return
