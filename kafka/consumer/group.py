@@ -12,6 +12,7 @@ from kafka.consumer.subscription_state import SubscriptionState
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.metrics import DictReporter, MetricConfig, Metrics
 from kafka.protocol.offset import OffsetResetStrategy
 from kafka.structs import TopicPartition
 from kafka.version import __version__
@@ -122,6 +123,21 @@ class KafkaConsumer(six.Iterator):
         consumer_timeout_ms (int): number of millisecond to throw a timeout
             exception to the consumer if no message is available for
             consumption. Default: -1 (dont throw exception)
+        security_protocol (str): Protocol used to communicate with brokers.
+            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+            socket connections. If provided, all other ssl_* configurations
+            will be ignored. Default: None.
+        ssl_check_hostname (bool): flag to configure whether ssl handshake
+            should verify that the certificate matches the brokers hostname.
+            default: true.
+        ssl_cafile (str): optional filename of ca file to use in certificate
+            veriication. default: none.
+        ssl_certfile (str): optional filename of file in pem format containing
+            the client certificate, as well as any ca certificates needed to
+            establish the certificate's authenticity. default: none.
+        ssl_keyfile (str): optional filename containing the client private key.
+            default: none.
         api_version (str): specify which kafka API version to use.
             0.9 enables full group coordination features; 0.8.2 enables
             kafka-storage offset commits; 0.8.1 enables zookeeper-storage
@@ -131,6 +147,13 @@ class KafkaConsumer(six.Iterator):
         client_check_version_timeout_s (int): number of seconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
+        metric_reporters (list): A list of classes to use as metrics reporters.
+            Implementing the AbstractMetricsReporter interface allows plugging
+            in classes that will be notified of new metric creation. Default: []
+        metrics_num_samples (int): The number of samples maintained to compute
+            metrics. Default: 2
+        metrics_sample_window_ms (int): The number of samples maintained to
+            compute metrics. Default: 30000
 
     Note:
         Configuration parameters are described in more detail at
@@ -161,12 +184,18 @@ class KafkaConsumer(six.Iterator):
         'send_buffer_bytes': None,
         'receive_buffer_bytes': None,
         'consumer_timeout_ms': -1,
+        'security_protocol': 'PLAINTEXT',
+        'ssl_context': None,
+        'ssl_check_hostname': True,
+        'ssl_cafile': None,
+        'ssl_certfile': None,
+        'ssl_keyfile': None,
         'api_version': 'auto',
         'client_check_version_timeout_s': 2,
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
-        #'metric_reporters': None,
-        #'metrics_num_samples': 2,
-        #'metrics_sample_window_ms': 30000,
+        'metric_reporters': [],
+        'metrics_num_samples': 2,
+        'metrics_sample_window_ms': 30000,
     }
 
     def __init__(self, *topics, **configs):
@@ -185,6 +214,16 @@ class KafkaConsumer(six.Iterator):
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
 
+        metrics_tags = {'client-id': self.config['client_id']}
+        metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
+                                     time_window_ms=self.config['metrics_sample_window_ms'],
+                                     tags=metrics_tags)
+        reporters = [reporter() for reporter in self.config['metric_reporters']]
+        reporters.append(DictReporter('kafka.consumer'))
+        self._metrics = Metrics(metric_config, reporters)
+        metric_group_prefix = 'consumer'
+        # TODO _metrics likely needs to be passed to KafkaClient, etc.
+
         self._client = KafkaClient(**self.config)
 
         # Check Broker Version if not set explicitly
@@ -198,16 +237,15 @@ class KafkaConsumer(six.Iterator):
 
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
-            self._client, self._subscription, **self.config)
+            self._client, self._subscription, self._metrics, metric_group_prefix, **self.config)
         self._coordinator = ConsumerCoordinator(
-            self._client, self._subscription,
+            self._client, self._subscription, self._metrics, metric_group_prefix,
             assignors=self.config['partition_assignment_strategy'],
             **self.config)
         self._closed = False
         self._iterator = None
         self._consumer_timeout = float('inf')
 
-        #self.metrics = None
         if topics:
             self._subscription.subscribe(topics=topics)
             self._client.set_topics(topics)
@@ -260,7 +298,7 @@ class KafkaConsumer(six.Iterator):
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
         self._coordinator.close()
-        #self.metrics.close()
+        self._metrics.close()
         self._client.close()
         try:
             self.config['key_deserializer'].close()

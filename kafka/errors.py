@@ -361,6 +361,10 @@ class KafkaConfigurationError(KafkaError):
     pass
 
 
+class QuotaViolationError(KafkaError):
+    pass
+
+
 class AsyncProducerQueueFull(KafkaError):
     def __init__(self, failed_msgs, *args):
         super(AsyncProducerQueueFull, self).__init__(*args)

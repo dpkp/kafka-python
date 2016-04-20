@@ -1,5 +1,12 @@
-import time
+# selectors in stdlib as of py3.4
+try:
+    import selectors # pylint: disable=import-error
+except ImportError:
+    # vendored backport module
+    import kafka.selectors34 as selectors
+
 import socket
+import time
 
 import pytest
 
@@ -34,7 +41,10 @@ def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
 def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_INET)
+    kwargs.pop('state_change_callback')
+    assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest[0]([]))
     assert cli._bootstrap_fails == 0
@@ -44,7 +54,10 @@ def test_bootstrap_success(conn):
 def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
     cli = KafkaClient()
-    conn.assert_called_once_with('localhost', 9092, socket.AF_INET, **cli.config)
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_INET)
+    kwargs.pop('state_change_callback')
+    assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.close.assert_called_with()
     assert cli._bootstrap_fails == 1
@@ -83,25 +96,44 @@ def test_maybe_connect(conn):
     else:
         assert False, 'Exception not raised'
 
+    # New node_id creates a conn object
     assert 0 not in cli._conns
     conn.state = ConnectionStates.DISCONNECTED
     conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTING)
     assert cli._maybe_connect(0) is False
     assert cli._conns[0] is conn
-    assert 0 in cli._connecting
 
-    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTED)
-    assert cli._maybe_connect(0) is True
-    assert 0 not in cli._connecting
+
+def test_conn_state_change(mocker, conn):
+    cli = KafkaClient()
+    sel = mocker.patch.object(cli, '_selector')
+
+    node_id = 0
+    conn.state = ConnectionStates.CONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id in cli._connecting
+    sel.register.assert_called_with(conn._sock, selectors.EVENT_WRITE)
+
+    conn.state = ConnectionStates.CONNECTED
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
+    sel.unregister.assert_called_with(conn._sock)
+    sel.register.assert_called_with(conn._sock, selectors.EVENT_READ, conn)
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
-    conn.state = ConnectionStates.CONNECTING
-    cli._connecting.add(0)
-    conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.DISCONNECTED)
-    assert cli._maybe_connect(0) is False
-    assert 0 not in cli._connecting
+    conn.state = ConnectionStates.DISCONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
     assert cli.cluster._need_update is True
+    sel.unregister.assert_called_with(conn._sock)
+
+    conn.state = ConnectionStates.CONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id in cli._connecting
+    conn.state = ConnectionStates.DISCONNECTING
+    cli._conn_state_change(node_id, conn)
+    assert node_id not in cli._connecting
 
 
 def test_ready(mocker, conn):
@@ -147,8 +179,9 @@ def test_is_ready(mocker, conn):
     assert not cli.is_ready(0)
 
 
-def test_close(conn):
+def test_close(mocker, conn):
     cli = KafkaClient()
+    mocker.patch.object(cli, '_selector')
 
     # Unknown node - silent
     cli.close(2)
