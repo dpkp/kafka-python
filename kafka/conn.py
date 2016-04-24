@@ -120,11 +120,12 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
             # to check connection status
+            ret = None
             request_timeout = self.config['request_timeout_ms'] / 1000.0
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
-            except socket.error as ret:
-                pass
+            except socket.error as e:
+                ret = e
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
