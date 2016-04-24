@@ -20,11 +20,11 @@ from kafka.structs import BrokerMetadata
 
 
 @pytest.mark.parametrize("bootstrap,expected_hosts", [
-    (None, [('localhost', 9092, socket.AF_INET)]),
-    ('foobar:1234', [('foobar', 1234, socket.AF_INET)]),
-    ('fizzbuzz', [('fizzbuzz', 9092, socket.AF_INET)]),
-    ('foo:12,bar:34', [('foo', 12, socket.AF_INET), ('bar', 34, socket.AF_INET)]),
-    (['fizz:56', 'buzz'], [('fizz', 56, socket.AF_INET), ('buzz', 9092, socket.AF_INET)]),
+    (None, [('localhost', 9092, socket.AF_UNSPEC)]),
+    ('foobar:1234', [('foobar', 1234, socket.AF_UNSPEC)]),
+    ('fizzbuzz', [('fizzbuzz', 9092, socket.AF_UNSPEC)]),
+    ('foo:12,bar:34', [('foo', 12, socket.AF_UNSPEC), ('bar', 34, socket.AF_UNSPEC)]),
+    (['fizz:56', 'buzz'], [('fizz', 56, socket.AF_UNSPEC), ('buzz', 9092, socket.AF_UNSPEC)]),
 ])
 def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
     mocker.patch.object(KafkaClient, '_bootstrap')
@@ -42,7 +42,7 @@ def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
     args, kwargs = conn.call_args
-    assert args == ('localhost', 9092, socket.AF_INET)
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     assert kwargs == cli.config
     conn.connect.assert_called_with()
@@ -55,7 +55,7 @@ def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
     cli = KafkaClient()
     args, kwargs = conn.call_args
-    assert args == ('localhost', 9092, socket.AF_INET)
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     assert kwargs == cli.config
     conn.connect.assert_called_with()

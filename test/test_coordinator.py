@@ -34,7 +34,7 @@ def test_init(conn):
     coordinator = ConsumerCoordinator(cli, SubscriptionState(), Metrics(),
                                       'consumer')
 
-    # metadata update on init 
+    # metadata update on init
     assert cli.cluster._need_update is True
     assert WeakMethod(coordinator._handle_metadata_update) in cli.cluster._listeners
 
