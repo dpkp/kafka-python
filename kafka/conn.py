@@ -506,19 +506,19 @@ class BrokerConnection(object):
             # the attempt to write to a disconnected socket should
             # immediately fail and allow us to infer that the prior
             # request was unrecognized
-            metadata = self.send(MetadataRequest[0]([]))
+            self.send(MetadataRequest[0]([]))
 
             if self._sock:
                 self._sock.setblocking(True)
-            resp_1 = self.recv()
-            resp_2 = self.recv()
+            while not f.is_done:
+                self.recv()
             if self._sock:
                 self._sock.setblocking(False)
 
-            assert f.is_done, 'Future is not done? Please file bug report'
-
             if f.succeeded():
                 log.info('Broker version identifed as %s', version)
+                log.info("Set configuration api_version='%s' to skip auto"
+                         " check_version requests on startup", version)
                 break
 
             # Only enable strict checking to verify that we understand failure
