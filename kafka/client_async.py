@@ -133,8 +133,10 @@ class KafkaClient(object):
         self._selector.register(self._wake_r, selectors.EVENT_READ)
 
     def __del__(self):
-        self._wake_r.close()
-        self._wake_w.close()
+        if hasattr(self, '_wake_r'):
+            self._wake_r.close()
+        if hasattr(self, '_wake_w'):
+            self._wake_w.close()
 
     def _bootstrap(self, hosts):
         # Exponential backoff if bootstrap fails
