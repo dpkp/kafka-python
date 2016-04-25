@@ -653,7 +653,8 @@ class Fetcher(six.Iterator):
 
         self._sensors.bytes_fetched.record(total_bytes)
         self._sensors.records_fetched.record(total_count)
-        self._sensors.fetch_throttle_time_sensor.record(response['throttle_time_ms'])
+        if response.API_VERSION >= 1:
+            self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((recv_time - send_time) * 1000)
 
 
