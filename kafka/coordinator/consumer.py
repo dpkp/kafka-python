@@ -106,7 +106,8 @@ class ConsumerCoordinator(BaseCoordinator):
     def __del__(self):
         if hasattr(self, '_auto_commit_task') and self._auto_commit_task:
             self._auto_commit_task.disable()
-        self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
+        if hasattr(self, '_cluster') and self._cluster:
+            self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
 
     def protocol_type(self):
         return ConsumerProtocol.PROTOCOL_TYPE
