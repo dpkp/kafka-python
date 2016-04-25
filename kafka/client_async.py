@@ -448,14 +448,32 @@ class KafkaClient(object):
                 continue
             conn = key.data
             processed.add(conn)
+            did_read = False
             while conn.in_flight_requests:
                 response = conn.recv() # Note: conn.recv runs callbacks / errbacks
+                did_read = True
 
                 # Incomplete responses are buffered internally
                 # while conn.in_flight_requests retains the request
                 if not response:
                     break
                 responses.append(response)
+
+            if not did_read:
+                # if we got an EVENT_READ but there were no in-flight requests, one of
+                # two things has happened:
+                #
+                # 1. The remote end closed the connection (because it died, or because
+                #    a firewall timed out, or whatever)
+                # 2. The protocol is out of sync.
+                #
+                # either way, we can no longer safely use this connection
+                #
+                # Do a 1-byte read to clear the READ flag, and then close the conn
+                unexpected_data = key.fileobj.recv(1)
+                if unexpected_data:  # anything other than a 0-byte read means protocol issues
+                    log.warning('Protocol out of sync on %r, closing', conn)
+                conn.close()
 
         # Check for additional pending SSL bytes
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
