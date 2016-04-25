@@ -182,7 +182,8 @@ class ZookeeperFixture(Fixture):
 
 class KafkaFixture(Fixture):
     @classmethod
-    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None, port=None,
+    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None,
+                 host=None, port=None,
                  transport='PLAINTEXT', replicas=1, partitions=2):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
@@ -207,7 +208,8 @@ class KafkaFixture(Fixture):
             #
             # Note that even though we specify the bind host in bracket notation, Kafka responds to the bootstrap
             # metadata request without square brackets later.
-            host = "[::1]"
+            if host is None:
+                host = "[::1]"
             fixture = KafkaFixture(host, port, broker_id,
                                    zk_host, zk_port, zk_chroot,
                                    transport=transport,
