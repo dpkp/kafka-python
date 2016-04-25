@@ -1,3 +1,41 @@
+# 1.1.0 (Apr 25, 2016)
+
+Consumers
+* Avoid resending FetchRequests that are pending on internal queue
+* Log debug messages when skipping fetched messages due to offset checks
+* KAFKA-3013: Include topic-partition in exception for expired batches
+* KAFKA-3318: clean up consumer logging and error messages
+* Improve unknown coordinator error handling
+* Improve auto-commit error handling when group_id is None
+* Add paused() API (zackdever PR 602)
+* Add default_offset_commit_callback to KafkaConsumer DEFAULT_CONFIGS
+
+Producers
+<none>
+
+Clients
+* Support SSL connections
+* Use selectors module for non-blocking IO
+* Refactor KafkaClient connection management
+* Fix AttributeError in __del__
+* SimpleClient: catch errors thrown by _get_leader_for_partition (zackdever PR 606)
+
+Documentation
+* Fix serializer/deserializer examples in README
+* Update max.block.ms docstring
+* Remove errant next(consumer) from consumer documentation
+* Add producer.flush() to usage docs
+
+Internals
+* Add initial metrics implementation (zackdever PR 637)
+* KAFKA-2136: support Fetch and Produce v1 (throttle_time_ms)
+* Use version-indexed lists for request/response protocol structs (dpkp PR 630)
+* Split kafka.common into kafka.structs and kafka.errors
+* Handle partial socket send() (dpkp PR 611)
+* Fix windows support (dpkp PR 603)
+* IPv6 support (TimEvens PR 615; Roguelazer PR 642)
+
+
 # 1.0.2 (Mar 14, 2016)
 
 Consumers
