@@ -142,6 +142,7 @@ class KafkaClient(object):
         # Exponential backoff if bootstrap fails
         backoff_ms = self.config['reconnect_backoff_ms'] * 2 ** self._bootstrap_fails
         next_at = self._last_bootstrap + backoff_ms / 1000.0
+        self._refresh_on_disconnects = False
         now = time.time()
         if next_at > now:
             log.debug("Sleeping %0.4f before bootstrapping again", next_at - now)
@@ -180,6 +181,7 @@ class KafkaClient(object):
             log.error('Unable to bootstrap from %s', hosts)
             # Max exponential backoff is 2^12, x4000 (50ms -> 200s)
             self._bootstrap_fails = min(self._bootstrap_fails + 1, 12)
+        self._refresh_on_disconnects = True
 
     def _can_connect(self, node_id):
         if node_id not in self._conns:
