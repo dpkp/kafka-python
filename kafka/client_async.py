@@ -225,7 +225,7 @@ class KafkaClient(object):
             except KeyError:
                 pass
             if self._refresh_on_disconnects:
-                log.warning("Node %s connect failed -- refreshing metadata", node_id)
+                log.warning("Node %s connection failed -- refreshing metadata", node_id)
                 self.cluster.request_update()
 
     def _maybe_connect(self, node_id):
