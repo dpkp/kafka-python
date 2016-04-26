@@ -1,3 +1,13 @@
+# 1.1.1 (apr 26, 2016)
+
+quick bugfixes
+* fix throttle_time_ms sensor handling (zackdever pr 667)
+* improve handling of disconnected sockets (easypost pr 666 / dpkp)
+* disable standard metadata refresh triggers during bootstrap (dpkp)
+* more predictable future callback/errback exceptions (zackdever pr 670)
+* avoid some exceptions in coordinator.__del__ (dpkp pr 668)
+
+
 # 1.1.0 (Apr 25, 2016)
 
 Consumers

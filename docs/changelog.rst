@@ -1,6 +1,18 @@
 Changelog
 =========
 
+1.1.1 (Apr 26, 2016)
+####################
+
+Bugfixes
+--------
+* Fix throttle_time_ms sensor handling (zackdever PR 667)
+* Improve handling of disconnected sockets (EasyPost PR 666 / dpkp)
+* Disable standard metadata refresh triggers during bootstrap (dpkp)
+* More predictable Future callback/errback exceptions (zackdever PR 670)
+* Avoid some exceptions in Coordinator.__del__ (dpkp PR 668)
+
+
 1.1.0 (Apr 25, 2016)
 ####################
 
