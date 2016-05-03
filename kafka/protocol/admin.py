@@ -2,6 +2,28 @@ from .struct import Struct
 from .types import Array, Bytes, Int16, Schema, String
 
 
+class ApiVersionResponse_v0(Struct):
+    API_KEY = 18
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('error_code', Int16),
+        ('api_versions', Array(
+            ('api_key', Int16),
+            ('min_version', Int16),
+            ('max_version', Int16))))
+
+
+class ApiVersionRequest_v0(Struct):
+    API_KEY = 18
+    API_VERSION = 0
+    RESPONSE_TYPE = ApiVersionResponse_v0
+    SCHEMA = Schema()
+
+
+ApiVersionRequest = [ApiVersionRequest_v0]
+ApiVersionResponse = [ApiVersionResponse_v0]
+
+
 class ListGroupsResponse_v0(Struct):
     API_KEY = 16
     API_VERSION = 0

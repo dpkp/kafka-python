@@ -225,7 +225,7 @@ class KafkaConsumer(six.Iterator):
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
             self.config['api_version'] = self._client.check_version()
-        assert self.config['api_version'] in ('0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
+        assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
 
         # Convert api_version config to tuple for easy comparisons
         self.config['api_version'] = tuple(

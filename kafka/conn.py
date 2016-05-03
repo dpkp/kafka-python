@@ -520,7 +520,7 @@ class BrokerConnection(object):
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from .protocol.admin import ListGroupsRequest
+        from .protocol.admin import ApiVersionRequest, ListGroupsRequest
         from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
         from .protocol.metadata import MetadataRequest
 
@@ -536,6 +536,7 @@ class BrokerConnection(object):
         log.addFilter(log_filter)
 
         test_cases = [
+            ('0.10', ApiVersionRequest[0]()),
             ('0.9', ListGroupsRequest[0]()),
             ('0.8.2', GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ('0.8.1', OffsetFetchRequest[0]('kafka-python-default-group', [])),
