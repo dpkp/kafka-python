@@ -64,7 +64,7 @@ class Sensor(object):
         now = time.time() * 1000
         if time_ms is None:
             time_ms = now
-        self._last_record_time = now
+        self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
             for stat in self._stats:
