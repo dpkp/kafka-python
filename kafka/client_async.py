@@ -59,6 +59,7 @@ class KafkaClient(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
     }
 
     def __init__(self, **configs):
@@ -110,6 +111,11 @@ class KafkaClient(object):
                 the client certificate, as well as any ca certificates needed to
                 establish the certificate's authenticity. default: none.
             ssl_keyfile (str): optional filename containing the client private key.
+                default: none.
+            ssl_crlfile (str): optional filename containing the CRL to check for
+                certificate expiration. By default, no CRL check is done. When
+                providing a file, only the leaf certificate will be checked against
+                this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
                 default: none.
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)

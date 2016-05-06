@@ -70,6 +70,7 @@ class BrokerConnection(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
         'api_version': (0, 8, 2),  # default to most restrictive
         'state_change_callback': lambda conn: True,
     }
@@ -220,6 +221,16 @@ class BrokerConnection(object):
                 self._ssl_context.load_cert_chain(
                     certfile=self.config['ssl_certfile'],
                     keyfile=self.config['ssl_keyfile'])
+            if self.config['ssl_crlfile']:
+                if not hasattr(ssl, 'VERIFY_CRL_CHECK_LEAF'):
+                    log.error('%s: No CRL support with this version of Python.'
+                              ' Disconnecting.', self)
+                    self.close()
+                    return
+                log.info('%s: Loading SSL CRL from %s', str(self), self.config['ssl_crlfile'])
+                self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
+                # pylint: disable=no-member
+                self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         log.debug('%s: wrapping socket in ssl context', str(self))
         try:
             self._sock = self._ssl_context.wrap_socket(
