@@ -30,6 +30,7 @@ from ..common import (
     UnknownTopicOrPartitionError, NotLeaderForPartitionError,
     OffsetOutOfRangeError, FailedPayloadsError, check_error
 )
+from kafka import structs
 from kafka.protocol.message import PartialMessage
 
 
@@ -433,12 +434,26 @@ class SimpleConsumer(Consumer):
                     retry_partitions[partition] = buffer_size
                     resp.messages.pop()
 
-                for message in resp.messages:
-                    if message.offset < self.fetch_offsets[partition]:
-                        log.debug('Skipping message %s because its offset is less than the consumer offset',
-                                  message)
-                        continue
-                    # Put the message in our queue
-                    self.queue.put((partition, message))
-                    self.fetch_offsets[partition] = message.offset + 1
+                for off_and_msg in resp.messages:
+                    (offset, message) = off_and_msg
+                    # Put the messages in our queue
+                    if message.is_compressed():
+                        inner_messages = message.decompress()
+                        for (offset, _msg_size, inner_msg) in inner_messages:
+                            if offset < self.fetch_offsets[partition]:
+                                log.debug('Skipping message %s because its offset is less than the consumer offset',
+                                          message)
+                                continue
+                            self.queue.put((partition,
+                                            structs.OffsetAndMessage(
+                                                offset=offset,
+                                                message=inner_msg)))
+                            self.fetch_offsets[partition] = offset + 1
+                    else:
+                        if offset < self.fetch_offsets[partition]:
+                            log.debug('Skipping message %s because its offset is less than the consumer offset',
+                                      message)
+                            continue
+                        self.queue.put((partition, off_and_msg))
+                        self.fetch_offsets[partition] = offset + 1
             partitions = retry_partitions
