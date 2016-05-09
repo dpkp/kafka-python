@@ -76,6 +76,7 @@ class BrokerConnection(object):
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
+        self.hostname = host
         self.port = port
         self.afi = afi
         self.in_flight_requests = collections.deque()
@@ -224,7 +225,7 @@ class BrokerConnection(object):
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
-                server_hostname=self.host,
+                server_hostname=self.hostname,
                 do_handshake_on_connect=False)
         except ssl.SSLError:
             log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
@@ -605,7 +606,8 @@ class BrokerConnection(object):
         return version
 
     def __repr__(self):
-        return "<BrokerConnection host=%s port=%d>" % (self.host, self.port)
+        return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,
+                                                          self.port)
 
 
 def _address_family(address):
