@@ -204,11 +204,20 @@ class KafkaProtocol(object):
         return [
             kafka.structs.FetchResponsePayload(
                 topic, partition, error, highwater_offset, [
-                    kafka.structs.OffsetAndMessage(offset, message)
+                    kafka.structs.OffsetAndMessage(cls.decode_message_set(offset, message))
                     for offset, _, message in messages])
             for topic, partitions in response.topics
                 for partition, error, highwater_offset, messages in partitions
         ]
+
+    @classmethod
+    def decode_message_set(cls, offset, message):
+        if message.is_compressed():
+            inner_messages = message.decompress()
+            for (inner_offset, _msg_size, inner_msg) in inner_messages:
+                yield inner_offset, inner_msg
+        else:
+            yield offset, message
 
     @classmethod
     def encode_offset_request(cls, payloads=()):
