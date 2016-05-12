@@ -118,7 +118,7 @@ class BrokerConnection(object):
                         self._gai = socket.getaddrinfo(self.host, self.port,
                                                        socket.AF_UNSPEC,
                                                        socket.SOCK_STREAM)
-                    except socket.gaierror, ex:
+                    except socket.gaierror as ex:
                         raise socket.gaierror('getaddrinfo failed for {0}:{1}, ' 
                           'exception was {2}. Is your advertised.host.name correct'
                           ' and resolvable?'.format(
