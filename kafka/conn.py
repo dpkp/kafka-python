@@ -115,9 +115,16 @@ class BrokerConnection(object):
                     # library like python-adns, or move resolution onto its
                     # own thread. This will be subject to the default libc
                     # name resolution timeout (5s on most Linux boxes)
-                    self._gai = socket.getaddrinfo(self.host, self.port,
-                                                   socket.AF_UNSPEC,
-                                                   socket.SOCK_STREAM)
+                    try:
+                        self._gai = socket.getaddrinfo(self.host, self.port,
+                                                       socket.AF_UNSPEC,
+                                                       socket.SOCK_STREAM)
+                    except socket.gaierror as ex:
+                        raise socket.gaierror('getaddrinfo failed for {0}:{1}, ' 
+                          'exception was {2}. Is your advertised.host.name correct'
+                          ' and resolvable?'.format(
+                             self.host, self.port, ex
+                          ))
                     self._gai_index = 0
                 else:
                     # if self._gai already exists, then we should try the next
