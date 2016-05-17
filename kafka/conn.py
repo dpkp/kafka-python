@@ -598,6 +598,13 @@ class BrokerConnection(object):
                 # get a basic Request Timeout. This is not ideal, but we'll deal
                 if isinstance(f.exception, Errors.RequestTimedOutError):
                     pass
+
+                # 0.9 brokers do not close the socket on unrecognized api
+                # requests (bug...). In this case we expect to see a correlation
+                # id mismatch
+                elif (isinstance(f.exception, Errors.CorrelationIdError) and
+                      version == '0.10'):
+                    pass
                 elif six.PY2:
                     assert isinstance(f.exception.args[0], socket.error)
                     assert f.exception.args[0].errno in (32, 54, 104)
