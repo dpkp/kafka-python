@@ -207,6 +207,11 @@ class KafkaProducer(object):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
+        ssl_crlfile (str): optional filename containing the CRL to check for
+            certificate expiration. By default, no CRL check is done. When
+            providing a file, only the leaf certificate will be checked against
+            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
+            default: none.
         api_version (str): specify which kafka API version to use.
             If set to 'auto', will attempt to infer the broker version by
             probing various APIs. Default: auto
@@ -243,6 +248,7 @@ class KafkaProducer(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
         'api_version': 'auto',
     }
 
