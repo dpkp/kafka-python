@@ -2,7 +2,8 @@ import io
 import time
 
 from ..codec import (has_gzip, has_snappy, has_lz4,
-                     gzip_decode, snappy_decode, lz4_decode)
+                     gzip_decode, snappy_decode,
+                     lz4_decode, lz4_decode_old_kafka)
 from . import pickle
 from .struct import Struct
 from .types import (
@@ -116,7 +117,10 @@ class Message(Struct):
             raw_bytes = snappy_decode(self.value)
         elif codec == self.CODEC_LZ4:
             assert has_lz4(), 'LZ4 decompression unsupported'
-            raw_bytes = lz4_decode(self.value)
+            if self.magic == 0:
+                raw_bytes = lz4_decode_old_kafka(self.value)
+            else:
+                raw_bytes = lz4_decode(self.value)
         else:
           raise Exception('This should be impossible')
 
