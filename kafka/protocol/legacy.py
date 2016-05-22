@@ -143,9 +143,11 @@ class KafkaProtocol(object):
                 topic,
                 [(
                     partition,
-                    [(0, 0, kafka.protocol.message.Message(msg.value, key=msg.key,
-                                                           magic=msg.magic,
-                                                           attributes=msg.attributes))
+                    [(0,
+                      kafka.protocol.message.Message(
+                          msg.value, key=msg.key,
+                          magic=msg.magic, attributes=msg.attributes
+                      ).encode())
                     for msg in payload.messages])
                 for partition, payload in topic_payloads.items()])
             for topic, topic_payloads in group_by_topic_and_partition(payloads).items()])
