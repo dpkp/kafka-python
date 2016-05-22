@@ -133,10 +133,10 @@ class KafkaClient(object):
         self._delayed_tasks = DelayedTaskQueue()
         self._last_bootstrap = 0
         self._bootstrap_fails = 0
-        self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
         self._wake_r, self._wake_w = socket.socketpair()
         self._wake_r.setblocking(False)
         self._selector.register(self._wake_r, selectors.EVENT_READ)
+        self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
 
     def _bootstrap(self, hosts):
         # Exponential backoff if bootstrap fails
@@ -174,6 +174,8 @@ class KafkaClient(object):
             # in that case, we should keep the bootstrap connection
             if not len(self.cluster.brokers()):
                 self._conns['bootstrap'] = bootstrap
+            else:
+                bootstrap.close()
             self._bootstrap_fails = 0
             break
         # No bootstrap found...
