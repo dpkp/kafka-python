@@ -581,7 +581,12 @@ class Fetcher(six.Iterator):
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
 
-        version = 1 if self.config['api_version'] >= (0, 9) else 0
+        if self.config['api_version'] >= (0, 10):
+            version = 2
+        elif self.config['api_version'] == (0, 9):
+            version = 1
+        else:
+            version = 0
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
             requests[node_id] = FetchRequest[version](

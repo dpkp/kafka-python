@@ -174,11 +174,16 @@ class Sender(threading.Thread):
                                          for batch in batches])
 
             for topic, partitions in response.topics:
-                for partition, error_code, offset in partitions:
+                for partition_info in partitions:
+                    if response.API_VERSION < 2:
+                        partition, error_code, offset = partition_info
+                        ts = None
+                    else:
+                        partition, error_code, offset, ts = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset)
+                    self._complete_batch(batch, error, offset, ts)
 
         else:
             # this is the acks = 0 case, just complete all requests
@@ -258,7 +263,12 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        version = 1 if self.config['api_version'] >= (0, 9) else 0
+        if self.config['api_version'] >= (0, 10):
+            version = 2
+        elif self.config['api_version'] == (0, 9):
+            version = 1
+        else:
+            version = 0
         return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,
