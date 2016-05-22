@@ -8,6 +8,7 @@ from kafka.codec import (
     gzip_encode, gzip_decode,
     snappy_encode, snappy_decode,
     lz4_encode, lz4_decode,
+    lz4_encode_old_kafka, lz4_decode_old_kafka,
 )
 
 from test.testutil import random_string
@@ -84,4 +85,26 @@ def test_lz4():
     for i in xrange(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = lz4_decode(lz4_encode(b1))
+        assert len(b1) == len(b2)
+        assert b1 == b2
+
+
+@pytest.mark.skipif(not has_lz4(), reason="LZ4 not available")
+def test_lz4_old():
+    for i in xrange(1000):
+        b1 = random_string(100).encode('utf-8')
+        b2 = lz4_decode_old_kafka(lz4_encode_old_kafka(b1))
+        assert len(b1) == len(b2)
+        assert b1 == b2
+
+
+@pytest.mark.xfail(reason="lz4tools library doesnt support incremental decompression")
+@pytest.mark.skipif(not has_lz4(), reason="LZ4 not available")
+def test_lz4_incremental():
+    for i in xrange(1000):
+        # lz4 max single block size is 4MB
+        # make sure we test with multiple-blocks
+        b1 = random_string(100).encode('utf-8') * 50000
+        b2 = lz4_decode(lz4_encode(b1))
+        assert len(b1) == len(b2)
         assert b1 == b2
