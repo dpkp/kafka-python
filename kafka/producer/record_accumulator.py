@@ -36,7 +36,7 @@ class AtomicInteger(object):
 
 
 class RecordBatch(object):
-    def __init__(self, tp, records):
+    def __init__(self, tp, records, message_version=0):
         self.record_count = 0
         #self.max_record_size = 0 # for metrics only
         now = time.time()
@@ -46,22 +46,25 @@ class RecordBatch(object):
         self.last_attempt = now
         self.last_append = now
         self.records = records
+        self.message_version = message_version
         self.topic_partition = tp
         self.produce_future = FutureProduceResult(tp)
         self._retry = False
 
-    def try_append(self, key, value):
+    def try_append(self, timestamp_ms, key, value):
         if not self.records.has_room_for(key, value):
             return None
 
-        self.records.append(self.record_count, Message(value, key=key))
+        msg = Message(value, key=key, magic=self.message_version)
+        self.records.append(self.record_count, msg)
         # self.max_record_size = max(self.max_record_size, Record.record_size(key, value)) # for metrics only
         self.last_append = time.time()
-        future = FutureRecordMetadata(self.produce_future, self.record_count)
+        future = FutureRecordMetadata(self.produce_future, self.record_count,
+                                      timestamp_ms)
         self.record_count += 1
         return future
 
-    def done(self, base_offset=None, exception=None):
+    def done(self, base_offset=None, timestamp_ms=None, exception=None):
         log.debug("Produced messages to topic-partition %s with base offset"
                   " %s and error %s.", self.topic_partition, base_offset,
                   exception) # trace
@@ -69,7 +72,7 @@ class RecordBatch(object):
             log.warning('Batch is already closed -- ignoring batch.done()')
             return
         elif exception is None:
-            self.produce_future.success(base_offset)
+            self.produce_future.success((base_offset, timestamp_ms))
         else:
             self.produce_future.failure(exception)
 
@@ -78,7 +81,7 @@ class RecordBatch(object):
         if ((self.records.is_full() and request_timeout_ms < since_append_ms)
             or (request_timeout_ms < (since_append_ms + linger_ms))):
             self.records.close()
-            self.done(-1, Errors.KafkaTimeoutError(
+            self.done(-1, None, Errors.KafkaTimeoutError(
                 "Batch containing %s record(s) expired due to timeout while"
                 " requesting metadata from brokers for %s", self.record_count,
                 self.topic_partition))
@@ -137,6 +140,7 @@ class RecordAccumulator(object):
         'compression_type': None,
         'linger_ms': 0,
         'retry_backoff_ms': 100,
+        'message_version': 0,
     }
 
     def __init__(self, **configs):
@@ -155,7 +159,7 @@ class RecordAccumulator(object):
                                       self.config['batch_size'])
         self._incomplete = IncompleteRecordBatches()
 
-    def append(self, tp, key, value, max_time_to_block_ms):
+    def append(self, tp, timestamp_ms, key, value, max_time_to_block_ms):
         """Add a record to the accumulator, return the append result.
 
         The append result will contain the future metadata, and flag for
@@ -164,6 +168,7 @@ class RecordAccumulator(object):
         Arguments:
             tp (TopicPartition): The topic/partition to which this record is
                 being sent
+            timestamp_ms (int): The timestamp of the record (epoch ms)
             key (bytes): The key for the record
             value (bytes): The value for the record
             max_time_to_block_ms (int): The maximum time in milliseconds to
@@ -188,7 +193,7 @@ class RecordAccumulator(object):
                 dq = self._batches[tp]
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(key, value)
+                    future = last.try_append(timestamp_ms, key, value)
                     if future is not None:
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
@@ -211,7 +216,7 @@ class RecordAccumulator(object):
 
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(key, value)
+                    future = last.try_append(timestamp_ms, key, value)
                     if future is not None:
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
@@ -220,9 +225,10 @@ class RecordAccumulator(object):
                         return future, batch_is_full, False
 
                 records = MessageSetBuffer(buf, self.config['batch_size'],
-                                           self.config['compression_type'])
-                batch = RecordBatch(tp, records)
-                future = batch.try_append(key, value)
+                                           self.config['compression_type'],
+                                           self.config['message_version'])
+                batch = RecordBatch(tp, records, self.config['message_version'])
+                future = batch.try_append(timestamp_ms, key, value)
                 if not future:
                     raise Exception()
 
