@@ -181,13 +181,20 @@ def snappy_decode(payload):
 
 def lz4_encode(payload):
     """Encode payload using interoperable LZ4 framing. Requires Kafka >= 0.10"""
+    # pylint: disable-msg=no-member
     return lz4f.compressFrame(payload)
 
 
 def lz4_decode(payload):
     """Decode payload using interoperable LZ4 framing. Requires Kafka >= 0.10"""
-    cCtx = lz4f.createCompContext()  # pylint: disable-msg=no-member
-    data = lz4f.decompressFrame(payload, cCtx)  # pylint: disable-msg=no-member
+    # pylint: disable-msg=no-member
+    ctx = lz4f.createDecompContext()
+    data = lz4f.decompressFrame(payload, ctx)
+
+    # lz4f python module does not expose how much of the payload was
+    # actually read if the decompression was only partial.
+    if data['next'] != 0:
+        raise RuntimeError('lz4f unable to decompress full payload')
     return data['decomp']
 
 
