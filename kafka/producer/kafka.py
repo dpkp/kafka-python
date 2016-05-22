@@ -283,7 +283,8 @@ class KafkaProducer(object):
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
 
-        self._accumulator = RecordAccumulator(**self.config)
+        message_version = 1 if self.config['api_version'] >= (0, 10) else 0
+        self._accumulator = RecordAccumulator(message_version=message_version, **self.config)
         self._metadata = client.cluster
         self._sender = Sender(client, self._metadata, self._accumulator,
                               **self.config)

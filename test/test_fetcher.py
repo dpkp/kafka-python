@@ -15,7 +15,7 @@ from kafka.structs import TopicPartition, OffsetAndMetadata
 
 @pytest.fixture
 def client(mocker):
-    return mocker.Mock(spec=KafkaClient)
+    return mocker.Mock(spec=KafkaClient(bootstrap_servers=[]))
 
 
 @pytest.fixture
@@ -69,6 +69,19 @@ def test_init_fetches(fetcher, mocker):
     for node, request in enumerate(fetch_requests):
         fetcher._client.send.assert_any_call(node, request)
     assert len(ret) == len(fetch_requests)
+
+
+@pytest.mark.parametrize(("api_version", "fetch_version"), [
+    ((0, 10), 2),
+    ((0, 9), 1),
+    ((0, 8), 0)
+])
+def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
+    fetcher._client.in_flight_request_count.return_value = 0
+    fetcher.config['api_version'] = api_version
+    by_node = fetcher._create_fetch_requests()
+    requests = by_node.values()
+    assert all([isinstance(r, FetchRequest[fetch_version]) for r in requests])
 
 
 def test_update_fetch_positions(fetcher, mocker):

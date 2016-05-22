@@ -310,6 +310,12 @@ class ClusterAuthorizationFailedError(BrokerResponseError):
                    ' use an inter-broker or administrative API.')
 
 
+class InvalidTimestampError(BrokerResponseError):
+    errno = 32
+    message = 'INVALID_TIMESTAMP'
+    description = ('The timestamp of the message is out of acceptable range.')
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 

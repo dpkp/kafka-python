@@ -30,6 +30,21 @@ class ProduceResponse_v1(Struct):
     )
 
 
+class ProduceResponse_v2(Struct):
+    API_KEY = 0
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('error_code', Int16),
+                ('offset', Int64),
+                ('timestamp', Int64))))),
+        ('thottle_time_ms', Int32)
+    )
+
+
 class ProduceRequest_v0(Struct):
     API_KEY = 0
     API_VERSION = 0
@@ -52,5 +67,12 @@ class ProduceRequest_v1(Struct):
     SCHEMA = ProduceRequest_v0.SCHEMA
 
 
-ProduceRequest = [ProduceRequest_v0, ProduceRequest_v1]
-ProduceResponse = [ProduceResponse_v0, ProduceResponse_v1]
+class ProduceRequest_v2(Struct):
+    API_KEY = 0
+    API_VERSION = 2
+    RESPONSE_TYPE = ProduceResponse_v2
+    SCHEMA = ProduceRequest_v1.SCHEMA
+
+
+ProduceRequest = [ProduceRequest_v0, ProduceRequest_v1, ProduceRequest_v2]
+ProduceResponse = [ProduceResponse_v0, ProduceResponse_v1, ProduceResponse_v2]

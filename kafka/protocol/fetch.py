@@ -32,6 +32,12 @@ class FetchResponse_v1(Struct):
     )
 
 
+class FetchResponse_v2(Struct):
+    API_KEY = 1
+    API_VERSION = 2
+    SCHEMA = FetchResponse_v1.SCHEMA # message format changed internally
+
+
 class FetchRequest_v0(Struct):
     API_KEY = 1
     API_VERSION = 0
@@ -56,5 +62,12 @@ class FetchRequest_v1(Struct):
     SCHEMA = FetchRequest_v0.SCHEMA
 
 
-FetchRequest = [FetchRequest_v0, FetchRequest_v1]
-FetchResponse = [FetchResponse_v0, FetchResponse_v1]
+class FetchRequest_v2(Struct):
+    API_KEY = 1
+    API_VERSION = 2
+    RESPONSE_TYPE = FetchResponse_v2
+    SCHEMA = FetchRequest_v1.SCHEMA
+
+
+FetchRequest = [FetchRequest_v0, FetchRequest_v1, FetchRequest_v2]
+FetchResponse = [FetchResponse_v0, FetchResponse_v1, FetchResponse_v2]
