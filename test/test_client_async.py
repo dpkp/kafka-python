@@ -183,19 +183,22 @@ def test_close(mocker, conn):
     cli = KafkaClient()
     mocker.patch.object(cli, '_selector')
 
+    # bootstrap connection should have been closed
+    assert conn.close.call_count == 1
+
     # Unknown node - silent
     cli.close(2)
 
     # Single node close
     cli._maybe_connect(0)
-    assert not conn.close.call_count
-    cli.close(0)
     assert conn.close.call_count == 1
+    cli.close(0)
+    assert conn.close.call_count == 2
 
     # All node close
     cli._maybe_connect(1)
     cli.close()
-    assert conn.close.call_count == 3
+    assert conn.close.call_count == 4
 
 
 def test_is_disconnected(conn):
