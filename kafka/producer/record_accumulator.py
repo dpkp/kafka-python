@@ -470,7 +470,7 @@ class RecordAccumulator(object):
             for batch in self._incomplete.all():
                 log.debug('Waiting on produce to %s',
                           batch.produce_future.topic_partition)
-                assert batch.produce_future.await(timeout=timeout), 'Timeout waiting for future'
+                assert batch.produce_future.wait(timeout=timeout), 'Timeout waiting for future'
                 assert batch.produce_future.is_done, 'Future not done?'
                 if batch.produce_future.failed():
                     log.warning(batch.produce_future.exception)

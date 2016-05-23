@@ -23,7 +23,7 @@ class FutureProduceResult(Future):
         self._latch.set()
         return ret
 
-    def await(self, timeout=None):
+    def wait(self, timeout=None):
         # wait() on python2.6 returns None instead of the flag value
         return self._latch.wait(timeout) or self._latch.is_set()
 
@@ -46,7 +46,7 @@ class FutureRecordMetadata(Future):
                                     self.relative_offset))
 
     def get(self, timeout=None):
-        if not self.is_done and not self._produce_future.await(timeout):
+        if not self.is_done and not self._produce_future.wait(timeout):
             raise Errors.KafkaTimeoutError(
                 "Timeout after waiting for %s secs." % timeout)
         assert self.is_done
