@@ -286,7 +286,9 @@ class KafkaProducer(object):
         message_version = 1 if self.config['api_version'] >= (0, 10) else 0
         self._accumulator = RecordAccumulator(message_version=message_version, **self.config)
         self._metadata = client.cluster
+        guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata, self._accumulator,
+                              guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
         self._sender.start()
