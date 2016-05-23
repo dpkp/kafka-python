@@ -81,8 +81,8 @@ class OffsetOutOfRangeError(BrokerResponseError):
 class InvalidMessageError(BrokerResponseError):
     errno = 2
     message = 'INVALID_MESSAGE'
-    description = ('This indicates that a message contents does not match its'
-                   ' CRC.')
+    description = ('This message has failed its CRC checksum, exceeds the'
+                   ' valid size, or is otherwise corrupt.')
 
 
 class UnknownTopicOrPartitionError(BrokerResponseError):
