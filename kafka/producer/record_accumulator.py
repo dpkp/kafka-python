@@ -150,7 +150,6 @@ class RecordAccumulator(object):
                 self.config[key] = configs.pop(key)
 
         self._closed = False
-        self._drain_index = 0
         self._flushes_in_progress = AtomicInteger()
         self._appends_in_progress = AtomicInteger()
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [RecordBatch]
@@ -158,6 +157,10 @@ class RecordAccumulator(object):
         self._free = SimpleBufferPool(self.config['buffer_memory'],
                                       self.config['batch_size'])
         self._incomplete = IncompleteRecordBatches()
+        # The following variables should only be accessed by the sender thread,
+        # so we don't need to protect them w/ locking.
+        self.muted = set()
+        self._drain_index = 0
 
     def append(self, tp, timestamp_ms, key, value, max_time_to_block_ms):
         """Add a record to the accumulator, return the append result.
@@ -304,16 +307,20 @@ class RecordAccumulator(object):
         Also return the flag for whether there are any unknown leaders for the
         accumulated partition batches.
 
-        A destination node is ready to send data if ANY one of its partition is
-        not backing off the send and ANY of the following are true:
+        A destination node is ready to send if:
 
-         * The record set is full
-         * The record set has sat in the accumulator for at least linger_ms
-           milliseconds
-         * The accumulator is out of memory and threads are blocking waiting
-           for data (in this case all partitions are immediately considered
-           ready).
-         * The accumulator has been closed
+         * There is at least one partition that is not backing off its send
+         * and those partitions are not muted (to prevent reordering if
+           max_in_flight_connections is set to 1)
+         * and any of the following are true:
+
+           * The record set is full
+           * The record set has sat in the accumulator for at least linger_ms
+             milliseconds
+           * The accumulator is out of memory and threads are blocking waiting
+             for data (in this case all partitions are immediately considered
+             ready).
+           * The accumulator has been closed
 
         Arguments:
             cluster (ClusterMetadata):
@@ -340,6 +347,8 @@ class RecordAccumulator(object):
                 unknown_leaders_exist = True
                 continue
             elif leader in ready_nodes:
+                continue
+            elif tp in self.muted:
                 continue
 
             with self._tp_locks[tp]:
@@ -410,7 +419,7 @@ class RecordAccumulator(object):
             start = self._drain_index
             while True:
                 tp = partitions[self._drain_index]
-                if tp in self._batches:
+                if tp in self._batches and tp not in self.muted:
                     with self._tp_locks[tp]:
                         dq = self._batches[tp]
                         if dq:
