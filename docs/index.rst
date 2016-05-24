@@ -16,7 +16,7 @@ Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with 0.9 brokers, but is backwards-compatible with
+kafka-python is best used with newer brokers (0.10 or 0.9), but is backwards-compatible with
 older versions (to 0.8.0). Some features will only be enabled on newer brokers,
 however; for example, fully coordinated consumer groups -- i.e., dynamic
 partition assignment to multiple consumers in the same group -- requires use of
@@ -37,9 +37,9 @@ KafkaConsumer
 *************
 
 :class:`~kafka.KafkaConsumer` is a high-level message consumer, intended to
-operate as similarly as possible to the official 0.9 java client. Full support
+operate as similarly as possible to the official java client. Full support
 for coordinated consumer groups requires use of kafka brokers that support the
-0.9 Group APIs.
+Group APIs: kafka v0.9+.
 
 See `KafkaConsumer <apidoc/KafkaConsumer.html>`_ for API and configuration details.
 
@@ -118,7 +118,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 0.9).
+attempts to identify which version it is running (0.8.0 to 0.10).
 
 
 Low-level
