@@ -33,16 +33,6 @@ install:
     - pip install tox coveralls
     - pip install .
 
-deploy:
-  provider: pypi
-  server: https://pypi.python.org/pypi
-  user: mumrah
-  password:
-    secure: TIZNKxktOm42/LHLDCuKuPqmAfYKekyHL4MqEFpnqDI5T5sHzG9IQaOwppYfQNggHiILUBzk1j6w/FPJunJyd62AFtydkKtIccqENIIAio78afeCRMQDynstNXjDefmt0s90xLGSlLzDMxCEWB4F6frEtPl/8KpNSFB2fvj+HXY=
-  on:
-    tags: true
-    branch: master
-
 script:
   - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
