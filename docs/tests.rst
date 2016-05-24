@@ -49,7 +49,7 @@ Integration tests
 
 .. code:: bash
 
-    KAFKA_VERSION=0.9.0.1 tox -e py27
+    KAFKA_VERSION=0.10.0.0 tox -e py27
     KAFKA_VERSION=0.8.2.2 tox -e py35
 
 
@@ -60,7 +60,7 @@ kafka server binaries:
 
     ./build_integration.sh
 
-By default, this will install 0.8.1.1, 0.8.2.2, and 0.9.0.1 brokers into the
+By default, this will install 0.8.1.1, 0.8.2.2, 0.9.0.1, and 0.10.0.0 brokers into the
 servers/ directory. To install a specific version, set `KAFKA_VERSION=1.2.3`:
 
 .. code:: bash
