@@ -1,6 +1,45 @@
 Changelog
 =========
 
+1.2.0 (May 24, 2016)
+####################
+
+Support Kafka 0.10 Features
+---------------------------
+* Add protocol support for ApiVersionRequest (dpkp PR 678)
+* KAFKA-3025: Message v1 -- add timetamp and relative offsets (dpkp PR 693)
+* Use Fetch/Produce API v2 for brokers >= 0.10 (uses message format v1) (dpkp PR 694)
+* Use standard LZ4 framing for v1 messages / kafka 0.10 (dpkp PR 695)
+
+Consumers
+---------
+* Update SimpleConsumer / legacy protocol to handle compressed messages (paulcavallaro PR 684)
+
+Producers
+---------
+* KAFKA-3388: Fix expiration of batches sitting in the accumulator (dpkp PR 699)
+* KAFKA-3197: when max.in.flight.request.per.connection = 1, attempt to guarantee ordering (dpkp PR 698)
+* Dont use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
+
+Clients
+-------
+* Fix socket leaks in KafkaClient (dpkp PR 696)
+
+Documentation
+-------------
+<none>
+
+Internals
+---------
+* Support SSL CRL [requires python 2.7.9+ / 3.4+] (vincentbernat PR 683)
+* Use original hostname for SSL checks (vincentbernat PR 682)
+* Always pass encoded message bytes to MessageSet.encode()
+* Raise ValueError on protocol encode/decode errors
+* Supplement socket.gaierror exception in BrokerConnection.connect() (erikbeebe PR 687)
+* BrokerConnection check_version: expect 0.9 to fail with CorrelationIdError
+* Fix small bug in Sensor (zackdever PR 679)
+
+
 1.1.1 (Apr 26, 2016)
 ####################
 
