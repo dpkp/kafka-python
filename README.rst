@@ -127,4 +127,4 @@ Low-level
 
 Legacy support is maintained for low-level consumer and producer classes,
 SimpleConsumer and SimpleProducer. See
-<http://kafka-python.readthedocs.org/master/> for API details.
+<http://kafka-python.readthedocs.io/en/master/simple.html?highlight=SimpleProducer> for API details.
