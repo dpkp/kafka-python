@@ -507,7 +507,20 @@ class BrokerConnection(object):
             return None
 
         # decode response
-        response = ifr.response_type.decode(read_buffer)
+        try:
+            response = ifr.response_type.decode(read_buffer)
+        except ValueError:
+            read_buffer.seek(0)
+            buf = read_buffer.read()
+            log.error('%s Response %d [ResponseType: %s Request: %s]:'
+                      ' Unable to decode %d-byte buffer: %r', self,
+                      ifr.correlation_id, ifr.response_type,
+                      ifr.request, len(buf), buf)
+            ifr.future.failure(Errors.UnknownError('Unable to decode response'))
+            self.close()
+            self._processing = False
+            return None
+
         log.debug('%s Response %d: %s', self, ifr.correlation_id, response)
         ifr.future.success(response)
         self._processing = False
