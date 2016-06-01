@@ -1,3 +1,12 @@
+# 1.2.1 (June 1, 2016)
+
+Bugfixes
+* Fix regression in MessageSet decoding wrt PartialMessages (#716)
+* Catch response decode errors and log details (#715)
+* Fix Legacy support url (#712 - JonasGroeger)
+* Update sphinx docs re 0.10 broker support
+
+
 # 1.2.0 (May 24, 2016)
 
 This release officially adds support for Kafka 0.10
