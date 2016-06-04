@@ -1,12 +1,14 @@
 import socket
 import struct
 from threading import Thread
+import time
 
 import mock
 from . import unittest
 
 from kafka.errors import ConnectionError
-from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SECONDS
+from kafka.conn import KafkaConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS
+from test.testutil import Timer
 
 
 class ConnTest(unittest.TestCase):
@@ -46,56 +48,6 @@ class ConnTest(unittest.TestCase):
 
         # Reset any mock counts caused by __init__
         self.MockCreateConn.reset_mock()
-
-    def test_collect_hosts__happy_path(self):
-        hosts = "127.0.0.1:1234,127.0.0.1"
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('127.0.0.1', 1234, socket.AF_INET),
-            ('127.0.0.1', 9092, socket.AF_INET),
-        ]))
-
-    def test_collect_hosts__ipv6(self):
-        hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_INET6),
-            ('2001:1000:2000::1', 9092, socket.AF_INET6),
-            ('2001:1000:2000::1', 1234, socket.AF_INET6),
-        ]))
-
-    def test_collect_hosts__string_list(self):
-        hosts = [
-            'localhost:1234',
-            'localhost',
-            '[localhost]',
-            '2001::1',
-            '[2001::1]',
-            '[2001::1]:1234',
-        ]
-
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_UNSPEC),
-            ('localhost', 9092, socket.AF_UNSPEC),
-            ('localhost', 9092, socket.AF_INET6),
-            ('2001::1', 9092, socket.AF_INET6),
-            ('2001::1', 9092, socket.AF_INET6),
-            ('2001::1', 1234, socket.AF_INET6),
-        ]))
-
-    def test_collect_hosts__with_spaces(self):
-        hosts = "localhost:1234, localhost"
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234, socket.AF_UNSPEC),
-            ('localhost', 9092, socket.AF_UNSPEC),
-        ]))
-
 
     def test_send(self):
         self.conn.send(self.config['request_id'], self.config['payload'])
@@ -243,3 +195,16 @@ class TestKafkaConnection(unittest.TestCase):
 
         self.assertEqual(err, [None])
         self.assertEqual(socket.call_count, 2)
+
+    def test_timeout(self):
+        def _timeout(*args, **kwargs):
+            timeout = args[1]
+            time.sleep(timeout)
+            raise socket.timeout
+
+        with mock.patch.object(socket, "create_connection", side_effect=_timeout):
+
+            with Timer() as t:
+                with self.assertRaises(ConnectionError):
+                    KafkaConnection("nowhere", 1234, 1.0)
+            self.assertGreaterEqual(t.interval, 1.0)

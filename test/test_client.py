@@ -1,12 +1,10 @@
 import socket
-from time import sleep
 
 from mock import ANY, MagicMock, patch
 import six
 from . import unittest
 
 from kafka import SimpleClient
-from kafka.conn import KafkaConnection
 from kafka.errors import (
     KafkaUnavailableError, LeaderNotAvailableError, KafkaTimeoutError,
     UnknownTopicOrPartitionError, ConnectionError, FailedPayloadsError)
@@ -15,7 +13,6 @@ from kafka.protocol import KafkaProtocol, create_message
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import ProduceRequestPayload, BrokerMetadata, TopicPartition
 
-from test.testutil import Timer
 
 NO_ERROR = 0
 UNKNOWN_TOPIC_OR_PARTITION = 3
@@ -91,7 +88,7 @@ class TestSimpleClient(unittest.TestCase):
             ('kafka02', 9092): MagicMock(),
             ('kafka03', 9092): MagicMock()
         }
-        # inject KafkaConnection side effects
+        # inject BrokerConnection side effects
         mock_conn(mocked_conns[('kafka01', 9092)], success=False)
         mock_conn(mocked_conns[('kafka03', 9092)], success=False)
         future = Future()
@@ -389,19 +386,6 @@ class TestSimpleClient(unittest.TestCase):
         with self.assertRaises(FailedPayloadsError):
             client.send_produce_request(requests)
 
-    def test_timeout(self):
-        def _timeout(*args, **kwargs):
-            timeout = args[1]
-            sleep(timeout)
-            raise socket.timeout
-
-        with patch.object(socket, "create_connection", side_effect=_timeout):
-
-            with Timer() as t:
-                with self.assertRaises(ConnectionError):
-                    KafkaConnection("nowhere", 1234, 1.0)
-            self.assertGreaterEqual(t.interval, 1.0)
-
     def test_correlation_rollover(self):
         with patch.object(SimpleClient, 'load_metadata_for_topics'):
             big_num = 2**31 - 3
@@ -409,4 +393,3 @@ class TestSimpleClient(unittest.TestCase):
             self.assertEqual(big_num + 1, client._next_id())
             self.assertEqual(big_num + 2, client._next_id())
             self.assertEqual(0, client._next_id())
-
