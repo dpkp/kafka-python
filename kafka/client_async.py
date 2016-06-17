@@ -280,6 +280,7 @@ class KafkaClient(object):
                 conn.close()
             self._wake_r.close()
             self._wake_w.close()
+            self._selector.close()
         elif node_id in self._conns:
             self._conns[node_id].close()
         else:
