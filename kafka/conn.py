@@ -561,9 +561,9 @@ class BrokerConnection(object):
 
         class ConnFilter(Filter):
             def filter(self, record):
-                if record.funcName in ('recv', 'send'):
-                    return False
-                return True
+                if record.funcName == 'check_version':
+                    return True
+                return False
         log_filter = ConnFilter()
         log.addFilter(log_filter)
 
