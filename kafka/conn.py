@@ -598,11 +598,11 @@ class BrokerConnection(object):
             # the attempt to write to a disconnected socket should
             # immediately fail and allow us to infer that the prior
             # request was unrecognized
-            self.send(MetadataRequest[0]([]))
+            mr = self.send(MetadataRequest[0]([]))
 
             if self._sock:
                 self._sock.setblocking(True)
-            while not f.is_done:
+            while not (f.is_done and mr.is_done):
                 self.recv()
             if self._sock:
                 self._sock.setblocking(False)
