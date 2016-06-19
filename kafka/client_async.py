@@ -662,20 +662,49 @@ class KafkaClient(object):
         self._delayed_tasks.remove(task)
 
     def check_version(self, node_id=None, timeout=2, strict=False):
-        """Attempt to guess the broker version"""
-        if node_id is None:
-            node_id = self.least_loaded_node()
-            if node_id is None:
-                raise Errors.NoBrokersAvailable()
+        """Attempt to guess a broker version
 
-        # We will be intentionally causing socket failures
-        # and should not trigger metadata refresh
-        self._refresh_on_disconnects = False
-        self._maybe_connect(node_id)
-        conn = self._conns[node_id]
-        version = conn.check_version()
-        self._refresh_on_disconnects = True
-        return version
+        Note: it is possible that this method blocks longer than the
+            specified timeout. This can happen if the entire cluster
+            is down and the client enters a bootstrap backoff sleep.
+            This is only possible if node_id is None.
+
+        Returns: version str, i.e. '0.10', '0.9', '0.8.2', '0.8.1', '0.8.0'
+
+        Raises:
+            NodeNotReadyError (if node_id is provided)
+            NoBrokersAvailable (if node_id is None)
+            UnrecognizedBrokerVersion: please file bug if seen!
+            AssertionError (if strict=True): please file bug if seen!
+        """
+        end = time.time() + timeout
+        while time.time() < end:
+
+            # It is possible that least_loaded_node falls back to bootstrap,
+            # which can block for an increasing backoff period
+            try_node = node_id or self.least_loaded_node()
+            if try_node is None:
+                raise Errors.NoBrokersAvailable()
+            self._maybe_connect(try_node)
+            conn = self._conns[try_node]
+
+            # We will intentionally cause socket failures
+            # These should not trigger metadata refresh
+            self._refresh_on_disconnects = False
+            try:
+                remaining = end - time.time()
+                version = conn.check_version(timeout=remaining, strict=strict)
+                return version
+            except Errors.NodeNotReadyError:
+                # Only raise to user if this is a node-specific request
+                if node_id is not None:
+                    raise
+            finally:
+                self._refresh_on_disconnects = True
+
+        # Timeout
+        else:
+            raise Errors.NoBrokersAvailable()
 
     def wakeup(self):
         if self._wake_w.send(b'x') != 1:
