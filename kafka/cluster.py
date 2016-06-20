@@ -131,6 +131,10 @@ class ClusterMetadata(object):
 
         return max(ttl, next_retry, 0)
 
+    def refresh_backoff(self):
+        """Return milliseconds to wait before attempting to retry after failure"""
+        return self.config['retry_backoff_ms']
+
     def request_update(self):
         """Flags metadata for update, return Future()
 
