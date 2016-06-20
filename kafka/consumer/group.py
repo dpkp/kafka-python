@@ -91,6 +91,10 @@ class KafkaConsumer(six.Iterator):
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
+        reconnect_backoff_max (int): If higher than reconnect_backoff_ms,
+            node reconnect backoff will increase on each consecutive failure
+            up to this maximum. The actual backoff is chosen randomly from
+            an exponentially increasing range. Default: 60000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -230,6 +234,7 @@ class KafkaConsumer(six.Iterator):
         'request_timeout_ms': 40 * 1000,
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
+        'reconnect_backoff_max': 60000,
         'max_in_flight_requests_per_connection': 5,
         'auto_offset_reset': 'latest',
         'enable_auto_commit': True,

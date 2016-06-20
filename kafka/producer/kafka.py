@@ -199,6 +199,10 @@ class KafkaProducer(object):
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
+        reconnect_backoff_max (int): If higher than reconnect_backoff_ms,
+            node reconnect backoff will increase on each consecutive failure
+            up to this maximum. The actual backoff is chosen randomly from
+            an exponentially increasing range. Default: 60000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -276,6 +280,7 @@ class KafkaProducer(object):
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'reconnect_backoff_ms': 50,
+        'reconnect_backoff_max': 60000,
         'max_in_flight_requests_per_connection': 5,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
