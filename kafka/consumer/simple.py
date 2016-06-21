@@ -104,7 +104,7 @@ class SimpleConsumer(Consumer):
              OffsetOutOfRangeError. Valid values are largest and smallest.
              Otherwise, do not reset the offsets and raise OffsetOutOfRangeError.
 
-        offset_storage:. default zookeeper. Specifies that offset storage that
+        offset_storage: default zookeeper. Specifies that offset storage that
              will be used to fetch and commit the offsets. Valid values are
              'zookeeper', 'kafka', or 'dual'.
 

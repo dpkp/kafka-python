@@ -163,7 +163,7 @@ class Consumer(object):
             try:
                 if self.offset_storage in ['zookeeper', 'dual']:
                     self.client.send_offset_commit_request(self.group, reqs)
-                if self.offset_storage in ['zookeeper', 'dual']:
+                if self.offset_storage in ['kafka', 'dual']:
                     self.client.send_offset_commit_request_kafka(self.group, reqs)
             except KafkaError as e:
                 log.error('%s saving offsets: %s', e.__class__.__name__, e)
