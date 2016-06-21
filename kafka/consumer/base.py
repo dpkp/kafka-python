@@ -44,7 +44,8 @@ class Consumer(object):
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 offset_storage='zookeeper'):
 
         self.client = client
         self.topic = kafka_bytestring(topic)
@@ -64,6 +65,7 @@ class Consumer(object):
         self.auto_commit = auto_commit
         self.auto_commit_every_n = auto_commit_every_n
         self.auto_commit_every_t = auto_commit_every_t
+        self.offset_storage = offset_storage
 
         # Set up the auto-commit timer
         if auto_commit is True and auto_commit_every_t is not None:
@@ -159,7 +161,10 @@ class Consumer(object):
                                                 offset, None))
 
             try:
-                self.client.send_offset_commit_request(self.group, reqs)
+                if self.offset_storage in ['zookeeper', 'dual']:
+                    self.client.send_offset_commit_request(self.group, reqs)
+                if self.offset_storage in ['kafka', 'dual']:
+                    self.client.send_offset_commit_request_kafka(self.group, reqs)
             except KafkaError as e:
                 log.error('%s saving offsets: %s', e.__class__.__name__, e)
                 return False
