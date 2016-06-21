@@ -104,6 +104,10 @@ class SimpleConsumer(Consumer):
              OffsetOutOfRangeError. Valid values are largest and smallest.
              Otherwise, do not reset the offsets and raise OffsetOutOfRangeError.
 
+        offset_storage:. default zookeeper. Specifies that offset storage that
+             will be used to fetch and commit the offsets. Valid values are
+             'zookeeper', 'kafka', or 'dual'.
+
     Auto commit details:
     If both auto_commit_every_n and auto_commit_every_t are set, they will
     reset one another when one is triggered. These triggers simply call the
@@ -117,13 +121,15 @@ class SimpleConsumer(Consumer):
                  buffer_size=FETCH_BUFFER_SIZE_BYTES,
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
                  iter_timeout=None,
-                 auto_offset_reset='largest'):
+                 auto_offset_reset='largest',
+                 offset_storage='zookeeper'):
         super(SimpleConsumer, self).__init__(
             client, group, topic,
             partitions=partitions,
             auto_commit=auto_commit,
             auto_commit_every_n=auto_commit_every_n,
-            auto_commit_every_t=auto_commit_every_t)
+            auto_commit_every_t=auto_commit_every_t,
+            offset_storage=offset_storage)
 
         if max_buffer_size is not None and buffer_size > max_buffer_size:
             raise ValueError('buffer_size (%d) is greater than '
