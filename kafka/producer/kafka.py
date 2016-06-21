@@ -330,7 +330,11 @@ class KafkaProducer(object):
         self.close(timeout=0)
 
     def close(self, timeout=None):
-        """Close this producer."""
+        """Close this producer.
+
+        Arguments:
+            timeout (float, optional): timeout in seconds to wait for completion.
+        """
 
         # drop our atexit handler now to avoid leaks
         self._unregister_cleanup()
@@ -476,6 +480,9 @@ class KafkaProducer(object):
         Other threads can continue sending messages while one thread is blocked
         waiting for a flush call to complete; however, no guarantee is made
         about the completion of messages sent after the flush call begins.
+
+        Arguments:
+            timeout (float, optional): timeout in seconds to wait for completion.
         """
         log.debug("Flushing accumulated records in producer.") # trace
         self._accumulator.begin_flush()
