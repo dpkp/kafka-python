@@ -1,3 +1,16 @@
+# 1.2.2 (June 21, 2016)
+
+Bugfixes
+* Clarify timeout unit in KafkaProducer close and flush (ms7s PR 734)
+* Avoid busy poll during metadata refresh failure with retry_backoff_ms (dpkp PR 733)
+* Check_version should scan nodes until version found or timeout (dpkp PR 731)
+* Fix bug which could cause least_loaded_node to always return the same unavailable node (dpkp PR 730)
+* Fix producer garbage collection with weakref in atexit handler (dpkp PR 728)
+* Close client selector to fix fd leak (msmith PR 729)
+* Tweak spelling mistake in error const (steve8918 PR 719)
+* Rearrange connection tests to separate legacy KafkaConnection
+
+
 # 1.2.1 (June 1, 2016)
 
 Bugfixes
