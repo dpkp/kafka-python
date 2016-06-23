@@ -32,9 +32,9 @@ DEFAULT_KAFKA_PORT = 9092
 
 # support older ssl libraries
 try:
-    assert ssl.SSLWantReadError
-    assert ssl.SSLWantWriteError
-    assert ssl.SSLZeroReturnError
+    ssl.SSLWantReadError
+    ssl.SSLWantWriteError
+    ssl.SSLZeroReturnError
 except:
     log.warning('old ssl module detected.'
                 ' ssl error handling may not operate cleanly.'
@@ -121,7 +121,7 @@ class BrokerConnection(object):
                                                        socket.AF_UNSPEC,
                                                        socket.SOCK_STREAM)
                     except socket.gaierror as ex:
-                        raise socket.gaierror('getaddrinfo failed for {0}:{1}, ' 
+                        raise socket.gaierror('getaddrinfo failed for {0}:{1}, '
                           'exception was {2}. Is your advertised.host.name correct'
                           ' and resolvable?'.format(
                              self.host, self.port, ex
