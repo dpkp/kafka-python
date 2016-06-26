@@ -726,7 +726,7 @@ class KafkaClient(object):
     def _clear_wake_fd(self):
         while True:
             try:
-                self._wake_r.recv(1)
+                self._wake_r.recv(1024)
             except:
                 break
 

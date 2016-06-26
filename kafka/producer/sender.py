@@ -163,7 +163,12 @@ class Sender(threading.Thread):
         self.initiate_close()
 
     def add_topic(self, topic):
-        if topic not in self._topics_to_add:
+        # This is generally called from a separate thread
+        # so this needs to be a thread-safe operation
+        # we assume that checking set membership across threads
+        # is ok where self._client._topics should never
+        # remove topics for a producer instance, only add them.
+        if topic not in self._client._topics:
             self._topics_to_add.add(topic)
             self.wakeup()
 
