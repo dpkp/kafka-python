@@ -15,7 +15,7 @@ from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
 from kafka.structs import TopicPartition, BrokerMetadata
 
 from kafka.conn import (
-    collect_hosts, BrokerConnection, DEFAULT_SOCKET_TIMEOUT_SECONDS,
+    collect_hosts, BrokerConnection,
     ConnectionStates, get_ip_port_afi)
 from kafka.protocol import KafkaProtocol
 
@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 class SimpleClient(object):
 
     CLIENT_ID = b'kafka-python'
+    DEFAULT_SOCKET_TIMEOUT_SECONDS = 120
 
     # NOTE: The timeout given to the client should always be greater than the
     # one passed to SimpleConsumer.get_message(), otherwise you can get a
