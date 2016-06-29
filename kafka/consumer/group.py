@@ -149,6 +149,9 @@ class KafkaConsumer(six.Iterator):
             offset commits; 0.8.0 is what is left. If set to 'auto', will
             attempt to infer the broker version by probing various APIs.
             Default: auto
+        api_version_auto_timeout_ms (int): number of milliseconds to throw a
+            timeout exception from the constructor when checking the broker
+            api version. Only applies if api_version set to 'auto'
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
@@ -194,6 +197,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'api_version': 'auto',
+        'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
         'metric_reporters': [],
         'metrics_num_samples': 2,
@@ -230,7 +234,7 @@ class KafkaConsumer(six.Iterator):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
-            self.config['api_version'] = self._client.check_version()
+            self.config['api_version'] = self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms']/1000))
         assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
 
         # Convert api_version config to tuple for easy comparisons

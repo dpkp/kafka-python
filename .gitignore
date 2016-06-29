@@ -11,3 +11,4 @@ servers/*/resources/ssl*
 .noseids
 docs/_build
 .cache*
+.idea/
