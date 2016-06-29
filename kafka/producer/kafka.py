@@ -216,7 +216,7 @@ class KafkaProducer(object):
         api_version (str): specify which kafka API version to use.
             If set to 'auto', will attempt to infer the broker version by
             probing various APIs. Default: auto
-        client_check_version_timeout_ms (int): number of milliseconds to throw a
+        api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
 
@@ -254,7 +254,7 @@ class KafkaProducer(object):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'api_version': 'auto',
-        'client_check_version_timeout_ms': 2000,
+        'api_version_auto_timeout_ms': 2000
     }
 
     def __init__(self, **configs):
@@ -278,7 +278,7 @@ class KafkaProducer(object):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
-            self.config['api_version'] = client.check_version(timeout=(self.config['client_check_version_timeout_ms']/1000))
+            self.config['api_version'] = client.check_version(timeout=(self.config['api_version_auto_timeout_ms']/1000))
         assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0')
 
         # Convert api_version config to tuple for easy comparisons
