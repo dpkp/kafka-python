@@ -5,7 +5,7 @@ from six.moves import xrange
 
 from . import unittest
 from kafka import (
-    KafkaConsumer, MultiProcessConsumer, SimpleConsumer, create_message
+    KafkaConsumer, MultiProcessConsumer, SimpleConsumer, create_message, create_gzip_message
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
 from kafka.errors import ConsumerFetchSizeTooSmall, OffsetOutOfRangeError
@@ -49,6 +49,12 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         return [ x.value for x in messages ]
 
+    def send_gzip_message(self, partition, messages):
+        message = create_gzip_message([(self.msg(str(msg)), None) for msg in messages])
+        produce = ProduceRequestPayload(self.topic, partition, messages = [message])
+        resp, = self.client.send_produce_request([produce])
+        self.assertEqual(resp.error, 0)
+
     def assert_message_count(self, messages, num_messages):
         # Make sure we got them all
         self.assertEqual(len(messages), num_messages)
@@ -84,6 +90,17 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
     def test_simple_consumer(self):
         self.send_messages(0, range(0, 100))
         self.send_messages(1, range(100, 200))
+
+        # Start a consumer
+        consumer = self.consumer()
+
+        self.assert_message_count([ message for message in consumer ], 200)
+
+        consumer.stop()
+
+    def test_simple_consumer_gzip(self):
+        self.send_gzip_message(0, range(0, 100))
+        self.send_gzip_message(1, range(100, 200))
 
         # Start a consumer
         consumer = self.consumer()

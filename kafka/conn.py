@@ -32,9 +32,9 @@ DEFAULT_KAFKA_PORT = 9092
 
 # support older ssl libraries
 try:
-    assert ssl.SSLWantReadError
-    assert ssl.SSLWantWriteError
-    assert ssl.SSLZeroReturnError
+    ssl.SSLWantReadError
+    ssl.SSLWantWriteError
+    ssl.SSLZeroReturnError
 except:
     log.warning('old ssl module detected.'
                 ' ssl error handling may not operate cleanly.'
@@ -70,12 +70,14 @@ class BrokerConnection(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
         'api_version': (0, 8, 2),  # default to most restrictive
         'state_change_callback': lambda conn: True,
     }
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
+        self.hostname = host
         self.port = port
         self.afi = afi
         self.in_flight_requests = collections.deque()
@@ -97,13 +99,54 @@ class BrokerConnection(object):
         self.last_failure = 0
         self._processing = False
         self._correlation_id = 0
+        self._gai = None
+        self._gai_index = 0
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
             self.close()
             log.debug('%s: creating new socket', str(self))
-            self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
+            # if self.afi is set to AF_UNSPEC, then we need to do a name
+            # resolution and try all available address families
+            if self.afi == socket.AF_UNSPEC:
+                if self._gai is None:
+                    # XXX: all DNS functions in Python are blocking. If we really
+                    # want to be non-blocking here, we need to use a 3rd-party
+                    # library like python-adns, or move resolution onto its
+                    # own thread. This will be subject to the default libc
+                    # name resolution timeout (5s on most Linux boxes)
+                    try:
+                        self._gai = socket.getaddrinfo(self.host, self.port,
+                                                       socket.AF_UNSPEC,
+                                                       socket.SOCK_STREAM)
+                    except socket.gaierror as ex:
+                        raise socket.gaierror('getaddrinfo failed for {0}:{1}, '
+                          'exception was {2}. Is your advertised.host.name correct'
+                          ' and resolvable?'.format(
+                             self.host, self.port, ex
+                          ))
+                    self._gai_index = 0
+                else:
+                    # if self._gai already exists, then we should try the next
+                    # name
+                    self._gai_index += 1
+                while True:
+                    if self._gai_index >= len(self._gai):
+                        log.error('Unable to connect to any of the names for {0}:{1}'.format(
+                            self.host, self.port
+                        ))
+                        self.close()
+                        return
+                    afi, _, __, ___, sockaddr = self._gai[self._gai_index]
+                    if afi not in (socket.AF_INET, socket.AF_INET6):
+                        self._gai_index += 1
+                        continue
+                    break
+                self.host, self.port = sockaddr[:2]
+                self._sock = socket.socket(afi, socket.SOCK_STREAM)
+            else:
+                self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
             if self.config['receive_buffer_bytes'] is not None:
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
                                       self.config['receive_buffer_bytes'])
@@ -121,10 +164,16 @@ class BrokerConnection(object):
             # in non-blocking mode, use repeated calls to socket.connect_ex
             # to check connection status
             request_timeout = self.config['request_timeout_ms'] / 1000.0
+            ret = None
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
-            except socket.error as ret:
-                pass
+                # if we got here through a host lookup, we've found a host,port,af tuple
+                # that works save it so we don't do a GAI lookup again
+                if self._gai is not None:
+                    self.afi = self._sock.family
+                    self._gai = None
+            except socket.error as err:
+                ret = err
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
@@ -180,11 +229,21 @@ class BrokerConnection(object):
                 self._ssl_context.load_cert_chain(
                     certfile=self.config['ssl_certfile'],
                     keyfile=self.config['ssl_keyfile'])
+            if self.config['ssl_crlfile']:
+                if not hasattr(ssl, 'VERIFY_CRL_CHECK_LEAF'):
+                    log.error('%s: No CRL support with this version of Python.'
+                              ' Disconnecting.', self)
+                    self.close()
+                    return
+                log.info('%s: Loading SSL CRL from %s', str(self), self.config['ssl_crlfile'])
+                self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
+                # pylint: disable=no-member
+                self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         log.debug('%s: wrapping socket in ssl context', str(self))
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
-                server_hostname=self.host,
+                server_hostname=self.hostname,
                 do_handshake_on_connect=False)
         except ssl.SSLError:
             log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
@@ -341,9 +400,17 @@ class BrokerConnection(object):
         # Not receiving is the state of reading the payload header
         if not self._receiving:
             try:
-                # An extremely small, but non-zero, probability that there are
-                # more than 0 but not yet 4 bytes available to read
-                self._rbuffer.write(self._sock.recv(4 - self._rbuffer.tell()))
+                bytes_to_read = 4 - self._rbuffer.tell()
+                data = self._sock.recv(bytes_to_read)
+                # We expect socket.recv to raise an exception if there is not
+                # enough data to read the full bytes_to_read
+                # but if the socket is disconnected, we will get empty data
+                # without an exception raised
+                if not data:
+                    log.error('%s: socket disconnected', self)
+                    self.close(error=Errors.ConnectionError('socket disconnected'))
+                    return None
+                self._rbuffer.write(data)
             except ssl.SSLWantReadError:
                 return None
             except ConnectionError as e:
@@ -371,7 +438,17 @@ class BrokerConnection(object):
         if self._receiving:
             staged_bytes = self._rbuffer.tell()
             try:
-                self._rbuffer.write(self._sock.recv(self._next_payload_bytes - staged_bytes))
+                bytes_to_read = self._next_payload_bytes - staged_bytes
+                data = self._sock.recv(bytes_to_read)
+                # We expect socket.recv to raise an exception if there is not
+                # enough data to read the full bytes_to_read
+                # but if the socket is disconnected, we will get empty data
+                # without an exception raised
+                if not data:
+                    log.error('%s: socket disconnected', self)
+                    self.close(error=Errors.ConnectionError('socket disconnected'))
+                    return None
+                self._rbuffer.write(data)
             except ssl.SSLWantReadError:
                 return None
             except ConnectionError as e:
@@ -430,7 +507,20 @@ class BrokerConnection(object):
             return None
 
         # decode response
-        response = ifr.response_type.decode(read_buffer)
+        try:
+            response = ifr.response_type.decode(read_buffer)
+        except ValueError:
+            read_buffer.seek(0)
+            buf = read_buffer.read()
+            log.error('%s Response %d [ResponseType: %s Request: %s]:'
+                      ' Unable to decode %d-byte buffer: %r', self,
+                      ifr.correlation_id, ifr.response_type,
+                      ifr.request, len(buf), buf)
+            ifr.future.failure(Errors.UnknownError('Unable to decode response'))
+            self.close()
+            self._processing = False
+            return None
+
         log.debug('%s Response %d: %s', self, ifr.correlation_id, response)
         ifr.future.success(response)
         self._processing = False
@@ -448,35 +538,37 @@ class BrokerConnection(object):
         self._correlation_id = (self._correlation_id + 1) % 2**31
         return self._correlation_id
 
-    def check_version(self, timeout_ms=2000, strict=False):
+    def check_version(self, timeout=2, strict=False):
         """Attempt to guess the broker version. This is a blocking call."""
 
         # Monkeypatch the connection request timeout
         # Generally this timeout should not get triggered
         # but in case it does, we want it to be reasonably short
         stashed_request_timeout_ms = self.config['request_timeout_ms']
-        self.config['request_timeout_ms'] = timeout_ms
+        self.config['request_timeout_ms'] = timeout * 1000
 
         # kafka kills the connection when it doesnt recognize an API request
         # so we can send a test request and then follow immediately with a
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from .protocol.admin import ListGroupsRequest
+        from .protocol.admin import ApiVersionRequest, ListGroupsRequest
         from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
         from .protocol.metadata import MetadataRequest
 
         # Socket errors are logged as exceptions and can alarm users. Mute them
         from logging import Filter
+
         class ConnFilter(Filter):
             def filter(self, record):
-                if record.funcName in ('recv', 'send'):
-                    return False
-                return True
+                if record.funcName == 'check_version':
+                    return True
+                return False
         log_filter = ConnFilter()
         log.addFilter(log_filter)
 
         test_cases = [
+            ('0.10', ApiVersionRequest[0]()),
             ('0.9', ListGroupsRequest[0]()),
             ('0.8.2', GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ('0.8.1', OffsetFetchRequest[0]('kafka-python-default-group', [])),
@@ -487,7 +579,7 @@ class BrokerConnection(object):
             self.connect()
             if self.connected():
                 return
-            timeout_at = time.time() + (timeout_ms/1000)
+            timeout_at = time.time() + timeout
             while time.time() < timeout_at and self.connecting():
                 if self.connect() is ConnectionStates.CONNECTED:
                     return
@@ -506,19 +598,19 @@ class BrokerConnection(object):
             # the attempt to write to a disconnected socket should
             # immediately fail and allow us to infer that the prior
             # request was unrecognized
-            metadata = self.send(MetadataRequest[0]([]))
+            mr = self.send(MetadataRequest[0]([]))
 
             if self._sock:
                 self._sock.setblocking(True)
-            resp_1 = self.recv()
-            resp_2 = self.recv()
+            while not (f.is_done and mr.is_done):
+                self.recv()
             if self._sock:
                 self._sock.setblocking(False)
 
-            assert f.is_done, 'Future is not done? Please file bug report'
-
             if f.succeeded():
                 log.info('Broker version identifed as %s', version)
+                log.info("Set configuration api_version='%s' to skip auto"
+                         " check_version requests on startup", version)
                 break
 
             # Only enable strict checking to verify that we understand failure
@@ -529,6 +621,13 @@ class BrokerConnection(object):
                 # connection to close and fail all pending requests), then we
                 # get a basic Request Timeout. This is not ideal, but we'll deal
                 if isinstance(f.exception, Errors.RequestTimedOutError):
+                    pass
+
+                # 0.9 brokers do not close the socket on unrecognized api
+                # requests (bug...). In this case we expect to see a correlation
+                # id mismatch
+                elif (isinstance(f.exception, Errors.CorrelationIdError) and
+                      version == '0.10'):
                     pass
                 elif six.PY2:
                     assert isinstance(f.exception.args[0], socket.error)
@@ -545,40 +644,75 @@ class BrokerConnection(object):
         return version
 
     def __repr__(self):
-        return "<BrokerConnection host=%s port=%d>" % (self.host, self.port)
+        return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,
+                                                          self.port)
+
+
+def _address_family(address):
+    """
+        Attempt to determine the family of an address (or hostname)
+
+        :return: either socket.AF_INET or socket.AF_INET6 or socket.AF_UNSPEC if the address family
+                 could not be determined
+    """
+    if address.startswith('[') and address.endswith(']'):
+        return socket.AF_INET6
+    for af in (socket.AF_INET, socket.AF_INET6):
+        try:
+            socket.inet_pton(af, address)
+            return af
+        except (ValueError, AttributeError, socket.error):
+            continue
+    return socket.AF_UNSPEC
 
 
 def get_ip_port_afi(host_and_port_str):
     """
         Parse the IP and port from a string in the format of:
 
-            * host_or_ip          <- Can be either IPv4 or IPv6 address or hostname/fqdn
-            * host_or_ip:port     <- This is only for IPv4
-            * [host_or_ip]:port.  <- This is only for IPv6
+            * host_or_ip          <- Can be either IPv4 address literal or hostname/fqdn
+            * host_or_ipv4:port   <- Can be either IPv4 address literal or hostname/fqdn
+            * [host_or_ip]        <- IPv6 address literal
+            * [host_or_ip]:port.  <- IPv6 address literal
+
+        .. note:: IPv6 address literals with ports *must* be enclosed in brackets
 
         .. note:: If the port is not specified, default will be returned.
 
-        :return: tuple (host, port, afi), afi will be socket.AF_INET or socket.AF_INET6
+        :return: tuple (host, port, afi), afi will be socket.AF_INET or socket.AF_INET6 or socket.AF_UNSPEC
     """
-    afi = socket.AF_INET
-
-    if host_and_port_str.strip()[0] == '[':
-        afi = socket.AF_INET6
-        res = host_and_port_str.split("]:")
-        res[0] = res[0].replace("[", "")
-        res[0] = res[0].replace("]", "")
-
-    elif host_and_port_str.count(":") > 1:
-        afi = socket.AF_INET6
-        res = [host_and_port_str]
-
+    host_and_port_str = host_and_port_str.strip()
+    if host_and_port_str.startswith('['):
+        af = socket.AF_INET6
+        host, rest = host_and_port_str[1:].split(']')
+        if rest:
+            port = int(rest[1:])
+        else:
+            port = DEFAULT_KAFKA_PORT
+        return host, port, af
     else:
-        res = host_and_port_str.split(':')
+        if ':' not in host_and_port_str:
+            af = _address_family(host_and_port_str)
+            return host_and_port_str, DEFAULT_KAFKA_PORT, af
+        else:
+            # now we have something with a colon in it and no square brackets. It could be
+            # either an IPv6 address literal (e.g., "::1") or an IP:port pair or a host:port pair
+            try:
+                # if it decodes as an IPv6 address, use that
+                socket.inet_pton(socket.AF_INET6, host_and_port_str)
+                return host_and_port_str, DEFAULT_KAFKA_PORT, socket.AF_INET6
+            except AttributeError:
+                log.warning('socket.inet_pton not available on this platform.'
+                            ' consider pip install win_inet_pton')
+                pass
+            except (ValueError, socket.error):
+                # it's a host:port pair
+                pass
+            host, port = host_and_port_str.rsplit(':', 1)
+            port = int(port)
 
-    host = res[0]
-    port = int(res[1]) if len(res) > 1 else DEFAULT_KAFKA_PORT
-
-    return host.strip(), port, afi
+            af = _address_family(host)
+            return host, port, af
 
 
 def collect_hosts(hosts, randomize=True):

@@ -89,7 +89,8 @@ class BaseCoordinator(object):
         #self.sensors = GroupCoordinatorMetrics(metrics, metric_group_prefix, metric_tags)
 
     def __del__(self):
-        self.heartbeat_task.disable()
+        if hasattr(self, 'heartbeat_task') and self.heartbeat_task:
+            self.heartbeat_task.disable()
 
     @abc.abstractmethod
     def protocol_type(self):

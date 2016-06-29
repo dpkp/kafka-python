@@ -81,13 +81,13 @@ class OffsetOutOfRangeError(BrokerResponseError):
 class InvalidMessageError(BrokerResponseError):
     errno = 2
     message = 'INVALID_MESSAGE'
-    description = ('This indicates that a message contents does not match its'
-                   ' CRC.')
+    description = ('This message has failed its CRC checksum, exceeds the'
+                   ' valid size, or is otherwise corrupt.')
 
 
 class UnknownTopicOrPartitionError(BrokerResponseError):
     errno = 3
-    message = 'UNKNOWN_TOPIC_OR_PARTITON'
+    message = 'UNKNOWN_TOPIC_OR_PARTITION'
     description = ('This request is for a topic or partition that does not'
                    ' exist on this broker.')
     invalid_metadata = True
@@ -308,6 +308,12 @@ class ClusterAuthorizationFailedError(BrokerResponseError):
     message = 'CLUSTER_AUTHORIZATION_FAILED'
     description = ('Returned by the broker when the client is not authorized to'
                    ' use an inter-broker or administrative API.')
+
+
+class InvalidTimestampError(BrokerResponseError):
+    errno = 32
+    message = 'INVALID_TIMESTAMP'
+    description = ('The timestamp of the message is out of acceptable range.')
 
 
 class KafkaUnavailableError(KafkaError):

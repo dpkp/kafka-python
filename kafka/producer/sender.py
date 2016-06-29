@@ -26,6 +26,7 @@ class Sender(threading.Thread):
         'acks': 1,
         'retries': 0,
         'request_timeout_ms': 30000,
+        'guarantee_message_order': False,
         'client_id': 'kafka-python-' + __version__,
         'api_version': (0, 8, 0),
     }
@@ -110,6 +111,12 @@ class Sender(threading.Thread):
         batches_by_node = self._accumulator.drain(
             self._metadata, ready_nodes, self.config['max_request_size'])
 
+        if self.config['guarantee_message_order']:
+            # Mute all the partitions drained
+            for batch_list in six.itervalues(batches_by_node):
+                for batch in batch_list:
+                    self._accumulator.muted.add(batch.topic_partition)
+
         expired_batches = self._accumulator.abort_expired_batches(
             self.config['request_timeout_ms'], self._metadata)
 
@@ -156,14 +163,19 @@ class Sender(threading.Thread):
         self.initiate_close()
 
     def add_topic(self, topic):
-        if topic not in self._topics_to_add:
+        # This is generally called from a separate thread
+        # so this needs to be a thread-safe operation
+        # we assume that checking set membership across threads
+        # is ok where self._client._topics should never
+        # remove topics for a producer instance, only add them.
+        if topic not in self._client._topics:
             self._topics_to_add.add(topic)
             self.wakeup()
 
     def _failed_produce(self, batches, node_id, error):
         log.debug("Error sending produce request to node %d: %s", node_id, error) # trace
         for batch in batches:
-            self._complete_batch(batch, error, -1)
+            self._complete_batch(batch, error, -1, None)
 
     def _handle_produce_response(self, batches, response):
         """Handle a produce response."""
@@ -174,24 +186,30 @@ class Sender(threading.Thread):
                                          for batch in batches])
 
             for topic, partitions in response.topics:
-                for partition, error_code, offset in partitions:
+                for partition_info in partitions:
+                    if response.API_VERSION < 2:
+                        partition, error_code, offset = partition_info
+                        ts = None
+                    else:
+                        partition, error_code, offset, ts = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset)
+                    self._complete_batch(batch, error, offset, ts)
 
         else:
             # this is the acks = 0 case, just complete all requests
             for batch in batches:
-                self._complete_batch(batch, None, -1)
+                self._complete_batch(batch, None, -1, None)
 
-    def _complete_batch(self, batch, error, base_offset):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
         """Complete or retry the given batch of records.
 
         Arguments:
             batch (RecordBatch): The record batch
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
+            timestamp_ms (int, optional): The timestamp returned by the broker for this batch
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -210,11 +228,15 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, error)
+            batch.done(base_offset, timestamp_ms, error)
             self._accumulator.deallocate(batch)
 
         if getattr(error, 'invalid_metadata', False):
             self._metadata.request_update()
+
+        # Unmute the completed partition.
+        if self.config['guarantee_message_order']:
+            self._accumulator.muted.remove(batch.topic_partition)
 
     def _can_retry(self, batch, error):
         """
@@ -257,7 +279,12 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        version = 1 if self.config['api_version'] >= (0, 9) else 0
+        if self.config['api_version'] >= (0, 10):
+            version = 2
+        elif self.config['api_version'] == (0, 9):
+            version = 1
+        else:
+            version = 0
         return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,

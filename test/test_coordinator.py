@@ -548,7 +548,7 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
     patched_coord._client.send.return_value = _f
     future = patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args
-    response = OffsetFetchResponse[0]([('foobar', [(0, 0), (1, 0)])])
+    response = OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])])
     _f.success(response)
     patched_coord._handle_offset_fetch_response.assert_called_with(
         future, response) 

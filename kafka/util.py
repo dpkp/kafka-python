@@ -1,3 +1,4 @@
+import atexit
 import binascii
 import collections
 import struct
@@ -188,3 +189,12 @@ class WeakMethod(object):
         if not isinstance(other, WeakMethod):
             return False
         return self._target_id == other._target_id and self._method_id == other._method_id
+
+
+def try_method_on_system_exit(obj, method, *args, **kwargs):
+    def wrapper(_obj, _meth, *args, **kwargs):
+        try:
+            getattr(_obj, _meth)(*args, **kwargs)
+        except (ReferenceError, AttributeError):
+            pass
+    atexit.register(wrapper, weakref.proxy(obj), method, *args, **kwargs)

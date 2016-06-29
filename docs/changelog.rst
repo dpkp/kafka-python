@@ -1,6 +1,129 @@
 Changelog
 =========
 
+1.2.2 (June 21, 2016)
+#####################
+
+Bugfixes
+--------
+* Clarify timeout unit in KafkaProducer close and flush (ms7s PR 734)
+* Avoid busy poll during metadata refresh failure with retry_backoff_ms (dpkp PR 733)
+* Check_version should scan nodes until version found or timeout (dpkp PR 731)
+* Fix bug which could cause least_loaded_node to always return the same unavailable node (dpkp PR 730)
+* Fix producer garbage collection with weakref in atexit handler (dpkp PR 728)
+* Close client selector to fix fd leak (msmith PR 729)
+* Tweak spelling mistake in error const (steve8918 PR 719)
+* Rearrange connection tests to separate legacy KafkaConnection
+
+
+1.2.1 (June 1, 2016)
+####################
+
+Bugfixes
+--------
+* Fix regression in MessageSet decoding wrt PartialMessages (#716)
+* Catch response decode errors and log details (#715)
+* Fix Legacy support url (#712 - JonasGroeger)
+* Update sphinx docs re 0.10 broker support
+
+
+1.2.0 (May 24, 2016)
+####################
+
+Support Kafka 0.10 Features
+---------------------------
+* Add protocol support for ApiVersionRequest (dpkp PR 678)
+* KAFKA-3025: Message v1 -- add timetamp and relative offsets (dpkp PR 693)
+* Use Fetch/Produce API v2 for brokers >= 0.10 (uses message format v1) (dpkp PR 694)
+* Use standard LZ4 framing for v1 messages / kafka 0.10 (dpkp PR 695)
+
+Consumers
+---------
+* Update SimpleConsumer / legacy protocol to handle compressed messages (paulcavallaro PR 684)
+
+Producers
+---------
+* KAFKA-3388: Fix expiration of batches sitting in the accumulator (dpkp PR 699)
+* KAFKA-3197: when max.in.flight.request.per.connection = 1, attempt to guarantee ordering (dpkp PR 698)
+* Dont use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
+
+Clients
+-------
+* Fix socket leaks in KafkaClient (dpkp PR 696)
+
+Documentation
+-------------
+<none>
+
+Internals
+---------
+* Support SSL CRL [requires python 2.7.9+ / 3.4+] (vincentbernat PR 683)
+* Use original hostname for SSL checks (vincentbernat PR 682)
+* Always pass encoded message bytes to MessageSet.encode()
+* Raise ValueError on protocol encode/decode errors
+* Supplement socket.gaierror exception in BrokerConnection.connect() (erikbeebe PR 687)
+* BrokerConnection check_version: expect 0.9 to fail with CorrelationIdError
+* Fix small bug in Sensor (zackdever PR 679)
+
+
+1.1.1 (Apr 26, 2016)
+####################
+
+Bugfixes
+--------
+* Fix throttle_time_ms sensor handling (zackdever PR 667)
+* Improve handling of disconnected sockets (EasyPost PR 666 / dpkp)
+* Disable standard metadata refresh triggers during bootstrap (dpkp)
+* More predictable Future callback/errback exceptions (zackdever PR 670)
+* Avoid some exceptions in Coordinator.__del__ (dpkp PR 668)
+
+
+1.1.0 (Apr 25, 2016)
+####################
+
+Consumers
+---------
+* Avoid resending FetchRequests that are pending on internal queue
+* Log debug messages when skipping fetched messages due to offset checks
+* KAFKA-3013: Include topic-partition in exception for expired batches
+* KAFKA-3318: clean up consumer logging and error messages
+* Improve unknown coordinator error handling
+* Improve auto-commit error handling when group_id is None
+* Add paused() API (zackdever PR 602)
+* Add default_offset_commit_callback to KafkaConsumer DEFAULT_CONFIGS
+
+Producers
+---------
+<none>
+
+Clients
+-------
+* Support SSL connections
+* Use selectors module for non-blocking IO
+* Refactor KafkaClient connection management
+* Fix AttributeError in __del__
+* SimpleClient: catch errors thrown by _get_leader_for_partition (zackdever PR 606)
+
+Documentation
+-------------
+* Fix serializer/deserializer examples in README
+* Update max.block.ms docstring
+* Remove errant next(consumer) from consumer documentation
+* Add producer.flush() to usage docs
+
+Internals
+---------
+* Add initial metrics implementation (zackdever PR 637)
+* KAFKA-2136: support Fetch and Produce v1 (throttle_time_ms)
+* Use version-indexed lists for request/response protocol structs (dpkp PR 630)
+* Split kafka.common into kafka.structs and kafka.errors
+* Handle partial socket send() (dpkp PR 611)
+* Fix windows support (dpkp PR 603)
+* IPv6 support (TimEvens PR 615; Roguelazer PR 642)
+
+
+
+
 1.0.2 (Mar 14, 2016)
 ####################
 

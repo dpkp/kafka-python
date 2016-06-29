@@ -15,3 +15,6 @@ except ImportError:
             pass
 
 logging.getLogger(__name__).addHandler(NullHandler())
+
+from kafka.future import Future
+Future.error_on_callbacks = True  # always fail during testing

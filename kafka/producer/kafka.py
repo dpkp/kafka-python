@@ -5,12 +5,13 @@ import copy
 import logging
 import threading
 import time
+import weakref
 
+from .. import errors as Errors
 from ..client_async import KafkaClient
-from ..structs import TopicPartition
 from ..partitioner.default import DefaultPartitioner
 from ..protocol.message import Message, MessageSet
-from .. import errors as Errors
+from ..structs import TopicPartition
 from .future import FutureRecordMetadata, FutureProduceResult
 from .record_accumulator import AtomicInteger, RecordAccumulator
 from .sender import Sender
@@ -207,6 +208,11 @@ class KafkaProducer(object):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
+        ssl_crlfile (str): optional filename containing the CRL to check for
+            certificate expiration. By default, no CRL check is done. When
+            providing a file, only the leaf certificate will be checked against
+            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
+            default: none.
         api_version (str): specify which kafka API version to use.
             If set to 'auto', will attempt to infer the broker version by
             probing various APIs. Default: auto
@@ -246,6 +252,7 @@ class KafkaProducer(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
         'api_version': 'auto',
         'client_check_version_timeout_ms': 2000,
     }
@@ -271,8 +278,8 @@ class KafkaProducer(object):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
-            self.config['api_version'] = client.check_version(timeout_ms=self.config['client_check_version_timeout_ms'])
-        assert self.config['api_version'] in ('0.9', '0.8.2', '0.8.1', '0.8.0')
+            self.config['api_version'] = client.check_version(timeout=(self.config['client_check_version_timeout_ms']/1000))
+        assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0')
 
         # Convert api_version config to tuple for easy comparisons
         self.config['api_version'] = tuple(
@@ -281,21 +288,61 @@ class KafkaProducer(object):
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
 
-        self._accumulator = RecordAccumulator(**self.config)
+        message_version = 1 if self.config['api_version'] >= (0, 10) else 0
+        self._accumulator = RecordAccumulator(message_version=message_version, **self.config)
         self._metadata = client.cluster
+        guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata, self._accumulator,
+                              guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
         self._sender.start()
         self._closed = False
-        atexit.register(self.close, timeout=0)
+
+        self._cleanup = self._cleanup_factory()
+        atexit.register(self._cleanup)
         log.debug("Kafka producer started")
+
+    def _cleanup_factory(self):
+        """Build a cleanup clojure that doesn't increase our ref count"""
+        _self = weakref.proxy(self)
+        def wrapper():
+            try:
+                _self.close()
+            except (ReferenceError, AttributeError):
+                pass
+        return wrapper
+
+    def _unregister_cleanup(self):
+        if getattr(self, '_cleanup'):
+            if hasattr(atexit, 'unregister'):
+                atexit.unregister(self._cleanup) # pylint: disable=no-member
+
+            # py2 requires removing from private attribute...
+            else:
+
+                # ValueError on list.remove() if the exithandler no longer exists
+                # but that is fine here
+                try:
+                    atexit._exithandlers.remove(  # pylint: disable=no-member
+                        (self._cleanup, (), {}))
+                except ValueError:
+                    pass
+        self._cleanup = None
 
     def __del__(self):
         self.close(timeout=0)
 
     def close(self, timeout=None):
-        """Close this producer."""
+        """Close this producer.
+
+        Arguments:
+            timeout (float, optional): timeout in seconds to wait for completion.
+        """
+
+        # drop our atexit handler now to avoid leaks
+        self._unregister_cleanup()
+
         if not hasattr(self, '_closed') or self._closed:
             log.info('Kafka producer closed')
             return
@@ -345,7 +392,7 @@ class KafkaProducer(object):
         max_wait = self.config['max_block_ms'] / 1000.0
         return self._wait_on_metadata(topic, max_wait)
 
-    def send(self, topic, value=None, key=None, partition=None):
+    def send(self, topic, value=None, key=None, partition=None, timestamp_ms=None):
         """Publish a message to a topic.
 
         Arguments:
@@ -366,6 +413,8 @@ class KafkaProducer(object):
                 partition (but if key is None, partition is chosen randomly).
                 Must be type bytes, or be serializable to bytes via configured
                 key_serializer.
+            timestamp_ms (int, optional): epoch milliseconds (from Jan 1 1970 UTC)
+                to use as the message timestamp. Defaults to current time.
 
         Returns:
             FutureRecordMetadata: resolves to RecordMetadata
@@ -394,8 +443,11 @@ class KafkaProducer(object):
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
+            if timestamp_ms is None:
+                timestamp_ms = int(time.time() * 1000)
             log.debug("Sending (key=%s value=%s) to %s", key, value, tp)
-            result = self._accumulator.append(tp, key_bytes, value_bytes,
+            result = self._accumulator.append(tp, timestamp_ms,
+                                              key_bytes, value_bytes,
                                               self.config['max_block_ms'])
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
@@ -414,8 +466,10 @@ class KafkaProducer(object):
         except Exception as e:
             log.debug("Exception occurred during message send: %s", e)
             return FutureRecordMetadata(
-                FutureProduceResult(TopicPartition(topic, partition)),
-                -1).failure(e)
+                FutureProduceResult(
+                    TopicPartition(topic, partition)),
+                    -1, None
+                ).failure(e)
 
     def flush(self, timeout=None):
         """
@@ -430,6 +484,9 @@ class KafkaProducer(object):
         Other threads can continue sending messages while one thread is blocked
         waiting for a flush call to complete; however, no guarantee is made
         about the completion of messages sent after the flush call begins.
+
+        Arguments:
+            timeout (float, optional): timeout in seconds to wait for completion.
         """
         log.debug("Flushing accumulated records in producer.") # trace
         self._accumulator.begin_flush()

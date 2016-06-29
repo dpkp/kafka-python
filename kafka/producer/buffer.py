@@ -6,7 +6,8 @@ import threading
 import time
 
 from ..codec import (has_gzip, has_snappy, has_lz4,
-                     gzip_encode, snappy_encode, lz4_encode)
+                     gzip_encode, snappy_encode,
+                     lz4_encode, lz4_encode_old_kafka)
 from .. import errors as Errors
 from ..protocol.types import Int32, Int64
 from ..protocol.message import MessageSet, Message
@@ -28,10 +29,16 @@ class MessageSetBuffer(object):
         'gzip': (has_gzip, gzip_encode, Message.CODEC_GZIP),
         'snappy': (has_snappy, snappy_encode, Message.CODEC_SNAPPY),
         'lz4': (has_lz4, lz4_encode, Message.CODEC_LZ4),
+        'lz4-old-kafka': (has_lz4, lz4_encode_old_kafka, Message.CODEC_LZ4),
     }
-    def __init__(self, buf, batch_size, compression_type=None):
+    def __init__(self, buf, batch_size, compression_type=None, message_version=0):
         if compression_type is not None:
             assert compression_type in self._COMPRESSORS, 'Unrecognized compression type'
+
+            # Kafka 0.8/0.9 had a quirky lz4...
+            if compression_type == 'lz4' and message_version == 0:
+                compression_type = 'lz4-old-kafka'
+
             checker, encoder, attributes = self._COMPRESSORS[compression_type]
             assert checker(), 'Compression Libraries Not Found'
             self._compressor = encoder
@@ -40,6 +47,7 @@ class MessageSetBuffer(object):
             self._compressor = None
             self._compression_attributes = None
 
+        self._message_version = message_version
         self._buffer = buf
         # Init MessageSetSize to 0 -- update on close
         self._buffer.seek(0)
@@ -85,7 +93,8 @@ class MessageSetBuffer(object):
             # TODO: avoid copies with bytearray / memoryview
             self._buffer.seek(4)
             msg = Message(self._compressor(self._buffer.read()),
-                          attributes=self._compression_attributes)
+                          attributes=self._compression_attributes,
+                          magic=self._message_version)
             encoded = msg.encode()
             self._buffer.seek(4)
             self._buffer.write(Int64.encode(0)) # offset 0 for wrapper msg

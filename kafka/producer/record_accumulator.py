@@ -36,32 +36,35 @@ class AtomicInteger(object):
 
 
 class RecordBatch(object):
-    def __init__(self, tp, records):
+    def __init__(self, tp, records, message_version=0):
         self.record_count = 0
         #self.max_record_size = 0 # for metrics only
         now = time.time()
-        #self.created = now # for metrics only
+        self.created = now
         self.drained = None
         self.attempts = 0
         self.last_attempt = now
         self.last_append = now
         self.records = records
+        self.message_version = message_version
         self.topic_partition = tp
         self.produce_future = FutureProduceResult(tp)
         self._retry = False
 
-    def try_append(self, key, value):
+    def try_append(self, timestamp_ms, key, value):
         if not self.records.has_room_for(key, value):
             return None
 
-        self.records.append(self.record_count, Message(value, key=key))
+        msg = Message(value, key=key, magic=self.message_version)
+        self.records.append(self.record_count, msg)
         # self.max_record_size = max(self.max_record_size, Record.record_size(key, value)) # for metrics only
         self.last_append = time.time()
-        future = FutureRecordMetadata(self.produce_future, self.record_count)
+        future = FutureRecordMetadata(self.produce_future, self.record_count,
+                                      timestamp_ms)
         self.record_count += 1
         return future
 
-    def done(self, base_offset=None, exception=None):
+    def done(self, base_offset=None, timestamp_ms=None, exception=None):
         log.debug("Produced messages to topic-partition %s with base offset"
                   " %s and error %s.", self.topic_partition, base_offset,
                   exception) # trace
@@ -69,16 +72,34 @@ class RecordBatch(object):
             log.warning('Batch is already closed -- ignoring batch.done()')
             return
         elif exception is None:
-            self.produce_future.success(base_offset)
+            self.produce_future.success((base_offset, timestamp_ms))
         else:
             self.produce_future.failure(exception)
 
-    def maybe_expire(self, request_timeout_ms, linger_ms):
-        since_append_ms = 1000 * (time.time() - self.last_append)
-        if ((self.records.is_full() and request_timeout_ms < since_append_ms)
-            or (request_timeout_ms < (since_append_ms + linger_ms))):
+    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full):
+        """Expire batches if metadata is not available
+
+        A batch whose metadata is not available should be expired if one
+        of the following is true:
+
+          * the batch is not in retry AND request timeout has elapsed after
+            it is ready (full or linger.ms has reached).
+
+          * the batch is in retry AND request timeout has elapsed after the
+            backoff period ended.
+        """
+        now = time.time()
+        since_append = now - self.last_append
+        since_ready = now - (self.created + linger_ms / 1000.0)
+        since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
+        timeout = request_timeout_ms / 1000.0
+
+        if ((not self.in_retry() and is_full and timeout < since_append) or
+            (not self.in_retry() and timeout < since_ready) or
+            (self.in_retry() and timeout < since_backoff)):
+
             self.records.close()
-            self.done(-1, Errors.KafkaTimeoutError(
+            self.done(-1, None, Errors.KafkaTimeoutError(
                 "Batch containing %s record(s) expired due to timeout while"
                 " requesting metadata from brokers for %s", self.record_count,
                 self.topic_partition))
@@ -137,6 +158,7 @@ class RecordAccumulator(object):
         'compression_type': None,
         'linger_ms': 0,
         'retry_backoff_ms': 100,
+        'message_version': 0,
     }
 
     def __init__(self, **configs):
@@ -146,7 +168,6 @@ class RecordAccumulator(object):
                 self.config[key] = configs.pop(key)
 
         self._closed = False
-        self._drain_index = 0
         self._flushes_in_progress = AtomicInteger()
         self._appends_in_progress = AtomicInteger()
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [RecordBatch]
@@ -154,8 +175,12 @@ class RecordAccumulator(object):
         self._free = SimpleBufferPool(self.config['buffer_memory'],
                                       self.config['batch_size'])
         self._incomplete = IncompleteRecordBatches()
+        # The following variables should only be accessed by the sender thread,
+        # so we don't need to protect them w/ locking.
+        self.muted = set()
+        self._drain_index = 0
 
-    def append(self, tp, key, value, max_time_to_block_ms):
+    def append(self, tp, timestamp_ms, key, value, max_time_to_block_ms):
         """Add a record to the accumulator, return the append result.
 
         The append result will contain the future metadata, and flag for
@@ -164,6 +189,7 @@ class RecordAccumulator(object):
         Arguments:
             tp (TopicPartition): The topic/partition to which this record is
                 being sent
+            timestamp_ms (int): The timestamp of the record (epoch ms)
             key (bytes): The key for the record
             value (bytes): The value for the record
             max_time_to_block_ms (int): The maximum time in milliseconds to
@@ -188,7 +214,7 @@ class RecordAccumulator(object):
                 dq = self._batches[tp]
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(key, value)
+                    future = last.try_append(timestamp_ms, key, value)
                     if future is not None:
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
@@ -211,7 +237,7 @@ class RecordAccumulator(object):
 
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(key, value)
+                    future = last.try_append(timestamp_ms, key, value)
                     if future is not None:
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
@@ -220,9 +246,10 @@ class RecordAccumulator(object):
                         return future, batch_is_full, False
 
                 records = MessageSetBuffer(buf, self.config['batch_size'],
-                                           self.config['compression_type'])
-                batch = RecordBatch(tp, records)
-                future = batch.try_append(key, value)
+                                           self.config['compression_type'],
+                                           self.config['message_version'])
+                batch = RecordBatch(tp, records, self.config['message_version'])
+                future = batch.try_append(timestamp_ms, key, value)
                 if not future:
                     raise Exception()
 
@@ -250,19 +277,33 @@ class RecordAccumulator(object):
         count = 0
         for tp in list(self._batches.keys()):
             assert tp in self._tp_locks, 'TopicPartition not in locks dict'
+
+            # We only check if the batch should be expired if the partition
+            # does not have a batch in flight. This is to avoid the later
+            # batches get expired when an earlier batch is still in progress.
+            # This protection only takes effect when user sets
+            # max.in.flight.request.per.connection=1. Otherwise the expiration
+            # order is not guranteed.
+            if tp in self.muted:
+                continue
+
             with self._tp_locks[tp]:
                 # iterate over the batches and expire them if they have stayed
                 # in accumulator for more than request_timeout_ms
                 dq = self._batches[tp]
                 for batch in dq:
+                    is_full = bool(bool(batch != dq[-1]) or batch.records.is_full())
                     # check if the batch is expired
                     if batch.maybe_expire(request_timeout_ms,
-                                          self.config['linger_ms']):
+                                          self.config['retry_backoff_ms'],
+                                          self.config['linger_ms'],
+                                          is_full):
                         expired_batches.append(batch)
                         to_remove.append(batch)
                         count += 1
                         self.deallocate(batch)
-                    elif not batch.in_retry():
+                    else:
+                        # Stop at the first batch that has not expired.
                         break
 
                 # Python does not allow us to mutate the dq during iteration
@@ -298,16 +339,20 @@ class RecordAccumulator(object):
         Also return the flag for whether there are any unknown leaders for the
         accumulated partition batches.
 
-        A destination node is ready to send data if ANY one of its partition is
-        not backing off the send and ANY of the following are true:
+        A destination node is ready to send if:
 
-         * The record set is full
-         * The record set has sat in the accumulator for at least linger_ms
-           milliseconds
-         * The accumulator is out of memory and threads are blocking waiting
-           for data (in this case all partitions are immediately considered
-           ready).
-         * The accumulator has been closed
+         * There is at least one partition that is not backing off its send
+         * and those partitions are not muted (to prevent reordering if
+           max_in_flight_connections is set to 1)
+         * and any of the following are true:
+
+           * The record set is full
+           * The record set has sat in the accumulator for at least linger_ms
+             milliseconds
+           * The accumulator is out of memory and threads are blocking waiting
+             for data (in this case all partitions are immediately considered
+             ready).
+           * The accumulator has been closed
 
         Arguments:
             cluster (ClusterMetadata):
@@ -334,6 +379,8 @@ class RecordAccumulator(object):
                 unknown_leaders_exist = True
                 continue
             elif leader in ready_nodes:
+                continue
+            elif tp in self.muted:
                 continue
 
             with self._tp_locks[tp]:
@@ -404,7 +451,7 @@ class RecordAccumulator(object):
             start = self._drain_index
             while True:
                 tp = partitions[self._drain_index]
-                if tp in self._batches:
+                if tp in self._batches and tp not in self.muted:
                     with self._tp_locks[tp]:
                         dq = self._batches[tp]
                         if dq:
@@ -464,7 +511,7 @@ class RecordAccumulator(object):
             for batch in self._incomplete.all():
                 log.debug('Waiting on produce to %s',
                           batch.produce_future.topic_partition)
-                assert batch.produce_future.await(timeout=timeout), 'Timeout waiting for future'
+                assert batch.produce_future.wait(timeout=timeout), 'Timeout waiting for future'
                 assert batch.produce_future.is_done, 'Future not done?'
                 if batch.produce_future.failed():
                     log.warning(batch.produce_future.exception)

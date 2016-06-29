@@ -138,6 +138,11 @@ class KafkaConsumer(six.Iterator):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
+        ssl_crlfile (str): optional filename containing the CRL to check for
+            certificate expiration. By default, no CRL check is done. When
+            providing a file, only the leaf certificate will be checked against
+            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
+            default: none.
         api_version (str): specify which kafka API version to use.
             0.9 enables full group coordination features; 0.8.2 enables
             kafka-storage offset commits; 0.8.1 enables zookeeper-storage
@@ -190,6 +195,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_crlfile': None,
         'api_version': 'auto',
         'client_check_version_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
@@ -228,8 +234,8 @@ class KafkaConsumer(six.Iterator):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] == 'auto':
-            self.config['api_version'] = self._client.check_version(timeout_ms=self.config['client_check_version_timeout_ms'])
-        assert self.config['api_version'] in ('0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
+            self.config['api_version'] = self._client.check_version(timeout=(self.config['client_check_version_timeout_ms']/1000))
+        assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
 
         # Convert api_version config to tuple for easy comparisons
         self.config['api_version'] = tuple(

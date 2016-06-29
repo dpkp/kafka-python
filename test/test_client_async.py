@@ -20,11 +20,11 @@ from kafka.structs import BrokerMetadata
 
 
 @pytest.mark.parametrize("bootstrap,expected_hosts", [
-    (None, [('localhost', 9092, socket.AF_INET)]),
-    ('foobar:1234', [('foobar', 1234, socket.AF_INET)]),
-    ('fizzbuzz', [('fizzbuzz', 9092, socket.AF_INET)]),
-    ('foo:12,bar:34', [('foo', 12, socket.AF_INET), ('bar', 34, socket.AF_INET)]),
-    (['fizz:56', 'buzz'], [('fizz', 56, socket.AF_INET), ('buzz', 9092, socket.AF_INET)]),
+    (None, [('localhost', 9092, socket.AF_UNSPEC)]),
+    ('foobar:1234', [('foobar', 1234, socket.AF_UNSPEC)]),
+    ('fizzbuzz', [('fizzbuzz', 9092, socket.AF_UNSPEC)]),
+    ('foo:12,bar:34', [('foo', 12, socket.AF_UNSPEC), ('bar', 34, socket.AF_UNSPEC)]),
+    (['fizz:56', 'buzz'], [('fizz', 56, socket.AF_UNSPEC), ('buzz', 9092, socket.AF_UNSPEC)]),
 ])
 def test_bootstrap_servers(mocker, bootstrap, expected_hosts):
     mocker.patch.object(KafkaClient, '_bootstrap')
@@ -42,7 +42,7 @@ def test_bootstrap_success(conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient()
     args, kwargs = conn.call_args
-    assert args == ('localhost', 9092, socket.AF_INET)
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     assert kwargs == cli.config
     conn.connect.assert_called_with()
@@ -55,7 +55,7 @@ def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
     cli = KafkaClient()
     args, kwargs = conn.call_args
-    assert args == ('localhost', 9092, socket.AF_INET)
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     assert kwargs == cli.config
     conn.connect.assert_called_with()
@@ -183,19 +183,22 @@ def test_close(mocker, conn):
     cli = KafkaClient()
     mocker.patch.object(cli, '_selector')
 
+    # bootstrap connection should have been closed
+    assert conn.close.call_count == 1
+
     # Unknown node - silent
     cli.close(2)
 
     # Single node close
     cli._maybe_connect(0)
-    assert not conn.close.call_count
-    cli.close(0)
     assert conn.close.call_count == 1
+    cli.close(0)
+    assert conn.close.call_count == 2
 
     # All node close
     cli._maybe_connect(1)
     cli.close()
-    assert conn.close.call_count == 3
+    assert conn.close.call_count == 4
 
 
 def test_is_disconnected(conn):
@@ -290,8 +293,106 @@ def test_set_topics():
     pass
 
 
-def test_maybe_refresh_metadata():
-    pass
+def test_maybe_refresh_metadata_ttl(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+
+    cli = KafkaClient(request_timeout_ms=9999999, retry_backoff_ms=2222)
+
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+    tasks.return_value = 9999999
+
+    ttl = mocker.patch.object(cli.cluster, 'ttl')
+    ttl.return_value = 1234
+
+    cli.poll(timeout_ms=9999999, sleep=True)
+    _poll.assert_called_with(1.234, sleep=True)
+
+
+def test_maybe_refresh_metadata_backoff(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+
+    cli = KafkaClient(request_timeout_ms=9999999, retry_backoff_ms=2222)
+
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+    tasks.return_value = 9999999
+
+    ttl = mocker.patch.object(cli.cluster, 'ttl')
+    ttl.return_value = 0
+
+    now = time.time()
+    t = mocker.patch('time.time')
+    t.return_value = now
+    cli._last_no_node_available_ms = now * 1000
+
+    cli.poll(timeout_ms=9999999, sleep=True)
+    _poll.assert_called_with(2.222, sleep=True)
+
+
+def test_maybe_refresh_metadata_in_progress(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+
+    cli = KafkaClient(request_timeout_ms=9999999, retry_backoff_ms=2222)
+
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+    tasks.return_value = 9999999
+
+    ttl = mocker.patch.object(cli.cluster, 'ttl')
+    ttl.return_value = 0
+
+    cli._metadata_refresh_in_progress = True
+
+    cli.poll(timeout_ms=9999999, sleep=True)
+    _poll.assert_called_with(9999.999, sleep=True)
+
+
+def test_maybe_refresh_metadata_update(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+
+    cli = KafkaClient(request_timeout_ms=9999999, retry_backoff_ms=2222)
+
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+    tasks.return_value = 9999999
+
+    ttl = mocker.patch.object(cli.cluster, 'ttl')
+    ttl.return_value = 0
+
+    mocker.patch.object(cli, 'least_loaded_node', return_value='foobar')
+    mocker.patch.object(cli, '_can_send_request', return_value=True)
+    send = mocker.patch.object(cli, 'send')
+
+    cli.poll(timeout_ms=9999999, sleep=True)
+    _poll.assert_called_with(0, sleep=True)
+    assert cli._metadata_refresh_in_progress
+    request = MetadataRequest[0]([])
+    send.assert_called_with('foobar', request)
+
+
+def test_maybe_refresh_metadata_failure(mocker):
+    mocker.patch.object(KafkaClient, '_bootstrap')
+    _poll = mocker.patch.object(KafkaClient, '_poll')
+
+    cli = KafkaClient(request_timeout_ms=9999999, retry_backoff_ms=2222)
+
+    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
+    tasks.return_value = 9999999
+
+    ttl = mocker.patch.object(cli.cluster, 'ttl')
+    ttl.return_value = 0
+
+    mocker.patch.object(cli, 'least_loaded_node', return_value='foobar')
+
+    now = time.time()
+    t = mocker.patch('time.time')
+    t.return_value = now
+
+    cli.poll(timeout_ms=9999999, sleep=True)
+    _poll.assert_called_with(0, sleep=True)
+    assert cli._last_no_node_available_ms == now * 1000
+    assert not cli._metadata_refresh_in_progress
 
 
 def test_schedule():

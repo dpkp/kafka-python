@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-0.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-0.10%2C%200.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.org/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -16,17 +16,17 @@ Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with 0.9 brokers, but is backwards-compatible with
+kafka-python is best used with newer brokers (0.10 or 0.9), but is backwards-compatible with
 older versions (to 0.8.0). Some features will only be enabled on newer brokers,
 however; for example, fully coordinated consumer groups -- i.e., dynamic partition
-assignment to multiple consumers in the same group -- requires use of 0.9 kafka
+assignment to multiple consumers in the same group -- requires use of 0.9+ kafka
 brokers. Supporting this feature for earlier broker releases would require
 writing and maintaining custom leadership election and membership / health
 check code (perhaps using zookeeper or consul). For older brokers, you can
 achieve something similar by manually assigning different partitions to each
 consumer instance with config management tools like chef, ansible, etc. This
 approach will work fine, though it does not support rebalancing on failures.
-See `Compatibility <http://kafka-python.readthedocs.org/en/master/compatibility.html>`_
+See <http://kafka-python.readthedocs.org/en/master/compatibility.html>
 for more details.
 
 Please note that the master branch may contain unreleased features. For release
@@ -38,10 +38,10 @@ KafkaConsumer
 *************
 
 KafkaConsumer is a high-level message consumer, intended to operate as similarly
-as possible to the official 0.9 java client. Full support for coordinated
-consumer groups requires use of kafka brokers that support the 0.9 Group APIs.
+as possible to the official java client. Full support for coordinated
+consumer groups requires use of kafka brokers that support the Group APIs: kafka v0.9+.
 
-See `ReadTheDocs <http://kafka-python.readthedocs.org/en/master/apidoc/KafkaConsumer.html>`_
+See <http://kafka-python.readthedocs.org/en/master/apidoc/KafkaConsumer.html>
 for API and configuration details.
 
 The consumer iterator returns ConsumerRecords, which are simple namedtuples
@@ -70,7 +70,7 @@ KafkaProducer
 
 KafkaProducer is a high-level, asynchronous message producer. The class is
 intended to operate as similarly as possible to the official java client.
-See `ReadTheDocs <http://kafka-python.readthedocs.org/en/master/apidoc/KafkaProducer.html>`_
+See <http://kafka-python.readthedocs.org/en/master/apidoc/KafkaProducer.html>
 for more details.
 
 >>> from kafka import KafkaProducer
@@ -108,7 +108,7 @@ kafka-python supports gzip compression/decompression natively. To produce or
 consume lz4 compressed messages, you must install lz4tools and xxhash (modules
 may not work on python2.6). To enable snappy compression/decompression install
 python-snappy (also requires snappy library).
-See `Installation <http://kafka-python.readthedocs.org/en/master/install.html#optional-snappy-install>`_
+See <http://kafka-python.readthedocs.org/en/master/install.html#optional-snappy-install>
 for more information.
 
 Protocol
@@ -119,7 +119,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 0.9).
+(0.8.0 to 0.10).
 
 
 Low-level
@@ -127,4 +127,4 @@ Low-level
 
 Legacy support is maintained for low-level consumer and producer classes,
 SimpleConsumer and SimpleProducer. See
-`ReadTheDocs <http://kafka-python.readthedocs.org/master/>`_ for API details.
+<http://kafka-python.readthedocs.io/en/master/simple.html?highlight=SimpleProducer> for API details.
