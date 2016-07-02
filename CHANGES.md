@@ -1,3 +1,12 @@
+# 1.2.3 (July 2, 2016)
+
+Patch Improvements
+* Wakeup socket optimizations (dpkp PR 740)
+* Assert will be disabled by "python -O" (tyronecai PR 736)
+* Randomize order of topics/partitions processed by fetcher to improve balance (dpkp PR 732)
+* Allow client.check_version timeout to be set in Producer and Consumer constructors (eastlondoner PR 647)
+
+
 # 1.2.2 (June 21, 2016)
 
 Bugfixes
