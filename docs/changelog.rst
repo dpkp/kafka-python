@@ -6,6 +6,7 @@ Changelog
 
 Patch Improvements
 ------------------
+* Fix gc error log: avoid AttributeError in _unregister_cleanup (dpkp PR 747)
 * Wakeup socket optimizations (dpkp PR 740)
 * Assert will be disabled by "python -O" (tyronecai PR 736)
 * Randomize order of topics/partitions processed by fetcher to improve balance (dpkp PR 732)
