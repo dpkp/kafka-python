@@ -314,7 +314,7 @@ class KafkaProducer(object):
         return wrapper
 
     def _unregister_cleanup(self):
-        if getattr(self, '_cleanup'):
+        if getattr(self, '_cleanup', None):
             if hasattr(atexit, 'unregister'):
                 atexit.unregister(self._cleanup) # pylint: disable=no-member
 
