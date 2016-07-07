@@ -59,6 +59,7 @@ class KafkaClient(object):
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
+        'ssl_password': None,
         'ssl_crlfile': None,
     }
 

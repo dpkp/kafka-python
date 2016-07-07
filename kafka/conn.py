@@ -71,6 +71,7 @@ class BrokerConnection(object):
         'ssl_certfile': None,
         'ssl_keyfile': None,
         'ssl_crlfile': None,
+        'ssl_password': None,
         'api_version': (0, 8, 2),  # default to most restrictive
         'state_change_callback': lambda conn: True,
     }
@@ -228,7 +229,8 @@ class BrokerConnection(object):
                 log.info('%s: Loading SSL Key from %s', str(self), self.config['ssl_keyfile'])
                 self._ssl_context.load_cert_chain(
                     certfile=self.config['ssl_certfile'],
-                    keyfile=self.config['ssl_keyfile'])
+                    keyfile=self.config['ssl_keyfile'],
+                    password=self.config['ssl_password'])
             if self.config['ssl_crlfile']:
                 if not hasattr(ssl, 'VERIFY_CRL_CHECK_LEAF'):
                     log.error('%s: No CRL support with this version of Python.'
