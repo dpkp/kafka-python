@@ -120,9 +120,9 @@ class KafkaConsumer(six.Iterator):
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
-        consumer_timeout_ms (int): number of millisecond to throw a timeout
-            exception to the consumer if no message is available for
-            consumption. Default: -1 (dont throw exception)
+        consumer_timeout_ms (int): number of milliseconds to block during
+            message iteration before raising StopIteration (i.e., ending the
+            iterator). Default -1 (block forever).
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
