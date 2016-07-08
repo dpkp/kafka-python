@@ -1,6 +1,17 @@
 Changelog
 =========
 
+1.2.4 (July 8, 2016)
+####################
+
+Bugfixes
+--------
+* Update consumer_timeout_ms docstring - KafkaConsumer raises StopIteration, no longer ConsumerTimeout
+* Use explicit subscription state flag to handle seek() during message iteration
+* Fix consumer iteration on compacted topics (dpkp PR 752)
+* Support ssl_password config when loading cert chains (amckemie PR 750)
+
+
 1.2.3 (July 2, 2016)
 ####################
 
