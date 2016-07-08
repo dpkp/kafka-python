@@ -196,6 +196,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_certfile': None,
         'ssl_keyfile': None,
         'ssl_crlfile': None,
+        'ssl_password': None,
         'api_version': 'auto',
         'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
