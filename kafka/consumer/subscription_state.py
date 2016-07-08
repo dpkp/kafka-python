@@ -350,6 +350,7 @@ class TopicPartitionState(object):
         self.reset_strategy = None # the reset strategy if awaitingReset is set
         self._position = None # offset exposed to the user
         self.highwater = None
+        self.drop_pending_message_set = False
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -371,6 +372,7 @@ class TopicPartitionState(object):
         self.awaiting_reset = False
         self.reset_strategy = None
         self.has_valid_position = True
+        self.drop_pending_message_set = True
 
     def pause(self):
         self.paused = True
