@@ -438,7 +438,7 @@ class Fetcher(six.Iterator):
 
                     # Compressed messagesets may include earlier messages
                     # It is also possible that the user called seek()
-                    elif msg.offset != self._subscriptions.assignment[tp].position:
+                    elif msg.offset < self._subscriptions.assignment[tp].position:
                         log.debug("Skipping message offset: %s (expecting %s)",
                                   msg.offset,
                                   self._subscriptions.assignment[tp].position)
