@@ -30,7 +30,8 @@ class Future(object):
         assert not self.is_done, 'Future is already complete'
         self.value = value
         self.is_done = True
-        self._call_backs('callback', self._callbacks, self.value)
+        if self._callbacks:
+            self._call_backs('callback', self._callbacks, self.value)
         return self
 
     def failure(self, e):
