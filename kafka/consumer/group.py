@@ -171,8 +171,8 @@ class KafkaConsumer(six.Iterator):
             in classes that will be notified of new metric creation. Default: []
         metrics_num_samples (int): The number of samples maintained to compute
             metrics. Default: 2
-        metrics_sample_window_ms (int): The number of samples maintained to
-            compute metrics. Default: 30000
+        metrics_sample_window_ms (int): The maximum age in milliseconds of
+            samples used to compute metrics. Default: 30000
 
     Note:
         Configuration parameters are described in more detail at
