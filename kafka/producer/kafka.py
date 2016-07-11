@@ -602,3 +602,18 @@ class KafkaProducer(object):
         return self.config['partitioner'](serialized_key,
                                           all_partitions,
                                           available)
+
+    def metrics(self, raw=False):
+        """Warning: this is an unstable interface.
+        It may change in future releases without warning"""
+        if raw:
+            return self._metrics.metrics
+
+        metrics = {}
+        for k, v in self._metrics.metrics.items():
+            if k.group not in metrics:
+                metrics[k.group] = {}
+            if k.name not in metrics[k.group]:
+                metrics[k.group][k.name] = {}
+            metrics[k.group][k.name] = v.value()
+        return metrics
