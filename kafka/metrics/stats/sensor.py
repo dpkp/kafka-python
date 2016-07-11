@@ -55,15 +55,15 @@ class Sensor(object):
         Record a value at a known time.
         Arguments:
             value (double): The value we are recording
-            time_ms (int): The current POSIX time in milliseconds
+            time_ms (int): A POSIX timestamp in milliseconds.
+                Default: The time when record() is evaluated (now)
 
         Raises:
             QuotaViolationException: if recording this value moves a
                 metric beyond its configured maximum or minimum bound
         """
-        now = time.time() * 1000
         if time_ms is None:
-            time_ms = now
+            time_ms = time.time() * 1000
         self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
