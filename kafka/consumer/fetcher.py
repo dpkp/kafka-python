@@ -774,12 +774,12 @@ class FetchManagerMetrics(object):
             'The maximum throttle time in ms'), Max())
 
     def record_topic_fetch_metrics(self, topic, num_bytes, num_records):
-        metric_tags = {'topic': topic.replace('.', '_')}
-
         # record bytes fetched
         name = '.'.join(['topic', topic, 'bytes-fetched'])
         bytes_fetched = self.metrics.get_sensor(name)
         if not bytes_fetched:
+            metric_tags = {'topic': topic.replace('.', '_')}
+
             bytes_fetched = self.metrics.sensor(name)
             bytes_fetched.add(self.metrics.metric_name('fetch-size-avg',
                     self.group_name,
@@ -799,6 +799,8 @@ class FetchManagerMetrics(object):
         name = '.'.join(['topic', topic, 'records-fetched'])
         records_fetched = self.metrics.get_sensor(name)
         if not records_fetched:
+            metric_tags = {'topic': topic.replace('.', '_')}
+
             records_fetched = self.metrics.sensor(name)
             records_fetched.add(self.metrics.metric_name('records-per-request-avg',
                     self.group_name,
