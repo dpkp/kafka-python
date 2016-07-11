@@ -729,6 +729,8 @@ class Fetcher(six.Iterator):
                 else:
                     raise error_type('Unexpected error while fetching data')
 
+        # Because we are currently decompressing messages lazily, the sensors here
+        # will get compressed bytes / message set stats when compression is enabled
         self._sensors.bytes_fetched.record(total_bytes)
         self._sensors.records_fetched.record(total_count)
         if response.API_VERSION >= 1:
