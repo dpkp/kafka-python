@@ -50,6 +50,7 @@ class BaseCoordinator(object):
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
+        'api_version': (0, 9),
     }
 
     def __init__(self, client, **configs):
@@ -193,6 +194,14 @@ class BaseCoordinator(object):
         (and we have an active connection -- java client uses unsent queue).
         """
         while self.coordinator_unknown():
+
+            # Prior to 0.8.2 there was no group coordinator
+            # so we will just pick a node at random and treat
+            # it as the "coordinator"
+            if self.config['api_version'] < (0, 8, 2):
+                self.coordinator_id = self._client.least_loaded_node()
+                self._client.ready(self.coordinator_id)
+                continue
 
             future = self._send_group_coordinator_request()
             self._client.poll(future=future)
