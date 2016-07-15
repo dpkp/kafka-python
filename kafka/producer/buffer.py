@@ -89,22 +89,29 @@ class MessageSetBuffer(object):
         return self._buffer.tell() >= self._batch_size
 
     def close(self):
-        if self._compressor:
-            # TODO: avoid copies with bytearray / memoryview
-            self._buffer.seek(4)
-            msg = Message(self._compressor(self._buffer.read()),
-                          attributes=self._compression_attributes,
-                          magic=self._message_version)
-            encoded = msg.encode()
-            self._buffer.seek(4)
-            self._buffer.write(Int64.encode(0)) # offset 0 for wrapper msg
-            self._buffer.write(Int32.encode(len(encoded)))
-            self._buffer.write(encoded)
+        # This method may be called multiple times on the same batch
+        # i.e., on retries
+        # we need to make sure we only close it out once
+        # otherwise compressed messages may be double-compressed
+        # see Issue 718
+        if not self._closed:
+            if self._compressor:
+                # TODO: avoid copies with bytearray / memoryview
+                self._buffer.seek(4)
+                msg = Message(self._compressor(self._buffer.read()),
+                              attributes=self._compression_attributes,
+                              magic=self._message_version)
+                encoded = msg.encode()
+                self._buffer.seek(4)
+                self._buffer.write(Int64.encode(0)) # offset 0 for wrapper msg
+                self._buffer.write(Int32.encode(len(encoded)))
+                self._buffer.write(encoded)
 
-        # Update the message set size, and return ready for full read()
-        size = self._buffer.tell() - 4
-        self._buffer.seek(0)
-        self._buffer.write(Int32.encode(size))
+            # Update the message set size, and return ready for full read()
+            size = self._buffer.tell() - 4
+            self._buffer.seek(0)
+            self._buffer.write(Int32.encode(size))
+
         self._buffer.seek(0)
         self._closed = True
 
