@@ -155,6 +155,8 @@ class Array(AbstractType):
             raise ValueError('Array instantiated with no array_of type')
 
     def encode(self, items):
+        if items is None:
+            return Int32.encode(-1)
         return b''.join(
             [Int32.encode(len(items))] +
             [self.array_of.encode(item) for item in items]
@@ -162,7 +164,11 @@ class Array(AbstractType):
 
     def decode(self, data):
         length = Int32.decode(data)
+        if length == -1:
+            return None
         return [self.array_of.decode(data) for _ in range(length)]
 
     def repr(self, list_of_items):
+        if list_of_items is None:
+            return 'NULL'
         return '[' + ', '.join([self.array_of.repr(item) for item in list_of_items]) + ']'
