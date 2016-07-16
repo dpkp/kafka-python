@@ -7,6 +7,12 @@ class KafkaError(RuntimeError):
     # whether metadata should be refreshed on error
     invalid_metadata = False
 
+    def __str__(self):
+        if not self.args:
+            return self.__class__.__name__
+        return '{}: {}'.format(self.__class__.__name__,
+                               super(KafkaError, self).__str__())
+
 
 class IllegalStateError(KafkaError):
     pass
@@ -56,7 +62,11 @@ class BrokerResponseError(KafkaError):
     description = None
 
     def __str__(self):
-        return '%s - %s - %s' % (self.__class__.__name__, self.errno, self.description)
+        """Add errno to standard KafkaError str"""
+        return '[Error {}] {}: {}'.format(
+            self.errno,
+            self.__class__.__name__,
+            super(KafkaError, self).__str__()) # pylint: disable=bad-super-call
 
 
 class NoError(BrokerResponseError):

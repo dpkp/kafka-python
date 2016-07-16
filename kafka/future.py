@@ -55,7 +55,7 @@ class Future(object):
         if args or kwargs:
             f = functools.partial(f, *args, **kwargs)
         if self.is_done and self.exception:
-            self._call_backs('callback', [f], self.exception)
+            self._call_backs('errback', [f], self.exception)
         else:
             self._errbacks.append(f)
         return self
