@@ -1,6 +1,16 @@
 Changelog
 =========
 
+1.2.5 (July 15, 2016)
+#####################
+
+Bugfixes
+--------
+* Fix bug causing KafkaProducer to double-compress message batches on retry
+* Check for double-compressed messages in KafkaConsumer, log warning and optionally skip
+* Drop recursion in _unpack_message_set; only decompress once
+
+
 1.2.4 (July 8, 2016)
 ####################
 
