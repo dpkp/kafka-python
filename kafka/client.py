@@ -137,7 +137,7 @@ class SimpleClient(object):
         kafka.errors.check_error(resp)
 
         # Otherwise return the BrokerMetadata
-        return BrokerMetadata(resp.nodeId, resp.host, resp.port)
+        return BrokerMetadata(resp.nodeId, resp.host, resp.port, None)
 
     def _next_id(self):
         """Generate a new correlation id"""
@@ -525,7 +525,7 @@ class SimpleClient(object):
         log.debug('Updating broker metadata: %s', resp.brokers)
         log.debug('Updating topic metadata: %s', [topic for _, topic, _ in resp.topics])
 
-        self.brokers = dict([(nodeId, BrokerMetadata(nodeId, host, port))
+        self.brokers = dict([(nodeId, BrokerMetadata(nodeId, host, port, None))
                              for nodeId, host, port in resp.brokers])
 
         for error, topic, partitions in resp.topics:
@@ -577,7 +577,7 @@ class SimpleClient(object):
                 # (not sure how this could happen. server could be in bad state)
                 else:
                     self.topics_to_brokers[topic_part] = BrokerMetadata(
-                        leader, None, None
+                        leader, None, None, None
                     )
 
     def send_metadata_request(self, payloads=[], fail_on_error=True,

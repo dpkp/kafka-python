@@ -53,8 +53,8 @@ def test_bootstrap_success(conn):
     conn.connect.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest[0]([]))
     assert cli._bootstrap_fails == 0
-    assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12),
-                                         BrokerMetadata(1, 'bar', 34)])
+    assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
+                                         BrokerMetadata(1, 'bar', 34, None)])
 
 def test_bootstrap_failure(conn):
     conn.state = ConnectionStates.DISCONNECTED
