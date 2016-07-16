@@ -425,8 +425,7 @@ def test_send_offset_commit_request_fail(patched_coord, offsets):
     ((0, 9), OffsetCommitRequest[2])])
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, req_type):
-    # assuming fixture sets coordinator=0, least_loaded_node=1
-    expect_node = 0 if api_version >= (0, 8, 2) else 1
+    expect_node = 0
     patched_coord.config['api_version'] = api_version
 
     patched_coord._send_offset_commit_request(offsets)
@@ -522,7 +521,7 @@ def test_send_offset_fetch_request_fail(patched_coord, partitions):
 def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, req_type):
     # assuming fixture sets coordinator=0, least_loaded_node=1
-    expect_node = 0 if api_version >= (0, 8, 2) else 1
+    expect_node = 0
     patched_coord.config['api_version'] = api_version
 
     patched_coord._send_offset_fetch_request(partitions)

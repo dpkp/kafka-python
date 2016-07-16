@@ -100,6 +100,12 @@ class ConsumerCoordinator(BaseCoordinator):
                 interval = self.config['auto_commit_interval_ms'] / 1000.0
                 self._auto_commit_task = AutoCommitTask(weakref.proxy(self), interval)
 
+                # When using broker-coordinated consumer groups, auto-commit will
+                # be automatically enabled on group join (see _on_join_complete)
+                # Otherwise, we should enable now b/c there will be no group join
+                if self.config['api_version'] < (0, 9):
+                    self._auto_commit_task.enable()
+
         self._sensors = ConsumerCoordinatorMetrics(metrics, metric_group_prefix,
                                                    self._subscription)
 
@@ -293,8 +299,7 @@ class ConsumerCoordinator(BaseCoordinator):
             return {}
 
         while True:
-            if self.config['api_version'] >= (0, 8, 2):
-                self.ensure_coordinator_known()
+            self.ensure_coordinator_known()
 
             # contact coordinator to fetch committed offsets
             future = self._send_offset_fetch_request(partitions)
@@ -356,8 +361,7 @@ class ConsumerCoordinator(BaseCoordinator):
             return
 
         while True:
-            if self.config['api_version'] >= (0, 8, 2):
-                self.ensure_coordinator_known()
+            self.ensure_coordinator_known()
 
             future = self._send_offset_commit_request(offsets)
             self._client.poll(future=future)
@@ -415,14 +419,10 @@ class ConsumerCoordinator(BaseCoordinator):
             log.debug('No offsets to commit')
             return Future().success(True)
 
-        if self.config['api_version'] >= (0, 8, 2):
-            if self.coordinator_unknown():
-                return Future().failure(Errors.GroupCoordinatorNotAvailableError)
-            node_id = self.coordinator_id
-        else:
-            node_id = self._client.least_loaded_node()
-            if node_id is None:
-                return Future().failure(Errors.NoBrokersAvailable)
+        elif self.coordinator_unknown():
+            return Future().failure(Errors.GroupCoordinatorNotAvailableError)
+
+        node_id = self.coordinator_id
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -571,14 +571,10 @@ class ConsumerCoordinator(BaseCoordinator):
         if not partitions:
             return Future().success({})
 
-        if self.config['api_version'] >= (0, 8, 2):
-            if self.coordinator_unknown():
-                return Future().failure(Errors.GroupCoordinatorNotAvailableError)
-            node_id = self.coordinator_id
-        else:
-            node_id = self._client.least_loaded_node()
-            if node_id is None:
-                return Future().failure(Errors.NoBrokersAvailable)
+        elif self.coordinator_unknown():
+            return Future().failure(Errors.GroupCoordinatorNotAvailableError)
+
+        node_id = self.coordinator_id
 
         # Verify node is ready
         if not self._client.ready(node_id):
