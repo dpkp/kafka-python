@@ -99,6 +99,16 @@ class Bytes(AbstractType):
         return value
 
 
+class Boolean(AbstractType):
+    @classmethod
+    def encode(cls, value):
+        return _pack('>?', value)
+
+    @classmethod
+    def decode(cls, data):
+        return _unpack('>?', data.read(1))
+
+
 class Schema(AbstractType):
     def __init__(self, *fields):
         if fields:
