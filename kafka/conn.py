@@ -541,7 +541,12 @@ class BrokerConnection(object):
         return self._correlation_id
 
     def check_version(self, timeout=2, strict=False):
-        """Attempt to guess the broker version. This is a blocking call."""
+        """Attempt to guess the broker version.
+
+        Note: This is a blocking call.
+
+        Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
+        """
 
         # Monkeypatch the connection request timeout
         # Generally this timeout should not get triggered
@@ -643,7 +648,7 @@ class BrokerConnection(object):
 
         log.removeFilter(log_filter)
         self.config['request_timeout_ms'] = stashed_request_timeout_ms
-        return version
+        return tuple(map(int, version.split('.')))
 
     def __repr__(self):
         return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,

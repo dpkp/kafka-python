@@ -150,12 +150,19 @@ class KafkaConsumer(six.Iterator):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: none.
-        api_version (str): specify which kafka API version to use.
-            0.9 enables full group coordination features; 0.8.2 enables
-            kafka-storage offset commits; 0.8.1 enables zookeeper-storage
-            offset commits; 0.8.0 is what is left. If set to 'auto', will
-            attempt to infer the broker version by probing various APIs.
-            Default: auto
+        api_version (tuple): specify which kafka API version to use.
+            If set to None, the client will attempt to infer the broker version
+            by probing various APIs. Default: None
+            Examples:
+                (0, 9) enables full group coordination features with automatic
+                    partition assignment and rebalancing,
+                (0, 8, 2) enables kafka-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 1) enables zookeeper-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 0) enables basic functionality but requires manual
+                    partition assignment and offset management.
+            For a full list of supported versions, see KafkaClient.API_VERSIONS
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -205,7 +212,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'ssl_password': None,
-        'api_version': 'auto',
+        'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000, # not implemented yet
         'metric_reporters': [],
@@ -222,7 +229,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % configs
 
-        deprecated = {'smallest': 'earliest', 'largest': 'latest' }
+        deprecated = {'smallest': 'earliest', 'largest': 'latest'}
         if self.config['auto_offset_reset'] in deprecated:
             new_config = deprecated[self.config['auto_offset_reset']]
             log.warning('use auto_offset_reset=%s (%s is deprecated)',
@@ -239,16 +246,21 @@ class KafkaConsumer(six.Iterator):
         metric_group_prefix = 'consumer'
         # TODO _metrics likely needs to be passed to KafkaClient, etc.
 
+        # api_version was previously a str. accept old format for now
+        if isinstance(self.config['api_version'], str):
+            str_version = self.config['api_version']
+            if str_version == 'auto':
+                self.config['api_version'] = None
+            else:
+                self.config['api_version'] = tuple(map(int, str_version.split('.')))
+            log.warning('use api_version=%s (%s is deprecated)',
+                        str(self.config['api_version']), str_version)
+
         self._client = KafkaClient(**self.config)
 
-        # Check Broker Version if not set explicitly
-        if self.config['api_version'] == 'auto':
-            self.config['api_version'] = self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms']/1000))
-        assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0'), 'Unrecognized api version'
-
-        # Convert api_version config to tuple for easy comparisons
-        self.config['api_version'] = tuple(
-            map(int, self.config['api_version'].split('.')))
+        # Get auto-discovered version from client if necessary
+        if self.config['api_version'] is None:
+            self.config['api_version'] = self._client.config['api_version']
 
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
