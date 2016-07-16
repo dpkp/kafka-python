@@ -213,9 +213,10 @@ class KafkaProducer(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: none.
-        api_version (str): specify which kafka API version to use.
-            If set to 'auto', will attempt to infer the broker version by
-            probing various APIs. Default: auto
+        api_version (tuple): specify which kafka API version to use.
+            For a full list of supported versions, see KafkaClient.API_VERSIONS
+            If set to None, the client will attempt to infer the broker version
+            by probing various APIs. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -253,7 +254,7 @@ class KafkaProducer(object):
         'ssl_certfile': None,
         'ssl_keyfile': None,
         'ssl_crlfile': None,
-        'api_version': 'auto',
+        'api_version': None,
         'api_version_auto_timeout_ms': 2000
     }
 
@@ -274,16 +275,21 @@ class KafkaProducer(object):
         if self.config['acks'] == 'all':
             self.config['acks'] = -1
 
+        # api_version was previously a str. accept old format for now
+        if isinstance(self.config['api_version'], str):
+            deprecated = self.config['api_version']
+            if deprecated == 'auto':
+                self.config['api_version'] = None
+            else:
+                self.config['api_version'] = tuple(map(int, deprecated.split('.')))
+            log.warning('use api_version=%s (%s is deprecated)',
+                        str(self.config['api_version']), deprecated)
+
         client = KafkaClient(**self.config)
 
-        # Check Broker Version if not set explicitly
-        if self.config['api_version'] == 'auto':
-            self.config['api_version'] = client.check_version(timeout=(self.config['api_version_auto_timeout_ms']/1000))
-        assert self.config['api_version'] in ('0.10', '0.9', '0.8.2', '0.8.1', '0.8.0')
-
-        # Convert api_version config to tuple for easy comparisons
-        self.config['api_version'] = tuple(
-            map(int, self.config['api_version'].split('.')))
+        # Get auto-discovered version from client if necessary
+        if self.config['api_version'] is None:
+            self.config['api_version'] = client.config['api_version']
 
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
