@@ -344,7 +344,9 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
 
 @pytest.mark.parametrize(
     'api_version,group_id,enable,error,has_auto_commit,commit_offsets,warn,exc', [
-        ((0, 8), 'foobar', True, None, False, False, True, False),
+        ((0, 8, 0), 'foobar', True, None, False, False, True, False),
+        ((0, 8, 1), 'foobar', True, None, True, True, False, False),
+        ((0, 8, 2), 'foobar', True, None, True, True, False, False),
         ((0, 9), 'foobar', False, None, False, False, False, False),
         ((0, 9), 'foobar', True, Errors.UnknownMemberIdError(), True, True, True, False),
         ((0, 9), 'foobar', True, Errors.IllegalGenerationError(), True, True, True, False),
@@ -367,7 +369,9 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
                                       side_effect=error)
     if has_auto_commit:
         assert coordinator._auto_commit_task is not None
-        coordinator._auto_commit_task.enable()
+        # auto-commit enable is defered until after group join in 0.9+
+        if api_version >= (0, 9):
+            coordinator._auto_commit_task.enable()
         assert coordinator._auto_commit_task._enabled is True
     else:
         assert coordinator._auto_commit_task is None
