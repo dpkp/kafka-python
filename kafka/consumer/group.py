@@ -6,7 +6,7 @@ import time
 
 import six
 
-from kafka.client_async import KafkaClient
+from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.coordinator.consumer import ConsumerCoordinator
@@ -173,6 +173,9 @@ class KafkaConsumer(six.Iterator):
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
+        selector (selectors.BaseSelector): Provide a specific selector
+            implementation to use for I/O multiplexing.
+            Default: selectors.DefaultSelector
 
     Note:
         Configuration parameters are described in more detail at
@@ -218,6 +221,7 @@ class KafkaConsumer(six.Iterator):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'selector': selectors.DefaultSelector,
     }
 
     def __init__(self, *topics, **configs):

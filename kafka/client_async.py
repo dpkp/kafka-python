@@ -63,6 +63,7 @@ class KafkaClient(object):
         'ssl_crlfile': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
+        'selector': selectors.DefaultSelector,
     }
     API_VERSIONS = [
         (0, 10),
@@ -134,6 +135,9 @@ class KafkaClient(object):
             api_version_auto_timeout_ms (int): number of milliseconds to throw a
                 timeout exception from the constructor when checking the broker
                 api version. Only applies if api_version is None
+            selector (selectors.BaseSelector): Provide a specific selector
+                implementation to use for I/O multiplexing.
+                Default: selectors.DefaultSelector
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -149,7 +153,7 @@ class KafkaClient(object):
         self._topics = set() # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
         self._last_no_node_available_ms = 0
-        self._selector = selectors.DefaultSelector()
+        self._selector = self.config['selector']()
         self._conns = {}
         self._connecting = set()
         self._refresh_on_disconnects = True
