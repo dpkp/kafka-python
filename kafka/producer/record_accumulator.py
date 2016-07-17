@@ -57,10 +57,13 @@ class RecordBatch(object):
 
         msg = Message(value, key=key, magic=self.message_version)
         record_size = self.records.append(self.record_count, msg)
+        checksum = msg.crc # crc is recalculated during records.append()
         self.max_record_size = max(self.max_record_size, record_size)
         self.last_append = time.time()
         future = FutureRecordMetadata(self.produce_future, self.record_count,
-                                      timestamp_ms)
+                                      timestamp_ms, checksum,
+                                      len(key) if key is not None else -1,
+                                      len(value) if value is not None else -1)
         self.record_count += 1
         return future
 
