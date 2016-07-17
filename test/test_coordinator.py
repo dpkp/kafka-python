@@ -370,10 +370,6 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
                                       side_effect=error)
     if has_auto_commit:
         assert coordinator._auto_commit_task is not None
-        # auto-commit enable is defered until after group join in 0.9+
-        if api_version >= (0, 9):
-            coordinator._auto_commit_task.enable()
-        assert coordinator._auto_commit_task._enabled is True
     else:
         assert coordinator._auto_commit_task is None
 
@@ -381,7 +377,6 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
 
     if has_auto_commit:
         assert coordinator._auto_commit_task is not None
-        assert coordinator._auto_commit_task._enabled is False
 
     assert commit_sync.call_count == (1 if commit_offsets else 0)
     assert mock_warn.call_count == (1 if warn else 0)
