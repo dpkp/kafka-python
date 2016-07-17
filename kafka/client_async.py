@@ -6,6 +6,7 @@ import heapq
 import itertools
 import logging
 import random
+import threading
 
 # selectors in stdlib as of py3.4
 try:
@@ -158,6 +159,7 @@ class KafkaClient(object):
         self._bootstrap_fails = 0
         self._wake_r, self._wake_w = socket.socketpair()
         self._wake_r.setblocking(False)
+        self._wake_lock = threading.Lock()
         self._selector.register(self._wake_r, selectors.EVENT_READ)
         self._closed = False
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
@@ -758,10 +760,12 @@ class KafkaClient(object):
             raise Errors.NoBrokersAvailable()
 
     def wakeup(self):
-        if self._wake_w.send(b'x') != 1:
-            log.warning('Unable to send to wakeup socket!')
+        with self._wake_lock:
+            if self._wake_w.send(b'x') != 1:
+                log.warning('Unable to send to wakeup socket!')
 
     def _clear_wake_fd(self):
+        # reading from wake socket should only happen in a single thread
         while True:
             try:
                 self._wake_r.recv(1024)
