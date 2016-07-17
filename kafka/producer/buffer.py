@@ -103,8 +103,9 @@ class MessageSetBuffer(object):
         if not self._closed:
             if self._compressor:
                 # TODO: avoid copies with bytearray / memoryview
+                uncompressed_size = self._buffer.tell()
                 self._buffer.seek(4)
-                msg = Message(self._compressor(self._buffer.read()),
+                msg = Message(self._compressor(self._buffer.read(uncompressed_size - 4)),
                               attributes=self._compression_attributes,
                               magic=self._message_version)
                 encoded = msg.encode()
