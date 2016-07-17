@@ -41,7 +41,7 @@ class ProduceResponse_v2(Struct):
                 ('error_code', Int16),
                 ('offset', Int64),
                 ('timestamp', Int64))))),
-        ('thottle_time_ms', Int32)
+        ('throttle_time_ms', Int32)
     )
 
 
