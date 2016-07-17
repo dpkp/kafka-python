@@ -85,7 +85,7 @@ def test_pattern_subscription(coordinator, api_version):
     coordinator.config['api_version'] = api_version
     coordinator._subscription.subscribe(pattern='foo')
     assert coordinator._subscription.subscription == set([])
-    assert coordinator._subscription_metadata_changed() is False
+    assert coordinator._subscription_metadata_changed({}) is False
     assert coordinator._subscription.needs_partition_assignment is False
 
     cluster = coordinator._client.cluster
