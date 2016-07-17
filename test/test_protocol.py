@@ -72,8 +72,7 @@ def test_encode_message_set():
         Message(b'v2', key=b'k2')
     ]
     encoded = MessageSet.encode([(0, msg.encode())
-                                 for msg in messages],
-                                size=False)
+                                 for msg in messages])
     expect = b''.join([
         struct.pack('>q', 0),          # MsgSet Offset
         struct.pack('>i', 18),         # Msg Size
@@ -93,6 +92,7 @@ def test_encode_message_set():
         struct.pack('>i', 2),          # Length of value
         b'v2',                          # Value
     ])
+    expect = struct.pack('>i', len(expect)) + expect
     assert encoded == expect
 
 
