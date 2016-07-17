@@ -38,7 +38,7 @@ class AtomicInteger(object):
 class RecordBatch(object):
     def __init__(self, tp, records, message_version=0):
         self.record_count = 0
-        #self.max_record_size = 0 # for metrics only
+        self.max_record_size = 0
         now = time.time()
         self.created = now
         self.drained = None
@@ -56,8 +56,8 @@ class RecordBatch(object):
             return None
 
         msg = Message(value, key=key, magic=self.message_version)
-        self.records.append(self.record_count, msg)
-        # self.max_record_size = max(self.max_record_size, Record.record_size(key, value)) # for metrics only
+        record_size = self.records.append(self.record_count, msg)
+        self.max_record_size = max(self.max_record_size, record_size)
         self.last_append = time.time()
         future = FutureRecordMetadata(self.produce_future, self.record_count,
                                       timestamp_ms)
