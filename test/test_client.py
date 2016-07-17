@@ -1,6 +1,7 @@
 import socket
 
 from mock import ANY, MagicMock, patch
+from operator import itemgetter
 import six
 from . import unittest
 
@@ -117,9 +118,10 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_ERROR, 'topic_1', [
@@ -137,7 +139,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_ERROR, 2, 0, [0, 1], [0, 1])
             ])
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         # client loads metadata at init
         client = SimpleClient(hosts=['broker_1:4567'])
@@ -167,9 +169,10 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_LEADER, 'topic_still_creating', []),
@@ -179,7 +182,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_LEADER, 1, -1, [], []),
             ]),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
@@ -197,9 +200,10 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_LEADER, 'topic_still_creating', []),
@@ -209,7 +213,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_LEADER, 1, -1, [], []),
             ]),
         ]
-        decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
@@ -230,14 +234,15 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_LEADER, 'topic_no_partitions', [])
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
@@ -249,7 +254,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_ERROR, 0, 0, [0, 1], [0, 1])
             ])
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         # calling _get_leader_for_partition (from any broker aware request)
         # will try loading metadata again for the same topic
@@ -267,15 +272,16 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_LEADER, 'topic_no_partitions', []),
             (UNKNOWN_TOPIC_OR_PARTITION, 'topic_unknown', []),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
@@ -294,9 +300,10 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_ERROR, 'topic_noleader', [
@@ -304,7 +311,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_LEADER, 1, -1, [], []),
             ]),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
         self.assertDictEqual(
@@ -330,7 +337,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_ERROR, 1, 1, [1, 0], [1, 0])
             ]),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
         self.assertEqual(brokers[0], client._get_leader_for_partition('topic_noleader', 0))
         self.assertEqual(brokers[1], client._get_leader_for_partition('topic_noleader', 1))
 
@@ -340,9 +347,10 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (NO_ERROR, 'topic_noleader', [
@@ -350,7 +358,7 @@ class TestSimpleClient(unittest.TestCase):
                 (NO_LEADER, 1, -1, [], []),
             ]),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
@@ -368,14 +376,15 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(conn)
 
         brokers = [
-            BrokerMetadata(0, 'broker_1', 4567),
-            BrokerMetadata(1, 'broker_2', 5678)
+            BrokerMetadata(0, 'broker_1', 4567, None),
+            BrokerMetadata(1, 'broker_2', 5678, None)
         ]
+        resp0_brokers = list(map(itemgetter(0, 1, 2), brokers))
 
         topics = [
             (UNKNOWN_TOPIC_OR_PARTITION, 'topic_doesnt_exist', []),
         ]
-        protocol.decode_metadata_response.return_value = MetadataResponse[0](brokers, topics)
+        protocol.decode_metadata_response.return_value = MetadataResponse[0](resp0_brokers, topics)
 
         client = SimpleClient(hosts=['broker_1:4567'])
 
