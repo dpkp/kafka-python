@@ -59,7 +59,7 @@ class MessageSetBuffer(object):
         self._final_size = None
 
     def append(self, offset, message):
-        """Apend a Message to the MessageSet.
+        """Append a Message to the MessageSet.
 
         Arguments:
             offset (int): offset of the message

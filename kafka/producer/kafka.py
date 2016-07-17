@@ -457,6 +457,7 @@ class KafkaProducer(object):
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
+        key_bytes = value_bytes = None
         try:
             # first make sure the metadata for the topic is
             # available
@@ -497,10 +498,11 @@ class KafkaProducer(object):
         except Exception as e:
             log.debug("Exception occurred during message send: %s", e)
             return FutureRecordMetadata(
-                FutureProduceResult(
-                    TopicPartition(topic, partition)),
-                    -1, None
-                ).failure(e)
+                FutureProduceResult(TopicPartition(topic, partition)),
+                -1, None, None,
+                len(key_bytes) if key_bytes is not None else -1,
+                len(value_bytes) if value_bytes is not None else -1
+            ).failure(e)
 
     def flush(self, timeout=None):
         """

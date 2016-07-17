@@ -20,7 +20,8 @@ log = logging.getLogger(__name__)
 
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
-    ["topic", "partition", "offset", "timestamp", "timestamp_type", "key", "value"])
+    ["topic", "partition", "offset", "timestamp", "timestamp_type",
+     "key", "value", "checksum", "serialized_key_size", "serialized_value_size"])
 
 
 class NoOffsetForPartitionError(Errors.KafkaError):
@@ -410,13 +411,17 @@ class Fetcher(six.Iterator):
                         key, value = self._deserialize(inner_msg)
                         yield ConsumerRecord(tp.topic, tp.partition, inner_offset,
                                              inner_timestamp, msg.timestamp_type,
-                                             key, value)
+                                             key, value, inner_msg.crc,
+                                             len(inner_msg.key) if inner_msg.key is not None else -1,
+                                             len(inner_msg.value) if inner_msg.value is not None else -1)
 
                 else:
                     key, value = self._deserialize(msg)
                     yield ConsumerRecord(tp.topic, tp.partition, offset,
                                          msg.timestamp, msg.timestamp_type,
-                                         key, value)
+                                         key, value, msg.crc,
+                                         len(msg.key) if msg.key is not None else -1,
+                                         len(msg.value) if msg.value is not None else -1)
 
         # If unpacking raises StopIteration, it is erroneously
         # caught by the generator. We want all exceptions to be raised
