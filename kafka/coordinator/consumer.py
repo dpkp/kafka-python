@@ -36,6 +36,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
+        'exclude_internal_topics': True,
     }
 
     def __init__(self, client, subscription, metrics, metric_group_prefix,
@@ -70,6 +71,10 @@ class ConsumerCoordinator(BaseCoordinator):
                 using Kafka's group managementment facilities. Default: 30000
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
+            exclude_internal_topics (bool): Whether records from internal topics
+                (such as offsets) should be exposed to the consumer. If set to
+                True the only way to receive records from an internal topic is
+                subscribing to it. Requires 0.10+. Default: True
         """
         super(ConsumerCoordinator, self).__init__(client, **configs)
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -131,13 +136,12 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_metadata_update(self, cluster):
         # if we encounter any unauthorized topics, raise an exception
-        # TODO
-        #if self._cluster.unauthorized_topics:
-        #    raise TopicAuthorizationError(self._cluster.unauthorized_topics)
+        if cluster.unauthorized_topics:
+            raise Errors.TopicAuthorizationFailedError(cluster.unauthorized_topics)
 
         if self._subscription.subscribed_pattern:
             topics = []
-            for topic in cluster.topics():
+            for topic in cluster.topics(self.config['exclude_internal_topics']):
                 if self._subscription.subscribed_pattern.match(topic):
                     topics.append(topic)
 
