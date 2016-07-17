@@ -8,7 +8,7 @@ import time
 import weakref
 
 from .. import errors as Errors
-from ..client_async import KafkaClient
+from ..client_async import KafkaClient, selectors
 from ..metrics import MetricConfig, Metrics
 from ..partitioner.default import DefaultPartitioner
 from ..protocol.message import Message, MessageSet
@@ -228,6 +228,9 @@ class KafkaProducer(object):
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
+        selector (selectors.BaseSelector): Provide a specific selector
+            implementation to use for I/O multiplexing.
+            Default: selectors.DefaultSelector
 
     Note:
         Configuration parameters are described in more detail at
@@ -267,6 +270,7 @@ class KafkaProducer(object):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'selector': selectors.DefaultSelector,
     }
 
     def __init__(self, **configs):
