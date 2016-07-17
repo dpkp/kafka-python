@@ -231,7 +231,7 @@ class KafkaProducer(object):
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/090/configuration.html#producerconfigs
+        https://kafka.apache.org/0100/configuration.html#producerconfigs
     """
     _DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
