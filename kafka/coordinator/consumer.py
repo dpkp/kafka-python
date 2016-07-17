@@ -136,9 +136,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_metadata_update(self, cluster):
         # if we encounter any unauthorized topics, raise an exception
-        # TODO
-        #if self._cluster.unauthorized_topics:
-        #    raise TopicAuthorizationError(self._cluster.unauthorized_topics)
+        if cluster.unauthorized_topics:
+            raise Errors.TopicAuthorizationFailedError(cluster.unauthorized_topics)
 
         if self._subscription.subscribed_pattern:
             topics = []
