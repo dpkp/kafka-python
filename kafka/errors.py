@@ -10,7 +10,7 @@ class KafkaError(RuntimeError):
     def __str__(self):
         if not self.args:
             return self.__class__.__name__
-        return '{}: {}'.format(self.__class__.__name__,
+        return '{0}: {1}'.format(self.__class__.__name__,
                                super(KafkaError, self).__str__())
 
 
@@ -63,7 +63,7 @@ class BrokerResponseError(KafkaError):
 
     def __str__(self):
         """Add errno to standard KafkaError str"""
-        return '[Error {}] {}: {}'.format(
+        return '[Error {0}] {1}: {2}'.format(
             self.errno,
             self.__class__.__name__,
             super(KafkaError, self).__str__()) # pylint: disable=bad-super-call

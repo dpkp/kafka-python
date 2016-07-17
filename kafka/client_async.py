@@ -147,7 +147,7 @@ class KafkaClient(object):
 
         if self.config['api_version'] is not None:
             assert self.config['api_version'] in self.API_VERSIONS, (
-                'api_version [{}] must be one of: {}'.format(
+                'api_version [{0}] must be one of: {1}'.format(
                     self.config['api_version'], str(self.API_VERSIONS)))
 
         self.cluster = ClusterMetadata(**self.config)

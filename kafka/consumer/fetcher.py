@@ -400,7 +400,7 @@ class Fetcher(six.Iterator):
                                 inner_timestamp = msg.timestamp
 
                             else:
-                                raise ValueError('Unknown timestamp type: {}'.format(msg.timestamp_type))
+                                raise ValueError('Unknown timestamp type: {0}'.format(msg.timestamp_type))
                         else:
                             inner_timestamp = msg.timestamp
 
