@@ -683,7 +683,9 @@ class Fetcher(six.Iterator):
                     self._subscriptions.assignment[tp].highwater = highwater
 
                     # we are interested in this fetch only if the beginning
-                    # offset matches the current consumed position
+                    # offset (of the *request*) matches the current consumed position
+                    # Note that the *response* may return a messageset that starts
+                    # earlier (e.g., compressed messages) or later (e.g., compacted topic)
                     fetch_offset = fetch_offsets[tp]
                     position = self._subscriptions.assignment[tp].position
                     if position is None or position != fetch_offset:
