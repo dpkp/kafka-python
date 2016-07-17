@@ -176,6 +176,10 @@ class KafkaConsumer(six.Iterator):
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
+        exclude_internal_topics (bool): Whether records from internal topics
+            (such as offsets) should be exposed to the consumer. If set to True
+            the only way to receive records from an internal topic is
+            subscribing to it. Requires 0.10+ Default: True
 
     Note:
         Configuration parameters are described in more detail at
@@ -222,6 +226,7 @@ class KafkaConsumer(six.Iterator):
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'selector': selectors.DefaultSelector,
+        'exclude_internal_topics': True,
     }
 
     def __init__(self, *topics, **configs):
