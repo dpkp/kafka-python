@@ -199,6 +199,7 @@ class SubscriptionState(object):
             del self.assignment[tp]
 
         self.needs_partition_assignment = False
+        self.needs_fetch_committed_offsets = True
 
     def assign_from_subscribed(self, assignments):
         """Update the assignment to the specified partitions
