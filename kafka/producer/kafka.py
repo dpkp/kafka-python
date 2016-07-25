@@ -287,11 +287,11 @@ class KafkaProducer(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
-                
+
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % configs
 
-        if self.config['client_id'] is None:K
+        if self.config['client_id'] is None:
             self.config['client_id'] = 'kafka-python-producer-%s' % \
                                        PRODUCER_CLIENT_ID_SEQUENCE.increment()
 
