@@ -276,6 +276,9 @@ class KafkaProducer(object):
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'selector': selectors.DefaultSelector,
+        'sasl_mechanism': None,
+        'sasl_username': None,
+        'sasl_password': None,
     }
 
     def __init__(self, **configs):
@@ -284,11 +287,11 @@ class KafkaProducer(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
-
+                
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % configs
 
-        if self.config['client_id'] is None:
+        if self.config['client_id'] is None:K
             self.config['client_id'] = 'kafka-python-producer-%s' % \
                                        PRODUCER_CLIENT_ID_SEQUENCE.increment()
 

@@ -70,6 +70,9 @@ class KafkaClient(object):
         'selector': selectors.DefaultSelector,
         'metrics': None,
         'metric_group_prefix': '',
+        'sasl_mechanism': None,
+        'sasl_username': None,
+        'sasl_password': None,
     }
     API_VERSIONS = [
         (0, 10),
