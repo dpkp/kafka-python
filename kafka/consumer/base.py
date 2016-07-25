@@ -101,11 +101,19 @@ class Consumer(object):
         if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
 
-        responses = self.client.send_offset_fetch_request(
-            self.group,
-            [OffsetFetchRequest(self.topic, p) for p in partitions],
-            fail_on_error=False
-        )
+        responses = []
+        if self.offset_storage in ['zookeeper', 'dual']:
+            responses += self.client.send_offset_fetch_request(
+                self.group,
+                [OffsetFetchRequest(self.topic, p) for p in partitions],
+                fail_on_error=False
+            )
+        if self.offset_storage in ['kafka', 'dual']:
+            responses += self.client.send_offset_fetch_request_kafka(
+                self.group,
+                [OffsetFetchRequest(self.topic, p) for p in partitions],
+                fail_on_error=False
+            )
 
         for resp in responses:
             try:
@@ -115,14 +123,15 @@ class Consumer(object):
             except UnknownTopicOrPartitionError:
                 pass
 
+            prev = self.offsets.get(resp.partition, 0)
             # -1 offset signals no commit is currently stored
             if resp.offset == -1:
-                self.offsets[resp.partition] = 0
+                self.offsets[resp.partition] = prev
 
             # Otherwise we committed the stored offset
             # and need to fetch the next one
             else:
-                self.offsets[resp.partition] = resp.offset
+                self.offsets[resp.partition] = max(prev, resp.offset)
 
     def commit(self, partitions=None):
         """Commit stored offsets to Kafka via OffsetCommitRequest (v0)
