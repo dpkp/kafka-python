@@ -199,7 +199,8 @@ class KafkaProducer(object):
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
         security_protocol (str): Protocol used to communicate with brokers.
-            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+            Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL. 
+            Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
@@ -235,6 +236,13 @@ class KafkaProducer(object):
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
+        sasl_mechanim (str): string picking sasl mechanism when security_protocol
+            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
+            Default: None
+        sasl_username (str): username for sasl PLAIN authentication.
+            Default: None
+        sasl_password (str): passowrd for sasl PLAIN authentication.
+            Defualt: None
 
     Note:
         Configuration parameters are described in more detail at
