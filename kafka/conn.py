@@ -319,7 +319,7 @@ class BrokerConnection(object):
             response = self.recv()
 
         if not response.error_code is 0:
-            raise for_code(response.error_code)
+            raise Errors.for_code(response.error_code)
 
         if not self.config['sasl_mechanism'] in response.enabled_mechanisms:
             raise AuthenticationMethodNotSupported(self.config['sasl_mechanism'] + " is not supported by broker")
