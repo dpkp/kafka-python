@@ -56,6 +56,14 @@ class CommitFailedError(KafkaError):
     pass
 
 
+class AuthenticationMethodNotSupported(KafkaError):
+    pass
+
+
+class AuthenticationFailedError(KafkaError):
+    retriable = False
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None
@@ -324,6 +332,18 @@ class InvalidTimestampError(BrokerResponseError):
     errno = 32
     message = 'INVALID_TIMESTAMP'
     description = ('The timestamp of the message is out of acceptable range.')
+
+
+class UnsupportedSaslMechanismError(BrokerResponseError):
+    errno = 33
+    message = 'UNSUPPORTED_SASL_MECHANISM'
+    description = ('The broker does not support the requested SASL mechanism.')
+
+
+class IllegalSaslStateError(BrokerResponseError):
+    errno = 34
+    message = 'ILLEGAL_SASL_STATE'
+    description = ('Request is not valid given the current SASL state.')
 
 
 class KafkaUnavailableError(KafkaError):

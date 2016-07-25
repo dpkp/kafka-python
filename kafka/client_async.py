@@ -65,6 +65,9 @@ class KafkaClient(object):
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
+        'sasl_mechanism': None,
+        'sasl_username': None,
+        'sasl_password': None,
     }
     API_VERSIONS = [
         (0, 10),

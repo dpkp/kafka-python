@@ -76,3 +76,24 @@ class DescribeGroupsRequest_v0(Struct):
 
 DescribeGroupsRequest = [DescribeGroupsRequest_v0]
 DescribeGroupsResponse = [DescribeGroupsResponse_v0]
+
+
+class SaslHandShakeResponse_v0(Struct):
+    API_KEY = 17
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('error_code', Int16),
+        ('enabled_mechanisms', Array(String('utf-8')))
+    )
+
+
+class SaslHandShakeRequest_v0(Struct):
+    API_KEY = 17
+    API_VERSION = 0
+    RESPONSE_TYPE = SaslHandShakeResponse_v0
+    SCHEMA = Schema(
+        ('mechanism', String('utf-8'))
+    )
+
+SaslHandShakeRequest = [SaslHandShakeRequest_v0]
+SaslHandShakeResponse = [SaslHandShakeResponse_v0]
