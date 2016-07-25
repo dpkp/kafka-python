@@ -322,7 +322,7 @@ class BrokerConnection(object):
             raise Errors.for_code(response.error_code)
 
         if not self.config['sasl_mechanism'] in response.enabled_mechanisms:
-            raise AuthenticationMethodNotSupported(self.config['sasl_mechanism'] + " is not supported by broker")
+            raise Errors.AuthenticationMethodNotSupported(self.config['sasl_mechanism'] + " is not supported by broker")
 
         return self._try_authenticate_plain()
 
@@ -358,7 +358,7 @@ class BrokerConnection(object):
             buffer.write(data)
             buffer.seek(0)
             if not Int32.decode(buffer) == 0:
-                raise KafkaError('Expected a zero sized reply after sending credentials')
+                raise Errors.KafkaError('Expected a zero sized reply after sending credentials')
 
         return True
 
