@@ -526,7 +526,6 @@ class BrokerConnection(object):
             if self._rbuffer.tell() == 4:
                 self._rbuffer.seek(0)
                 self._next_payload_bytes = Int32.decode(self._rbuffer)
-                log.debug('_next_payload_bytes: ' + str(self._next_payload_bytes))
                 # reset buffer and switch state to receiving payload bytes
                 self._rbuffer.seek(0)
                 self._rbuffer.truncate()
@@ -538,14 +537,12 @@ class BrokerConnection(object):
             staged_bytes = self._rbuffer.tell()
             try:
                 bytes_to_read = self._next_payload_bytes - staged_bytes
-                log.debug('bytes_to_read: ' + str(bytes_to_read))
                 data = self._sock.recv(bytes_to_read)
                 # We expect socket.recv to raise an exception if there is not
                 # enough data to read the full bytes_to_read
                 # but if the socket is disconnected, we will get empty data
                 # without an exception raised
                 if not data:
-                    #raise Exception('Whyyyy?')
                     log.error('%s: socket disconnected', self)
                     self.close(error=Errors.ConnectionError('socket disconnected'))
                     return None
