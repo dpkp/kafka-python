@@ -294,7 +294,7 @@ class BrokerConnection(object):
         if self.config['security_protocol'] == 'SASL_PLAINTEXT':
             log.warning('%s: Sending username and password in the clear', str(self))
 
-        # build a SaslHandShakeRequest message
+        # Build a SaslHandShakeRequest message
         correlation_id = self._next_correlation_id()
         request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
         header = RequestHeader(request,
@@ -304,7 +304,7 @@ class BrokerConnection(object):
         message = b''.join([header.encode(), request.encode()])
         size = Int32.encode(len(message))
 
-        # attempt to send it over our socket
+        # Attempt to send it over our socket
         try:
             self._sock.setblocking(True)
             self._sock.sendall(size + message)
@@ -323,7 +323,7 @@ class BrokerConnection(object):
                               timestamp=time.time())
         self.in_flight_requests.append(ifr)
 
-        # listen for a reply and check that the server supports the PLAIN mechanism
+        # Listen for a reply and check that the server supports the PLAIN mechanism
         response = None
         while not response:
             response = self.recv()
@@ -340,7 +340,7 @@ class BrokerConnection(object):
         data = b''
         try:
             self._sock.setblocking(True)
-            # send our credentials
+            # Send our credentials
             msg = bytes('\0'.join([self.config['sasl_username'],
                                    self.config['sasl_username'],
                                    self.config['sasl_password']]).encode('utf-8'))
