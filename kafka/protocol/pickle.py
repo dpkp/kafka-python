@@ -9,9 +9,15 @@ import types
 
 
 def _pickle_method(method):
-    func_name = method.im_func.__name__
-    obj = method.im_self
-    cls = method.im_class
+    try:
+        func_name = method.__func__.__name__
+        obj = method.__self__
+        cls = method.__self__.__class__
+    except AttributeError:
+        func_name = method.im_func.__name__
+        obj = method.im_self
+        cls = method.im_class
+
     return _unpickle_method, (func_name, obj, cls)
 
 
