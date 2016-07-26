@@ -308,7 +308,8 @@ class KafkaProducer(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        client = KafkaClient(**self.config)
+        client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
+                             **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
