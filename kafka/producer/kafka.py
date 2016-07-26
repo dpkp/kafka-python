@@ -235,9 +235,9 @@ class KafkaProducer(object):
         sasl_mechanim (str): string picking sasl mechanism when security_protocol
             is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
             Default: None
-        sasl_username (str): username for sasl PLAIN authentication.
+        sasl_plain_username (str): username for sasl PLAIN authentication.
             Default: None
-        sasl_password (str): passowrd for sasl PLAIN authentication.
+        sasl_plain_password (str): passowrd for sasl PLAIN authentication.
             Defualt: None
 
     Note:
@@ -280,8 +280,8 @@ class KafkaProducer(object):
         'metrics_sample_window_ms': 30000,
         'selector': selectors.DefaultSelector,
         'sasl_mechanism': None,
-        'sasl_username': None,
-        'sasl_password': None,
+        'sasl_plain_username': None,
+        'sasl_plain_password': None,
     }
 
     def __init__(self, **configs):

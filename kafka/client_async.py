@@ -66,8 +66,8 @@ class KafkaClient(object):
         'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'sasl_mechanism': None,
-        'sasl_username': None,
-        'sasl_password': None,
+        'sasl_plain_username': None,
+        'sasl_plain_password': None,
     }
     API_VERSIONS = [
         (0, 10),
@@ -142,6 +142,14 @@ class KafkaClient(object):
             selector (selectors.BaseSelector): Provide a specific selector
                 implementation to use for I/O multiplexing.
                 Default: selectors.DefaultSelector
+            sasl_mechanim (str): string picking sasl mechanism when security_protocol
+                is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
+                Default: None
+            sasl_plain_username (str): username for sasl PLAIN authentication.
+                Default: None
+            sasl_plain_password (str): passowrd for sasl PLAIN authentication.
+                Defualt: None
+
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
