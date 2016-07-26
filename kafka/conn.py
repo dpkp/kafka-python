@@ -75,8 +75,8 @@ class BrokerConnection(object):
         'api_version': (0, 8, 2),  # default to most restrictive
         'state_change_callback': lambda conn: True,
         'sasl_mechanism': None,
-        'sasl_username': None,
-        'sasl_password': None
+        'sasl_plain_username': None,
+        'sasl_plain_password': None
     }
 
     def __init__(self, host, port, afi, **configs):
@@ -225,7 +225,7 @@ class BrokerConnection(object):
 
         if self.state is ConnectionStates.AUTHENTICATING:
             if self._try_authenticate():
-                log.debug('%s: Authenticated as %s', str(self), self.config['sasl_username'])
+                log.debug('%s: Authenticated as %s', str(self), self.config['sasl_plain_username'])
                 self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -341,9 +341,9 @@ class BrokerConnection(object):
         try:
             self._sock.setblocking(True)
             # Send our credentials
-            msg = bytes('\0'.join([self.config['sasl_username'],
-                                   self.config['sasl_username'],
-                                   self.config['sasl_password']]).encode('utf-8'))
+            msg = bytes('\0'.join([self.config['sasl_plain_username'],
+                                   self.config['sasl_plain_username'],
+                                   self.config['sasl_plain_password']]).encode('utf-8'))
             size = Int32.encode(len(msg))
             self._sock.sendall(size + msg)
 
@@ -354,9 +354,9 @@ class BrokerConnection(object):
                 data = data + self._sock.recv(4 - received_bytes)
                 received_bytes = received_bytes + len(data)
                 if not data:
-                    log.error('%s: Authentication failed for user %s', self, self.config['sasl_username'])
+                    log.error('%s: Authentication failed for user %s', self, self.config['sasl_plain_username'])
                     self.close(error=Errors.ConnectionError('Authentication failed'))
-                    raise Errors.AuthenticationFailedError('Authentication failed for user {}'.format(self.config['sasl_username']))
+                    raise Errors.AuthenticationFailedError('Authentication failed for user {}'.format(self.config['sasl_plain_username']))
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("%s: Error receiving reply from server",  self)
