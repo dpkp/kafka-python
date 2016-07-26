@@ -145,6 +145,8 @@ class KafkaConsumer(six.Iterator):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
+        ssl_password (str): optional password to be used when loading the
+            certificate chain. default: None.
         ssl_crlfile (str): optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
