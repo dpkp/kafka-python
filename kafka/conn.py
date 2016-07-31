@@ -60,6 +60,7 @@ class BrokerConnection(object):
         'max_in_flight_requests_per_connection': 5,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
+        'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -83,6 +84,15 @@ class BrokerConnection(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        if self.config['receive_buffer_bytes'] is not None:
+            self.config['socket_options'].append(
+                (socket.SOL_SOCKET, socket.SO_RCVBUF,
+                 self.config['receive_buffer_bytes']))
+        if self.config['send_buffer_bytes'] is not None:
+            self.config['socket_options'].append(
+                 (socket.SOL_SOCKET, socket.SO_SNDBUF,
+                 self.config['send_buffer_bytes']))
 
         self.state = ConnectionStates.DISCONNECTED
         self._sock = None
@@ -144,12 +154,10 @@ class BrokerConnection(object):
                 self._sock = socket.socket(afi, socket.SOCK_STREAM)
             else:
                 self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
-            if self.config['receive_buffer_bytes'] is not None:
-                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF,
-                                      self.config['receive_buffer_bytes'])
-            if self.config['send_buffer_bytes'] is not None:
-                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF,
-                                      self.config['send_buffer_bytes'])
+
+            for option in self.config['socket_options']:
+                self._sock.setsockopt(*option)
+
             self._sock.setblocking(False)
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()

@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import atexit
 import copy
 import logging
+import socket
 import threading
 import time
 import weakref
@@ -188,6 +189,9 @@ class KafkaProducer(object):
         send_buffer_bytes (int): The size of the TCP send buffer
             (SO_SNDBUF) to use when sending data. Default: None (relies on
             system defaults). Java client defaults to 131072.
+        socket_options (list): List of tuple-arguments to socket.setsockopt
+            to apply to broker connection sockets. Default:
+            [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
@@ -256,6 +260,7 @@ class KafkaProducer(object):
         'request_timeout_ms': 30000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
+        'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'reconnect_backoff_ms': 50,
         'max_in_flight_requests_per_connection': 5,
         'security_protocol': 'PLAINTEXT',
