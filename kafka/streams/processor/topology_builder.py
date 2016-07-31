@@ -108,7 +108,7 @@ class SinkNodeFactory(NodeFactory):
         self.partitioner = partitioner
 
     def build(self, application_id):
-        if self.topic in self.builder.internal_topics:
+        if self.topic in self.builder.internal_topic_names:
             sink_name = application_id + '-' + self.topic
         else:
             sink_name = self.topic

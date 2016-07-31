@@ -36,12 +36,14 @@ log = logging.getLogger(__name__)
 
 
 class AssignedPartition(object):
-    def __init__(self, task_id, partition):
+    def __init__(self, task_id, tp):
         self.task_id = task_id
-        self.partition = partition
+        self.tp = tp
+        self.topic = tp.topic
+        self.partition = tp.partition
 
     def __cmp__(self, that):
-        return cmp(self.partition, that.partition)
+        return cmp(self.tp, that.tp)
 
 
 class SubscriptionUpdates(object):
@@ -53,7 +55,7 @@ class SubscriptionUpdates(object):
         self.updated_topic_subscriptions = set()
 
     def update_topics(self, topic_names):
-        self.updatedTopicSubscriptions.clear()
+        self.updated_topic_subscriptions.clear()
         self.updated_topic_subscriptions.update(topic_names)
 
     def get_updates(self):
@@ -192,7 +194,6 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
         Returns:
             {member_id: ConsumerProtocolMemberAssignment}
         """
-        import pdb; pdb.set_trace()
         consumers_by_client = {}
         states = {}
         subscription_updates = SubscriptionUpdates()
@@ -320,11 +321,12 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
                     task_ids.append(task_id)
 
             num_consumers = len(consumers)
-            standby = {}
 
             i = 0
             for consumer in consumers:
                 assigned_partitions = []
+                standby = {}
+                active = []
 
                 num_task_ids = len(task_ids)
                 j = i
@@ -342,7 +344,6 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
                     j += num_consumers
 
                 assigned_partitions.sort()
-                active = []
                 active_partitions = collections.defaultdict(list)
                 for partition in assigned_partitions:
                     active.append(partition.task_id)
@@ -355,9 +356,6 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
                     data.encode())
                 i += 1
 
-                active.clear()
-                standby.clear()
-
         # if ZK is specified, validate the internal topics again
         self.prepare_topic(self.internal_source_topic_to_task_ids, False, True)
         # change log topics should be compacted
@@ -367,7 +365,7 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
 
     def on_assignment(self, assignment):
         partitions = [TopicPartition(topic, partition)
-                      for topic, topic_partitions in assignment.partition_assignment
+                      for topic, topic_partitions in assignment.assignment
                       for partition in topic_partitions]
 
         partitions.sort()
@@ -375,13 +373,13 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
         info = AssignmentInfo.decode(assignment.user_data)
         self.standby_tasks = info.standby_tasks
 
-        partition_to_task_ids = {}
+        new_partition_to_task_ids = {}
         task_iter = iter(info.active_tasks)
         for partition in partitions:
-            task_ids = self.partition_to_task_ids.get(partition)
+            task_ids = new_partition_to_task_ids.get(partition)
             if task_ids is None:
                 task_ids = set()
-                self.partition_to_task_ids[partition] = task_ids
+                new_partition_to_task_ids[partition] = task_ids
 
             try:
                 task_ids.add(next(task_iter))
@@ -390,7 +388,7 @@ class StreamPartitionAssignor(AbstractPartitionAssignor):
                     "failed to find a task id for the partition=%s"
                     ", partitions=%d, assignment_info=%s"
                     % (partition, len(partitions), info))
-        self.partition_to_task_ids = partition_to_task_ids
+        self.partition_to_task_ids = new_partition_to_task_ids
 
     def ensure_copartitioning(self, copartition_groups, internal_topic_groups, metadata):
         internal_topics = set()

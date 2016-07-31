@@ -135,7 +135,7 @@ class TaskAssignor(object):
         return False
 
     def compute_addition_cost(self, task, state):
-        cost = len(state.assignedTasks) // state.capacity
+        cost = len(state.assigned_tasks) // state.capacity
 
         if task in state.prev_assigned_tasks:
             if task in state.prev_active_tasks:

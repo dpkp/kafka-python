@@ -84,7 +84,7 @@ class RecordQueue(object):
 
         Arguments:
             raw_records (list of ConsumerRecord): the raw records
-            timestamp_extractor (TimestampExtractor)
+            timestamp_extractor (callable): given a record, return a timestamp
 
         Returns: the size of this queue
         """
@@ -98,12 +98,12 @@ class RecordQueue(object):
                                     raw_record.offset,
                                     raw_record.timestamp,
                                     0, # TimestampType.CREATE_TIME,
+                                    key, value,
                                     raw_record.checksum,
                                     raw_record.serialized_key_size,
-                                    raw_record.serialized_value_size,
-                                    key, value)
+                                    raw_record.serialized_value_size)
 
-            timestamp = timestamp_extractor.extract(record)
+            timestamp = timestamp_extractor(record)
 
             # validate that timestamp must be non-negative
             if timestamp < 0:
@@ -125,12 +125,12 @@ class RecordQueue(object):
         return self.size()
 
     def poll(self):
-        """Get the next StampedRecord from the queue
+        """Get the next Record from the queue
 
-        Returns: StampedRecord
+        Returns: (timestamp, record)
         """
         if not self.fifo_queue:
-            return None
+            return None, None
 
         elem = self.fifo_queue.popleft()
         self.time_tracker.remove_element(elem)

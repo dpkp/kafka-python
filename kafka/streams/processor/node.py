@@ -26,7 +26,8 @@ class ProcessorNode(object):
         self.name = name
 
         # Could we construct a Processor here if the processor is just a function?
-        assert isinstance(processor, Processor), 'processor must subclass Processor'
+        if processor is not None:
+            assert isinstance(processor, Processor), 'processor must subclass Processor'
 
         self.processor = processor
         self.children = []
@@ -47,11 +48,11 @@ class ProcessorNode(object):
 
 class SourceNode(ProcessorNode):
 
-    def __init__(self, name, key_deserializer, val_deserializer):
+    def __init__(self, name, key_deserializer, value_deserializer):
         super(SourceNode, self).__init__(name)
 
         self.key_deserializer = key_deserializer
-        self.val_deserializer = val_deserializer
+        self.value_deserializer = value_deserializer
         self.context = None
 
     def deserialize_key(self, topic, data):
@@ -62,7 +63,7 @@ class SourceNode(ProcessorNode):
     def deserialize_value(self, topic, data):
         if self.value_deserializer is None:
             return data
-        return self.val_deserializer.deserialize(topic, data)
+        return self.value_deserializer.deserialize(topic, data)
 
     def init(self, context):
         self.context = context
@@ -70,8 +71,8 @@ class SourceNode(ProcessorNode):
         # if deserializers are null, get the default ones from the context
         if self.key_deserializer is None:
             self.key_deserializer = self.context.key_deserializer
-        if self.val_deserializer is None:
-            self.val_deserializer = self.context.value_deserializer
+        if self.value_deserializer is None:
+            self.value_deserializer = self.context.value_deserializer
 
         """
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
@@ -90,12 +91,12 @@ class SourceNode(ProcessorNode):
 
 class SinkNode(ProcessorNode):
 
-    def __init__(self, name, topic, key_serializer, val_serializer, partitioner):
+    def __init__(self, name, topic, key_serializer, value_serializer, partitioner):
         super(SinkNode, self).__init__(name)
 
         self.topic = topic
         self.key_serializer = key_serializer
-        self.val_serializer = val_serializer
+        self.value_serializer = value_serializer
         self.partitioner = partitioner
         self.context = None
 
@@ -108,8 +109,8 @@ class SinkNode(ProcessorNode):
         # if serializers are null, get the default ones from the context
         if self.key_serializer is None:
             self.key_serializer = self.context.key_serializer
-        if self.val_serializer is None:
-            self.val_serializer = self.context.value_serializer
+        if self.value_serializer is None:
+            self.value_serializer = self.context.value_serializer
 
         """
         // if value serializers are for {@code Change} values, set the inner serializer when necessary
@@ -124,7 +125,7 @@ class SinkNode(ProcessorNode):
         collector.send(self.topic, key=key, value=value,
                        timestamp_ms=self.context.timestamp(),
                        key_serializer=self.key_serializer,
-                       val_serializer=self.val_serializer,
+                       value_serializer=self.value_serializer,
                        partitioner=self.partitioner)
 
     def close(self):

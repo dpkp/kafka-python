@@ -43,11 +43,12 @@ class AbstractTask(object):
                  consumer, restore_consumer, is_standby, **config):
         """Raises ProcessorStateError if the state manager cannot be created"""
         self.id = task_id
-        self.application_id = self.config['application_id']
+        self.application_id = config['application_id']
         self.partitions = set(partitions)
         self.topology = topology
         self.consumer = consumer
         self.processor_context = None
+        self.state_mgr = None
 
         # create the processor state manager
         """
@@ -78,7 +79,8 @@ class AbstractTask(object):
         Raises ProcessorStateError if there is an error while closing the state manager
         """
         try:
-            self.state_mgr.close(self.record_collector_offsets())
+            if self.state_mgr is not None:
+                self.state_mgr.close(self.record_collector_offsets())
         except Exception as e:
             raise ProcessorStateError('Error while closing the state manager', e)
 
@@ -126,17 +128,17 @@ class StreamTask(AbstractTask):
         partition_queues = {}
 
         for partition in partitions:
-            source = self.topology.source(partition.topic())
+            source = self.topology.source(partition.topic)
             queue = self._create_record_queue(partition, source)
             partition_queues[partition] = queue
 
-        self.partition_group = PartitionGroup(partition_queues, self.config['timestamp_extractor_class'])
+        self.partition_group = PartitionGroup(partition_queues, config['timestamp_extractor'])
 
         # initialize the consumed offset cache
         self.consumed_offsets = {}
 
         # create the RecordCollector that maintains the produced offsets
-        self.record_collector = RecordCollector(self.producer)
+        self.record_collector = RecordCollector(producer)
 
         log.info('Creating restoration consumer client for stream task #%s', self.id)
 
@@ -144,7 +146,7 @@ class StreamTask(AbstractTask):
         self.processor_context = ProcessorContext(self.id, self, self.record_collector, self.state_mgr, **config)
 
         # initialize the state stores
-        self.initialize_state_stores()
+        #self.initialize_state_stores()
 
         # initialize the task by initializing all its processor nodes in the topology
         for node in self.topology.processors():
@@ -175,7 +177,7 @@ class StreamTask(AbstractTask):
         """
         with self._process_lock:
             # get the next record to process
-            record = self.partition_group.next_record(self._record_info)
+            timestamp, record = self.partition_group.next_record(self._record_info)
 
             # if there is no record to process, return immediately
             if record is None:
@@ -203,7 +205,7 @@ class StreamTask(AbstractTask):
                 # after processing this record, if its partition queue's
                 # buffered size has been decreased to the threshold, we can then
                 # resume the consumption on this partition
-                if self._record_info.queue().size() == self.max_buffered_size:
+                if self._record_info.queue.size() == self.max_buffered_size:
                     self.consumer.resume(partition)
                     self.requires_poll = True
 
@@ -251,7 +253,8 @@ class StreamTask(AbstractTask):
     def commit(self):
         """Commit the current task state"""
         # 1) flush local state
-        self.state_mgr.flush()
+        if self.state_mgr is not None:
+            self.state_mgr.flush()
 
         # 2) flush produced records in the downstream and change logs of local states
         self.record_collector.flush()
@@ -260,9 +263,10 @@ class StreamTask(AbstractTask):
         if self._commit_offset_needed:
             consumed_offsets_and_metadata = {}
             for partition, offset in self.consumed_offsets.items():
-                consumed_offsets_and_metadata[partition] = OffsetAndMetadata(offset + 1)
-                self.state_mgr.put_offset_limit(partition, offset + 1)
-            self.consumer.commit_sync(consumed_offsets_and_metadata)
+                consumed_offsets_and_metadata[partition] = OffsetAndMetadata(offset + 1, b'')
+                if self.state_mgr is not None:
+                    self.state_mgr.put_offset_limit(partition, offset + 1)
+            self.consumer.commit(consumed_offsets_and_metadata)
             self._commit_offset_needed = False
 
         self._commit_requested = False
@@ -319,7 +323,7 @@ class StreamTask(AbstractTask):
     def forward(self, key, value, child_index=None, child_name=None):
         this_node = self._curr_node
         try:
-            children = this_node.children()
+            children = this_node.children
 
             if child_index is not None:
                 children = [children[child_index]]

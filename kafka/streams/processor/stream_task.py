@@ -74,7 +74,7 @@ class StreamTask(AbstractTask):
             queue = self.create_record_queue(partition, source)
             partition_queues[partition] = queue
 
-        self.partition_group = PartitionGroup(partition_queues, self.config['timestamp_extractor_class'])
+        self.partition_group = PartitionGroup(partition_queues, self.config['timestamp_extractor'])
 
         # initialize the consumed offset cache
         self.consumed_offsets = {}
@@ -119,7 +119,7 @@ class StreamTask(AbstractTask):
         """
         with self._process_lock:
             # get the next record to process
-            record = self.partition_group.next_record(self._record_info)
+            timestamp, record = self.partition_group.next_record(self._record_info)
 
             # if there is no record to process, return immediately
             if record is None:
@@ -206,7 +206,7 @@ class StreamTask(AbstractTask):
             for partition, offset in self.consumed_offsets.items():
                 consumed_offsets_and_metadata[partition] = OffsetAndMetadata(offset + 1)
                 self.state_mgr.put_offset_limit(partition, offset + 1)
-            self.consumer.commit_sync(consumed_offsets_and_metadata)
+            self.consumer.commit(consumed_offsets_and_metadata)
             self._commit_offset_needed = False
 
         self._commit_requested = False

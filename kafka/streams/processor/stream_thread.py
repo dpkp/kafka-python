@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 STREAM_THREAD_ID_SEQUENCE = AtomicInteger(0)
 
 
-class StreamThread(object):#Process):
+class StreamThread(Process):
     DEFAULT_CONFIG = {
         'application_id': None, # required
         'bootstrap_servers': None, # required
@@ -60,12 +60,24 @@ class StreamThread(object):#Process):
         'auto_offset_reset': 'earliest',
         'enable_auto_commit': False,
         'max_poll_records': 1000,
+        'replication_factor': 1,
+        'num_standby_replicas': 0,
+        'buffered_records_per_partition': 1000,
+        'zookeeper_connect': None,
+        'timestamp_extractor': lambda x: x.timestamp,
+    }
+    PRODUCER_OVERRIDES = {
+        'linger_ms': 100
+    }
+    CONSUMER_OVERRIDES = {
+        'max_poll_records': 1000,
+        'auto_offset_reset': 'earliest',
+        'enable_auto_commit': False,
     }
 
     def __init__(self, builder, **configs):
         stream_id = STREAM_THREAD_ID_SEQUENCE.increment()
-        #super(StreamThread, self).__init__(name='StreamThread-' + str(stream_id))
-        self.name = 'StreamThread-' + str(stream_id)
+        super(StreamThread, self).__init__(name='StreamThread-' + str(stream_id))
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -79,7 +91,6 @@ class StreamThread(object):#Process):
         log.warning('Unrecognized configs: %s', configs.keys())
 
         self.builder = builder
-        self._partition_grouper = self.config.get('partition_grouper', partition_grouper)
         self.source_topics = builder.source_topics()
         self.topic_pattern = builder.source_topic_pattern()
         self.partition_assignor = None
@@ -102,21 +113,67 @@ class StreamThread(object):#Process):
     def client_id(self):
         return self.config['client_id']
 
+    @property
+    def partition_grouper(self):
+        return self.config['partition_grouper']
+
+    def consumer_configs(self, restore=False):
+        consumer = {}
+        for key in KafkaConsumer.DEFAULT_CONFIG:
+            if key in self.config:
+                consumer[key] = self.config[key]
+            if key in self.CONSUMER_OVERRIDES:
+                if (key in consumer
+                    and consumer[key] != self.CONSUMER_OVERRIDES[key]):
+                    log.warning('Overriding KafkaConsumer configs: %s=%s',
+                                key, self.CONSUMER_OVERRIDES[key])
+                consumer[key] = self.CONSUMER_OVERRIDES[key]
+
+        assert not consumer['enable_auto_commit'], (
+            'Unexpected user-specified consumer config enable_auto_commit,'
+            ' as the streams client will always turn off auto committing.')
+
+        if restore:
+            if 'group_id' in consumer:
+                consumer.pop('group_id')
+            restore_id = self.config['thread_client_id'] + '-restore-consumer'
+            consumer['client_id'] = restore_id
+            return consumer
+
+        consumer['group_id'] = self.config['application_id']
+        consumer['client_id'] = self.config['thread_client_id'] + '-consumer'
+        consumer['stream_thread_instance'] = self
+        consumer['replication_factor'] = self.config['replication_factor']
+        consumer['num_standby_replicas'] = self.config['num_standby_replicas']
+        consumer['zookeeper_connect'] = self.config['zookeeper_connect']
+        consumer['partition_assignment_strategy'] = [
+            StreamPartitionAssignor(**consumer)
+        ]
+        return consumer
+
+    def producer_configs(self):
+        producer = {}
+        for key in KafkaProducer.DEFAULT_CONFIG:
+            if key in self.config:
+                producer[key] = self.config[key]
+            if key in self.PRODUCER_OVERRIDES:
+                if (key in producer
+                    and producer[key] != self.PRODUCER_OVERRIDES[key]):
+                    log.warning('Overriding KafkaProducer configs: %s=%s',
+                                key, self.PRODUCER_OVERRIDES[key])
+                producer[key] = self.PRODUCER_OVERRIDES[key]
+        producer['client_id'] = self.config['thread_client_id'] + '-producer'
+        return producer
+
     def initialize(self):
         assert not self._running
         log.info('Creating producer client for stream thread [%s]', self.name)
         #client_supplier = self.config['client_supplier']
-        self.producer = KafkaProducer(**self.config)
+        self.producer = KafkaProducer(**self.producer_configs())
         log.info('Creating consumer client for stream thread [%s]', self.name)
-        assignor = StreamPartitionAssignor(
-            stream_thread_instance=self, **self.config)
-        self.consumer = KafkaConsumer(
-            partition_assignment_strategy=[assignor], **self.config)
+        self.consumer = KafkaConsumer(**self.consumer_configs())
         log.info('Creating restore consumer client for stream thread [%s]', self.name)
-        restore_assignor = StreamPartitionAssignor(
-            stream_thread_instance=self, **self.config)
-        self.restore_consumer = KafkaConsumer(
-            partition_assignment_strategy=[restore_assignor], **self.config)
+        self.restore_consumer = KafkaConsumer(**self.consumer_configs(restore=True))
 
         # initialize the task list
         self._active_tasks = {}
@@ -255,7 +312,7 @@ class StreamThread(object):#Process):
                     start_process = time.time()
 
                     total_num_buffered += task.process()
-                    requires_poll = requires_poll or task.requires_poll()
+                    requires_poll = requires_poll or task.requires_poll
 
                     latency_ms = (time.time() - start_process) * 1000
                     #self._sensors.process_time_sensor.record(latency_ms)
@@ -457,8 +514,7 @@ class StreamThread(object):#Process):
         topology = self.builder.build(self.config['application_id'],
                                       task_id.topic_group_id)
 
-        return StreamTask(task_id, self.config['application_id'],
-                          partitions, topology,
+        return StreamTask(task_id, partitions, topology,
                           self.consumer, self.producer, self.restore_consumer,
                           **self.config) # self._sensors
 
@@ -535,7 +591,7 @@ class StreamThread(object):#Process):
         checkpointed_offsets = {}
 
         # create the standby tasks
-        for task_id, partitions in self.partition_assignor.standby_tasks().items():
+        for task_id, partitions in self.partition_assignor.standby_tasks.items():
             task = self._create_standby_task(task_id, partitions)
             if task:
                 self._standby_tasks[task_id] = task

@@ -29,13 +29,13 @@ TaskId = collections.namedtuple('TaskId', 'topic_group_id partition_id')
 
 class RecordInfo(object):
     def __init__(self):
-        self.queue = RecordQueue()
+        self.queue = None
 
     def node(self):
-        return self.queue.source()
+        return self.queue.source
 
     def partition(self):
-        return self.queue.partition()
+        return self.queue.partition
 
     def queue(self):
         return self.queue
@@ -57,13 +57,13 @@ class PartitionGroup(object):
 
         Returns: (timestamp, ConsumerRecord)
         """
-        record = None
+        timestamp = record = queue = None
 
         if self._queues_by_time:
             _, queue = heapq.heappop(self._queues_by_time)
 
             # get the first record from this queue.
-            record = queue.poll()
+            timestamp, record = queue.poll()
 
             if queue:
                 heapq.heappush(self._queues_by_time, (queue.timestamp(), queue))
@@ -73,7 +73,7 @@ class PartitionGroup(object):
         if record:
             self._total_buffered -= 1
 
-        return record
+        return timestamp, record
 
     def add_raw_records(self, partition, raw_records):
         """Adds raw records to this partition group
@@ -124,7 +124,7 @@ class PartitionGroup(object):
     def top_queue_size(self):
         if not self._queues_by_time:
             return 0
-        return self._queues_by_time[0].size()
+        return self._queues_by_time[0][1].size() # XXX RecordQueue.__len__
 
     def close(self):
         self._queues_by_time = []

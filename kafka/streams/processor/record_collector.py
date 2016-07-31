@@ -42,11 +42,13 @@ class RecordCollector(object):
         if key_serializer:
             key_bytes = key_serializer(topic, key)
         else:
+            assert key is None or isinstance(key, bytes), key
             key_bytes = key
 
         if value_serializer:
             val_bytes = value_serializer(topic, value)
         else:
+            assert value is None or isinstance(value, bytes), value
             val_bytes = value
 
         if partition is None and partitioner is not None:

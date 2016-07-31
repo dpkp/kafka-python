@@ -20,6 +20,7 @@ import json
 import logging
 
 from kafka.streams.errors import TaskAssignmentError
+from kafka.streams.processor.partition_group import TaskId
 
 log = logging.getLogger(__name__)
 
@@ -53,9 +54,9 @@ class SubscriptionInfo(object):
             if decoded['version'] != cls.CURRENT_VERSION:
                 raise TaskAssignmentError('unable to decode subscription data: version=' + str(cls.version))
 
-            decoded['prev_tasks'] = set(decoded['prev_tasks'])
-            decoded['standby_tasks'] = set(decoded['standby_tasks'])
+            decoded['prev_tasks'] = set([TaskId(*item) for item in decoded['prev_tasks']])
+            decoded['standby_tasks'] = set([TaskId(*item) for item in decoded['standby_tasks']])
             return cls(decoded['process_id'], decoded['prev_tasks'], decoded['standby_tasks'], decoded['version'])
 
         except Exception as e:
-            raise TaskAssignmentError('unable to decode subscription data', e)
+            raise TaskAssignmentError('unable to decode subscription data', data, e)
