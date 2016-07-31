@@ -346,5 +346,5 @@ class ClusterMetadata(object):
         return new_metadata
 
     def __str__(self):
-        return 'Cluster(brokers: %d, topics: %d, groups: %d)' % \
+        return 'ClusterMetadata(brokers: %d, topics: %d, groups: %d)' % \
                (len(self._brokers), len(self._partitions), len(self._groups))
