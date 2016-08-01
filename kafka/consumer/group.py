@@ -268,7 +268,7 @@ class KafkaConsumer(six.Iterator):
                 self.config['api_version'] = None
             else:
                 self.config['api_version'] = tuple(map(int, str_version.split('.')))
-            log.warning('use api_version=%s (%s is deprecated)',
+            log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
                         str(self.config['api_version']), str_version)
 
         self._client = KafkaClient(**self.config)
