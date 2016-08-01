@@ -240,7 +240,7 @@ class KafkaProducer(object):
         Configuration parameters are described in more detail at
         https://kafka.apache.org/0100/configuration.html#producerconfigs
     """
-    _DEFAULT_CONFIG = {
+    DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': None,
         'key_serializer': None,
@@ -280,7 +280,7 @@ class KafkaProducer(object):
 
     def __init__(self, **configs):
         log.debug("Starting the Kafka producer") # trace
-        self.config = copy.copy(self._DEFAULT_CONFIG)
+        self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)

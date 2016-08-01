@@ -24,7 +24,7 @@ class Sender(threading.Thread):
     Kafka cluster. This thread makes metadata requests to renew its view of the
     cluster and then sends produce requests to the appropriate nodes.
     """
-    _DEFAULT_CONFIG = {
+    DEFAULT_CONFIG = {
         'max_request_size': 1048576,
         'acks': 1,
         'retries': 0,
@@ -36,7 +36,7 @@ class Sender(threading.Thread):
 
     def __init__(self, client, metadata, accumulator, metrics, **configs):
         super(Sender, self).__init__()
-        self.config = copy.copy(self._DEFAULT_CONFIG)
+        self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)

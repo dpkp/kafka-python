@@ -155,7 +155,7 @@ class RecordAccumulator(object):
             produce request upon receiving an error. This avoids exhausting
             all retries in a short period of time. Default: 100
     """
-    _DEFAULT_CONFIG = {
+    DEFAULT_CONFIG = {
         'buffer_memory': 33554432,
         'batch_size': 16384,
         'compression_type': None,
@@ -165,7 +165,7 @@ class RecordAccumulator(object):
     }
 
     def __init__(self, **configs):
-        self.config = copy.copy(self._DEFAULT_CONFIG)
+        self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
