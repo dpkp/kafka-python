@@ -75,7 +75,7 @@ SyncGroupResponse = [SyncGroupResponse_v0]
 class MemberAssignment(Struct):
     SCHEMA = Schema(
         ('version', Int16),
-        ('partition_assignment', Array(
+        ('assignment', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(Int32)))),
         ('user_data', Bytes)
