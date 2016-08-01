@@ -54,6 +54,7 @@ class KafkaClient(object):
         'max_in_flight_requests_per_connection': 5,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
+        'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
         'security_protocol': 'PLAINTEXT',
@@ -93,26 +94,29 @@ class KafkaClient(object):
                 server-side log entries that correspond to this client. Also
                 submitted to GroupCoordinator for logging with respect to
                 consumer group administration. Default: 'kafka-python-{version}'
-            request_timeout_ms (int): Client request timeout in milliseconds.
-                Default: 40000.
             reconnect_backoff_ms (int): The amount of time in milliseconds to
                 wait before attempting to reconnect to a given host.
                 Default: 50.
+            request_timeout_ms (int): Client request timeout in milliseconds.
+                Default: 40000.
+            retry_backoff_ms (int): Milliseconds to backoff when retrying on
+                errors. Default: 100.
             max_in_flight_requests_per_connection (int): Requests are pipelined
                 to kafka brokers up to this number of maximum requests per
                 broker connection. Default: 5.
-            send_buffer_bytes (int): The size of the TCP send buffer
-                (SO_SNDBUF) to use when sending data. Default: None (relies on
-                system defaults). Java client defaults to 131072.
             receive_buffer_bytes (int): The size of the TCP receive buffer
                 (SO_RCVBUF) to use when reading data. Default: None (relies on
                 system defaults). Java client defaults to 32768.
+            send_buffer_bytes (int): The size of the TCP send buffer
+                (SO_SNDBUF) to use when sending data. Default: None (relies on
+                system defaults). Java client defaults to 131072.
+            socket_options (list): List of tuple-arguments to socket.setsockopt
+                to apply to broker connection sockets. Default:
+                [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
             metadata_max_age_ms (int): The period of time in milliseconds after
                 which we force a refresh of metadata even if we haven't seen any
                 partition leadership changes to proactively discover any new
                 brokers or partitions. Default: 300000
-            retry_backoff_ms (int): Milliseconds to backoff when retrying on
-                errors. Default: 100.
             security_protocol (str): Protocol used to communicate with brokers.
                 Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
             ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
