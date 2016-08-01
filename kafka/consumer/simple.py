@@ -9,8 +9,8 @@ import sys
 import time
 import warnings
 
-import six
-from six.moves import queue
+from kafka.vendor import six
+from kafka.vendor.six.moves import queue # pylint: disable=import-error
 
 from .base import (
     Consumer,

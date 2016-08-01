@@ -18,7 +18,7 @@ except ImportError:
 import socket
 import time
 
-import six
+from kafka.vendor import six
 
 from .cluster import ClusterMetadata
 from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi

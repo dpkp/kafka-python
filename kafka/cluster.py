@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-import six
+from kafka.vendor import six
 
 from . import errors as Errors
 from .future import Future

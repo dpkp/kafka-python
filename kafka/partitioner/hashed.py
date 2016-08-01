@@ -1,4 +1,6 @@
-import six
+from __future__ import absolute_import
+
+from kafka.vendor import six
 
 from .base import Partitioner
 

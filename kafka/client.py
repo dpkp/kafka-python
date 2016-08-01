@@ -5,7 +5,7 @@ import logging
 import random
 import time
 
-import six
+from kafka.vendor import six
 
 import kafka.errors
 from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,

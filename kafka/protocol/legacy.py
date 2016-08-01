@@ -3,9 +3,9 @@ from __future__ import absolute_import
 import logging
 import struct
 
-import six
+from kafka.vendor import six # pylint: disable=import-error
 
-from six.moves import xrange
+from kafka.vendor.six.moves import xrange # pylint: disable=import-error
 
 import kafka.protocol.commit
 import kafka.protocol.fetch

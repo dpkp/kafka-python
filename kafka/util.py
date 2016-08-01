@@ -6,7 +6,7 @@ import sys
 from threading import Thread, Event
 import weakref
 
-import six
+from kafka.vendor import six
 
 from kafka.errors import BufferUnderflowError
 

@@ -6,7 +6,7 @@ import logging
 import time
 import weakref
 
-import six
+from kafka.vendor import six
 
 from .heartbeat import Heartbeat
 from .. import errors as Errors

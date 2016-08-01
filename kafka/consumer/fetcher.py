@@ -6,7 +6,7 @@ import logging
 import random
 import time
 
-import six
+from kafka.vendor import six
 
 import kafka.errors as Errors
 from kafka.future import Future

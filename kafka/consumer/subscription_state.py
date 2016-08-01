@@ -4,7 +4,7 @@ import abc
 import logging
 import re
 
-import six
+from kafka.vendor import six
 
 from kafka.errors import IllegalStateError
 from kafka.protocol.offset import OffsetResetStrategy
