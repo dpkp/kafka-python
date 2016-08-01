@@ -13,7 +13,7 @@ try:
     import selectors # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from . import selectors34 as selectors
+    from .vendor import selectors34 as selectors
 
 import socket
 import time
