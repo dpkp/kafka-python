@@ -326,6 +326,25 @@ class ClusterMetadata(object):
         self._groups[group] = node_id
         return True
 
+    def with_partitions(self, partitions_to_add):
+        """Returns a copy of cluster metadata with partitions added"""
+        new_metadata = ClusterMetadata(**self.config)
+        new_metadata._brokers = copy.deepcopy(self._brokers)
+        new_metadata._partitions = copy.deepcopy(self._partitions)
+        new_metadata._broker_partitions = copy.deepcopy(self._broker_partitions)
+        new_metadata._groups = copy.deepcopy(self._groups)
+        new_metadata.internal_topics = copy.deepcopy(self.internal_topics)
+        new_metadata.unauthorized_topics = copy.deepcopy(self.unauthorized_topics)
+
+        for partition in partitions_to_add:
+            new_metadata._partitions[partition.topic][partition.partition] = partition
+
+            if partition.leader is not None and partition.leader != -1:
+                new_metadata._broker_partitions[partition.leader].add(
+                    TopicPartition(partition.topic, partition.partition))
+
+        return new_metadata
+
     def __str__(self):
-        return 'Cluster(brokers: %d, topics: %d, groups: %d)' % \
+        return 'ClusterMetadata(brokers: %d, topics: %d, groups: %d)' % \
                (len(self._brokers), len(self._partitions), len(self._groups))
