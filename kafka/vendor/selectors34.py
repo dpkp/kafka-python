@@ -12,7 +12,7 @@ This module allows high-level and efficient I/O multiplexing, built upon the
 
 The following code adapted from trollius.selectors.
 """
-
+from __future__ import absolute_import
 
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple, Mapping
@@ -21,7 +21,7 @@ import math
 import select
 import sys
 
-import six
+from kafka.vendor import six
 
 
 def _wrap_error(exc, mapping, key):

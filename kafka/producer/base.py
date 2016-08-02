@@ -12,7 +12,7 @@ from collections import defaultdict
 
 from threading import Thread, Event
 
-import six
+from kafka.vendor import six
 
 from kafka.structs import (
     ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions)

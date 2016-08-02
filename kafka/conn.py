@@ -8,7 +8,7 @@ import socket
 import ssl
 import time
 
-import six
+from kafka.vendor import six
 
 import kafka.errors as Errors
 from kafka.future import Future

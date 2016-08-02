@@ -1,7 +1,7 @@
 import collections
 import logging
 
-import six
+from kafka.vendor import six
 
 from .abstract import AbstractPartitionAssignor
 from ..protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment

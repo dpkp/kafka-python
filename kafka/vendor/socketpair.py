@@ -1,5 +1,6 @@
 # pylint: skip-file
 # vendored from https://github.com/mhils/backports.socketpair
+from __future__ import absolute_import
 
 import sys
 import socket

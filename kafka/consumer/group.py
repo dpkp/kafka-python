@@ -5,7 +5,7 @@ import logging
 import socket
 import time
 
-import six
+from kafka.vendor import six
 
 from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher

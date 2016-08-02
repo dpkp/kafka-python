@@ -13,12 +13,12 @@ try:
     import selectors # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from . import selectors34 as selectors
+    from .vendor import selectors34 as selectors
 
 import socket
 import time
 
-import six
+from kafka.vendor import six
 
 from .cluster import ClusterMetadata
 from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
@@ -28,7 +28,7 @@ from .metrics.stats import Avg, Count, Rate
 from .metrics.stats.rate import TimeUnit
 from .protocol.metadata import MetadataRequest
 from .protocol.produce import ProduceRequest
-from . import socketpair
+from .vendor import socketpair
 from .version import __version__
 
 if six.PY2:

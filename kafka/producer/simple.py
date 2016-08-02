@@ -4,7 +4,7 @@ from itertools import cycle
 import logging
 import random
 
-from six.moves import xrange
+from kafka.vendor.six.moves import xrange # pylint: disable=import-error
 
 from .base import Producer
 

@@ -3,7 +3,7 @@ try:
     import selectors # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    import kafka.selectors34 as selectors
+    import kafka.vendor.selectors34 as selectors
 
 import socket
 import time
