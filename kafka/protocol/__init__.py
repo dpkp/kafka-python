@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .legacy import (
     create_message, create_gzip_message,
     create_snappy_message, create_message_set,

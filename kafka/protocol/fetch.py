@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .message import MessageSet
 from .struct import Struct
 from .types import Array, Int16, Int32, Int64, Schema, String

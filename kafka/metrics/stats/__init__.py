@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .avg import Avg
 from .count import Count
 from .histogram import Histogram

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .compound_stat import NamedMeasurable
 from .dict_reporter import DictReporter
 from .kafka_metric import KafkaMetric

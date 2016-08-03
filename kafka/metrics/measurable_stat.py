@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import abc
 
 from kafka.metrics.measurable import AbstractMeasurable

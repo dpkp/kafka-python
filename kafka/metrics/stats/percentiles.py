@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from kafka.metrics import AnonMeasurable, NamedMeasurable
 from kafka.metrics.compound_stat import AbstractCompoundStat
 from kafka.metrics.stats import Histogram

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .roundrobin import RoundRobinPartitioner
 from .hashed import HashedPartitioner, Murmur2Partitioner, LegacyPartitioner
 

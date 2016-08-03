@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 __title__ = 'kafka'
 from .version import __version__
 __author__ = 'Dana Powers'

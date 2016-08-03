@@ -1,6 +1,8 @@
 """
 Context manager to commit/rollback consumer offsets.
 """
+from __future__ import absolute_import
+
 from logging import getLogger
 
 from kafka.errors import check_error, OffsetOutOfRangeError

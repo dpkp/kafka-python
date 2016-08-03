@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from .struct import Struct
 from .types import Array, Bytes, Int16, Int32, Schema, String
 
