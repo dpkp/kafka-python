@@ -537,10 +537,13 @@ class KafkaClient(object):
                 #
                 # either way, we can no longer safely use this connection
                 #
-                # Do a 1-byte read to clear the READ flag, and then close the conn
-                unexpected_data = key.fileobj.recv(1)
-                if unexpected_data:  # anything other than a 0-byte read means protocol issues
-                    log.warning('Protocol out of sync on %r, closing', conn)
+                # Do a 1-byte read to check protocol didnt get out of sync, and then close the conn
+                try:
+                    unexpected_data = key.fileobj.recv(1)
+                    if unexpected_data:  # anything other than a 0-byte read means protocol issues
+                        log.warning('Protocol out of sync on %r, closing', conn)
+                except socket.error:
+                    pass
                 conn.close()
                 continue
 
