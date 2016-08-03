@@ -15,6 +15,7 @@ from kafka.vendor import six
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.api import RequestHeader
+from kafka.protocol.admin import SaslHandShakeRequest, SaslHandShakeResponse
 from kafka.protocol.commit import GroupCoordinatorResponse
 from kafka.protocol.types import Int32
 from kafka.version import __version__
@@ -48,7 +49,7 @@ class ConnectionStates(object):
     CONNECTING = '<connecting>'
     HANDSHAKE = '<handshake>'
     CONNECTED = '<connected>'
-
+    AUTHENTICATING = '<authenticating>'
 
 InFlightRequest = collections.namedtuple('InFlightRequest',
     ['request', 'response_type', 'correlation_id', 'future', 'timestamp'])
@@ -73,7 +74,11 @@ class BrokerConnection(object):
         'ssl_password': None,
         'api_version': (0, 8, 2),  # default to most restrictive
         'state_change_callback': lambda conn: True,
+        'sasl_mechanism': 'PLAIN',
+        'sasl_plain_username': None,
+        'sasl_plain_password': None
     }
+    SASL_MECHANISMS = ('PLAIN',)
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -96,11 +101,19 @@ class BrokerConnection(object):
                  (socket.SOL_SOCKET, socket.SO_SNDBUF,
                  self.config['send_buffer_bytes']))
 
+        if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
+            assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
+                'sasl_mechanism must be in ' + self.SASL_MECHANISMS)
+            if self.config['sasl_mechanism'] == 'PLAIN':
+                assert self.config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
+                assert self.config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
+
         self.state = ConnectionStates.DISCONNECTED
         self._sock = None
         self._ssl_context = None
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
+        self._sasl_auth_future = None
         self._rbuffer = io.BytesIO()
         self._receiving = False
         self._next_payload_bytes = 0
@@ -188,6 +201,8 @@ class BrokerConnection(object):
                 if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                     log.debug('%s: initiating SSL handshake', str(self))
                     self.state = ConnectionStates.HANDSHAKE
+                elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
+                    self.state = ConnectionStates.AUTHENTICATING
                 else:
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
@@ -211,6 +226,16 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
                 log.debug('%s: completed SSL handshake.', str(self))
+                if self.config['security_protocol'] == 'SASL_SSL':
+                    self.state = ConnectionStates.AUTHENTICATING
+                else:
+                    self.state = ConnectionStates.CONNECTED
+                self.config['state_change_callback'](self)
+
+        if self.state is ConnectionStates.AUTHENTICATING:
+            assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
+            if self._try_authenticate():
+                log.info('%s: Authenticated as %s', str(self), self.config['sasl_plain_username'])
                 self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -273,6 +298,75 @@ class BrokerConnection(object):
 
         return False
 
+    def _try_authenticate(self):
+        assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10)
+
+        if self._sasl_auth_future is None:
+            # Build a SaslHandShakeRequest message
+            request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
+            future = Future()
+            sasl_response = self._send(request)
+            sasl_response.add_callback(self._handle_sasl_handshake_response, future)
+            sasl_response.add_errback(lambda f, e: f.failure(e), future)
+            self._sasl_auth_future = future
+        self._recv()
+        if self._sasl_auth_future.failed():
+            raise self._sasl_auth_future.exception # pylint: disable-msg=raising-bad-type
+        return self._sasl_auth_future.succeeded()
+
+    def _handle_sasl_handshake_response(self, future, response):
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            error = error_type(self)
+            self.close(error=error)
+            return future.failure(error_type(self))
+
+        if self.config['sasl_mechanism'] == 'PLAIN':
+            return self._try_authenticate_plain(future)
+        else:
+            return future.failure(
+                Errors.UnsupportedSaslMechanismError(
+                    'kafka-python does not support SASL mechanism %s' %
+                    self.config['sasl_mechanism']))
+
+    def _try_authenticate_plain(self, future):
+        if self.config['security_protocol'] == 'SASL_PLAINTEXT':
+            log.warning('%s: Sending username and password in the clear', str(self))
+
+        data = b''
+        try:
+            self._sock.setblocking(True)
+            # Send PLAIN credentials per RFC-4616
+            msg = bytes('\0'.join([self.config['sasl_plain_username'],
+                                   self.config['sasl_plain_username'],
+                                   self.config['sasl_plain_password']]).encode('utf-8'))
+            size = Int32.encode(len(msg))
+            self._sock.sendall(size + msg)
+
+            # The server will send a zero sized message (that is Int32(0)) on success.
+            # The connection is closed on failure
+            while len(data) < 4:
+                fragment = self._sock.recv(4 - len(data))
+                if not fragment:
+                    log.error('%s: Authentication failed for user %s', self, self.config['sasl_plain_username'])
+                    error = Errors.AuthenticationFailedError(
+                        'Authentication failed for user {0}'.format(
+                            self.config['sasl_plain_username']))
+                    future.failure(error)
+                    raise error
+                data += fragment
+            self._sock.setblocking(False)
+        except (AssertionError, ConnectionError) as e:
+            log.exception("%s: Error receiving reply from server",  self)
+            error = Errors.ConnectionError("%s: %s" % (str(self), e))
+            future.failure(error)
+            self.close(error=error)
+
+        if data != b'\x00\x00\x00\x00':
+            return future.failure(Errors.AuthenticationFailedError())
+
+        return future.success(True)
+
     def blacked_out(self):
         """
         Return true if we are disconnected from the given node and can't
@@ -292,7 +386,8 @@ class BrokerConnection(object):
         """Returns True if still connecting (this may encompass several
         different states, such as SSL handshake, authorization, etc)."""
         return self.state in (ConnectionStates.CONNECTING,
-                              ConnectionStates.HANDSHAKE)
+                              ConnectionStates.HANDSHAKE,
+                              ConnectionStates.AUTHENTICATING)
 
     def disconnected(self):
         """Return True iff socket is closed"""
@@ -337,6 +432,10 @@ class BrokerConnection(object):
             return future.failure(Errors.ConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
+        return self._send(request, expect_response=expect_response)
+
+    def _send(self, request, expect_response=True):
+        future = Future()
         correlation_id = self._next_correlation_id()
         header = RequestHeader(request,
                                correlation_id=correlation_id,
@@ -385,7 +484,7 @@ class BrokerConnection(object):
         Return response if available
         """
         assert not self._processing, 'Recursion not supported'
-        if not self.connected():
+        if not self.connected() and not self.state is ConnectionStates.AUTHENTICATING:
             log.warning('%s cannot recv: socket not connected', self)
             # If requests are pending, we should close the socket and
             # fail all the pending request futures
@@ -405,6 +504,9 @@ class BrokerConnection(object):
                 self.config['request_timeout_ms']))
             return None
 
+        return self._recv()
+
+    def _recv(self):
         # Not receiving is the state of reading the payload header
         if not self._receiving:
             try:
@@ -452,7 +554,7 @@ class BrokerConnection(object):
                 # enough data to read the full bytes_to_read
                 # but if the socket is disconnected, we will get empty data
                 # without an exception raised
-                if not data:
+                if bytes_to_read and not data:
                     log.error('%s: socket disconnected', self)
                     self.close(error=Errors.ConnectionError('socket disconnected'))
                     return None
