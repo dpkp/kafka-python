@@ -186,7 +186,7 @@ class KafkaConsumer(six.Iterator):
             (such as offsets) should be exposed to the consumer. If set to True
             the only way to receive records from an internal topic is
             subscribing to it. Requires 0.10+ Default: True
-        sasl_mechanim (str): string picking sasl mechanism when security_protocol
+        sasl_mechanism (str): string picking sasl mechanism when security_protocol
             is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
             Default: None
         sasl_plain_username (str): username for sasl PLAIN authentication.

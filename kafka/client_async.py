@@ -153,7 +153,7 @@ class KafkaClient(object):
             metrics (kafka.metrics.Metrics): Optionally provide a metrics
                 instance for capturing network IO stats. Default: None.
             metric_group_prefix (str): Prefix for metric names. Default: ''
-            sasl_mechanim (str): string picking sasl mechanism when security_protocol
+            sasl_mechanism (str): string picking sasl mechanism when security_protocol
                 is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
                 Default: None
             sasl_plain_username (str): username for sasl PLAIN authentication.

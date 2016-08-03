@@ -236,7 +236,7 @@ class KafkaProducer(object):
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
-        sasl_mechanim (str): string picking sasl mechanism when security_protocol
+        sasl_mechanism (str): string picking sasl mechanism when security_protocol
             is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
             Default: None
         sasl_plain_username (str): username for sasl PLAIN authentication.
