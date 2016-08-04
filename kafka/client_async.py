@@ -273,6 +273,8 @@ class KafkaClient(object):
             except KeyError:
                 pass
             self._selector.register(conn._sock, selectors.EVENT_READ, conn)
+            if self._sensors:
+                self._sensors.connection_created.record()
 
             if 'bootstrap' in self._conns and node_id != 'bootstrap':
                 bootstrap = self._conns.pop('bootstrap')
@@ -289,6 +291,8 @@ class KafkaClient(object):
                 self._selector.unregister(conn._sock)
             except KeyError:
                 pass
+            if self._sensors:
+                self._sensors.connection_closed.record()
             if self._refresh_on_disconnects and not self._closed:
                 log.warning("Node %s connection failed -- refreshing metadata", node_id)
                 self.cluster.request_update()
@@ -891,6 +895,15 @@ class KafkaClientMetrics(object):
     def __init__(self, metrics, metric_group_prefix):
         self.metrics = metrics
         self.metric_group_name = metric_group_prefix + '-metrics'
+
+        self.connection_closed = metrics.sensor('connections-closed')
+        self.connection_closed.add(metrics.metric_name(
+            'connection-close-rate', self.metric_group_name,
+            'Connections closed per second in the window.'), Rate())
+        self.connection_created = metrics.sensor('connections-created')
+        self.connection_created.add(metrics.metric_name(
+            'connection-creation-rate', self.metric_group_name,
+            'New connections established per second in the window.'), Rate())
 
         self.select_time = metrics.sensor('select-time')
         self.select_time.add(metrics.metric_name(
