@@ -162,6 +162,8 @@ class RecordAccumulator(object):
         'linger_ms': 0,
         'retry_backoff_ms': 100,
         'message_version': 0,
+        'metrics': None,
+        'metric_group_prefix': 'producer-metrics',
     }
 
     def __init__(self, **configs):
@@ -176,7 +178,9 @@ class RecordAccumulator(object):
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [RecordBatch]
         self._tp_locks = {None: threading.Lock()} # TopicPartition: Lock, plus a lock to add entries
         self._free = SimpleBufferPool(self.config['buffer_memory'],
-                                      self.config['batch_size'])
+                                      self.config['batch_size'],
+                                      metrics=self.config['metrics'],
+                                      metric_group_prefix=self.config['metric_group_prefix'])
         self._incomplete = IncompleteRecordBatches()
         # The following variables should only be accessed by the sender thread,
         # so we don't need to protect them w/ locking.

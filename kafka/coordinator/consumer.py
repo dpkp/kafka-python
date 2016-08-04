@@ -37,10 +37,10 @@ class ConsumerCoordinator(BaseCoordinator):
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
         'exclude_internal_topics': True,
+        'metric_group_prefix': 'consumer'
     }
 
-    def __init__(self, client, subscription, metrics, metric_group_prefix,
-                 **configs):
+    def __init__(self, client, subscription, metrics, **configs):
         """Initialize the coordination manager.
 
         Keyword Arguments:
@@ -76,9 +76,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 True the only way to receive records from an internal topic is
                 subscribing to it. Requires 0.10+. Default: True
         """
-        super(ConsumerCoordinator, self).__init__(client,
-                                                  metrics, metric_group_prefix,
-                                                  **configs)
+        super(ConsumerCoordinator, self).__init__(client, metrics, **configs)
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -111,7 +109,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 self._auto_commit_task.reschedule()
 
         self.consumer_sensors = ConsumerCoordinatorMetrics(
-            metrics, metric_group_prefix, self._subscription)
+            metrics, self.config['metric_group_prefix'], self._subscription)
 
     def __del__(self):
         if hasattr(self, '_cluster') and self._cluster:

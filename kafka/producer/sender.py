@@ -204,7 +204,6 @@ class Sender(threading.Thread):
                     batch = batches_by_partition[tp]
                     self._complete_batch(batch, error, offset, ts)
 
-            self._sensors.record_latency((time.time() - send_time) * 1000, node=node_id)
             if response.API_VERSION > 0:
                 self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
 
@@ -342,15 +341,6 @@ class SenderMetrics(object):
         self.add_metric('record-queue-time-max', Max(),
                         sensor_name=sensor_name,
                         description='The maximum time in ms record batches spent in the record accumulator.')
-
-        sensor_name = 'request-time'
-        self.request_time_sensor = self.metrics.sensor(sensor_name)
-        self.add_metric('request-latency-avg', Avg(),
-                        sensor_name=sensor_name,
-                        description='The average request latency in ms')
-        self.add_metric('request-latency-max', Max(),
-                        sensor_name=sensor_name,
-                        description='The maximum request latency in ms')
 
         sensor_name = 'produce-throttle-time'
         self.produce_throttle_time_sensor = self.metrics.sensor(sensor_name)
@@ -497,13 +487,6 @@ class SenderMetrics(object):
         sensor = self.metrics.get_sensor('topic.' + topic + '.record-errors')
         if sensor:
             sensor.record(count)
-
-    def record_latency(self, latency, node=None):
-        self.request_time_sensor.record(latency)
-        if node is not None:
-            sensor = self.metrics.get_sensor('node-' + str(node) + '.latency')
-            if sensor:
-                sensor.record(latency)
 
     def record_throttle_time(self, throttle_time_ms, node=None):
         self.produce_throttle_time_sensor.record(throttle_time_ms)

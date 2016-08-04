@@ -29,8 +29,7 @@ def client(conn):
 
 @pytest.fixture
 def coordinator(client):
-    return ConsumerCoordinator(client, SubscriptionState(), Metrics(),
-                               'consumer')
+    return ConsumerCoordinator(client, SubscriptionState(), Metrics())
 
 
 def test_init(client, coordinator):
@@ -42,7 +41,7 @@ def test_init(client, coordinator):
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
 def test_autocommit_enable_api_version(client, api_version):
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
-                                      Metrics(), 'consumer',
+                                      Metrics(),
                                       enable_auto_commit=True,
                                       group_id='foobar',
                                       api_version=api_version)
@@ -362,7 +361,7 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
     mock_exc = mocker.patch('kafka.coordinator.consumer.log.exception')
     client = KafkaClient(api_version=api_version)
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
-                                      Metrics(), 'consumer',
+                                      Metrics(),
                                       api_version=api_version,
                                       enable_auto_commit=enable,
                                       group_id=group_id)

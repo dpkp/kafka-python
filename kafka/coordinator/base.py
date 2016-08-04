@@ -55,9 +55,10 @@ class BaseCoordinator(object):
         'heartbeat_interval_ms': 3000,
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
+        'metric_group_prefix': '',
     }
 
-    def __init__(self, client, metrics, metric_group_prefix, **configs):
+    def __init__(self, client, metrics, **configs):
         """
         Keyword Arguments:
             group_id (str): name of the consumer group to join for dynamic
@@ -92,7 +93,7 @@ class BaseCoordinator(object):
         self.heartbeat = Heartbeat(**self.config)
         self.heartbeat_task = HeartbeatTask(weakref.proxy(self))
         self.sensors = GroupCoordinatorMetrics(self.heartbeat, metrics,
-                                               metric_group_prefix)
+                                               self.config['metric_group_prefix'])
 
     def __del__(self):
         if hasattr(self, 'heartbeat_task') and self.heartbeat_task:
