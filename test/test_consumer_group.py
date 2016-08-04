@@ -95,7 +95,12 @@ def test_group(kafka_broker, topic):
                 generations = set([consumer._coordinator.generation
                                    for consumer in list(consumers.values())])
 
-                if len(generations) == 1:
+                # New generation assignment is not complete until
+                # coordinator.rejoining = False
+                rejoining = any([consumer._coordinator.rejoining
+                                 for consumer in list(consumers.values())])
+
+                if not rejoining and len(generations) == 1:
                     for c, consumer in list(consumers.items()):
                         logging.info("[%s] %s %s: %s", c,
                                      consumer._coordinator.generation,
