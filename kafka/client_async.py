@@ -158,7 +158,7 @@ class KafkaClient(object):
                 Default: None
             sasl_plain_username (str): username for sasl PLAIN authentication.
                 Default: None
-            sasl_plain_password (str): passowrd for sasl PLAIN authentication.
+            sasl_plain_password (str): password for sasl PLAIN authentication.
                 Defualt: None
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
