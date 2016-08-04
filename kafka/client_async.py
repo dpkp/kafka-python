@@ -222,6 +222,7 @@ class KafkaClient(object):
             cb = functools.partial(self._conn_state_change, 'bootstrap')
             bootstrap = BrokerConnection(host, port, afi,
                                          state_change_callback=cb,
+                                         node_id='bootstrap',
                                          **self.config)
             bootstrap.connect()
             while bootstrap.connecting():
@@ -313,6 +314,7 @@ class KafkaClient(object):
             cb = functools.partial(self._conn_state_change, node_id)
             self._conns[node_id] = BrokerConnection(host, broker.port, afi,
                                                     state_change_callback=cb,
+                                                    node_id=node_id,
                                                     **self.config)
         conn = self._conns[node_id]
         if conn.connected():

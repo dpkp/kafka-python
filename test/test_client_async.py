@@ -49,6 +49,7 @@ def test_bootstrap_success(conn):
     args, kwargs = conn.call_args
     assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
+    kwargs.pop('node_id')
     assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest[0]([]))
@@ -62,6 +63,7 @@ def test_bootstrap_failure(conn):
     args, kwargs = conn.call_args
     assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
+    kwargs.pop('node_id')
     assert kwargs == cli.config
     conn.connect.assert_called_with()
     conn.close.assert_called_with()
