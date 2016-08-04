@@ -15,7 +15,7 @@ from kafka.vendor import six
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.api import RequestHeader
-from kafka.protocol.admin import SaslHandShakeRequest, SaslHandShakeResponse
+from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import GroupCoordinatorResponse
 from kafka.protocol.types import Int32
 from kafka.version import __version__
