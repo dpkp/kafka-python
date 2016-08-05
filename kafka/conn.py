@@ -519,17 +519,17 @@ class BrokerConnection(object):
                                client_id=self.config['client_id'])
         message = b''.join([header.encode(), request.encode()])
         size = Int32.encode(len(message))
+        data = size + message
         try:
             # In the future we might manage an internal write buffer
             # and send bytes asynchronously. For now, just block
             # sending each request payload
             self._sock.setblocking(True)
-            for data in (size, message):
-                total_sent = 0
-                while total_sent < len(data):
-                    sent_bytes = self._sock.send(data[total_sent:])
-                    total_sent += sent_bytes
-                assert total_sent == len(data)
+            total_sent = 0
+            while total_sent < len(data):
+                sent_bytes = self._sock.send(data[total_sent:])
+                total_sent += sent_bytes
+            assert total_sent == len(data)
             if self._sensors:
                 self._sensors.bytes_sent.record(total_sent)
             self._sock.setblocking(False)
