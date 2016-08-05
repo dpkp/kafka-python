@@ -1,3 +1,59 @@
+# 1.3.0 (Aug 4, 2016)
+
+Incompatible Changes
+* Delete KafkaConnection class (dpkp 769)
+* Rename partition_assignment -> assignment in MemberMetadata for consistency
+* Move selectors34 and socketpair to kafka.vendor (dpkp 785)
+* Change api_version config to tuple; deprecate str with warning (dpkp 761)
+* Rename _DEFAULT_CONFIG -> DEFAULT_CONFIG in KafkaProducer (dpkp 788)
+
+Improvements
+* Vendor six 1.10.0 to eliminate runtime dependency (dpkp 785)
+* Add KafkaProducer and KafkaConsumer.metrics() with instrumentation similar to java client (dpkp 754 / 772 / 794)
+* Support Sasl PLAIN authentication (larsjsol PR 779)
+* Add checksum and size to RecordMetadata and ConsumerRecord (KAFKA-3196 / 770 / 594)
+* Use MetadataRequest v1 for 0.10+ api_version (dpkp 762)
+* Fix KafkaConsumer autocommit for 0.8 brokers (dpkp 756 / 706)
+* Improve error logging (dpkp 760 / 759)
+* Adapt benchmark scripts from https://github.com/mrafayaleem/kafka-jython (dpkp 754)
+* Add api_version config to KafkaClient (dpkp 761)
+* New Metadata method with_partitions() (dpkp 787)
+* Use socket_options configuration to setsockopts(). Default TCP_NODELAY (dpkp 783)
+* Expose selector type as config option (dpkp 764)
+* Drain pending requests to the coordinator before initiating group rejoin (dpkp 798)
+* Send combined size and payload bytes to socket to avoid potentially split packets with TCP_NODELAY (dpkp 797)
+
+Bugfixes
+* Ignore socket.error when checking for protocol out of sync prior to socket close (dpkp 792)
+* Fix offset fetch when partitions are manually assigned (KAFKA-3960 / 786)
+* Change pickle_method to use python3 special attributes (jpaulodit 777)
+* Fix ProduceResponse v2 throttle_time_ms
+* Always encode size with MessageSet (#771)
+* Avoid buffer overread when compressing messageset in KafkaProducer
+* Explicit format string argument indices for python 2.6 compatibility
+* Simplify RecordMetadata; short circuit callbacks (#768)
+* Fix autocommit when partitions assigned manually (KAFKA-3486 / #767 / #626)
+* Handle metadata updates during consumer rebalance (KAFKA-3117 / #766 / #701)
+* Add a consumer config option to exclude internal topics (KAFKA-2832 / #765)
+* Protect writes to wakeup socket with threading lock (#763 / #709)
+* Fetcher spending unnecessary time during metrics recording (KAFKA-3785)
+* Always use absolute_import (dpkp)
+
+Test / Fixtures
+* Catch select errors while capturing test fixture logs
+* Fix consumer group test race condition (dpkp 795)
+* Retry fixture failures on a different port (dpkp 796)
+* Dump fixture logs on failure
+
+Documentation
+* Fix misspelling of password (ssaamm 793)
+* Document the ssl_password config option (ssaamm 780)
+* Fix typo in KafkaConsumer documentation (ssaamm 775)
+* Expand consumer.fetcher inline comments
+* Update kafka configuration links -> 0.10.0.0 docs
+* Fixup metrics_sample_window_ms docstring in consumer
+
+
 # 1.2.5 (July 15, 2016)
 
 Bugfixes
