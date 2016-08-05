@@ -156,6 +156,7 @@ class ZookeeperFixture(Fixture):
             timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
+            self.child.dump_logs()
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
@@ -305,6 +306,7 @@ class KafkaFixture(Fixture):
             if self.child.wait_for(r"\[Kafka Server %d\], Started" %
                                    self.broker_id, timeout=timeout):
                 break
+            self.child.dump_logs()
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
