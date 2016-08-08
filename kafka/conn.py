@@ -905,49 +905,53 @@ class BrokerConnectionMetrics(object):
         if not node_sensor:
             metric_group_name = metric_group_prefix + '-node-metrics.' + node_str
 
-            self.bytes_sent = metrics.sensor(
+            bytes_sent = metrics.sensor(
                 node_str + '.bytes-sent',
                 parents=[metrics.get_sensor('bytes-sent')])
-            self.bytes_sent.add(metrics.metric_name(
+            bytes_sent.add(metrics.metric_name(
                 'outgoing-byte-rate', metric_group_name,
                 'The average number of outgoing bytes sent per second.'),
                 Rate())
-            self.bytes_sent.add(metrics.metric_name(
+            bytes_sent.add(metrics.metric_name(
                 'request-rate', metric_group_name,
                 'The average number of requests sent per second.'),
                 Rate(sampled_stat=Count()))
-            self.bytes_sent.add(metrics.metric_name(
+            bytes_sent.add(metrics.metric_name(
                 'request-size-avg', metric_group_name,
                 'The average size of all requests in the window.'),
                 Avg())
-            self.bytes_sent.add(metrics.metric_name(
+            bytes_sent.add(metrics.metric_name(
                 'request-size-max', metric_group_name,
                 'The maximum size of any request sent in the window.'),
                 Max())
 
-            self.bytes_received = metrics.sensor(
+            bytes_received = metrics.sensor(
                 node_str + '.bytes-received',
                 parents=[metrics.get_sensor('bytes-received')])
-            self.bytes_received.add(metrics.metric_name(
+            bytes_received.add(metrics.metric_name(
                 'incoming-byte-rate', metric_group_name,
                 'Bytes/second read off node-connection socket'),
                 Rate())
-            self.bytes_received.add(metrics.metric_name(
+            bytes_received.add(metrics.metric_name(
                 'response-rate', metric_group_name,
                 'The average number of responses received per second.'),
                 Rate(sampled_stat=Count()))
 
-            self.request_time = self.metrics.sensor(
+            request_time = metrics.sensor(
                 node_str + '.latency',
                 parents=[metrics.get_sensor('request-latency')])
-            self.request_time.add(metrics.metric_name(
+            request_time.add(metrics.metric_name(
                 'request-latency-avg', metric_group_name,
                 'The average request latency in ms.'),
                 Avg())
-            self.request_time.add(metrics.metric_name(
+            request_time.add(metrics.metric_name(
                 'request-latency-max', metric_group_name,
                 'The maximum request latency in ms.'),
                 Max())
+
+        self.bytes_sent = metrics.sensor(node_str + '.bytes-sent')
+        self.bytes_received = metrics.sensor(node_str + '.bytes-received')
+        self.request_time = metrics.sensor(node_str + '.latency')
 
 
 def _address_family(address):
