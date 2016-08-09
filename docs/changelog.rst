@@ -1,6 +1,14 @@
 Changelog
 =========
 
+1.3.1 (Aug 8, 2016)
+###################
+
+Bugfixes
+--------
+* Fix AttributeError in BrokerConnectionMetrics after reconnecting
+
+
 1.3.0 (Aug 4, 2016)
 ###################
 
