@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import copy
 import logging
 import socket
+import sys
 import time
 
 from kafka.vendor import six
@@ -115,6 +116,7 @@ class KafkaConsumer(six.Iterator):
             rebalances. Default: 3000
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group managementment facilities. Default: 30000
+        max_poll_records (int): ....
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -220,6 +222,7 @@ class KafkaConsumer(six.Iterator):
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'heartbeat_interval_ms': 3000,
         'session_timeout_ms': 30000,
+        'max_poll_records': sys.maxsize,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
@@ -517,7 +520,7 @@ class KafkaConsumer(six.Iterator):
                 # next round of fetches and avoid block waiting for their
                 # responses to enable pipelining while the user is handling the
                 # fetched records.
-                self._fetcher.init_fetches()
+                self._fetcher.send_fetches()
                 return records
 
             elapsed_ms = (time.time() - start) * 1000
@@ -559,7 +562,7 @@ class KafkaConsumer(six.Iterator):
         if records:
             return records
 
-        self._fetcher.init_fetches()
+        self._fetcher.send_fetches()
         self._client.poll(timeout_ms=timeout_ms, sleep=True)
         return self._fetcher.fetched_records()
 
@@ -881,10 +884,10 @@ class KafkaConsumer(six.Iterator):
 
             # an else block on a for loop only executes if there was no break
             # so this should only be called on a StopIteration from the fetcher
-            # and we assume that it is safe to init_fetches when fetcher is done
+            # and we assume that it is safe to send_fetches when fetcher is done
             # i.e., there are no more records stored internally
             else:
-                self._fetcher.init_fetches()
+                self._fetcher.send_fetches()
 
     def _next_timeout(self):
         timeout = min(self._consumer_timeout,
