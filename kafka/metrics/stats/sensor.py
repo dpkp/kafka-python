@@ -84,11 +84,11 @@ class Sensor(object):
             if metric.config and metric.config.quota:
                 value = metric.value(time_ms)
                 if not metric.config.quota.is_acceptable(value):
-                    raise QuotaViolationError('(%s) violated quota. Actual: '
-                                              '(%d), Threshold: (%d)' %
+                    raise QuotaViolationError("'%s' violated quota. Actual: "
+                                              "%d, Threshold: %d" %
                                               (metric.metric_name,
-                                               metric.config.quota.bound,
-                                               value))
+                                               value,
+                                               metric.config.quota.bound))
 
     def add_compound(self, compound_stat, config=None):
         """
