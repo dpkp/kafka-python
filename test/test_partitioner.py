@@ -54,16 +54,6 @@ def test_roundrobin_partitioner():
         i += 1
 
 
-def test_hash_bytes():
-    p = Murmur2Partitioner(range(1000))
-    assert p.partition(bytearray(b'test')) == p.partition(b'test')
-
-
-def test_hash_encoding():
-    p = Murmur2Partitioner(range(1000))
-    assert p.partition('test') == p.partition(u'test')
-
-
 def test_murmur2_java_compatibility():
     p = Murmur2Partitioner(range(1000))
     # compare with output from Kafka's org.apache.kafka.clients.producer.Partitioner
