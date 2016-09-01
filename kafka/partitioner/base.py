@@ -5,22 +5,23 @@ class Partitioner(object):
     """
     Base class for a partitioner
     """
-    def __init__(self, partitions):
+    def __init__(self, partitions=None):
         """
         Initialize the partitioner
 
         Arguments:
-            partitions: A list of available partitions (during startup)
+            partitions: A list of available partitions (during startup) OPTIONAL.
         """
         self.partitions = partitions
 
-    def partition(self, key, partitions=None):
+    def __call__(self, key, all_partitions, available_partitions):
         """
-        Takes a string key and num_partitions as argument and returns
+        Takes a string key, num_partitions and available_partitions as argument and returns
         a partition to be used for the message
 
         Arguments:
-            key: the key to use for partitioning
-            partitions: (optional) a list of partitions.
+            key: the key to use for partitioning.
+            all_partitions: a list of the topic's partitions.
+            available_partitions: a list of the broker's currently avaliable partitions(optional).
         """
         raise NotImplementedError('partition function has to be implemented')
