@@ -19,12 +19,13 @@ logging.getLogger(__name__).addHandler(NullHandler())
 
 
 from kafka.consumer import KafkaConsumer
+from kafka.consumer.subscription_state import ConsumerRebalanceListener
 from kafka.producer import KafkaProducer
 from kafka.conn import BrokerConnection
 from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message)
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner, Murmur2Partitioner
-from kafka.structs import TopicPartition
+from kafka.structs import TopicPartition, OffsetAndMetadata
 
 # To be deprecated when KafkaProducer interface is released
 from kafka.client import SimpleClient
