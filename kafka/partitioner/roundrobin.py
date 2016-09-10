@@ -37,8 +37,8 @@ class CachedPartitionCycler(object):
             assert type(partitions) is list
         self.cur_pos = None
 
-    def __iter__(self):
-        self.next()
+    def __next__(self):
+        return self.next()
 
     @staticmethod
     def _index_available(cur_pos, partitions):
