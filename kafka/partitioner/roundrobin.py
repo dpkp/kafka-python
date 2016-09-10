@@ -18,7 +18,7 @@ class RoundRobinPartitioner(Partitioner):
             cur_partitions = all_partitions
         if not self.partitions:
             self._set_partitions(cur_partitions)
-        elif cur_partitions != self.partitions_iterable.partitions and cur_partitions is not None:
+        elif cur_partitions != self.partitions_iterable.partitions:
             self._set_partitions(cur_partitions)
         return next(self.partitions_iterable)
 
@@ -27,7 +27,7 @@ class RoundRobinPartitioner(Partitioner):
         self.partitions_iterable.set_partitions(available_partitions)
 
     def partition(self, key, all_partitions=None, available_partitions=None):
-        self.__call__(key, all_partitions, available_partitions)
+        return self.__call__(key, all_partitions, available_partitions)
 
 
 class CachedPartitionCycler(object):
