@@ -5,11 +5,11 @@ from .base import Partitioner
 
 class RoundRobinPartitioner(Partitioner):
     def __init__(self, partitions=None):
+        self.partitions_iterable = CachedPartitionCycler(partitions)
         if partitions:
             self._set_partitions(partitions)
         else:
             self.partitions = None
-        self.partitions_iterable = CachedPartitionCycler(partitions)
 
     def __call__(self, key, all_partitions, available_partitions):
         if available_partitions:
