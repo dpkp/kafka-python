@@ -61,6 +61,7 @@ class CachedPartitionCycler(object):
         self.partitions = partitions
 
     def next(self):
+        assert self.partitions is not None
         if self.cur_pos is None or not self._index_available(self.cur_pos, self.partitions):
             self.cur_pos = 1
             return self.partitions[0]
