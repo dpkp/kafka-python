@@ -14,7 +14,7 @@ class Partitioner(object):
         """
         self.partitions = partitions
 
-    def __call__(self, key, all_partitions, available_partitions):
+    def __call__(self, key, all_partitions=None, available_partitions=None):
         """
         Takes a string key, num_partitions and available_partitions as argument and returns
         a partition to be used for the message
