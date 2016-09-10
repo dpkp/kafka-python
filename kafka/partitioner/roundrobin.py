@@ -23,7 +23,7 @@ class RoundRobinPartitioner(Partitioner):
         self.partitions = available_partitions
         self.partitions_iterable.set_partitions(available_partitions)
 
-    def partition(self, key, all_partitions, available_partitions):
+    def partition(self, key, all_partitions=None, available_partitions=None):
         self.__call__(key, all_partitions, available_partitions)
 
 
