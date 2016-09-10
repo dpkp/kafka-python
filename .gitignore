@@ -12,3 +12,4 @@ servers/*/resources/ssl*
 docs/_build
 .cache*
 .idea/
+integration-test/

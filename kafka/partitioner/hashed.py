@@ -11,6 +11,11 @@ class Murmur2Partitioner(Partitioner):
     the hash of the key. Attempts to apply the same hashing
     function as mainline java client.
     """
+    def __call__(self, key, partitions=None, available=None):
+        if available:
+            return self.partition(key, available)
+        return self.partition(key, partitions)
+
     def partition(self, key, partitions=None):
         if not partitions:
             partitions = self.partitions
@@ -21,12 +26,15 @@ class Murmur2Partitioner(Partitioner):
         return partitions[idx]
 
 
-class LegacyPartitioner(Partitioner):
+class LegacyPartitioner(object):
     """DEPRECATED -- See Issue 374
 
     Implements a partitioner which selects the target partition based on
     the hash of the key
     """
+    def __init__(self, partitions):
+        self.partitions = partitions
+
     def partition(self, key, partitions=None):
         if not partitions:
             partitions = self.partitions
