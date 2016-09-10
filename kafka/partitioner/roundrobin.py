@@ -18,7 +18,7 @@ class RoundRobinPartitioner(Partitioner):
             cur_partitions = all_partitions
         if not self.partitions:
             self._set_partitions(cur_partitions)
-        elif cur_partitions != self.partitions_iterable.partitions:
+        elif cur_partitions != self.partitions_iterable.partitions and cur_partitions is not None:
             self._set_partitions(cur_partitions)
         return next(self.partitions_iterable)
 
