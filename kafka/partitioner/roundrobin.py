@@ -34,7 +34,6 @@ class CachedPartitionCycler(object):
     def __init__(self, partitions=None):
         self.partitions = partitions
         if partitions:
-            print partitions
             assert type(partitions) is list
         self.cur_pos = None
 
@@ -62,7 +61,6 @@ class CachedPartitionCycler(object):
         self.partitions = partitions
 
     def next(self):
-        print self.partitions
         assert self.partitions is not None
         if self.cur_pos is None or not self._index_available(self.cur_pos, self.partitions):
             self.cur_pos = 1
