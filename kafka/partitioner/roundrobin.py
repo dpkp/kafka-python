@@ -11,7 +11,7 @@ class RoundRobinPartitioner(Partitioner):
         else:
             self.partitions = None
 
-    def __call__(self, key, all_partitions, available_partitions):
+    def __call__(self, key, all_partitions=None, available_partitions=None):
         if available_partitions:
             cur_partitions = available_partitions
         else:
