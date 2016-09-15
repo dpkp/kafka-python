@@ -64,7 +64,10 @@ class Message(Struct):
         """
         if self.magic == 0:
             return None
-        return self.attributes & self.TIMESTAMP_TYPE_MASK
+        elif self.attributes & self.TIMESTAMP_TYPE_MASK:
+            return 1
+        else:
+            return 0
 
     def _encode_self(self, recalc_crc=True):
         version = self.magic
