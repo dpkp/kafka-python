@@ -216,7 +216,7 @@ class KafkaProducer(object):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
-        ssl_password (str) - optional password to be used when loading the
+        ssl_password (str): optional password to be used when loading the
             certificate chain. default: none.
         ssl_crlfile (str): optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
