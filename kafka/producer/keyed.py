@@ -5,7 +5,6 @@ import warnings
 
 from .base import Producer
 from ..partitioner import HashedPartitioner
-from ..util import kafka_bytestring
 
 
 log = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ class KeyedProducer(Producer):
     def _next_partition(self, topic, key):
         if topic not in self.partitioners:
             if not self.client.has_metadata_for_topic(topic):
-                self.client.load_metadata_for_topics(topic)
+                self.client.load_metadata_for_topics(topic, ignore_leadernotavailable=True)
 
             self.partitioners[topic] = self.partitioner_class(self.client.get_partition_ids_for_topic(topic))
 
@@ -38,7 +37,6 @@ class KeyedProducer(Producer):
         return partitioner.partition(key)
 
     def send_messages(self, topic, key, *msg):
-        topic = kafka_bytestring(topic)
         partition = self._next_partition(topic, key)
         return self._send_messages(topic, partition, *msg, key=key)
 

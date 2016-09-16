@@ -1,6 +1,9 @@
+from __future__ import absolute_import
+
 from itertools import cycle
 
 from .base import Partitioner
+
 
 class RoundRobinPartitioner(Partitioner):
     """

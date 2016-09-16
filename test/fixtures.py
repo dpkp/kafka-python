@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+
+import atexit
 import logging
 import os
 import os.path
@@ -5,10 +8,11 @@ import shutil
 import subprocess
 import tempfile
 import time
-from six.moves import urllib
 import uuid
 
-from six.moves.urllib.parse import urlparse # pylint: disable-msg=E0611,F0401
+from six.moves import urllib
+from six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+
 from test.service import ExternalService, SpawnedService
 from test.testutil import get_open_port
 
@@ -70,18 +74,27 @@ class Fixture(object):
         result.extend(args)
         return result
 
-    @classmethod
-    def kafka_run_class_env(cls):
+    def kafka_run_class_env(self):
         env = os.environ.copy()
-        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % cls.test_resource("log4j.properties")
+        env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % self.test_resource("log4j.properties")
         return env
 
     @classmethod
     def render_template(cls, source_file, target_file, binding):
+        log.info('Rendering %s from template %s', target_file, source_file)
         with open(source_file, "r") as handle:
             template = handle.read()
+            assert len(template) > 0, 'Empty template %s' % source_file
         with open(target_file, "w") as handle:
             handle.write(template.format(**binding))
+            handle.flush()
+            os.fsync(handle)
+
+        # fsync directory for durability
+        # https://blog.gocept.com/2013/07/15/reliable-file-updates-with-python/
+        dirfd = os.open(os.path.dirname(target_file), os.O_DIRECTORY)
+        os.fsync(dirfd)
+        os.close(dirfd)
 
 
 class ZookeeperFixture(Fixture):
@@ -92,7 +105,7 @@ class ZookeeperFixture(Fixture):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("127.0.0.1", get_open_port())
+            (host, port) = ("127.0.0.1", None)
             fixture = cls(host, port)
 
         fixture.open()
@@ -105,52 +118,72 @@ class ZookeeperFixture(Fixture):
         self.tmp_dir = None
         self.child = None
 
+    def kafka_run_class_env(self):
+        env = super(ZookeeperFixture, self).kafka_run_class_env()
+        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
+        return env
+
     def out(self, message):
-        log.info("*** Zookeeper [%s:%d]: %s", self.host, self.port, message)
+        log.info("*** Zookeeper [%s:%s]: %s", self.host, self.port or '(auto)', message)
 
     def open(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.out("Running local instance...")
         log.info("  host    = %s", self.host)
-        log.info("  port    = %s", self.port)
+        log.info("  port    = %s", self.port or '(auto)')
         log.info("  tmp_dir = %s", self.tmp_dir)
 
-        # Generate configs
+        # Configure Zookeeper child process
         template = self.test_resource("zookeeper.properties")
         properties = os.path.join(self.tmp_dir, "zookeeper.properties")
-        self.render_template(template, properties, vars(self))
-
-        # Configure Zookeeper child process
         args = self.kafka_run_class_args("org.apache.zookeeper.server.quorum.QuorumPeerMain", properties)
         env = self.kafka_run_class_env()
 
         # Party!
-        self.out("Starting...")
         timeout = 5
         max_timeout = 30
         backoff = 1
-        while True:
+        end_at = time.time() + max_timeout
+        tries = 1
+        auto_port = (self.port is None)
+        while time.time() < end_at:
+            if auto_port:
+                self.port = get_open_port()
+            self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
+            self.render_template(template, properties, vars(self))
             self.child = SpawnedService(args, env)
             self.child.start()
-            timeout = min(timeout, max_timeout)
+            timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"binding to port", timeout=timeout):
                 break
+            self.child.dump_logs()
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+            tries += 1
+        else:
+            raise Exception('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
+        atexit.register(self.close)
 
     def close(self):
+        if self.child is None:
+            return
         self.out("Stopping...")
         self.child.stop()
         self.child = None
         self.out("Done!")
         shutil.rmtree(self.tmp_dir)
 
+    def __del__(self):
+        self.close()
+
 
 class KafkaFixture(Fixture):
     @classmethod
-    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None, replicas=1, partitions=2):
+    def instance(cls, broker_id, zk_host, zk_port, zk_chroot=None,
+                 host=None, port=None,
+                 transport='PLAINTEXT', replicas=1, partitions=2):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
         if "KAFKA_URI" in os.environ:
@@ -158,16 +191,37 @@ class KafkaFixture(Fixture):
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
-            (host, port) = ("127.0.0.1", get_open_port())
-            fixture = KafkaFixture(host, port, broker_id, zk_host, zk_port, zk_chroot, replicas, partitions)
+            # force IPv6 here because of a confusing point:
+            #
+            #  - if the string "localhost" is passed, Kafka will *only* bind to the IPv4 address of localhost
+            #    (127.0.0.1); however, kafka-python will attempt to connect on ::1 and fail
+            #
+            #  - if the address literal 127.0.0.1 is passed, the metadata request during bootstrap will return
+            #    the name "localhost" and we'll go back to the first case. This is odd!
+            #
+            # Ideally, Kafka would bind to all loopback addresses when we tell it to listen on "localhost" the
+            # way it makes an IPv6 socket bound to both 0.0.0.0/0 and ::/0 when we tell it to bind to "" (that is
+            # to say, when we make a listener of PLAINTEXT://:port.
+            #
+            # Note that even though we specify the bind host in bracket notation, Kafka responds to the bootstrap
+            # metadata request without square brackets later.
+            if host is None:
+                host = "[::1]"
+            fixture = KafkaFixture(host, port, broker_id,
+                                   zk_host, zk_port, zk_chroot,
+                                   transport=transport,
+                                   replicas=replicas, partitions=partitions)
             fixture.open()
         return fixture
 
-    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot, replicas=1, partitions=2):
+    def __init__(self, host, port, broker_id, zk_host, zk_port, zk_chroot,
+                 replicas=1, partitions=2, transport='PLAINTEXT'):
         self.host = host
         self.port = port
 
         self.broker_id = broker_id
+        self.transport = transport.upper()
+        self.ssl_dir = self.test_resource('ssl')
 
         self.zk_host = zk_host
         self.zk_port = zk_port
@@ -180,8 +234,13 @@ class KafkaFixture(Fixture):
         self.child = None
         self.running = False
 
+    def kafka_run_class_env(self):
+        env = super(KafkaFixture, self).kafka_run_class_env()
+        env['LOG_DIR'] = os.path.join(self.tmp_dir, 'logs')
+        return env
+
     def out(self, message):
-        log.info("*** Kafka [%s:%d]: %s", self.host, self.port, message)
+        log.info("*** Kafka [%s:%s]: %s", self.host, self.port or '(auto)', message)
 
     def open(self):
         if self.running:
@@ -191,7 +250,8 @@ class KafkaFixture(Fixture):
         self.tmp_dir = tempfile.mkdtemp()
         self.out("Running local instance...")
         log.info("  host       = %s", self.host)
-        log.info("  port       = %s", self.port)
+        log.info("  port       = %s", self.port or '(auto)')
+        log.info("  transport  = %s", self.transport)
         log.info("  broker_id  = %s", self.broker_id)
         log.info("  zk_host    = %s", self.zk_host)
         log.info("  zk_port    = %s", self.zk_port)
@@ -204,12 +264,6 @@ class KafkaFixture(Fixture):
         os.mkdir(os.path.join(self.tmp_dir, "logs"))
         os.mkdir(os.path.join(self.tmp_dir, "data"))
 
-        # Generate configs
-        template = self.test_resource("kafka.properties")
-        properties = os.path.join(self.tmp_dir, "kafka.properties")
-        self.render_template(template, properties, vars(self))
-
-        # Party!
         self.out("Creating Zookeeper chroot node...")
         args = self.kafka_run_class_args("org.apache.zookeeper.ZooKeeperMain",
                                          "-server", "%s:%d" % (self.zk_host, self.zk_port),
@@ -218,6 +272,9 @@ class KafkaFixture(Fixture):
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Fix bugs where integration tests hang in docker container by sending
+        # blank line to stdin
+        proc.communicate('')
 
         if proc.wait() != 0:
             self.out("Failed to create Zookeeper chroot node")
@@ -226,27 +283,45 @@ class KafkaFixture(Fixture):
             raise RuntimeError("Failed to create Zookeeper chroot node")
         self.out("Done!")
 
-        self.out("Starting...")
-
         # Configure Kafka child process
+        properties = os.path.join(self.tmp_dir, "kafka.properties")
+        template = self.test_resource("kafka.properties")
         args = self.kafka_run_class_args("kafka.Kafka", properties)
         env = self.kafka_run_class_env()
 
         timeout = 5
         max_timeout = 30
         backoff = 1
-        while True:
+        end_at = time.time() + max_timeout
+        tries = 1
+        auto_port = (self.port is None)
+        while time.time() < end_at:
+            # We have had problems with port conflicts on travis
+            # so we will try a different port on each retry
+            # unless the fixture was passed a specific port
+            if auto_port:
+                self.port = get_open_port()
+            self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
+            self.render_template(template, properties, vars(self))
             self.child = SpawnedService(args, env)
             self.child.start()
-            timeout = min(timeout, max_timeout)
+            timeout = min(timeout, max(end_at - time.time(), 0))
             if self.child.wait_for(r"\[Kafka Server %d\], Started" %
                                    self.broker_id, timeout=timeout):
                 break
+            self.child.dump_logs()
             self.child.stop()
             timeout *= 2
             time.sleep(backoff)
+            tries += 1
+        else:
+            raise Exception('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
         self.running = True
+        atexit.register(self.close)
+
+    def __del__(self):
+        self.close()
 
     def close(self):
         if not self.running:

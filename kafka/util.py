@@ -1,16 +1,26 @@
+from __future__ import absolute_import
+
+import atexit
 import binascii
 import collections
 import struct
 import sys
 from threading import Thread, Event
+import weakref
 
-import six
+from kafka.vendor import six
 
-from kafka.common import BufferUnderflowError
+from kafka.errors import BufferUnderflowError
 
 
 def crc32(data):
-    return binascii.crc32(data) & 0xffffffff
+    crc = binascii.crc32(data)
+    # py2 and py3 behave a little differently
+    # CRC is encoded as a signed int in kafka protocol
+    # so we'll convert the py3 unsigned result to signed
+    if six.PY3 and crc >= 2**31:
+        crc -= 2**32
+    return crc
 
 
 def write_int_string(s):
@@ -89,18 +99,6 @@ def group_by_topic_and_partition(tuples):
     return out
 
 
-def kafka_bytestring(s):
-    """
-    Takes a string or bytes instance
-    Returns bytes, encoding strings in utf-8 as necessary
-    """
-    if isinstance(s, six.binary_type):
-        return s
-    if isinstance(s, six.string_types):
-        return s.encode('utf-8')
-    raise TypeError(s)
-
-
 class ReentrantTimer(object):
     """
     A timer that can be restarted, unlike threading.Timer
@@ -157,3 +155,48 @@ class ReentrantTimer(object):
 
     def __del__(self):
         self.stop()
+
+
+class WeakMethod(object):
+    """
+    Callable that weakly references a method and the object it is bound to. It
+    is based on http://stackoverflow.com/a/24287465.
+
+    Arguments:
+
+        object_dot_method: A bound instance method (i.e. 'object.method').
+    """
+    def __init__(self, object_dot_method):
+        try:
+            self.target = weakref.ref(object_dot_method.__self__)
+        except AttributeError:
+            self.target = weakref.ref(object_dot_method.im_self)
+        self._target_id = id(self.target())
+        try:
+            self.method = weakref.ref(object_dot_method.__func__)
+        except AttributeError:
+            self.method = weakref.ref(object_dot_method.im_func)
+        self._method_id = id(self.method())
+
+    def __call__(self, *args, **kwargs):
+        """
+        Calls the method on target with args and kwargs.
+        """
+        return self.method()(self.target(), *args, **kwargs)
+
+    def __hash__(self):
+        return hash(self.target) ^ hash(self.method)
+
+    def __eq__(self, other):
+        if not isinstance(other, WeakMethod):
+            return False
+        return self._target_id == other._target_id and self._method_id == other._method_id
+
+
+def try_method_on_system_exit(obj, method, *args, **kwargs):
+    def wrapper(_obj, _meth, *args, **kwargs):
+        try:
+            getattr(_obj, _meth)(*args, **kwargs)
+        except (ReferenceError, AttributeError):
+            pass
+    atexit.register(wrapper, weakref.proxy(obj), method, *args, **kwargs)

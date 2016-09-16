@@ -3,9 +3,8 @@ from __future__ import absolute_import
 from itertools import cycle
 import logging
 import random
-import six
 
-from six.moves import xrange
+from kafka.vendor.six.moves import xrange # pylint: disable=import-error
 
 from .base import Producer
 
@@ -33,7 +32,7 @@ class SimpleProducer(Producer):
     def _next_partition(self, topic):
         if topic not in self.partition_cycles:
             if not self.client.has_metadata_for_topic(topic):
-                self.client.load_metadata_for_topics(topic)
+                self.client.ensure_topic_exists(topic)
 
             self.partition_cycles[topic] = cycle(self.client.get_partition_ids_for_topic(topic))
 
@@ -46,9 +45,6 @@ class SimpleProducer(Producer):
         return next(self.partition_cycles[topic])
 
     def send_messages(self, topic, *msg):
-        if not isinstance(topic, six.binary_type):
-            topic = topic.encode('utf-8')
-
         partition = self._next_partition(topic)
         return super(SimpleProducer, self).send_messages(
             topic, partition, *msg

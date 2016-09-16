@@ -3,11 +3,10 @@ from __future__ import absolute_import
 from collections import namedtuple
 import logging
 from multiprocessing import Process, Manager as MPManager
-try:
-    import queue # python 3
-except ImportError:
-    import Queue as queue # python 2
 import time
+import warnings
+
+from kafka.vendor.six.moves import queue # pylint: disable=import-error
 
 from ..common import KafkaError
 from .base import (
@@ -25,7 +24,7 @@ log = logging.getLogger(__name__)
 Events = namedtuple("Events", ["start", "pause", "exit"])
 
 
-def _mp_consume(client, group, topic, queue, size, events, **consumer_options):
+def _mp_consume(client, group, topic, message_queue, size, events, **consumer_options):
     """
     A child process worker which consumes messages based on the
     notifications given by the controller process
@@ -69,7 +68,7 @@ def _mp_consume(client, group, topic, queue, size, events, **consumer_options):
                 if message:
                     while True:
                         try:
-                            queue.put(message, timeout=FULL_QUEUE_WAIT_TIME_SECONDS)
+                            message_queue.put(message, timeout=FULL_QUEUE_WAIT_TIME_SECONDS)
                             break
                         except queue.Full:
                             if events.exit.is_set(): break
@@ -104,7 +103,7 @@ class MultiProcessConsumer(Consumer):
     parallel using multiple processes
 
     Arguments:
-        client: a connected KafkaClient
+        client: a connected SimpleClient
         group: a name for this consumer, used for offset storage and must be unique
             If you are connecting to a server that does not support offset
             commit/fetch (any prior to 0.8.1.1), then you *must* set this to None
@@ -136,6 +135,10 @@ class MultiProcessConsumer(Consumer):
                  num_procs=1,
                  partitions_per_proc=0,
                  **simple_consumer_options):
+
+        warnings.warn('This class has been deprecated and will be removed in a'
+                      ' future release. Use KafkaConsumer instead',
+                      DeprecationWarning)
 
         # Initiate the base consumer class
         super(MultiProcessConsumer, self).__init__(

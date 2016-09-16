@@ -2,15 +2,15 @@ import logging
 import os
 import time
 
-from kafka import KafkaClient, SimpleConsumer, KeyedProducer
-from kafka.common import TopicAndPartition, FailedPayloadsError, ConnectionError
+from kafka import SimpleClient, SimpleConsumer, KeyedProducer
+from kafka.errors import (
+    FailedPayloadsError, ConnectionError, RequestTimedOutError,
+    NotLeaderForPartitionError)
 from kafka.producer.base import Producer
-from kafka.util import kafka_bytestring
+from kafka.structs import TopicPartition
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions, random_string
-)
+from test.testutil import KafkaIntegrationTestCase, random_string
 
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class TestFailover(KafkaIntegrationTestCase):
 
     def setUp(self):
         if not os.environ.get('KAFKA_VERSION'):
-            return
+            self.skipTest('integration test requires KAFKA_VERSION')
 
         zk_chroot = random_string(10)
         replicas = 3
@@ -29,11 +29,14 @@ class TestFailover(KafkaIntegrationTestCase):
 
         # mini zookeeper, 3 kafka brokers
         self.zk = ZookeeperFixture.instance()
-        kk_args = [self.zk.host, self.zk.port, zk_chroot, replicas, partitions]
-        self.brokers = [KafkaFixture.instance(i, *kk_args) for i in range(replicas)]
+        kk_args = [self.zk.host, self.zk.port]
+        kk_kwargs = {'zk_chroot': zk_chroot, 'replicas': replicas,
+                     'partitions': partitions}
+        self.brokers = [KafkaFixture.instance(i, *kk_args, **kk_kwargs)
+                        for i in range(replicas)]
 
         hosts = ['%s:%d' % (b.host, b.port) for b in self.brokers]
-        self.client = KafkaClient(hosts)
+        self.client = SimpleClient(hosts, timeout=2)
         super(TestFailover, self).setUp()
 
     def tearDown(self):
@@ -46,7 +49,6 @@ class TestFailover(KafkaIntegrationTestCase):
             broker.close()
         self.zk.close()
 
-    @kafka_versions("all")
     def test_switch_leader(self):
         topic = self.topic
         partition = 0
@@ -78,7 +80,8 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, b'success')
                 log.debug("success!")
                 recovered = True
-            except (FailedPayloadsError, ConnectionError):
+            except (FailedPayloadsError, ConnectionError, RequestTimedOutError,
+                    NotLeaderForPartitionError):
                 log.debug("caught exception sending message -- will retry")
                 continue
 
@@ -94,7 +97,6 @@ class TestFailover(KafkaIntegrationTestCase):
         self.assert_message_count(topic, 201, partitions=(partition,),
                                   at_least=True)
 
-    @kafka_versions("all")
     def test_switch_leader_async(self):
         topic = self.topic
         partition = 0
@@ -142,7 +144,6 @@ class TestFailover(KafkaIntegrationTestCase):
         self.assert_message_count(topic, 21, partitions=(partition + 1,),
                                   at_least=True)
 
-    @kafka_versions("all")
     def test_switch_leader_keyed_producer(self):
         topic = self.topic
 
@@ -165,9 +166,10 @@ class TestFailover(KafkaIntegrationTestCase):
                 key = random_string(3).encode('utf-8')
                 msg = random_string(10).encode('utf-8')
                 producer.send_messages(topic, key, msg)
-                if producer.partitioners[kafka_bytestring(topic)].partition(key) == 0:
+                if producer.partitioners[topic].partition(key) == 0:
                     recovered = True
-            except (FailedPayloadsError, ConnectionError):
+            except (FailedPayloadsError, ConnectionError, RequestTimedOutError,
+                    NotLeaderForPartitionError):
                 log.debug("caught exception sending message -- will retry")
                 continue
 
@@ -180,7 +182,6 @@ class TestFailover(KafkaIntegrationTestCase):
             msg = random_string(10).encode('utf-8')
             producer.send_messages(topic, key, msg)
 
-    @kafka_versions("all")
     def test_switch_leader_simple_consumer(self):
         producer = Producer(self.client, async=False)
         consumer = SimpleConsumer(self.client, None, self.topic, partitions=None, auto_commit=False, iter_timeout=10)
@@ -203,7 +204,7 @@ class TestFailover(KafkaIntegrationTestCase):
                     break
 
     def _kill_leader(self, topic, partition):
-        leader = self.client.topics_to_brokers[TopicAndPartition(kafka_bytestring(topic), partition)]
+        leader = self.client.topics_to_brokers[TopicPartition(topic, partition)]
         broker = self.brokers[leader.nodeId]
         broker.close()
         return broker
@@ -213,18 +214,19 @@ class TestFailover(KafkaIntegrationTestCase):
         hosts = ','.join(['%s:%d' % (broker.host, broker.port)
                           for broker in self.brokers])
 
-        client = KafkaClient(hosts)
+        client = SimpleClient(hosts, timeout=2)
         consumer = SimpleConsumer(client, None, topic,
                                   partitions=partitions,
                                   auto_commit=False,
                                   iter_timeout=timeout)
 
         started_at = time.time()
-        pending = consumer.pending(partitions)
-
-        # Keep checking if it isn't immediately correct, subject to timeout
+        pending = -1
         while pending < check_count and (time.time() - started_at < timeout):
-            pending = consumer.pending(partitions)
+            try:
+                pending = consumer.pending(partitions)
+            except FailedPayloadsError:
+                pass
             time.sleep(0.5)
 
         consumer.stop()

@@ -1,243 +1,266 @@
-import logging
+# pylint: skip-file
+from __future__ import absolute_import
+
+from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
-import struct
-from threading import Thread
+import time
 
-import mock
-from . import unittest
+import pytest
 
-from kafka.common import ConnectionError
-from kafka.conn import KafkaConnection, collect_hosts, DEFAULT_SOCKET_TIMEOUT_SECONDS
+from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
+from kafka.protocol.api import RequestHeader
+from kafka.protocol.metadata import MetadataRequest
 
-class ConnTest(unittest.TestCase):
-    def setUp(self):
-
-        # kafka.conn debug logging is verbose, so only enable in conn tests
-        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
-
-        self.config = {
-            'host': 'localhost',
-            'port': 9090,
-            'request_id': 0,
-            'payload': b'test data',
-            'payload2': b'another packet'
-        }
-
-        # Mocking socket.create_connection will cause _sock to always be a
-        # MagicMock()
-        patcher = mock.patch('socket.create_connection', spec=True)
-        self.MockCreateConn = patcher.start()
-        self.addCleanup(patcher.stop)
-
-        # Also mock socket.sendall() to appear successful
-        self.MockCreateConn().sendall.return_value = None
-
-        # And mock socket.recv() to return two payloads, then '', then raise
-        # Note that this currently ignores the num_bytes parameter to sock.recv()
-        payload_size = len(self.config['payload'])
-        payload2_size = len(self.config['payload2'])
-        self.MockCreateConn().recv.side_effect = [
-            struct.pack('>i', payload_size),
-            struct.pack('>%ds' % payload_size, self.config['payload']),
-            struct.pack('>i', payload2_size),
-            struct.pack('>%ds' % payload2_size, self.config['payload2']),
-            b''
-        ]
-
-        # Create a connection object
-        self.conn = KafkaConnection(self.config['host'], self.config['port'])
-
-        # Reset any mock counts caused by __init__
-        self.MockCreateConn.reset_mock()
-
-    def tearDown(self):
-        # Return connection logging to INFO
-        logging.getLogger('kafka.conn').setLevel(logging.INFO)
+import kafka.common as Errors
 
 
-    def test_collect_hosts__happy_path(self):
-        hosts = "localhost:1234,localhost"
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
-        ]))
-
-    def test_collect_hosts__string_list(self):
-        hosts = [
-            'localhost:1234',
-            'localhost',
-        ]
-
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
-        ]))
-
-    def test_collect_hosts__with_spaces(self):
-        hosts = "localhost:1234, localhost"
-        results = collect_hosts(hosts)
-
-        self.assertEqual(set(results), set([
-            ('localhost', 1234),
-            ('localhost', 9092),
-        ]))
-
-    def test_send(self):
-        self.conn.send(self.config['request_id'], self.config['payload'])
-        self.conn._sock.sendall.assert_called_with(self.config['payload'])
-
-    def test_init_creates_socket_connection(self):
-        KafkaConnection(self.config['host'], self.config['port'])
-        self.MockCreateConn.assert_called_with((self.config['host'], self.config['port']), DEFAULT_SOCKET_TIMEOUT_SECONDS)
-
-    def test_init_failure_raises_connection_error(self):
-
-        def raise_error(*args):
-            raise socket.error
-
-        assert socket.create_connection is self.MockCreateConn
-        socket.create_connection.side_effect=raise_error
-        with self.assertRaises(ConnectionError):
-            KafkaConnection(self.config['host'], self.config['port'])
-
-    def test_send__reconnects_on_dirty_conn(self):
-
-        # Dirty the connection
-        try:
-            self.conn._raise_connection_error()
-        except ConnectionError:
-            pass
-
-        # Now test that sending attempts to reconnect
-        self.assertEqual(self.MockCreateConn.call_count, 0)
-        self.conn.send(self.config['request_id'], self.config['payload'])
-        self.assertEqual(self.MockCreateConn.call_count, 1)
-
-    def test_send__failure_sets_dirty_connection(self):
-
-        def raise_error(*args):
-            raise socket.error
-
-        assert isinstance(self.conn._sock, mock.Mock)
-        self.conn._sock.sendall.side_effect=raise_error
-        try:
-            self.conn.send(self.config['request_id'], self.config['payload'])
-        except ConnectionError:
-            self.assertIsNone(self.conn._sock)
-
-    def test_recv(self):
-
-        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload'])
-
-    def test_recv__reconnects_on_dirty_conn(self):
-
-        # Dirty the connection
-        try:
-            self.conn._raise_connection_error()
-        except ConnectionError:
-            pass
-
-        # Now test that recv'ing attempts to reconnect
-        self.assertEqual(self.MockCreateConn.call_count, 0)
-        self.conn.recv(self.config['request_id'])
-        self.assertEqual(self.MockCreateConn.call_count, 1)
-
-    def test_recv__failure_sets_dirty_connection(self):
-
-        def raise_error(*args):
-            raise socket.error
-
-        # test that recv'ing attempts to reconnect
-        assert isinstance(self.conn._sock, mock.Mock)
-        self.conn._sock.recv.side_effect=raise_error
-        try:
-            self.conn.recv(self.config['request_id'])
-        except ConnectionError:
-            self.assertIsNone(self.conn._sock)
-
-    def test_recv__doesnt_consume_extra_data_in_stream(self):
-
-        # Here just test that each call to recv will return a single payload
-        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload'])
-        self.assertEqual(self.conn.recv(self.config['request_id']), self.config['payload2'])
-
-    def test_get_connected_socket(self):
-        s = self.conn.get_connected_socket()
-
-        self.assertEqual(s, self.MockCreateConn())
-
-    def test_get_connected_socket_on_dirty_conn(self):
-        # Dirty the connection
-        try:
-            self.conn._raise_connection_error()
-        except ConnectionError:
-            pass
-
-        # Test that get_connected_socket tries to connect
-        self.assertEqual(self.MockCreateConn.call_count, 0)
-        self.conn.get_connected_socket()
-        self.assertEqual(self.MockCreateConn.call_count, 1)
-
-    def test_close__object_is_reusable(self):
-
-        # test that sending to a closed connection
-        # will re-connect and send data to the socket
-        self.conn.close()
-        self.conn.send(self.config['request_id'], self.config['payload'])
-        self.assertEqual(self.MockCreateConn.call_count, 1)
-        self.conn._sock.sendall.assert_called_with(self.config['payload'])
+@pytest.fixture
+def _socket(mocker):
+    socket = mocker.MagicMock()
+    socket.connect_ex.return_value = 0
+    mocker.patch('socket.socket', return_value=socket)
+    return socket
 
 
-class TestKafkaConnection(unittest.TestCase):
+@pytest.fixture
+def conn(_socket):
+    conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    return conn
 
-    def setUp(self):
-        # kafka.conn debug logging is verbose, so only enable in conn tests
-        logging.getLogger('kafka.conn').setLevel(logging.DEBUG)
 
-    def tearDown(self):
-        # Return connection logging to INFO
-        logging.getLogger('kafka.conn').setLevel(logging.INFO)
+@pytest.mark.parametrize("states", [
+    (([EINPROGRESS, EALREADY], ConnectionStates.CONNECTING),),
+    (([EALREADY, EALREADY], ConnectionStates.CONNECTING),),
+    (([0], ConnectionStates.CONNECTED),),
+    (([EINPROGRESS, EALREADY], ConnectionStates.CONNECTING),
+     ([ECONNRESET], ConnectionStates.DISCONNECTED)),
+    (([EINPROGRESS, EALREADY], ConnectionStates.CONNECTING),
+     ([EALREADY], ConnectionStates.CONNECTING),
+     ([EISCONN], ConnectionStates.CONNECTED)),
+])
+def test_connect(_socket, conn, states):
+    assert conn.state is ConnectionStates.DISCONNECTED
 
-    @mock.patch('socket.create_connection')
-    def test_copy(self, socket):
-        """KafkaConnection copies work as expected"""
+    for errno, state in states:
+        _socket.connect_ex.side_effect = errno
+        conn.connect()
+        assert conn.state is state
 
-        conn = KafkaConnection('kafka', 9092)
-        self.assertEqual(socket.call_count, 1)
 
-        copy = conn.copy()
-        self.assertEqual(socket.call_count, 1)
-        self.assertEqual(copy.host, 'kafka')
-        self.assertEqual(copy.port, 9092)
-        self.assertEqual(copy._sock, None)
+def test_connect_timeout(_socket, conn):
+    assert conn.state is ConnectionStates.DISCONNECTED
 
-        copy.reinit()
-        self.assertEqual(socket.call_count, 2)
-        self.assertNotEqual(copy._sock, None)
+    # Initial connect returns EINPROGRESS
+    # immediate inline connect returns EALREADY
+    # second explicit connect returns EALREADY
+    # third explicit connect returns EALREADY and times out via last_attempt
+    _socket.connect_ex.side_effect = [EINPROGRESS, EALREADY, EALREADY, EALREADY]
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTING
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTING
+    conn.last_attempt = 0
+    conn.connect()
+    assert conn.state is ConnectionStates.DISCONNECTED
 
-    @mock.patch('socket.create_connection')
-    def test_copy_thread(self, socket):
-        """KafkaConnection copies work in other threads"""
 
-        err = []
-        copy = KafkaConnection('kafka', 9092).copy()
+def test_blacked_out(conn):
+    assert conn.blacked_out() is False
+    conn.last_attempt = time.time()
+    assert conn.blacked_out() is True
 
-        def thread_func(err, copy):
-            try:
-                self.assertEqual(copy.host, 'kafka')
-                self.assertEqual(copy.port, 9092)
-                self.assertNotEqual(copy._sock, None)
-            except Exception as e:
-                err.append(e)
-            else:
-                err.append(None)
-        thread = Thread(target=thread_func, args=(err, copy))
-        thread.start()
-        thread.join()
 
-        self.assertEqual(err, [None])
-        self.assertEqual(socket.call_count, 2)
+def test_connected(conn):
+    assert conn.connected() is False
+    conn.state = ConnectionStates.CONNECTED
+    assert conn.connected() is True
+
+
+def test_connecting(conn):
+    assert conn.connecting() is False
+    conn.state = ConnectionStates.CONNECTING
+    assert conn.connecting() is True
+    conn.state = ConnectionStates.CONNECTED
+    assert conn.connecting() is False
+
+
+def test_send_disconnected(conn):
+    conn.state = ConnectionStates.DISCONNECTED
+    f = conn.send('foobar')
+    assert f.failed() is True
+    assert isinstance(f.exception, Errors.ConnectionError)
+
+
+def test_send_connecting(conn):
+    conn.state = ConnectionStates.CONNECTING
+    f = conn.send('foobar')
+    assert f.failed() is True
+    assert isinstance(f.exception, Errors.NodeNotReadyError)
+
+
+def test_send_max_ifr(conn):
+    conn.state = ConnectionStates.CONNECTED
+    max_ifrs = conn.config['max_in_flight_requests_per_connection']
+    for _ in range(max_ifrs):
+        conn.in_flight_requests.append('foo')
+    f = conn.send('foobar')
+    assert f.failed() is True
+    assert isinstance(f.exception, Errors.TooManyInFlightRequests)
+
+
+def test_send_no_response(_socket, conn):
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTED
+    req = MetadataRequest[0]([])
+    header = RequestHeader(req, client_id=conn.config['client_id'])
+    payload_bytes = len(header.encode()) + len(req.encode())
+    third = payload_bytes // 3
+    remainder = payload_bytes % 3
+    _socket.send.side_effect = [4, third, third, third, remainder]
+
+    assert len(conn.in_flight_requests) == 0
+    f = conn.send(req, expect_response=False)
+    assert f.succeeded() is True
+    assert f.value is None
+    assert len(conn.in_flight_requests) == 0
+
+
+def test_send_response(_socket, conn):
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTED
+    req = MetadataRequest[0]([])
+    header = RequestHeader(req, client_id=conn.config['client_id'])
+    payload_bytes = len(header.encode()) + len(req.encode())
+    third = payload_bytes // 3
+    remainder = payload_bytes % 3
+    _socket.send.side_effect = [4, third, third, third, remainder]
+
+    assert len(conn.in_flight_requests) == 0
+    f = conn.send(req)
+    assert f.is_done is False
+    assert len(conn.in_flight_requests) == 1
+
+
+def test_send_error(_socket, conn):
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTED
+    req = MetadataRequest[0]([])
+    try:
+        _socket.send.side_effect = ConnectionError
+    except NameError:
+        _socket.send.side_effect = socket.error
+    f = conn.send(req)
+    assert f.failed() is True
+    assert isinstance(f.exception, Errors.ConnectionError)
+    assert _socket.close.call_count == 1
+    assert conn.state is ConnectionStates.DISCONNECTED
+
+
+def test_can_send_more(conn):
+    assert conn.can_send_more() is True
+    max_ifrs = conn.config['max_in_flight_requests_per_connection']
+    for _ in range(max_ifrs):
+        assert conn.can_send_more() is True
+        conn.in_flight_requests.append('foo')
+    assert conn.can_send_more() is False
+
+
+def test_recv_disconnected():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('127.0.0.1', 0))
+    port = sock.getsockname()[1]
+    sock.listen(5)
+
+    conn = BrokerConnection('127.0.0.1', port, socket.AF_INET)
+    timeout = time.time() + 1
+    while time.time() < timeout:
+        conn.connect()
+        if conn.connected():
+            break
+    else:
+        assert False, 'Connection attempt to local socket timed-out ?'
+
+    conn.send(MetadataRequest[0]([]))
+
+    # Disconnect server socket
+    sock.close()
+
+    # Attempt to receive should mark connection as disconnected
+    assert conn.connected()
+    conn.recv()
+    assert conn.disconnected()
+
+
+def test_recv_disconnected_too(_socket, conn):
+    conn.connect()
+    assert conn.connected()
+
+    req = MetadataRequest[0]([])
+    header = RequestHeader(req, client_id=conn.config['client_id'])
+    payload_bytes = len(header.encode()) + len(req.encode())
+    _socket.send.side_effect = [4, payload_bytes]
+    conn.send(req)
+
+    # Empty data on recv means the socket is disconnected
+    _socket.recv.return_value = b''
+
+    # Attempt to receive should mark connection as disconnected
+    assert conn.connected()
+    conn.recv()
+    assert conn.disconnected()
+
+
+def test_recv(_socket, conn):
+    pass # TODO
+
+
+def test_close(conn):
+    pass # TODO
+
+
+def test_collect_hosts__happy_path():
+    hosts = "127.0.0.1:1234,127.0.0.1"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('127.0.0.1', 1234, socket.AF_INET),
+        ('127.0.0.1', 9092, socket.AF_INET),
+    ])
+
+
+def test_collect_hosts__ipv6():
+    hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_INET6),
+        ('2001:1000:2000::1', 9092, socket.AF_INET6),
+        ('2001:1000:2000::1', 1234, socket.AF_INET6),
+    ])
+
+
+def test_collect_hosts__string_list():
+    hosts = [
+        'localhost:1234',
+        'localhost',
+        '[localhost]',
+        '2001::1',
+        '[2001::1]',
+        '[2001::1]:1234',
+    ]
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_INET6),
+        ('2001::1', 9092, socket.AF_INET6),
+        ('2001::1', 9092, socket.AF_INET6),
+        ('2001::1', 1234, socket.AF_INET6),
+    ])
+
+
+def test_collect_hosts__with_spaces():
+    hosts = "localhost:1234, localhost"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_UNSPEC),
+    ])

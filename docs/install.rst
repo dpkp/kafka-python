@@ -1,10 +1,10 @@
 Install
-=======
+#######
 
 Install with your favorite package manager
 
 Latest Release
---------------
+**************
 Pip:
 
 .. code:: bash
@@ -15,7 +15,7 @@ Releases are also listed at https://github.com/dpkp/kafka-python/releases
 
 
 Bleeding-Edge
--------------
+*************
 
 .. code:: bash
 
@@ -37,12 +37,21 @@ Using `setup.py` directly:
     cd kafka-python
     python setup.py install
 
+Optional LZ4 install
+********************
+
+To enable LZ4 compression/decompression, install lz4tools and xxhash:
+
+>>> pip install lz4tools
+>>> pip install xxhash
+
+*Note*: these modules do not support python2.6
 
 Optional Snappy install
------------------------
+***********************
 
 Install Development Libraries
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+=============================
 
 Download and build Snappy from http://code.google.com/p/snappy/downloads/list
 
@@ -70,7 +79,7 @@ From Source:
     sudo make install
 
 Install Python Module
-^^^^^^^^^^^^^^^^^^^^^
+=====================
 
 Install the `python-snappy` module
 

@@ -1,6 +1,6 @@
 import sys
 import os
-from setuptools import setup, Command
+from setuptools import setup, Command, find_packages
 
 # Pull version from source without importing
 # since we can't import something we haven't built yet :)
@@ -37,14 +37,7 @@ setup(
 
     tests_require=test_require,
     cmdclass={"test": Tox},
-
-    packages=[
-        "kafka",
-        "kafka.consumer",
-        "kafka.partitioner",
-        "kafka.producer",
-    ],
-
+    packages=find_packages(exclude=['test']),
     author="Dana Powers",
     author_email="dana.powers@gmail.com",
     url="https://github.com/dpkp/kafka-python",
@@ -52,9 +45,8 @@ setup(
     description="Pure Python client for Apache Kafka",
     long_description=README,
     keywords="apache kafka",
-    install_requires=['six'],
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
