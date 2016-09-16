@@ -94,7 +94,6 @@ class Fetcher(six.Iterator):
         self._unauthorized_topics = set()
         self._offset_out_of_range_partitions = dict() # {topic_partition: offset}
         self._record_too_large_partitions = dict() # {topic_partition: offset}
-        self._iterator = None
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
 
@@ -106,16 +105,6 @@ class Fetcher(six.Iterator):
         Returns:
             List of Futures: each future resolves to a FetchResponse
         """
-        # We need to be careful when creating fetch records during iteration
-        # so we verify that there are no records in the deque, or in an
-        # iterator
-        if self._records or self._iterator:
-            log.debug('Skipping send_fetches because there are unconsumed'
-                      ' records internally')
-            return []
-        return self._send_fetches()
-
-    def _send_fetches(self):
         futures = []
         for node_id, request in six.iteritems(self._create_fetch_requests()):
             if self._client.ready(node_id):
@@ -293,10 +282,12 @@ class Fetcher(six.Iterator):
             copied_record_too_large_partitions,
             self.config['max_partition_fetch_bytes'])
 
-    def fetched_records(self):
+    def fetched_records(self, max_records=None):
         """Returns previously fetched records and updates consumed offsets.
 
-        Incompatible with iterator interface - use one or the other, not both.
+        Arguments:
+            max_records (int): Maximum number of records returned. Defaults
+                to max_poll_records configuration.
 
         Raises:
             OffsetOutOfRangeError: if no subscription offset_reset_strategy
@@ -306,22 +297,21 @@ class Fetcher(six.Iterator):
                 configured max_partition_fetch_bytes
             TopicAuthorizationError: if consumer is not authorized to fetch
                 messages from the topic
-            AssertionError: if used with iterator (incompatible)
 
         Returns:
             dict: {TopicPartition: [messages]}
         """
-        assert self._iterator is None, (
-            'fetched_records is incompatible with message iterator')
+        if max_records is None:
+            max_records = self.config['max_poll_records']
+
         if self._subscriptions.needs_partition_assignment:
             return {}
 
-        drained = collections.defaultdict(list)
         self._raise_if_offset_out_of_range()
         self._raise_if_unauthorized_topics()
         self._raise_if_record_too_large()
 
-        max_records = self.config['max_poll_records']
+        drained = collections.defaultdict(list)
         while self._records and max_records > 0:
             part = self._records.popleft()
             max_records -= self._append(drained, part, max_records)
@@ -349,13 +339,15 @@ class Fetcher(six.Iterator):
 
             elif fetch_offset == position:
                 part_records = part.take(max_records)
-                next_offset = part_records[-1][0] + 1
+                if not part_records:
+                    return 0
+                next_offset = part_records[-1].offset + 1
 
                 log.log(0, "Returning fetched records at offset %d for assigned"
                            " partition %s and update position to %s", position,
                            tp, next_offset)
 
-                for record in self._unpack_message_set(tp, part_records):
+                for record in part_records:
                     # Fetched compressed messages may include additional records
                     if record.offset < fetch_offset:
                         log.debug("Skipping message offset: %s (expecting %s)",
@@ -372,6 +364,7 @@ class Fetcher(six.Iterator):
                 log.debug("Ignoring fetched records for %s at offset %s since"
                           " the current position is %d", tp, part.fetch_offset,
                           position)
+
         part.discard()
         return 0
 
@@ -444,98 +437,17 @@ class Fetcher(six.Iterator):
             log.exception('StopIteration raised unpacking messageset: %s', e)
             raise Exception('StopIteration raised unpacking messageset')
 
-    def _message_generator(self):
-        """Iterate over fetched_records"""
-        if self._subscriptions.needs_partition_assignment:
-            raise StopIteration('Subscription needs partition assignment')
-
-        while self._records:
-
-            # Check on each iteration since this is a generator
-            self._raise_if_offset_out_of_range()
-            self._raise_if_unauthorized_topics()
-            self._raise_if_record_too_large()
-
-            # Send additional FetchRequests when the internal queue is low
-            # this should enable moderate pipelining
-            if len(self._records) <= self.config['iterator_refetch_records']:
-                self._send_fetches()
-
-            part = self._records.popleft()
-            tp = part.topic_partition
-
-            if not self._subscriptions.is_assigned(tp):
-                # this can happen when a rebalance happened before
-                # fetched records are returned
-                log.debug("Not returning fetched records for partition %s"
-                          " since it is no longer assigned", tp)
-                continue
-
-            # note that the consumed position should always be available
-            # as long as the partition is still assigned
-            position = self._subscriptions.assignment[tp].position
-            if not self._subscriptions.is_fetchable(tp):
-                # this can happen when a partition consumption paused before
-                # fetched records are returned
-                log.debug("Not returning fetched records for assigned partition"
-                          " %s since it is no longer fetchable", tp)
-
-            elif part.fetch_offset == position:
-                log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s", position, tp)
-
-                # We can ignore any prior signal to drop pending message sets
-                # because we are starting from a fresh one where fetch_offset == position
-                # i.e., the user seek()'d to this position
-                self._subscriptions.assignment[tp].drop_pending_message_set = False
-
-                for msg in self._unpack_message_set(tp, part.messages):
-
-                    # Because we are in a generator, it is possible for
-                    # subscription state to change between yield calls
-                    # so we need to re-check on each loop
-                    # this should catch assignment changes, pauses
-                    # and resets via seek_to_beginning / seek_to_end
-                    if not self._subscriptions.is_fetchable(tp):
-                        log.debug("Not returning fetched records for partition %s"
-                                  " since it is no longer fetchable", tp)
-                        break
-
-                    # If there is a seek during message iteration,
-                    # we should stop unpacking this message set and
-                    # wait for a new fetch response that aligns with the
-                    # new seek position
-                    elif self._subscriptions.assignment[tp].drop_pending_message_set:
-                        log.debug("Skipping remainder of message set for partition %s", tp)
-                        self._subscriptions.assignment[tp].drop_pending_message_set = False
-                        break
-
-                    # Compressed messagesets may include earlier messages
-                    elif msg.offset < self._subscriptions.assignment[tp].position:
-                        log.debug("Skipping message offset: %s (expecting %s)",
-                                  msg.offset,
-                                  self._subscriptions.assignment[tp].position)
-                        continue
-
-                    self._subscriptions.assignment[tp].position = msg.offset + 1
-                    yield msg
-            else:
-                # these records aren't next in line based on the last consumed
-                # position, ignore them they must be from an obsolete request
-                log.debug("Ignoring fetched records for %s at offset %s",
-                          tp, part.fetch_offset)
-
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
 
     def __next__(self):
-        if not self._iterator:
-            self._iterator = self._message_generator()
-        try:
-            return next(self._iterator)
-        except StopIteration:
-            self._iterator = None
-            raise
+        ret = self.fetched_records(max_records=1)
+        if not ret:
+            raise StopIteration
+        assert len(ret.keys()) == 1
+        (messages,) = ret.values()
+        assert len(messages) == 1
+        return messages[0]
 
     def _deserialize(self, msg):
         if self.config['key_deserializer']:
@@ -717,7 +629,8 @@ class Fetcher(six.Iterator):
                         log.debug("Adding fetched record for partition %s with"
                                   " offset %d to buffered record list", tp,
                                   position)
-                        self._records.append(self.PartitionRecords(fetch_offset, tp, messages))
+                        unpacked = list(self._unpack_message_set(tp, messages))
+                        self._records.append(self.PartitionRecords(fetch_offset, tp, unpacked))
                         last_offset, _, _ = messages[-1]
                         self._sensors.records_fetch_lag.record(highwater - last_offset)
                         num_bytes = sum(msg[1] for msg in messages)
@@ -757,8 +670,7 @@ class Fetcher(six.Iterator):
             self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((recv_time - send_time) * 1000)
 
-    class PartitionRecords(object):
-
+    class PartitionRecords(six.Iterator):
         def __init__(self, fetch_offset, tp, messages):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
@@ -780,7 +692,7 @@ class Fetcher(six.Iterator):
             self.messages = self.messages[n:]
 
             if self.messages:
-                self.fetch_offset = self.messages[0][0]
+                self.fetch_offset = self.messages[0].offset
 
             return res
 
