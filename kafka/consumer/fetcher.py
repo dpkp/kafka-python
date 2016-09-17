@@ -306,6 +306,7 @@ class Fetcher(six.Iterator):
         """
         if max_records is None:
             max_records = self.config['max_poll_records']
+        assert max_records > 0
 
         if self._subscriptions.needs_partition_assignment:
             return {}, False
