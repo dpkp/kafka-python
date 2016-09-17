@@ -298,26 +298,32 @@ class Fetcher(six.Iterator):
             TopicAuthorizationError: if consumer is not authorized to fetch
                 messages from the topic
 
-        Returns:
-            dict: {TopicPartition: [messages]}
+        Returns: (records (dict), partial (bool))
+            records: {TopicPartition: [messages]}
+            partial: True if records returned did not fully drain any pending
+                partition requests. This may be useful for choosing when to
+                pipeline additional fetch requests.
         """
         if max_records is None:
             max_records = self.config['max_poll_records']
 
         if self._subscriptions.needs_partition_assignment:
-            return {}
+            return {}, False
 
         self._raise_if_offset_out_of_range()
         self._raise_if_unauthorized_topics()
         self._raise_if_record_too_large()
 
         drained = collections.defaultdict(list)
+        partial = bool(self._records and max_records)
         while self._records and max_records > 0:
             part = self._records.popleft()
             max_records -= self._append(drained, part, max_records)
-            if part.messages:
+            if part.has_more():
                 self._records.appendleft(part)
-        return dict(drained)
+            else:
+                partial &= False
+        return dict(drained), partial
 
     def _append(self, drained, part, max_records):
         tp = part.topic_partition
@@ -675,26 +681,23 @@ class Fetcher(six.Iterator):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
             self.messages = messages
+            self.message_idx = 0
 
         def discard(self):
             self.messages = None
 
         def take(self, n):
-            if self.messages is None:
+            if not self.has_more():
                 return []
-
-            if n >= len(self.messages):
-                res = self.messages
-                self.messages = None
-                return res
-
-            res = self.messages[:n]
-            self.messages = self.messages[n:]
-
-            if self.messages:
-                self.fetch_offset = self.messages[0].offset
-
+            next_idx = self.message_idx + n
+            res = self.messages[self.message_idx:next_idx]
+            self.message_idx = next_idx
+            if self.has_more():
+                self.fetch_offset = self.messages[self.message_idx].offset
             return res
+
+        def has_more(self):
+            return self.message_idx < len(self.messages)
 
 
 class FetchManagerMetrics(object):

@@ -554,7 +554,7 @@ class KafkaConsumer(six.Iterator):
 
         # if data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
-        records = self._fetcher.fetched_records(max_records)
+        records, partial = self._fetcher.fetched_records(max_records)
         if records:
             return records
 
@@ -562,7 +562,8 @@ class KafkaConsumer(six.Iterator):
         self._fetcher.send_fetches()
 
         self._client.poll(timeout_ms=timeout_ms, sleep=True)
-        return self._fetcher.fetched_records(max_records)
+        records, _ = self._fetcher.fetched_records(max_records)
+        return records
 
     def position(self, partition):
         """Get the offset of the next record that will be fetched
