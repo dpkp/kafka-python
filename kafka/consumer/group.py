@@ -842,7 +842,7 @@ class KafkaConsumer(six.Iterator):
         ret = self.poll(timeout_ms=self.config['consumer_timeout_ms'], max_records=1)
         if not ret:
             raise StopIteration
-        assert len(ret.keys()) == 1
+        assert len(ret) == 1
         (messages,) = ret.values()
         assert len(messages) == 1
         return messages[0]

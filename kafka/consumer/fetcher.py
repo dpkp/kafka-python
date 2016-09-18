@@ -448,10 +448,10 @@ class Fetcher(six.Iterator):
         return self
 
     def __next__(self):
-        ret = self.fetched_records(max_records=1)
+        ret, _ = self.fetched_records(max_records=1)
         if not ret:
             raise StopIteration
-        assert len(ret.keys()) == 1
+        assert len(ret) == 1
         (messages,) = ret.values()
         assert len(messages) == 1
         return messages[0]
