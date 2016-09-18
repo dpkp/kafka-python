@@ -515,11 +515,6 @@ class KafkaConsumer(six.Iterator):
         while True:
             records = self._poll_once(remaining, max_records)
             if records:
-                # before returning the fetched records, we can send off the
-                # next round of fetches and avoid block waiting for their
-                # responses to enable pipelining while the user is handling the
-                # fetched records.
-                self._fetcher.send_fetches()
                 return records
 
             elapsed_ms = (time.time() - start) * 1000
@@ -556,6 +551,12 @@ class KafkaConsumer(six.Iterator):
         # poll() call to commit, then just return it immediately
         records, partial = self._fetcher.fetched_records(max_records)
         if records:
+            # before returning the fetched records, we can send off the
+            # next round of fetches and avoid block waiting for their
+            # responses to enable pipelining while the user is handling the
+            # fetched records.
+            if not partial:
+                self._fetcher.send_fetches()
             return records
 
         # send any new fetches (won't resend pending fetches)
