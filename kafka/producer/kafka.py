@@ -122,7 +122,7 @@ class KafkaProducer(object):
             to resend any record whose send fails with a potentially transient
             error. Note that this retry is no different than if the client
             resent the record upon receiving the error. Allowing retries
-            without setting max_in_flight_connections_per_connection to 1 will
+            without setting max_in_flight_requests_per_connection to 1 will
             potentially change the ordering of records because if two batches
             are sent to a single partition, and the first fails and is retried
             but the second succeeds, then the records in the second batch may

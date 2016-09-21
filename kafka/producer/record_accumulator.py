@@ -354,7 +354,7 @@ class RecordAccumulator(object):
 
          * There is at least one partition that is not backing off its send
          * and those partitions are not muted (to prevent reordering if
-           max_in_flight_connections is set to 1)
+           max_in_flight_requests_per_connection is set to 1)
          * and any of the following are true:
 
            * The record set is full

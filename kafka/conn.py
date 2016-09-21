@@ -557,7 +557,7 @@ class BrokerConnection(object):
         return future
 
     def can_send_more(self):
-        """Return True unless there are max_in_flight_requests."""
+        """Return True unless there are max_in_flight_requests_per_connection."""
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
