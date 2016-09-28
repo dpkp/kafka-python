@@ -1,5 +1,4 @@
-import pytest
-import six
+from __future__ import absolute_import
 
 from kafka.partitioner import DefaultPartitioner, Murmur2Partitioner, RoundRobinPartitioner
 from kafka.partitioner.hashed import murmur2
