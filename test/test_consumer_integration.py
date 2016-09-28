@@ -500,6 +500,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
     def test_kafka_consumer__blocking(self):
         TIMEOUT_MS = 500
         consumer = self.kafka_consumer(auto_offset_reset='earliest',
+                                       enable_auto_commit=False,
                                        consumer_timeout_ms=TIMEOUT_MS)
 
         # Manual assignment avoids overhead of consumer group mgmt
