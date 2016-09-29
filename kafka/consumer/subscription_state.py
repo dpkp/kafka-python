@@ -133,6 +133,9 @@ class SubscriptionState(object):
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
+        if isinstance(topics, str):
+            topics = [topics]
+
         if self.subscription == set(topics):
             log.warning("subscription unchanged by change_subscription(%s)",
                         topics)
