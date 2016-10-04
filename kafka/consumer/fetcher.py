@@ -698,7 +698,7 @@ class Fetcher(six.Iterator):
             return res
 
         def has_more(self):
-            return self.message_idx < len(self.messages)
+            return self.messages and self.message_idx < len(self.messages)
 
 
 class FetchManagerMetrics(object):
