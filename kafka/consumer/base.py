@@ -4,14 +4,13 @@ import atexit
 import logging
 import numbers
 from threading import Lock
+import warnings
 
-import kafka.common
-from kafka.common import (
-    OffsetRequest, OffsetCommitRequest, OffsetFetchRequest,
-    UnknownTopicOrPartitionError, check_error, KafkaError
-)
-
-from kafka.util import kafka_bytestring, ReentrantTimer
+from kafka.errors import (
+    UnknownTopicOrPartitionError, check_error, KafkaError)
+from kafka.structs import (
+    OffsetRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload)
+from kafka.util import ReentrantTimer
 
 
 log = logging.getLogger('kafka.consumer')
@@ -47,10 +46,13 @@ class Consumer(object):
                  auto_commit_every_t=AUTO_COMMIT_INTERVAL,
                  offset_storage='zookeeper'):
 
+        warnings.warn('deprecated -- this class will be removed in a future'
+                      ' release. Use KafkaConsumer instead.',
+                      DeprecationWarning)
         self.client = client
-        self.topic = kafka_bytestring(topic)
-        self.group = None if group is None else kafka_bytestring(group)
-        self.client.load_metadata_for_topics(topic)
+        self.topic = topic
+        self.group = group
+        self.client.load_metadata_for_topics(topic, ignore_leadernotavailable=True)
         self.offsets = {}
 
         if partitions is None:
@@ -96,7 +98,7 @@ class Consumer(object):
 
     def fetch_last_known_offsets(self, partitions=None):
         if self.group is None:
-            raise ValueError('KafkaClient.group must not be None')
+            raise ValueError('SimpleClient.group must not be None')
 
         if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
@@ -105,13 +107,13 @@ class Consumer(object):
         if self.offset_storage in ['zookeeper', 'dual']:
             responses += self.client.send_offset_fetch_request(
                 self.group,
-                [OffsetFetchRequest(self.topic, p) for p in partitions],
+                [OffsetFetchRequestPayload(self.topic, p) for p in partitions],
                 fail_on_error=False
             )
         if self.offset_storage in ['kafka', 'dual']:
             responses += self.client.send_offset_fetch_request_kafka(
                 self.group,
-                [OffsetFetchRequest(self.topic, p) for p in partitions],
+                [OffsetFetchRequestPayload(self.topic, p) for p in partitions],
                 fail_on_error=False
             )
 
@@ -166,7 +168,7 @@ class Consumer(object):
                           'group=%s, topic=%s, partition=%s',
                           offset, self.group, self.topic, partition)
 
-                reqs.append(OffsetCommitRequest(self.topic, partition,
+                reqs.append(OffsetCommitRequestPayload(self.topic, partition,
                                                 offset, None))
 
             try:
@@ -211,7 +213,8 @@ class Consumer(object):
                 # ValueError on list.remove() if the exithandler no longer
                 # exists is fine here
                 try:
-                    atexit._exithandlers.remove((self._cleanup_func, (self,), {}))
+                    atexit._exithandlers.remove(  # pylint: disable=no-member
+                        (self._cleanup_func, (self,), {}))
                 except ValueError:
                     pass
 
@@ -231,7 +234,7 @@ class Consumer(object):
         reqs = []
 
         for partition in partitions:
-            reqs.append(OffsetRequest(self.topic, partition, -1, 1))
+            reqs.append(OffsetRequestPayload(self.topic, partition, -1, 1))
 
         resps = self.client.send_offset_request(reqs)
         for resp in resps:

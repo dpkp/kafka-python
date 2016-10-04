@@ -1,7 +1,9 @@
-kafka
-=====
+kafka-python API
+****************
 
 .. toctree::
-   :maxdepth: 4
 
-   kafka
+   KafkaConsumer
+   KafkaProducer
+   KafkaClient
+   BrokerConnection

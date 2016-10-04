@@ -1,7 +1,324 @@
+# 1.3.1 (Aug 8, 2016)
+
+Bugfixes
+* Fix AttributeError in BrokerConnectionMetrics after reconnecting
+
+
+# 1.3.0 (Aug 4, 2016)
+
+Incompatible Changes
+* Delete KafkaConnection class (dpkp 769)
+* Rename partition_assignment -> assignment in MemberMetadata for consistency
+* Move selectors34 and socketpair to kafka.vendor (dpkp 785)
+* Change api_version config to tuple; deprecate str with warning (dpkp 761)
+* Rename _DEFAULT_CONFIG -> DEFAULT_CONFIG in KafkaProducer (dpkp 788)
+
+Improvements
+* Vendor six 1.10.0 to eliminate runtime dependency (dpkp 785)
+* Add KafkaProducer and KafkaConsumer.metrics() with instrumentation similar to java client (dpkp 754 / 772 / 794)
+* Support Sasl PLAIN authentication (larsjsol PR 779)
+* Add checksum and size to RecordMetadata and ConsumerRecord (KAFKA-3196 / 770 / 594)
+* Use MetadataRequest v1 for 0.10+ api_version (dpkp 762)
+* Fix KafkaConsumer autocommit for 0.8 brokers (dpkp 756 / 706)
+* Improve error logging (dpkp 760 / 759)
+* Adapt benchmark scripts from https://github.com/mrafayaleem/kafka-jython (dpkp 754)
+* Add api_version config to KafkaClient (dpkp 761)
+* New Metadata method with_partitions() (dpkp 787)
+* Use socket_options configuration to setsockopts(). Default TCP_NODELAY (dpkp 783)
+* Expose selector type as config option (dpkp 764)
+* Drain pending requests to the coordinator before initiating group rejoin (dpkp 798)
+* Send combined size and payload bytes to socket to avoid potentially split packets with TCP_NODELAY (dpkp 797)
+
+Bugfixes
+* Ignore socket.error when checking for protocol out of sync prior to socket close (dpkp 792)
+* Fix offset fetch when partitions are manually assigned (KAFKA-3960 / 786)
+* Change pickle_method to use python3 special attributes (jpaulodit 777)
+* Fix ProduceResponse v2 throttle_time_ms
+* Always encode size with MessageSet (#771)
+* Avoid buffer overread when compressing messageset in KafkaProducer
+* Explicit format string argument indices for python 2.6 compatibility
+* Simplify RecordMetadata; short circuit callbacks (#768)
+* Fix autocommit when partitions assigned manually (KAFKA-3486 / #767 / #626)
+* Handle metadata updates during consumer rebalance (KAFKA-3117 / #766 / #701)
+* Add a consumer config option to exclude internal topics (KAFKA-2832 / #765)
+* Protect writes to wakeup socket with threading lock (#763 / #709)
+* Fetcher spending unnecessary time during metrics recording (KAFKA-3785)
+* Always use absolute_import (dpkp)
+
+Test / Fixtures
+* Catch select errors while capturing test fixture logs
+* Fix consumer group test race condition (dpkp 795)
+* Retry fixture failures on a different port (dpkp 796)
+* Dump fixture logs on failure
+
+Documentation
+* Fix misspelling of password (ssaamm 793)
+* Document the ssl_password config option (ssaamm 780)
+* Fix typo in KafkaConsumer documentation (ssaamm 775)
+* Expand consumer.fetcher inline comments
+* Update kafka configuration links -> 0.10.0.0 docs
+* Fixup metrics_sample_window_ms docstring in consumer
+
+
+# 1.2.5 (July 15, 2016)
+
+Bugfixes
+* Fix bug causing KafkaProducer to double-compress message batches on retry
+* Check for double-compressed messages in KafkaConsumer, log warning and optionally skip
+* Drop recursion in _unpack_message_set; only decompress once
+
+
+# 1.2.4 (July 8, 2016)
+
+Bugfixes
+* Update consumer_timeout_ms docstring - KafkaConsumer raises StopIteration, no longer ConsumerTimeout
+* Use explicit subscription state flag to handle seek() during message iteration
+* Fix consumer iteration on compacted topics (dpkp PR 752)
+* Support ssl_password config when loading cert chains (amckemie PR 750)
+
+
+# 1.2.3 (July 2, 2016)
+
+Patch Improvements
+* Fix gc error log: avoid AttributeError in _unregister_cleanup (dpkp PR 747)
+* Wakeup socket optimizations (dpkp PR 740)
+* Assert will be disabled by "python -O" (tyronecai PR 736)
+* Randomize order of topics/partitions processed by fetcher to improve balance (dpkp PR 732)
+* Allow client.check_version timeout to be set in Producer and Consumer constructors (eastlondoner PR 647)
+
+
+# 1.2.2 (June 21, 2016)
+
+Bugfixes
+* Clarify timeout unit in KafkaProducer close and flush (ms7s PR 734)
+* Avoid busy poll during metadata refresh failure with retry_backoff_ms (dpkp PR 733)
+* Check_version should scan nodes until version found or timeout (dpkp PR 731)
+* Fix bug which could cause least_loaded_node to always return the same unavailable node (dpkp PR 730)
+* Fix producer garbage collection with weakref in atexit handler (dpkp PR 728)
+* Close client selector to fix fd leak (msmith PR 729)
+* Tweak spelling mistake in error const (steve8918 PR 719)
+* Rearrange connection tests to separate legacy KafkaConnection
+
+
+# 1.2.1 (June 1, 2016)
+
+Bugfixes
+* Fix regression in MessageSet decoding wrt PartialMessages (#716)
+* Catch response decode errors and log details (#715)
+* Fix Legacy support url (#712 - JonasGroeger)
+* Update sphinx docs re 0.10 broker support
+
+
+# 1.2.0 (May 24, 2016)
+
+This release officially adds support for Kafka 0.10
+* Add protocol support for ApiVersionRequest (dpkp PR 678)
+* KAFKA-3025: Message v1 -- add timetamp and relative offsets (dpkp PR 693)
+* Use Fetch/Produce API v2 for brokers >= 0.10 (uses message format v1) (dpkp PR 694)
+* Use standard LZ4 framing for v1 messages / kafka 0.10 (dpkp PR 695)
+
+Consumers
+* Update SimpleConsumer / legacy protocol to handle compressed messages (paulcavallaro PR 684)
+
+Producers
+* KAFKA-3388: Fix expiration of batches sitting in the accumulator (dpkp PR 699)
+* KAFKA-3197: when max.in.flight.request.per.connection = 1, attempt to guarantee ordering (dpkp PR 698)
+* Dont use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
+
+Clients
+* Fix socket leaks in KafkaClient (dpkp PR 696)
+
+Documentation
+<none>
+
+Internals
+* Support SSL CRL [requires python 2.7.9+ / 3.4+] (vincentbernat PR 683)
+* Use original hostname for SSL checks (vincentbernat PR 682)
+* Always pass encoded message bytes to MessageSet.encode()
+* Raise ValueError on protocol encode/decode errors
+* Supplement socket.gaierror exception in BrokerConnection.connect() (erikbeebe PR 687)
+* BrokerConnection check_version: expect 0.9 to fail with CorrelationIdError
+* Fix small bug in Sensor (zackdever PR 679)
+
+
+# 1.1.1 (Apr 26, 2016)
+
+quick bugfixes
+* fix throttle_time_ms sensor handling (zackdever pr 667)
+* improve handling of disconnected sockets (easypost pr 666 / dpkp)
+* disable standard metadata refresh triggers during bootstrap (dpkp)
+* more predictable future callback/errback exceptions (zackdever pr 670)
+* avoid some exceptions in coordinator.__del__ (dpkp pr 668)
+
+
+# 1.1.0 (Apr 25, 2016)
+
+Consumers
+* Avoid resending FetchRequests that are pending on internal queue
+* Log debug messages when skipping fetched messages due to offset checks
+* KAFKA-3013: Include topic-partition in exception for expired batches
+* KAFKA-3318: clean up consumer logging and error messages
+* Improve unknown coordinator error handling
+* Improve auto-commit error handling when group_id is None
+* Add paused() API (zackdever PR 602)
+* Add default_offset_commit_callback to KafkaConsumer DEFAULT_CONFIGS
+
+Producers
+<none>
+
+Clients
+* Support SSL connections
+* Use selectors module for non-blocking IO
+* Refactor KafkaClient connection management
+* Fix AttributeError in __del__
+* SimpleClient: catch errors thrown by _get_leader_for_partition (zackdever PR 606)
+
+Documentation
+* Fix serializer/deserializer examples in README
+* Update max.block.ms docstring
+* Remove errant next(consumer) from consumer documentation
+* Add producer.flush() to usage docs
+
+Internals
+* Add initial metrics implementation (zackdever PR 637)
+* KAFKA-2136: support Fetch and Produce v1 (throttle_time_ms)
+* Use version-indexed lists for request/response protocol structs (dpkp PR 630)
+* Split kafka.common into kafka.structs and kafka.errors
+* Handle partial socket send() (dpkp PR 611)
+* Fix windows support (dpkp PR 603)
+* IPv6 support (TimEvens PR 615; Roguelazer PR 642)
+
+
+# 1.0.2 (Mar 14, 2016)
+
+Consumers
+* Improve KafkaConsumer Heartbeat handling (dpkp PR 583)
+* Fix KafkaConsumer.position bug (stefanth PR 578)
+* Raise TypeError when partition is not a TopicPartition (dpkp PR 587)
+* KafkaConsumer.poll should sleep to prevent tight-loops (dpkp PR 597)
+
+Producers
+* Fix producer threading bug that can crash sender (dpkp PR 590)
+* Fix bug in producer buffer pool reallocation (dpkp PR 585)
+* Remove spurious warnings when closing sync SimpleProducer (twm PR 567)
+* Fix FutureProduceResult.await() on python2.6 (dpkp)
+* Add optional timeout parameter to KafkaProducer.flush() (dpkp)
+* KafkaProducer Optimizations (zackdever PR 598)
+
+Clients
+* Improve error handling in SimpleClient.load_metadata_for_topics (dpkp)
+* Improve handling of KafkaClient.least_loaded_node failure (dpkp PR 588)
+
+Documentation
+* Fix KafkaError import error in docs (shichao-an PR 564)
+* Fix serializer / deserializer examples (scribu PR 573)
+
+Internals
+* Update to Kafka 0.9.0.1 for integration testing
+* Fix ifr.future.failure in conn.py (mortenlj PR 566)
+* Improve Zookeeper / Kafka Fixture management (dpkp)
+
+
+# 1.0.1 (Feb 19, 2016)
+
+Consumers
+* Add RangePartitionAssignor (and use as default); add assignor tests (dpkp PR 550)
+* Make sure all consumers are in same generation before stopping group test
+* Verify node ready before sending offset fetch request from coordinator
+* Improve warning when offset fetch request returns unknown topic / partition
+
+Producers
+* Warn if pending batches failed during flush
+* Fix concurrency bug in RecordAccumulator.ready()
+* Fix bug in SimpleBufferPool memory condition waiting / timeout
+* Support batch_size = 0 in producer buffers (dpkp PR 558)
+* Catch duplicate batch.done() calls [e.g., maybe_expire then a response errback]
+
+Clients
+
+Documentation
+* Improve kafka.cluster docstrings
+* Migrate load_example.py to KafkaProducer / KafkaConsumer
+
+Internals
+* Dont override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
+* Some attributes may not exist in __del__ if we failed assertions
+* Break up some circular references and close client wake pipes on __del__ (aisch PR 554)
+
+
+# 1.0.0 (Feb 15, 2016)
+
+This release includes significant code changes. Users of older kafka-python
+versions are encouraged to test upgrades before deploying to production as
+some interfaces and configuration options have changed.
+
+Users of SimpleConsumer / SimpleProducer / SimpleClient (formerly KafkaClient)
+from prior releases should migrate to KafkaConsumer / KafkaProducer. Low-level
+APIs (Simple*) are no longer being actively maintained and will be removed in a
+future release.
+
+For comprehensive API documentation, please see python help() / docstrings,
+kafka-python.readthedocs.org, or run `tox -e docs` from source to build
+documentation locally.
+
+Consumers
+* KafkaConsumer re-written to emulate the new 0.9 kafka consumer (java client)
+  and support coordinated consumer groups (feature requires >= 0.9.0.0 brokers)
+
+  * Methods no longer available:
+
+    * configure [initialize a new consumer instead]
+    * set_topic_partitions [use subscribe() or assign()]
+    * fetch_messages [use poll() or iterator interface]
+    * get_partition_offsets
+    * offsets [use committed(partition)]
+    * task_done [handled internally by auto-commit; or commit offsets manually]
+
+  * Configuration changes (consistent with updated java client):
+
+    * lots of new configuration parameters -- see docs for details
+    * auto_offset_reset: previously values were 'smallest' or 'largest', now
+      values are 'earliest' or 'latest'
+    * fetch_wait_max_ms is now fetch_max_wait_ms
+    * max_partition_fetch_bytes is now max_partition_fetch_bytes
+    * deserializer_class is now value_deserializer and key_deserializer
+    * auto_commit_enable is now enable_auto_commit
+    * auto_commit_interval_messages was removed
+    * socket_timeout_ms was removed
+    * refresh_leader_backoff_ms was removed
+
+* SimpleConsumer and MultiProcessConsumer are now deprecated and will be removed
+  in a future release. Users are encouraged to migrate to KafkaConsumer.
+
+Producers
+* new producer class: KafkaProducer. Exposes the same interface as official java client.
+  Async by default; returned future.get() can be called for synchronous blocking
+* SimpleProducer is now deprecated and will be removed in a future release. Users are
+  encouraged to migrate to KafkaProducer.
+
+Clients
+* synchronous KafkaClient renamed to SimpleClient. For backwards compatibility, you
+  will get a SimpleClient via `from kafka import KafkaClient`. This will change in
+  a future release.
+* All client calls use non-blocking IO under the hood.
+* Add probe method check_version() to infer broker versions.
+
+Documentation
+* Updated README and sphinx documentation to address new classes.
+* Docstring improvements to make python help() easier to use.
+
+Internals
+* Old protocol stack is deprecated. It has been moved to kafka.protocol.legacy
+  and may be removed in a future release.
+* Protocol layer re-written using Type classes, Schemas and Structs (modeled on
+  the java client).
+* Add support for LZ4 compression (including broken framing header checksum).
+
+
 # 0.9.5 (Dec 6, 2015)
 
 Consumers
-* Initial support for consumer coordinator [offsets only] (toddpalino PR 420)
+* Initial support for consumer coordinator: offsets only (toddpalino PR 420)
 * Allow blocking until some messages are received in SimpleConsumer (saaros PR 457)
 * Support subclass config changes in KafkaConsumer (zackdever PR 446)
 * Support retry semantics in MultiProcessConsumer (barricadeio PR 456)
@@ -10,7 +327,7 @@ Consumers
 * Add KafkaConsumer.close() (ucarion PR 426)
 
 Producers
-* Cath client.reinit() exceptions in async producer (dpkp)
+* Catch client.reinit() exceptions in async producer (dpkp)
 * Producer.stop() now blocks until async thread completes (dpkp PR 485)
 * Catch errors during load_metadata_for_topics in async producer (bschopman PR 467)
 * Add compression-level support for codecs that support it (trbs PR 454)

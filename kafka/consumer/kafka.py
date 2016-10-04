@@ -9,14 +9,16 @@ import time
 
 import six
 
-from kafka.client import KafkaClient
+from kafka.client import SimpleClient
 from kafka.common import (
-    OffsetFetchRequest, OffsetCommitRequest, OffsetRequest, FetchRequest,
     check_error, NotLeaderForPartitionError, UnknownTopicOrPartitionError,
     OffsetOutOfRangeError, RequestTimedOutError, KafkaMessage, ConsumerTimeout,
     FailedPayloadsError, KafkaUnavailableError, KafkaConfigurationError
 )
-from kafka.util import kafka_bytestring
+from kafka.structs import (
+    FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
+    OffsetRequestPayload
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,7 @@ DEFAULT_CONSUMER_CONFIG = {
 DEPRECATED_CONFIG_KEYS = {
     'metadata_broker_list': 'bootstrap_servers',
 }
+
 
 class KafkaConsumer(object):
     """A simpler kafka consumer"""
@@ -140,7 +143,7 @@ class KafkaConsumer(object):
 
         self.metrics_responder = self._config['metrics_responder']
 
-        self._client = KafkaClient(
+        self._client = SimpleClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0),
@@ -197,14 +200,14 @@ class KafkaConsumer(object):
 
             # Topic name str -- all partitions
             if isinstance(arg, (six.string_types, six.binary_type)):
-                topic = kafka_bytestring(arg)
+                topic = arg
 
                 for partition in self._client.get_partition_ids_for_topic(topic):
                     self._consume_topic_partition(topic, partition)
 
             # (topic, partition [, offset]) tuple
             elif isinstance(arg, tuple):
-                topic = kafka_bytestring(arg[0])
+                topic = arg[0]
                 partition = arg[1]
                 self._consume_topic_partition(topic, partition)
                 if len(arg) == 3:
@@ -217,7 +220,7 @@ class KafkaConsumer(object):
 
                     # key can be string (a topic)
                     if isinstance(key, (six.string_types, six.binary_type)):
-                        topic = kafka_bytestring(key)
+                        topic = key
 
                         # topic: partition
                         if isinstance(value, int):
@@ -235,7 +238,7 @@ class KafkaConsumer(object):
 
                     # (topic, partition): offset
                     elif isinstance(key, tuple):
-                        topic = kafka_bytestring(key[0])
+                        topic = key[0]
                         partition = key[1]
                         self._consume_topic_partition(topic, partition)
                         self._offsets.fetch[(topic, partition)] = value
@@ -338,7 +341,7 @@ class KafkaConsumer(object):
                 'No fetch offsets found when calling fetch_messages'
             )
 
-        fetches = [FetchRequest(topic, partition,
+        fetches = [FetchRequestPayload(topic, partition,
                                 self._offsets.fetch[(topic, partition)],
                                 max_bytes)
                    for (topic, partition) in self._topics]
@@ -361,7 +364,7 @@ class KafkaConsumer(object):
                 self._refresh_metadata_on_error()
                 continue
 
-            topic = kafka_bytestring(resp.topic)
+            topic = resp.topic
             partition = resp.partition
             try:
                 check_error(resp)
@@ -442,7 +445,7 @@ class KafkaConsumer(object):
             topic / partition. See:
             https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetAPI
         """
-        reqs = [OffsetRequest(topic, partition, request_time_ms, max_num_offsets)]
+        reqs = [OffsetRequestPayload(topic, partition, request_time_ms, max_num_offsets)]
 
         (resp,) = self._client.send_offset_request(reqs)
 
@@ -562,7 +565,7 @@ class KafkaConsumer(object):
                 continue
 
             commits.append(
-                OffsetCommitRequest(topic_partition[0], topic_partition[1],
+                OffsetCommitRequestPayload(topic_partition[0], topic_partition[1],
                                     commit_offset, metadata)
             )
 
@@ -572,12 +575,12 @@ class KafkaConsumer(object):
             resps = []
             if self._config['offset_storage'] in ['zookeeper', 'dual']:
                 resps += self._client.send_offset_commit_request(
-                    kafka_bytestring(self._config['group_id']), commits,
+                    self._config['group_id'], commits,
                     fail_on_error=False,
                 )
             if self._config['offset_storage'] in ['kafka', 'dual']:
                 resps += self._client.send_offset_commit_request_kafka(
-                    kafka_bytestring(self._config['group_id']), commits,
+                    self._config['group_id'], commits,
                     fail_on_error=False,
                 )
 
@@ -601,7 +604,7 @@ class KafkaConsumer(object):
     #
 
     def _consume_topic_partition(self, topic, partition):
-        topic = kafka_bytestring(topic)
+        topic = topic
         if not isinstance(partition, int):
             raise KafkaConfigurationError('Unknown partition type (%s) '
                                           '-- expected int' % type(partition))
@@ -643,13 +646,13 @@ class KafkaConsumer(object):
             resps = []
             if self._config['offset_storage'] in ('zookeeper', 'dual'):
                 resps += self._client.send_offset_fetch_request(
-                    kafka_bytestring(self._config['group_id']),
-                    [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
+                    self._config['group_id'],
+                    [OffsetFetchRequestPayload(topic_partition[0], topic_partition[1])],
                     fail_on_error=False)
             if self._config['offset_storage'] in ('kafka', 'dual'):
                 resps += self._client.send_offset_fetch_request_kafka(
-                    kafka_bytestring(self._config['group_id']),
-                    [OffsetFetchRequest(topic_partition[0], topic_partition[1])],
+                    self._config['group_id'],
+                    [OffsetFetchRequestPayload(topic_partition[0], topic_partition[1])],
                     fail_on_error=False)
             try:
                 for r in resps:

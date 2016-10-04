@@ -9,12 +9,11 @@ python:
     - pypy
 
 env:
-    - UNIT_AND_LINT_ONLY=true
     - KAFKA_VERSION=0.8.0
-    - KAFKA_VERSION=0.8.1
     - KAFKA_VERSION=0.8.1.1
     - KAFKA_VERSION=0.8.2.2
-    - KAFKA_VERSION=0.9.0.0
+    - KAFKA_VERSION=0.9.0.1
+    - KAFKA_VERSION=0.10.0.0
 
 sudo: false
 
@@ -35,20 +34,8 @@ install:
     - pip install tox coveralls
     - pip install .
 
-deploy:
-  provider: pypi
-  server: https://pypi.python.org/pypi
-  user: mumrah
-  password:
-    secure: TIZNKxktOm42/LHLDCuKuPqmAfYKekyHL4MqEFpnqDI5T5sHzG9IQaOwppYfQNggHiILUBzk1j6w/FPJunJyd62AFtydkKtIccqENIIAio78afeCRMQDynstNXjDefmt0s90xLGSlLzDMxCEWB4F6frEtPl/8KpNSFB2fvj+HXY=
-  on:
-    tags: true
-    all_branches: true
-    # TODO replace all_branches with "branch: master" after https://github.com/travis-ci/travis-ci/issues/1675 is fixed
-    # branch: master
-
 script:
-  - if [ -n "$UNIT_AND_LINT_ONLY" ]; then tox -e lint,`./travis_selector.sh $TRAVIS_PYTHON_VERSION`; else tox -e `./travis_selector.sh $TRAVIS_PYTHON_VERSION`; fi
+  - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
 after_success:
   - coveralls

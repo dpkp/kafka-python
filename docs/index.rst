@@ -1,66 +1,143 @@
 kafka-python
-============
+############
 
-This module provides low-level protocol support for Apache Kafka as well as
-high-level consumer and producer classes. Request batching is supported by the
-protocol as well as broker-aware request routing. Gzip and Snappy compression
-is also supported for message sets.
+.. image:: https://img.shields.io/badge/kafka-0.10%2C%200.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.org/compatibility.html
+.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
+    :target: https://pypi.python.org/pypi/kafka-python
+.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
+.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
+    :target: https://travis-ci.org/dpkp/kafka-python
+.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
+    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
 
-Coordinated Consumer Group support is under development - see Issue #38.
+Python client for the Apache Kafka distributed stream processing system.
+kafka-python is designed to function much like the official java client, with a
+sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-On Freenode IRC at #kafka-python, as well as #apache-kafka
+kafka-python is best used with newer brokers (0.10 or 0.9), but is backwards-compatible with
+older versions (to 0.8.0). Some features will only be enabled on newer brokers,
+however; for example, fully coordinated consumer groups -- i.e., dynamic
+partition assignment to multiple consumers in the same group -- requires use of
+0.9 kafka brokers. Supporting this feature for earlier broker releases would
+require writing and maintaining custom leadership election and membership /
+health check code (perhaps using zookeeper or consul). For older brokers, you
+can achieve something similar by manually assigning different partitions to
+each consumer instance with config management tools like chef, ansible, etc.
+This approach will work fine, though it does not support rebalancing on
+failures.  See `Compatibility <compatibility.html>`_ for more details.
 
-For general discussion of kafka-client design and implementation (not python specific),
-see https://groups.google.com/forum/m/#!forum/kafka-clients
+Please note that the master branch may contain unreleased features. For release
+documentation, please see readthedocs and/or python's inline help.
 
-For information about Apache Kafka generally, see https://kafka.apache.org/
+>>> pip install kafka-python
 
-Status
-------
+KafkaConsumer
+*************
 
-The current stable version of this package is `0.9.5 <https://github.com/dpkp/kafka-python/releases/tag/v0.9.5>`_ and is compatible with:
+:class:`~kafka.KafkaConsumer` is a high-level message consumer, intended to
+operate as similarly as possible to the official java client. Full support
+for coordinated consumer groups requires use of kafka brokers that support the
+Group APIs: kafka v0.9+.
 
-Kafka broker versions
+See `KafkaConsumer <apidoc/KafkaConsumer.html>`_ for API and configuration details.
 
-* 0.9.0.0
-* 0.8.2.2
-* 0.8.2.1
-* 0.8.1.1
-* 0.8.1
-* 0.8.0
+The consumer iterator returns ConsumerRecords, which are simple namedtuples
+that expose basic message attributes: topic, partition, offset, key, and value:
 
-Python versions
+>>> from kafka import KafkaConsumer
+>>> consumer = KafkaConsumer('my_favorite_topic')
+>>> for msg in consumer:
+...     print (msg)
 
-* 3.5 (tested on 3.5.0)
-* 3.4 (tested on 3.4.2)
-* 3.3 (tested on 3.3.5)
-* 2.7 (tested on 2.7.9)
-* 2.6 (tested on 2.6.9)
-* pypy (tested on pypy 2.5.0 / python 2.7.8)
+>>> # manually assign the partition list for the consumer
+>>> from kafka import TopicPartition
+>>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234')
+>>> consumer.assign([TopicPartition('foobar', 2)])
+>>> msg = next(consumer)
 
-License
--------
-
-Apache License, v2.0. See `LICENSE <https://github.com/dpkp/kafka-python/blob/master/LICENSE>`_.
-
-Copyright 2015, David Arthur, Dana Powers, and Contributors
-(See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_).
+>>> # Deserialize msgpack-encoded values
+>>> consumer = KafkaConsumer(value_deserializer=msgpack.loads)
+>>> consumer.subscribe(['msgpackfoo'])
+>>> for msg in consumer:
+...     assert isinstance(msg.value, dict)
 
 
-Contents
---------
+KafkaProducer
+*************
+
+:class:`~kafka.KafkaProducer` is a high-level, asynchronous message producer.
+The class is intended to operate as similarly as possible to the official java
+client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
+
+>>> from kafka import KafkaProducer
+>>> producer = KafkaProducer(bootstrap_servers='localhost:1234')
+>>> for _ in range(100):
+...     producer.send('foobar', b'some_message_bytes')
+
+>>> # Block until all pending messages are sent
+>>> producer.flush()
+
+>>> # Block until a single message is sent (or timeout)
+>>> producer.send('foobar', b'another_message').get(timeout=60)
+
+>>> # Use a key for hashed-partitioning
+>>> producer.send('foobar', key=b'foo', value=b'bar')
+
+>>> # Serialize json messages
+>>> import json
+>>> producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+>>> producer.send('fizzbuzz', {'foo': 'bar'})
+
+>>> # Serialize string keys
+>>> producer = KafkaProducer(key_serializer=str.encode)
+>>> producer.send('flipflap', key='ping', value=b'1234')
+
+>>> # Compress messages
+>>> producer = KafkaProducer(compression_type='gzip')
+>>> for i in range(1000):
+...     producer.send('foobar', b'msg %d' % i)
+
+
+Compression
+***********
+
+kafka-python supports gzip compression/decompression natively. To produce or
+consume lz4 compressed messages, you must install lz4tools and xxhash (modules
+may not work on python2.6). To enable snappy, install python-snappy (also
+requires snappy library).
+See `Installation <install.html#optional-snappy-install>`_ for more information.
+
+
+Protocol
+********
+
+A secondary goal of kafka-python is to provide an easy-to-use protocol layer
+for interacting with kafka brokers via the python repl. This is useful for
+testing, probing, and general experimentation. The protocol support is
+leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
+method that probes a kafka broker and
+attempts to identify which version it is running (0.8.0 to 0.10).
+
+
+Low-level
+*********
+
+Legacy support is maintained for low-level consumer and producer classes,
+SimpleConsumer and SimpleProducer.
+
 
 .. toctree::
+   :hidden:
    :maxdepth: 2
 
-   usage
+   Usage Overview <usage>
+   API </apidoc/modules>
+   Simple Clients [deprecated] <simple>
    install
    tests
-   API reference </apidoc/modules>
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   compatibility
+   support
+   license
+   changelog
