@@ -260,8 +260,8 @@ class SimpleClient(object):
 
         def failed_payloads(payloads):
             for payload in payloads:
-                topic_partition = (payload.topic, payload.partition)
-                responses[(topic_partition)] = FailedPayloadsError(payload)
+                topic_partition = (str(payload.topic), payload.partition)
+                responses[topic_partition] = FailedPayloadsError(payload)
 
         # For each BrokerConnection keep the real socket so that we can use
         # a select to perform unblocking I/O
@@ -294,7 +294,7 @@ class SimpleClient(object):
 
             if not expect_response:
                 for payload in broker_payloads:
-                    topic_partition = (payload.topic, payload.partition)
+                    topic_partition = (str(payload.topic), payload.partition)
                     responses[topic_partition] = None
                 continue
 
@@ -317,7 +317,7 @@ class SimpleClient(object):
 
                 else:
                     for payload_response in decoder_fn(future.value):
-                        topic_partition = (payload_response.topic,
+                        topic_partition = (str(payload_response.topic),
                                            payload_response.partition)
                         responses[topic_partition] = payload_response
 
@@ -374,8 +374,8 @@ class SimpleClient(object):
 
         def failed_payloads(payloads):
             for payload in payloads:
-                topic_partition = (payload.topic, payload.partition)
-                responses[(topic_partition)] = FailedPayloadsError(payload)
+                topic_partition = (str(payload.topic), payload.partition)
+                responses[topic_partition] = FailedPayloadsError(payload)
 
         host, port, afi = get_ip_port_afi(broker.host)
         try:
@@ -402,7 +402,7 @@ class SimpleClient(object):
 
             else:
                 for payload_response in decoder_fn(future.value):
-                    topic_partition = (payload_response.topic,
+                    topic_partition = (str(payload_response.topic),
                                        payload_response.partition)
                     responses[topic_partition] = payload_response
 

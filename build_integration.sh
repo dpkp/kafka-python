@@ -55,7 +55,7 @@ pushd servers
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
           echo "Downloading kafka ${kafka} tarball"
           if hash wget 2>/dev/null; then
-            wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz --no-check-certificate || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz --no-check-certificate
+            wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
           else
             echo "wget not found... using curl"
             if [ -f "${KAFKA_ARTIFACT}.tar.gz" ]; then
