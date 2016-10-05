@@ -65,7 +65,7 @@ pushd servers
             fi
           fi
           # Retry download again
-          if [ ! -f "${KAFKA_ARTIFACT}.tar.gz" && ! -f "${KAFKA_ARTIFACT}.tgz"]; then
+          if [ ! -f "${KAFKA_ARTIFACT}.tar.gz" ] && [ ! -f "${KAFKA_ARTIFACT}.tgz" ]; then
             echo "Downloading kafka ${kafka} tarball"
             if hash curl 2>/dev/null; then
               curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz -o ${KAFKA_ARTIFACT}.tar.gz || curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz -o ${KAFKA_ARTIFACT}.tar.gz
