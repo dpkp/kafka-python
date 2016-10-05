@@ -55,9 +55,22 @@ pushd servers
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
           echo "Downloading kafka ${kafka} tarball"
           if hash curl 2>/dev/null; then
-           curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz -o ${KAFKA_ARTIFACT}.tar.gz || curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz -o ${KAFKA_ARTIFACT}.tar.gz
+            curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz -o ${KAFKA_ARTIFACT}.tar.gz || curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz -o ${KAFKA_ARTIFACT}.tar.gz
           else
-            echo "wget not found... using curl"
+            echo "curl not found... using wget"
+            if [ -f "${KAFKA_ARTIFACT}.tar.gz" ]; then
+              echo "Using cached artifact: ${KAFKA_ARTIFACT}.tar.gz"
+            else
+              wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
+            fi
+          fi
+          # Retry download again
+          if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
+          echo "Downloading kafka ${kafka} tarball"
+          if hash curl 2>/dev/null; then
+            curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz -o ${KAFKA_ARTIFACT}.tar.gz || curl -f https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz -o ${KAFKA_ARTIFACT}.tar.gz
+          else
+            echo "curl not found... using wget"
             if [ -f "${KAFKA_ARTIFACT}.tar.gz" ]; then
               echo "Using cached artifact: ${KAFKA_ARTIFACT}.tar.gz"
             else
