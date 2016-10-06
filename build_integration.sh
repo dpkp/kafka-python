@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Versions available for testing via binary distributions
-OFFICIAL_RELEASES="0.8.1.1 0.8.2.2 0.9.0.1 0.10.0.0"
+OFFICIAL_RELEASES="0.8.1.1 0.8.2.2 0.9.0.1 0.10.0.1"
 
 # Useful configuration vars, with sensible defaults
 if [ -z "$SCALA_VERSION" ]; then
@@ -9,7 +9,7 @@ if [ -z "$SCALA_VERSION" ]; then
 fi
 
 # On travis CI, empty KAFKA_VERSION means skip integration tests
-# so we dont try to get binaries 
+# so we dont try to get binaries
 # Otherwise it means test all official releases, so we get all of them!
 if [ -z "$KAFKA_VERSION" -a -z "$TRAVIS" ]; then
   KAFKA_VERSION=$OFFICIAL_RELEASES
@@ -55,7 +55,7 @@ pushd servers
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
           echo "Downloading kafka ${kafka} tarball"
           if hash wget 2>/dev/null; then
-            wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz --no-check-certificate || wget -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz --no-check-certificate
+            wget --no-proxy --tries=3 -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tgz || wget --no-proxy --tries=3 -N https://archive.apache.org/dist/kafka/$kafka/${KAFKA_ARTIFACT}.tar.gz
           else
             echo "wget not found... using curl"
             if [ -f "${KAFKA_ARTIFACT}.tar.gz" ]; then
