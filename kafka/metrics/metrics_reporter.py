@@ -55,3 +55,11 @@ class AbstractMetricsReporter(object):
     def close(self):
         """Called when the metrics repository is closed."""
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_emitter(self, metric):
+        """Called to return an instance of an emitter like meteorite etc"""
+
+    @abc.abstractmethod
+    def record(self, emitter, value):
+        """ called to record and emit metrics"""

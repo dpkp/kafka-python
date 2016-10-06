@@ -16,7 +16,7 @@ class Sensor(object):
     of metrics about request sizes such as the average or max.
     """
     def __init__(self, registry, name, parents, config,
-                 inactive_sensor_expiration_time_seconds):
+                 inactive_sensor_expiration_time_seconds, reporters):
         if not name:
             raise ValueError('name must be non-empty')
         self._lock = threading.RLock()
@@ -30,6 +30,8 @@ class Sensor(object):
             inactive_sensor_expiration_time_seconds * 1000)
         self._last_record_time = time.time() * 1000
         self._check_forest(set())
+        self._emitters = dict( (reporter, reporter.get_emitter(name)) for
+                               reporter in reporters )
 
     def _check_forest(self, sensors):
         """Validate that this sensor doesn't end up referencing itself."""
@@ -64,6 +66,8 @@ class Sensor(object):
             QuotaViolationException: if recording this value moves a
                 metric beyond its configured maximum or minimum bound
         """
+        for reporter, emitter in self._emitters.items():
+            reporter.record(emitter, value)
         if time_ms is None:
             time_ms = time.time() * 1000
         self._last_record_time = time_ms
