@@ -160,7 +160,6 @@ class Metrics(object):
                 logger.debug('Added sensor with name %s', name)
             return sensor
 
-
     def remove_sensor(self, name):
         """
         Remove a sensor (if it exists), associated metrics and its children.

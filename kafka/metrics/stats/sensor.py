@@ -30,7 +30,7 @@ class Sensor(object):
             inactive_sensor_expiration_time_seconds * 1000)
         self._last_record_time = time.time() * 1000
         self._check_forest(set())
-        self._emitters = dict( (reporter, reporter.get_emitter(name)) for
+        self._emitters = dict((reporter, reporter.get_emitter(name)) for
                                reporter in reporters )
 
     def _check_forest(self, sensors):
