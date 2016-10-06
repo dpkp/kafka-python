@@ -59,18 +59,19 @@ class AbstractMetricsReporter(object):
     @abc.abstractmethod
     def get_emitter(self, metric):
         """
-        Called to return an instance of an emitter like meteorite etc
-        
+        Called to return an instance of an emitter
+
         Arguments:
             metric (str): the name of the metric
         """
 
     @abc.abstractmethod
-    def record(self, emitter, value):
+    def record(self, emitter, value, timestamp):
         """
         Called to record and emit metrics
-        
+
         Arguments:
-            emitter: reference to an emitter 
+            emitter: reference to an emitter
             value(float): value to be emitted
+            timestamp: the time the value was recorded at
         """

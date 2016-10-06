@@ -66,10 +66,10 @@ class Sensor(object):
             QuotaViolationException: if recording this value moves a
                 metric beyond its configured maximum or minimum bound
         """
-        for reporter, emitter in self._emitters.items():
-            reporter.record(emitter, value)
         if time_ms is None:
             time_ms = time.time() * 1000
+        for reporter, emitter in self._emitters.items():
+            reporter.record(emitter, value, time_ms)
         self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
