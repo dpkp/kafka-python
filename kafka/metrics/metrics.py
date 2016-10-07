@@ -140,11 +140,15 @@ class Metrics(object):
         if sensor:
             return sensor
 
+
         with self._lock:
             sensor = self.get_sensor(name)
             if not sensor:
-                sensor = Sensor(self, name, parents, config or self.config,
-                                inactive_sensor_expiration_time_seconds)
+                sensor = Sensor(
+                    self, name, parents, config or self.config,
+                    inactive_sensor_expiration_time_seconds,
+                    self._reporters
+                )
                 self._sensors[name] = sensor
                 if parents:
                     for parent in parents:
