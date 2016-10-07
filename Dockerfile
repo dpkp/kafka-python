@@ -38,5 +38,9 @@ COPY LICENSE /work
 COPY AUTHORS.md /work
 COPY CHANGES.md /work
 COPY MANIFEST.in /work
+COPY run_itest.sh /work
+RUN chmod +x /work/run_itest.sh
 
 WORKDIR /work
+
+CMD ["./run_itest.sh"]
