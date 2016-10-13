@@ -735,7 +735,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    @time_metric('offset_fetch_request_timer_kafka')
+    @time_metric('offset_fetch_request_kafka_timer')
     def send_offset_fetch_request_kafka(self, group, payloads=[],
                                   fail_on_error=True, callback=None):
 
