@@ -49,22 +49,20 @@ HashedPartitioner = LegacyPartitioner
 
 
 # https://github.com/apache/kafka/blob/0.8.2/clients/src/main/java/org/apache/kafka/common/utils/Utils.java#L244
-def murmur2(key):
+def murmur2(data):
     """Pure-python Murmur2 implementation.
 
     Based on java client, see org.apache.kafka.common.utils.Utils.murmur2
 
     Args:
-        key: if not a bytes type, encoded using default encoding
+        data (bytes): opaque bytes
 
-    Returns: MurmurHash2 of key bytearray
+    Returns: MurmurHash2 of data
     """
-
-    # Convert key to bytes or bytearray
-    if isinstance(key, bytearray) or (six.PY3 and isinstance(key, bytes)):
-        data = key
-    else:
-        data = bytearray(str(key).encode())
+    # Python2 bytes is really a str, causing the bitwise operations below to fail
+    # so convert to bytearray.
+    if six.PY2:
+        data = bytearray(bytes(data))
 
     length = len(data)
     seed = 0x9747b28c
