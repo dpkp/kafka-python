@@ -5,6 +5,7 @@ from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
 import time
 
+import mock
 import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
@@ -264,3 +265,30 @@ def test_collect_hosts__with_spaces():
         ('localhost', 1234, socket.AF_UNSPEC),
         ('localhost', 9092, socket.AF_UNSPEC),
     ])
+
+
+def test_lookup_on_connect():
+    hostname = 'example.org'
+    port = 9092
+    conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
+    assert conn.host == conn.hostname == hostname
+    ip1 = '127.0.0.1'
+    mock_return1 = [
+        (2, 2, 17, '', (ip1, 9092)),
+    ]
+    with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        conn.close()
+        assert conn.host == ip1
+
+    ip2 = '127.0.0.2'
+    mock_return2 = [
+        (2, 2, 17, '', (ip2, 9092)),
+    ]
+
+    with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        conn.close()
+        assert conn.host == ip2
