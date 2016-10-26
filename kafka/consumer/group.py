@@ -84,7 +84,7 @@ class KafkaConsumer(six.Iterator):
         auto_offset_reset (str): A policy for resetting offsets on
             OffsetOutOfRange errors: 'earliest' will move to the oldest
             available message, 'latest' will move to the most recent. Any
-            ofther value will raise the exception. Default: 'latest'.
+            other value will raise the exception. Default: 'latest'.
         enable_auto_commit (bool): If true the consumer's offset will be
             periodically committed in the background. Default: True.
         auto_commit_interval_ms (int): milliseconds between automatic
