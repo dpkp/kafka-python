@@ -236,7 +236,7 @@ class Fetcher(six.Iterator):
         current_out_of_range_partitions = {}
 
         # filter only the fetchable partitions
-        for partition, offset in self._offset_out_of_range_partitions:
+        for partition, offset in six.iteritems(self._offset_out_of_range_partitions):
             if not self._subscriptions.is_fetchable(partition):
                 log.debug("Ignoring fetched records for %s since it is no"
                           " longer fetchable", partition)
@@ -740,12 +740,13 @@ class Fetcher(six.Iterator):
                     self._client.cluster.request_update()
                 elif error_type is Errors.OffsetOutOfRangeError:
                     fetch_offset = fetch_offsets[tp]
+                    log.info("Fetch offset %s is out of range", fetch_offset)
                     if self._subscriptions.has_default_offset_reset_policy():
                         self._subscriptions.need_offset_reset(tp)
+                        log.info("Resetting offset")
                     else:
                         self._offset_out_of_range_partitions[tp] = fetch_offset
-                    log.info("Fetch offset %s is out of range, resetting offset",
-                             fetch_offset)
+                        log.info("Raising exception")
                 elif error_type is Errors.TopicAuthorizationFailedError:
                     log.warn("Not authorized to read from topic %s.", tp.topic)
                     self._unauthorized_topics.add(tp.topic)
