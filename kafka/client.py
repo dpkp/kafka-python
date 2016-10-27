@@ -704,7 +704,7 @@ class SimpleClient(object):
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
                           group=group, from_kafka=True)
         decoder = KafkaProtocol.decode_offset_fetch_response
-        resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+        resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
