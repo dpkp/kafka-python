@@ -16,6 +16,7 @@ from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
                           NotLeaderForPartitionError, ReplicaNotAvailableError,
                           GroupCoordinatorNotAvailableError, GroupLoadInProgressError)
 from kafka.structs import TopicPartition, BrokerMetadata
+from kafka.metrics.metrics import Metrics
 
 from kafka.conn import (
     collect_hosts, BrokerConnection,
@@ -46,7 +47,7 @@ def time_metric(metric_name):
             ret = fn(self, *args, **kwargs)
 
             if self.metrics_responder:
-                self.metrics_responder(metric_name, time.time() - start_time)
+                self.metrics_responder.record(metric_name, time.time() - start_time)
 
             return ret
         return wrapper
@@ -87,10 +88,16 @@ class SimpleClient(object):
         """Get or create a connection to a broker using host and port"""
         host_key = (host, port)
         if host_key not in self._conns:
+            metrics = None
+            if self.metrics_responder:
+                metrics = Metrics(
+                    reporters=[self.metrics_responder]
+                )
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
-                client_id=self.client_id
+                client_id=self.client_id,
+                metrics=metrics
             )
 
         conn = self._conns[host_key]

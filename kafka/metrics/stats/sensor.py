@@ -30,8 +30,7 @@ class Sensor(object):
             inactive_sensor_expiration_time_seconds * 1000)
         self._last_record_time = time.time() * 1000
         self._check_forest(set())
-        self._emitters = dict((reporter, reporter.get_emitter(name)) for
-                               reporter in reporters )
+        self.reporters = reporters
 
     def _check_forest(self, sensors):
         """Validate that this sensor doesn't end up referencing itself."""
@@ -68,8 +67,8 @@ class Sensor(object):
         """
         if time_ms is None:
             time_ms = time.time() * 1000
-        for reporter, emitter in self._emitters.items():
-            reporter.record(emitter, value, time_ms)
+        for reporter in self.reporters:
+            reporter.record(self._name, value, time_ms)
         self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
