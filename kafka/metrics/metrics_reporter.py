@@ -57,21 +57,23 @@ class AbstractMetricsReporter(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_emitter(self, metric):
+    def get_emitter(self, metric_name, prefix='', default_dimensions=None):
         """
         Called to return an instance of an emitter
 
         Arguments:
-            metric (str): the name of the metric
+            metric_name (str): the name of the metric
+            prefix (str): the prefix attached to the metric for reporting
+            default_dimensions: the extra dimensions provided for the metric
         """
 
     @abc.abstractmethod
-    def record(self, name, value, timestamp):
+    def record(self, metric_name, value, timestamp=None):
         """
         Called to record and emit metrics
 
         Arguments:
-            name: name of the metric to be recorded
+            metric_name: name of the metric to be recorded
             value(float): value to be emitted
             timestamp: the time the value was recorded at
         """
