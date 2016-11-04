@@ -57,7 +57,7 @@ class AbstractMetricsReporter(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_emitter(self, metric_name, prefix='', default_dimensions=None):
+    def get_emitter(self, metric_name):
         """
         Called to return an instance of an emitter
 
