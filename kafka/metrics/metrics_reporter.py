@@ -66,12 +66,12 @@ class AbstractMetricsReporter(object):
         """
 
     @abc.abstractmethod
-    def record(self, emitter, value, timestamp):
+    def record(self, name, value, timestamp):
         """
         Called to record and emit metrics
 
         Arguments:
-            emitter: reference to an emitter
+            name: name of the metric to be recorded
             value(float): value to be emitted
             timestamp: the time the value was recorded at
         """
