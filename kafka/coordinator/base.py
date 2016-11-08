@@ -516,7 +516,7 @@ class BaseCoordinator(object):
     def coordinator_dead(self, error=None):
         """Mark the current coordinator as dead."""
         if self.coordinator_id is not None:
-            log.warning("Marking the coordinator dead (node %s) for group %s: %s.",
+            log.warning("ZZZZMarking the coordinator dead (node %s) for group %s: %s.",
                         self.coordinator_id, self.group_id, error)
             self.coordinator_id = None
 
