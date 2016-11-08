@@ -9,7 +9,7 @@ if [ -z "$SCALA_VERSION" ]; then
 fi
 
 # On travis CI, empty KAFKA_VERSION means skip integration tests
-# so we dont try to get binaries 
+# so we don't try to get binaries 
 # Otherwise it means test all official releases, so we get all of them!
 if [ -z "$KAFKA_VERSION" -a -z "$TRAVIS" ]; then
   KAFKA_VERSION=$OFFICIAL_RELEASES
