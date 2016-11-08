@@ -451,6 +451,7 @@ class BaseCoordinator(object):
                             Errors.NotCoordinatorForGroupError):
             error = error_type()
             log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
+            log.warning("SYNCGROUP")
             self.coordinator_dead()
             future.failure(error)
         else:
