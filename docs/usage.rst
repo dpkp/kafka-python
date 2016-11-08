@@ -20,7 +20,7 @@ KafkaConsumer
                                               message.offset, message.key,
                                               message.value))
 
-    # consume earliest available messages, dont commit offsets
+    # consume earliest available messages, don't commit offsets
     KafkaConsumer(auto_offset_reset='earliest', enable_auto_commit=False)
 
     # consume json messages

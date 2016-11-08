@@ -497,7 +497,7 @@ class KafkaClient(object):
                 else:
                     task_future.success(result)
 
-            # If we got a future that is already done, dont block in _poll
+            # If we got a future that is already done, don't block in _poll
             if future and future.is_done:
                 timeout = 0
             else:

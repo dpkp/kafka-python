@@ -31,7 +31,7 @@ def test_end_to_end(kafka_broker, compression):
         # LZ4 requires 0.8.2
         if version() < (0, 8, 2):
             return
-        # LZ4 python libs dont work on python2.6
+        # LZ4 python libs don't work on python2.6
         elif sys.version_info < (2, 7):
             return
 
