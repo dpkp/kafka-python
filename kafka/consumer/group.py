@@ -290,12 +290,9 @@ class KafkaConsumer(six.Iterator):
         if self.config['api_version'] is None:
             self.config['api_version'] = self._client.config['api_version']
 
-        log.warning("BEFORE SUBSCRIPTION STATE")
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
-        log.warning("BEFORE FETCHER")
         self._fetcher = Fetcher(
             self._client, self._subscription, self._metrics, **self.config)
-        log.warning("BEFORE CONSUMER COORDINATOR")
         self._coordinator = ConsumerCoordinator(
             self._client, self._subscription, self._metrics,
             assignors=self.config['partition_assignment_strategy'],
@@ -304,13 +301,9 @@ class KafkaConsumer(six.Iterator):
         self._iterator = None
         self._consumer_timeout = float('inf')
 
-        log.warning("BEFORE IF TOPICS")
         if topics:
-            log.warning("BEFORE SUBSCRIPTION SUBSCRIBE")
             self._subscription.subscribe(topics=topics)
-            log.warning("BEFORE CLIENT SET TOPICS")
             self._client.set_topics(topics)
-        log.warning("AFTER IF TOPICS")
 
     def assign(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
@@ -522,6 +515,7 @@ class KafkaConsumer(six.Iterator):
         start = time.time()
         remaining = timeout_ms
         while True:
+            log.warning("PPPOOOOOOOOOOOOOOOOLLL ONCE")
             records = self._poll_once(remaining, max_records)
             if records:
                 return records
