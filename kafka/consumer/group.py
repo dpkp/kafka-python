@@ -515,7 +515,6 @@ class KafkaConsumer(six.Iterator):
         start = time.time()
         remaining = timeout_ms
         while True:
-            log.warning("PPPOOOOOOOOOOOOOOOOLLL ONCE")
             records = self._poll_once(remaining, max_records)
             if records:
                 return records

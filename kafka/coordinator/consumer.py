@@ -617,6 +617,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_offset_fetch_response(self, future, response):
         offsets = {}
+        log.warning("DDDDDDDDDDDDD %s", response)
         for topic, partitions in response.topics:
             for partition, offset, metadata, error_code in partitions:
                 tp = TopicPartition(topic, partition)
