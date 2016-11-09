@@ -90,9 +90,7 @@ class SimpleClient(object):
         if host_key not in self._conns:
             metrics = None
             if self.metrics_responder:
-                metrics = Metrics(
-                    reporters=[self.metrics_responder]
-                )
+                metrics = Metrics(reporters=[self.metrics_responder])
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,

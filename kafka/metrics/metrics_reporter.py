@@ -63,8 +63,6 @@ class AbstractMetricsReporter(object):
 
         Arguments:
             metric_name (str): the name of the metric
-            prefix (str): the prefix attached to the metric for reporting
-            default_dimensions: the extra dimensions provided for the metric
         """
 
     @abc.abstractmethod
