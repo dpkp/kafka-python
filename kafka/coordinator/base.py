@@ -190,7 +190,6 @@ class BaseCoordinator(object):
             return True
 
         if self._client.is_disconnected(self.coordinator_id):
-            log.warning("DISCONNECTED")
             self.coordinator_dead()
             return True
 
@@ -312,7 +311,6 @@ class BaseCoordinator(object):
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
-            log.warning("NOT INSTANCE")
             self.coordinator_dead()
         future.failure(error)
 
@@ -350,7 +348,6 @@ class BaseCoordinator(object):
         elif error_type in (Errors.GroupCoordinatorNotAvailableError,
                             Errors.NotCoordinatorForGroupError):
             # re-discover the coordinator and retry with backoff
-            log.warning("JOIN GROUP")
             self.coordinator_dead()
             log.debug("Attempt to join group %s failed due to obsolete "
                       "coordinator information: %s", self.group_id,
@@ -451,7 +448,6 @@ class BaseCoordinator(object):
                             Errors.NotCoordinatorForGroupError):
             error = error_type()
             log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
-            log.warning("SYNCGROUP")
             self.coordinator_dead()
             future.failure(error)
         else:

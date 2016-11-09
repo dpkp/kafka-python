@@ -630,7 +630,6 @@ class ConsumerCoordinator(BaseCoordinator):
                         future.failure(error)
                     elif error_type is Errors.NotCoordinatorForGroupError:
                         # re-discover the coordinator and retry
-                        log.warning("OFFSET FETCH")
                         self.coordinator_dead()
                         future.failure(error)
                     elif error_type in (Errors.UnknownMemberIdError,
