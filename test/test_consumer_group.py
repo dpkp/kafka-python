@@ -141,11 +141,3 @@ def test_paused(kafka_broker, topic):
 
     consumer.unsubscribe()
     assert set() == consumer.paused()
-
-
-def test_heartbeat_timeout(conn, mocker):
-    mocker.patch('kafka.client_async.KafkaClient.check_version', return_value = (0, 9))
-    mocker.patch('time.time', return_value = 1234)
-    consumer = KafkaConsumer('foobar')
-    mocker.patch.object(consumer._coordinator.heartbeat, 'ttl', return_value = 0)
-    assert consumer._next_timeout() == 1234

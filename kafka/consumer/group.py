@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import copy
 import logging
 import socket
+import sys
 import time
 
 from kafka.vendor import six
@@ -115,6 +116,7 @@ class KafkaConsumer(six.Iterator):
             rebalances. Default: 3000
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group managementment facilities. Default: 30000
+        max_poll_records (int): ....
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -126,7 +128,7 @@ class KafkaConsumer(six.Iterator):
             [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
         consumer_timeout_ms (int): number of milliseconds to block during
             message iteration before raising StopIteration (i.e., ending the
-            iterator). Default -1 (block forever).
+            iterator). Default block forever [float('inf')].
         skip_double_compressed_messages (bool): A bug in KafkaProducer <= 1.2.4
             caused some messages to be corrupted via double-compression.
             By default, the fetcher will return these messages as a compressed
@@ -220,10 +222,11 @@ class KafkaConsumer(six.Iterator):
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'heartbeat_interval_ms': 3000,
         'session_timeout_ms': 30000,
+        'max_poll_records': sys.maxsize,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
-        'consumer_timeout_ms': -1,
+        'consumer_timeout_ms': float('inf'),
         'skip_double_compressed_messages': False,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
@@ -483,7 +486,7 @@ class KafkaConsumer(six.Iterator):
         """
         return self._client.cluster.partitions_for_topic(topic)
 
-    def poll(self, timeout_ms=0):
+    def poll(self, timeout_ms=0, max_records=None):
         """Fetch data from assigned topics / partitions.
 
         Records are fetched and returned in batches by topic-partition.
@@ -505,19 +508,15 @@ class KafkaConsumer(six.Iterator):
                 subscribed list of topics and partitions
         """
         assert timeout_ms >= 0, 'Timeout must not be negative'
-        assert self._iterator is None, 'Incompatible with iterator interface'
+        if max_records is None:
+            max_records = self.config['max_poll_records']
 
         # poll for new data until the timeout expires
         start = time.time()
         remaining = timeout_ms
         while True:
-            records = self._poll_once(remaining)
+            records = self._poll_once(remaining, max_records)
             if records:
-                # before returning the fetched records, we can send off the
-                # next round of fetches and avoid block waiting for their
-                # responses to enable pipelining while the user is handling the
-                # fetched records.
-                self._fetcher.init_fetches()
                 return records
 
             elapsed_ms = (time.time() - start) * 1000
@@ -526,7 +525,7 @@ class KafkaConsumer(six.Iterator):
             if remaining <= 0:
                 return {}
 
-    def _poll_once(self, timeout_ms):
+    def _poll_once(self, timeout_ms, max_records):
         """
         Do one round of polling. In addition to checking for new data, this does
         any needed heart-beating, auto-commits, and offset updates.
@@ -545,23 +544,29 @@ class KafkaConsumer(six.Iterator):
         elif self.config['group_id'] is not None and self.config['api_version'] >= (0, 8, 2):
             self._coordinator.ensure_coordinator_known()
 
-
         # fetch positions if we have partitions we're subscribed to that we
         # don't know the offset for
         if not self._subscription.has_all_fetch_positions():
             self._update_fetch_positions(self._subscription.missing_fetch_positions())
 
-        # init any new fetches (won't resend pending fetches)
-        records = self._fetcher.fetched_records()
-
         # if data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
+        records, partial = self._fetcher.fetched_records(max_records)
         if records:
+            # before returning the fetched records, we can send off the
+            # next round of fetches and avoid block waiting for their
+            # responses to enable pipelining while the user is handling the
+            # fetched records.
+            if not partial:
+                self._fetcher.send_fetches()
             return records
 
-        self._fetcher.init_fetches()
+        # send any new fetches (won't resend pending fetches)
+        self._fetcher.send_fetches()
+
         self._client.poll(timeout_ms=timeout_ms, sleep=True)
-        return self._fetcher.fetched_records()
+        records, _ = self._fetcher.fetched_records(max_records)
+        return records
 
     def position(self, partition):
         """Get the offset of the next record that will be fetched
@@ -884,7 +889,7 @@ class KafkaConsumer(six.Iterator):
             # and we assume that it is safe to init_fetches when fetcher is done
             # i.e., there are no more records stored internally
             else:
-                self._fetcher.init_fetches()
+                self._fetcher.send_fetches()
 
     def _next_timeout(self):
         timeout = min(self._consumer_timeout,

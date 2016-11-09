@@ -29,6 +29,21 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     The assignment will be:
         C0: [t0p0, t0p2, t1p1]
         C1: [t0p1, t1p0, t1p2]
+
+    When subscriptions differ across consumer instances, the assignment process
+    still considers each consumer instance in round robin fashion but skips
+    over an instance if it is not subscribed to the topic. Unlike the case when
+    subscriptions are identical, this can result in imbalanced assignments.
+
+    For example, suppose we have three consumers C0, C1, C2, and three topics
+    t0, t1, t2, with unbalanced partitions t0p0, t1p0, t1p1, t2p0, t2p1, t2p2,
+    where C0 is subscribed to t0; C1 is subscribed to t0, t1; and C2 is
+    subscribed to t0, t1, t2.
+
+    The assignment will be:
+        C0: [t0p0]
+        C1: [t1p0]
+        C2: [t1p1, t2p0, t2p1, t2p2]
     """
     name = 'roundrobin'
     version = 0
