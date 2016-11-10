@@ -460,6 +460,7 @@ class BaseCoordinator(object):
         Returns:
             Future: resolves to the node id of the coordinator
         """
+        log.warning("SEND GROUP COORDINATOR REQ")
         node_id = self._client.least_loaded_node()
         if node_id is None:
             return Future().failure(Errors.NoBrokersAvailable())

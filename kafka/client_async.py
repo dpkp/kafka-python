@@ -508,7 +508,7 @@ class KafkaClient(object):
                 timeout = max(0, timeout / 1000.0) # avoid negative timeouts
 
             responses.extend(self._poll(timeout, sleep=sleep))
-
+            log.warning("RESPONSES %s", responses)
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
             if not future or future.is_done:
@@ -692,6 +692,7 @@ class KafkaClient(object):
         timeout = max(ttl, next_reconnect_ms, wait_for_in_progress_ms)
 
         if timeout == 0:
+            log.warning("MAY REFRESH METADATA")
             node_id = self.least_loaded_node()
             if node_id is None:
                 log.debug("Give up sending metadata request since no node is available")
@@ -784,7 +785,7 @@ class KafkaClient(object):
         """
         end = time.time() + timeout
         while time.time() < end:
-
+            log.warning("CHECK VERSION")
             # It is possible that least_loaded_node falls back to bootstrap,
             # which can block for an increasing backoff period
             try_node = node_id or self.least_loaded_node()
