@@ -310,11 +310,9 @@ class ConsumerCoordinator(BaseCoordinator):
         if not partitions:
             return {}
 
-        time.sleep(10)
-
         while True:
             self.ensure_coordinator_known()
-
+            time.sleep(5)
             # contact coordinator to fetch committed offsets
             future = self._send_offset_fetch_request(partitions)
             log.warning("FETCH COMMITTED OFFSET %s", self._client.poll(future=future))

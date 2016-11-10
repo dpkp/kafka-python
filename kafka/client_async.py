@@ -692,7 +692,6 @@ class KafkaClient(object):
         timeout = max(ttl, next_reconnect_ms, wait_for_in_progress_ms)
 
         if timeout == 0:
-            log.warning("MAY REFRESH METADATA")
             node_id = self.least_loaded_node()
             if node_id is None:
                 log.debug("Give up sending metadata request since no node is available")
@@ -785,7 +784,6 @@ class KafkaClient(object):
         """
         end = time.time() + timeout
         while time.time() < end:
-            log.warning("CHECK VERSION")
             # It is possible that least_loaded_node falls back to bootstrap,
             # which can block for an increasing backoff period
             try_node = node_id or self.least_loaded_node()
