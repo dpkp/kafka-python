@@ -508,7 +508,6 @@ class KafkaClient(object):
                 timeout = max(0, timeout / 1000.0) # avoid negative timeouts
 
             responses.extend(self._poll(timeout, sleep=sleep))
-            log.warning("RESPONSES %s", responses)
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
             if not future or future.is_done:
