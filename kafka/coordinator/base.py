@@ -460,7 +460,6 @@ class BaseCoordinator(object):
         Returns:
             Future: resolves to the node id of the coordinator
         """
-
         node_id = self._client.least_loaded_node()
         if node_id is None:
             return Future().failure(Errors.NoBrokersAvailable())
