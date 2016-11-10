@@ -208,8 +208,9 @@ class BaseCoordinator(object):
                 self.coordinator_id = self._client.least_loaded_node()
                 self._client.ready(self.coordinator_id)
                 continue
-
+            log.warning("AAAAAAAAPI VERSION OK %s", self.config['api_version'])
             future = self._send_group_coordinator_request()
+            log.warning("FUTURE %s", future)
             self._client.poll(future=future)
 
             if future.failed():
