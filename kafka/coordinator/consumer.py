@@ -315,7 +315,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
             # contact coordinator to fetch committed offsets
             future = self._send_offset_fetch_request(partitions)
-            self._client.poll(future=future)
+            time.sleep(0.1)
+            log.warning("FETCH COMMITTED OFFSET ", self._client.poll(future=future))
 
             if future.succeeded():
                 return future.value

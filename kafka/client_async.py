@@ -498,7 +498,6 @@ class KafkaClient(object):
                     task_future.success(result)
             # If we got a future that is already done, dont block in _poll
             if future and future.is_done:
-                log.warning("FUTURE IS done")
                 timeout = 0
             else:
                 timeout = min(
@@ -509,7 +508,6 @@ class KafkaClient(object):
                 timeout = max(0, timeout / 1000.0) # avoid negative timeouts
 
             responses.extend(self._poll(timeout, sleep=sleep))
-            log.warning("RESPONSES %s", responses)
 
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
