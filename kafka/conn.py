@@ -221,8 +221,8 @@ class BrokerConnection(object):
                                                        socket.SOCK_STREAM)
                     except socket.gaierror as ex:
                         raise socket.gaierror('getaddrinfo failed for {0}:{1}, '
-                          'exception was {2}. Is your advertised.host.name correct'
-                          ' and resolvable?'.format(
+                          'exception was {2}. Is your advertised.listeners (called'
+                          'advertised.host.name before Kafka 9) correct and resolvable?'.format(
                              self.host, self.port, ex
                           ))
                     self._gai_index = 0
