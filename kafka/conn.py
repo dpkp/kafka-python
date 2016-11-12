@@ -140,7 +140,7 @@ class BrokerConnection(object):
             api_version_auto_timeout_ms (int): number of milliseconds to throw a
                 timeout exception from the constructor when checking the broker
                 api version. Only applies if api_version is None
-            state_chance_callback (callable): function to be called when the
+            state_change_callback (callable): function to be called when the
                 connection state changes from CONNECTING to CONNECTED etc.
             metrics (kafka.metrics.Metrics): Optionally provide a metrics
                 instance for capturing network IO stats. Default: None.
