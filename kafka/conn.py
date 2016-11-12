@@ -291,7 +291,7 @@ class BrokerConnection(object):
                           ' Disconnecting.', self, ret)
                 self.close()
 
-            # Connection timedout
+            # Connection timed out
             elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
                 self.close() # error=TimeoutError ?
