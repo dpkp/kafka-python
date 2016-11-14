@@ -65,6 +65,6 @@ def test_murmur2_java_compatibility():
 
 
 def test_murmur2_not_ascii():
-    # Verify no regression of murmur2() bug encoding py2 bytes that dont ascii encode
+    # Verify no regression of murmur2() bug encoding py2 bytes that don't ascii encode
     murmur2(b'\xa4')
     murmur2(b'\x81' * 1000)

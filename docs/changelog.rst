@@ -148,7 +148,7 @@ Producers
 ---------
 * KAFKA-3388: Fix expiration of batches sitting in the accumulator (dpkp PR 699)
 * KAFKA-3197: when max.in.flight.request.per.connection = 1, attempt to guarantee ordering (dpkp PR 698)
-* Dont use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
+* Don't use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
 
 Clients
 -------
@@ -292,7 +292,7 @@ Documentation
 
 Internals
 ---------
-* Dont override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
+* Don't override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
 * Some attributes may not exist in __del__ if we failed assertions
 * Break up some circular references and close client wake pipes on __del__ (aisch PR 554)
 

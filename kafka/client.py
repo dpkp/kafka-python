@@ -576,7 +576,7 @@ class SimpleClient(object):
                 if leader in self.brokers:
                     self.topics_to_brokers[topic_part] = self.brokers[leader]
 
-                # If Unknown Broker, fake BrokerMetadata so we dont lose the id
+                # If Unknown Broker, fake BrokerMetadata so we don't lose the id
                 # (not sure how this could happen. server could be in bad state)
                 else:
                     self.topics_to_brokers[topic_part] = BrokerMetadata(

@@ -362,7 +362,7 @@ class KafkaClient(object):
             return
 
     def is_disconnected(self, node_id):
-        """Check whether the node connection has been disconnected failed.
+        """Check whether the node connection has been disconnected or failed.
 
         A disconnected node has either been closed or has failed. Connection
         failures are usually transient and can be resumed in the next ready()
@@ -497,7 +497,7 @@ class KafkaClient(object):
                 else:
                     task_future.success(result)
 
-            # If we got a future that is already done, dont block in _poll
+            # If we got a future that is already done, don't block in _poll
             if future and future.is_done:
                 timeout = 0
             else:
