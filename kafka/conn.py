@@ -175,7 +175,7 @@ class BrokerConnection(object):
 
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
             assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
-                'sasl_mechanism must be in ' + self.SASL_MECHANISMS)
+                'sasl_mechanism must be in ' + ', '.join(self.SASL_MECHANISMS))
             if self.config['sasl_mechanism'] == 'PLAIN':
                 assert self.config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
                 assert self.config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
