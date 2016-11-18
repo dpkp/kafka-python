@@ -33,7 +33,7 @@ def fetcher(client, subscription_state):
     return Fetcher(client, subscription_state, Metrics())
 
 
-def test_init_fetches(fetcher, mocker):
+def test_send_fetches(fetcher, mocker):
     fetch_requests = [
         FetchRequest[0](
             -1, fetcher.config['fetch_max_wait_ms'],
@@ -53,19 +53,7 @@ def test_init_fetches(fetcher, mocker):
     mocker.patch.object(fetcher, '_create_fetch_requests',
                         return_value = dict(enumerate(fetch_requests)))
 
-    fetcher._records.append('foobar')
-    ret = fetcher.init_fetches()
-    assert fetcher._create_fetch_requests.call_count == 0
-    assert ret == []
-    fetcher._records.clear()
-
-    fetcher._iterator = 'foo'
-    ret = fetcher.init_fetches()
-    assert fetcher._create_fetch_requests.call_count == 0
-    assert ret == []
-    fetcher._iterator = None
-
-    ret = fetcher.init_fetches()
+    ret = fetcher.send_fetches()
     for node, request in enumerate(fetch_requests):
         fetcher._client.send.assert_any_call(node, request)
     assert len(ret) == len(fetch_requests)

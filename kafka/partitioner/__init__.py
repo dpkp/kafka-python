@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 
-from .roundrobin import RoundRobinPartitioner
+from .default import DefaultPartitioner
 from .hashed import HashedPartitioner, Murmur2Partitioner, LegacyPartitioner
+from .roundrobin import RoundRobinPartitioner
 
 __all__ = [
-    'RoundRobinPartitioner', 'HashedPartitioner', 'Murmur2Partitioner',
-    'LegacyPartitioner'
+    'DefaultPartitioner', 'RoundRobinPartitioner', 'HashedPartitioner',
+    'Murmur2Partitioner', 'LegacyPartitioner'
 ]

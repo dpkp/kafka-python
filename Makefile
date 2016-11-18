@@ -19,4 +19,4 @@ clean:
 docs:
 	tox -e docs
 
-.PHONY: docs
+.PHONY: docs test all

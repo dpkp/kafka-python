@@ -121,10 +121,12 @@ class KafkaProducer(object):
         retries (int): Setting a value greater than zero will cause the client
             to resend any record whose send fails with a potentially transient
             error. Note that this retry is no different than if the client
-            resent the record upon receiving the error. Allowing retries will
-            potentially change the ordering of records because if two records
+            resent the record upon receiving the error. Allowing retries
+            without setting max_in_flight_connections_per_connection to 1 will
+            potentially change the ordering of records because if two batches
             are sent to a single partition, and the first fails and is retried
-            but the second succeeds, then the second record may appear first.
+            but the second succeeds, then the records in the second batch may
+            appear first.
             Default: 0.
         batch_size (int): Requests sent to brokers will contain multiple
             batches, one for each partition with data available to be sent.
@@ -214,6 +216,8 @@ class KafkaProducer(object):
             establish the certificate's authenticity. default: none.
         ssl_keyfile (str): optional filename containing the client private key.
             default: none.
+        ssl_password (str): optional password to be used when loading the
+            certificate chain. default: none.
         ssl_crlfile (str): optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
@@ -278,6 +282,7 @@ class KafkaProducer(object):
         'ssl_certfile': None,
         'ssl_keyfile': None,
         'ssl_crlfile': None,
+        'ssl_password': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'metric_reporters': [],
