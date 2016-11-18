@@ -82,8 +82,8 @@ class DictReporter(AbstractMetricsReporter):
     def close(self):
         pass
 
-    def record(self, emitter, value, timestamp):
+    def record(self, metric_name, value, timestamp=None):
         pass
 
-    def get_emitter(self, metric):
+    def get_emitter(self, metric_name):
         pass
