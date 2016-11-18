@@ -578,6 +578,14 @@ class KafkaClient(object):
                     if response:
                         responses.append(response)
 
+        for conn in six.itervalues(self._conns):
+            if conn.requests_timed_out():
+                log.warning('%s timed out after %s ms. Closing connection.',
+                            conn, conn.config['request_timeout_ms'])
+                conn.close(error=Errors.RequestTimedOutError(
+                    'Request timed out after %s ms' %
+                    conn.config['request_timeout_ms']))
+
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
         return responses
