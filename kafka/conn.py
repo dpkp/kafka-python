@@ -575,14 +575,6 @@ class BrokerConnection(object):
             log.warning('%s: No in-flight-requests to recv', self)
             return None
 
-        elif self._requests_timed_out():
-            log.warning('%s timed out after %s ms. Closing connection.',
-                        self, self.config['request_timeout_ms'])
-            self.close(error=Errors.RequestTimedOutError(
-                'Request timed out after %s ms' %
-                self.config['request_timeout_ms']))
-            return None
-
         return self._recv()
 
     def _recv(self):
@@ -719,7 +711,7 @@ class BrokerConnection(object):
         self._processing = False
         return response
 
-    def _requests_timed_out(self):
+    def requests_timed_out(self):
         if self.in_flight_requests:
             oldest_at = self.in_flight_requests[0].timestamp
             timeout = self.config['request_timeout_ms'] / 1000.0
