@@ -708,18 +708,11 @@ class KafkaClient(object):
                 self._last_no_node_available_ms = time.time() * 1000
                 return timeout
 
-            topics = list(self._topics)
-            if self.cluster.need_all_topic_metadata:
-                if self.config['api_version'] < (0, 10):
-                    topics = []
-                else:
-                    topics = None
-
             if self._can_send_request(node_id):
-                if self.config['api_version'] < (0, 10):
-                    api_version = 0
-                else:
-                    api_version = 1
+                topics = list(self._topics)
+                if self.cluster.need_all_topic_metadata or not topics:
+                    topics = [] if self.config['api_version'] < (0, 10) else None
+                api_version = 0 if self.config['api_version'] < (0, 10) else 1
                 request = MetadataRequest[api_version](topics)
                 log.debug("Sending metadata request %s to node %s", request, node_id)
                 future = self.send(node_id, request)
