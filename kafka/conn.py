@@ -575,7 +575,15 @@ class BrokerConnection(object):
             log.warning('%s: No in-flight-requests to recv', self)
             return None
 
-        return self._recv()
+        response = self._recv()
+        if not response and self.requests_timed_out():
+            log.warning('%s timed out after %s ms. Closing connection.',
+                        self, self.config['request_timeout_ms'])
+            self.close(error=Errors.RequestTimedOutError(
+                'Request timed out after %s ms' %
+                self.config['request_timeout_ms']))
+            return None
+        return response
 
     def _recv(self):
         # Not receiving is the state of reading the payload header
