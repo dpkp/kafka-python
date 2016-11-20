@@ -116,7 +116,8 @@ class KafkaConsumer(six.Iterator):
             rebalances. Default: 3000
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group managementment facilities. Default: 30000
-        max_poll_records (int): ....
+        max_poll_records (int): The maximum number of records returned in a
+            single call to poll().
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
