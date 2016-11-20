@@ -133,7 +133,7 @@ class SubscriptionState(object):
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
-        if isinstance(topics, str):
+        if isinstance(topics, six.string_types):
             topics = [topics]
 
         if self.subscription == set(topics):
@@ -141,7 +141,7 @@ class SubscriptionState(object):
                         topics)
             return
 
-        if any(not isinstance(t, str) for t in topics):
+        if any(not isinstance(t, six.string_types) for t in topics):
             raise TypeError('All topics must be strings')
 
         log.info('Updating subscribed topics to: %s', topics)
