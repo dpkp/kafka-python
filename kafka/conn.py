@@ -151,7 +151,7 @@ class BrokerConnection(object):
             sasl_plain_username (str): username for sasl PLAIN authentication.
                 Default: None
             sasl_plain_password (str): passowrd for sasl PLAIN authentication.
-                Defualt: None
+                Default: None
         """
         self.host = host
         self.hostname = host
