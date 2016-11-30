@@ -39,7 +39,7 @@ DEFAULT_CONSUMER_CONFIG = {
     'auto_commit_interval_ms': 60 * 1000,
     'auto_commit_interval_messages': None,
     'consumer_timeout_ms': -1,
-    'metrics_responder': None,
+    'metrics_reporter': None,
     'offset_storage': 'zookeeper',
 
     # Currently unused
@@ -141,13 +141,13 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
-        self.metrics_responder = self._config['metrics_responder']
+        self.metrics_reporter = self._config['metrics_reporter']
 
         self._client = SimpleClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0),
-            metrics_responder=self.metrics_responder
+            metrics_reporter=self.metrics_reporter
         )
 
     def set_topic_partitions(self, *topics):
@@ -357,8 +357,8 @@ class KafkaConsumer(object):
         for resp in responses:
 
             if isinstance(resp, FailedPayloadsError):
-                if self.metrics_responder:
-                    self.metrics_responder('failed_payloads_count', 1)
+                if self.metrics_reporter:
+                    self.metrics_reporter('failed_payloads_count', 1)
 
                 logger.warning('FailedPayloadsError attempting to fetch data')
                 self._refresh_metadata_on_error()
@@ -369,8 +369,8 @@ class KafkaConsumer(object):
             try:
                 check_error(resp)
             except OffsetOutOfRangeError:
-                if self.metrics_responder:
-                    self.metrics_responder('offset_out_of_range_count', 1)
+                if self.metrics_reporter:
+                    self.metrics_reporter('offset_out_of_range_count', 1)
 
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
@@ -384,8 +384,8 @@ class KafkaConsumer(object):
                 continue
 
             except NotLeaderForPartitionError:
-                if self.metrics_responder:
-                    self.metrics_responder('not_leader_for_partition_count', 1)
+                if self.metrics_reporter:
+                    self.metrics_reporter('not_leader_for_partition_count', 1)
 
                 logger.warning("NotLeaderForPartitionError for %s - %d. "
                                "Metadata may be out of date",
@@ -394,8 +394,8 @@ class KafkaConsumer(object):
                 continue
 
             except RequestTimedOutError:
-                if self.metrics_responder:
-                    self.metrics_responder('request_timed_out_count', 1)
+                if self.metrics_reporter:
+                    self.metrics_reporter('request_timed_out_count', 1)
 
                 logger.warning("RequestTimedOutError for %s - %d",
                                topic, partition)
