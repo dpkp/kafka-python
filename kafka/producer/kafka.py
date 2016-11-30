@@ -246,7 +246,7 @@ class KafkaProducer(object):
         sasl_plain_username (str): username for sasl PLAIN authentication.
             Default: None
         sasl_plain_password (str): password for sasl PLAIN authentication.
-            Defualt: None
+            Default: None
 
     Note:
         Configuration parameters are described in more detail at
