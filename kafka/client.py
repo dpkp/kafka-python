@@ -46,8 +46,8 @@ def time_metric(metric_name):
             start_time = time.time()
             ret = fn(self, *args, **kwargs)
 
-            if self.metrics_responder:
-                self.metrics_responder.record(metric_name, time.time() - start_time)
+            if self.metrics_reporter:
+                self.metrics_reporter.record(metric_name, time.time() - start_time)
 
             return ret
         return wrapper
@@ -65,13 +65,13 @@ class SimpleClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0, metrics_responder=None):
+                 correlation_id=0, metrics_reporter=None):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
-        self.metrics_responder = metrics_responder
+        self.metrics_reporter = metrics_reporter
 
         self._conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
@@ -89,8 +89,8 @@ class SimpleClient(object):
         host_key = (host, port)
         if host_key not in self._conns:
             metrics = None
-            if self.metrics_responder:
-                metrics = Metrics(reporters=[self.metrics_responder])
+            if self.metrics_reporter:
+                metrics = Metrics(reporters=[self.metrics_reporter])
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
