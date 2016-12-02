@@ -296,6 +296,7 @@ class KafkaProducer(object):
 
     def __init__(self, **configs):
         log.debug("Starting the Kafka producer") # trace
+        self.cluster_reachable = True
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -332,28 +333,32 @@ class KafkaProducer(object):
         client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
                              **self.config)
 
-        # Get auto-discovered version from client if necessary
-        if self.config['api_version'] is None:
-            self.config['api_version'] = client.config['api_version']
+        if client.reachable:
+            # Only needed when actually kafka cluster is reachable
+            # Get auto-discovered version from client if necessary
+            if self.config['api_version'] is None:
+                self.config['api_version'] = client.config['api_version']
 
-        if self.config['compression_type'] == 'lz4':
-            assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
+            if self.config['compression_type'] == 'lz4':
+                assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
 
-        message_version = 1 if self.config['api_version'] >= (0, 10) else 0
-        self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
-        self._metadata = client.cluster
-        guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
-        self._sender = Sender(client, self._metadata,
-                              self._accumulator, self._metrics,
-                              guarantee_message_order=guarantee_message_order,
-                              **self.config)
-        self._sender.daemon = True
-        self._sender.start()
-        self._closed = False
+            message_version = 1 if self.config['api_version'] >= (0, 10) else 0
+            self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
+            self._metadata = client.cluster
+            guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
+            self._sender = Sender(client, self._metadata,
+                                  self._accumulator, self._metrics,
+                                  guarantee_message_order=guarantee_message_order,
+                                  **self.config)
+            self._sender.daemon = True
+            self._sender.start()
+            self._closed = False
 
-        self._cleanup = self._cleanup_factory()
-        atexit.register(self._cleanup)
-        log.debug("Kafka producer started")
+            self._cleanup = self._cleanup_factory()
+            atexit.register(self._cleanup)
+            log.debug("Kafka producer started")
+        else:
+            self.cluster_reachable = False
 
     def _cleanup_factory(self):
         """Build a cleanup clojure that doesn't increase our ref count"""
