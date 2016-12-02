@@ -91,11 +91,11 @@ class SimpleClient(object):
         Returns the leader for a partition or None if the partition exists
         but has no leader.
 
-        UnknownTopicOrPartitionError will be raised if the topic or partition
-        is not part of the metadata.
-
-        LeaderNotAvailableError is raised if server has metadata, but there is
-        no current leader
+        Raises:
+            UnknownTopicOrPartitionError: If the topic or partition is not part
+                of the metadata.
+            LeaderNotAvailableError: If the server has metadata, but there is no
+        current leader.
         """
 
         key = TopicPartition(topic, partition)
@@ -435,8 +435,8 @@ class SimpleClient(object):
         Create an inactive copy of the client object, suitable for passing
         to a separate thread.
 
-        Note that the copied connections are not initialized, so reinit() must
-        be called on the returned copy.
+        Note that the copied connections are not initialized, so :meth:`.reinit`
+        must be called on the returned copy.
         """
         _conns = self._conns
         self._conns = {}
