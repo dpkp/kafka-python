@@ -57,21 +57,13 @@ class AbstractMetricsReporter(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_emitter(self, metric_name):
-        """
-        Called to return an instance of an emitter
-
-        Arguments:
-            metric_name (str): the name of the metric
-        """
-
-    @abc.abstractmethod
-    def record(self, metric_name, value, timestamp=None):
+    def record(self, metric, value, timestamp, config):
         """
         Called to record and emit metrics
 
         Arguments:
-            metric_name: name of the metric to be recorded
-            value(float): value to be emitted
+            metric: KafkaMetric object of the metric to be recorded
+            value(float): value to be recorded
             timestamp: the time the value was recorded at
+            config: sensor config
         """
