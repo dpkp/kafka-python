@@ -274,7 +274,7 @@ class BrokerConnection(object):
                     self.afi = self._sock.family
                     self._gai = None
             except socket.error as err:
-                ret = err
+                ret = err.errno
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
