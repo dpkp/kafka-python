@@ -67,11 +67,21 @@ class Sensor(object):
         """
         if time_ms is None:
             time_ms = time.time() * 1000
-        for reporter in self.reporters:
-            reporter.record(self._name, value, time_ms)
         self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
+            for metric in self._metrics:
+                # Some metrics are not stats and they don't have any measurable
+                # we cannot report them.
+                if hasattr(metric, 'measurable'):
+                    for reporter in self.reporters:
+                        reporter.record(
+                            self._name,
+                            metric,
+                            value,
+                            time_ms,
+                            self._config,
+                        )
             for stat in self._stats:
                 stat.record(self._config, value, time_ms)
             self._check_quotas(time_ms)
