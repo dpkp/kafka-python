@@ -24,7 +24,7 @@ class Sensor(object):
         self._name = name
         self._parents = parents or []
         self._metrics = []
-        self._stats = []
+        self._stats = set()
         self._config = config
         self._inactive_sensor_expiration_time_ms = (
             inactive_sensor_expiration_time_seconds * 1000)
@@ -71,10 +71,18 @@ class Sensor(object):
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
             for metric in self._metrics:
-                if hasattr(metric, 'measurable'):
+                # Some metrics are not stats and they don't have any measurable
+                # we cannot report them.
+                if metric in self._stats:
+                    for reporter in self.reporters:
+                        reporter.record(
+                            self._name,
+                            metric,
+                            value,
+                            time_ms,
+                            self._config,
+                        )
                     metric.measurable.record(self._config, value, time_ms)
-                for reporter in self.reporters:
-                    reporter.record(self._name, metric, value, time_ms, self._config)
             self._check_quotas(time_ms)
         for parent in self._parents:
             parent.record(value, time_ms)
@@ -107,7 +115,7 @@ class Sensor(object):
         """
         if not compound_stat:
             raise ValueError('compound stat must be non-empty')
-        self._stats.append(compound_stat)
+        self._stats.add(compound_stat)
         for named_measurable in compound_stat.stats():
             metric = KafkaMetric(named_measurable.name, named_measurable.stat,
                                  config or self._config)
@@ -128,7 +136,7 @@ class Sensor(object):
             metric = KafkaMetric(metric_name, stat, config or self._config)
             self._registry.register_metric(metric)
             self._metrics.append(metric)
-            self._stats.append(stat)
+            self._stats.add(stat)
 
     def has_expired(self):
         """
