@@ -17,6 +17,7 @@ from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
                           GroupCoordinatorNotAvailableError, GroupLoadInProgressError)
 from kafka.structs import TopicPartition, BrokerMetadata
 from kafka.metrics.metrics import Metrics
+from kafka.metrics.stat.avg import Avg
 
 from kafka.conn import (
     collect_hosts, BrokerConnection,
@@ -46,8 +47,10 @@ def time_metric(metric_name):
             start_time = time.time()
             ret = fn(self, *args, **kwargs)
 
-            if self.metrics_reporter:
-                self.metrics_reporter.record(metric_name, time.time() - start_time)
+            self.metrics.record(
+                metric_name,
+                (time.time() - start_time) * 1000,
+            )
 
             return ret
         return wrapper
@@ -65,13 +68,14 @@ class SimpleClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0, metrics_reporter=None):
+                 correlation_id=0, metrics=None):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
-        self.metrics_reporter = metrics_reporter
+        self._metrics = metrics
+        self.metrics = SimpleClientMetrics(metrics if metrics else Metrics())
 
         self._conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
@@ -88,14 +92,11 @@ class SimpleClient(object):
         """Get or create a connection to a broker using host and port"""
         host_key = (host, port)
         if host_key not in self._conns:
-            metrics = None
-            if self.metrics_reporter:
-                metrics = Metrics(reporters=[self.metrics_reporter])
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
                 client_id=self.client_id,
-                metrics=metrics
+                metrics=self._metrics
             )
 
         conn = self._conns[host_key]
@@ -751,3 +752,26 @@ class SimpleClient(object):
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
+
+
+class SimpleClientMetrics(object):
+
+    def __init__(self, metrics):
+        self.metrics = metrics
+        self.group_name = 'simple-client'
+        self.request_timers = {}
+
+    def record(self, request_name, value):
+        timer = self.request_timers.setdefault(
+            request_name,
+            self.metrics.sensor(request_name.replace('_', '-').add(
+                self.metrics.metric_name(
+                    'request-time-avg',
+                    self.group,
+                    "Time latency for request {}".format(request_name),
+                    {'request-type': request_name.replace('_', '-')},
+                ),
+                Avg(),
+            )),
+        )
+        timer.record(value)
