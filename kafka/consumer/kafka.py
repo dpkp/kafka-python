@@ -143,7 +143,9 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
-        metrics = Metrics(reporters=[self._config['metrics_reporter']()])
+        reporters = [self._config['metrics_reporter']()] if \
+            self._config['metrics_reporter'] else []
+        metrics = Metrics(reporters=reporters)
         self.metrics = KafkaConsumerMetrics(metrics)
 
         self._client = SimpleClient(

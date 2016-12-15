@@ -74,7 +74,7 @@ class SimpleClient(object):
         self.timeout = timeout
         self.hosts = collect_hosts(hosts)
         self.correlation_id = correlation_id
-        self._metrics = metrics
+        self._metrics_registry = metrics
         self.metrics = SimpleClientMetrics(metrics if metrics else Metrics())
 
         self._conns = {}
@@ -96,7 +96,7 @@ class SimpleClient(object):
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
                 client_id=self.client_id,
-                metrics=self._metrics
+                metrics=self._metrics_registry
             )
 
         conn = self._conns[host_key]
@@ -451,8 +451,17 @@ class SimpleClient(object):
         """
         _conns = self._conns
         self._conns = {}
+        _metrics_registry = self._metrics_registry
+        self._metrics_registry = None
+        _metrics = self.metrics
+        self.metrics = None
+
         c = copy.deepcopy(self)
         self._conns = _conns
+        self.metrics = _metrics
+        self._metrics_registry = _metrics_registry
+        c.metrics = _metrics
+        c._metrics_registry = _metrics_registry
         return c
 
     def reinit(self):
@@ -762,6 +771,10 @@ class SimpleClientMetrics(object):
         self.request_timers = {}
 
     def record(self, request_name, value):
+        # Note: there is a possible race condition here when using async simple
+        # producer. A metric can be added twice to the same sensor and reported
+        # twice. This case should be extremely rare and shouldn't be too bad for
+        # metrics.
         timer = self.request_timers.get(request_name)
         if not timer:
             timer = self.metrics.sensor(request_name.replace('_', '-'))
