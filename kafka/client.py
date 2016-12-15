@@ -17,7 +17,7 @@ from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
                           GroupCoordinatorNotAvailableError, GroupLoadInProgressError)
 from kafka.structs import TopicPartition, BrokerMetadata
 from kafka.metrics.metrics import Metrics
-from kafka.metrics.stat.avg import Avg
+from kafka.metrics.stats.avg import Avg
 
 from kafka.conn import (
     collect_hosts, BrokerConnection,
@@ -762,16 +762,17 @@ class SimpleClientMetrics(object):
         self.request_timers = {}
 
     def record(self, request_name, value):
-        timer = self.request_timers.setdefault(
-            request_name,
-            self.metrics.sensor(request_name.replace('_', '-').add(
+        timer = self.request_timers.get(request_name)
+        if not timer:
+            timer = self.metrics.sensor(request_name.replace('_', '-'))
+            timer.add(
                 self.metrics.metric_name(
                     'request-time-avg',
-                    self.group,
+                    self.group_name,
                     "Time latency for request {}".format(request_name),
                     {'request-type': request_name.replace('_', '-')},
                 ),
                 Avg(),
-            )),
-        )
+            )
+            self.request_timers[request_name] = timer
         timer.record(value)

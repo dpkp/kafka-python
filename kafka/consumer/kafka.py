@@ -360,7 +360,7 @@ class KafkaConsumer(object):
         for resp in responses:
 
             if isinstance(resp, FailedPayloadsError):
-                self.metrics.record_count('failed-payloads', 1)
+                self.metrics.record('failed-payloads', 1)
 
                 logger.warning('FailedPayloadsError attempting to fetch data')
                 self._refresh_metadata_on_error()
@@ -371,7 +371,7 @@ class KafkaConsumer(object):
             try:
                 check_error(resp)
             except OffsetOutOfRangeError:
-                self.metrics.record_count('offset-out-of-range', 1)
+                self.metrics.record('offset-out-of-range', 1)
 
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
@@ -385,7 +385,7 @@ class KafkaConsumer(object):
                 continue
 
             except NotLeaderForPartitionError:
-                self.metrics.record_count('not-leader-for-partition', 1)
+                self.metrics.record('not-leader-for-partition', 1)
 
                 logger.warning("NotLeaderForPartitionError for %s - %d. "
                                "Metadata may be out of date",
@@ -394,7 +394,7 @@ class KafkaConsumer(object):
                 continue
 
             except RequestTimedOutError:
-                self.metrics.record_count('request-timed-out', 1)
+                self.metrics.record('request-timed-out', 1)
 
                 logger.warning("RequestTimedOutError for %s - %d",
                                topic, partition)
@@ -811,20 +811,21 @@ class KafkaConsumer(object):
 class KafkaConsumerMetrics(object):
 
     def __init__(self, metrics):
-        self._metrics = metrics
+        self.metrics = metrics
         self.group_name = 'legacy-kafka-consumer'
-        self.counters = {}
+        self.sensors = {}
 
-    def record_count(self, counter_name, value):
-        counter = self.counters.setdefault(
-            counter_name,
-            self.metrics.sensor(counter_name).add(
+    def record(self, sensor_name, value):
+        sensor = self.sensors.get(sensor_name)
+        if not sensor:
+            sensor = self.metrics.sensor(sensor_name)
+            sensor.add(
                 self.metrics.metric_name(
-                    counter_name + '-rate',
-                    self.group,
-                    "Rate of {}".format(counter_name),
+                    sensor_name + '-rate',
+                    self.group_name,
+                    "Rate of {}".format(sensor_name),
                 ),
                 Rate(),
-            )),
-        )
-        counter.record(value)
+            )
+            self.sensors[sensor_name] = sensor
+        sensor.record(value)
