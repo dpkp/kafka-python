@@ -15,6 +15,8 @@ from kafka.common import (
     OffsetOutOfRangeError, RequestTimedOutError, KafkaMessage, ConsumerTimeout,
     FailedPayloadsError, KafkaUnavailableError, KafkaConfigurationError
 )
+from kafka.metrics.metrics import Metrics
+from kafka.metrics.stats.rate import Rate
 from kafka.structs import (
     FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
     OffsetRequestPayload
@@ -141,13 +143,16 @@ class KafkaConsumer(object):
                 'bootstrap_servers required to configure KafkaConsumer'
             )
 
-        self.metrics_reporter = self._config['metrics_reporter']
+        reporters = [self._config['metrics_reporter']()] if \
+            self._config['metrics_reporter'] else []
+        metrics = Metrics(reporters=reporters)
+        self.metrics = KafkaConsumerMetrics(metrics)
 
         self._client = SimpleClient(
             self._config['bootstrap_servers'],
             client_id=self._config['client_id'],
             timeout=(self._config['socket_timeout_ms'] / 1000.0),
-            metrics_reporter=self.metrics_reporter
+            metrics=metrics,
         )
 
     def set_topic_partitions(self, *topics):
@@ -357,8 +362,7 @@ class KafkaConsumer(object):
         for resp in responses:
 
             if isinstance(resp, FailedPayloadsError):
-                if self.metrics_reporter:
-                    self.metrics_reporter('failed_payloads_count', 1)
+                self.metrics.record('failed-payloads', 1)
 
                 logger.warning('FailedPayloadsError attempting to fetch data')
                 self._refresh_metadata_on_error()
@@ -369,8 +373,7 @@ class KafkaConsumer(object):
             try:
                 check_error(resp)
             except OffsetOutOfRangeError:
-                if self.metrics_reporter:
-                    self.metrics_reporter('offset_out_of_range_count', 1)
+                self.metrics.record('offset-out-of-range', 1)
 
                 logger.warning('OffsetOutOfRange: topic %s, partition %d, '
                                'offset %d (Highwatermark: %d)',
@@ -384,8 +387,7 @@ class KafkaConsumer(object):
                 continue
 
             except NotLeaderForPartitionError:
-                if self.metrics_reporter:
-                    self.metrics_reporter('not_leader_for_partition_count', 1)
+                self.metrics.record('not-leader-for-partition', 1)
 
                 logger.warning("NotLeaderForPartitionError for %s - %d. "
                                "Metadata may be out of date",
@@ -394,8 +396,7 @@ class KafkaConsumer(object):
                 continue
 
             except RequestTimedOutError:
-                if self.metrics_reporter:
-                    self.metrics_reporter('request_timed_out_count', 1)
+                self.metrics.record('request-timed-out', 1)
 
                 logger.warning("RequestTimedOutError for %s - %d",
                                topic, partition)
@@ -807,3 +808,26 @@ class KafkaConsumer(object):
                 if new not in configs:
                     configs[new] = old_value
         return configs
+
+
+class KafkaConsumerMetrics(object):
+
+    def __init__(self, metrics):
+        self.metrics = metrics
+        self.group_name = 'legacy-kafka-consumer'
+        self.sensors = {}
+
+    def record(self, sensor_name, value):
+        sensor = self.sensors.get(sensor_name)
+        if not sensor:
+            sensor = self.metrics.sensor(sensor_name)
+            sensor.add(
+                self.metrics.metric_name(
+                    sensor_name + '-rate',
+                    self.group_name,
+                    "Rate of {}".format(sensor_name),
+                ),
+                Rate(),
+            )
+            self.sensors[sensor_name] = sensor
+        sensor.record(value)
