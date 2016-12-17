@@ -519,6 +519,7 @@ class BrokerConnection(object):
         return self._send(request, expect_response=expect_response)
 
     def _send(self, request, expect_response=True):
+        assert self.state in (ConnectionStates.AUTHENTICATING, ConnectionStates.CONNECTED)
         future = Future()
         correlation_id = self._next_correlation_id()
         header = RequestHeader(request,
