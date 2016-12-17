@@ -229,7 +229,7 @@ class KafkaClient(object):
             bootstrap.connect()
             while bootstrap.connecting():
                 bootstrap.connect()
-            if bootstrap.state is not ConnectionStates.CONNECTED:
+            if not bootstrap.connected():
                 bootstrap.close()
                 continue
             future = bootstrap.send(metadata_request)
@@ -261,7 +261,7 @@ class KafkaClient(object):
                 return True
             return False
         conn = self._conns[node_id]
-        return conn.state is ConnectionStates.DISCONNECTED and not conn.blacked_out()
+        return conn.disconnected() and not conn.blacked_out()
 
     def _conn_state_change(self, node_id, conn):
         if conn.connecting():
@@ -398,7 +398,7 @@ class KafkaClient(object):
 
         conn = self._conns[node_id]
         time_waited_ms = time.time() - (conn.last_attempt or 0)
-        if conn.state is ConnectionStates.DISCONNECTED:
+        if conn.disconnected():
             return max(self.config['reconnect_backoff_ms'] - time_waited_ms, 0)
         elif conn.connecting():
             return 0
