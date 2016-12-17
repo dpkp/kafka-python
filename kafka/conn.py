@@ -154,8 +154,8 @@ class BrokerConnection(object):
             sasl_plain_password (str): password for sasl PLAIN authentication.
                 Default: None
         """
-        self.host = host
         self.hostname = host
+        self.host = host
         self.port = port
         self.afi = afi
         self._init_host = host
@@ -194,7 +194,6 @@ class BrokerConnection(object):
         self._receiving = False
         self._next_payload_bytes = 0
         self.last_attempt = 0
-        self.last_failure = 0
         self._processing = False
         self._correlation_id = 0
         self._gai = None
@@ -363,7 +362,6 @@ class BrokerConnection(object):
         except ssl.SSLError as e:
             log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
             self.close(e)
-            self.last_failure = time.time()
 
     def _try_handshake(self):
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
@@ -496,7 +494,6 @@ class BrokerConnection(object):
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
-        self.last_failure = time.time()
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)
