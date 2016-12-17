@@ -207,7 +207,6 @@ class BrokerConnection(object):
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
-            self.close()
             log.debug('%s: creating new socket', str(self))
             # if self.afi is set to AF_UNSPEC, then we need to do a name
             # resolution and try all available address families
