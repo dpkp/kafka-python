@@ -556,7 +556,7 @@ class KafkaClient(object):
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
                     pass
-                conn.close()
+                conn.close(Errors.ConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
 
             # Accumulate as many responses as the connection has pending

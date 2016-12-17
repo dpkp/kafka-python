@@ -9,6 +9,7 @@ from random import shuffle
 import socket
 import ssl
 import time
+import traceback
 
 from kafka.vendor import six
 
@@ -289,12 +290,12 @@ class BrokerConnection(object):
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
-                self.close()
+                self.close(Errors.ConnectionError(ret))
 
             # Connection timedout
             elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
-                self.close() # error=TimeoutError ?
+                self.close(Errors.ConnectionError('timeout'))
 
             # Needs retry
             else:
@@ -341,9 +342,9 @@ class BrokerConnection(object):
                     password=self.config['ssl_password'])
             if self.config['ssl_crlfile']:
                 if not hasattr(ssl, 'VERIFY_CRL_CHECK_LEAF'):
-                    log.error('%s: No CRL support with this version of Python.'
-                              ' Disconnecting.', self)
-                    self.close()
+                    error = 'No CRL support with this version of Python.'
+                    log.error('%s: %s Disconnecting.', self, error)
+                    self.close(Errors.ConnectionError(error))
                     return
                 log.info('%s: Loading SSL CRL from %s', str(self), self.config['ssl_crlfile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
@@ -355,9 +356,9 @@ class BrokerConnection(object):
                 self._sock,
                 server_hostname=self.hostname,
                 do_handshake_on_connect=False)
-        except ssl.SSLError:
+        except ssl.SSLError as e:
             log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
-            self.close()
+            self.close(e)
             self.last_failure = time.time()
 
     def _try_handshake(self):
@@ -370,7 +371,7 @@ class BrokerConnection(object):
             pass
         except ssl.SSLZeroReturnError:
             log.warning('SSL connection closed by server during handshake.')
-            self.close()
+            self.close(Errors.ConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
 
         return False
@@ -478,9 +479,15 @@ class BrokerConnection(object):
                 will be failed with this exception.
                 Default: kafka.errors.ConnectionError.
         """
-        if self.state is not ConnectionStates.DISCONNECTED:
-            self.state = ConnectionStates.DISCONNECTING
-            self.config['state_change_callback'](self)
+        if self.state is ConnectionStates.DISCONNECTED:
+            if error is not None:
+                log.warning('%s: close() called on disconnected connection with error: %s', self, error)
+                traceback.print_stack()
+            return
+
+        log.info('%s: Closing connection. %s', self, error or '')
+        self.state = ConnectionStates.DISCONNECTING
+        self.config['state_change_callback'](self)
         if self._sock:
             self._sock.close()
             self._sock = None
@@ -568,7 +575,7 @@ class BrokerConnection(object):
             # If requests are pending, we should close the socket and
             # fail all the pending request futures
             if self.in_flight_requests:
-                self.close()
+                self.close(Errors.ConnectionError('Socket not connected during recv with in-flight-requests'))
             return None
 
         elif not self.in_flight_requests:
@@ -695,7 +702,7 @@ class BrokerConnection(object):
                 '%s: Correlation IDs do not match: sent %d, recv %d'
                 % (str(self), ifr.correlation_id, recv_correlation_id))
             ifr.future.failure(error)
-            self.close()
+            self.close(error)
             self._processing = False
             return None
 
@@ -709,8 +716,9 @@ class BrokerConnection(object):
                       ' Unable to decode %d-byte buffer: %r', self,
                       ifr.correlation_id, ifr.response_type,
                       ifr.request, len(buf), buf)
-            ifr.future.failure(Errors.UnknownError('Unable to decode response'))
-            self.close()
+            error = Errors.UnknownError('Unable to decode response')
+            ifr.future.failure(error)
+            self.close(error)
             self._processing = False
             return None
 
