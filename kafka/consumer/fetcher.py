@@ -542,12 +542,12 @@ class Fetcher(six.Iterator):
             raise
 
     def _deserialize(self, msg):
-        if self.config['key_deserializer']:
-            key = self.config['key_deserializer'](msg.key) # pylint: disable-msg=not-callable
+        if self.config['key_deserializer'] and msg.key is not None:
+            key = self.config['key_deserializer'](msg.key)  # pylint: disable-msg=not-callable
         else:
             key = msg.key
         if self.config['value_deserializer']:
-            value = self.config['value_deserializer'](msg.value) # pylint: disable-msg=not-callable
+            value = self.config['value_deserializer'](msg.value)  # pylint: disable-msg=not-callable
         else:
             value = msg.value
         return key, value
