@@ -236,7 +236,7 @@ class Fetcher(six.Iterator):
         current_out_of_range_partitions = {}
 
         # filter only the fetchable partitions
-        for partition, offset in self._offset_out_of_range_partitions:
+        for partition, offset in six.iteritems(self._offset_out_of_range_partitions):
             if not self._subscriptions.is_fetchable(partition):
                 log.debug("Ignoring fetched records for %s since it is no"
                           " longer fetchable", partition)
