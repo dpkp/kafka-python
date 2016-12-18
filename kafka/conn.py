@@ -274,7 +274,7 @@ class BrokerConnection(object):
                     self.afi = self._sock.family
                     self._gai = None
             except socket.error as err:
-                ret = err
+                ret = self._get_errno(err)
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
@@ -321,6 +321,11 @@ class BrokerConnection(object):
                 self.config['state_change_callback'](self)
 
         return self.state
+
+    def _get_errno(self, socket_error):
+        if isinstance(socket_error, BlockingIOError):
+            return socket_error.errno
+        return socket_error
 
     def _wrap_ssl(self):
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
