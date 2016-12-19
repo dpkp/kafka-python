@@ -625,7 +625,7 @@ class KafkaProducer(object):
             assert partition in self._metadata.partitions_for_topic(topic), 'Unrecognized partition'
             return partition
 
-        all_partitions = sorted(list(self._metadata.partitions_for_topic(topic)))
+        all_partitions = sorted(self._metadata.partitions_for_topic(topic))
         available = list(self._metadata.available_partitions_for_topic(topic))
         return self.config['partitioner'](serialized_key,
                                           all_partitions,
