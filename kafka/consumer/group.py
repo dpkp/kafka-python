@@ -503,6 +503,9 @@ class KafkaConsumer(six.Iterator):
                 data is not available in the buffer. If 0, returns immediately
                 with any records that are available currently in the buffer,
                 else returns empty. Must not be negative. Default: 0
+            max_records (int, optional): The maximum number of records returned
+                in a single call to :meth:`poll`. Default: Inherit value from
+                max_poll_records.
 
         Returns:
             dict: topic to list of records since the last fetch for the
