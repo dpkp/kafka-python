@@ -26,6 +26,7 @@ from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message)
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner, Murmur2Partitioner
 from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.serializer import Serializer, Deserializer
 
 # To be deprecated when KafkaProducer interface is released
 from kafka.client import SimpleClient
