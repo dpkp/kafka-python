@@ -261,3 +261,7 @@ class Metrics(object):
         """Close this metrics repository."""
         for reporter in self._reporters:
             reporter.close()
+
+    def init(self):
+        for reporter in self._reporters:
+            reporter.init()
