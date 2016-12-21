@@ -32,8 +32,8 @@ def reporter():
 @pytest.fixture
 def metrics(request, config, reporter):
     metrics = Metrics(config, [reporter], enable_expiration=True)
-    request.addfinalizer(lambda: metrics.close())
-    return metrics
+    yield metrics
+    metrics.close()
 
 
 def test_MetricName():
