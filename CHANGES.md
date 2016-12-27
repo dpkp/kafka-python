@@ -6,6 +6,7 @@ Core
 Consumer
 * KAFKA-3007: KafkaConsumer max_poll_records (dpkp 831)
 * Raise exception if given a non-str topic (ssaamm 824)
+* Immediately update metadata for pattern subscription (laz2 915)
 
 Producer
 * Update Partitioners for use with KafkaProducer (barrotsteindev 827)
@@ -17,7 +18,7 @@ Client
 
 Bugfixes
 * Fix errorcode check when socket.connect_ex raises an exception (guojh 907)
-* Fix fetcher bug when processing offset out of range (dpkp 911)
+* Fix fetcher bug when processing offset out of range (sibiryakov 860)
 * Fix possible request draining in ensure_active_group (dpkp 896)
 * Fix metadata refresh handling with 0.10+ brokers when topic list is empty (sibiryakov 867)
 * KafkaProducer should set timestamp in Message if provided (Drizzt1991 875)
