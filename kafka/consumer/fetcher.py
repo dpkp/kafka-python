@@ -747,12 +747,12 @@ class Fetcher(six.Iterator):
                     self._client.cluster.request_update()
                 elif error_type is Errors.OffsetOutOfRangeError:
                     fetch_offset = fetch_offsets[tp]
+                    log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
                     if self._subscriptions.has_default_offset_reset_policy():
                         self._subscriptions.need_offset_reset(tp)
+                        log.info("Resetting offset for topic-partition %s", tp)
                     else:
                         self._offset_out_of_range_partitions[tp] = fetch_offset
-                    log.info("Fetch offset %s is out of range, resetting offset",
-                             fetch_offset)
                 elif error_type is Errors.TopicAuthorizationFailedError:
                     log.warn("Not authorized to read from topic %s.", tp.topic)
                     self._unauthorized_topics.add(tp.topic)
