@@ -772,6 +772,7 @@ class KafkaConsumer(six.Iterator):
         if pattern is not None:
             self._client.cluster.need_all_topic_metadata = True
             self._client.set_topics([])
+            self._client.cluster.request_update()
             log.debug("Subscribed to topic pattern: %s", pattern)
         else:
             self._client.cluster.need_all_topic_metadata = False
