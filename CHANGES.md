@@ -1,4 +1,4 @@
-# Unreleased
+# 1.3.2 (Dec 28, 2016)
 
 Core
 * Add kafka.serializer interfaces (dpkp 912)
