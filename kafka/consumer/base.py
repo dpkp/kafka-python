@@ -110,7 +110,7 @@ class Consumer(object):
         for resp in responses:
             try:
                 check_error(resp)
-            # API spec says server wont set an error here
+            # API spec says server won't set an error here
             # but 0.8.1.1 does actually...
             except UnknownTopicOrPartitionError:
                 pass
