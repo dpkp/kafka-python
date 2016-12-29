@@ -2,6 +2,8 @@
 
 Core
 * Add kafka.serializer interfaces (dpkp 912)
+* from kafka import ConsumerRebalanceListener, OffsetAndMetadata
+* Use 0.10.0.1 for integration tests (dpkp 803)
 
 Consumer
 * KAFKA-3007: KafkaConsumer max_poll_records (dpkp 831)
@@ -11,6 +13,7 @@ Consumer
 Producer
 * Update Partitioners for use with KafkaProducer (barrotsteindev 827)
 * Sort partitions before calling partitioner (ms7s 905)
+* Added ssl_password config option to KafkaProducer class (kierkegaard13 830)
 
 Client
 * Always check for request timeouts (dpkp 887)
@@ -25,9 +28,6 @@ Bugfixes
 * Fix murmur2 bug handling python2 bytes that do not ascii encode (dpkp 815)
 * Monkeypatch max_in_flight_requests_per_connection when checking broker version (dpkp 834)
 * Fix message timestamp_type (qix 828)
-* Added ssl_password config option to KafkaProducer class (kierkegaard13 830)
-* from kafka import ConsumerRebalanceListener, OffsetAndMetadata
-* Use 0.10.0.1 for integration tests (dpkp 803)
 
 Logging / Error Messages
 * Always include an error for logging when the coordinator is marked dead (dpkp 890)
