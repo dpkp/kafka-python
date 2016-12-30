@@ -36,9 +36,9 @@ try:
     ssl.SSLWantWriteError
     ssl.SSLZeroReturnError
 except:
-    log.warning('old ssl module detected.'
-                ' ssl error handling may not operate cleanly.'
-                ' Consider upgrading to python 3.5 or 2.7')
+    log.warning('Old SSL module detected.'
+                ' SSL error handling may not operate cleanly.'
+                ' Consider upgrading to Python 3.3 or 2.7.9')
     ssl.SSLWantReadError = ssl.SSLError
     ssl.SSLWantWriteError = ssl.SSLError
     ssl.SSLZeroReturnError = ssl.SSLError
