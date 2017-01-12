@@ -690,13 +690,13 @@ class BrokerConnection(object):
             ifr.correlation_id != 0 and
             recv_correlation_id == 0):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
-                        ' coorelation id does not match request. This'
+                        ' Correlation ID does not match request. This'
                         ' should go away once at least one topic has been'
-                        ' initialized on the broker')
+                        ' initialized on the broker.')
 
         elif ifr.correlation_id != recv_correlation_id:
             error = Errors.CorrelationIdError(
-                '%s: Correlation ids do not match: sent %d, recv %d'
+                '%s: Correlation IDs do not match: sent %d, recv %d'
                 % (str(self), ifr.correlation_id, recv_correlation_id))
             ifr.future.failure(error)
             self.close()
@@ -752,7 +752,7 @@ class BrokerConnection(object):
             stashed[key] = self.config[key]
             self.config[key] = override_config[key]
 
-        # kafka kills the connection when it doesnt recognize an API request
+        # kafka kills the connection when it doesn't recognize an API request
         # so we can send a test request and then follow immediately with a
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
@@ -1018,7 +1018,7 @@ def get_ip_port_afi(host_and_port_str):
                 return host_and_port_str, DEFAULT_KAFKA_PORT, socket.AF_INET6
             except AttributeError:
                 log.warning('socket.inet_pton not available on this platform.'
-                            ' consider pip install win_inet_pton')
+                            ' consider `pip install win_inet_pton`')
                 pass
             except (ValueError, socket.error):
                 # it's a host:port pair
