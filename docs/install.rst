@@ -22,20 +22,6 @@ Bleeding-Edge
     git clone https://github.com/dpkp/kafka-python
     pip install ./kafka-python
 
-Setuptools:
-
-.. code:: bash
-
-    git clone https://github.com/dpkp/kafka-python
-    easy_install ./kafka-python
-
-Using `setup.py` directly:
-
-.. code:: bash
-
-    git clone https://github.com/dpkp/kafka-python
-    cd kafka-python
-    python setup.py install
 
 Optional LZ4 install
 ********************
