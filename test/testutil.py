@@ -114,7 +114,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         try:
             offsets, = self.client.send_offset_request([OffsetRequestPayload(topic, partition, -1, 1)])
         except:
-            # XXX: We've seen some UnknownErrors here and cant debug w/o server logs
+            # XXX: We've seen some UnknownErrors here and can't debug w/o server logs
             self.zk.child.dump_logs()
             self.server.child.dump_logs()
             raise

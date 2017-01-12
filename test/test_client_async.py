@@ -72,7 +72,7 @@ def test_bootstrap_failure(conn):
 
 
 def test_can_connect(cli, conn):
-    # Node is not in broker metadata - cant connect
+    # Node is not in broker metadata - can't connect
     assert not cli._can_connect(2)
 
     # Node is in broker metadata but not in _conns
