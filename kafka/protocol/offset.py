@@ -22,6 +22,19 @@ class OffsetResponse_v0(Struct):
                 ('offsets', Array(Int64))))))
     )
 
+class OffsetResponse_v1(Struct):
+    API_KEY = 2
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('error_code', Int16),
+                ('timestamp', Int64),
+                ('offset', Int64)))))
+    )
+
 
 class OffsetRequest_v0(Struct):
     API_KEY = 2
@@ -40,6 +53,24 @@ class OffsetRequest_v0(Struct):
         'replica_id': -1
     }
 
+class OffsetRequest_v1(Struct):
+    API_KEY = 2
+    API_VERSION = 1
+    RESPONSE_TYPE = OffsetResponse_v1
+    SCHEMA = Schema(
+        ('replica_id', Int32),
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('time', Int64)))))
+    )
+    DEFAULTS = {
+        'replica_id': -1
+    }
+
 
 OffsetRequest = [OffsetRequest_v0]
 OffsetResponse = [OffsetResponse_v0]
+OffsetRequest = [OffsetRequest_v0, OffsetRequest_v1]
+OffsetResponse = [OffsetResponse_v0, OffsetResponse_v1]
