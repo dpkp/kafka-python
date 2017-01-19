@@ -40,6 +40,12 @@ class FetchResponse_v2(Struct):
     SCHEMA = FetchResponse_v1.SCHEMA # message format changed internally
 
 
+class FetchResponse_v3(Struct):
+    API_KEY = 1
+    API_VERSION = 3
+    SCHEMA = FetchResponse_v2.SCHEMA
+
+
 class FetchRequest_v0(Struct):
     API_KEY = 1
     API_VERSION = 0
@@ -71,5 +77,25 @@ class FetchRequest_v2(Struct):
     SCHEMA = FetchRequest_v1.SCHEMA
 
 
-FetchRequest = [FetchRequest_v0, FetchRequest_v1, FetchRequest_v2]
-FetchResponse = [FetchResponse_v0, FetchResponse_v1, FetchResponse_v2]
+class FetchRequest_v3(Struct):
+    API_KEY = 1
+    API_VERSION = 3
+    RESPONSE_TYPE = FetchResponse_v3
+    SCHEMA = Schema(
+        ('replica_id', Int32),
+        ('max_wait_time', Int32),
+        ('min_bytes', Int32),
+        ('max_bytes', Int32),  # This new field is only difference from FR_v2
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('offset', Int64),
+                ('max_bytes', Int32)))))
+    )
+
+
+FetchRequest = [FetchRequest_v0, FetchRequest_v1, FetchRequest_v2,
+    FetchRequest_v3]
+FetchResponse = [FetchResponse_v0, FetchResponse_v1, FetchResponse_v2,
+    FetchResponse_v3]
