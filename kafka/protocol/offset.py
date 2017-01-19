@@ -46,7 +46,7 @@ class OffsetRequest_v0(Struct):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('time', Int64),
+                ('timestamp', Int64),
                 ('max_offsets', Int32)))))
     )
     DEFAULTS = {
