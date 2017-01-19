@@ -70,7 +70,5 @@ class OffsetRequest_v1(Struct):
     }
 
 
-OffsetRequest = [OffsetRequest_v0]
-OffsetResponse = [OffsetResponse_v0]
 OffsetRequest = [OffsetRequest_v0, OffsetRequest_v1]
 OffsetResponse = [OffsetResponse_v0, OffsetResponse_v1]
