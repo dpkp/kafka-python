@@ -331,7 +331,7 @@ class SelectSelector(_BaseSelectorImpl):
             r, w, x = select.select(r, w, w, timeout)
             return r, w + x, []
     else:
-        _select = select.select
+        _select = staticmethod(select.select)
 
     def select(self, timeout=None):
         timeout = None if timeout is None else max(timeout, 0)
