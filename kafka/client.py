@@ -284,7 +284,7 @@ class SimpleClient(object):
             # block until a socket is ready to be read
             sockets = [
                 conn._sock
-                for future, (conn, _) in connections_by_future.iteritems()
+                for future, (conn, _) in six.iteritems(connections_by_future)
                 if not future.is_done and conn._sock is not None]
             if sockets:
                 read_socks, _, _ = select.select(sockets, [], [])
