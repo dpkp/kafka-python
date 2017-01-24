@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+import select
 
 from kafka.vendor import six
 
@@ -279,6 +280,15 @@ class SimpleClient(object):
         conn = None
         while connections_by_future:
             futures = list(connections_by_future.keys())
+
+            # block until a socket is ready to be read
+            sockets = [
+                conn._sock
+                for future, (conn, _) in connections_by_future.iteritems()
+                if not future.is_done and conn._sock is not None]
+            if sockets:
+                read_socks, _, _ = select.select(sockets, [], [])
+
             for future in futures:
 
                 if not future.is_done:
