@@ -17,6 +17,7 @@ from kafka.common import (
 )
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.rate import Rate
+from kafka.protocol.message import PartialMessage
 from kafka.structs import (
     FetchRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload,
     OffsetRequestPayload
@@ -404,6 +405,10 @@ class KafkaConsumer(object):
 
             # Track server highwater mark
             self._offsets.highwater[(topic, partition)] = resp.highwaterMark
+
+            # Check for partial message and remove
+            if resp.messages and isinstance(resp.messages[-1].message, PartialMessage):
+                resp.messages.pop()
 
             # Yield each message
             # Kafka-python could raise an exception during iteration
