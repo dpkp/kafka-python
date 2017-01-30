@@ -2,6 +2,7 @@ import logging
 import os
 
 from six.moves import xrange
+import six
 
 from . import unittest
 from kafka import (
@@ -572,3 +573,46 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             output_msgs2.append(m)
         self.assert_message_count(output_msgs2, 20)
         self.assertEqual(len(set(output_msgs1) | set(output_msgs2)), 200)
+
+    @kafka_versions('>=0.10.1')
+    def test_kafka_consumer_max_bytes_simple(self):
+        self.send_messages(0, range(100, 200))
+        self.send_messages(1, range(200, 300))
+
+        # Start a consumer
+        consumer = self.kafka_consumer(
+            auto_offset_reset='earliest', fetch_max_bytes=300)
+        fetched_size = 0
+        seen_partitions = set([])
+        for i in range(10):
+            poll_res = consumer.poll(timeout_ms=100)
+            for partition, msgs in six.iteritems(poll_res):
+                for msg in msgs:
+                    fetched_size += len(msg.value)
+                    seen_partitions.add(partition)
+
+        # Check that we fetched at least 1 message from both partitions
+        self.assertEqual(
+            seen_partitions, set([
+                TopicPartition(self.topic, 0), TopicPartition(self.topic, 1)]))
+        self.assertLess(fetched_size, 3000)
+
+    @kafka_versions('>=0.10.1')
+    def test_kafka_consumer_max_bytes_one_msg(self):
+        # We send to only 1 partition so we don't have parallel requests to 2
+        # nodes for data.
+        self.send_messages(0, range(100, 200))
+
+        # Start a consumer. FetchResponse_v3 should always include at least 1
+        # full msg, so by setting fetch_max_bytes=1 we must get 1 msg at a time
+        consumer = self.kafka_consumer(
+            auto_offset_reset='earliest', fetch_max_bytes=1)
+        fetched_msgs = []
+        for i in range(10):
+            poll_res = consumer.poll(timeout_ms=2000)
+            print(poll_res)
+            for partition, msgs in six.iteritems(poll_res):
+                for msg in msgs:
+                    fetched_msgs.append(msg)
+
+        self.assertEqual(len(fetched_msgs), 10)

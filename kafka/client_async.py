@@ -156,6 +156,8 @@ class KafkaClient(object):
         'sasl_plain_password': None,
     }
     API_VERSIONS = [
+        (0, 10, 1),
+        (0, 10, 0),
         (0, 10),
         (0, 9),
         (0, 8, 2),

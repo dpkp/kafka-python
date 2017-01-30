@@ -40,6 +40,7 @@ class Fetcher(six.Iterator):
         'value_deserializer': None,
         'fetch_min_bytes': 1,
         'fetch_max_wait_ms': 500,
+        'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1048576,
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
@@ -617,7 +618,7 @@ class Fetcher(six.Iterator):
             log.debug("Fetched offset %d for partition %s", offset, partition)
             future.success(offset)
         elif error_type in (Errors.NotLeaderForPartitionError,
-                       Errors.UnknownTopicOrPartitionError):
+                            Errors.UnknownTopicOrPartitionError):
             log.debug("Attempt to fetch offsets for partition %s failed due"
                       " to obsolete leadership information, retrying.",
                       partition)
@@ -664,7 +665,9 @@ class Fetcher(six.Iterator):
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
 
-        if self.config['api_version'] >= (0, 10):
+        if self.config['api_version'] >= (0, 10, 1):
+            version = 3
+        elif self.config['api_version'] >= (0, 10):
             version = 2
         elif self.config['api_version'] == (0, 9):
             version = 1
@@ -672,11 +675,24 @@ class Fetcher(six.Iterator):
             version = 0
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
-            requests[node_id] = FetchRequest[version](
-                -1,  # replica_id
-                self.config['fetch_max_wait_ms'],
-                self.config['fetch_min_bytes'],
-                partition_data.items())
+            if version < 3:
+                requests[node_id] = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    partition_data.items())
+            else:
+                # As of version == 3 partitions will be returned in order as
+                # they are requested, so to avoid starvation with
+                # `fetch_max_bytes` option we need this shuffle
+                partition_data = list(partition_data.items())
+                random.shuffle(partition_data)
+                requests[node_id] = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    partition_data)
         return requests
 
     def _handle_fetch_response(self, request, send_time, response):

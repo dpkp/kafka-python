@@ -63,6 +63,13 @@ class KafkaConsumer(six.Iterator):
             the server will block before answering the fetch request if
             there isn't sufficient data to immediately satisfy the
             requirement given by fetch_min_bytes. Default: 500.
+        fetch_max_bytes (int): The maximum amount of data the server should
+            return for a fetch request. This is not an absolute maximum, if the
+            first message in the first non-empty partition of the fetch is
+            larger than this value, the message will still be returned to
+            ensure that the consumer can make progress. NOTE: consumer performs
+            multiple fetches in parallel so memory usage will be higher.
+            Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 Mb).
         max_partition_fetch_bytes (int): The maximum amount of data
             per-partition the server will return. The maximum total memory
             used for a request = #partitions * max_partition_fetch_bytes.
@@ -209,6 +216,7 @@ class KafkaConsumer(six.Iterator):
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
         'fetch_min_bytes': 1,
+        'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
         'request_timeout_ms': 40 * 1000,
         'retry_backoff_ms': 100,

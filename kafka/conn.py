@@ -790,7 +790,8 @@ class BrokerConnection(object):
         log.addFilter(log_filter)
 
         test_cases = [
-            ((0, 10), ApiVersionRequest[0]()),
+            ((0, 10, 1), MetadataRequest[2]([])),
+            ((0, 10, 0), ApiVersionRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
