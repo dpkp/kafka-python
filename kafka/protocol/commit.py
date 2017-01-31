@@ -19,30 +19,18 @@ class OffsetCommitResponse_v0(Struct):
 class OffsetCommitResponse_v1(Struct):
     API_KEY = 8
     API_VERSION = 1
-    SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
-                ('error_code', Int16)))))
-    )
+    SCHEMA = OffsetCommitResponse_v0.SCHEMA
 
 
 class OffsetCommitResponse_v2(Struct):
     API_KEY = 8
     API_VERSION = 2
-    SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
-                ('error_code', Int16)))))
-    )
+    SCHEMA = OffsetCommitResponse_v1.SCHEMA
 
 
 class OffsetCommitRequest_v0(Struct):
     API_KEY = 8
-    API_VERSION = 0 # Zookeeper-backed storage
+    API_VERSION = 0  # Zookeeper-backed storage
     RESPONSE_TYPE = OffsetCommitResponse_v0
     SCHEMA = Schema(
         ('consumer_group', String('utf-8')),
@@ -57,7 +45,7 @@ class OffsetCommitRequest_v0(Struct):
 
 class OffsetCommitRequest_v1(Struct):
     API_KEY = 8
-    API_VERSION = 1 # Kafka-backed storage
+    API_VERSION = 1  # Kafka-backed storage
     RESPONSE_TYPE = OffsetCommitResponse_v1
     SCHEMA = Schema(
         ('consumer_group', String('utf-8')),
@@ -75,7 +63,7 @@ class OffsetCommitRequest_v1(Struct):
 
 class OffsetCommitRequest_v2(Struct):
     API_KEY = 8
-    API_VERSION = 2 # added retention_time, dropped timestamp
+    API_VERSION = 2  # added retention_time, dropped timestamp
     RESPONSE_TYPE = OffsetCommitResponse_v2
     SCHEMA = Schema(
         ('consumer_group', String('utf-8')),
