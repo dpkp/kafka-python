@@ -608,6 +608,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer = self.kafka_consumer(
             auto_offset_reset='earliest', fetch_max_bytes=1)
         fetched_msgs = []
+        # A bit hacky, but we need this in order for message count to be exact
+        consumer._coordinator.ensure_active_group()
         for i in range(10):
             poll_res = consumer.poll(timeout_ms=2000)
             print(poll_res)

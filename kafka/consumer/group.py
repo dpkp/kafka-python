@@ -68,7 +68,8 @@ class KafkaConsumer(six.Iterator):
             first message in the first non-empty partition of the fetch is
             larger than this value, the message will still be returned to
             ensure that the consumer can make progress. NOTE: consumer performs
-            multiple fetches in parallel so memory usage will be higher.
+            fetches to multiple brokers in parallel so memory usage will depend
+            on the number of brokers containing partitions for the topic.
             Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 Mb).
         max_partition_fetch_bytes (int): The maximum amount of data
             per-partition the server will return. The maximum total memory

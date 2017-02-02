@@ -65,6 +65,15 @@ class Fetcher(six.Iterator):
                 the server will block before answering the fetch request if
                 there isn't sufficient data to immediately satisfy the
                 requirement given by fetch_min_bytes. Default: 500.
+            fetch_max_bytes (int): The maximum amount of data the server should
+                return for a fetch request. This is not an absolute maximum, if
+                the first message in the first non-empty partition of the fetch
+                is larger than this value, the message will still be returned
+                to ensure that the consumer can make progress. NOTE: consumer
+                performs fetches to multiple brokers in parallel so memory
+                usage will depend on the number of brokers containing
+                partitions for the topic.
+                Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 Mb).
             max_partition_fetch_bytes (int): The maximum amount of data
                 per-partition the server will return. The maximum total memory
                 used for a request = #partitions * max_partition_fetch_bytes.
@@ -685,6 +694,10 @@ class Fetcher(six.Iterator):
                 # As of version == 3 partitions will be returned in order as
                 # they are requested, so to avoid starvation with
                 # `fetch_max_bytes` option we need this shuffle
+                # NOTE: we do have partition_data in random order due to usage
+                #       of unordered structures like dicts, but that does not
+                #       guaranty equal distribution, and starting Python3.6
+                #       dicts retain insert order.
                 partition_data = list(partition_data.items())
                 random.shuffle(partition_data)
                 requests[node_id] = FetchRequest[version](
