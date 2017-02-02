@@ -47,6 +47,30 @@ class MetadataResponse_v1(Struct):
     )
 
 
+class MetadataResponse_v2(Struct):
+    API_KEY = 3
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('brokers', Array(
+            ('node_id', Int32),
+            ('host', String('utf-8')),
+            ('port', Int32),
+            ('rack', String('utf-8')))),
+        ('cluster_id', String('utf-8')),  # <-- Added cluster_id field in v2
+        ('controller_id', Int32),
+        ('topics', Array(
+            ('error_code', Int16),
+            ('topic', String('utf-8')),
+            ('is_internal', Boolean),
+            ('partitions', Array(
+                ('error_code', Int16),
+                ('partition', Int32),
+                ('leader', Int32),
+                ('replicas', Array(Int32)),
+                ('isr', Array(Int32))))))
+    )
+
+
 class MetadataRequest_v0(Struct):
     API_KEY = 3
     API_VERSION = 0
@@ -65,5 +89,13 @@ class MetadataRequest_v1(Struct):
     )
 
 
-MetadataRequest = [MetadataRequest_v0, MetadataRequest_v1]
-MetadataResponse = [MetadataResponse_v0, MetadataResponse_v1]
+class MetadataRequest_v2(Struct):
+    API_KEY = 3
+    API_VERSION = 2
+    RESPONSE_TYPE = MetadataResponse_v2
+    SCHEMA = MetadataRequest_v1.SCHEMA
+
+
+MetadataRequest = [MetadataRequest_v0, MetadataRequest_v1, MetadataRequest_v2]
+MetadataResponse = [
+    MetadataResponse_v0, MetadataResponse_v1, MetadataResponse_v2]
