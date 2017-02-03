@@ -191,6 +191,7 @@ class KafkaClient(object):
         self._selector.register(self._wake_r, selectors.EVENT_READ)
         self._closed = False
         self._sensors = None
+        self.reachable = True
         if self.config['metrics']:
             self._sensors = KafkaClientMetrics(self.config['metrics'],
                                                self.config['metric_group_prefix'],
@@ -198,8 +199,8 @@ class KafkaClient(object):
 
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
 
-        # Check Broker Version if not set explicitly
-        if self.config['api_version'] is None:
+        # Check Broker Version if not set explicitly and only when kafka cluster is reachable
+        if self.reachable and self.config['api_version'] is None:
             check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
             self.config['api_version'] = self.check_version(timeout=check_timeout)
 
@@ -219,14 +220,24 @@ class KafkaClient(object):
         else:
             metadata_request = MetadataRequest[1](None)
 
+        _count_host = 0
         for host, port, afi in hosts:
+            _count_host += 1
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
             cb = functools.partial(self._conn_state_change, 'bootstrap')
             bootstrap = BrokerConnection(host, port, afi,
                                          state_change_callback=cb,
                                          node_id='bootstrap',
                                          **self.config)
-            bootstrap.connect()
+            try:
+                bootstrap.connect()
+            except socket.gaierror as gaiErr:
+                log.error('Error to bootstrap via node at %s:%s = %s', host, port, repr(gaiErr))
+                if _count_host < len(hosts):
+                    continue
+                else:
+                    self.reachable = False
+
             while bootstrap.connecting():
                 bootstrap.connect()
             if not bootstrap.connected():
@@ -250,6 +261,7 @@ class KafkaClient(object):
             break
         # No bootstrap found...
         else:
+            self.reachable = False
             log.error('Unable to bootstrap from %s', hosts)
             # Max exponential backoff is 2^12, x4000 (50ms -> 200s)
             self._bootstrap_fails = min(self._bootstrap_fails + 1, 12)
@@ -654,6 +666,7 @@ class KafkaClient(object):
         # Last option: try to bootstrap again
         # this should only happen if no prior bootstrap has been successful
         log.error('No nodes found in metadata -- retrying bootstrap')
+        self.reachable = False
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
         return None
 

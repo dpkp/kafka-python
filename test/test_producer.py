@@ -78,3 +78,25 @@ def test_kafka_producer_gc_cleanup():
     del(producer)
     gc.collect()
     assert threading.active_count() == threads
+
+
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+def test_kafka_cluster_not_reachable(kafka_broker, compression):
+
+    if compression == 'lz4':
+        # LZ4 requires 0.8.2
+        if version() < (0, 8, 2):
+            return
+        # LZ4 python libs don't work on python2.6
+        elif sys.version_info < (2, 7):
+            return
+
+    connect_str = '192.168.0.1:' + str(kafka_broker.port)
+    producer = KafkaProducer(bootstrap_servers=connect_str,
+                             retries=5,
+                             max_block_ms=10000,
+                             compression_type=compression,
+                             value_serializer=str.encode)
+
+    assert producer.cluster_reachable == False
