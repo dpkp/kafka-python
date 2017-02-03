@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+import select
 
 # selectors in stdlib as of py3.4
 try:
