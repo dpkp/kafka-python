@@ -116,20 +116,12 @@ class OffsetFetchResponse_v0(Struct):
 class OffsetFetchResponse_v1(Struct):
     API_KEY = 9
     API_VERSION = 1
-    SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
-                ('offset', Int64),
-                ('metadata', String('utf-8')),
-                ('error_code', Int16)))))
-    )
+    SCHEMA = OffsetFetchResponse_v0.SCHEMA
 
 
 class OffsetFetchRequest_v0(Struct):
     API_KEY = 9
-    API_VERSION = 0 # zookeeper-backed storage
+    API_VERSION = 0  # zookeeper-backed storage
     RESPONSE_TYPE = OffsetFetchResponse_v0
     SCHEMA = Schema(
         ('consumer_group', String('utf-8')),
@@ -141,14 +133,9 @@ class OffsetFetchRequest_v0(Struct):
 
 class OffsetFetchRequest_v1(Struct):
     API_KEY = 9
-    API_VERSION = 1 # kafka-backed storage
+    API_VERSION = 1  # kafka-backed storage
     RESPONSE_TYPE = OffsetFetchResponse_v1
-    SCHEMA = Schema(
-        ('consumer_group', String('utf-8')),
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(Int32))))
-    )
+    SCHEMA = OffsetFetchRequest_v0.SCHEMA
 
 
 OffsetFetchRequest = [OffsetFetchRequest_v0, OffsetFetchRequest_v1]
