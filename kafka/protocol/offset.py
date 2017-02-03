@@ -63,7 +63,7 @@ class OffsetRequest_v1(Struct):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('time', Int64)))))
+                ('timestamp', Int64)))))
     )
     DEFAULTS = {
         'replica_id': -1
