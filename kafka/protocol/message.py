@@ -10,7 +10,7 @@ from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
-from ..util import crc32
+from ..util import crc32, WeakMethod
 
 
 class Message(Struct):
@@ -52,7 +52,7 @@ class Message(Struct):
         self.attributes = attributes
         self.key = key
         self.value = value
-        self.encode = self._encode_self
+        self.encode = WeakMethod(self._encode_self)
 
     @property
     def timestamp_type(self):
