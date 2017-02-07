@@ -3,6 +3,8 @@ from __future__ import absolute_import
 #from collections import namedtuple
 from io import BytesIO
 
+from kafka.util import WeakMethod
+
 from .abstract import AbstractType
 from .types import Schema
 
@@ -20,7 +22,9 @@ class Struct(AbstractType):
             self.__dict__.update(kwargs)
 
         # overloading encode() to support both class and instance
-        self.encode = self._encode_self
+        # Without WeakMethod() this creates circular ref, which
+        # causes instances to "leak" to garbage
+        self.encode = WeakMethod(self._encode_self)
 
     @classmethod
     def encode(cls, item): # pylint: disable=E0202

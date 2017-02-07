@@ -93,7 +93,8 @@ class _SelectorMapping(Mapping):
         return iter(self._selector._fd_to_key)
 
 
-class BaseSelector(six.with_metaclass(ABCMeta)):
+@six.add_metaclass(ABCMeta)
+class BaseSelector(object):
     """Selector abstract base class.
 
     A selector supports registering file objects to be monitored for specific
