@@ -5,6 +5,8 @@ from io import BytesIO
 from .abstract import AbstractType
 from .types import Schema
 
+from ..util import WeakMethod
+
 
 class Struct(AbstractType):
     SCHEMA = Schema()
@@ -19,7 +21,9 @@ class Struct(AbstractType):
             self.__dict__.update(kwargs)
 
         # overloading encode() to support both class and instance
-        self.encode = self._encode_self
+        # Without WeakMethod() this creates circular ref, which
+        # causes instances to "leak" to garbage
+        self.encode = WeakMethod(self._encode_self)
 
     @classmethod
     def encode(cls, item):  # pylint: disable=E0202
