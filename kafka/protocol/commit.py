@@ -107,6 +107,22 @@ class OffsetFetchResponse_v1(Struct):
     SCHEMA = OffsetFetchResponse_v0.SCHEMA
 
 
+class OffsetFetchResponse_v2(Struct):
+    # Added in KIP-88
+    API_KEY = 9
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('offset', Int64),
+                ('metadata', String('utf-8')),
+                ('error_code', Int16))))),
+        ('error_code', Int16)
+    )
+
+
 class OffsetFetchRequest_v0(Struct):
     API_KEY = 9
     API_VERSION = 0  # zookeeper-backed storage
@@ -126,8 +142,20 @@ class OffsetFetchRequest_v1(Struct):
     SCHEMA = OffsetFetchRequest_v0.SCHEMA
 
 
-OffsetFetchRequest = [OffsetFetchRequest_v0, OffsetFetchRequest_v1]
-OffsetFetchResponse = [OffsetFetchResponse_v0, OffsetFetchResponse_v1]
+class OffsetFetchRequest_v2(Struct):
+    # KIP-88: Allows passing null topics to return offsets for all partitions
+    # that the consumer group has a stored offset for, even if no consumer in
+    # the group is currently consuming that partition.
+    API_KEY = 9
+    API_VERSION = 2
+    RESPONSE_TYPE = OffsetFetchResponse_v2
+    SCHEMA = OffsetFetchRequest_v1.SCHEMA
+
+
+OffsetFetchRequest = [OffsetFetchRequest_v0, OffsetFetchRequest_v1,
+    OffsetFetchRequest_v2]
+OffsetFetchResponse = [OffsetFetchResponse_v0, OffsetFetchResponse_v1,
+    OffsetFetchResponse_v2]
 
 
 class GroupCoordinatorResponse_v0(Struct):
