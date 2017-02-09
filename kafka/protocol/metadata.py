@@ -52,17 +52,18 @@ class MetadataRequest_v0(Struct):
     API_VERSION = 0
     RESPONSE_TYPE = MetadataResponse_v0
     SCHEMA = Schema(
-        ('topics', Array(String('utf-8'))) # Empty Array (len 0) for all topics
+        ('topics', Array(String('utf-8')))
     )
+    ALL_TOPICS = None  # Empty Array (len 0) for topics returns all topics
 
 
 class MetadataRequest_v1(Struct):
     API_KEY = 3
     API_VERSION = 1
     RESPONSE_TYPE = MetadataResponse_v1
-    SCHEMA = Schema(
-        ('topics', Array(String('utf-8'))) # Null Array (len -1) for all topics
-    )
+    SCHEMA = MetadataRequest_v0.SCHEMA
+    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
+    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
 
 
 MetadataRequest = [MetadataRequest_v0, MetadataRequest_v1]
