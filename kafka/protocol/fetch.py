@@ -37,7 +37,7 @@ class FetchResponse_v1(Struct):
 class FetchResponse_v2(Struct):
     API_KEY = 1
     API_VERSION = 2
-    SCHEMA = FetchResponse_v1.SCHEMA # message format changed internally
+    SCHEMA = FetchResponse_v1.SCHEMA  # message format changed internally
 
 
 class FetchResponse_v3(Struct):

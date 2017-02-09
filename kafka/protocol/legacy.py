@@ -3,9 +3,7 @@ from __future__ import absolute_import
 import logging
 import struct
 
-from kafka.vendor import six # pylint: disable=import-error
-
-from kafka.vendor.six.moves import xrange # pylint: disable=import-error
+from kafka.vendor import six  # pylint: disable=import-error
 
 import kafka.protocol.commit
 import kafka.protocol.fetch
@@ -15,13 +13,12 @@ import kafka.protocol.offset
 import kafka.protocol.produce
 import kafka.structs
 
-from kafka.codec import (
-    gzip_encode, gzip_decode, snappy_encode, snappy_decode)
-from kafka.errors import ProtocolError, ChecksumError, UnsupportedCodecError
+from kafka.codec import gzip_encode, snappy_encode
+from kafka.errors import ProtocolError, UnsupportedCodecError
 from kafka.structs import ConsumerMetadataResponse
 from kafka.util import (
-    crc32, read_short_string, read_int_string, relative_unpack,
-    write_short_string, write_int_string, group_by_topic_and_partition)
+    crc32, read_short_string, relative_unpack,
+    write_int_string, group_by_topic_and_partition)
 
 
 log = logging.getLogger(__name__)
@@ -319,7 +316,6 @@ class KafkaProtocol(object):
                     payload.metadata)
                 for partition, payload in six.iteritems(topic_payloads)])
             for topic, topic_payloads in six.iteritems(group_by_topic_and_partition(payloads))])
-
 
     @classmethod
     def decode_offset_commit_response(cls, response):
