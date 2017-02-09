@@ -289,7 +289,6 @@ class SimpleClient(object):
                 failed_payloads(broker_payloads)
                 continue
 
-
             host, port, afi = get_ip_port_afi(broker.host)
             try:
                 conn = self._get_conn(host, broker.port, afi, broker.nodeId)
@@ -522,8 +521,8 @@ class SimpleClient(object):
 
     def has_metadata_for_topic(self, topic):
         return (
-          topic in self.topic_partitions
-          and len(self.topic_partitions[topic]) > 0
+            topic in self.topic_partitions
+            and len(self.topic_partitions[topic]) > 0
         )
 
     def get_partition_ids_for_topic(self, topic):
@@ -536,7 +535,7 @@ class SimpleClient(object):
     def topics(self):
         return list(self.topic_partitions.keys())
 
-    def ensure_topic_exists(self, topic, timeout = 30):
+    def ensure_topic_exists(self, topic, timeout=30):
         start_time = time.time()
 
         while not self.has_metadata_for_topic(topic):

@@ -239,7 +239,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_password': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
-        'connections_max_idle_ms': 9 * 60 * 1000, # Not implemented yet
+        'connections_max_idle_ms': 9 * 60 * 1000,  # Not implemented yet
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
@@ -827,8 +827,8 @@ class KafkaConsumer(six.Iterator):
             NoOffsetForPartitionError: If no offset is stored for a given
                 partition and no offset reset policy is defined.
         """
-        if (self.config['api_version'] >= (0, 8, 1)
-            and self.config['group_id'] is not None):
+        if (self.config['api_version'] >= (0, 8, 1) and
+                self.config['group_id'] is not None):
 
             # Refresh commits for all assigned partitions
             self._coordinator.refresh_committed_offsets_if_needed()

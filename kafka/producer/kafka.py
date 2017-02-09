@@ -264,7 +264,7 @@ class KafkaProducer(object):
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
         'buffer_memory': 33554432,
-        'connections_max_idle_ms': 600000, # not implemented yet
+        'connections_max_idle_ms': 600000,  # not implemented yet
         'max_block_ms': 60000,
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,
@@ -295,7 +295,7 @@ class KafkaProducer(object):
     }
 
     def __init__(self, **configs):
-        log.debug("Starting the Kafka producer") # trace
+        log.debug("Starting the Kafka producer")  # trace
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -368,7 +368,7 @@ class KafkaProducer(object):
     def _unregister_cleanup(self):
         if getattr(self, '_cleanup', None):
             if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup) # pylint: disable=no-member
+                atexit.unregister(self._cleanup)  # pylint: disable=no-member
 
             # py2 requires removing from private attribute...
             else:
@@ -543,7 +543,7 @@ class KafkaProducer(object):
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
         """
-        log.debug("Flushing accumulated records in producer.") # trace
+        log.debug("Flushing accumulated records in producer.")  # trace
         self._accumulator.begin_flush()
         self._sender.wakeup()
         self._accumulator.await_flush_completion(timeout=timeout)

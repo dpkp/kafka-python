@@ -282,7 +282,7 @@ class Producer(object):
                  codec_compresslevel=None,
                  sync_fail_on_error=SYNC_FAIL_ON_ERROR_DEFAULT,
                  async=False,
-                 batch_send=False, # deprecated, use async
+                 batch_send=False,  # deprecated, use async
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
                  async_retry_limit=ASYNC_RETRY_LIMIT,
@@ -452,7 +452,7 @@ class Producer(object):
 
             # py3 supports unregistering
             if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup_func) # pylint: disable=no-member
+                atexit.unregister(self._cleanup_func)  # pylint: disable=no-member
 
             # py2 requires removing from private attribute...
             else:
