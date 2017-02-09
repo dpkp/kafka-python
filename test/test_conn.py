@@ -166,33 +166,7 @@ def test_can_send_more(conn):
     assert conn.can_send_more() is False
 
 
-def test_recv_disconnected():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('127.0.0.1', 0))
-    port = sock.getsockname()[1]
-    sock.listen(5)
-
-    conn = BrokerConnection('127.0.0.1', port, socket.AF_INET)
-    timeout = time.time() + 1
-    while time.time() < timeout:
-        conn.connect()
-        if conn.connected():
-            break
-    else:
-        assert False, 'Connection attempt to local socket timed-out ?'
-
-    conn.send(MetadataRequest[0]([]))
-
-    # Disconnect server socket
-    sock.close()
-
-    # Attempt to receive should mark connection as disconnected
-    assert conn.connected()
-    conn.recv()
-    assert conn.disconnected()
-
-
-def test_recv_disconnected_too(_socket, conn):
+def test_recv_disconnected(_socket, conn):
     conn.connect()
     assert conn.connected()
 
