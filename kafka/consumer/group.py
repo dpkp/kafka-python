@@ -273,9 +273,13 @@ class KafkaConsumer(six.Iterator):
         session_timeout_ms = self.config['session_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
         if request_timeout_ms <= session_timeout_ms:
-            raise KafkaConfigurationError("Request timeout ({}) must be larger than session timeout ({})".format(request_timeout_ms, session_timeout_ms))
+            raise KafkaConfigurationError(
+                "Request timeout (" + str(request_timeout_ms) + ") must be larger than session timeout (" +
+                str(session_timeout_ms) + ")")
         if request_timeout_ms <= fetch_max_wait_ms:
-            raise KafkaConfigurationError("Request timeout ({}) must be larger than fetch-max-wait-ms ({})".format(request_timeout_ms, fetch_max_wait_ms))
+            raise KafkaConfigurationError(
+                "Request timeout (" + str(request_timeout_ms) + ") must be larger than fetch-max-wait-ms (" +
+                str(fetch_max_wait_ms) + ")")
 
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
