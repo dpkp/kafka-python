@@ -3,10 +3,10 @@ from __future__ import absolute_import
 #from collections import namedtuple
 from io import BytesIO
 
-from kafka.util import WeakMethod
-
 from .abstract import AbstractType
 from .types import Schema
+
+from ..util import WeakMethod
 
 
 class Struct(AbstractType):
