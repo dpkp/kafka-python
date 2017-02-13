@@ -6,6 +6,8 @@ import socket
 import sys
 import time
 
+from kafka.errors import KafkaConfigurationError
+
 from kafka.vendor import six
 
 from kafka.client_async import KafkaClient, selectors
@@ -266,6 +268,14 @@ class KafkaConsumer(six.Iterator):
             log.warning('use auto_offset_reset=%s (%s is deprecated)',
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
+
+        request_timeout_ms = self.config['request_timeout_ms']
+        session_timeout_ms = self.config['session_timeout_ms']
+        fetch_max_wait_ms = self.config['fetch_max_wait_ms']
+        if request_timeout_ms <= session_timeout_ms:
+            raise KafkaConfigurationError("Request timeout ({}) must be larger than session timeout ({})".format(request_timeout_ms, session_timeout_ms))
+        if request_timeout_ms <= fetch_max_wait_ms:
+            raise KafkaConfigurationError("Request timeout ({}) must be larger than fetch-max-wait-ms ({})".format(request_timeout_ms, fetch_max_wait_ms))
 
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
