@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-#from collections import namedtuple
 from io import BytesIO
 
 from .abstract import AbstractType
@@ -27,7 +26,7 @@ class Struct(AbstractType):
         self.encode = WeakMethod(self._encode_self)
 
     @classmethod
-    def encode(cls, item): # pylint: disable=E0202
+    def encode(cls, item):  # pylint: disable=E0202
         bits = []
         for i, field in enumerate(cls.SCHEMA.fields):
             bits.append(field.encode(item[i]))
