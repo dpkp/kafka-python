@@ -6,6 +6,7 @@ import collections
 import struct
 import sys
 from threading import Thread, Event
+from weakref import ref
 import weakref
 
 from kafka.vendor import six
