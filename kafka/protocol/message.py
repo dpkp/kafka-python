@@ -52,7 +52,7 @@ class Message(Struct):
         self.attributes = attributes
         self.key = key
         self.value = value
-        self.encode = WeakMethod(self._encode_self)
+        self.encode = WeakMethod(self._encode_self_message)
 
     @property
     def timestamp_type(self):
@@ -68,7 +68,7 @@ class Message(Struct):
         else:
             return 0
 
-    def _encode_self(self, recalc_crc=True):
+    def _encode_self_message(self, recalc_crc=True):
         version = self.magic
         if version == 1:
             fields = (self.crc, self.magic, self.attributes, self.timestamp, self.key, self.value)
