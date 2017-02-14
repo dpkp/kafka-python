@@ -761,10 +761,10 @@ class BrokerConnection(object):
 
         error_type = Errors.for_code(response.error_code)
         assert error_type is Errors.NoError, "API version check failed"
-        max_versions = {
-            api_key: max_version
+        max_versions = dict([
+            (api_key, max_version)
             for api_key, _, max_version in response.api_versions
-        }
+        ])
         # Get the best match of test cases
         for broker_version, struct in test_cases:
             if max_versions.get(struct.API_KEY, -1) >= struct.API_VERSION:
