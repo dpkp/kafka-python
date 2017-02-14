@@ -189,12 +189,12 @@ class WeakMethod(ref):
         self_wr = ref(self)
         return self
 
-    def __call__(self):
+    def __call__(self, *args, **kwargs):
         obj = super(WeakMethod, self).__call__()
         func = self._func_ref()
         if obj is None or func is None:
             return None
-        return self._meth_type(func, obj)
+        return self._meth_type(func, obj)(*args, **kwargs)
 
     def __eq__(self, other):
         if isinstance(other, WeakMethod):
