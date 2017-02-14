@@ -143,9 +143,9 @@ class KafkaProtocol(object):
                           msg.value, key=msg.key,
                           magic=msg.magic, attributes=msg.attributes
                     )
-                    partition_msgs.append(0, m.encode())
-                topic_msgs.append(partition, partition_msgs)
-            topics.append(topic, topic_msgs)
+                    partition_msgs.append((0, m.encode()))
+                topic_msgs.append((partition, partition_msgs))
+            topics.append((topic, topic_msgs))
 
 
         return kafka.protocol.produce.ProduceRequest[0](
