@@ -52,7 +52,6 @@ class Message(Struct):
         self.attributes = attributes
         self.key = key
         self.value = value
-        self.encode = None
         self.encode = WeakMethod(self._encode_self)
 
     @property

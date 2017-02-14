@@ -133,6 +133,11 @@ class KafkaProtocol(object):
         if acks not in (1, 0, -1):
             raise ValueError('ProduceRequest acks (%s) must be 1, 0, -1' % acks)
 
+        msg = kafka.protocol.message.Message(
+                          msg.value, key=msg.key,
+                          magic=msg.magic, attributes=msg.attributes
+        );
+
         return kafka.protocol.produce.ProduceRequest[0](
             required_acks=acks,
             timeout=timeout,
@@ -140,11 +145,7 @@ class KafkaProtocol(object):
                 topic,
                 [(
                     partition,
-                    [(0,
-                      kafka.protocol.message.Message(
-                          msg.value, key=msg.key,
-                          magic=msg.magic, attributes=msg.attributes
-                      ).encode())
+                    [(0, msg.encode())
                     for msg in payload.messages])
                 for partition, payload in topic_payloads.items()])
             for topic, topic_payloads in group_by_topic_and_partition(payloads).items()])
