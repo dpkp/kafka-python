@@ -7,6 +7,13 @@ import logging
 import random
 import time
 
+# selectors in stdlib as of py3.4
+try:
+    import selectors # pylint: disable=import-error
+except ImportError:
+    # vendored backport module
+    from .vendor import selectors34 as selectors
+
 from kafka.vendor import six
 
 import kafka.errors
@@ -92,11 +99,12 @@ class SimpleClient(object):
         """Get or create a connection to a broker using host and port"""
         host_key = (host, port)
         if host_key not in self._conns:
+
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
                 client_id=self.client_id,
-                metrics=self._metrics_registry
+                metrics=self._metrics_registry,
             )
 
         conn = self._conns[host_key]
@@ -202,7 +210,8 @@ class SimpleClient(object):
             request = encoder_fn(payloads=payloads)
             future = conn.send(request)
 
-            # Block
+            # Block, also waste CPU cycle here, but broker unaware requests
+            # shouldn't be very frequent.
             while not future.is_done:
                 conn.recv()
 
@@ -269,9 +278,9 @@ class SimpleClient(object):
                 topic_partition = (str(payload.topic), payload.partition)
                 responses[topic_partition] = FailedPayloadsError(payload)
 
-        # For each BrokerConnection keep the real socket so that we can use
-        # a select to perform unblocking I/O
-        connections_by_future = {}
+        futures_by_connection = {}
+        selector = selectors.DefaultSelector()
+
         for broker, broker_payloads in six.iteritems(payloads_by_broker):
             if broker is None:
                 failed_payloads(broker_payloads)
@@ -291,9 +300,13 @@ class SimpleClient(object):
             # send a response.  This probably only applies to
             # ProduceRequest w/ acks = 0
             expect_response = (decoder_fn is not None)
+            if expect_response:
+                selector.register(conn._sock, selectors.EVENT_READ, conn)
             future = conn.send(request, expect_response=expect_response)
 
             if future.failed():
+                log.error("Request failed: %s", future.exception)
+                selector.unregister(conn._sock)
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
                 continue
@@ -304,20 +317,24 @@ class SimpleClient(object):
                     responses[topic_partition] = None
                 continue
 
-            connections_by_future[future] = (conn, broker)
+            futures_by_connection[conn] = (future, broker)
 
-        conn = None
-        while connections_by_future:
-            futures = list(connections_by_future.keys())
-            for future in futures:
+        timeout = self.timeout
+        while futures_by_connection:
+            start_time = time.time()
 
-                if not future.is_done:
-                    conn, _ = connections_by_future[future]
+            ready = selector.select(timeout)
+
+            for key, _ in ready:
+
+                conn = key.data
+                future, _ = futures_by_connection[conn]
+                while not future.is_done:
                     conn.recv()
-                    continue
+                _, broker = futures_by_connection.pop(conn)
 
-                _, broker = connections_by_future.pop(future)
                 if future.failed():
+                    log.error("Request failed: %s", future.exception)
                     refresh_metadata = True
                     failed_payloads(payloads_by_broker[broker])
 
@@ -327,9 +344,18 @@ class SimpleClient(object):
                                            payload_response.partition)
                         responses[topic_partition] = payload_response
 
+            timeout -= time.time() - start_time
+            if timeout < 0:
+                log.error("%s requests timed out.", len(futures_by_connection))
+                for _, broker in six.itervalues(futures_by_connection):
+                    failed_payloads(payloads_by_broker[broker])
+                    refresh_metadata = True
+                break
+
         if refresh_metadata:
             self.reset_all_metadata()
 
+        selector.close()
         # Return responses in the same order as provided
         return [responses[tp] for tp in original_ordering]
 

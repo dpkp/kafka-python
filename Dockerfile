@@ -39,8 +39,8 @@ COPY AUTHORS.md /work
 COPY CHANGES.md /work
 COPY MANIFEST.in /work
 COPY run_itest.sh /work
+COPY run_utest.sh /work
 RUN chmod +x /work/run_itest.sh
+RUN chmod +x /work/run_utest.sh
 
 WORKDIR /work
-
-CMD ["./run_itest.sh"]
