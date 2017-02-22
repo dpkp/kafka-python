@@ -217,6 +217,7 @@ class BaseCoordinator(object):
                 if isinstance(future.exception,
                               Errors.GroupCoordinatorNotAvailableError):
                     continue
+                log.error('FUTURE EXCEPTION %s', future.exception)
                 if isinstance(future.exception, Errors.NoBrokersAvailable):
                     log.error('NO BROKERS AVAILABLE retry count %d', retry_count)
                     if num_retries == retry_count:
