@@ -524,7 +524,7 @@ class ConsumerCoordinator(BaseCoordinator):
                                     Errors.RequestTimedOutError):
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error_type.__name__)
-                    self.coordinator_dead()
+                    self.coordinator_dead(error_type())
                     future.failure(error_type(self.group_id))
                     return
                 elif error_type in (Errors.UnknownMemberIdError,
@@ -629,7 +629,7 @@ class ConsumerCoordinator(BaseCoordinator):
                         future.failure(error)
                     elif error_type is Errors.NotCoordinatorForGroupError:
                         # re-discover the coordinator and retry
-                        self.coordinator_dead()
+                        self.coordinator_dead(error_type())
                         future.failure(error)
                     elif error_type in (Errors.UnknownMemberIdError,
                                         Errors.IllegalGenerationError):

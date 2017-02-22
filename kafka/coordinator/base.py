@@ -15,7 +15,7 @@ from ..metrics import AnonMeasurable
 from ..metrics.stats import Avg, Count, Max, Rate
 from ..protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
 from ..protocol.group import (HeartbeatRequest, JoinGroupRequest,
-                                  LeaveGroupRequest, SyncGroupRequest)
+                            LeaveGroupRequest, SyncGroupRequest)
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -190,7 +190,7 @@ class BaseCoordinator(object):
             return True
 
         if self._client.is_disconnected(self.coordinator_id):
-            self.coordinator_dead()
+            self.coordinator_dead('Node Disconnected')
             return True
 
         return False
@@ -219,7 +219,7 @@ class BaseCoordinator(object):
                     metadata_update = self._client.cluster.request_update()
                     self._client.poll(future=metadata_update)
                 else:
-                    raise future.exception # pylint: disable-msg=raising-bad-type
+                    raise future.exception  # pylint: disable-msg=raising-bad-type
 
     def need_rejoin(self):
         """Check whether the group should be rejoined (e.g. if metadata changes)
@@ -245,9 +245,12 @@ class BaseCoordinator(object):
             # This is important in particular to avoid resending a pending
             # JoinGroup request.
             if self._client.in_flight_request_count(self.coordinator_id):
-                while self._client.in_flight_request_count(self.coordinator_id):
-                    self._client.poll()
-                continue
+                while not self.coordinator_unknown():
+                    self._client.poll(delayed_tasks=False)
+                    if not self._client.in_flight_request_count(self.coordinator_id):
+                        break
+                else:
+                    continue
 
             future = self._send_join_group_request()
             self._client.poll(future=future)
@@ -266,7 +269,7 @@ class BaseCoordinator(object):
                                           Errors.IllegalGenerationError)):
                     continue
                 elif not future.retriable():
-                    raise exception # pylint: disable-msg=raising-bad-type
+                    raise exception  # pylint: disable-msg=raising-bad-type
                 time.sleep(self.config['retry_backoff_ms'] / 1000)
 
     def _send_join_group_request(self):
@@ -310,7 +313,7 @@ class BaseCoordinator(object):
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
-            self.coordinator_dead()
+            self.coordinator_dead(error)
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
@@ -347,7 +350,7 @@ class BaseCoordinator(object):
         elif error_type in (Errors.GroupCoordinatorNotAvailableError,
                             Errors.NotCoordinatorForGroupError):
             # re-discover the coordinator and retry with backoff
-            self.coordinator_dead()
+            self.coordinator_dead(error_type())
             log.debug("Attempt to join group %s failed due to obsolete "
                       "coordinator information: %s", self.group_id,
                       error_type.__name__)
@@ -424,7 +427,7 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             log.info("Successfully joined group %s with generation %s",
-                      self.group_id, self.generation)
+                    self.group_id, self.generation)
             self.sensors.sync_latency.record((time.time() - send_time) * 1000)
             future.success(response.member_assignment)
             return
@@ -447,7 +450,7 @@ class BaseCoordinator(object):
                             Errors.NotCoordinatorForGroupError):
             error = error_type()
             log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
-            self.coordinator_dead()
+            self.coordinator_dead(error)
             future.failure(error)
         else:
             error = error_type()
@@ -512,7 +515,7 @@ class BaseCoordinator(object):
                       error)
             future.failure(error)
 
-    def coordinator_dead(self, error=None):
+    def coordinator_dead(self, error):
         """Mark the current coordinator as dead."""
         if self.coordinator_id is not None:
             log.warning("Marking the coordinator dead (node %s) for group %s: %s.",
@@ -550,7 +553,7 @@ class BaseCoordinator(object):
     def _send_heartbeat_request(self):
         """Send a heartbeat request"""
         request = HeartbeatRequest[0](self.group_id, self.generation, self.member_id)
-        log.debug("Heartbeat: %s[%s] %s", request.group, request.generation_id, request.member_id) #pylint: disable-msg=no-member
+        log.debug("Heartbeat: %s[%s] %s", request.group, request.generation_id, request.member_id)  # pylint: disable-msg=no-member
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
         _f.add_callback(self._handle_heartbeat_response, future, time.time())
@@ -570,7 +573,7 @@ class BaseCoordinator(object):
             log.warning("Heartbeat failed for group %s: coordinator (node %s)"
                         " is either not started or not valid", self.group_id,
                         self.coordinator_id)
-            self.coordinator_dead()
+            self.coordinator_dead(error_type())
             future.failure(error_type())
         elif error_type is Errors.RebalanceInProgressError:
             log.warning("Heartbeat failed for group %s because it is"
@@ -623,7 +626,7 @@ class HeartbeatTask(object):
 
     def __call__(self):
         if (self._coordinator.generation < 0 or
-            self._coordinator.need_rejoin()):
+                self._coordinator.need_rejoin()):
             # no need to send the heartbeat we're not using auto-assignment
             # or if we are awaiting a rebalance
             log.info("Skipping heartbeat: no auto-assignment"
@@ -639,7 +642,7 @@ class HeartbeatTask(object):
             # we haven't received a successful heartbeat in one session interval
             # so mark the coordinator dead
             log.error("Heartbeat session expired - marking coordinator dead")
-            self._coordinator.coordinator_dead()
+            self._coordinator.coordinator_dead('Heartbeat session expired')
             return
 
         if not self._heartbeat.should_heartbeat():

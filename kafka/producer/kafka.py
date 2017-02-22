@@ -13,6 +13,7 @@ from ..client_async import KafkaClient, selectors
 from ..metrics import MetricConfig, Metrics
 from ..partitioner.default import DefaultPartitioner
 from ..protocol.message import Message, MessageSet
+from ..serializer import Serializer
 from ..structs import TopicPartition
 from .future import FutureRecordMetadata, FutureProduceResult
 from .record_accumulator import AtomicInteger, RecordAccumulator
@@ -122,7 +123,7 @@ class KafkaProducer(object):
             to resend any record whose send fails with a potentially transient
             error. Note that this retry is no different than if the client
             resent the record upon receiving the error. Allowing retries
-            without setting max_in_flight_connections_per_connection to 1 will
+            without setting max_in_flight_requests_per_connection to 1 will
             potentially change the ordering of records because if two batches
             are sent to a single partition, and the first fails and is retried
             but the second succeeds, then the records in the second batch may
@@ -246,7 +247,7 @@ class KafkaProducer(object):
         sasl_plain_username (str): username for sasl PLAIN authentication.
             Default: None
         sasl_plain_password (str): password for sasl PLAIN authentication.
-            Defualt: None
+            Default: None
 
     Note:
         Configuration parameters are described in more detail at
@@ -264,7 +265,7 @@ class KafkaProducer(object):
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
         'buffer_memory': 33554432,
-        'connections_max_idle_ms': 600000, # not implemented yet
+        'connections_max_idle_ms': 600000,  # not implemented yet
         'max_block_ms': 60000,
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,
@@ -295,7 +296,7 @@ class KafkaProducer(object):
     }
 
     def __init__(self, **configs):
-        log.debug("Starting the Kafka producer") # trace
+        log.debug("Starting the Kafka producer")  # trace
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -368,7 +369,7 @@ class KafkaProducer(object):
     def _unregister_cleanup(self):
         if getattr(self, '_cleanup', None):
             if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup) # pylint: disable=no-member
+                atexit.unregister(self._cleanup)  # pylint: disable=no-member
 
             # py2 requires removing from private attribute...
             else:
@@ -485,7 +486,12 @@ class KafkaProducer(object):
             # available
             self._wait_on_metadata(topic, self.config['max_block_ms'] / 1000.0)
 
-            key_bytes, value_bytes = self._serialize(topic, key, value)
+            key_bytes = self._serialize(
+                self.config['key_serializer'],
+                topic, key)
+            value_bytes = self._serialize(
+                self.config['value_serializer'],
+                topic, value)
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
@@ -543,7 +549,7 @@ class KafkaProducer(object):
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
         """
-        log.debug("Flushing accumulated records in producer.") # trace
+        log.debug("Flushing accumulated records in producer.")  # trace
         self._accumulator.begin_flush()
         self._sender.wakeup()
         self._accumulator.await_flush_completion(timeout=timeout)
@@ -606,17 +612,12 @@ class KafkaProducer(object):
             else:
                 log.debug("_wait_on_metadata woke after %s secs.", elapsed)
 
-    def _serialize(self, topic, key, value):
-        # pylint: disable-msg=not-callable
-        if self.config['key_serializer']:
-            serialized_key = self.config['key_serializer'](key)
-        else:
-            serialized_key = key
-        if self.config['value_serializer']:
-            serialized_value = self.config['value_serializer'](value)
-        else:
-            serialized_value = value
-        return serialized_key, serialized_value
+    def _serialize(self, f, topic, data):
+        if not f:
+            return data
+        if isinstance(f, Serializer):
+            return f.serialize(topic, data)
+        return f(data)
 
     def _partition(self, topic, partition, key, value,
                    serialized_key, serialized_value):
@@ -625,7 +626,7 @@ class KafkaProducer(object):
             assert partition in self._metadata.partitions_for_topic(topic), 'Unrecognized partition'
             return partition
 
-        all_partitions = list(self._metadata.partitions_for_topic(topic))
+        all_partitions = sorted(self._metadata.partitions_for_topic(topic))
         available = list(self._metadata.available_partitions_for_topic(topic))
         return self.config['partitioner'](serialized_key,
                                           all_partitions,

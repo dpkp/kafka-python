@@ -1,3 +1,53 @@
+# 1.3.2 (Dec 28, 2016)
+
+Core
+* Add kafka.serializer interfaces (dpkp 912)
+* from kafka import ConsumerRebalanceListener, OffsetAndMetadata
+* Use 0.10.0.1 for integration tests (dpkp 803)
+
+Consumer
+* KAFKA-3007: KafkaConsumer max_poll_records (dpkp 831)
+* Raise exception if given a non-str topic (ssaamm 824)
+* Immediately update metadata for pattern subscription (laz2 915)
+
+Producer
+* Update Partitioners for use with KafkaProducer (barrotsteindev 827)
+* Sort partitions before calling partitioner (ms7s 905)
+* Added ssl_password config option to KafkaProducer class (kierkegaard13 830)
+
+Client
+* Always check for request timeouts (dpkp 887)
+* When hostname lookup is necessary, do every connect (benauthor 812)
+
+Bugfixes
+* Fix errorcode check when socket.connect_ex raises an exception (guojh 907)
+* Fix fetcher bug when processing offset out of range (sibiryakov 860)
+* Fix possible request draining in ensure_active_group (dpkp 896)
+* Fix metadata refresh handling with 0.10+ brokers when topic list is empty (sibiryakov 867)
+* KafkaProducer should set timestamp in Message if provided (Drizzt1991 875)
+* Fix murmur2 bug handling python2 bytes that do not ascii encode (dpkp 815)
+* Monkeypatch max_in_flight_requests_per_connection when checking broker version (dpkp 834)
+* Fix message timestamp_type (qix 828)
+
+Logging / Error Messages
+* Always include an error for logging when the coordinator is marked dead (dpkp 890)
+* Only string-ify BrokerResponseError args if provided (dpkp 889)
+* Update warning re advertised.listeners / advertised.host.name (jeffwidman 878)
+* Fix unrecognized sasl_mechanism error message (sharego 883)
+
+Documentation
+* Add docstring for max_records (jeffwidman 897)
+* Fixup doc references to max_in_flight_requests_per_connection
+* Fix typo: passowrd --> password (jeffwidman 901)
+* Fix documentation typo 'Defualt' -> 'Default'. (rolando 895)
+* Added doc for `max_poll_records` option (Drizzt1991 881)
+* Remove old design notes from Kafka 8 era (jeffwidman 876)
+* Fix documentation typos (jeffwidman 874)
+* Fix quota violation exception message (dpkp 809)
+* Add comment for round robin partitioner with different subscriptions
+* Improve KafkaProducer docstring for retries configuration
+
+
 # 1.3.1 (Aug 8, 2016)
 
 Bugfixes
@@ -123,7 +173,7 @@ Consumers
 Producers
 * KAFKA-3388: Fix expiration of batches sitting in the accumulator (dpkp PR 699)
 * KAFKA-3197: when max.in.flight.request.per.connection = 1, attempt to guarantee ordering (dpkp PR 698)
-* Dont use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
+* Don't use soon-to-be-reserved keyword await as function name (FutureProduceResult) (dpkp PR 697)
 
 Clients
 * Fix socket leaks in KafkaClient (dpkp PR 696)
@@ -241,7 +291,7 @@ Documentation
 * Migrate load_example.py to KafkaProducer / KafkaConsumer
 
 Internals
-* Dont override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
+* Don't override system rcvbuf or sndbuf unless configured explicitly (dpkp PR 557)
 * Some attributes may not exist in __del__ if we failed assertions
 * Break up some circular references and close client wake pipes on __del__ (aisch PR 554)
 

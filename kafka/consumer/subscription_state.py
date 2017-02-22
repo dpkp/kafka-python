@@ -128,14 +128,21 @@ class SubscriptionState(object):
 
         Raises:
             IllegalStateErrror: if assign_from_user has been used already
+            TypeError: if a non-str topic is given
         """
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
+
+        if isinstance(topics, six.string_types):
+            topics = [topics]
 
         if self.subscription == set(topics):
             log.warning("subscription unchanged by change_subscription(%s)",
                         topics)
             return
+
+        if any(not isinstance(t, six.string_types) for t in topics):
+            raise TypeError('All topics must be strings')
 
         log.info('Updating subscribed topics to: %s', topics)
         self.subscription = set(topics)
@@ -218,7 +225,7 @@ class SubscriptionState(object):
 
         for tp in assignments:
             if tp.topic not in self.subscription:
-                raise ValueError("Assigned partition %s for non-subscribed topic." % tp)
+                raise ValueError("Assigned partition %s for non-subscribed topic." % str(tp))
         self.assignment.clear()
         for tp in assignments:
             self._add_assigned_partition(tp)

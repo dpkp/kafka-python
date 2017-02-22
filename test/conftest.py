@@ -18,10 +18,8 @@ def version():
 def zookeeper(version, request):
     assert version
     zk = ZookeeperFixture.instance()
-    def fin():
-        zk.close()
-    request.addfinalizer(fin)
-    return zk
+    yield zk
+    zk.close()
 
 
 @pytest.fixture(scope="module")
@@ -29,10 +27,8 @@ def kafka_broker(version, zookeeper, request):
     assert version
     k = KafkaFixture.instance(0, zookeeper.host, zookeeper.port,
                               partitions=4)
-    def fin():
-        k.close()
-    request.addfinalizer(fin)
-    return k
+    yield k
+    k.close()
 
 
 @pytest.fixture

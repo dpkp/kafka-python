@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from .struct import Struct
-from .types import Array, Bytes, Int16, Schema, String
+from .types import Array, Bytes, Int16, Int32, Schema, String
 
 
 class ApiVersionResponse_v0(Struct):
@@ -12,7 +12,8 @@ class ApiVersionResponse_v0(Struct):
         ('api_versions', Array(
             ('api_key', Int16),
             ('min_version', Int16),
-            ('max_version', Int16))))
+            ('max_version', Int16)))
+    )
 
 
 class ApiVersionRequest_v0(Struct):
@@ -24,6 +25,63 @@ class ApiVersionRequest_v0(Struct):
 
 ApiVersionRequest = [ApiVersionRequest_v0]
 ApiVersionResponse = [ApiVersionResponse_v0]
+
+
+class CreateTopicsResponse_v0(Struct):
+    API_KEY = 19
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('topic_error_codes', Array(
+            ('topic', String('utf-8')),
+            ('error_code', Int16)))
+    )
+
+
+class CreateTopicsRequest_v0(Struct):
+    API_KEY = 19
+    API_VERSION = 0
+    RESPONSE_TYPE = CreateTopicsResponse_v0
+    SCHEMA = Schema(
+        ('create_topic_requests', Array(
+            ('topic', String('utf-8')),
+            ('num_partitions', Int32),
+            ('replication_factor', Int16),
+            ('replica_assignment', Array(
+                ('partition_id', Int32),
+                ('replicas', Array(Int32)))),
+            ('configs', Array(
+                ('config_key', String('utf-8')),
+                ('config_value', String('utf-8')))))),
+        ('timeout', Int32)
+    )
+
+
+CreateTopicsRequest = [CreateTopicsRequest_v0]
+CreateTopicsResponse = [CreateTopicsResponse_v0]
+
+
+class DeleteTopicsResponse_v0(Struct):
+    API_KEY = 20
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('topic_error_codes', Array(
+            ('topic', String('utf-8')),
+            ('error_code', Int16)))
+    )
+
+
+class DeleteTopicsRequest_v0(Struct):
+    API_KEY = 20
+    API_VERSION = 0
+    RESPONSE_TYPE = DeleteTopicsResponse_v0
+    SCHEMA = Schema(
+        ('topics', Array(String('utf-8'))),
+        ('timeout', Int32)
+    )
+
+
+DeleteTopicsRequest = [DeleteTopicsRequest_v0]
+DeleteTopicsResponse = [DeleteTopicsResponse_v0]
 
 
 class ListGroupsResponse_v0(Struct):

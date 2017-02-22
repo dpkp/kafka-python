@@ -55,9 +55,13 @@ class RecordBatch(object):
         if not self.records.has_room_for(key, value):
             return None
 
-        msg = Message(value, key=key, magic=self.message_version)
+        if self.message_version == 0:
+            msg = Message(value, key=key, magic=self.message_version)
+        else:
+            msg = Message(value, key=key, magic=self.message_version,
+                          timestamp=timestamp_ms)
         record_size = self.records.append(self.record_count, msg)
-        checksum = msg.crc # crc is recalculated during records.append()
+        checksum = msg.crc  # crc is recalculated during records.append()
         self.max_record_size = max(self.max_record_size, record_size)
         self.last_append = time.time()
         future = FutureRecordMetadata(self.produce_future, self.record_count,
@@ -350,7 +354,7 @@ class RecordAccumulator(object):
 
          * There is at least one partition that is not backing off its send
          * and those partitions are not muted (to prevent reordering if
-           max_in_flight_connections is set to 1)
+           max_in_flight_requests_per_connection is set to 1)
          * and any of the following are true:
 
            * The record set is full

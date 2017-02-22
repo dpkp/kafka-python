@@ -73,10 +73,9 @@ class BrokerResponseError(KafkaError):
 
     def __str__(self):
         """Add errno to standard KafkaError str"""
-        return '[Error {0}] {1}: {2}'.format(
+        return '[Error {0}] {1}'.format(
             self.errno,
-            self.__class__.__name__,
-            super(KafkaError, self).__str__()) # pylint: disable=bad-super-call
+            super(BrokerResponseError, self).__str__())
 
 
 class NoError(BrokerResponseError):
@@ -153,6 +152,7 @@ class BrokerNotAvailableError(BrokerResponseError):
     message = 'BROKER_NOT_AVAILABLE'
     description = ('This is not a client facing error and is used mostly by'
                    ' tools when a broker is not alive.')
+
 
 class ReplicaNotAvailableError(BrokerResponseError):
     errno = 9

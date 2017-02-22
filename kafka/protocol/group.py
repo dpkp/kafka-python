@@ -19,6 +19,12 @@ class JoinGroupResponse_v0(Struct):
     )
 
 
+class JoinGroupResponse_v1(Struct):
+    API_KEY = 11
+    API_VERSION = 1
+    SCHEMA = JoinGroupResponse_v0.SCHEMA
+
+
 class JoinGroupRequest_v0(Struct):
     API_KEY = 11
     API_VERSION = 0
@@ -35,8 +41,25 @@ class JoinGroupRequest_v0(Struct):
     UNKNOWN_MEMBER_ID = ''
 
 
-JoinGroupRequest = [JoinGroupRequest_v0]
-JoinGroupResponse = [JoinGroupResponse_v0]
+class JoinGroupRequest_v1(Struct):
+    API_KEY = 11
+    API_VERSION = 1
+    RESPONSE_TYPE = JoinGroupResponse_v1
+    SCHEMA = Schema(
+        ('group', String('utf-8')),
+        ('session_timeout', Int32),
+        ('rebalance_timeout', Int32),
+        ('member_id', String('utf-8')),
+        ('protocol_type', String('utf-8')),
+        ('group_protocols', Array(
+            ('protocol_name', String('utf-8')),
+            ('protocol_metadata', Bytes)))
+    )
+    UNKNOWN_MEMBER_ID = ''
+
+
+JoinGroupRequest = [JoinGroupRequest_v0, JoinGroupRequest_v1]
+JoinGroupResponse = [JoinGroupResponse_v0, JoinGroupResponse_v1]
 
 
 class ProtocolMetadata(Struct):

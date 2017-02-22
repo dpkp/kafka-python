@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+import select
 
 from kafka.vendor import six
 
@@ -247,7 +248,6 @@ class SimpleClient(object):
                 failed_payloads(broker_payloads)
                 continue
 
-
             host, port, afi = get_ip_port_afi(broker.host)
             try:
                 conn = self._get_conn(host, broker.port, afi)
@@ -279,6 +279,15 @@ class SimpleClient(object):
         conn = None
         while connections_by_future:
             futures = list(connections_by_future.keys())
+
+            # block until a socket is ready to be read
+            sockets = [
+                conn._sock
+                for future, (conn, _) in six.iteritems(connections_by_future)
+                if not future.is_done and conn._sock is not None]
+            if sockets:
+                read_socks, _, _ = select.select(sockets, [], [])
+
             for future in futures:
 
                 if not future.is_done:
@@ -338,20 +347,20 @@ class SimpleClient(object):
         # Send the list of request payloads and collect the responses and
         # errors
         responses = {}
-        requestId = self._next_id()
-        log.debug('Request %s to %s: %s', requestId, broker, payloads)
+        request_id = self._next_id()
+        log.debug('Request %s to %s: %s', request_id, broker, payloads)
         request = encoder_fn(client_id=self.client_id,
-                             correlation_id=requestId, payloads=payloads)
+                             correlation_id=request_id, payloads=payloads)
 
         # Send the request, recv the response
         try:
             host, port, afi = get_ip_port_afi(broker.host)
             conn = self._get_conn(host, broker.port, afi)
-            conn.send(requestId, request)
+            conn.send(request_id, request)
 
         except ConnectionError as e:
             log.warning('ConnectionError attempting to send request %s '
-                        'to server %s: %s', requestId, broker, e)
+                        'to server %s: %s', request_id, broker, e)
 
             for payload in payloads:
                 topic_partition = (payload.topic, payload.partition)
@@ -365,18 +374,18 @@ class SimpleClient(object):
             # ProduceRequest w/ acks = 0
             if decoder_fn is None:
                 log.debug('Request %s does not expect a response '
-                          '(skipping conn.recv)', requestId)
+                          '(skipping conn.recv)', request_id)
                 for payload in payloads:
                     topic_partition = (payload.topic, payload.partition)
                     responses[topic_partition] = None
                 return []
 
             try:
-                response = conn.recv(requestId)
+                response = conn.recv(request_id)
             except ConnectionError as e:
                 log.warning('ConnectionError attempting to receive a '
                             'response to request %s from server %s: %s',
-                            requestId, broker, e)
+                            request_id, broker, e)
 
                 for payload in payloads:
                     topic_partition = (payload.topic, payload.partition)
@@ -389,7 +398,7 @@ class SimpleClient(object):
                                        payload_response.partition)
                     responses[topic_partition] = payload_response
                     _resps.append(payload_response)
-                log.debug('Response %s: %s', requestId, _resps)
+                log.debug('Response %s: %s', request_id, _resps)
 
         # Return responses in the same order as provided
         return [responses[tp] for tp in original_ordering]
@@ -463,8 +472,8 @@ class SimpleClient(object):
 
     def has_metadata_for_topic(self, topic):
         return (
-          topic in self.topic_partitions
-          and len(self.topic_partitions[topic]) > 0
+            topic in self.topic_partitions
+            and len(self.topic_partitions[topic]) > 0
         )
 
     def get_partition_ids_for_topic(self, topic):
@@ -477,7 +486,7 @@ class SimpleClient(object):
     def topics(self):
         return list(self.topic_partitions.keys())
 
-    def ensure_topic_exists(self, topic, timeout = 30):
+    def ensure_topic_exists(self, topic, timeout=30):
         start_time = time.time()
 
         while not self.has_metadata_for_topic(topic):
@@ -576,7 +585,7 @@ class SimpleClient(object):
                 if leader in self.brokers:
                     self.topics_to_brokers[topic_part] = self.brokers[leader]
 
-                # If Unknown Broker, fake BrokerMetadata so we dont lose the id
+                # If Unknown Broker, fake BrokerMetadata so we don't lose the id
                 # (not sure how this could happen. server could be in bad state)
                 else:
                     self.topics_to_brokers[topic_part] = BrokerMetadata(

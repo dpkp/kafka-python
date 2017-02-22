@@ -15,6 +15,7 @@ from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.message import PartialMessage
 from kafka.protocol.offset import OffsetRequest, OffsetResetStrategy
+from kafka.serializer import Deserializer
 from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class Fetcher(six.Iterator):
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
         'skip_double_compressed_messages': False,
-        'iterator_refetch_records': 1, # undocumented -- interface may change
+        'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
         'api_version': (0, 8, 0),
     }
@@ -90,10 +91,10 @@ class Fetcher(six.Iterator):
 
         self._client = client
         self._subscriptions = subscriptions
-        self._records = collections.deque() # (offset, topic_partition, messages)
+        self._records = collections.deque()  # (offset, topic_partition, messages)
         self._unauthorized_topics = set()
-        self._offset_out_of_range_partitions = dict() # {topic_partition: offset}
-        self._record_too_large_partitions = dict() # {topic_partition: offset}
+        self._offset_out_of_range_partitions = dict()  # {topic_partition: offset}
+        self._record_too_large_partitions = dict()  # {topic_partition: offset}
         self._iterator = None
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
@@ -216,7 +217,7 @@ class Fetcher(six.Iterator):
                 return future.value
 
             if not future.retriable():
-                raise future.exception # pylint: disable-msg=raising-bad-type
+                raise future.exception  # pylint: disable-msg=raising-bad-type
 
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
@@ -236,7 +237,7 @@ class Fetcher(six.Iterator):
         current_out_of_range_partitions = {}
 
         # filter only the fetchable partitions
-        for partition, offset in self._offset_out_of_range_partitions:
+        for partition, offset in six.iteritems(self._offset_out_of_range_partitions):
             if not self._subscriptions.is_fetchable(partition):
                 log.debug("Ignoring fetched records for %s since it is no"
                           " longer fetchable", partition)
@@ -493,10 +494,10 @@ class Fetcher(six.Iterator):
                             # of a compressed message depends on the
                             # typestamp type of the wrapper message:
 
-                            if msg.timestamp_type == 0: # CREATE_TIME (0)
+                            if msg.timestamp_type == 0:  # CREATE_TIME (0)
                                 inner_timestamp = inner_msg.timestamp
 
-                            elif msg.timestamp_type == 1: # LOG_APPEND_TIME (1)
+                            elif msg.timestamp_type == 1:  # LOG_APPEND_TIME (1)
                                 inner_timestamp = msg.timestamp
 
                             else:
@@ -507,7 +508,12 @@ class Fetcher(six.Iterator):
                         if absolute_base_offset >= 0:
                             inner_offset += absolute_base_offset
 
-                        key, value = self._deserialize(inner_msg)
+                        key = self._deserialize(
+                            self.config['key_deserializer'],
+                            tp.topic, inner_msg.key)
+                        value = self._deserialize(
+                            self.config['value_deserializer'],
+                            tp.topic, inner_msg.value)
                         yield ConsumerRecord(tp.topic, tp.partition, inner_offset,
                                              inner_timestamp, msg.timestamp_type,
                                              key, value, inner_msg.crc,
@@ -515,7 +521,12 @@ class Fetcher(six.Iterator):
                                              len(inner_msg.value) if inner_msg.value is not None else -1)
 
                 else:
-                    key, value = self._deserialize(msg)
+                    key = self._deserialize(
+                        self.config['key_deserializer'],
+                        tp.topic, msg.key)
+                    value = self._deserialize(
+                        self.config['value_deserializer'],
+                        tp.topic, msg.value)
                     yield ConsumerRecord(tp.topic, tp.partition, offset,
                                          msg.timestamp, msg.timestamp_type,
                                          key, value, msg.crc,
@@ -541,16 +552,12 @@ class Fetcher(six.Iterator):
             self._iterator = None
             raise
 
-    def _deserialize(self, msg):
-        if self.config['key_deserializer']:
-            key = self.config['key_deserializer'](msg.key) # pylint: disable-msg=not-callable
-        else:
-            key = msg.key
-        if self.config['value_deserializer']:
-            value = self.config['value_deserializer'](msg.value) # pylint: disable-msg=not-callable
-        else:
-            value = msg.value
-        return key, value
+    def _deserialize(self, f, topic, bytes_):
+        if not f:
+            return bytes_
+        if isinstance(f, Deserializer):
+            return f.deserialize(topic, bytes_)
+        return f(bytes_)
 
     def _send_offset_request(self, partition, timestamp):
         """Fetch a single offset before the given timestamp for the partition.
@@ -666,7 +673,7 @@ class Fetcher(six.Iterator):
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
             requests[node_id] = FetchRequest[version](
-                -1, # replica_id
+                -1,  # replica_id
                 self.config['fetch_max_wait_ms'],
                 self.config['fetch_min_bytes'],
                 partition_data.items())
@@ -740,12 +747,12 @@ class Fetcher(six.Iterator):
                     self._client.cluster.request_update()
                 elif error_type is Errors.OffsetOutOfRangeError:
                     fetch_offset = fetch_offsets[tp]
+                    log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
                     if self._subscriptions.has_default_offset_reset_policy():
                         self._subscriptions.need_offset_reset(tp)
+                        log.info("Resetting offset for topic-partition %s", tp)
                     else:
                         self._offset_out_of_range_partitions[tp] = fetch_offset
-                    log.info("Fetch offset %s is out of range, resetting offset",
-                             fetch_offset)
                 elif error_type is Errors.TopicAuthorizationFailedError:
                     log.warn("Not authorized to read from topic %s.", tp.topic)
                     self._unauthorized_topics.add(tp.topic)

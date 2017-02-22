@@ -17,6 +17,8 @@ from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse, MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
+from kafka.cluster import ClusterMetadata
+from kafka.future import Future
 
 
 @pytest.fixture
@@ -72,7 +74,7 @@ def test_bootstrap_failure(conn):
 
 
 def test_can_connect(cli, conn):
-    # Node is not in broker metadata - cant connect
+    # Node is not in broker metadata - can't connect
     assert not cli._can_connect(2)
 
     # Node is in broker metadata but not in _conns
@@ -285,8 +287,30 @@ def test_least_loaded_node():
     pass
 
 
-def test_set_topics():
-    pass
+def test_set_topics(mocker):
+    request_update = mocker.patch.object(ClusterMetadata, 'request_update')
+    request_update.side_effect = lambda: Future()
+    cli = KafkaClient(api_version=(0, 10))
+
+    # replace 'empty' with 'non empty'
+    request_update.reset_mock()
+    fut = cli.set_topics(['t1', 't2'])
+    assert not fut.is_done
+    request_update.assert_called_with()
+
+    # replace 'non empty' with 'same'
+    request_update.reset_mock()
+    fut = cli.set_topics(['t1', 't2'])
+    assert fut.is_done
+    assert fut.value == set(['t1', 't2'])
+    request_update.assert_not_called()
+
+    # replace 'non empty' with 'empty'
+    request_update.reset_mock()
+    fut = cli.set_topics([])
+    assert fut.is_done
+    assert fut.value == set()
+    request_update.assert_not_called()
 
 
 @pytest.fixture
