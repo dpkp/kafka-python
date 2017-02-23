@@ -221,7 +221,7 @@ class BaseCoordinator(object):
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll()
                         if num_retries == retry_count:
-                            break
+                            raise future.exception  # pylint: disable-msg=raising-bad-type
                         retry_count += 1
                     else:
                         metadata_update = self._client.cluster.request_update()
