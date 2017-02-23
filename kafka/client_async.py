@@ -485,6 +485,7 @@ class KafkaClient(object):
                 self._maybe_connect(node_id)
 
             # Send a metadata request if needed
+            log.error("POLLLING")
             metadata_timeout_ms = self._maybe_refresh_metadata()
 
             # Send scheduled tasks
