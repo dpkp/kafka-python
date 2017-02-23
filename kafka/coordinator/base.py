@@ -199,6 +199,8 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
+        num_retries = 3
+        retry_count = 0
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -218,6 +220,11 @@ class BaseCoordinator(object):
                 if future.retriable():
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll()
+                        log.error("RETURNED FROM POLL %d", retry_count)
+                        if num_retries == retry_count:
+                            log.error("BREAK ENSURE_COORDINATOR_KNOWN")
+                            break
+                        retry_count += 1
                     else:
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update)
