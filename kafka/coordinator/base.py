@@ -224,9 +224,11 @@ class BaseCoordinator(object):
                         break
                     retry_count += 1
                 if future.retriable():
+                    log.error('FUTURE RETRIABLE %s', future.exception)
                     metadata_update = self._client.cluster.request_update()
                     self._client.poll(future=metadata_update)
                 else:
+                    log.error('FUTURE RAISE %s', future.exception)
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
     def need_rejoin(self):
