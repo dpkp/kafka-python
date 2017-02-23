@@ -216,9 +216,11 @@ class BaseCoordinator(object):
                               Errors.GroupCoordinatorNotAvailableError):
                     continue
                 if future.retriable():
-                    log.error('FUTURE RETRIABLE %s', future.exception)
-                    metadata_update = self._client.cluster.request_update()
-                    self._client.poll(future=metadata_update)
+                    if isinstance(future.exception, Errors.NodeNotReadyError):
+                        self._client.poll()
+                    else:
+                        metadata_update = self._client.cluster.request_update()
+                        self._client.poll(future=metadata_update)
                 else:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
