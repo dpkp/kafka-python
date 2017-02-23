@@ -485,7 +485,6 @@ class KafkaClient(object):
                 self._maybe_connect(node_id)
 
             # Send a metadata request if needed
-            log.error("POLLLING")
             metadata_timeout_ms = self._maybe_refresh_metadata()
 
             # Send scheduled tasks
@@ -511,6 +510,7 @@ class KafkaClient(object):
                 timeout = max(0, timeout / 1000.0)  # avoid negative timeouts
 
             responses.extend(self._poll(timeout, sleep=sleep))
+            log.error("POLLLING %s", responses)
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
             if not future or future.is_done:
@@ -704,12 +704,14 @@ class KafkaClient(object):
         if timeout == 0:
             node_id = self.least_loaded_node()
             if node_id is None:
+                log.error("GNNNNNNNNNNNNNNNNNNODE IS NONE")
                 log.debug("Give up sending metadata request since no node is available")
                 # mark the timestamp for no node available to connect
                 self._last_no_node_available_ms = time.time() * 1000
                 return timeout
 
             if self._can_send_request(node_id):
+                log.error("XXXXXXXXXXX_can_send_requeste")
                 topics = list(self._topics)
                 if self.cluster.need_all_topic_metadata or not topics:
                     topics = [] if self.config['api_version'] < (0, 10) else None
@@ -727,6 +729,7 @@ class KafkaClient(object):
                 future.add_errback(refresh_done)
 
             elif self._can_connect(node_id):
+                log.error("GNNNNNNNNNNNNNNNNNNO_can_connect")
                 log.debug("Initializing connection to node %s for metadata request", node_id)
                 self._maybe_connect(node_id)
                 # If initiateConnect failed immediately, this node will be put into blackout and we
@@ -737,6 +740,7 @@ class KafkaClient(object):
                 # connected, but can't send more OR connecting
                 # In either case, we just need to wait for a network event to let us know the selected
                 # connection might be usable again.
+                log.error("######################################")
                 self._last_no_node_available_ms = time.time() * 1000
 
         return timeout
