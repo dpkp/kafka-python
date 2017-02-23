@@ -505,13 +505,13 @@ class KafkaProducer(object):
             tp = TopicPartition(topic, partition)
             if timestamp_ms is None:
                 timestamp_ms = int(time.time() * 1000)
-            log.debug("Sending (key=%s value=%s) to %s", key, value, tp)
+            log.fatal("Sending (key=%s value=%s) to %s", key, value, tp)
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes,
                                               self.config['max_block_ms'])
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
-                log.debug("Waking up the sender since %s is either full or"
+                log.fatal("Waking up the sender since %s is either full or"
                            " getting a new batch", tp)
                 self._sender.wakeup()
 
@@ -524,7 +524,7 @@ class KafkaProducer(object):
         except AssertionError:
             raise
         except Exception as e:
-            log.debug("Exception occurred during message send: %s", e)
+            log.fatal("Exception occurred during message send: %s", e)
             return FutureRecordMetadata(
                 FutureProduceResult(TopicPartition(topic, partition)),
                 -1, None, None,
