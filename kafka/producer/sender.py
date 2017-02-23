@@ -156,7 +156,6 @@ class Sender(threading.Thread):
         # difference between now and its linger expiry time; otherwise the
         # select time will be the time difference between now and the
         # metadata expiry time
-        log.error("SENDER.RUN_ONCE")
         self._client.poll(poll_timeout_ms, sleep=True)
 
     def initiate_close(self):

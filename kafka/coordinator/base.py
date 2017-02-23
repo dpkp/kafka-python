@@ -218,7 +218,6 @@ class BaseCoordinator(object):
                               Errors.GroupCoordinatorNotAvailableError):
                     continue
                 if future.retriable():
-                    log.error("FUTURE RETRIABLE %s", future.exception)
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll()
                         if num_retries == retry_count:
