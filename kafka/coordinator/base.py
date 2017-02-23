@@ -220,9 +220,7 @@ class BaseCoordinator(object):
                 if future.retriable():
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll()
-                        log.error("RETURNED FROM POLL %d", retry_count)
                         if num_retries == retry_count:
-                            log.error("BREAK ENSURE_COORDINATOR_KNOWN")
                             break
                         retry_count += 1
                     else:
