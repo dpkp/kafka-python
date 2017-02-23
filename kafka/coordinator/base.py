@@ -186,13 +186,16 @@ class BaseCoordinator(object):
         Returns:
             bool: True if the coordinator is unknown
         """
+        log.error('COORDINATOR UNKNOWN 1 %s', self.coordinator_id)
         if self.coordinator_id is None:
             return True
 
+        log.error('COORDINATOR UNKNOWN 2 %s', self.coordinator_id)
         if self._client.is_disconnected(self.coordinator_id):
             self.coordinator_dead('Node Disconnected')
             return True
 
+        log.error('COORDINATOR UNKNOWN 3 %s', self.coordinator_id)
         return False
 
     def ensure_coordinator_known(self):
