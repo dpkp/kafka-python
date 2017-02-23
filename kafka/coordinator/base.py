@@ -186,24 +186,19 @@ class BaseCoordinator(object):
         Returns:
             bool: True if the coordinator is unknown
         """
-        log.error('COORDINATOR UNKNOWN 1 %s', self.coordinator_id)
         if self.coordinator_id is None:
             return True
 
-        log.error('COORDINATOR UNKNOWN 2 %s', self.coordinator_id)
         if self._client.is_disconnected(self.coordinator_id):
             self.coordinator_dead('Node Disconnected')
             return True
 
-        log.error('COORDINATOR UNKNOWN 3 %s', self.coordinator_id)
         return False
 
     def ensure_coordinator_known(self):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        num_retries = 3
-        retry_count = 0
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -220,18 +215,11 @@ class BaseCoordinator(object):
                 if isinstance(future.exception,
                               Errors.GroupCoordinatorNotAvailableError):
                     continue
-                log.error('FUTURE EXCEPTION %s', future.exception)
-                if isinstance(future.exception, Errors.NoBrokersAvailable):
-                    log.error('NO BROKERS AVAILABLE retry count %d', retry_count)
-                    if num_retries == retry_count:
-                        break
-                    retry_count += 1
                 if future.retriable():
                     log.error('FUTURE RETRIABLE %s', future.exception)
                     metadata_update = self._client.cluster.request_update()
                     self._client.poll(future=metadata_update)
                 else:
-                    log.error('FUTURE RAISE %s', future.exception)
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
     def need_rejoin(self):
