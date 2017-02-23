@@ -482,7 +482,9 @@ class KafkaClient(object):
 
             # Attempt to complete pending connections
             for node_id in list(self._connecting):
+                log.error("MAYBE CON 1 %s", node_id)
                 self._maybe_connect(node_id)
+                log.error("MAYBE CON 2 %s", node_id)
 
             # Send a metadata request if needed
             metadata_timeout_ms = self._maybe_refresh_metadata()
@@ -525,9 +527,7 @@ class KafkaClient(object):
         processed = set()
 
         start_select = time.time()
-        log.error("POLLING 1")
         ready = self._selector.select(timeout)
-        log.error("POLLING 2 %s", ready)
         end_select = time.time()
         if self._sensors:
             self._sensors.select_time.record((end_select - start_select) * 1000000000)
