@@ -287,6 +287,10 @@ class BaseCoordinator(object):
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
+        elif not self._client.ready(self.coordinator_id):
+            e = Errors.NodeNotReadyError(self.coordinator_id)
+            return Future().failure(e)
+
         # send a join group request to the coordinator
         log.info("(Re-)joining group %s", self.group_id)
         request = JoinGroupRequest[0](
@@ -417,6 +421,11 @@ class BaseCoordinator(object):
         if self.coordinator_unknown():
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
+
+        elif not self._client.ready(self.coordinator_id):
+            e = Errors.NodeNotReadyError(self.coordinator_id)
+            return Future().failure(e)
+
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
         _f.add_callback(self._handle_sync_group_response, future, time.time())
@@ -467,6 +476,10 @@ class BaseCoordinator(object):
         node_id = self._client.least_loaded_node()
         if node_id is None:
             return Future().failure(Errors.NoBrokersAvailable())
+
+        elif not self._client.ready(node_id):
+            e = Errors.NodeNotReadyError(node_id)
+            return Future().failure(e)
 
         log.debug("Sending group coordinator request for group %s to broker %s",
                   self.group_id, node_id)
@@ -554,6 +567,14 @@ class BaseCoordinator(object):
 
     def _send_heartbeat_request(self):
         """Send a heartbeat request"""
+        if self.coordinator_unknown():
+            e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            return Future().failure(e)
+
+        elif not self._client.ready(self.coordinator_id):
+            e = Errors.NodeNotReadyError(self.coordinator_id)
+            return Future().failure(e)
+
         request = HeartbeatRequest[0](self.group_id, self.generation, self.member_id)
         log.debug("Heartbeat: %s[%s] %s", request.group, request.generation_id, request.member_id)  # pylint: disable-msg=no-member
         future = Future()
