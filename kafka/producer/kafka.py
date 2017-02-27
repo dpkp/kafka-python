@@ -408,7 +408,7 @@ class KafkaProducer(object):
         if 'TIMEOUT_MAX' in dir(threading):
             assert 0 <= timeout <= threading.TIMEOUT_MAX
         else:
-            assert 0 <= timeout
+            assert timeout >= 0
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
         #first_exception = AtomicReference() # this will keep track of the first encountered exception
