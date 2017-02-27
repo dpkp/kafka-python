@@ -403,8 +403,9 @@ class KafkaProducer(object):
             try:
                 timeout = threading.TIMEOUT_MAX
             except AttributeError:
+                # threading.TIMEOUT_MAX is available in Python3.3+
                 timeout = 999999999
-        assert timeout >= 0
+        assert 0 <= timeout <= threading.TIMEOUT_MAX
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
         #first_exception = AtomicReference() # this will keep track of the first encountered exception
