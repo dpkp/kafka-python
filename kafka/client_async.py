@@ -105,10 +105,10 @@ class KafkaClient(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: none.
-        api_version (tuple): specify which kafka API version to use. Accepted
-            values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9), (0, 10)
-            If None, KafkaClient will attempt to infer the broker
-            version by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set
+            to None, KafkaClient will attempt to infer the broker version by
+            probing various APIs. For the full list of supported versions,
+            see KafkaClient.API_VERSIONS. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version is None
