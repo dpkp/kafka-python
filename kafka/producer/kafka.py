@@ -224,10 +224,10 @@ class KafkaProducer(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: none.
-        api_version (tuple): specify which kafka API version to use.
-            For a full list of supported versions, see KafkaClient.API_VERSIONS
-            If set to None, the client will attempt to infer the broker version
-            by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to infer the broker version by probing
+            various APIs. For a full list of supported versions, see
+            KafkaClient.API_VERSIONS. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
