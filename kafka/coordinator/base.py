@@ -219,12 +219,12 @@ class BaseCoordinator(object):
                 if future.retriable():
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         node_not_ready_retry_start_time = time.time()
-                        self._client.poll(timeout_ms=node_not_ready_retry_timeout_in_ms)
+                        self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
                         node_not_ready_retry_end_time = time.time()
                         log.fatal("ST %d ET %d\n" % (node_not_ready_retry_start_time, node_not_ready_retry_end_time))
-                        node_not_ready_retry_timeout_in_ms -=\
+                        node_not_ready_retry_timeout_ms -=\
                             (node_not_ready_retry_end_time - node_not_ready_retry_start_time) * 1000
-                        if node_not_ready_retry_timeout_in_ms <= 0:
+                        if node_not_ready_retry_timeout_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
                     else:
                         metadata_update = self._client.cluster.request_update()
