@@ -76,6 +76,9 @@ class ConsumerCoordinator(BaseCoordinator):
                 (such as offsets) should be exposed to the consumer. If set to
                 True the only way to receive records from an internal topic is
                 subscribing to it. Requires 0.10+. Default: True
+            node_not_ready_retry_timeout_ms (int): The timeout used to detect
+                the broker no being available so that NodeNotReadyError is raised.
+                Default: None
         """
         super(ConsumerCoordinator, self).__init__(client, metrics, **configs)
 

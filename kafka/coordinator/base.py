@@ -204,7 +204,6 @@ class BaseCoordinator(object):
         (and we have an active connection -- java client uses unsent queue).
         """
         node_not_ready_retry_timeout_ms = self.config['node_not_ready_retry_timeout_ms']
-        log.fatal("TIMEOUT %s", node_not_ready_retry_timeout_ms)
         node_not_ready_retry_start_time = time.time()
         while self.coordinator_unknown():
 
@@ -226,7 +225,6 @@ class BaseCoordinator(object):
                     if node_not_ready_retry_timeout_ms is not None and isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
                         node_not_ready_retry_timeout_ms -= (time.time() - node_not_ready_retry_start_time) * 1000
-                        log.fatal("TIMEOUT %s", node_not_ready_retry_timeout_ms)
                         if node_not_ready_retry_timeout_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
                     else:
