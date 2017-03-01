@@ -183,7 +183,7 @@ class KafkaConsumer(six.Iterator):
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
         node_not_ready_retry_timeout_ms (int): The timeout used to detect
-            the broker no being available so that NodeNotReadyError is raised.
+            the broker not being available so that NodeNotReadyError is raised.
             Default: None
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.

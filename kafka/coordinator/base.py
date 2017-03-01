@@ -66,7 +66,7 @@ class BaseCoordinator(object):
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
@@ -77,7 +77,7 @@ class BaseCoordinator(object):
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
             node_not_ready_retry_timeout_ms (int): The timeout used to detect
-                the broker no being available so that NodeNotReadyError is raised.
+                the broker not being available so that NodeNotReadyError is raised.
                 Default: None
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
