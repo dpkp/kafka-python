@@ -199,7 +199,9 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        node_not_ready_retry_timeout_in_secs = self.config['request_timeout_ms']
+        for key in self.config:
+            log.fatal("CONFIG %s: %s\n" % (key, str(self.config[key])))
+        node_not_ready_retry_timeout_in_secs = 40
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
