@@ -214,6 +214,7 @@ class BaseCoordinator(object):
                 self.coordinator_id = self._client.least_loaded_node()
                 self._client.ready(self.coordinator_id)
                 continue
+
             future = self._send_group_coordinator_request()
             self._client.poll(future=future)
 
