@@ -199,9 +199,7 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        for key in self.config:
-            log.fatal("CONFIG %s: %s\n" % (key, str(self.config[key])))
-        node_not_ready_retry_timeout_in_secs = 40
+        node_not_ready_retry_timeout_ms = 40000
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -221,12 +219,12 @@ class BaseCoordinator(object):
                 if future.retriable():
                     if isinstance(future.exception, Errors.NodeNotReadyError):
                         node_not_ready_retry_start_time = time.time()
-                        self._client.poll(timeout_ms=node_not_ready_retry_timeout_in_secs)
+                        self._client.poll(timeout_ms=node_not_ready_retry_timeout_in_ms)
                         node_not_ready_retry_end_time = time.time()
                         log.fatal("ST %d ET %d\n" % (node_not_ready_retry_start_time, node_not_ready_retry_end_time))
-                        node_not_ready_retry_timeout_in_secs -=\
-                            node_not_ready_retry_end_time - node_not_ready_retry_start_time
-                        if node_not_ready_retry_timeout_in_secs <= 0:
+                        node_not_ready_retry_timeout_in_ms -=\
+                            (node_not_ready_retry_end_time - node_not_ready_retry_start_time) * 1000
+                        if node_not_ready_retry_timeout_in_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
                     else:
                         metadata_update = self._client.cluster.request_update()
