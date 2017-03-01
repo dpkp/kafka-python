@@ -199,7 +199,7 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        node_not_ready_retry_timeout_ms = 4000
+        node_not_ready_retry_timeout_ms = 500
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
