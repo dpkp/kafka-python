@@ -53,6 +53,7 @@ class BaseCoordinator(object):
         'group_id': 'kafka-python-default-group',
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
+        'node_not_ready_retry_timeout_ms': None,
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
         'metric_group_prefix': '',
@@ -75,6 +76,9 @@ class BaseCoordinator(object):
                 should be set no higher than 1/3 of that value. It can be
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
+            node_not_ready_retry_timeout_ms (int): The timeout used to detect
+                the broker no being available so that NodeNotReadyError is raised.
+                Default: None
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
         """
@@ -199,7 +203,9 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        node_not_ready_retry_timeout_ms = 500
+        node_not_ready_retry_timeout_ms = self.config['node_not_ready_retry_timeout_ms']
+        log.fatal("TIMEOUT %s", node_not_ready_retry_timeout_ms)
+        node_not_ready_retry_start_time = time.time()
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -217,14 +223,10 @@ class BaseCoordinator(object):
                               Errors.GroupCoordinatorNotAvailableError):
                     continue
                 if future.retriable():
-                    if isinstance(future.exception, Errors.NodeNotReadyError):
-                        node_not_ready_retry_start_time = time.time()
+                    if node_not_ready_retry_timeout_ms is not None and isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
-                        node_not_ready_retry_end_time = time.time()
-                        node_not_ready_retry_timeout_ms -=\
-                            (node_not_ready_retry_end_time - node_not_ready_retry_start_time) * 1000
-                        log.fatal("RT %d ST %.2f ET %.2f\n" % (node_not_ready_retry_timeout_ms,
-                            node_not_ready_retry_start_time, node_not_ready_retry_end_time))
+                        node_not_ready_retry_timeout_ms -= (time.time() - node_not_ready_retry_start_time) * 1000
+                        log.fatal("TIMEOUT %s", node_not_ready_retry_timeout_ms)
                         if node_not_ready_retry_timeout_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
                     else:
