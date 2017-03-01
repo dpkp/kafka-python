@@ -664,7 +664,9 @@ class Fetcher(six.Iterator):
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
 
-        if self.config['api_version'] >= (0, 10):
+        if self.config['api_version'] >= (0, 10, 1):
+            version = 3
+        elif (0, 10, 1) > self.config['api_version'] >= (0, 10):
             version = 2
         elif self.config['api_version'] == (0, 9):
             version = 1
