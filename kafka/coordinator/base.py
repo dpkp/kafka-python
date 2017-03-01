@@ -199,7 +199,7 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        node_not_ready_retry_timeout_ms = 40000
+        node_not_ready_retry_timeout_ms = 4000
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -221,9 +221,10 @@ class BaseCoordinator(object):
                         node_not_ready_retry_start_time = time.time()
                         self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
                         node_not_ready_retry_end_time = time.time()
-                        log.fatal("ST %d ET %d\n" % (node_not_ready_retry_start_time, node_not_ready_retry_end_time))
                         node_not_ready_retry_timeout_ms -=\
                             (node_not_ready_retry_end_time - node_not_ready_retry_start_time) * 1000
+                        log.fatal("RT %d ST %.2f ET %.2f\n" % (node_not_ready_retry_timeout_ms,
+                            node_not_ready_retry_start_time, node_not_ready_retry_end_time))
                         if node_not_ready_retry_timeout_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
                     else:
