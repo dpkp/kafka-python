@@ -224,6 +224,7 @@ class KafkaConsumer(six.Iterator):
         'heartbeat_interval_ms': 3000,
         'session_timeout_ms': 30000,
         'max_poll_records': 500,
+        'node_not_ready_retry_timeout_ms': None,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
