@@ -37,7 +37,8 @@ class ConsumerCoordinator(BaseCoordinator):
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
         'exclude_internal_topics': True,
-        'metric_group_prefix': 'consumer'
+        'metric_group_prefix': 'consumer',
+        'node_not_ready_retry_timeout_ms': None
     }
 
     def __init__(self, client, subscription, metrics, **configs):
