@@ -37,8 +37,14 @@ FetchResponsePayload = namedtuple("FetchResponsePayload",
 OffsetRequestPayload = namedtuple("OffsetRequestPayload",
     ["topic", "partition", "time", "max_offsets"])
 
+ListOffsetRequestPayload = namedtuple("ListOffsetRequestPayload",
+    ["topic", "partition", "time"])
+
 OffsetResponsePayload = namedtuple("OffsetResponsePayload",
     ["topic", "partition", "error", "offsets"])
+
+ListOffsetResponsePayload = namedtuple("ListOffsetResponsePayload",
+    ["topic", "partition", "error", "timestamp", "offset"])
 
 # https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
 OffsetCommitRequestPayload = namedtuple("OffsetCommitRequestPayload",

@@ -741,6 +741,17 @@ class SimpleClient(object):
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
     @time_metric('offset_commit')
+    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+                            callback=None):
+        resps = self._send_broker_aware_request(
+            payloads,
+            KafkaProtocol.encode_list_offset_request,
+            KafkaProtocol.decode_list_offset_response)
+
+        return [resp if not callback else callback(resp) for resp in resps
+                if not fail_on_error or not self._raise_on_response_error(resp)]
+
+    @time_metric('offset_commit')
     def send_offset_commit_request(self, group, payloads=[],
                                    fail_on_error=True, callback=None):
         encoder = functools.partial(
