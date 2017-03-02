@@ -74,7 +74,7 @@ class KafkaConsumer(six.Iterator):
             happens, the consumer can get stuck trying to fetch a large
             message on a certain partition. Default: 1048576.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 305000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         reconnect_backoff_ms (int): The amount of time in milliseconds to
@@ -213,7 +213,7 @@ class KafkaConsumer(six.Iterator):
         'fetch_max_wait_ms': 500,
         'fetch_min_bytes': 1,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
-        'request_timeout_ms': 40 * 1000,
+        'request_timeout_ms': 305000,
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'max_in_flight_requests_per_connection': 5,
