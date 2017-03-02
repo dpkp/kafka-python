@@ -197,6 +197,7 @@ class SimpleBufferPool(object):
                     if self._free:
                         buf = self._free.popleft()
                     else:
+                        self._waiters.remove(more_memory)
                         raise Errors.KafkaTimeoutError(
                             "Failed to allocate memory within the configured"
                             " max blocking time")
