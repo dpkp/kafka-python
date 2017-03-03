@@ -505,6 +505,7 @@ class BrokerConnection(object):
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
+        self._sasl_auth_future = None
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)
