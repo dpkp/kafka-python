@@ -35,7 +35,7 @@ class KafkaConsumer(six.Iterator):
 
     Arguments:
         *topics (str): optional list of topics to subscribe to. If not set,
-            call subscribe() or assign() before consuming records.
+            call :meth:`.subscribe` or :meth:`.assign` before consuming records.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
@@ -119,7 +119,7 @@ class KafkaConsumer(six.Iterator):
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group management facilities. Default: 30000
         max_poll_records (int): The maximum number of records returned in a
-            single call to poll(). Default: 500
+            single call to :meth:`.poll`. Default: 500
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -327,11 +327,11 @@ class KafkaConsumer(six.Iterator):
             partitions (list of TopicPartition): Assignment for this instance.
 
         Raises:
-            IllegalStateError: If consumer has already called subscribe()
+            IllegalStateError: If consumer has already called :meth:`.subscribe`.
 
         Warning:
             It is not possible to use both manual partition assignment with
-            assign() and group assignment with subscribe().
+            :meth:`.assign` and group assignment with :meth:`.subscribe`.
 
         Note:
             This interface does not support incremental assignment and will
@@ -349,12 +349,12 @@ class KafkaConsumer(six.Iterator):
     def assignment(self):
         """Get the TopicPartitions currently assigned to this consumer.
 
-        If partitions were directly assigned using assign(), then this will
-        simply return the same partitions that were previously assigned.
-        If topics were subscribed using subscribe(), then this will give the
-        set of topic partitions currently assigned to the consumer (which may
-        be None if the assignment hasn't happened yet, or if the partitions are
-        in the process of being reassigned).
+        If partitions were directly assigned using :meth:`.assign`, then this
+        will simply return the same partitions that were previously assigned.
+        If topics were subscribed using :meth:`.subscribe`, then this will give
+        the set of topic partitions currently assigned to the consumer (which
+        may be None if the assignment hasn't happened yet, or if the partitions
+        are in the process of being reassigned).
 
         Returns:
             set: {TopicPartition, ...}
@@ -517,6 +517,9 @@ class KafkaConsumer(six.Iterator):
                 data is not available in the buffer. If 0, returns immediately
                 with any records that are available currently in the buffer,
                 else returns empty. Must not be negative. Default: 0
+            max_records (int, optional): The maximum number of records returned
+                in a single call to :meth:`.poll`. Default: Inherit value from
+                max_poll_records.
 
         Returns:
             dict: Topic to list of records since the last fetch for the
@@ -627,10 +630,10 @@ class KafkaConsumer(six.Iterator):
     def pause(self, *partitions):
         """Suspend fetching from the requested partitions.
 
-        Future calls to poll() will not return any records from these partitions
-        until they have been resumed using resume(). Note that this method does
-        not affect partition subscription. In particular, it does not cause a
-        group rebalance when automatic assignment is used.
+        Future calls to :meth:`.poll` will not return any records from these
+        partitions until they have been resumed using :meth:`.resume`. Note that
+        this method does not affect partition subscription. In particular, it
+        does not cause a group rebalance when automatic assignment is used.
 
         Arguments:
             *partitions (TopicPartition): Partitions to pause.
@@ -642,7 +645,7 @@ class KafkaConsumer(six.Iterator):
             self._subscription.pause(partition)
 
     def paused(self):
-        """Get the partitions that were previously paused by a call to pause().
+        """Get the partitions that were previously paused using :meth:`.pause`.
 
         Returns:
             set: {partition (TopicPartition), ...}
@@ -665,10 +668,10 @@ class KafkaConsumer(six.Iterator):
         """Manually specify the fetch offset for a TopicPartition.
 
         Overrides the fetch offsets that the consumer will use on the next
-        poll(). If this API is invoked for the same partition more than once,
-        the latest offset will be used on the next poll(). Note that you may
-        lose data if this API is arbitrarily used in the middle of consumption,
-        to reset the fetch offsets.
+        :meth:`.poll`. If this API is invoked for the same partition more than
+        once, the latest offset will be used on the next :meth:`.poll`. Note
+        that you may lose data if this API is arbitrarily used in the middle of
+        consumption, to reset the fetch offsets.
 
         Arguments:
             partition (TopicPartition): Partition for seek operation
@@ -740,7 +743,7 @@ class KafkaConsumer(six.Iterator):
         Topic subscriptions are not incremental: this list will replace the
         current assignment (if there is one).
 
-        This method is incompatible with assign().
+        This method is incompatible with :meth:`.assign`.
 
         Arguments:
             topics (list): List of topics for subscription.
@@ -769,7 +772,7 @@ class KafkaConsumer(six.Iterator):
                 through this interface are from topics subscribed in this call.
 
         Raises:
-            IllegalStateError: If called after previously calling assign().
+            IllegalStateError: If called after previously calling :meth:`.assign`.
             AssertionError: If neither topics or pattern is provided.
             TypeError: If listener is not a ConsumerRebalanceListener.
         """

@@ -34,9 +34,9 @@ class KafkaProducer(object):
     thread that is responsible for turning these records into requests and
     transmitting them to the cluster.
 
-    The send() method is asynchronous. When called it adds the record to a
-    buffer of pending record sends and immediately returns. This allows the
-    producer to batch together individual records for efficiency.
+    :meth:`.send` is asynchronous. When called it adds the record to a buffer of
+    pending record sends and immediately returns. This allows the producer to
+    batch together individual records for efficiency.
 
     The 'acks' config controls the criteria under which requests are considered
     complete. The "all" setting will result in blocking on the full commit of
@@ -166,9 +166,9 @@ class KafkaProducer(object):
             will block up to max_block_ms, raising an exception on timeout.
             In the current implementation, this setting is an approximation.
             Default: 33554432 (32MB)
-        max_block_ms (int): Number of milliseconds to block during send() and
-            partitions_for(). These methods can be blocked either because the
-            buffer is full or metadata unavailable. Blocking in the
+        max_block_ms (int): Number of milliseconds to block during :meth:`.send`
+            and :meth:`.partitions_for`. These methods can be blocked either
+            because the buffer is full or metadata unavailable. Blocking in the
             user-supplied serializers or partitioner will not be counted against
             this timeout. Default: 60000.
         max_request_size (int): The maximum size of a request. This is also
@@ -531,8 +531,8 @@ class KafkaProducer(object):
         Invoking this method makes all buffered records immediately available
         to send (even if linger_ms is greater than 0) and blocks on the
         completion of the requests associated with these records. The
-        post-condition of flush() is that any previously sent record will have
-        completed (e.g. Future.is_done() == True). A request is considered
+        post-condition of :meth:`.flush` is that any previously sent record will
+        have completed (e.g. Future.is_done() == True). A request is considered
         completed when either it is successfully acknowledged according to the
         'acks' configuration for the producer, or it results in an error.
 
