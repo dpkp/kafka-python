@@ -499,7 +499,7 @@ class KafkaProducer(object):
             tp = TopicPartition(topic, partition)
             if timestamp_ms is None:
                 timestamp_ms = int(time.time() * 1000)
-            log.debug("Sending (key=%s value=%s) to %s", key, value, tp)
+            log.debug("Sending (key=%r value=%r) to %s", key, value, tp)
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes,
                                               self.config['max_block_ms'])
