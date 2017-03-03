@@ -867,8 +867,8 @@ class BrokerConnection(object):
         return version
 
     def __repr__(self):
-        return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,
-                                                          self.port)
+        return "<BrokerConnection node_id=%s host=%s/%s port=%d>" % (
+            self.config['node_id'], self.hostname, self.host, self.port)
 
 
 class BrokerConnectionMetrics(object):
