@@ -511,7 +511,7 @@ class BrokerConnection(object):
         self._rbuffer.seek(0)
         self._rbuffer.truncate()
         if error is None:
-            error = Errors.ConnectionError(str(self))
+            error = Errors.Cancelled(str(self))
         while self.in_flight_requests:
             ifr = self.in_flight_requests.popleft()
             ifr.future.failure(error)
