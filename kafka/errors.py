@@ -349,6 +349,71 @@ class IllegalSaslStateError(BrokerResponseError):
     description = 'Request is not valid given the current SASL state.'
 
 
+class UnsupportedVersionError(BrokerResponseError):
+    errno = 35
+    message = 'UNSUPPORTED_VERSION'
+    description = 'The version of API is not supported.'
+
+
+class TopicAlreadyExistsError(BrokerResponseError):
+    errno = 36
+    message = 'TOPIC_ALREADY_EXISTS'
+    description = 'Topic with this name already exists.'
+
+
+class InvalidPartitionsError(BrokerResponseError):
+    errno = 37
+    message = 'INVALID_PARTITIONS'
+    description = 'Number of partitions is invalid.'
+
+
+class InvalidReplicationFactorError(BrokerResponseError):
+    errno = 38
+    message = 'INVALID_REPLICATION_FACTOR'
+    description = 'Replication-factor is invalid.'
+
+
+class InvalidReplicationAssignmentError(BrokerResponseError):
+    errno = 39
+    message = 'INVALID_REPLICATION_ASSIGNMENT'
+    description = 'Replication assignment is invalid.'
+
+
+class InvalidConfigurationError(BrokerResponseError):
+    errno = 40
+    message = 'INVALID_CONFIG'
+    description = 'Configuration is invalid.'
+
+
+class NotControllerError(BrokerResponseError):
+    errno = 41
+    message = 'NOT_CONTROLLER'
+    description = 'This is not the correct controller for this cluster.'
+    retriable = True
+
+
+class InvalidRequestError(BrokerResponseError):
+    errno = 42
+    message = 'INVALID_REQUEST'
+    description = ('This most likely occurs because of a request being'
+                   ' malformed by the client library or the message was'
+                   ' sent to an incompatible broker. See the broker logs'
+                   ' for more details.')
+
+
+class UnsupportedForMessageFormatError(BrokerResponseError):
+    errno = 43
+    message = 'UNSUPPORTED_FOR_MESSAGE_FORMAT'
+    description = ('The message format version on the broker does not'
+                   ' support this request.')
+
+
+class PolicyViolationError(BrokerResponseError):
+    errno = 44
+    message = 'POLICY_VIOLATION'
+    description = 'Request parameters do not satisfy the configured policy.'
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 
