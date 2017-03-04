@@ -270,7 +270,8 @@ class InconsistentGroupProtocolError(BrokerResponseError):
     errno = 23
     message = 'INCONSISTENT_GROUP_PROTOCOL'
     description = ('Returned in join group when the member provides a protocol'
-                   ' type or set of protocols which is not compatible with the current group.')
+                   ' type or set of protocols which is not compatible with the'
+                   ' current group.')
 
 
 class InvalidGroupIdError(BrokerResponseError):
@@ -333,19 +334,19 @@ class ClusterAuthorizationFailedError(BrokerResponseError):
 class InvalidTimestampError(BrokerResponseError):
     errno = 32
     message = 'INVALID_TIMESTAMP'
-    description = ('The timestamp of the message is out of acceptable range.')
+    description = 'The timestamp of the message is out of acceptable range.'
 
 
 class UnsupportedSaslMechanismError(BrokerResponseError):
     errno = 33
     message = 'UNSUPPORTED_SASL_MECHANISM'
-    description = ('The broker does not support the requested SASL mechanism.')
+    description = 'The broker does not support the requested SASL mechanism.'
 
 
 class IllegalSaslStateError(BrokerResponseError):
     errno = 34
     message = 'ILLEGAL_SASL_STATE'
-    description = ('Request is not valid given the current SASL state.')
+    description = 'Request is not valid given the current SASL state.'
 
 
 class KafkaUnavailableError(KafkaError):
