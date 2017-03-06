@@ -206,6 +206,7 @@ class KafkaClient(object):
             self.config['api_version'] = self.check_version(timeout=check_timeout)
 
     def _bootstrap(self, hosts):
+        log.info('Bootstrapping cluster metadata from %s', hosts)
         # Exponential backoff if bootstrap fails
         backoff_ms = self.config['reconnect_backoff_ms'] * 2 ** self._bootstrap_fails
         next_at = self._last_bootstrap + backoff_ms / 1000.0
@@ -241,6 +242,8 @@ class KafkaClient(object):
                 bootstrap.close()
                 continue
             self.cluster.update_metadata(future.value)
+            log.info('Bootstrap succeeded: found %d brokers and %d topics.',
+                     len(self.cluster.brokers()), len(self.cluster.topics()))
 
             # A cluster with no topics can return no broker metadata
             # in that case, we should keep the bootstrap connection

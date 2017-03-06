@@ -269,7 +269,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()
-            log.debug('%s: connecting to %s:%d', self, self.host, self.port)
+            log.info('%s: connecting to %s:%d', self, self.host, self.port)
             self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
             self.config['state_change_callback'](self)
