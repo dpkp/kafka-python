@@ -422,9 +422,11 @@ class BaseCoordinator(object):
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
-        elif not self._client.ready(self.coordinator_id):
-            e = Errors.NodeNotReadyError(self.coordinator_id)
-            return Future().failure(e)
+        # We assume that coordinator is ready if we're sending SyncGroup
+        # as it typically follows a successful JoinGroup
+        # Also note that if client.ready() enforces a metadata priority policy,
+        # we can get into an infinite loop if the leader assignment process
+        # itself requests a metadata update
 
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
