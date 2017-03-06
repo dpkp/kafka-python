@@ -91,11 +91,11 @@ class SimpleClient(object):
         Returns the leader for a partition or None if the partition exists
         but has no leader.
 
-        UnknownTopicOrPartitionError will be raised if the topic or partition
-        is not part of the metadata.
-
-        LeaderNotAvailableError is raised if server has metadata, but there is
-        no current leader
+        Raises:
+            UnknownTopicOrPartitionError: If the topic or partition is not part
+                of the metadata.
+            LeaderNotAvailableError: If the server has metadata, but there is no
+        current leader.
         """
 
         key = TopicPartition(topic, partition)
@@ -434,8 +434,8 @@ class SimpleClient(object):
         Create an inactive copy of the client object, suitable for passing
         to a separate thread.
 
-        Note that the copied connections are not initialized, so reinit() must
-        be called on the returned copy.
+        Note that the copied connections are not initialized, so :meth:`.reinit`
+        must be called on the returned copy.
         """
         _conns = self._conns
         self._conns = {}
@@ -682,6 +682,16 @@ class SimpleClient(object):
             payloads,
             KafkaProtocol.encode_offset_request,
             KafkaProtocol.decode_offset_response)
+
+        return [resp if not callback else callback(resp) for resp in resps
+                if not fail_on_error or not self._raise_on_response_error(resp)]
+
+    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+                            callback=None):
+        resps = self._send_broker_aware_request(
+            payloads,
+            KafkaProtocol.encode_list_offset_request,
+            KafkaProtocol.decode_list_offset_response)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]

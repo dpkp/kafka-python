@@ -16,6 +16,14 @@ class TestKafkaConsumer(unittest.TestCase):
         with self.assertRaises(AssertionError):
             SimpleConsumer(MagicMock(), 'group', 'topic', partitions = [ '0' ])
 
+    def test_session_timeout_larger_than_request_timeout_raises(self):
+        with self.assertRaises(KafkaConfigurationError):
+            KafkaConsumer(bootstrap_servers='localhost:9092', session_timeout_ms=60000, request_timeout_ms=40000)
+
+    def test_fetch_max_wait_larger_than_request_timeout_raises(self):
+        with self.assertRaises(KafkaConfigurationError):
+            KafkaConsumer(bootstrap_servers='localhost:9092', fetch_max_wait_ms=41000, request_timeout_ms=40000)
+
 
 class TestMultiProcessConsumer(unittest.TestCase):
     @unittest.skipIf(sys.platform.startswith('win'), 'test mocking fails on windows')

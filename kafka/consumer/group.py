@@ -6,6 +6,8 @@ import socket
 import sys
 import time
 
+from kafka.errors import KafkaConfigurationError
+
 from kafka.vendor import six
 
 from kafka.client_async import KafkaClient, selectors
@@ -33,7 +35,7 @@ class KafkaConsumer(six.Iterator):
 
     Arguments:
         *topics (str): optional list of topics to subscribe to. If not set,
-            call subscribe() or assign() before consuming records.
+            call :meth:`.subscribe` or :meth:`.assign` before consuming records.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
@@ -117,7 +119,7 @@ class KafkaConsumer(six.Iterator):
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group management facilities. Default: 30000
         max_poll_records (int): The maximum number of records returned in a
-            single call to poll(). Default: 500
+            single call to :meth:`.poll`. Default: 500
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -159,9 +161,9 @@ class KafkaConsumer(six.Iterator):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             Default: None.
-        api_version (tuple): Specify which kafka API version to use.
-            If set to None, the client will attempt to infer the broker version
-            by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to infer the broker version by probing
+            various APIs. Different versions enable different functionality.
             Examples:
                 (0, 9) enables full group coordination features with automatic
                     partition assignment and rebalancing,
@@ -171,7 +173,8 @@ class KafkaConsumer(six.Iterator):
                     partition assignment only,
                 (0, 8, 0) enables basic functionality but requires manual
                     partition assignment and offset management.
-            For a full list of supported versions, see KafkaClient.API_VERSIONS
+            For the full list of supported versions, see
+            KafkaClient.API_VERSIONS. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -267,6 +270,17 @@ class KafkaConsumer(six.Iterator):
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
 
+        request_timeout_ms = self.config['request_timeout_ms']
+        session_timeout_ms = self.config['session_timeout_ms']
+        fetch_max_wait_ms = self.config['fetch_max_wait_ms']
+        if request_timeout_ms <= session_timeout_ms:
+            raise KafkaConfigurationError(
+                "Request timeout (%s) must be larger than session timeout (%s)" %
+                (request_timeout_ms, session_timeout_ms))
+        if request_timeout_ms <= fetch_max_wait_ms:
+            raise KafkaConfigurationError("Request timeout (%s) must be larger than fetch-max-wait-ms (%s)" %
+                                          (request_timeout_ms, fetch_max_wait_ms))
+
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
                                      time_window_ms=self.config['metrics_sample_window_ms'],
@@ -313,11 +327,11 @@ class KafkaConsumer(six.Iterator):
             partitions (list of TopicPartition): Assignment for this instance.
 
         Raises:
-            IllegalStateError: If consumer has already called subscribe()
+            IllegalStateError: If consumer has already called :meth:`.subscribe`.
 
         Warning:
             It is not possible to use both manual partition assignment with
-            assign() and group assignment with subscribe().
+            :meth:`.assign` and group assignment with :meth:`.subscribe`.
 
         Note:
             This interface does not support incremental assignment and will
@@ -335,12 +349,12 @@ class KafkaConsumer(six.Iterator):
     def assignment(self):
         """Get the TopicPartitions currently assigned to this consumer.
 
-        If partitions were directly assigned using assign(), then this will
-        simply return the same partitions that were previously assigned.
-        If topics were subscribed using subscribe(), then this will give the
-        set of topic partitions currently assigned to the consumer (which may
-        be None if the assignment hasn't happened yet, or if the partitions are
-        in the process of being reassigned).
+        If partitions were directly assigned using :meth:`.assign`, then this
+        will simply return the same partitions that were previously assigned.
+        If topics were subscribed using :meth:`.subscribe`, then this will give
+        the set of topic partitions currently assigned to the consumer (which
+        may be None if the assignment hasn't happened yet, or if the partitions
+        are in the process of being reassigned).
 
         Returns:
             set: {TopicPartition, ...}
@@ -504,7 +518,7 @@ class KafkaConsumer(six.Iterator):
                 with any records that are available currently in the buffer,
                 else returns empty. Must not be negative. Default: 0
             max_records (int, optional): The maximum number of records returned
-                in a single call to :meth:`poll`. Default: Inherit value from
+                in a single call to :meth:`.poll`. Default: Inherit value from
                 max_poll_records.
 
         Returns:
@@ -616,10 +630,10 @@ class KafkaConsumer(six.Iterator):
     def pause(self, *partitions):
         """Suspend fetching from the requested partitions.
 
-        Future calls to poll() will not return any records from these partitions
-        until they have been resumed using resume(). Note that this method does
-        not affect partition subscription. In particular, it does not cause a
-        group rebalance when automatic assignment is used.
+        Future calls to :meth:`.poll` will not return any records from these
+        partitions until they have been resumed using :meth:`.resume`. Note that
+        this method does not affect partition subscription. In particular, it
+        does not cause a group rebalance when automatic assignment is used.
 
         Arguments:
             *partitions (TopicPartition): Partitions to pause.
@@ -631,7 +645,7 @@ class KafkaConsumer(six.Iterator):
             self._subscription.pause(partition)
 
     def paused(self):
-        """Get the partitions that were previously paused by a call to pause().
+        """Get the partitions that were previously paused using :meth:`.pause`.
 
         Returns:
             set: {partition (TopicPartition), ...}
@@ -654,10 +668,10 @@ class KafkaConsumer(six.Iterator):
         """Manually specify the fetch offset for a TopicPartition.
 
         Overrides the fetch offsets that the consumer will use on the next
-        poll(). If this API is invoked for the same partition more than once,
-        the latest offset will be used on the next poll(). Note that you may
-        lose data if this API is arbitrarily used in the middle of consumption,
-        to reset the fetch offsets.
+        :meth:`.poll`. If this API is invoked for the same partition more than
+        once, the latest offset will be used on the next :meth:`.poll`. Note
+        that you may lose data if this API is arbitrarily used in the middle of
+        consumption, to reset the fetch offsets.
 
         Arguments:
             partition (TopicPartition): Partition for seek operation
@@ -729,7 +743,7 @@ class KafkaConsumer(six.Iterator):
         Topic subscriptions are not incremental: this list will replace the
         current assignment (if there is one).
 
-        This method is incompatible with assign().
+        This method is incompatible with :meth:`.assign`.
 
         Arguments:
             topics (list): List of topics for subscription.
@@ -758,7 +772,7 @@ class KafkaConsumer(six.Iterator):
                 through this interface are from topics subscribed in this call.
 
         Raises:
-            IllegalStateError: If called after previously calling assign().
+            IllegalStateError: If called after previously calling :meth:`.assign`.
             AssertionError: If neither topics or pattern is provided.
             TypeError: If listener is not a ConsumerRebalanceListener.
         """

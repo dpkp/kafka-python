@@ -43,10 +43,10 @@ class BaseCoordinator(object):
        leader and begins processing.
 
     To leverage this protocol, an implementation must define the format of
-    metadata provided by each member for group registration in group_protocols()
-    and the format of the state assignment provided by the leader in
-    _perform_assignment() and which becomes available to members in
-    _on_join_complete().
+    metadata provided by each member for group registration in
+    :meth:`.group_protocols` and the format of the state assignment provided by
+    the leader in :meth:`._perform_assignment` and which becomes available to
+    members in :meth:`._on_join_complete`.
     """
 
     DEFAULT_CONFIG = {
@@ -213,12 +213,10 @@ class BaseCoordinator(object):
             self._client.poll(future=future)
 
             if future.failed():
-                if isinstance(future.exception,
-                              Errors.GroupCoordinatorNotAvailableError):
-                    continue
-                elif future.retriable():
-                    metadata_update = self._client.cluster.request_update()
-                    self._client.poll(future=metadata_update)
+                if future.retriable():
+                    if getattr(future.exception, 'invalid_metadata', False):
+                        metadata_update = self._client.cluster.request_update()
+                        self._client.poll(future=metadata_update)
                 else:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
@@ -277,7 +275,7 @@ class BaseCoordinator(object):
         """Join the group and return the assignment for the next generation.
 
         This function handles both JoinGroup and SyncGroup, delegating to
-        _perform_assignment() if elected leader by the coordinator.
+        :meth:`._perform_assignment` if elected leader by the coordinator.
 
         Returns:
             Future: resolves to the encoded-bytes assignment returned from the

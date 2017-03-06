@@ -1,6 +1,6 @@
 # pylint: skip-file
 # vendored from https://github.com/berkerpeksag/selectors34
-# at commit 5195dd2cbe598047ad0a2e446a829546f6ffc9eb (v1.1)
+# at commit ff61b82168d2cc9c4922ae08e2a8bf94aab61ea2 (unreleased, ~1.2)
 #
 # Original author: Charles-Francois Natali (c.f.natali[at]gmail.com)
 # Maintainer: Berker Peksag (berker.peksag[at]gmail.com)
@@ -91,6 +91,7 @@ class _SelectorMapping(Mapping):
 
     def __iter__(self):
         return iter(self._selector._fd_to_key)
+
 
 
 @six.add_metaclass(ABCMeta)

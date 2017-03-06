@@ -114,10 +114,9 @@ class BrokerConnection(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: None.
-        api_version (tuple): specify which Kafka API version to use. Accepted
-            values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9), (0, 10)
-            If None, KafkaClient will attempt to infer the broker
-            version by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use.
+            Accepted values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9),
+            (0, 10). Default: (0, 8, 2)
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version is None
@@ -382,7 +381,7 @@ class BrokerConnection(object):
         # old ssl in python2.6 will swallow all SSLErrors here...
         except (SSLWantReadError, SSLWantWriteError):
             pass
-        except SSLZeroReturnError:
+        except (SSLZeroReturnError, ConnectionError):
             log.warning('SSL connection closed by server during handshake.')
             self.close(Errors.ConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
@@ -505,12 +504,14 @@ class BrokerConnection(object):
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
+        self.last_attempt = time.time()
+        self._sasl_auth_future = None
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)
         self._rbuffer.truncate()
         if error is None:
-            error = Errors.ConnectionError(str(self))
+            error = Errors.Cancelled(str(self))
         while self.in_flight_requests:
             ifr = self.in_flight_requests.popleft()
             ifr.future.failure(error)
@@ -867,8 +868,8 @@ class BrokerConnection(object):
         return version
 
     def __repr__(self):
-        return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,
-                                                          self.port)
+        return "<BrokerConnection node_id=%s host=%s/%s port=%d>" % (
+            self.config['node_id'], self.hostname, self.host, self.port)
 
 
 class BrokerConnectionMetrics(object):
