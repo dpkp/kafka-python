@@ -215,6 +215,7 @@ class BaseCoordinator(object):
             if future.failed():
                 if future.retriable():
                     if getattr(future.exception, 'invalid_metadata', False):
+                        log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update)
                 else:
@@ -532,6 +533,7 @@ class BaseCoordinator(object):
         if not self.coordinator_unknown() and self.generation > 0:
             # this is a minimal effort attempt to leave the group. we do not
             # attempt any resending if the request fails or times out.
+            log.info('Leaving consumer group (%s).', self.group_id)
             request = LeaveGroupRequest[0](self.group_id, self.member_id)
             future = self._client.send(self.coordinator_id, request)
             future.add_callback(self._handle_leave_group_response)
