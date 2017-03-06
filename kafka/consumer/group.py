@@ -376,13 +376,13 @@ class KafkaConsumer(six.Iterator):
         """
         return self._subscription.assigned_partitions()
 
-    def close(self):
+    def close(self, autocommit=True):
         """Close the consumer, waiting indefinitely for any needed cleanup."""
         if self._closed:
             return
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
-        self._coordinator.close()
+        self._coordinator.close(autocommit=autocommit)
         self._metrics.close()
         self._client.close()
         try:
