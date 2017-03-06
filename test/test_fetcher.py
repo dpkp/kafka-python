@@ -58,7 +58,8 @@ def test_send_fetches(fetcher, mocker):
 
 
 @pytest.mark.parametrize(("api_version", "fetch_version"), [
-    ((0, 10), 2),
+    ((0, 10, 1), 3),
+    ((0, 10, 0), 2),
     ((0, 9), 1),
     ((0, 8), 0)
 ])

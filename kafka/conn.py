@@ -18,6 +18,7 @@ from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import GroupCoordinatorResponse
+from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Int32
 from kafka.version import __version__
 
@@ -756,6 +757,24 @@ class BrokerConnection(object):
         self._correlation_id = (self._correlation_id + 1) % 2**31
         return self._correlation_id
 
+    def _check_version_above_0_10(self, response):
+        test_cases = [
+            # format (<broker verion>, <needed struct>)
+            ((0, 10, 1), MetadataRequest[2])
+        ]
+
+        error_type = Errors.for_code(response.error_code)
+        assert error_type is Errors.NoError, "API version check failed"
+        max_versions = dict([
+            (api_key, max_version)
+            for api_key, _, max_version in response.api_versions
+        ])
+        # Get the best match of test cases
+        for broker_version, struct in test_cases:
+            if max_versions.get(struct.API_KEY, -1) >= struct.API_VERSION:
+                return broker_version
+        return (0, 10, 0)
+
     def check_version(self, timeout=2, strict=False):
         """Attempt to guess the broker version.
 
@@ -780,7 +799,6 @@ class BrokerConnection(object):
         # socket.error (32, 54, or 104)
         from .protocol.admin import ApiVersionRequest, ListGroupsRequest
         from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
-        from .protocol.metadata import MetadataRequest
 
         # Socket errors are logged as exceptions and can alarm users. Mute them
         from logging import Filter
@@ -794,6 +812,7 @@ class BrokerConnection(object):
         log.addFilter(log_filter)
 
         test_cases = [
+            # All cases starting from 0.10 will be based on ApiVersionResponse
             ((0, 10), ApiVersionRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
@@ -834,6 +853,10 @@ class BrokerConnection(object):
                 self._sock.setblocking(False)
 
             if f.succeeded():
+                if version == (0, 10):
+                    # Starting from 0.10 kafka broker we determine version
+                    # by looking at ApiVersionResponse
+                    version = self._check_version_above_0_10(f.value)
                 log.info('Broker version identifed as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)
