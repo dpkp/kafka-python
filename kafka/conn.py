@@ -218,7 +218,7 @@ class BrokerConnection(object):
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
-            log.debug('%s: creating new socket', str(self))
+            log.debug('%s: creating new socket', self)
             # if self.afi is set to AF_UNSPEC, then we need to do a name
             # resolution and try all available address families
             if self._init_afi == socket.AF_UNSPEC:
@@ -288,9 +288,9 @@ class BrokerConnection(object):
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
-                log.debug('%s: established TCP connection', str(self))
+                log.debug('%s: established TCP connection', self)
                 if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
-                    log.debug('%s: initiating SSL handshake', str(self))
+                    log.debug('%s: initiating SSL handshake', self)
                     self.state = ConnectionStates.HANDSHAKE
                 elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
                     self.state = ConnectionStates.AUTHENTICATING
@@ -316,7 +316,7 @@ class BrokerConnection(object):
 
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
-                log.debug('%s: completed SSL handshake.', str(self))
+                log.debug('%s: completed SSL handshake.', self)
                 if self.config['security_protocol'] == 'SASL_SSL':
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
@@ -326,7 +326,7 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
             if self._try_authenticate():
-                log.info('%s: Authenticated as %s', str(self), self.config['sasl_plain_username'])
+                log.info('%s: Authenticated as %s', self, self.config['sasl_plain_username'])
                 self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -335,7 +335,7 @@ class BrokerConnection(object):
     def _wrap_ssl(self):
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
         if self._ssl_context is None:
-            log.debug('%s: configuring default SSL Context', str(self))
+            log.debug('%s: configuring default SSL Context', self)
             self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)  # pylint: disable=no-member
             self._ssl_context.options |= ssl.OP_NO_SSLv2  # pylint: disable=no-member
             self._ssl_context.options |= ssl.OP_NO_SSLv3  # pylint: disable=no-member
@@ -343,12 +343,12 @@ class BrokerConnection(object):
             if self.config['ssl_check_hostname']:
                 self._ssl_context.check_hostname = True
             if self.config['ssl_cafile']:
-                log.info('%s: Loading SSL CA from %s', str(self), self.config['ssl_cafile'])
+                log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_cafile'])
                 self._ssl_context.verify_mode = ssl.CERT_REQUIRED
             if self.config['ssl_certfile'] and self.config['ssl_keyfile']:
-                log.info('%s: Loading SSL Cert from %s', str(self), self.config['ssl_certfile'])
-                log.info('%s: Loading SSL Key from %s', str(self), self.config['ssl_keyfile'])
+                log.info('%s: Loading SSL Cert from %s', self, self.config['ssl_certfile'])
+                log.info('%s: Loading SSL Key from %s', self, self.config['ssl_keyfile'])
                 self._ssl_context.load_cert_chain(
                     certfile=self.config['ssl_certfile'],
                     keyfile=self.config['ssl_keyfile'],
@@ -359,18 +359,18 @@ class BrokerConnection(object):
                     log.error('%s: %s Disconnecting.', self, error)
                     self.close(Errors.ConnectionError(error))
                     return
-                log.info('%s: Loading SSL CRL from %s', str(self), self.config['ssl_crlfile'])
+                log.info('%s: Loading SSL CRL from %s', self, self.config['ssl_crlfile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
                 # pylint: disable=no-member
                 self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
-        log.debug('%s: wrapping socket in ssl context', str(self))
+        log.debug('%s: wrapping socket in ssl context', self)
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
                 server_hostname=self.hostname,
                 do_handshake_on_connect=False)
         except ssl.SSLError as e:
-            log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
+            log.exception('%s: Failed to wrap socket in SSLContext!', self)
             self.close(e)
 
     def _try_handshake(self):
@@ -421,7 +421,7 @@ class BrokerConnection(object):
 
     def _try_authenticate_plain(self, future):
         if self.config['security_protocol'] == 'SASL_PLAINTEXT':
-            log.warning('%s: Sending username and password in the clear', str(self))
+            log.warning('%s: Sending username and password in the clear', self)
 
         data = b''
         try:
@@ -448,7 +448,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("%s: Error receiving reply from server",  self)
-            error = Errors.ConnectionError("%s: %s" % (str(self), e))
+            error = Errors.ConnectionError("%s: %s" % (self, e))
             future.failure(error)
             self.close(error=error)
 
@@ -556,7 +556,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("Error sending %s to %s", request, self)
-            error = Errors.ConnectionError("%s: %s" % (str(self), e))
+            error = Errors.ConnectionError("%s: %s" % (self, e))
             self.close(error=error)
             return future.failure(error)
         log.debug('%s Request %d: %s', self, correlation_id, request)
@@ -714,7 +714,7 @@ class BrokerConnection(object):
         elif ifr.correlation_id != recv_correlation_id:
             error = Errors.CorrelationIdError(
                 '%s: Correlation IDs do not match: sent %d, recv %d'
-                % (str(self), ifr.correlation_id, recv_correlation_id))
+                % (self, ifr.correlation_id, recv_correlation_id))
             ifr.future.failure(error)
             self.close(error)
             self._processing = False
