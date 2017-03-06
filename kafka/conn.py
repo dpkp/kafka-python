@@ -262,11 +262,13 @@ class BrokerConnection(object):
                 self._sock = socket.socket(self._init_afi, socket.SOCK_STREAM)
 
             for option in self.config['socket_options']:
+                log.debug('%s: setting socket option %s', self, option)
                 self._sock.setsockopt(*option)
 
             self._sock.setblocking(False)
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()
+            log.debug('%s: connecting to %s:%d', self, self.host, self.port)
             self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
             self.config['state_change_callback'](self)
@@ -293,8 +295,10 @@ class BrokerConnection(object):
                     log.debug('%s: initiating SSL handshake', self)
                     self.state = ConnectionStates.HANDSHAKE
                 elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
+                    log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
+                    log.debug('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -318,8 +322,10 @@ class BrokerConnection(object):
             if self._try_handshake():
                 log.debug('%s: completed SSL handshake.', self)
                 if self.config['security_protocol'] == 'SASL_SSL':
+                    log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
+                    log.debug('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -327,6 +333,7 @@ class BrokerConnection(object):
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
             if self._try_authenticate():
                 log.info('%s: Authenticated as %s', self, self.config['sasl_plain_username'])
+                log.debug('%s: Connection complete.', self)
                 self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
