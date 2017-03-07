@@ -22,17 +22,16 @@ Test Infrastructure
 * Update pytest fixtures to new yield syntax (jeffwidman 919)
 
 Consumer
+* No longer configure a default consumer group (dpkp 1016)
 * Dont refresh metadata on failed group coordinator request unless needed (dpkp 1006)
 * Fail-fast on timeout constraint violations during KafkaConsumer creation (harelba 986)
 * Default max_poll_records to Java default of 500 (jeffwidman 947)
 
 Producer
 * change default timeout of KafkaProducer.close() to threading.TIMEOUT_MAX on py3 (mmyjona 991)
-* Issue 985: Clear memory wait condition before raising Exception (dpkp 999)
 
 Client
 * When closing a broker connection without error, fail in-flight-requests with Cancelled (dpkp 1010)
-* Mark last_attempt time during connection close to fix blackout calculation (dpkp 1008)
 * Catch socket errors during ssl handshake (dpkp 1007)
 * Drop old brokers when rebuilding broker metadata (dpkp 1005)
 * Drop bad disconnect test -- just use the mocked-socket test (dpkp 982)
@@ -45,6 +44,8 @@ Client
 Bugfixes
 * Fix sasl reconnect bug: auth future must be reset on close (dpkp 1003)
 * Fix raise exception from SubscriptionState.assign_from_subscribed (qntln 960)
+* Fix blackout calculation: mark last_attempt time during connection close (dpkp 1008)
+* Fix buffer pool reallocation after raising timeout (dpkp 999)
 
 Logging / Error Messages
 * Add client info logging re bootstrap; log connection attempts to balance with close (dpkp)
