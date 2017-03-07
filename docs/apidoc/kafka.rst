@@ -6,12 +6,22 @@ Subpackages
 
 .. toctree::
 
+    kafka.cluster
     kafka.consumer
     kafka.partitioner
     kafka.producer
 
 Submodules
 ----------
+
+kafka.cluster module
+--------------------
+
+.. automodule:: kafka.cluster
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 kafka.client module
 -------------------

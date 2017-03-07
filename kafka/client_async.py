@@ -48,6 +48,10 @@ class KafkaClient(object):
 
     This class is not thread-safe!
 
+    Attributes:
+        cluster (:any:`ClusterMetadata`): Local cache of cluster metadata, retrived
+            via MetadataRequests during :meth:`.poll`.
+
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
             strings) that the consumer should contact to bootstrap initial
