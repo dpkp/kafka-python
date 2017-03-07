@@ -206,7 +206,8 @@ class BaseCoordinator(object):
             # it as the "coordinator"
             if self.config['api_version'] < (0, 8, 2):
                 self.coordinator_id = self._client.least_loaded_node()
-                self._client.ready(self.coordinator_id)
+                if self.coordinator_id is not None:
+                    self._client.ready(self.coordinator_id)
                 continue
 
             future = self._send_group_coordinator_request()
