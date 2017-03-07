@@ -732,7 +732,7 @@ class KafkaClient(object):
             elif self._can_connect(node_id):
                 log.debug("Initializing connection to node %s for metadata request", node_id)
                 self._maybe_connect(node_id)
-                # If initiateConnect failed immediately, this node will be put into blackout and we
+                # If _maybe_connect failed immediately, this node will be put into blackout and we
                 # should allow immediately retrying in case there is another candidate node. If it
                 # is still connecting, the worst case is that we end up setting a longer timeout
                 # on the next round and then wait for the response.
