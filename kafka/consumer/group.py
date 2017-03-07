@@ -53,7 +53,7 @@ class KafkaConsumer(six.Iterator):
             partition assignment (if enabled), and to use for fetching and
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
-            Default: 'kafka-python-default-group'
+            Default: None
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -215,7 +215,7 @@ class KafkaConsumer(six.Iterator):
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
-        'group_id': 'kafka-python-default-group',
+        'group_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
