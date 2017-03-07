@@ -1,6 +1,7 @@
 # 1.3.3 (Unreleased)
 
 Core / Protocol
+* Fixed couple of "leaks" when gc is disabled (Mephius 979)
 * Added `max_bytes` option and FetchRequest_v3 usage. (Drizzt1991 962)
 * CreateTopicsRequest / Response v1 (dpkp 1012)
 * Add MetadataRequest_v2 and MetadataResponse_v2 structures for KIP-78 (Drizzt1991 974)
@@ -26,6 +27,7 @@ Consumer
 * Dont refresh metadata on failed group coordinator request unless needed (dpkp 1006)
 * Fail-fast on timeout constraint violations during KafkaConsumer creation (harelba 986)
 * Default max_poll_records to Java default of 500 (jeffwidman 947)
+* For 0.8.2, only attempt connection to coordinator if least_loaded_node succeeds (dpkp)
 
 Producer
 * change default timeout of KafkaProducer.close() to threading.TIMEOUT_MAX on py3 (mmyjona 991)
@@ -67,6 +69,8 @@ Documentation
 * Spelling and grammar changes (melissacrawford396 923)
 * Fix typo: coorelation --> correlation (jeffwidman 929)
 * Make SSL warning list the correct Python versions (jeffwidman 924)
+* Fixup comment reference to _maybe_connect (dpkp)
+* Add ClusterMetadata sphinx documentation (dpkp)
 
 Legacy Client
 * Add send_list_offset_request for searching offset by timestamp (charsyam 1001)
