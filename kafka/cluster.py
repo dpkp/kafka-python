@@ -16,6 +16,20 @@ log = logging.getLogger(__name__)
 
 
 class ClusterMetadata(object):
+    """
+    A class to manage kafka cluster metadata.
+
+    This class does not perform any IO. It simply updates internal state
+    given API responses (MetadataResponse, GroupCoordinatorResponse).
+
+    Keyword Arguments:
+        retry_backoff_ms (int): Milliseconds to backoff when retrying on
+            errors. Default: 100.
+        metadata_max_age_ms (int): The period of time in milliseconds after
+            which we force a refresh of metadata even if we haven't seen any
+            partition leadership changes to proactively discover any new
+            brokers or partitions. Default: 300000
+    """
     DEFAULT_CONFIG = {
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
