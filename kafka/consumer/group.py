@@ -213,7 +213,7 @@ class KafkaConsumer(six.Iterator):
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/0100/configuration.html#newconsumerconfigs
+        https://kafka.apache.org/documentation/#newconsumerconfigs
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
@@ -522,8 +522,8 @@ class KafkaConsumer(six.Iterator):
         Records are fetched and returned in batches by topic-partition.
         On each poll, consumer will try to use the last consumed offset as the
         starting offset and fetch sequentially. The last consumed offset can be
-        manually set through seek(partition, offset) or automatically set as
-        the last committed offset for the subscribed list of partitions.
+        manually set through :meth:`~kafka.KafkaConsumer.seek` or automatically
+        set as the last committed offset for the subscribed list of partitions.
 
         Incompatible with iterator interface -- use one or the other, not both.
 
