@@ -753,8 +753,11 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Start a consumer. FetchResponse_v3 should always include at least 1
         # full msg, so by setting fetch_max_bytes=1 we must get 1 msg at a time
+        group = 'test-kafka-consumer-max-bytes-one-msg-' + random_string(5)
         consumer = self.kafka_consumer(
-            auto_offset_reset='earliest', fetch_max_bytes=1)
+            group_id=group,
+            auto_offset_reset='earliest',
+            fetch_max_bytes=1)
         fetched_msgs = []
         # A bit hacky, but we need this in order for message count to be exact
         consumer._coordinator.ensure_active_group()
