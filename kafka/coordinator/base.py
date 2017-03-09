@@ -287,7 +287,7 @@ class BaseCoordinator(object):
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
-        elif not self._client.ready(self.coordinator_id):
+        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
@@ -479,7 +479,7 @@ class BaseCoordinator(object):
         if node_id is None:
             return Future().failure(Errors.NoBrokersAvailable())
 
-        elif not self._client.ready(node_id):
+        elif not self._client.ready(node_id, metadata_priority=False):
             e = Errors.NodeNotReadyError(node_id)
             return Future().failure(e)
 
@@ -573,7 +573,7 @@ class BaseCoordinator(object):
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
-        elif not self._client.ready(self.coordinator_id):
+        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
