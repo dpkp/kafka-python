@@ -18,7 +18,12 @@ class Struct(AbstractType):
         elif len(args) > 0:
             raise ValueError('Args must be empty or mirror schema')
         else:
-            self.__dict__.update(kwargs)
+            for name in self.SCHEMA.names:
+                self.__dict__[name] = kwargs.pop(name, None)
+            if kwargs:
+                raise ValueError('Keyword(s) not in schema %s: %s'
+                                 % (list(self.SCHEMA.names),
+                                    ', '.join(kwargs.keys())))
 
         # overloading encode() to support both class and instance
         # Without WeakMethod() this creates circular ref, which
