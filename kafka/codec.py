@@ -192,6 +192,7 @@ def lz4_decode(payload):
     # pylint: disable-msg=no-member
     ctx = lz4f.createDecompContext()
     data = lz4f.decompressFrame(payload, ctx)
+    lz4f.freeDecompContext(ctx)
 
     # lz4f python module does not expose how much of the payload was
     # actually read if the decompression was only partial.
