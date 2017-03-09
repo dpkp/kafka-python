@@ -245,13 +245,12 @@ class BaseCoordinator(object):
             # ensure that there are no pending requests to the coordinator.
             # This is important in particular to avoid resending a pending
             # JoinGroup request.
-            if self._client.in_flight_request_count(self.coordinator_id):
-                while not self.coordinator_unknown():
-                    self._client.poll(delayed_tasks=False)
-                    if not self._client.in_flight_request_count(self.coordinator_id):
-                        break
-                else:
-                    continue
+            while not self.coordinator_unknown():
+                if not self._client.in_flight_request_count(self.coordinator_id):
+                    break
+                self._client.poll(delayed_tasks=False)
+            else:
+                continue
 
             future = self._send_join_group_request()
             self._client.poll(future=future)
