@@ -26,12 +26,10 @@ Bleeding-Edge
 Optional LZ4 install
 ********************
 
-To enable LZ4 compression/decompression, install lz4tools and xxhash:
+To enable LZ4 compression/decompression, install python-lz4:
 
->>> pip install lz4tools
->>> pip install xxhash
+>>> pip install lz4
 
-*Note*: these modules do not support python2.6
 
 Optional Snappy install
 ***********************

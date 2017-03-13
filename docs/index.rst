@@ -113,9 +113,8 @@ Compression
 ***********
 
 kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you must install lz4tools and xxhash (modules
-may not work on python2.6). To enable snappy, install python-snappy (also
-requires snappy library).
+consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
+To enable snappy, install python-snappy (also requires snappy library).
 See `Installation <install.html#optional-snappy-install>`_ for more information.
 
 
