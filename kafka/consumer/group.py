@@ -818,7 +818,7 @@ class KafkaConsumer(six.Iterator):
         Returns:
             set: {topic, ...}
         """
-        return self._subscription.subscription
+        return self._subscription.subscription.copy()
 
     def unsubscribe(self):
         """Unsubscribe from all topics and clear all assigned partitions."""
