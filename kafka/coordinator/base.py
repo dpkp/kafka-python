@@ -538,8 +538,8 @@ class BaseCoordinator(object):
             self.coordinator_id = None
 
     def close(self):
-        """Close the coordinator, leave the current group
-        and reset local generation/memberId."""
+        """Close the coordinator, leave the current group,
+        and reset local generation / member_id"""
         try:
             self._client.unschedule(self.heartbeat_task)
         except KeyError:
