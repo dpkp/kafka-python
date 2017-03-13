@@ -67,6 +67,30 @@ def test_decode_message():
     assert decoded_message == msg
 
 
+def test_decode_message_validate_crc():
+    encoded = b''.join([
+        struct.pack('>i', -1427009701), # CRC
+        struct.pack('>bb', 0, 0),       # Magic, flags
+        struct.pack('>i', 3),           # Length of key
+        b'key',                         # key
+        struct.pack('>i', 4),           # Length of value
+        b'test',                        # value
+    ])
+    decoded_message = Message.decode(encoded)
+    assert decoded_message.validate_crc() is True
+
+    encoded = b''.join([
+        struct.pack('>i', 1234),           # Incorrect CRC
+        struct.pack('>bb', 0, 0),       # Magic, flags
+        struct.pack('>i', 3),           # Length of key
+        b'key',                         # key
+        struct.pack('>i', 4),           # Length of value
+        b'test',                        # value
+    ])
+    decoded_message = Message.decode(encoded)
+    assert decoded_message.validate_crc() is False
+
+
 def test_encode_message_set():
     messages = [
         Message(b'v1', key=b'k1'),
