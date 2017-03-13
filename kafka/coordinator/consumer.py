@@ -325,9 +325,10 @@ class ConsumerCoordinator(BaseCoordinator):
 
             time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
-    def close(self):
+    def close(self, autocommit=True):
         try:
-            self._maybe_auto_commit_offsets_sync()
+            if autocommit:
+                self._maybe_auto_commit_offsets_sync()
         finally:
             super(ConsumerCoordinator, self).close()
 
