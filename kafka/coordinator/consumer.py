@@ -326,6 +326,14 @@ class ConsumerCoordinator(BaseCoordinator):
             time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
     def close(self, autocommit=True):
+        """Close the coordinator, leave the current group,
+        and reset local generation / member_id.
+
+        Keyword Arguments:
+            autocommit (bool): If auto-commit is configured for this consumer,
+                this optional flag causes the consumer to attempt to commit any
+                pending consumed offsets prior to close. Default: True
+        """
         try:
             if autocommit:
                 self._maybe_auto_commit_offsets_sync()

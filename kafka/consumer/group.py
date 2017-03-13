@@ -377,7 +377,13 @@ class KafkaConsumer(six.Iterator):
         return self._subscription.assigned_partitions()
 
     def close(self, autocommit=True):
-        """Close the consumer, waiting indefinitely for any needed cleanup."""
+        """Close the consumer, waiting indefinitely for any needed cleanup.
+
+        Keyword Arguments:
+            autocommit (bool): If auto-commit is configured for this consumer,
+                this optional flag causes the consumer to attempt to commit any
+                pending consumed offsets prior to close. Default: True
+        """
         if self._closed:
             return
         log.debug("Closing the KafkaConsumer.")
