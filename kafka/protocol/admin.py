@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 
-from .struct import Struct
+from .api import Request, Response
 from .types import Array, Boolean, Bytes, Int16, Int32, Schema, String
 
 
-class ApiVersionResponse_v0(Struct):
+class ApiVersionResponse_v0(Response):
     API_KEY = 18
     API_VERSION = 0
     SCHEMA = Schema(
@@ -16,7 +16,7 @@ class ApiVersionResponse_v0(Struct):
     )
 
 
-class ApiVersionRequest_v0(Struct):
+class ApiVersionRequest_v0(Request):
     API_KEY = 18
     API_VERSION = 0
     RESPONSE_TYPE = ApiVersionResponse_v0
@@ -27,7 +27,7 @@ ApiVersionRequest = [ApiVersionRequest_v0]
 ApiVersionResponse = [ApiVersionResponse_v0]
 
 
-class CreateTopicsResponse_v0(Struct):
+class CreateTopicsResponse_v0(Response):
     API_KEY = 19
     API_VERSION = 0
     SCHEMA = Schema(
@@ -37,7 +37,7 @@ class CreateTopicsResponse_v0(Struct):
     )
 
 
-class CreateTopicsResponse_v1(Struct):
+class CreateTopicsResponse_v1(Response):
     API_KEY = 19
     API_VERSION = 1
     SCHEMA = Schema(
@@ -48,7 +48,7 @@ class CreateTopicsResponse_v1(Struct):
     )
 
 
-class CreateTopicsRequest_v0(Struct):
+class CreateTopicsRequest_v0(Request):
     API_KEY = 19
     API_VERSION = 0
     RESPONSE_TYPE = CreateTopicsResponse_v0
@@ -67,7 +67,7 @@ class CreateTopicsRequest_v0(Struct):
     )
 
 
-class CreateTopicsRequest_v1(Struct):
+class CreateTopicsRequest_v1(Request):
     API_KEY = 19
     API_VERSION = 1
     RESPONSE_TYPE = CreateTopicsResponse_v1
@@ -91,7 +91,7 @@ CreateTopicsRequest = [CreateTopicsRequest_v0, CreateTopicsRequest_v1]
 CreateTopicsResponse = [CreateTopicsResponse_v0, CreateTopicsRequest_v1]
 
 
-class DeleteTopicsResponse_v0(Struct):
+class DeleteTopicsResponse_v0(Response):
     API_KEY = 20
     API_VERSION = 0
     SCHEMA = Schema(
@@ -101,7 +101,7 @@ class DeleteTopicsResponse_v0(Struct):
     )
 
 
-class DeleteTopicsRequest_v0(Struct):
+class DeleteTopicsRequest_v0(Request):
     API_KEY = 20
     API_VERSION = 0
     RESPONSE_TYPE = DeleteTopicsResponse_v0
@@ -115,7 +115,7 @@ DeleteTopicsRequest = [DeleteTopicsRequest_v0]
 DeleteTopicsResponse = [DeleteTopicsResponse_v0]
 
 
-class ListGroupsResponse_v0(Struct):
+class ListGroupsResponse_v0(Response):
     API_KEY = 16
     API_VERSION = 0
     SCHEMA = Schema(
@@ -126,7 +126,7 @@ class ListGroupsResponse_v0(Struct):
     )
 
 
-class ListGroupsRequest_v0(Struct):
+class ListGroupsRequest_v0(Request):
     API_KEY = 16
     API_VERSION = 0
     RESPONSE_TYPE = ListGroupsResponse_v0
@@ -137,7 +137,7 @@ ListGroupsRequest = [ListGroupsRequest_v0]
 ListGroupsResponse = [ListGroupsResponse_v0]
 
 
-class DescribeGroupsResponse_v0(Struct):
+class DescribeGroupsResponse_v0(Response):
     API_KEY = 15
     API_VERSION = 0
     SCHEMA = Schema(
@@ -156,7 +156,7 @@ class DescribeGroupsResponse_v0(Struct):
     )
 
 
-class DescribeGroupsRequest_v0(Struct):
+class DescribeGroupsRequest_v0(Request):
     API_KEY = 15
     API_VERSION = 0
     RESPONSE_TYPE = DescribeGroupsResponse_v0
@@ -169,7 +169,7 @@ DescribeGroupsRequest = [DescribeGroupsRequest_v0]
 DescribeGroupsResponse = [DescribeGroupsResponse_v0]
 
 
-class SaslHandShakeResponse_v0(Struct):
+class SaslHandShakeResponse_v0(Response):
     API_KEY = 17
     API_VERSION = 0
     SCHEMA = Schema(
@@ -178,7 +178,7 @@ class SaslHandShakeResponse_v0(Struct):
     )
 
 
-class SaslHandShakeRequest_v0(Struct):
+class SaslHandShakeRequest_v0(Request):
     API_KEY = 17
     API_VERSION = 0
     RESPONSE_TYPE = SaslHandShakeResponse_v0
