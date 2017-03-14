@@ -1,3 +1,6 @@
+from __future__ import absolute_import
+
+import platform
 import struct
 
 import pytest
@@ -80,7 +83,8 @@ def test_snappy_encode_xerial():
     assert compressed == to_ensure
 
 
-@pytest.mark.skipif(not has_lz4(), reason="LZ4 not available")
+@pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
+                    reason="python-lz4 crashes on old versions of pypy")
 def test_lz4():
     for i in xrange(1000):
         b1 = random_string(100).encode('utf-8')
@@ -89,7 +93,8 @@ def test_lz4():
         assert b1 == b2
 
 
-@pytest.mark.skipif(not has_lz4(), reason="LZ4 not available")
+@pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
+                    reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_old():
     for i in xrange(1000):
         b1 = random_string(100).encode('utf-8')
@@ -98,8 +103,8 @@ def test_lz4_old():
         assert b1 == b2
 
 
-@pytest.mark.xfail(reason="lz4tools library doesnt support incremental decompression")
-@pytest.mark.skipif(not has_lz4(), reason="LZ4 not available")
+@pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
+                    reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_incremental():
     for i in xrange(1000):
         # lz4 max single block size is 4MB
