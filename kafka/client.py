@@ -298,13 +298,7 @@ class SimpleClient(object):
                 continue
 
             request = encoder_fn(payloads=broker_payloads)
-            # decoder_fn=None signal that the server is expected to not
-            # send a response.  This probably only applies to
-            # ProduceRequest w/ acks = 0
-            expect_response = (decoder_fn is not None)
-            if expect_response:
-                selector.register(conn._sock, selectors.EVENT_READ, conn)
-            future = conn.send(request, expect_response=expect_response)
+            future = conn.send(request)
 
             if future.failed():
                 log.error("Request failed: %s", future.exception)
@@ -313,7 +307,7 @@ class SimpleClient(object):
                 failed_payloads(broker_payloads)
                 continue
 
-            if not expect_response:
+            if not request.expect_response():
                 for payload in broker_payloads:
                     topic_partition = (str(payload.topic), payload.partition)
                     responses[topic_partition] = None

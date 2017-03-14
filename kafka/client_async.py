@@ -464,12 +464,7 @@ class KafkaClient(object):
         if not self._maybe_connect(node_id):
             return Future().failure(Errors.NodeNotReadyError(node_id))
 
-        # Every request gets a response, except one special case:
-        expect_response = True
-        if isinstance(request, tuple(ProduceRequest)) and request.required_acks == 0:
-            expect_response = False
-
-        return self._conns[node_id].send(request, expect_response=expect_response)
+        return self._conns[node_id].send(request)
 
     def poll(self, timeout_ms=None, future=None, sleep=True):
         """Try to read and write to sockets.

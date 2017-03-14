@@ -521,7 +521,7 @@ class BrokerConnection(object):
             ifr.future.failure(error)
         self.config['state_change_callback'](self)
 
-    def send(self, request, expect_response=True):
+    def send(self, request):
         """send request, return Future()
 
         Can block on network if request is larger than send_buffer_bytes
@@ -533,9 +533,9 @@ class BrokerConnection(object):
             return future.failure(Errors.ConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
-        return self._send(request, expect_response=expect_response)
+        return self._send(request)
 
-    def _send(self, request, expect_response=True):
+    def _send(self, request):
         assert self.state in (ConnectionStates.AUTHENTICATING, ConnectionStates.CONNECTED)
         future = Future()
         correlation_id = self._next_correlation_id()
@@ -565,7 +565,7 @@ class BrokerConnection(object):
             return future.failure(error)
         log.debug('%s Request %d: %s', self, correlation_id, request)
 
-        if expect_response:
+        if request.expect_response():
             ifr = InFlightRequest(request=request,
                                   correlation_id=correlation_id,
                                   response_type=request.RESPONSE_TYPE,

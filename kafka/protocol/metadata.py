@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 
-from .struct import Struct
+from .api import Request, Response
 from .types import Array, Boolean, Int16, Int32, Schema, String
 
 
-class MetadataResponse_v0(Struct):
+class MetadataResponse_v0(Response):
     API_KEY = 3
     API_VERSION = 0
     SCHEMA = Schema(
@@ -24,7 +24,7 @@ class MetadataResponse_v0(Struct):
     )
 
 
-class MetadataResponse_v1(Struct):
+class MetadataResponse_v1(Response):
     API_KEY = 3
     API_VERSION = 1
     SCHEMA = Schema(
@@ -47,7 +47,7 @@ class MetadataResponse_v1(Struct):
     )
 
 
-class MetadataResponse_v2(Struct):
+class MetadataResponse_v2(Response):
     API_KEY = 3
     API_VERSION = 2
     SCHEMA = Schema(
@@ -71,7 +71,7 @@ class MetadataResponse_v2(Struct):
     )
 
 
-class MetadataRequest_v0(Struct):
+class MetadataRequest_v0(Request):
     API_KEY = 3
     API_VERSION = 0
     RESPONSE_TYPE = MetadataResponse_v0
@@ -81,7 +81,7 @@ class MetadataRequest_v0(Struct):
     ALL_TOPICS = None  # Empty Array (len 0) for topics returns all topics
 
 
-class MetadataRequest_v1(Struct):
+class MetadataRequest_v1(Request):
     API_KEY = 3
     API_VERSION = 1
     RESPONSE_TYPE = MetadataResponse_v1
@@ -90,7 +90,7 @@ class MetadataRequest_v1(Struct):
     NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
 
 
-class MetadataRequest_v2(Struct):
+class MetadataRequest_v2(Request):
     API_KEY = 3
     API_VERSION = 2
     RESPONSE_TYPE = MetadataResponse_v2
