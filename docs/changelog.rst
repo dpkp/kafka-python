@@ -6,6 +6,7 @@ Changelog
 
 Core / Protocol
 ---------------
+* Fix kwarg handing in kafka.protocol.struct.Struct (dpkp 1025)
 * Fixed couple of "leaks" when gc is disabled (Mephius 979)
 * Added `max_bytes` option and FetchRequest_v3 usage. (Drizzt1991 962)
 * CreateTopicsRequest / Response v1 (dpkp 1012)
@@ -30,6 +31,11 @@ Test Infrastructure
 
 Consumer
 --------
+* Avoid re-encoding message for crc check (dpkp 1027)
+* Optionally skip auto-commit during consumer.close (dpkp 1031)
+* Return copy of consumer subscription set (dpkp 1029)
+* Short-circuit group coordinator requests when NodeNotReady (dpkp 995)
+* Avoid unknown coordinator after client poll (dpkp 1023)
 * No longer configure a default consumer group (dpkp 1016)
 * Dont refresh metadata on failed group coordinator request unless needed (dpkp 1006)
 * Fail-fast on timeout constraint violations during KafkaConsumer creation (harelba 986)
@@ -42,6 +48,7 @@ Producer
 
 Client
 ------
+* Add optional kwarg to ready/is_ready to disable metadata-priority logic (dpkp 1017)
 * When closing a broker connection without error, fail in-flight-requests with Cancelled (dpkp 1010)
 * Catch socket errors during ssl handshake (dpkp 1007)
 * Drop old brokers when rebuilding broker metadata (dpkp 1005)
@@ -72,6 +79,7 @@ Logging / Error Messages
 
 Documentation
 -------------
+* Sphinx documentation updates (jeffwidman 1019)
 * Add sphinx formatting to hyperlink methods (jeffwidman 898)
 * Fix BrokerConnection api_version docs default (jeffwidman 909)
 * PEP-8: Spacing & removed unused imports (jeffwidman 899)
