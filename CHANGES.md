@@ -1,6 +1,8 @@
-# 1.3.3 (Unreleased)
+# 1.3.3 (Mar 14, 2017)
 
 Core / Protocol
+* Derive all api classes from Request / Response base classes (dpkp 1030)
+* Prefer python-lz4 if available (dpkp 1024)
 * Fix kwarg handing in kafka.protocol.struct.Struct (dpkp 1025)
 * Fixed couple of "leaks" when gc is disabled (Mephius 979)
 * Added `max_bytes` option and FetchRequest_v3 usage. (Drizzt1991 962)
@@ -51,6 +53,7 @@ Client
 * Pass error to BrokerConnection.close() (dpkp)
 
 Bugfixes
+* Free lz4 decompression context to avoid leak (dpkp 1024)
 * Fix sasl reconnect bug: auth future must be reset on close (dpkp 1003)
 * Fix raise exception from SubscriptionState.assign_from_subscribed (qntln 960)
 * Fix blackout calculation: mark last_attempt time during connection close (dpkp 1008)
