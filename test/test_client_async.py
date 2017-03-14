@@ -236,13 +236,14 @@ def test_send(cli, conn):
     cli._maybe_connect(0)
     # ProduceRequest w/ 0 required_acks -> no response
     request = ProduceRequest[0](0, 0, [])
+    assert request.expect_response() is False
     ret = cli.send(0, request)
-    assert conn.send.called_with(request, expect_response=False)
+    assert conn.send.called_with(request)
     assert isinstance(ret, Future)
 
     request = MetadataRequest[0]([])
     cli.send(0, request)
-    assert conn.send.called_with(request, expect_response=True)
+    assert conn.send.called_with(request)
 
 
 def test_poll(mocker):
