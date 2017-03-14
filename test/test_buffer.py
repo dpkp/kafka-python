@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import io
+import platform
 
 import pytest
 
@@ -34,7 +35,8 @@ def test_buffer_close():
 @pytest.mark.parametrize('compression', [
     'gzip',
     'snappy',
-    pytest.mark.skipif("sys.version_info < (2,7)")('lz4'), # lz4tools does not work on py26
+    pytest.mark.skipif(platform.python_implementation() == 'PyPy',
+                       reason='python-lz4 crashes on older versions of pypy')('lz4'),
 ])
 def test_compressed_buffer_close(compression):
     records = MessageSetBuffer(io.BytesIO(), 100000, compression_type=compression)

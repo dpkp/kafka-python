@@ -31,8 +31,8 @@ def test_end_to_end(kafka_broker, compression):
         # LZ4 requires 0.8.2
         if version() < (0, 8, 2):
             return
-        # LZ4 python libs dont work on python2.6
-        elif sys.version_info < (2, 7):
+        # python-lz4 crashes on older versions of pypy
+        elif platform.python_implementation() == 'PyPy':
             return
 
     connect_str = 'localhost:' + str(kafka_broker.port)
