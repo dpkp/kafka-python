@@ -36,7 +36,8 @@ try:
     ssl.SSLWantWriteError
     ssl.SSLZeroReturnError
 except:
-    log.warning('old ssl module detected.'
+    # Don't use warning as incompatible with our waf setup for ym
+    log.debug('old ssl module detected.'
                 ' ssl error handling may not operate cleanly.'
                 ' Consider upgrading to python 3.5 or 2.7')
     ssl.SSLWantReadError = ssl.SSLError
