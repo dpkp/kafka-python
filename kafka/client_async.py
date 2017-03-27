@@ -49,7 +49,7 @@ class KafkaClient(object):
     This class is not thread-safe!
 
     Attributes:
-        cluster (:any:`ClusterMetadata`): Local cache of cluster metadata, retrived
+        cluster (:any:`ClusterMetadata`): Local cache of cluster metadata, retrieved
             via MetadataRequests during :meth:`.poll`.
 
     Keyword Arguments:
