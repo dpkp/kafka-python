@@ -50,7 +50,7 @@ class KafkaClient(object):
 
     Attributes:
         cluster (:any:`ClusterMetadata`): Local cache of cluster metadata, retrieved
-            via MetadataRequests during :meth:`.poll`.
+            via MetadataRequests during :meth:`~kafka.KafkaClient.poll`.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
