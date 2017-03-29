@@ -105,6 +105,7 @@ class SimpleClient(object):
                 request_timeout_ms=self.timeout * 1000,
                 client_id=self.client_id,
                 metrics=self._metrics_registry,
+                metric_group_prefix='simple-client',
             )
 
         conn = self._conns[host_key]
