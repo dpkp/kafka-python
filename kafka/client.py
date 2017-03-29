@@ -79,7 +79,7 @@ class SimpleClient(object):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
-        self.hosts = collect_hosts(hosts)
+        self.hosts = [host + ('bootstrap',) for host in collect_hosts(hosts)]
         self.correlation_id = correlation_id
         self._metrics_registry = metrics
         self.metrics = SimpleClientMetrics(metrics if metrics else Metrics())
@@ -95,7 +95,7 @@ class SimpleClient(object):
     #   Private API  #
     ##################
 
-    def _get_conn(self, host, port, afi):
+    def _get_conn(self, host, port, afi, node_id='bootstrap'):
         """Get or create a connection to a broker using host and port"""
         host_key = (host, port)
         if host_key not in self._conns:
@@ -105,6 +105,8 @@ class SimpleClient(object):
                 request_timeout_ms=self.timeout * 1000,
                 client_id=self.client_id,
                 metrics=self._metrics_registry,
+                metric_group_prefix='simple-client',
+                node_id=node_id,
             )
 
         conn = self._conns[host_key]
@@ -192,17 +194,17 @@ class SimpleClient(object):
         brokers. Keep trying until you succeed.
         """
         hosts = set()
-        for broker in self.brokers.values():
+        for node_id, broker in self.brokers.items():
             host, port, afi = get_ip_port_afi(broker.host)
-            hosts.add((host, broker.port, afi))
+            hosts.add((host, broker.port, afi, node_id))
 
         hosts.update(self.hosts)
         hosts = list(hosts)
         random.shuffle(hosts)
 
-        for (host, port, afi) in hosts:
+        for (host, port, afi, node_id) in hosts:
             try:
-                conn = self._get_conn(host, port, afi)
+                conn = self._get_conn(host, port, afi, node_id)
             except ConnectionError:
                 log.warning("Skipping unconnected connection: %s:%s (AFI %s)",
                             host, port, afi)
@@ -289,7 +291,7 @@ class SimpleClient(object):
 
             host, port, afi = get_ip_port_afi(broker.host)
             try:
-                conn = self._get_conn(host, broker.port, afi)
+                conn = self._get_conn(host, broker.port, afi, broker.nodeId)
             except ConnectionError:
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
@@ -411,7 +413,7 @@ class SimpleClient(object):
 
         host, port, afi = get_ip_port_afi(broker.host)
         try:
-            conn = self._get_conn(host, broker.port, afi)
+            conn = self._get_conn(host, broker.port, afi, broker.nodeId)
         except ConnectionError:
             failed_payloads(payloads)
 
