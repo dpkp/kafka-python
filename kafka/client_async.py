@@ -829,7 +829,9 @@ class KafkaClient(object):
 
     def wakeup(self):
         with self._wake_lock:
-            if self._wake_w.send(b'x') != 1:
+            try:
+                assert self._wake_w.send(b'x') == 1
+            except (AssertionError, socket.error):
                 log.warning('Unable to send to wakeup socket!')
 
     def _clear_wake_fd(self):
@@ -837,7 +839,7 @@ class KafkaClient(object):
         while True:
             try:
                 self._wake_r.recv(1024)
-            except:
+            except socket.error:
                 break
 
 
