@@ -177,6 +177,8 @@ class BrokerConnection(object):
             if key in configs:
                 self.config[key] = configs[key]
 
+        self.node_id = self.config.pop('node_id')
+
         if self.config['receive_buffer_bytes'] is not None:
             self.config['socket_options'].append(
                 (socket.SOL_SOCKET, socket.SO_RCVBUF,
@@ -214,7 +216,7 @@ class BrokerConnection(object):
         if self.config['metrics']:
             self._sensors = BrokerConnectionMetrics(self.config['metrics'],
                                                     self.config['metric_group_prefix'],
-                                                    self.config['node_id'])
+                                                    self.node_id)
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
@@ -904,7 +906,7 @@ class BrokerConnection(object):
 
     def __repr__(self):
         return "<BrokerConnection node_id=%s host=%s/%s port=%d>" % (
-            self.config['node_id'], self.hostname, self.host, self.port)
+            self.node_id, self.hostname, self.host, self.port)
 
 
 class BrokerConnectionMetrics(object):
