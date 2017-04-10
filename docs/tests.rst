@@ -24,7 +24,7 @@ Unit tests
 ------------------
 
 To run the tests locally, install tox -- `pip install tox`
-See http://tox.readthedocs.org/en/latest/install.html
+See https://tox.readthedocs.io/en/latest/install.html
 
 Then simply run tox, optionally setting the python environment.
 If unset, tox will loop through all environments.
