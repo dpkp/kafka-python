@@ -266,7 +266,7 @@ class KafkaProducer(object):
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
         'buffer_memory': 33554432,
-        'connections_max_idle_ms': 9 * 60 * 1000,  # not implemented yet
+        'connections_max_idle_ms': 9 * 60 * 1000,
         'max_block_ms': 60000,
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,

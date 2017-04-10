@@ -254,7 +254,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_password': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
-        'connections_max_idle_ms': 9 * 60 * 1000,  # Not implemented yet
+        'connections_max_idle_ms': 9 * 60 * 1000,
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
