@@ -101,15 +101,19 @@ class RecordBatch(object):
         since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
         timeout = request_timeout_ms / 1000.0
 
-        if ((not self.in_retry() and is_full and timeout < since_append) or
-            (not self.in_retry() and timeout < since_ready) or
-            (self.in_retry() and timeout < since_backoff)):
+        error = None
+        if not self.in_retry() and is_full and timeout < since_append:
+            error = "%d ms has passed since last append" % since_append
+        elif not self.in_retry() and timeout < since_ready:
+            error = "%d ms has passed since batch creation plus linger time" % since_ready
+        elif self.in_retry() and timeout < since_backoff:
+            error = "%d ms has passed since last attempt plus backoff time" % since_backoff
 
+        if error:
             self.records.close()
             self.done(-1, None, Errors.KafkaTimeoutError(
-                "Batch containing %s record(s) expired due to timeout while"
-                " requesting metadata from brokers for %s", self.record_count,
-                self.topic_partition))
+                "Batch for %s containing %s record(s) expired: %s" % (
+                self.topic_partition, self.record_count, error)))
             return True
         return False
 
