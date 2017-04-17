@@ -1,3 +1,6 @@
+The current GC fork lives in the `tnt-fork-0.9.4` branch
+
+
 Kafka Python client
 ------------------------
 
