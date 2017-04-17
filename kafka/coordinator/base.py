@@ -312,7 +312,7 @@ class BaseCoordinator(object):
 
     def _failed_request(self, node_id, request, future, error):
         log.error('Error sending %s to node %s [%s]',
-                  request.__class__.__name__, node_id, error)
+                  request.__class__.__name__, node_id,  type(error).__name__)
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
