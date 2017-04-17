@@ -1,5 +1,8 @@
 Changelog
 =========
+1.3.3.post1 (Apr 17, 2017)
+##########################
+Resolve merge conflicts while merging changes for version 1.3.3
 
 1.3.3 (Mar 14, 2017)
 ####################
