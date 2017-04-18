@@ -1,2 +1,3 @@
 [TYPECHECK]
 ignored-classes=SyncManager,_socketobject
+disable=E1129
