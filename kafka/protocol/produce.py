@@ -1,11 +1,11 @@
 from __future__ import absolute_import
 
+from .api import Request, Response
 from .message import MessageSet
-from .struct import Struct
 from .types import Int16, Int32, Int64, String, Array, Schema
 
 
-class ProduceResponse_v0(Struct):
+class ProduceResponse_v0(Response):
     API_KEY = 0
     API_VERSION = 0
     SCHEMA = Schema(
@@ -18,7 +18,7 @@ class ProduceResponse_v0(Struct):
     )
 
 
-class ProduceResponse_v1(Struct):
+class ProduceResponse_v1(Response):
     API_KEY = 0
     API_VERSION = 1
     SCHEMA = Schema(
@@ -32,7 +32,7 @@ class ProduceResponse_v1(Struct):
     )
 
 
-class ProduceResponse_v2(Struct):
+class ProduceResponse_v2(Response):
     API_KEY = 0
     API_VERSION = 2
     SCHEMA = Schema(
@@ -47,7 +47,7 @@ class ProduceResponse_v2(Struct):
     )
 
 
-class ProduceRequest_v0(Struct):
+class ProduceRequest_v0(Request):
     API_KEY = 0
     API_VERSION = 0
     RESPONSE_TYPE = ProduceResponse_v0
@@ -61,19 +61,34 @@ class ProduceRequest_v0(Struct):
                 ('messages', MessageSet)))))
     )
 
+    def expect_response(self):
+        if self.required_acks == 0: # pylint: disable=no-member
+            return False
+        return True
 
-class ProduceRequest_v1(Struct):
+
+class ProduceRequest_v1(Request):
     API_KEY = 0
     API_VERSION = 1
     RESPONSE_TYPE = ProduceResponse_v1
     SCHEMA = ProduceRequest_v0.SCHEMA
 
+    def expect_response(self):
+        if self.required_acks == 0: # pylint: disable=no-member
+            return False
+        return True
 
-class ProduceRequest_v2(Struct):
+
+class ProduceRequest_v2(Request):
     API_KEY = 0
     API_VERSION = 2
     RESPONSE_TYPE = ProduceResponse_v2
     SCHEMA = ProduceRequest_v1.SCHEMA
+
+    def expect_response(self):
+        if self.required_acks == 0: # pylint: disable=no-member
+            return False
+        return True
 
 
 ProduceRequest = [ProduceRequest_v0, ProduceRequest_v1, ProduceRequest_v2]

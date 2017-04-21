@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 
-from .struct import Struct
+from .api import Request, Response
 from .types import Array, Boolean, Int16, Int32, Schema, String
 
 
-class MetadataResponse_v0(Struct):
+class MetadataResponse_v0(Response):
     API_KEY = 3
     API_VERSION = 0
     SCHEMA = Schema(
@@ -24,7 +24,7 @@ class MetadataResponse_v0(Struct):
     )
 
 
-class MetadataResponse_v1(Struct):
+class MetadataResponse_v1(Response):
     API_KEY = 3
     API_VERSION = 1
     SCHEMA = Schema(
@@ -47,23 +47,56 @@ class MetadataResponse_v1(Struct):
     )
 
 
-class MetadataRequest_v0(Struct):
+class MetadataResponse_v2(Response):
+    API_KEY = 3
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('brokers', Array(
+            ('node_id', Int32),
+            ('host', String('utf-8')),
+            ('port', Int32),
+            ('rack', String('utf-8')))),
+        ('cluster_id', String('utf-8')),  # <-- Added cluster_id field in v2
+        ('controller_id', Int32),
+        ('topics', Array(
+            ('error_code', Int16),
+            ('topic', String('utf-8')),
+            ('is_internal', Boolean),
+            ('partitions', Array(
+                ('error_code', Int16),
+                ('partition', Int32),
+                ('leader', Int32),
+                ('replicas', Array(Int32)),
+                ('isr', Array(Int32))))))
+    )
+
+
+class MetadataRequest_v0(Request):
     API_KEY = 3
     API_VERSION = 0
     RESPONSE_TYPE = MetadataResponse_v0
     SCHEMA = Schema(
-        ('topics', Array(String('utf-8'))) # Empty Array (len 0) for all topics
+        ('topics', Array(String('utf-8')))
     )
+    ALL_TOPICS = None  # Empty Array (len 0) for topics returns all topics
 
 
-class MetadataRequest_v1(Struct):
+class MetadataRequest_v1(Request):
     API_KEY = 3
     API_VERSION = 1
     RESPONSE_TYPE = MetadataResponse_v1
-    SCHEMA = Schema(
-        ('topics', Array(String('utf-8'))) # Null Array (len -1) for all topics
-    )
+    SCHEMA = MetadataRequest_v0.SCHEMA
+    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
+    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
 
 
-MetadataRequest = [MetadataRequest_v0, MetadataRequest_v1]
-MetadataResponse = [MetadataResponse_v0, MetadataResponse_v1]
+class MetadataRequest_v2(Request):
+    API_KEY = 3
+    API_VERSION = 2
+    RESPONSE_TYPE = MetadataResponse_v2
+    SCHEMA = MetadataRequest_v1.SCHEMA
+
+
+MetadataRequest = [MetadataRequest_v0, MetadataRequest_v1, MetadataRequest_v2]
+MetadataResponse = [
+    MetadataResponse_v0, MetadataResponse_v1, MetadataResponse_v2]

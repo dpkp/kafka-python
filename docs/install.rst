@@ -22,30 +22,14 @@ Bleeding-Edge
     git clone https://github.com/dpkp/kafka-python
     pip install ./kafka-python
 
-Setuptools:
-
-.. code:: bash
-
-    git clone https://github.com/dpkp/kafka-python
-    easy_install ./kafka-python
-
-Using `setup.py` directly:
-
-.. code:: bash
-
-    git clone https://github.com/dpkp/kafka-python
-    cd kafka-python
-    python setup.py install
 
 Optional LZ4 install
 ********************
 
-To enable LZ4 compression/decompression, install lz4tools and xxhash:
+To enable LZ4 compression/decompression, install python-lz4:
 
->>> pip install lz4tools
->>> pip install xxhash
+>>> pip install lz4
 
-*Note*: these modules do not support python2.6
 
 Optional Snappy install
 ***********************

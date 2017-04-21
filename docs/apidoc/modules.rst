@@ -7,3 +7,4 @@ kafka-python API
    KafkaProducer
    KafkaClient
    BrokerConnection
+   ClusterMetadata

@@ -56,7 +56,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
     Messages placed on the queue should be tuples that conform to this format:
         ((topic, partition), message, key)
 
-    Currently does not mark messages with task_done. Do not attempt to join()!
+    Currently does not mark messages with task_done. Do not attempt to
+    :meth:`join`!
 
     Arguments:
         queue (threading.Queue): the queue from which to get messages
@@ -227,7 +228,8 @@ class Producer(object):
     Arguments:
         client (kafka.SimpleClient): instance to use for broker
             communications. If async=True, the background thread will use
-            client.copy(), which is expected to return a thread-safe object.
+            :meth:`client.copy`, which is expected to return a thread-safe
+            object.
         codec (kafka.protocol.ALL_CODECS): compression codec to use.
         req_acks (int, optional): A value indicating the acknowledgements that
             the server must receive before responding to the request,
@@ -263,7 +265,7 @@ class Producer(object):
             will not allow you to identify the specific message that failed,
             but it will allow you to match failures with retries.
         async_stop_timeout (int or float, optional): seconds to continue
-            attempting to send queued messages after producer.stop(),
+            attempting to send queued messages after :meth:`producer.stop`,
             defaults to 30.
 
     Deprecated Arguments:
@@ -282,7 +284,7 @@ class Producer(object):
                  codec_compresslevel=None,
                  sync_fail_on_error=SYNC_FAIL_ON_ERROR_DEFAULT,
                  async=False,
-                 batch_send=False, # deprecated, use async
+                 batch_send=False,  # deprecated, use async
                  batch_send_every_n=BATCH_SEND_MSG_COUNT,
                  batch_send_every_t=BATCH_SEND_DEFAULT_INTERVAL,
                  async_retry_limit=ASYNC_RETRY_LIMIT,
@@ -452,7 +454,7 @@ class Producer(object):
 
             # py3 supports unregistering
             if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup_func) # pylint: disable=no-member
+                atexit.unregister(self._cleanup_func)  # pylint: disable=no-member
 
             # py2 requires removing from private attribute...
             else:

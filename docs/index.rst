@@ -51,6 +51,12 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> for msg in consumer:
 ...     print (msg)
 
+>>> # join a consumer group for dynamic partition assignment and offset commits
+>>> from kafka import KafkaConsumer
+>>> consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group')
+>>> for msg in consumer:
+...     print (msg)
+
 >>> # manually assign the partition list for the consumer
 >>> from kafka import TopicPartition
 >>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234')
@@ -76,11 +82,14 @@ client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
 >>> for _ in range(100):
 ...     producer.send('foobar', b'some_message_bytes')
 
->>> # Block until all pending messages are sent
->>> producer.flush()
-
 >>> # Block until a single message is sent (or timeout)
->>> producer.send('foobar', b'another_message').get(timeout=60)
+>>> future = producer.send('foobar', b'another_message')
+>>> result = future.get(timeout=60)
+
+>>> # Block until all pending messages are at least put on the network
+>>> # NOTE: This does not guarantee delivery or success! It is really
+>>> # only useful if you configure internal batching using linger_ms
+>>> producer.flush()
 
 >>> # Use a key for hashed-partitioning
 >>> producer.send('foobar', key=b'foo', value=b'bar')
@@ -104,9 +113,8 @@ Compression
 ***********
 
 kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you must install lz4tools and xxhash (modules
-may not work on python2.6). To enable snappy, install python-snappy (also
-requires snappy library).
+consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
+To enable snappy, install python-snappy (also requires snappy library).
 See `Installation <install.html#optional-snappy-install>`_ for more information.
 
 

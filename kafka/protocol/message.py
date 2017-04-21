@@ -6,12 +6,11 @@ import time
 from ..codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
-from . import pickle
 from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
-from ..util import crc32
+from ..util import crc32, WeakMethod
 
 
 class Message(Struct):
@@ -36,7 +35,7 @@ class Message(Struct):
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
     TIMESTAMP_TYPE_MASK = 0x08
-    HEADER_SIZE = 22 # crc(4), magic(1), attributes(1), timestamp(8), key+value size(4*2)
+    HEADER_SIZE = 22  # crc(4), magic(1), attributes(1), timestamp(8), key+value size(4*2)
 
     def __init__(self, value, key=None, magic=0, attributes=0, crc=0,
                  timestamp=None):
@@ -49,11 +48,12 @@ class Message(Struct):
             timestamp = int(time.time() * 1000)
         self.timestamp = timestamp
         self.crc = crc
+        self._validated_crc = None
         self.magic = magic
         self.attributes = attributes
         self.key = key
         self.value = value
-        self.encode = self._encode_self
+        self.encode = WeakMethod(self._encode_self)
 
     @property
     def timestamp_type(self):
@@ -86,7 +86,9 @@ class Message(Struct):
 
     @classmethod
     def decode(cls, data):
+        _validated_crc = None
         if isinstance(data, bytes):
+            _validated_crc = crc32(data[4:])
             data = io.BytesIO(data)
         # Partial decode required to determine message version
         base_fields = cls.SCHEMAS[0].fields[0:3]
@@ -97,14 +99,17 @@ class Message(Struct):
             timestamp = fields[0]
         else:
             timestamp = None
-        return cls(fields[-1], key=fields[-2],
-                   magic=magic, attributes=attributes, crc=crc,
-                   timestamp=timestamp)
+        msg = cls(fields[-1], key=fields[-2],
+                  magic=magic, attributes=attributes, crc=crc,
+                  timestamp=timestamp)
+        msg._validated_crc = _validated_crc
+        return msg
 
     def validate_crc(self):
-        raw_msg = self._encode_self(recalc_crc=False)
-        crc = crc32(raw_msg[4:])
-        if crc == self.crc:
+        if self._validated_crc is None:
+            raw_msg = self._encode_self(recalc_crc=False)
+            self._validated_crc = crc32(raw_msg[4:])
+        if self.crc == self._validated_crc:
             return True
         return False
 
@@ -127,7 +132,7 @@ class Message(Struct):
             else:
                 raw_bytes = lz4_decode(self.value)
         else:
-          raise Exception('This should be impossible')
+            raise Exception('This should be impossible')
 
         return MessageSet.decode(raw_bytes, bytes_to_read=len(raw_bytes))
 
@@ -145,7 +150,7 @@ class MessageSet(AbstractType):
         ('offset', Int64),
         ('message', Bytes)
     )
-    HEADER_SIZE = 12 # offset + message_size
+    HEADER_SIZE = 12  # offset + message_size
 
     @classmethod
     def encode(cls, items):

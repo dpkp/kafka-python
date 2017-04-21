@@ -70,7 +70,9 @@ else:
         else:
             # 64-bit
             MAXSIZE = int((1 << 63) - 1)
-        del X
+
+        # Don't del it here, cause with gc disabled this "leaks" to garbage
+        # del X
 
 
 def _add_doc(func, doc):

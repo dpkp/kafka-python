@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+import select
 
 # selectors in stdlib as of py3.4
 try:
@@ -130,11 +131,11 @@ class SimpleClient(object):
         Returns the leader for a partition or None if the partition exists
         but has no leader.
 
-        UnknownTopicOrPartitionError will be raised if the topic or partition
-        is not part of the metadata.
-
-        LeaderNotAvailableError is raised if server has metadata, but there is
-        no current leader
+        Raises:
+            UnknownTopicOrPartitionError: If the topic or partition is not part
+                of the metadata.
+            LeaderNotAvailableError: If the server has metadata, but there is no
+        current leader.
         """
 
         key = TopicPartition(topic, partition)
@@ -288,7 +289,6 @@ class SimpleClient(object):
                 failed_payloads(broker_payloads)
                 continue
 
-
             host, port, afi = get_ip_port_afi(broker.host)
             try:
                 conn = self._get_conn(host, broker.port, afi, broker.nodeId)
@@ -298,13 +298,9 @@ class SimpleClient(object):
                 continue
 
             request = encoder_fn(payloads=broker_payloads)
-            # decoder_fn=None signal that the server is expected to not
-            # send a response.  This probably only applies to
-            # ProduceRequest w/ acks = 0
-            expect_response = (decoder_fn is not None)
-            if expect_response:
+            if request.expect_response():
                 selector.register(conn._sock, selectors.EVENT_READ, conn)
-            future = conn.send(request, expect_response=expect_response)
+            future = conn.send(request)
 
             if future.failed():
                 log.error("Request failed: %s", future.exception)
@@ -313,7 +309,7 @@ class SimpleClient(object):
                 failed_payloads(broker_payloads)
                 continue
 
-            if not expect_response:
+            if not request.expect_response():
                 for payload in broker_payloads:
                     topic_partition = (str(payload.topic), payload.partition)
                     responses[topic_partition] = None
@@ -422,8 +418,7 @@ class SimpleClient(object):
             # decoder_fn=None signal that the server is expected to not
             # send a response.  This probably only applies to
             # ProduceRequest w/ acks = 0
-            expect_response = (decoder_fn is not None)
-            future = conn.send(request, expect_response=expect_response)
+            future = conn.send(request)
 
             while not future.is_done:
                 conn.recv()
@@ -431,7 +426,7 @@ class SimpleClient(object):
             if future.failed():
                 failed_payloads(payloads)
 
-            elif not expect_response:
+            elif not request.expect_response():
                 failed_payloads(payloads)
 
             else:
@@ -474,8 +469,8 @@ class SimpleClient(object):
         Create an inactive copy of the client object, suitable for passing
         to a separate thread.
 
-        Note that the copied connections are not initialized, so reinit() must
-        be called on the returned copy.
+        Note that the copied connections are not initialized, so :meth:`.reinit`
+        must be called on the returned copy.
         """
         _conns = self._conns
         self._conns = {}
@@ -521,8 +516,8 @@ class SimpleClient(object):
 
     def has_metadata_for_topic(self, topic):
         return (
-          topic in self.topic_partitions
-          and len(self.topic_partitions[topic]) > 0
+            topic in self.topic_partitions
+            and len(self.topic_partitions[topic]) > 0
         )
 
     def get_partition_ids_for_topic(self, topic):
@@ -535,7 +530,7 @@ class SimpleClient(object):
     def topics(self):
         return list(self.topic_partitions.keys())
 
-    def ensure_topic_exists(self, topic, timeout = 30):
+    def ensure_topic_exists(self, topic, timeout=30):
         start_time = time.time()
 
         while not self.has_metadata_for_topic(topic):
@@ -736,6 +731,17 @@ class SimpleClient(object):
             payloads,
             KafkaProtocol.encode_offset_request,
             KafkaProtocol.decode_offset_response)
+
+        return [resp if not callback else callback(resp) for resp in resps
+                if not fail_on_error or not self._raise_on_response_error(resp)]
+
+    @time_metric('offset_list')
+    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+                                callback=None):
+        resps = self._send_broker_aware_request(
+            payloads,
+            KafkaProtocol.encode_list_offset_request,
+            KafkaProtocol.decode_list_offset_response)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]

@@ -6,11 +6,9 @@ import pytest
 from kafka.client_async import KafkaClient
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
-import kafka.errors as Errors
-from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest
-from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.structs import TopicPartition
 
 
 @pytest.fixture
@@ -51,7 +49,7 @@ def test_send_fetches(fetcher, mocker):
     ]
 
     mocker.patch.object(fetcher, '_create_fetch_requests',
-                        return_value = dict(enumerate(fetch_requests)))
+                        return_value=dict(enumerate(fetch_requests)))
 
     ret = fetcher.send_fetches()
     for node, request in enumerate(fetch_requests):
@@ -60,7 +58,8 @@ def test_send_fetches(fetcher, mocker):
 
 
 @pytest.mark.parametrize(("api_version", "fetch_version"), [
-    ((0, 10), 2),
+    ((0, 10, 1), 3),
+    ((0, 10, 0), 2),
     ((0, 9), 1),
     ((0, 8), 0)
 ])

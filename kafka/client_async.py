@@ -10,7 +10,7 @@ import threading
 
 # selectors in stdlib as of py3.4
 try:
-    import selectors # pylint: disable=import-error
+    import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
     from .vendor import selectors34 as selectors
@@ -41,12 +41,96 @@ log = logging.getLogger('kafka.client')
 
 class KafkaClient(object):
     """
-    A network client for asynchronous request/response network i/o.
-    This is an internal class used to implement the
-    user-facing producer and consumer clients.
+    A network client for asynchronous request/response network I/O.
+
+    This is an internal class used to implement the user-facing producer and
+    consumer clients.
 
     This class is not thread-safe!
+
+    Attributes:
+        cluster (:any:`ClusterMetadata`): Local cache of cluster metadata, retrived
+            via MetadataRequests during :meth:`.poll`.
+
+    Keyword Arguments:
+        bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
+            strings) that the consumer should contact to bootstrap initial
+            cluster metadata. This does not have to be the full node list.
+            It just needs to have at least one broker that will respond to a
+            Metadata API Request. Default port is 9092. If no servers are
+            specified, will default to localhost:9092.
+        client_id (str): a name for this client. This string is passed in
+            each request to servers and can be used to identify specific
+            server-side log entries that correspond to this client. Also
+            submitted to GroupCoordinator for logging with respect to
+            consumer group administration. Default: 'kafka-python-{version}'
+        reconnect_backoff_ms (int): The amount of time in milliseconds to
+            wait before attempting to reconnect to a given host.
+            Default: 50.
+        request_timeout_ms (int): Client request timeout in milliseconds.
+            Default: 40000.
+        retry_backoff_ms (int): Milliseconds to backoff when retrying on
+            errors. Default: 100.
+        max_in_flight_requests_per_connection (int): Requests are pipelined
+            to kafka brokers up to this number of maximum requests per
+            broker connection. Default: 5.
+        receive_buffer_bytes (int): The size of the TCP receive buffer
+            (SO_RCVBUF) to use when reading data. Default: None (relies on
+            system defaults). Java client defaults to 32768.
+        send_buffer_bytes (int): The size of the TCP send buffer
+            (SO_SNDBUF) to use when sending data. Default: None (relies on
+            system defaults). Java client defaults to 131072.
+        socket_options (list): List of tuple-arguments to socket.setsockopt
+            to apply to broker connection sockets. Default:
+            [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
+        metadata_max_age_ms (int): The period of time in milliseconds after
+            which we force a refresh of metadata even if we haven't seen any
+            partition leadership changes to proactively discover any new
+            brokers or partitions. Default: 300000
+        security_protocol (str): Protocol used to communicate with brokers.
+            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+            socket connections. If provided, all other ssl_* configurations
+            will be ignored. Default: None.
+        ssl_check_hostname (bool): flag to configure whether ssl handshake
+            should verify that the certificate matches the brokers hostname.
+            default: true.
+        ssl_cafile (str): optional filename of ca file to use in certificate
+            veriication. default: none.
+        ssl_certfile (str): optional filename of file in pem format containing
+            the client certificate, as well as any ca certificates needed to
+            establish the certificate's authenticity. default: none.
+        ssl_keyfile (str): optional filename containing the client private key.
+            default: none.
+        ssl_password (str): optional password to be used when loading the
+            certificate chain. default: none.
+        ssl_crlfile (str): optional filename containing the CRL to check for
+            certificate expiration. By default, no CRL check is done. When
+            providing a file, only the leaf certificate will be checked against
+            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
+            default: none.
+        api_version (tuple): Specify which Kafka API version to use. If set
+            to None, KafkaClient will attempt to infer the broker version by
+            probing various APIs. For the full list of supported versions,
+            see KafkaClient.API_VERSIONS. Default: None
+        api_version_auto_timeout_ms (int): number of milliseconds to throw a
+            timeout exception from the constructor when checking the broker
+            api version. Only applies if api_version is None
+        selector (selectors.BaseSelector): Provide a specific selector
+            implementation to use for I/O multiplexing.
+            Default: selectors.DefaultSelector
+        metrics (kafka.metrics.Metrics): Optionally provide a metrics
+            instance for capturing network IO stats. Default: None.
+        metric_group_prefix (str): Prefix for metric names. Default: ''
+        sasl_mechanism (str): string picking sasl mechanism when security_protocol
+            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
+            Default: None
+        sasl_plain_username (str): username for sasl PLAIN authentication.
+            Default: None
+        sasl_plain_password (str): password for sasl PLAIN authentication.
+            Default: None
     """
+
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
@@ -76,6 +160,8 @@ class KafkaClient(object):
         'sasl_plain_password': None,
     }
     API_VERSIONS = [
+        (0, 10, 1),
+        (0, 10, 0),
         (0, 10),
         (0, 9),
         (0, 8, 2),
@@ -84,86 +170,6 @@ class KafkaClient(object):
     ]
 
     def __init__(self, **configs):
-        """Initialize an asynchronous kafka client
-
-        Keyword Arguments:
-            bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
-                strings) that the consumer should contact to bootstrap initial
-                cluster metadata. This does not have to be the full node list.
-                It just needs to have at least one broker that will respond to a
-                Metadata API Request. Default port is 9092. If no servers are
-                specified, will default to localhost:9092.
-            client_id (str): a name for this client. This string is passed in
-                each request to servers and can be used to identify specific
-                server-side log entries that correspond to this client. Also
-                submitted to GroupCoordinator for logging with respect to
-                consumer group administration. Default: 'kafka-python-{version}'
-            reconnect_backoff_ms (int): The amount of time in milliseconds to
-                wait before attempting to reconnect to a given host.
-                Default: 50.
-            request_timeout_ms (int): Client request timeout in milliseconds.
-                Default: 40000.
-            retry_backoff_ms (int): Milliseconds to backoff when retrying on
-                errors. Default: 100.
-            max_in_flight_requests_per_connection (int): Requests are pipelined
-                to kafka brokers up to this number of maximum requests per
-                broker connection. Default: 5.
-            receive_buffer_bytes (int): The size of the TCP receive buffer
-                (SO_RCVBUF) to use when reading data. Default: None (relies on
-                system defaults). Java client defaults to 32768.
-            send_buffer_bytes (int): The size of the TCP send buffer
-                (SO_SNDBUF) to use when sending data. Default: None (relies on
-                system defaults). Java client defaults to 131072.
-            socket_options (list): List of tuple-arguments to socket.setsockopt
-                to apply to broker connection sockets. Default:
-                [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
-            metadata_max_age_ms (int): The period of time in milliseconds after
-                which we force a refresh of metadata even if we haven't seen any
-                partition leadership changes to proactively discover any new
-                brokers or partitions. Default: 300000
-            security_protocol (str): Protocol used to communicate with brokers.
-                Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
-            ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
-                socket connections. If provided, all other ssl_* configurations
-                will be ignored. Default: None.
-            ssl_check_hostname (bool): flag to configure whether ssl handshake
-                should verify that the certificate matches the brokers hostname.
-                default: true.
-            ssl_cafile (str): optional filename of ca file to use in certificate
-                veriication. default: none.
-            ssl_certfile (str): optional filename of file in pem format containing
-                the client certificate, as well as any ca certificates needed to
-                establish the certificate's authenticity. default: none.
-            ssl_keyfile (str): optional filename containing the client private key.
-                default: none.
-            ssl_password (str): optional password to be used when loading the
-                certificate chain. default: none.
-            ssl_crlfile (str): optional filename containing the CRL to check for
-                certificate expiration. By default, no CRL check is done. When
-                providing a file, only the leaf certificate will be checked against
-                this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-                default: none.
-            api_version (tuple): specify which kafka API version to use. Accepted
-                values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9), (0, 10)
-                If None, KafkaClient will attempt to infer the broker
-                version by probing various APIs. Default: None
-            api_version_auto_timeout_ms (int): number of milliseconds to throw a
-                timeout exception from the constructor when checking the broker
-                api version. Only applies if api_version is None
-            selector (selectors.BaseSelector): Provide a specific selector
-                implementation to use for I/O multiplexing.
-                Default: selectors.DefaultSelector
-            metrics (kafka.metrics.Metrics): Optionally provide a metrics
-                instance for capturing network IO stats. Default: None.
-            metric_group_prefix (str): Prefix for metric names. Default: ''
-            sasl_mechanism (str): string picking sasl mechanism when security_protocol
-                is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
-                Default: None
-            sasl_plain_username (str): username for sasl PLAIN authentication.
-                Default: None
-            sasl_plain_password (str): password for sasl PLAIN authentication.
-                Defualt: None
-        """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -175,7 +181,7 @@ class KafkaClient(object):
                     self.config['api_version'], str(self.API_VERSIONS)))
 
         self.cluster = ClusterMetadata(**self.config)
-        self._topics = set() # empty set will fetch all topic metadata
+        self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
         self._last_no_node_available_ms = 0
         self._selector = self.config['selector']()
@@ -204,6 +210,7 @@ class KafkaClient(object):
             self.config['api_version'] = self.check_version(timeout=check_timeout)
 
     def _bootstrap(self, hosts):
+        log.info('Bootstrapping cluster metadata from %s', hosts)
         # Exponential backoff if bootstrap fails
         backoff_ms = self.config['reconnect_backoff_ms'] * 2 ** self._bootstrap_fails
         next_at = self._last_bootstrap + backoff_ms / 1000.0
@@ -229,7 +236,7 @@ class KafkaClient(object):
             bootstrap.connect()
             while bootstrap.connecting():
                 bootstrap.connect()
-            if bootstrap.state is not ConnectionStates.CONNECTED:
+            if not bootstrap.connected():
                 bootstrap.close()
                 continue
             future = bootstrap.send(metadata_request)
@@ -239,6 +246,8 @@ class KafkaClient(object):
                 bootstrap.close()
                 continue
             self.cluster.update_metadata(future.value)
+            log.info('Bootstrap succeeded: found %d brokers and %d topics.',
+                     len(self.cluster.brokers()), len(self.cluster.topics()))
 
             # A cluster with no topics can return no broker metadata
             # in that case, we should keep the bootstrap connection
@@ -261,7 +270,7 @@ class KafkaClient(object):
                 return True
             return False
         conn = self._conns[node_id]
-        return conn.state is ConnectionStates.DISCONNECTED and not conn.blacked_out()
+        return conn.disconnected() and not conn.blacked_out()
 
     def _conn_state_change(self, node_id, conn):
         if conn.connecting():
@@ -324,17 +333,19 @@ class KafkaClient(object):
         conn.connect()
         return conn.connected()
 
-    def ready(self, node_id):
+    def ready(self, node_id, metadata_priority=True):
         """Check whether a node is connected and ok to send more requests.
 
         Arguments:
             node_id (int): the id of the node to check
+            metadata_priority (bool): Mark node as not-ready if a metadata
+                refresh is required. Default: True
 
         Returns:
             bool: True if we are ready to send to the given node
         """
         self._maybe_connect(node_id)
-        return self.is_ready(node_id)
+        return self.is_ready(node_id, metadata_priority=metadata_priority)
 
     def connected(self, node_id):
         """Return True iff the node_id is connected."""
@@ -343,7 +354,7 @@ class KafkaClient(object):
         return self._conns[node_id].connected()
 
     def close(self, node_id=None):
-        """Closes one or all broker connections.
+        """Close one or all broker connections.
 
         Arguments:
             node_id (int, optional): the id of the node to close
@@ -381,7 +392,7 @@ class KafkaClient(object):
 
     def connection_delay(self, node_id):
         """
-        Returns the number of milliseconds to wait, based on the connection
+        Return the number of milliseconds to wait, based on the connection
         state, before attempting to send data. When disconnected, this respects
         the reconnect backoff time. When connecting, returns 0 to allow
         non-blocking connect to finish. When connected, returns a very large
@@ -398,14 +409,14 @@ class KafkaClient(object):
 
         conn = self._conns[node_id]
         time_waited_ms = time.time() - (conn.last_attempt or 0)
-        if conn.state is ConnectionStates.DISCONNECTED:
+        if conn.disconnected():
             return max(self.config['reconnect_backoff_ms'] - time_waited_ms, 0)
         elif conn.connecting():
             return 0
         else:
             return 999999999
 
-    def is_ready(self, node_id):
+    def is_ready(self, node_id, metadata_priority=True):
         """Check whether a node is ready to send more requests.
 
         In addition to connection-level checks, this method also is used to
@@ -413,16 +424,23 @@ class KafkaClient(object):
 
         Arguments:
             node_id (int): id of the node to check
+            metadata_priority (bool): Mark node as not-ready if a metadata
+                refresh is required. Default: True
 
         Returns:
             bool: True if the node is ready and metadata is not refreshing
         """
+        if not self._can_send_request(node_id):
+            return False
+
         # if we need to update our metadata now declare all requests unready to
         # make metadata requests first priority
-        if not self._metadata_refresh_in_progress and not self.cluster.ttl() == 0:
-            if self._can_send_request(node_id):
-                return True
-        return False
+        if metadata_priority:
+            if self._metadata_refresh_in_progress:
+                return False
+            if self.cluster.ttl() == 0:
+                return False
+        return True
 
     def _can_send_request(self, node_id):
         if node_id not in self._conns:
@@ -446,12 +464,7 @@ class KafkaClient(object):
         if not self._maybe_connect(node_id):
             return Future().failure(Errors.NodeNotReadyError(node_id))
 
-        # Every request gets a response, except one special case:
-        expect_response = True
-        if isinstance(request, tuple(ProduceRequest)) and request.required_acks == 0:
-            expect_response = False
-
-        return self._conns[node_id].send(request, expect_response=expect_response)
+        return self._conns[node_id].send(request)
 
     def poll(self, timeout_ms=None, future=None, sleep=True):
         """Try to read and write to sockets.
@@ -506,7 +519,7 @@ class KafkaClient(object):
                     metadata_timeout_ms,
                     self._delayed_tasks.next_at() * 1000,
                     self.config['request_timeout_ms'])
-                timeout = max(0, timeout / 1000.0) # avoid negative timeouts
+                timeout = max(0, timeout / 1000.0)  # avoid negative timeouts
 
             responses.extend(self._poll(timeout, sleep=sleep))
 
@@ -556,12 +569,12 @@ class KafkaClient(object):
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
                     pass
-                conn.close()
+                conn.close(Errors.ConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
 
             # Accumulate as many responses as the connection has pending
             while conn.in_flight_requests:
-                response = conn.recv() # Note: conn.recv runs callbacks / errbacks
+                response = conn.recv()  # Note: conn.recv runs callbacks / errbacks
 
                 # Incomplete responses are buffered internally
                 # while conn.in_flight_requests retains the request
@@ -727,7 +740,7 @@ class KafkaClient(object):
             elif self._can_connect(node_id):
                 log.debug("Initializing connection to node %s for metadata request", node_id)
                 self._maybe_connect(node_id)
-                # If initiateConnect failed immediately, this node will be put into blackout and we
+                # If _maybe_connect failed immediately, this node will be put into blackout and we
                 # should allow immediately retrying in case there is another candidate node. If it
                 # is still connecting, the worst case is that we end up setting a longer timeout
                 # on the next round and then wait for the response.
@@ -768,9 +781,9 @@ class KafkaClient(object):
         self._delayed_tasks.remove(task)
 
     def check_version(self, node_id=None, timeout=2, strict=False):
-        """Attempt to guess a broker version
+        """Attempt to guess the version of a Kafka broker.
 
-        Note: it is possible that this method blocks longer than the
+        Note: It is possible that this method blocks longer than the
             specified timeout. This can happen if the entire cluster
             is down and the client enters a bootstrap backoff sleep.
             This is only possible if node_id is None.
@@ -829,9 +842,9 @@ class KafkaClient(object):
 class DelayedTaskQueue(object):
     # see https://docs.python.org/2/library/heapq.html
     def __init__(self):
-        self._tasks = [] # list of entries arranged in a heap
-        self._task_map = {} # mapping of tasks to entries
-        self._counter = itertools.count() # unique sequence count
+        self._tasks = []  # list of entries arranged in a heap
+        self._task_map = {}  # mapping of tasks to entries
+        self._counter = itertools.count()  # unique sequence count
 
     def add(self, task, at):
         """Add a task to run at a later time.

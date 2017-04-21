@@ -7,8 +7,8 @@ import logging
 import io
 from random import shuffle
 import socket
-import ssl
 import time
+import traceback
 
 from kafka.vendor import six
 
@@ -18,6 +18,7 @@ from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import GroupCoordinatorResponse
+from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Int32
 from kafka.version import __version__
 
@@ -30,20 +31,28 @@ log = logging.getLogger(__name__)
 
 DEFAULT_KAFKA_PORT = 9092
 
-# support older ssl libraries
 try:
-    ssl.SSLWantReadError
-    ssl.SSLWantWriteError
-    ssl.SSLZeroReturnError
-except:
-    # Don't use warning as incompatible with our waf setup for ym
-    log.debug('old ssl module detected.'
-                ' ssl error handling may not operate cleanly.'
-                ' Consider upgrading to python 3.5 or 2.7')
-    ssl.SSLWantReadError = ssl.SSLError
-    ssl.SSLWantWriteError = ssl.SSLError
-    ssl.SSLZeroReturnError = ssl.SSLError
-
+    import ssl
+    ssl_available = True
+    try:
+        SSLWantReadError = ssl.SSLWantReadError
+        SSLWantWriteError = ssl.SSLWantWriteError
+        SSLZeroReturnError = ssl.SSLZeroReturnError
+    except:
+        # support older ssl libraries
+        log.debug('Old SSL module detected.'
+                    ' SSL error handling may not operate cleanly.'
+                    ' Consider upgrading to Python 3.3 or 2.7.9')
+        SSLWantReadError = ssl.SSLError
+        SSLWantWriteError = ssl.SSLError
+        SSLZeroReturnError = ssl.SSLError
+except ImportError:
+    # support Python without ssl libraries
+    ssl_available = False
+    class SSLWantReadError(Exception):
+        pass
+    class SSLWantWriteError(Exception):
+        pass
 
 class ConnectionStates(object):
     DISCONNECTING = '<disconnecting>'
@@ -58,6 +67,74 @@ InFlightRequest = collections.namedtuple('InFlightRequest',
 
 
 class BrokerConnection(object):
+    """Initialize a Kafka broker connection
+
+    Keyword Arguments:
+        client_id (str): a name for this client. This string is passed in
+            each request to servers and can be used to identify specific
+            server-side log entries that correspond to this client. Also
+            submitted to GroupCoordinator for logging with respect to
+            consumer group administration. Default: 'kafka-python-{version}'
+        reconnect_backoff_ms (int): The amount of time in milliseconds to
+            wait before attempting to reconnect to a given host.
+            Default: 50.
+        request_timeout_ms (int): Client request timeout in milliseconds.
+            Default: 40000.
+        max_in_flight_requests_per_connection (int): Requests are pipelined
+            to kafka brokers up to this number of maximum requests per
+            broker connection. Default: 5.
+        receive_buffer_bytes (int): The size of the TCP receive buffer
+            (SO_RCVBUF) to use when reading data. Default: None (relies on
+            system defaults). Java client defaults to 32768.
+        send_buffer_bytes (int): The size of the TCP send buffer
+            (SO_SNDBUF) to use when sending data. Default: None (relies on
+            system defaults). Java client defaults to 131072.
+        socket_options (list): List of tuple-arguments to socket.setsockopt
+            to apply to broker connection sockets. Default:
+            [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
+        security_protocol (str): Protocol used to communicate with brokers.
+            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+            socket connections. If provided, all other ssl_* configurations
+            will be ignored. Default: None.
+        ssl_check_hostname (bool): flag to configure whether ssl handshake
+            should verify that the certificate matches the brokers hostname.
+            default: True.
+        ssl_cafile (str): optional filename of ca file to use in certificate
+            veriication. default: None.
+        ssl_certfile (str): optional filename of file in pem format containing
+            the client certificate, as well as any ca certificates needed to
+            establish the certificate's authenticity. default: None.
+        ssl_keyfile (str): optional filename containing the client private key.
+            default: None.
+        ssl_password (callable, str, bytes, bytearray): optional password or
+            callable function that returns a password, for decrypting the
+            client private key. Default: None.
+        ssl_crlfile (str): optional filename containing the CRL to check for
+            certificate expiration. By default, no CRL check is done. When
+            providing a file, only the leaf certificate will be checked against
+            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
+            default: None.
+        api_version (tuple): Specify which Kafka API version to use.
+            Accepted values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9),
+            (0, 10). Default: (0, 8, 2)
+        api_version_auto_timeout_ms (int): number of milliseconds to throw a
+            timeout exception from the constructor when checking the broker
+            api version. Only applies if api_version is None
+        state_change_callback (callable): function to be called when the
+            connection state changes from CONNECTING to CONNECTED etc.
+        metrics (kafka.metrics.Metrics): Optionally provide a metrics
+            instance for capturing network IO stats. Default: None.
+        metric_group_prefix (str): Prefix for metric names. Default: ''
+        sasl_mechanism (str): string picking sasl mechanism when security_protocol
+            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
+            Default: None
+        sasl_plain_username (str): username for sasl PLAIN authentication.
+            Default: None
+        sasl_plain_password (str): password for sasl PLAIN authentication.
+            Default: None
+    """
+
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
         'node_id': 0,
@@ -86,76 +163,8 @@ class BrokerConnection(object):
     SASL_MECHANISMS = ('PLAIN',)
 
     def __init__(self, host, port, afi, **configs):
-        """Initialize a kafka broker connection
-
-        Keyword Arguments:
-            client_id (str): a name for this client. This string is passed in
-                each request to servers and can be used to identify specific
-                server-side log entries that correspond to this client. Also
-                submitted to GroupCoordinator for logging with respect to
-                consumer group administration. Default: 'kafka-python-{version}'
-            reconnect_backoff_ms (int): The amount of time in milliseconds to
-                wait before attempting to reconnect to a given host.
-                Default: 50.
-            request_timeout_ms (int): Client request timeout in milliseconds.
-                Default: 40000.
-            max_in_flight_requests_per_connection (int): Requests are pipelined
-                to kafka brokers up to this number of maximum requests per
-                broker connection. Default: 5.
-            receive_buffer_bytes (int): The size of the TCP receive buffer
-                (SO_RCVBUF) to use when reading data. Default: None (relies on
-                system defaults). Java client defaults to 32768.
-            send_buffer_bytes (int): The size of the TCP send buffer
-                (SO_SNDBUF) to use when sending data. Default: None (relies on
-                system defaults). Java client defaults to 131072.
-            socket_options (list): List of tuple-arguments to socket.setsockopt
-                to apply to broker connection sockets. Default:
-                [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
-            security_protocol (str): Protocol used to communicate with brokers.
-                Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
-            ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
-                socket connections. If provided, all other ssl_* configurations
-                will be ignored. Default: None.
-            ssl_check_hostname (bool): flag to configure whether ssl handshake
-                should verify that the certificate matches the brokers hostname.
-                default: True.
-            ssl_cafile (str): optional filename of ca file to use in certificate
-                veriication. default: None.
-            ssl_certfile (str): optional filename of file in pem format containing
-                the client certificate, as well as any ca certificates needed to
-                establish the certificate's authenticity. default: None.
-            ssl_keyfile (str): optional filename containing the client private key.
-                default: None.
-            ssl_password (callable, str, bytes, bytearray): optional password or
-                callable function that returns a password, for decrypting the
-                client private key. Default: None.
-            ssl_crlfile (str): optional filename containing the CRL to check for
-                certificate expiration. By default, no CRL check is done. When
-                providing a file, only the leaf certificate will be checked against
-                this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-                default: None.
-            api_version (tuple): specify which kafka API version to use. Accepted
-                values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9), (0, 10)
-                If None, KafkaClient will attempt to infer the broker
-                version by probing various APIs. Default: None
-            api_version_auto_timeout_ms (int): number of milliseconds to throw a
-                timeout exception from the constructor when checking the broker
-                api version. Only applies if api_version is None
-            state_chance_callback (callable): function to be called when the
-                connection state changes from CONNECTING to CONNECTED etc.
-            metrics (kafka.metrics.Metrics): Optionally provide a metrics
-                instance for capturing network IO stats. Default: None.
-            metric_group_prefix (str): Prefix for metric names. Default: ''
-            sasl_mechanism (str): string picking sasl mechanism when security_protocol
-                is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
-                Default: None
-            sasl_plain_username (str): username for sasl PLAIN authentication.
-                Default: None
-            sasl_plain_password (str): passowrd for sasl PLAIN authentication.
-                Defualt: None
-        """
-        self.host = host
         self.hostname = host
+        self.host = host
         self.port = port
         self.afi = afi
         self.in_flight_requests = collections.deque()
@@ -174,6 +183,9 @@ class BrokerConnection(object):
                  (socket.SOL_SOCKET, socket.SO_SNDBUF,
                  self.config['send_buffer_bytes']))
 
+        if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
+            assert ssl_available, "Python wasn't built with SSL support"
+
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
             assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
                 'sasl_mechanism must be in ' + self.SASL_MECHANISMS)
@@ -191,7 +203,6 @@ class BrokerConnection(object):
         self._receiving = False
         self._next_payload_bytes = 0
         self.last_attempt = 0
-        self.last_failure = 0
         self._processing = False
         self._correlation_id = 0
         self._gai = None
@@ -205,8 +216,7 @@ class BrokerConnection(object):
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED:
-            self.close()
-            log.debug('%s: creating new socket', str(self))
+            log.debug('%s: creating new socket', self)
             # if self.afi is set to AF_UNSPEC, then we need to do a name
             # resolution and try all available address families
             if self.afi == socket.AF_UNSPEC:
@@ -249,11 +259,13 @@ class BrokerConnection(object):
                 self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
 
             for option in self.config['socket_options']:
+                log.debug('%s: setting socket option %s', self, option)
                 self._sock.setsockopt(*option)
 
             self._sock.setblocking(False)
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()
+            log.info('%s: connecting to %s:%d', self, self.host, self.port)
             self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
             self.config['state_change_callback'](self)
@@ -275,13 +287,15 @@ class BrokerConnection(object):
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
-                log.debug('%s: established TCP connection', str(self))
+                log.debug('%s: established TCP connection', self)
                 if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
-                    log.debug('%s: initiating SSL handshake', str(self))
+                    log.debug('%s: initiating SSL handshake', self)
                     self.state = ConnectionStates.HANDSHAKE
                 elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
+                    log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
+                    log.debug('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -290,12 +304,12 @@ class BrokerConnection(object):
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
-                self.close()
+                self.close(Errors.ConnectionError(ret))
 
             # Connection timedout
             elif time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
-                self.close() # error=TimeoutError ?
+                self.close(Errors.ConnectionError('timeout'))
 
             # Needs retry
             else:
@@ -303,17 +317,20 @@ class BrokerConnection(object):
 
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
-                log.debug('%s: completed SSL handshake.', str(self))
+                log.debug('%s: completed SSL handshake.', self)
                 if self.config['security_protocol'] == 'SASL_SSL':
+                    log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
+                    log.debug('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
             if self._try_authenticate():
-                log.info('%s: Authenticated as %s', str(self), self.config['sasl_plain_username'])
+                log.info('%s: Authenticated as %s', self, self.config['sasl_plain_username'])
+                log.debug('%s: Connection complete.', self)
                 self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -322,7 +339,7 @@ class BrokerConnection(object):
     def _wrap_ssl(self):
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
         if self._ssl_context is None:
-            log.debug('%s: configuring default SSL Context', str(self))
+            log.debug('%s: configuring default SSL Context', self)
             self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)  # pylint: disable=no-member
             self._ssl_context.options |= ssl.OP_NO_SSLv2  # pylint: disable=no-member
             self._ssl_context.options |= ssl.OP_NO_SSLv3  # pylint: disable=no-member
@@ -330,36 +347,35 @@ class BrokerConnection(object):
             if self.config['ssl_check_hostname']:
                 self._ssl_context.check_hostname = True
             if self.config['ssl_cafile']:
-                log.info('%s: Loading SSL CA from %s', str(self), self.config['ssl_cafile'])
+                log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_cafile'])
                 self._ssl_context.verify_mode = ssl.CERT_REQUIRED
             if self.config['ssl_certfile'] and self.config['ssl_keyfile']:
-                log.info('%s: Loading SSL Cert from %s', str(self), self.config['ssl_certfile'])
-                log.info('%s: Loading SSL Key from %s', str(self), self.config['ssl_keyfile'])
+                log.info('%s: Loading SSL Cert from %s', self, self.config['ssl_certfile'])
+                log.info('%s: Loading SSL Key from %s', self, self.config['ssl_keyfile'])
                 self._ssl_context.load_cert_chain(
                     certfile=self.config['ssl_certfile'],
                     keyfile=self.config['ssl_keyfile'],
                     password=self.config['ssl_password'])
             if self.config['ssl_crlfile']:
                 if not hasattr(ssl, 'VERIFY_CRL_CHECK_LEAF'):
-                    log.error('%s: No CRL support with this version of Python.'
-                              ' Disconnecting.', self)
-                    self.close()
+                    error = 'No CRL support with this version of Python.'
+                    log.error('%s: %s Disconnecting.', self, error)
+                    self.close(Errors.ConnectionError(error))
                     return
-                log.info('%s: Loading SSL CRL from %s', str(self), self.config['ssl_crlfile'])
+                log.info('%s: Loading SSL CRL from %s', self, self.config['ssl_crlfile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
                 # pylint: disable=no-member
                 self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
-        log.debug('%s: wrapping socket in ssl context', str(self))
+        log.debug('%s: wrapping socket in ssl context', self)
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
                 server_hostname=self.hostname,
                 do_handshake_on_connect=False)
-        except ssl.SSLError:
-            log.exception('%s: Failed to wrap socket in SSLContext!', str(self))
-            self.close()
-            self.last_failure = time.time()
+        except ssl.SSLError as e:
+            log.exception('%s: Failed to wrap socket in SSLContext!', self)
+            self.close(e)
 
     def _try_handshake(self):
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
@@ -367,11 +383,11 @@ class BrokerConnection(object):
             self._sock.do_handshake()
             return True
         # old ssl in python2.6 will swallow all SSLErrors here...
-        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+        except (SSLWantReadError, SSLWantWriteError):
             pass
-        except ssl.SSLZeroReturnError:
+        except (SSLZeroReturnError, ConnectionError):
             log.warning('SSL connection closed by server during handshake.')
-            self.close()
+            self.close(Errors.ConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
 
         return False
@@ -409,7 +425,7 @@ class BrokerConnection(object):
 
     def _try_authenticate_plain(self, future):
         if self.config['security_protocol'] == 'SASL_PLAINTEXT':
-            log.warning('%s: Sending username and password in the clear', str(self))
+            log.warning('%s: Sending username and password in the clear', self)
 
         data = b''
         try:
@@ -436,7 +452,7 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("%s: Error receiving reply from server",  self)
-            error = Errors.ConnectionError("%s: %s" % (str(self), e))
+            error = Errors.ConnectionError("%s: %s" % (self, e))
             future.failure(error)
             self.close(error=error)
 
@@ -479,26 +495,33 @@ class BrokerConnection(object):
                 will be failed with this exception.
                 Default: kafka.errors.ConnectionError.
         """
-        if self.state is not ConnectionStates.DISCONNECTED:
-            self.state = ConnectionStates.DISCONNECTING
-            self.config['state_change_callback'](self)
+        if self.state is ConnectionStates.DISCONNECTED:
+            if error is not None:
+                log.warning('%s: close() called on disconnected connection with error: %s', self, error)
+                traceback.print_stack()
+            return
+
+        log.info('%s: Closing connection. %s', self, error or '')
+        self.state = ConnectionStates.DISCONNECTING
+        self.config['state_change_callback'](self)
         if self._sock:
             self._sock.close()
             self._sock = None
         self.state = ConnectionStates.DISCONNECTED
-        self.last_failure = time.time()
+        self.last_attempt = time.time()
+        self._sasl_auth_future = None
         self._receiving = False
         self._next_payload_bytes = 0
         self._rbuffer.seek(0)
         self._rbuffer.truncate()
         if error is None:
-            error = Errors.ConnectionError(str(self))
+            error = Errors.Cancelled(str(self))
         while self.in_flight_requests:
             ifr = self.in_flight_requests.popleft()
             ifr.future.failure(error)
         self.config['state_change_callback'](self)
 
-    def send(self, request, expect_response=True):
+    def send(self, request):
         """send request, return Future()
 
         Can block on network if request is larger than send_buffer_bytes
@@ -510,9 +533,10 @@ class BrokerConnection(object):
             return future.failure(Errors.ConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
-        return self._send(request, expect_response=expect_response)
+        return self._send(request)
 
-    def _send(self, request, expect_response=True):
+    def _send(self, request):
+        assert self.state in (ConnectionStates.AUTHENTICATING, ConnectionStates.CONNECTED)
         future = Future()
         correlation_id = self._next_correlation_id()
         header = RequestHeader(request,
@@ -536,12 +560,12 @@ class BrokerConnection(object):
             self._sock.setblocking(False)
         except (AssertionError, ConnectionError) as e:
             log.exception("Error sending %s to %s", request, self)
-            error = Errors.ConnectionError("%s: %s" % (str(self), e))
+            error = Errors.ConnectionError("%s: %s" % (self, e))
             self.close(error=error)
             return future.failure(error)
         log.debug('%s Request %d: %s', self, correlation_id, request)
 
-        if expect_response:
+        if request.expect_response():
             ifr = InFlightRequest(request=request,
                                   correlation_id=correlation_id,
                                   response_type=request.RESPONSE_TYPE,
@@ -569,7 +593,7 @@ class BrokerConnection(object):
             # If requests are pending, we should close the socket and
             # fail all the pending request futures
             if self.in_flight_requests:
-                self.close()
+                self.close(Errors.ConnectionError('Socket not connected during recv with in-flight-requests'))
             return None
 
         elif not self.in_flight_requests:
@@ -601,7 +625,7 @@ class BrokerConnection(object):
                     self.close(error=Errors.ConnectionError('socket disconnected'))
                     return None
                 self._rbuffer.write(data)
-            except ssl.SSLWantReadError:
+            except SSLWantReadError:
                 return None
             except ConnectionError as e:
                 if six.PY2 and e.errno == errno.EWOULDBLOCK:
@@ -639,7 +663,7 @@ class BrokerConnection(object):
                     self.close(error=Errors.ConnectionError('socket disconnected'))
                     return None
                 self._rbuffer.write(data)
-            except ssl.SSLWantReadError:
+            except SSLWantReadError:
                 return None
             except ConnectionError as e:
                 # Extremely small chance that we have exactly 4 bytes for a
@@ -687,16 +711,16 @@ class BrokerConnection(object):
             ifr.correlation_id != 0 and
             recv_correlation_id == 0):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
-                        ' coorelation id does not match request. This'
+                        ' Correlation ID does not match request. This'
                         ' should go away once at least one topic has been'
-                        ' initialized on the broker')
+                        ' initialized on the broker.')
 
         elif ifr.correlation_id != recv_correlation_id:
             error = Errors.CorrelationIdError(
-                '%s: Correlation ids do not match: sent %d, recv %d'
-                % (str(self), ifr.correlation_id, recv_correlation_id))
+                '%s: Correlation IDs do not match: sent %d, recv %d'
+                % (self, ifr.correlation_id, recv_correlation_id))
             ifr.future.failure(error)
-            self.close()
+            self.close(error)
             self._processing = False
             return None
 
@@ -710,8 +734,9 @@ class BrokerConnection(object):
                       ' Unable to decode %d-byte buffer: %r', self,
                       ifr.correlation_id, ifr.response_type,
                       ifr.request, len(buf), buf)
-            ifr.future.failure(Errors.UnknownError('Unable to decode response'))
-            self.close()
+            error = Errors.UnknownError('Unable to decode response')
+            ifr.future.failure(error)
+            self.close(error)
             self._processing = False
             return None
 
@@ -732,6 +757,29 @@ class BrokerConnection(object):
         self._correlation_id = (self._correlation_id + 1) % 2**31
         return self._correlation_id
 
+    def _check_api_version_response(self, response):
+        # The logic here is to check the list of supported request versions
+        # in descending order. As soon as we find one that works, return it
+        test_cases = [
+            # format (<broker verion>, <needed struct>)
+            ((0, 10, 1), MetadataRequest[2])
+        ]
+
+        error_type = Errors.for_code(response.error_code)
+        assert error_type is Errors.NoError, "API version check failed"
+        max_versions = dict([
+            (api_key, max_version)
+            for api_key, _, max_version in response.api_versions
+        ])
+        # Get the best match of test cases
+        for broker_version, struct in sorted(test_cases, reverse=True):
+            if max_versions.get(struct.API_KEY, -1) >= struct.API_VERSION:
+                return broker_version
+
+        # We know that ApiVersionResponse is only supported in 0.10+
+        # so if all else fails, choose that
+        return (0, 10, 0)
+
     def check_version(self, timeout=2, strict=False):
         """Attempt to guess the broker version.
 
@@ -749,14 +797,13 @@ class BrokerConnection(object):
             stashed[key] = self.config[key]
             self.config[key] = override_config[key]
 
-        # kafka kills the connection when it doesnt recognize an API request
+        # kafka kills the connection when it doesn't recognize an API request
         # so we can send a test request and then follow immediately with a
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
         from .protocol.admin import ApiVersionRequest, ListGroupsRequest
         from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
-        from .protocol.metadata import MetadataRequest
 
         # Socket errors are logged as exceptions and can alarm users. Mute them
         from logging import Filter
@@ -770,6 +817,7 @@ class BrokerConnection(object):
         log.addFilter(log_filter)
 
         test_cases = [
+            # All cases starting from 0.10 will be based on ApiVersionResponse
             ((0, 10), ApiVersionRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
@@ -810,6 +858,10 @@ class BrokerConnection(object):
                 self._sock.setblocking(False)
 
             if f.succeeded():
+                if isinstance(request, ApiVersionRequest[0]):
+                    # Starting from 0.10 kafka broker we determine version
+                    # by looking at ApiVersionResponse
+                    version = self._check_api_version_response(f.value)
                 log.info('Broker version identifed as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)
@@ -847,8 +899,8 @@ class BrokerConnection(object):
         return version
 
     def __repr__(self):
-        return "<BrokerConnection host=%s/%s port=%d>" % (self.hostname, self.host,
-                                                          self.port)
+        return "<BrokerConnection node_id=%s host=%s/%s port=%d>" % (
+            self.config['node_id'], self.hostname, self.host, self.port)
 
 
 class BrokerConnectionMetrics(object):
@@ -1015,7 +1067,7 @@ def get_ip_port_afi(host_and_port_str):
                 return host_and_port_str, DEFAULT_KAFKA_PORT, socket.AF_INET6
             except AttributeError:
                 log.warning('socket.inet_pton not available on this platform.'
-                            ' consider pip install win_inet_pton')
+                            ' consider `pip install win_inet_pton`')
                 pass
             except (ValueError, socket.error):
                 # it's a host:port pair

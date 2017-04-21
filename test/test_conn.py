@@ -10,6 +10,7 @@ import pytest
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.produce import ProduceRequest
 
 import kafka.common as Errors
 
@@ -111,7 +112,7 @@ def test_send_max_ifr(conn):
 def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = MetadataRequest[0]([])
+    req = ProduceRequest[0](required_acks=0, timeout=0, topics=[])
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
@@ -119,7 +120,7 @@ def test_send_no_response(_socket, conn):
     _socket.send.side_effect = [4, third, third, third, remainder]
 
     assert len(conn.in_flight_requests) == 0
-    f = conn.send(req, expect_response=False)
+    f = conn.send(req)
     assert f.succeeded() is True
     assert f.value is None
     assert len(conn.in_flight_requests) == 0
@@ -165,33 +166,7 @@ def test_can_send_more(conn):
     assert conn.can_send_more() is False
 
 
-def test_recv_disconnected():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('127.0.0.1', 0))
-    port = sock.getsockname()[1]
-    sock.listen(5)
-
-    conn = BrokerConnection('127.0.0.1', port, socket.AF_INET)
-    timeout = time.time() + 1
-    while time.time() < timeout:
-        conn.connect()
-        if conn.connected():
-            break
-    else:
-        assert False, 'Connection attempt to local socket timed-out ?'
-
-    conn.send(MetadataRequest[0]([]))
-
-    # Disconnect server socket
-    sock.close()
-
-    # Attempt to receive should mark connection as disconnected
-    assert conn.connected()
-    conn.recv()
-    assert conn.disconnected()
-
-
-def test_recv_disconnected_too(_socket, conn):
+def test_recv_disconnected(_socket, conn):
     conn.connect()
     assert conn.connected()
 

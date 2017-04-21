@@ -34,9 +34,9 @@ class KafkaProducer(object):
     thread that is responsible for turning these records into requests and
     transmitting them to the cluster.
 
-    The send() method is asynchronous. When called it adds the record to a
-    buffer of pending record sends and immediately returns. This allows the
-    producer to batch together individual records for efficiency.
+    :meth:`~kafka.KafkaProducer.send` is asynchronous. When called it adds the
+    record to a buffer of pending record sends and immediately returns. This
+    allows the producer to batch together individual records for efficiency.
 
     The 'acks' config controls the criteria under which requests are considered
     complete. The "all" setting will result in blocking on the full commit of
@@ -166,11 +166,12 @@ class KafkaProducer(object):
             will block up to max_block_ms, raising an exception on timeout.
             In the current implementation, this setting is an approximation.
             Default: 33554432 (32MB)
-        max_block_ms (int): Number of milliseconds to block during send() and
-            partitions_for(). These methods can be blocked either because the
-            buffer is full or metadata unavailable. Blocking in the
-            user-supplied serializers or partitioner will not be counted against
-            this timeout. Default: 60000.
+        max_block_ms (int): Number of milliseconds to block during
+            :meth:`~kafka.KafkaProducer.send` and
+            :meth:`~kafka.KafkaProducer.partitions_for`. These methods can be
+            blocked either because the buffer is full or metadata unavailable.
+            Blocking in the user-supplied serializers or partitioner will not be
+            counted against this timeout. Default: 60000.
         max_request_size (int): The maximum size of a request. This is also
             effectively a cap on the maximum record size. Note that the server
             has its own cap on record size which may be different from this.
@@ -223,10 +224,10 @@ class KafkaProducer(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: none.
-        api_version (tuple): specify which kafka API version to use.
-            For a full list of supported versions, see KafkaClient.API_VERSIONS
-            If set to None, the client will attempt to infer the broker version
-            by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to infer the broker version by probing
+            various APIs. For a full list of supported versions, see
+            KafkaClient.API_VERSIONS. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -264,7 +265,7 @@ class KafkaProducer(object):
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
         'buffer_memory': 33554432,
-        'connections_max_idle_ms': 600000, # not implemented yet
+        'connections_max_idle_ms': 600000,  # not implemented yet
         'max_block_ms': 60000,
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,
@@ -295,7 +296,7 @@ class KafkaProducer(object):
     }
 
     def __init__(self, **configs):
-        log.debug("Starting the Kafka producer") # trace
+        log.debug("Starting the Kafka producer")  # trace
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -368,7 +369,7 @@ class KafkaProducer(object):
     def _unregister_cleanup(self):
         if getattr(self, '_cleanup', None):
             if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup) # pylint: disable=no-member
+                atexit.unregister(self._cleanup)  # pylint: disable=no-member
 
             # py2 requires removing from private attribute...
             else:
@@ -399,8 +400,12 @@ class KafkaProducer(object):
             log.info('Kafka producer closed')
             return
         if timeout is None:
-            timeout = 999999999
-        assert timeout >= 0
+            # threading.TIMEOUT_MAX is available in Python3.3+
+            timeout = getattr(threading, 'TIMEOUT_MAX', 999999999)
+        if getattr(threading, 'TIMEOUT_MAX', False):
+            assert 0 <= timeout <= getattr(threading, 'TIMEOUT_MAX')
+        else:
+            assert timeout >= 0
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
         #first_exception = AtomicReference() # this will keep track of the first encountered exception
@@ -499,7 +504,7 @@ class KafkaProducer(object):
             tp = TopicPartition(topic, partition)
             if timestamp_ms is None:
                 timestamp_ms = int(time.time() * 1000)
-            log.debug("Sending (key=%s value=%s) to %s", key, value, tp)
+            log.debug("Sending (key=%r value=%r) to %s", key, value, tp)
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes,
                                               self.config['max_block_ms'])
@@ -531,10 +536,11 @@ class KafkaProducer(object):
         Invoking this method makes all buffered records immediately available
         to send (even if linger_ms is greater than 0) and blocks on the
         completion of the requests associated with these records. The
-        post-condition of flush() is that any previously sent record will have
-        completed (e.g. Future.is_done() == True). A request is considered
-        completed when either it is successfully acknowledged according to the
-        'acks' configuration for the producer, or it results in an error.
+        post-condition of :meth:`~kafka.KafkaProducer.flush` is that any
+        previously sent record will have completed
+        (e.g. Future.is_done() == True). A request is considered completed when
+        either it is successfully acknowledged according to the 'acks'
+        configuration for the producer, or it results in an error.
 
         Other threads can continue sending messages while one thread is blocked
         waiting for a flush call to complete; however, no guarantee is made
@@ -543,7 +549,7 @@ class KafkaProducer(object):
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
         """
-        log.debug("Flushing accumulated records in producer.") # trace
+        log.debug("Flushing accumulated records in producer.")  # trace
         self._accumulator.begin_flush()
         self._sender.wakeup()
         self._accumulator.await_flush_completion(timeout=timeout)
