@@ -1,5 +1,10 @@
 Changelog
 =========
+
+1.3.3.post2 (Apr 24, 2017)
+##########################
+Fix locale-gen not found
+
 1.3.3.post1 (Apr 17, 2017)
 ##########################
 Resolve merge conflicts while merging changes for version 1.3.3
