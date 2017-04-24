@@ -1,6 +1,4 @@
 FROM ubuntu:xenial
-RUN /usr/sbin/locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN echo "deb http://ppa.launchpad.net/webupd8team/java/ubuntu precise main" >> /etc/apt/sources.list
@@ -21,6 +19,8 @@ RUN apt-get update && apt-get install -y python2.7-dev \
     python-pip \
     python-tox
 
+RUN /usr/sbin/locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
 ENV JAVA_HOME="/usr/lib/jvm/java-8-oracle"
 ENV PATH="$PATH:$JAVA_HOME/bin"
 
