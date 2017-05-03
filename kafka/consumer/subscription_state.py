@@ -59,7 +59,7 @@ class SubscriptionState(object):
             offset_reset_strategy = OffsetResetStrategy.NONE
         self._default_offset_reset_strategy = offset_reset_strategy
 
-        self.subscription = None # set() or None
+        self.subscription = set() # set() or None
         self.subscribed_pattern = None # regex str or None
         self._group_subscription = set()
         self._user_assignment = set()
