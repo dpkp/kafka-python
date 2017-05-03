@@ -237,11 +237,13 @@ class BrokerConnection(object):
                                                        socket.AF_UNSPEC,
                                                        socket.SOCK_STREAM)
                     except socket.gaierror as ex:
-                        raise socket.gaierror('getaddrinfo failed for {0}:{1}, '
-                          'exception was {2}. Is your advertised.listeners (called'
-                          'advertised.host.name before Kafka 9) correct and resolvable?'.format(
-                             self._init_host, self._init_port, ex
-                          ))
+                        log.warning('DNS lookup failed for {0}:{1},'
+                                    ' exception was {2}. Is your'
+                                    ' advertised.listeners (called'
+                                    ' advertised.host.name before Kafka 9)'
+                                    ' correct and resolvable?'.format(
+                                        self._init_host, self._init_port, ex))
+                        self._gai = []
                     self._gai_index = 0
                 else:
                     # if self._gai already exists, then we should try the next
