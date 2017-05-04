@@ -590,7 +590,7 @@ class KafkaProducer(object):
             set: partition ids for the topic
 
         Raises:
-            TimeoutException: if partitions for topic were not obtained before
+            KafkaTimeoutError: if partitions for topic were not obtained before
                 specified max_wait timeout
         """
         # add topic to metadata topic list if it is not there already.
