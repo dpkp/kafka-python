@@ -554,6 +554,10 @@ class KafkaProducer(object):
 
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
+            
+        Raises:
+            KafkaTimeoutError: failure to flush buffered records within the 
+                provided timeout 
         """
         log.debug("Flushing accumulated records in producer.")  # trace
         self._accumulator.begin_flush()
