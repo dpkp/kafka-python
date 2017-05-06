@@ -92,8 +92,8 @@ class _SelectorMapping(Mapping):
     def __iter__(self):
         return iter(self._selector._fd_to_key)
 
-# Using six.add_metaclass() decorator instead of six.with_metaclass() because
-# the latter leaks temporary_class to garbage with gc disabled
+
+
 @six.add_metaclass(ABCMeta)
 class BaseSelector(object):
     """Selector abstract base class.
