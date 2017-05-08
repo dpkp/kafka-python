@@ -10,8 +10,8 @@ Test environments are managed via tox. The test suite is run via pytest.
 Individual tests are written using unittest, pytest, and in some cases,
 doctest.
 
-Linting is run via pylint, but is generally skipped on python2.6 and pypy
-due to pylint compatibility / performance issues.
+Linting is run via pylint, but is generally skipped on pypy due to pylint
+compatibility / performance issues.
 
 For test coverage details, see https://coveralls.io/github/dpkp/kafka-python
 
