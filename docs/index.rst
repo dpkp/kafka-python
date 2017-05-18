@@ -109,6 +109,16 @@ client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
 ...     producer.send('foobar', b'msg %d' % i)
 
 
+Thread safety
+*************
+
+The KafkaProducer can be used across threads without issue, unlike the
+KafkaConsumer which cannot.
+
+While it is possible to use the KafkaConsumer in a thread-local manner,
+multiprocessing is recommended.
+
+
 Compression
 ***********
 
