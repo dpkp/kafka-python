@@ -33,6 +33,8 @@ class KafkaConsumer(six.Iterator):
     to allow multiple consumers to load balance consumption of topics (requires
     kafka >= 0.9.0.0).
 
+    The consumer is not thread safe and should not be shared across threads.
+
     Arguments:
         *topics (str): optional list of topics to subscribe to. If not set,
             call :meth:`~kafka.KafkaConsumer.subscribe` or
