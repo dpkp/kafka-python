@@ -110,6 +110,16 @@ for more details.
 >>> for i in range(1000):
 ...     producer.send('foobar', b'msg %d' % i)
 
+Thread safety
+*************
+
+The KafkaProducer can be used across threads without issue, unlike the
+KafkaConsumer which cannot.
+
+While it is possible to use the KafkaConsumer in a thread-local manner using
+multithreading is recommended, as is the case in general in python when it
+comes to concurrency.
+
 Compression
 ***********
 
