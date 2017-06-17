@@ -16,7 +16,7 @@ from test.testutil import random_string
 
 
 def get_connect_str(kafka_broker):
-    return 'localhost:' + str(kafka_broker.port)
+    return kafka_broker.host + ':' + str(kafka_broker.port)
 
 
 @pytest.fixture

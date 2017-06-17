@@ -35,7 +35,7 @@ def test_end_to_end(kafka_broker, compression):
         elif platform.python_implementation() == 'PyPy':
             return
 
-    connect_str = 'localhost:' + str(kafka_broker.port)
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
                              max_block_ms=10000,
