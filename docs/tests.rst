@@ -10,8 +10,8 @@ Test environments are managed via tox. The test suite is run via pytest.
 Individual tests are written using unittest, pytest, and in some cases,
 doctest.
 
-Linting is run via pylint, but is generally skipped on python2.6 and pypy
-due to pylint compatibility / performance issues.
+Linting is run via pylint, but is generally skipped on pypy due to pylint
+compatibility / performance issues.
 
 For test coverage details, see https://coveralls.io/github/dpkp/kafka-python
 
@@ -60,19 +60,20 @@ kafka server binaries:
 
     ./build_integration.sh
 
-By default, this will install 0.8.1.1, 0.8.2.2, 0.9.0.1, and 0.10.1.1 brokers into the
-servers/ directory. To install a specific version, set `KAFKA_VERSION=0.9.0.0`:
+By default, this will install 0.8.2.2, 0.9.0.1, 0.10.1.1, and
+0.10.2.1 brokers into the servers/ directory. To install a specific version,
+ e.g., set `KAFKA_VERSION=0.10.2.1`:
 
 .. code:: bash
 
-    KAFKA_VERSION=0.8.0 ./build_integration.sh
+    KAFKA_VERSION=0.10.2.1 ./build_integration.sh
 
 Then run the tests against supported Kafka versions, simply set the `KAFKA_VERSION`
 env variable to the server build you want to use for testing:
 
 .. code:: bash
 
-    KAFKA_VERSION=0.9.0.1 tox -e py27
+    KAFKA_VERSION=0.10.2.1 tox -e py27
 
 To test against the kafka source tree, set KAFKA_VERSION=trunk
 [optionally set SCALA_VERSION (defaults to 2.10)]

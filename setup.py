@@ -23,8 +23,6 @@ class Tox(Command):
 
 
 test_require = ['tox', 'mock']
-if sys.version_info < (2, 7):
-    test_require.append('unittest2')
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -51,7 +49,6 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.3",
