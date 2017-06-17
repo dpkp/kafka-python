@@ -588,20 +588,17 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         # Start a consumer
         consumer = self.kafka_consumer(
             auto_offset_reset='earliest', fetch_max_bytes=300)
-        fetched_size = 0
         seen_partitions = set([])
         for i in range(10):
             poll_res = consumer.poll(timeout_ms=100)
             for partition, msgs in six.iteritems(poll_res):
                 for msg in msgs:
-                    fetched_size += len(msg.value)
                     seen_partitions.add(partition)
 
         # Check that we fetched at least 1 message from both partitions
         self.assertEqual(
             seen_partitions, set([
                 TopicPartition(self.topic, 0), TopicPartition(self.topic, 1)]))
-        self.assertLess(fetched_size, 3000)
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_max_bytes_one_msg(self):
