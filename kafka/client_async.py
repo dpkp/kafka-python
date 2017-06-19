@@ -67,10 +67,14 @@ class KafkaClient(object):
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
-        reconnect_backoff_max (int): If higher than reconnect_backoff_ms,
-            node reconnect backoff will increase on each consecutive failure
-            up to this maximum. The actual backoff is chosen randomly from
-            an exponentially increasing range. Default: 60000.
+        reconnect_backoff_max_ms (int): The maximum amount of time in
+            milliseconds to wait when reconnecting to a broker that has
+            repeatedly failed to connect. If provided, the backoff per host
+            will increase exponentially for each consecutive connection
+            failure, up to this maximum. To avoid connection storms, a
+            randomization factor of 0.2 will be applied to the backoff
+            resulting in a random range between 20% below and 20% above
+            the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 40000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
@@ -141,7 +145,7 @@ class KafkaClient(object):
         'request_timeout_ms': 40000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
-        'reconnect_backoff_max': 60000,
+        'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
