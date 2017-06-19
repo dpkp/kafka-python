@@ -493,9 +493,9 @@ class BrokerConnection(object):
 
     def connection_delay(self):
         time_waited_ms = time.time() - (self.last_attempt or 0)
-        if conn.state is ConnectionStates.DISCONNECTED:
+        if self.state is ConnectionStates.DISCONNECTED:
             return max(self._reconnect_backoff - time_waited_ms, 0)
-        elif conn.connecting():
+        elif self.connecting():
             return 0
         else:
             return 999999999
