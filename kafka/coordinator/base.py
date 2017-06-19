@@ -219,6 +219,8 @@ class BaseCoordinator(object):
                         log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update)
+                    else:
+                        time.sleep(self.config['retry_backoff_ms'] / 1000)
                 else:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
