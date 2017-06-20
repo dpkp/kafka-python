@@ -81,7 +81,7 @@ class MetadataResponse_v3(Response):
             ('host', String('utf-8')),
             ('port', Int32),
             ('rack', String('utf-8')))),
-        ('cluster_id', String('utf-8')),  # <-- Added cluster_id field in v2
+        ('cluster_id', String('utf-8')),
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),

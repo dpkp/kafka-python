@@ -135,7 +135,7 @@ class FetchRequest_v3(Request):
 
 
 class FetchRequest_v4(Request):
-    """Adds isolation_level field"""
+    # Adds isolation_level field
     API_KEY = 1
     API_VERSION = 4
     RESPONSE_TYPE = FetchResponse_v4
@@ -155,7 +155,7 @@ class FetchRequest_v4(Request):
 
 
 class FetchRequest_v5(Request):
-    """This may only be used in broker-broker api calls"""
+    # This may only be used in broker-broker api calls
     API_KEY = 1
     API_VERSION = 5
     RESPONSE_TYPE = FetchResponse_v5
