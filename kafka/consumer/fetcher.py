@@ -360,7 +360,7 @@ class Fetcher(six.Iterator):
                 part_records = part.take(max_records)
                 if not part_records:
                     return 0
-                next_offset = part_records[-1].offset + 1
+                next_offset = part.fetch_offset
 
                 log.log(0, "Returning fetched records at offset %d for assigned"
                            " partition %s and update position to %s", position,
