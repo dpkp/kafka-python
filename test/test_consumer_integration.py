@@ -375,7 +375,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         # Create a consumer with the default buffer size
         consumer = self.consumer()
 
-        # This consumer failes to get the message
+        # This consumer fails to get the message
         with self.assertRaises(ConsumerFetchSizeTooSmall):
             consumer.get_message(False, 0.1)
 
