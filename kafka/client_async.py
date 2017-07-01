@@ -516,6 +516,7 @@ class KafkaClient(object):
             timeout_ms = self.config['request_timeout_ms']
 
         responses = []
+        start_loop = time.time()
 
         # Loop for futures, break after first loop if None
         while True:
@@ -554,8 +555,13 @@ class KafkaClient(object):
             responses.extend(self._poll(timeout, sleep=sleep))
 
             # If all we had was a timeout (future is None) - only do one poll
-            # If we do have a future, we keep looping until it is done
+            # If we do have a future, we keep looping until it is done or request times out
             if not future or future.is_done:
+                break
+
+            in_loop = (time.time() - start_loop) * 1000.0
+            if in_loop > self.config['request_timeout_ms']:
+                future.failure(Errors.KafkaTimeoutError("Future wasn't done within request timeout."))
                 break
 
         return responses
