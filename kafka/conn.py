@@ -247,12 +247,12 @@ class BrokerConnection(object):
                                                        socket.AF_UNSPEC,
                                                        socket.SOCK_STREAM)
                     except socket.gaierror as ex:
-                        log.warning('DNS lookup failed for {0}:{1},'
-                                    ' exception was {2}. Is your'
+                        log.warning('DNS lookup failed for %s:%d,'
+                                    ' exception was %s. Is your'
                                     ' advertised.listeners (called'
                                     ' advertised.host.name before Kafka 9)'
-                                    ' correct and resolvable?'.format(
-                                        self._init_host, self._init_port, ex))
+                                    ' correct and resolvable?',
+                                    self._init_host, self._init_port, ex)
                         self._gai = []
                     self._gai_index = 0
                 else:

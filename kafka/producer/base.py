@@ -217,8 +217,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                        else hash(orig_req.messages))
 
     if request_tries or not queue.empty():
-        log.error('Stopped producer with {0} unsent messages'
-                  .format(len(request_tries) + queue.qsize()))
+        log.error('Stopped producer with %d unsent messages', len(request_tries) + queue.qsize())
 
 
 class Producer(object):
