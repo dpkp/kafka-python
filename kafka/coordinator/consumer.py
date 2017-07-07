@@ -140,8 +140,9 @@ class ConsumerCoordinator(BaseCoordinator):
                 if self._subscription.subscribed_pattern.match(topic):
                     topics.append(topic)
 
-            self._subscription.change_subscription(topics)
-            self._client.set_topics(self._subscription.group_subscription())
+            if set(topics) != self._subscription.subscription:
+                self._subscription.change_subscription(topics)
+                self._client.set_topics(self._subscription.group_subscription())
 
         # check if there are any changes to the metadata which should trigger
         # a rebalance
