@@ -721,7 +721,7 @@ class GroupCoordinatorMetrics(object):
         self.join_latency.add(metrics.metric_name(
             'join-time-max', self.metric_group_name,
             'The max time taken for a group rejoin',
-            tags), Avg())
+            tags), Max())
         self.join_latency.add(metrics.metric_name(
             'join-rate', self.metric_group_name,
             'The number of group joins per second',
@@ -735,7 +735,7 @@ class GroupCoordinatorMetrics(object):
         self.sync_latency.add(metrics.metric_name(
             'sync-time-max', self.metric_group_name,
             'The max time taken for a group sync',
-            tags), Avg())
+            tags), Max())
         self.sync_latency.add(metrics.metric_name(
             'sync-rate', self.metric_group_name,
             'The number of group syncs per second',
