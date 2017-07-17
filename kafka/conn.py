@@ -21,7 +21,6 @@ from kafka.protocol.commit import GroupCoordinatorResponse
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Int32
 from kafka.version import __version__
-from mechanize import _response
 
 
 if six.PY2:
