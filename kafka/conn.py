@@ -62,6 +62,8 @@ try:
 except ImportError:
     #no gssapi available, will disable gssapi mechanism
     disable_gssapi = True
+    class GSSError(Exception):
+    pass
 
 
 
