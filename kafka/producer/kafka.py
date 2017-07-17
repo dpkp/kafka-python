@@ -209,7 +209,10 @@ class KafkaProducer(object):
             the computed value. Default: 1000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
-            broker connection. Default: 5.
+            broker connection. Note that if this setting is set to be greater
+            than 1 and there are failed sends, there is a risk of message
+            re-ordering due to retries (i.e., if retries are enabled).
+            Default: 5.
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL.
             Default: PLAINTEXT.
