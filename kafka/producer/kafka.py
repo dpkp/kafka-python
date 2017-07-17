@@ -625,7 +625,7 @@ class KafkaProducer(object):
             elapsed = time.time() - begin
             if not metadata_event.is_set():
                 raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %s secs.", max_wait)
+                    "Failed to update metadata after %.1f secs." % max_wait)
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(topic)
             else:
