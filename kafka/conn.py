@@ -55,17 +55,19 @@ except ImportError:
         pass
 
 # needed for SASL_GSSAPI authentication:
-disable_gssapi = False
 try:
     import gssapi
-    from gssapi import raw
+    #from gssapi import raw
 except ImportError:
     #no gssapi available, will disable gssapi mechanism
-    disable_gssapi = True
-    class GSSError(Exception):
-        pass
+    gssapi = None
+    #class GSSError(Exception):
+    #    pass
 
-
+try:
+    from gssapi.raw.misc import GSSError
+except ImportError:
+    GSSError = None
 
 
 
@@ -183,9 +185,9 @@ class BrokerConnection(object):
         'sasl_mechanism': 'PLAIN',
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_servicename_kafka':'kafka'
+        'sasl_kerberos_service_name':'kafka'
     }
-    if disable_gssapi:
+    if gssapi is None:
         SASL_MECHANISMS = ('PLAIN')
     else:
         SASL_MECHANISMS = ('PLAIN', 'GSSAPI')
@@ -226,8 +228,8 @@ class BrokerConnection(object):
                 assert self.config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
                 assert self.config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
             if self.config['sasl_mechanism'] == 'GSSAPI':
-                assert disable_gssapi is not True, 'GSSAPI lib not available'
-                assert self.config['sasl_servicename_kafka'] is not None, 'sasl_servicename_kafka required for GSSAPI sasl'
+                assert gssapi is not None, 'GSSAPI lib not available'
+                assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_servicename_kafka required for GSSAPI sasl'
 
         self.state = ConnectionStates.DISCONNECTED
         self._reset_reconnect_backoff()
@@ -508,7 +510,7 @@ class BrokerConnection(object):
     def _try_authenticate_gssapi(self, future):
 
         data = b''
-        gssname = self.config['sasl_servicename_kafka'] + '@' + self.hostname
+        gssname = self.config['sasl_kerberos_service_name'] + '@' + self.hostname
         ctx_Name      = gssapi.Name(gssname, name_type=gssapi.NameType.hostbased_service)
         ctx_CanonName = ctx_Name.canonicalize(gssapi.MechType.kerberos)
         log.debug('%s: canonical Servicename: %s', self, ctx_CanonName)
