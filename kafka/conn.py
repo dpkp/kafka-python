@@ -57,19 +57,11 @@ except ImportError:
 # needed for SASL_GSSAPI authentication:
 try:
     import gssapi
-    #from gssapi import raw
+    from gssapi.raw.misc import GSSError
 except ImportError:
     #no gssapi available, will disable gssapi mechanism
     gssapi = None
-    #class GSSError(Exception):
-    #    pass
-
-try:
-    from gssapi.raw.misc import GSSError
-except ImportError:
     GSSError = None
-
-
 
 class ConnectionStates(object):
     DISCONNECTING = '<disconnecting>'
@@ -188,7 +180,7 @@ class BrokerConnection(object):
         'sasl_kerberos_service_name':'kafka'
     }
     if gssapi is None:
-        SASL_MECHANISMS = ('PLAIN')
+        SASL_MECHANISMS = ('PLAIN',)
     else:
         SASL_MECHANISMS = ('PLAIN', 'GSSAPI')
 
