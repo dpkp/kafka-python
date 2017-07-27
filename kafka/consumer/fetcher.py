@@ -122,6 +122,7 @@ class Fetcher(six.Iterator):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request)
+                future.error_on_callbacks=True
                 future.add_callback(self._handle_fetch_response, request, time.time())
                 future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
                 futures.append(future)
@@ -549,6 +550,12 @@ class Fetcher(six.Iterator):
         except StopIteration as e:
             log.exception('StopIteration raised unpacking messageset: %s', e)
             raise Exception('StopIteration raised unpacking messageset')
+
+        # If unpacking raises AssertionError, it means decompression unsupported
+        # See Issue 1033
+        except AssertionError as e:
+            log.exception('AssertionError raised unpacking messageset: %s', e)
+            raise
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
