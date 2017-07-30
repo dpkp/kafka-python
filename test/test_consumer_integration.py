@@ -11,7 +11,9 @@ from kafka import (
     create_gzip_message, KafkaProducer
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
-from kafka.errors import ConsumerFetchSizeTooSmall, OffsetOutOfRangeError
+from kafka.errors import (
+    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, UnsupportedVersionError
+)
 from kafka.structs import ProduceRequestPayload, TopicPartition
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -666,5 +668,5 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer = self.kafka_consumer()
         tp = TopicPartition(self.topic, 0)
 
-        with self.assertRaises():
+        with self.assertRaises(UnsupportedVersionError):
             consumer.offsets_for_times({tp: int(time.time())})
