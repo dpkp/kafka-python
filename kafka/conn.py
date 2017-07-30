@@ -19,6 +19,7 @@ from kafka.protocol.api import RequestHeader
 from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import GroupCoordinatorResponse, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.types import Int32
 from kafka.version import __version__
 
