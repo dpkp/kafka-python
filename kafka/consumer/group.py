@@ -881,7 +881,8 @@ class KafkaConsumer(six.Iterator):
 
         Arguments:
             timestamps (dict): ``{TopicPartition: int}`` mapping from partition
-                to the timestamp to look up.
+                to the timestamp to look up. Unit should be milliseconds since
+                beginning of the epoch (midnight Jan 1, 1970 (UTC))
 
         Raises:
             ValueError: if the target timestamp is negative
@@ -894,6 +895,7 @@ class KafkaConsumer(six.Iterator):
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
         for tp, ts in timestamps.items():
+            timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
                     "The target time for partition {} is {}. The target time "
