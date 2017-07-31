@@ -701,7 +701,7 @@ class Fetcher(six.Iterator):
                 if error_type is Errors.NoError:
                     if response.API_VERSION == 0:
                         offsets = partition_info[2]
-                        assert len(offsets) > 1, 'Expected OffsetResponse with one offset'
+                        assert len(offsets) <= 1, 'Expected OffsetResponse with one offset'
                         if offsets:
                             offset = offsets[0]
                             log.debug("Handling v0 ListOffsetResponse response for %s. "
