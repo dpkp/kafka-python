@@ -35,6 +35,7 @@ try:
     import ssl
     ssl_available = True
     try:
+        SSLEOFError = ssl.SSLEOFError
         SSLWantReadError = ssl.SSLWantReadError
         SSLWantWriteError = ssl.SSLWantWriteError
         SSLZeroReturnError = ssl.SSLZeroReturnError
@@ -43,6 +44,7 @@ try:
         log.warning('Old SSL module detected.'
                     ' SSL error handling may not operate cleanly.'
                     ' Consider upgrading to Python 3.3 or 2.7.9')
+        SSLEOFError = ssl.SSLError
         SSLWantReadError = ssl.SSLError
         SSLWantWriteError = ssl.SSLError
         SSLZeroReturnError = ssl.SSLError
@@ -421,7 +423,7 @@ class BrokerConnection(object):
         # old ssl in python2.6 will swallow all SSLErrors here...
         except (SSLWantReadError, SSLWantWriteError):
             pass
-        except (SSLZeroReturnError, ConnectionError):
+        except (SSLZeroReturnError, ConnectionError, SSLEOFError):
             log.warning('SSL connection closed by server during handshake.')
             self.close(Errors.ConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
