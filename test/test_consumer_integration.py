@@ -12,7 +12,8 @@ from kafka import (
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
 from kafka.errors import (
-    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, UnsupportedVersionError
+    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, UnsupportedVersionError,
+    KafkaTimeoutError
 )
 from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
@@ -666,6 +667,9 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEqual(offsets[tp].offset, late_msg.offset)
         self.assertEqual(offsets[tp].timestamp, late_time)
 
+        offsets = consumer.offsets_for_times({})
+        self.assertEqual(offsets, {})
+
         # Out of bound timestamps check
 
         offsets = consumer.offsets_for_times({tp: 0})
@@ -674,6 +678,17 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         offsets = consumer.offsets_for_times({tp: 9999999999999})
         self.assertEqual(offsets[tp], None)
+
+        # Beginning/End offsets
+
+        offsets = consumer.beginning_offsets([tp])
+        self.assertEqual(offsets, {
+            tp: early_msg.offset,
+        })
+        offsets = consumer.end_offsets([tp])
+        self.assertEqual(offsets, {
+            tp: late_msg.offset + 1
+        })
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_offsets_search_many_partitions(self):
@@ -700,6 +715,18 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             tp1: OffsetAndTimestamp(p1msg.offset, send_time)
         })
 
+        offsets = consumer.beginning_offsets([tp0, tp1])
+        self.assertEqual(offsets, {
+            tp0: p0msg.offset,
+            tp1: p1msg.offset
+        })
+
+        offsets = consumer.end_offsets([tp0, tp1])
+        self.assertEqual(offsets, {
+            tp0: p0msg.offset + 1,
+            tp1: p1msg.offset + 1
+        })
+
     @kafka_versions('<0.10.1')
     def test_kafka_consumer_offsets_for_time_old(self):
         consumer = self.kafka_consumer()
@@ -707,3 +734,21 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         with self.assertRaises(UnsupportedVersionError):
             consumer.offsets_for_times({tp: int(time.time())})
+
+        with self.assertRaises(UnsupportedVersionError):
+            consumer.beginning_offsets([tp])
+
+        with self.assertRaises(UnsupportedVersionError):
+            consumer.end_offsets([tp])
+
+    @kafka_versions('<0.10.1')
+    def test_kafka_consumer_offsets_for_times_errors(self):
+        consumer = self.kafka_consumer()
+        tp = TopicPartition(self.topic, 0)
+        bad_tp = TopicPartition(self.topic, 100)
+
+        with self.assertRaises(ValueError):
+            consumer.offsets_for_times({tp: -1})
+
+        with self.assertRaises(KafkaTimeoutError):
+            consumer.offsets_for_times({bad_tp: 0})

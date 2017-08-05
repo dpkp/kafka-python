@@ -193,6 +193,21 @@ class Fetcher(six.Iterator):
                 offsets[tp] = OffsetAndTimestamp(offset, timestamp)
         return offsets
 
+    def beginning_offsets(self, partitions, timeout_ms):
+        return self.beginning_or_end_offset(
+            partitions, OffsetResetStrategy.EARLIEST, timeout_ms)
+
+    def end_offsets(self, partitions, timeout_ms):
+        return self.beginning_or_end_offset(
+            partitions, OffsetResetStrategy.LATEST, timeout_ms)
+
+    def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
+        timestamps = dict([(tp, timestamp) for tp in partitions])
+        offsets = self._retrieve_offsets(timestamps, timeout_ms)
+        for tp in timestamps:
+            offsets[tp] = offsets[tp][0]
+        return offsets
+
     def _reset_offset(self, partition):
         """Reset offsets for the given partition using the offset reset strategy.
 
@@ -222,10 +237,10 @@ class Fetcher(six.Iterator):
             self._subscriptions.seek(partition, offset)
 
     def _retrieve_offsets(self, timestamps, timeout_ms=float("inf")):
-        """ Fetch offset for each partition passed in ``timestamps`` map.
+        """Fetch offset for each partition passed in ``timestamps`` map.
 
         Blocks until offsets are obtained, a non-retriable exception is raised
-        or ``timeout_ms`` passed (if it's not ``None``).
+        or ``timeout_ms`` passed.
 
         Arguments:
             timestamps: {TopicPartition: int} dict with timestamps to fetch
@@ -268,7 +283,7 @@ class Fetcher(six.Iterator):
             remaining_ms = timeout_ms - elapsed_ms
 
         raise Errors.KafkaTimeoutError(
-            "Failed to get offsets by times in %s ms" % timeout_ms)
+            "Failed to get offsets by timestamps in %s ms" % timeout_ms)
 
     def _raise_if_offset_out_of_range(self):
         """Check FetchResponses for offset out of range.
@@ -613,7 +628,7 @@ class Fetcher(six.Iterator):
         return f(bytes_)
 
     def _send_offset_requests(self, timestamps):
-        """ Fetch offsets for each partition in timestamps dict. This may send
+        """Fetch offsets for each partition in timestamps dict. This may send
         request to multiple nodes, based on who is Leader for partition.
 
         Arguments:
