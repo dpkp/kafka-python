@@ -741,7 +741,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         with self.assertRaises(UnsupportedVersionError):
             consumer.end_offsets([tp])
 
-    @kafka_versions('<0.10.1')
+    @kafka_versions('>=0.10.1')
     def test_kafka_consumer_offsets_for_times_errors(self):
         consumer = self.kafka_consumer()
         tp = TopicPartition(self.topic, 0)
