@@ -3,6 +3,8 @@ from __future__ import absolute_import
 from .api import Request, Response
 from .types import Array, Int8, Int16, Int32, Int64, Schema, String
 
+UNKNOWN_OFFSET = -1
+
 
 class OffsetResetStrategy(object):
     LATEST = -1
@@ -91,7 +93,7 @@ class OffsetRequest_v2(Request):
     RESPONSE_TYPE = OffsetResponse_v2
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('isolation_level', Int8),
+        ('isolation_level', Int8),  # <- added isolation_level
         ('topics', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(

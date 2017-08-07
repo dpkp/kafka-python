@@ -19,6 +19,7 @@ from kafka.protocol.api import RequestHeader
 from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import GroupCoordinatorResponse, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.types import Int32
 from kafka.version import __version__
 
@@ -886,7 +887,7 @@ class BrokerConnection(object):
 
     def _infer_broker_version_from_api_versions(self, api_versions):
         # The logic here is to check the list of supported request versions
-        # in descending order. As soon as we find one that works, return it
+        # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker verion>, <needed struct>)
             ((0, 11, 0), MetadataRequest[4]),
