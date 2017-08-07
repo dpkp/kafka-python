@@ -275,8 +275,7 @@ class Fetcher(six.Iterator):
 
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
-                self._client.poll(
-                    future=refresh_future, sleep=True, timeout_ms=remaining_ms)
+                self._client.poll(future=refresh_future, timeout_ms=remaining_ms)
             else:
                 time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
