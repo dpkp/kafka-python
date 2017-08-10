@@ -245,6 +245,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # keep track of the metadata used for assignment so that we can check
         # after rebalance completion whether anything has changed
         self._cluster.request_update()
+        for topic in all_subscribed_topics:
+            self._metadata_snapshot[topic] = self._cluster.partitions_for_topic(topic)
         self._assignment_snapshot = self._metadata_snapshot
 
         log.debug("Performing assignment for group %s using strategy %s"
