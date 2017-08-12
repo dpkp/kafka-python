@@ -164,7 +164,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _build_metadata_snapshot(self, subscription, cluster):
         metadata_snapshot = {}
-        for topic in self._subscription.group_subscription():
+        for topic in subscription.group_subscription():
             partitions = cluster.partitions_for_topic(topic) or []
             metadata_snapshot[topic] = set(partitions)
         return metadata_snapshot
