@@ -1,7 +1,7 @@
 kafka-python
 ############
 
-.. image:: https://img.shields.io/badge/kafka-0.10%2C%200.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-0.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -16,9 +16,9 @@ Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with newer brokers (0.10 or 0.9), but is backwards-compatible with
-older versions (to 0.8.0). Some features will only be enabled on newer brokers,
-however; for example, fully coordinated consumer groups -- i.e., dynamic
+kafka-python is best used with newer brokers (0.9+), but is backwards-compatible with
+older versions (to 0.8.0). Some features will only be enabled on newer brokers.
+For example, fully coordinated consumer groups -- i.e., dynamic
 partition assignment to multiple consumers in the same group -- requires use of
 0.9 kafka brokers. Supporting this feature for earlier broker releases would
 require writing and maintaining custom leadership election and membership /
@@ -136,7 +136,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 0.10).
+attempts to identify which version it is running (0.8.0 to 0.11).
 
 
 Low-level
