@@ -245,12 +245,14 @@ class KafkaClient(object):
                                          **self.config)
             bootstrap.connect()
             while bootstrap.connecting():
+                self._selector.select(1)
                 bootstrap.connect()
             if not bootstrap.connected():
                 bootstrap.close()
                 continue
             future = bootstrap.send(metadata_request)
             while not future.is_done:
+                self._selector.select(1)
                 bootstrap.recv()
             if future.failed():
                 bootstrap.close()
