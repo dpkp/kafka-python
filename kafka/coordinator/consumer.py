@@ -87,7 +87,7 @@ class ConsumerCoordinator(BaseCoordinator):
             assert self.config['assignors'], 'Coordinator requires assignors'
 
         self._subscription = subscription
-        self._metadata_snapshot = {}
+        self._metadata_snapshot = self._build_metadata_snapshot(subscription, client.cluster)
         self._assignment_snapshot = None
         self._cluster = client.cluster
         self._cluster.request_update()
@@ -162,15 +162,18 @@ class ConsumerCoordinator(BaseCoordinator):
                     for partition in self._metadata_snapshot[topic]
                 ])
 
+    def _build_metadata_snapshot(self, subscription, cluster):
+        metadata_snapshot = {}
+        for topic in subscription.group_subscription():
+            partitions = cluster.partitions_for_topic(topic) or []
+            metadata_snapshot[topic] = set(partitions)
+        return metadata_snapshot
+
     def _subscription_metadata_changed(self, cluster):
         if not self._subscription.partitions_auto_assigned():
             return False
 
-        metadata_snapshot = {}
-        for topic in self._subscription.group_subscription():
-            partitions = cluster.partitions_for_topic(topic) or []
-            metadata_snapshot[topic] = set(partitions)
-
+        metadata_snapshot = self._build_metadata_snapshot(self._subscription, cluster)
         if self._metadata_snapshot != metadata_snapshot:
             self._metadata_snapshot = metadata_snapshot
             return True
