@@ -5,7 +5,7 @@ Bugfixes
 * Catch socket.errors when sending / recving bytes on wake socketpair (dpkp #1069)
 * Deal with brokers that reappear with different IP address (originsmike #1085)
 * Fix join-time-max and sync-time-max metrics to use Max() measure function (billyevans #1146)
-* Fixed Issue 1033.Raise AssertionError when decompression unsupported (bts-webber #1159)
+* Raise AssertionError when decompression unsupported (bts-webber #1159)
 * Catch ssl.EOFErrors on Python3.3 so we close the failing conn (Ormod #1162)
 * Select on sockets to avoid busy polling during bootstrap (dpkp #1175)
 * Initialize metadata_snapshot in group coordinator to avoid unnecessary rebalance (dpkp #1174)
