@@ -1,3 +1,61 @@
+# 1.3.4 (Aug 13, 2017)
+
+Bugfixes
+* Avoid multiple connection attempts when refreshing metadata (dpkp #1067)
+* Catch socket.errors when sending / recving bytes on wake socketpair (dpkp #1069)
+* Deal with brokers that reappear with different IP address (originsmike #1085)
+* Fix join-time-max and sync-time-max metrics to use Max() measure function (billyevans #1146)
+* Fixed Issue 1033.Raise AssertionError when decompression unsupported (bts-webber #1159)
+* Catch ssl.EOFErrors on Python3.3 so we close the failing conn (Ormod #1162)
+* Select on sockets to avoid busy polling during bootstrap (dpkp #1175)
+* Initialize metadata_snapshot in group coordinator to avoid unnecessary rebalance (dpkp #1174)
+
+Client
+* Timeout idle connections via connections_max_idle_ms (dpkp #1068)
+* Warn, dont raise, on DNS lookup failures (dpkp #1091)
+* Support exponential backoff for broker reconnections -- KIP-144 (dpkp #1124)
+* Add gssapi support (Kerberos) for SASL (Harald-Berghoff #1152)
+* Add private map of api key -> min/max versions to BrokerConnection (dpkp #1169)
+
+Consumer
+* Backoff on unavailable group coordinator retry (dpkp #1125)
+* Only change_subscription on pattern subscription when topics change (Artimi #1132)
+* Add offsets_for_times, beginning_offsets and end_offsets APIs (tvoinarovskyi #1161)
+
+Producer
+* Raise KafkaTimeoutError when flush times out (infecto)
+* Set producer atexit timeout to 0 to match del (Ormod #1126)
+
+Core / Protocol
+* 0.11.0.0 protocol updates (only - no client support yet) (dpkp #1127)
+* Make UnknownTopicOrPartitionError retriable error (tvoinarovskyi)
+
+Test Infrastructure
+* pylint 1.7.0+ supports python 3.6 and merge py36 into common testenv (jianbin-wei #1095)
+* Add kafka 0.10.2.1 into integration testing version (jianbin-wei #1096)
+* Disable automated tests for python 2.6 and kafka 0.8.0 and 0.8.1.1 (jianbin-wei #1096)
+* Support manual py26 testing; dont advertise 3.3 support (dpkp)
+* Add 0.11.0.0 server resources, fix tests for 0.11 brokers (dpkp)
+* Use fixture hostname, dont assume localhost (dpkp)
+* Add 0.11.0.0 to travis test matrix, remove 0.10.1.1; use scala 2.11 artifacts (dpkp #1176)
+
+Logging / Error Messages
+* Improve error message when expiring batches in KafkaProducer (dpkp #1077)
+* Update producer.send docstring -- raises KafkaTimeoutError (infecto)
+* Use logging's built-in string interpolation (jeffwidman)
+* Fix produce timeout message (melor #1151)
+* Fix producer batch expiry messages to use seconds (dnwe)
+
+Documentation
+* Fix typo in KafkaClient docstring (jeffwidman #1054)
+* Update README: Prefer python-lz4 over lz4tools (kiri11 #1057)
+* Fix poll() hyperlink in KafkaClient (jeffwidman)
+* Update RTD links with https / .io (jeffwidman #1074)
+* Describe consumer thread-safety (ecksun)
+* Fix typo in consumer integration test (jeffwidman)
+* Note max_in_flight_requests_per_connection > 1 may change order of messages (tvoinarovskyi #1149)
+
+
 # 1.3.3 (Mar 14, 2017)
 
 Core / Protocol
