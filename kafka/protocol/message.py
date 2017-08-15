@@ -6,6 +6,7 @@ import time
 from ..codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
+from .frame import KafkaBytes
 from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
@@ -155,10 +156,10 @@ class MessageSet(AbstractType):
     @classmethod
     def encode(cls, items):
         # RecordAccumulator encodes messagesets internally
-        if isinstance(items, io.BytesIO):
+        if isinstance(items, (io.BytesIO, KafkaBytes)):
             size = Int32.decode(items)
             # rewind and return all the bytes
-            items.seek(-4, 1)
+            items.seek(items.tell() - 4)
             return items.read(size + 4)
 
         encoded_values = []
@@ -198,7 +199,7 @@ class MessageSet(AbstractType):
 
     @classmethod
     def repr(cls, messages):
-        if isinstance(messages, io.BytesIO):
+        if isinstance(messages, (KafkaBytes, io.BytesIO)):
             offset = messages.tell()
             decoded = cls.decode(messages)
             messages.seek(offset)
