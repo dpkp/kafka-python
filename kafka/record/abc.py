@@ -36,12 +36,18 @@ class ABCRecord(object):
             be the checksum for v0 and v1 and None for v2 and above.
         """
 
+    @abc.abstractproperty
+    def headers(self):
+        """ If supported by version list of key-value tuples, or empty list if
+            not supported by format.
+        """
+
 
 class ABCRecordBatchBuilder(object):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def append(self, offset, timestamp, key, value):
+    def append(self, offset, timestamp, key, value, headers=None):
         """ Writes record to internal buffer.
 
         Arguments:
@@ -51,6 +57,8 @@ class ABCRecordBatchBuilder(object):
                 set to current time.
             key (bytes or None): Key of the record
             value (bytes or None): Value of the record
+            headers (List[Tuple[str, bytes]]): Headers of the record. Header
+                keys can not be ``None``.
 
         Returns:
             (bytes, int): Checksum of the written record (or None for v2 and

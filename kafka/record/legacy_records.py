@@ -329,9 +329,10 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         self._batch_size = batch_size
         self._buffer = bytearray()
 
-    def append(self, offset, timestamp, key, value):
+    def append(self, offset, timestamp, key, value, headers=None):
         """ Append message to batch.
         """
+        assert not headers, "Headers not supported in v0/v1"
         # Check types
         if type(offset) != int:
             raise TypeError(offset)

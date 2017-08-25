@@ -58,7 +58,8 @@ def func(loops, magic):
             magic, batch_size=DEFAULT_BATCH_SIZE, compression_type=0)
         for _ in range(MESSAGES_PER_BATCH):
             key, value, timestamp = next(precomputed_samples)
-            size = batch.append(timestamp=timestamp, key=key, value=value)
+            size = batch.append(
+                timestamp=timestamp, key=key, value=value)
             assert size
         batch.close()
         results.append(batch.buffer())
@@ -73,3 +74,4 @@ def func(loops, magic):
 runner = perf.Runner()
 runner.bench_time_func('batch_append_v0', func, 0)
 runner.bench_time_func('batch_append_v1', func, 1)
+runner.bench_time_func('batch_append_v2', func, 2)

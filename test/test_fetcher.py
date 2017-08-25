@@ -54,7 +54,7 @@ def _build_record_batch(msgs, compression=0):
         magic=1, compression_type=0, batch_size=9999999)
     for msg in msgs:
         key, value, timestamp = msg
-        builder.append(key=key, value=value, timestamp=timestamp)
+        builder.append(key=key, value=value, timestamp=timestamp, headers=[])
     builder.close()
     return builder.buffer()
 

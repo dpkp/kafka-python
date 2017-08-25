@@ -24,6 +24,7 @@ import struct
 from kafka.errors import CorruptRecordException
 from .abc import ABCRecords
 from .legacy_records import LegacyRecordBatch, LegacyRecordBatchBuilder
+from .default_records import DefaultRecordBatch, DefaultRecordBatchBuilder
 
 
 class MemoryRecords(ABCRecords):
@@ -102,18 +103,24 @@ class MemoryRecords(ABCRecords):
         magic, = struct.unpack_from(">b", next_slice, _magic_offset)
         if magic <= 1:
             return LegacyRecordBatch(next_slice, magic)
-        else:  # pragma: no cover
-            raise NotImplementedError("Record V2 still not implemented")
+        else:
+            return DefaultRecordBatch(next_slice)
 
 
 class MemoryRecordsBuilder(object):
 
     def __init__(self, magic, compression_type, batch_size):
-        assert magic in [0, 1], "Not supported magic"
+        assert magic in [0, 1, 2], "Not supported magic"
         assert compression_type in [0, 1, 2, 3], "Not valid compression type"
-        self._builder = LegacyRecordBatchBuilder(
-            magic=magic, compression_type=compression_type,
-            batch_size=batch_size)
+        if magic >= 2:
+            self._builder = DefaultRecordBatchBuilder(
+                magic=magic, compression_type=compression_type,
+                is_transactional=False, producer_id=-1, producer_epoch=-1,
+                base_sequence=-1, batch_size=batch_size)
+        else:
+            self._builder = LegacyRecordBatchBuilder(
+                magic=magic, compression_type=compression_type,
+                batch_size=batch_size)
         self._batch_size = batch_size
         self._buffer = None
 
@@ -121,7 +128,7 @@ class MemoryRecordsBuilder(object):
         self._closed = False
         self._bytes_written = 0
 
-    def append(self, timestamp, key, value):
+    def append(self, timestamp, key, value, headers=[]):
         """ Append a message to the buffer.
 
         Returns:
@@ -131,7 +138,7 @@ class MemoryRecordsBuilder(object):
             return None, 0
 
         offset = self._next_offset
-        metadata = self._builder.append(offset, timestamp, key, value)
+        metadata = self._builder.append(offset, timestamp, key, value, headers)
         # Return of 0 size means there's no space to add a new message
         if metadata is None:
             return None
