@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import copy
 import logging
 import socket
-import sys
 import time
 
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError

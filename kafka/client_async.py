@@ -28,8 +28,6 @@ from .metrics import AnonMeasurable
 from .metrics.stats import Avg, Count, Rate
 from .metrics.stats.rate import TimeUnit
 from .protocol.metadata import MetadataRequest
-from .protocol.produce import ProduceRequest
-from .vendor import socketpair
 from .version import __version__
 
 if six.PY2:

@@ -10,7 +10,7 @@ from kafka.vendor import six
 
 from .. import errors as Errors
 from ..metrics.measurable import AnonMeasurable
-from ..metrics.stats import Avg, Count, Max, Rate
+from ..metrics.stats import Avg, Max, Rate
 from ..protocol.produce import ProduceRequest
 from ..structs import TopicPartition
 from ..version import __version__
