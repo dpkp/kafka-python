@@ -13,8 +13,7 @@ import py
 from kafka.vendor.six.moves import urllib, range
 from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
-from kafka import errors, KafkaConsumer, KafkaProducer, SimpleClient, KafkaAdminClient
-from kafka.client_async import KafkaClient
+from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.protocol.admin import CreateTopicsRequest
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import env_kafka_version, random_string
@@ -524,7 +523,3 @@ class KafkaFixture(Fixture):
         for x in range(cnt):
             params['client_id'] = '%s_%s' % (client_id, random_string(4))
             yield KafkaProducer(**params)
-
-    def get_simple_client(self, **params):
-        params.setdefault('client_id', 'simple_client')
-        return SimpleClient(self.bootstrap_server(), **params)
