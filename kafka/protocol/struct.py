@@ -64,11 +64,3 @@ class Struct(AbstractType):
             if self.__dict__[attr] != other.__dict__[attr]:
                 return False
         return True
-
-"""
-class MetaStruct(type):
-    def __new__(cls, clsname, bases, dct):
-        nt = namedtuple(clsname, [name for (name, _) in dct['SCHEMA']])
-        bases = tuple([Struct, nt] + list(bases))
-        return super(MetaStruct, cls).__new__(cls, clsname, bases, dct)
-"""

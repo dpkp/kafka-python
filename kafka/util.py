@@ -65,12 +65,3 @@ class Dict(dict):
     See: https://docs.python.org/2/library/weakref.html
     """
     pass
-
-
-def try_method_on_system_exit(obj, method, *args, **kwargs):
-    def wrapper(_obj, _meth, *args, **kwargs):
-        try:
-            getattr(_obj, _meth)(*args, **kwargs)
-        except (ReferenceError, AttributeError):
-            pass
-    atexit.register(wrapper, weakref.proxy(obj), method, *args, **kwargs)
