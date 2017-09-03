@@ -893,10 +893,6 @@ class KafkaConsumer(six.Iterator):
                 up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
-        if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
-                "offsets_for_times API not supported for cluster version {}"
-                .format(self.config['api_version']))
         for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
@@ -928,10 +924,6 @@ class KafkaConsumer(six.Iterator):
                 up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms.
         """
-        if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
-                "offsets_for_times API not supported for cluster version {}"
-                .format(self.config['api_version']))
         offsets = self._fetcher.beginning_offsets(
             partitions, self.config['request_timeout_ms'])
         return offsets
@@ -959,10 +951,6 @@ class KafkaConsumer(six.Iterator):
                 up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
-        if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
-                "offsets_for_times API not supported for cluster version {}"
-                .format(self.config['api_version']))
         offsets = self._fetcher.end_offsets(
             partitions, self.config['request_timeout_ms'])
         return offsets
