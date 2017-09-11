@@ -53,6 +53,7 @@ class BaseCoordinator(object):
         'group_id': 'kafka-python-default-group',
         'session_timeout_ms': 30000,
         'heartbeat_interval_ms': 3000,
+        'node_not_ready_retry_timeout_ms': None,
         'retry_backoff_ms': 100,
         'api_version': (0, 9),
         'metric_group_prefix': '',
@@ -65,7 +66,7 @@ class BaseCoordinator(object):
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
@@ -75,6 +76,9 @@ class BaseCoordinator(object):
                 should be set no higher than 1/3 of that value. It can be
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
+            node_not_ready_retry_timeout_ms (int): The timeout used to detect
+                the broker not being available so that NodeNotReadyError is raised.
+                Default: None
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
         """
@@ -199,6 +203,8 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
+        node_not_ready_retry_timeout_ms = self.config['node_not_ready_retry_timeout_ms']
+        node_not_ready_retry_start_time = time.time()
         while self.coordinator_unknown():
 
             # Prior to 0.8.2 there was no group coordinator
@@ -215,7 +221,12 @@ class BaseCoordinator(object):
 
             if future.failed():
                 if future.retriable():
-                    if getattr(future.exception, 'invalid_metadata', False):
+                    if node_not_ready_retry_timeout_ms is not None and isinstance(future.exception, Errors.NodeNotReadyError):
+                        self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
+                        node_not_ready_retry_timeout_ms -= (time.time() - node_not_ready_retry_start_time) * 1000
+                        if node_not_ready_retry_timeout_ms <= 0:
+                            raise future.exception  # pylint: disable-msg=raising-bad-type
+                    elif getattr(future.exception, 'invalid_metadata', False):
                         log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update)
