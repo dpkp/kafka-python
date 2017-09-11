@@ -109,6 +109,7 @@ class UnknownTopicOrPartitionError(BrokerResponseError):
     message = 'UNKNOWN_TOPIC_OR_PARTITION'
     description = ('This request is for a topic or partition that does not'
                    ' exist on this broker.')
+    retriable = True
     invalid_metadata = True
 
 
@@ -270,7 +271,8 @@ class InconsistentGroupProtocolError(BrokerResponseError):
     errno = 23
     message = 'INCONSISTENT_GROUP_PROTOCOL'
     description = ('Returned in join group when the member provides a protocol'
-                   ' type or set of protocols which is not compatible with the current group.')
+                   ' type or set of protocols which is not compatible with the'
+                   ' current group.')
 
 
 class InvalidGroupIdError(BrokerResponseError):
@@ -333,19 +335,84 @@ class ClusterAuthorizationFailedError(BrokerResponseError):
 class InvalidTimestampError(BrokerResponseError):
     errno = 32
     message = 'INVALID_TIMESTAMP'
-    description = ('The timestamp of the message is out of acceptable range.')
+    description = 'The timestamp of the message is out of acceptable range.'
 
 
 class UnsupportedSaslMechanismError(BrokerResponseError):
     errno = 33
     message = 'UNSUPPORTED_SASL_MECHANISM'
-    description = ('The broker does not support the requested SASL mechanism.')
+    description = 'The broker does not support the requested SASL mechanism.'
 
 
 class IllegalSaslStateError(BrokerResponseError):
     errno = 34
     message = 'ILLEGAL_SASL_STATE'
-    description = ('Request is not valid given the current SASL state.')
+    description = 'Request is not valid given the current SASL state.'
+
+
+class UnsupportedVersionError(BrokerResponseError):
+    errno = 35
+    message = 'UNSUPPORTED_VERSION'
+    description = 'The version of API is not supported.'
+
+
+class TopicAlreadyExistsError(BrokerResponseError):
+    errno = 36
+    message = 'TOPIC_ALREADY_EXISTS'
+    description = 'Topic with this name already exists.'
+
+
+class InvalidPartitionsError(BrokerResponseError):
+    errno = 37
+    message = 'INVALID_PARTITIONS'
+    description = 'Number of partitions is invalid.'
+
+
+class InvalidReplicationFactorError(BrokerResponseError):
+    errno = 38
+    message = 'INVALID_REPLICATION_FACTOR'
+    description = 'Replication-factor is invalid.'
+
+
+class InvalidReplicationAssignmentError(BrokerResponseError):
+    errno = 39
+    message = 'INVALID_REPLICATION_ASSIGNMENT'
+    description = 'Replication assignment is invalid.'
+
+
+class InvalidConfigurationError(BrokerResponseError):
+    errno = 40
+    message = 'INVALID_CONFIG'
+    description = 'Configuration is invalid.'
+
+
+class NotControllerError(BrokerResponseError):
+    errno = 41
+    message = 'NOT_CONTROLLER'
+    description = 'This is not the correct controller for this cluster.'
+    retriable = True
+
+
+class InvalidRequestError(BrokerResponseError):
+    errno = 42
+    message = 'INVALID_REQUEST'
+    description = ('This most likely occurs because of a request being'
+                   ' malformed by the client library or the message was'
+                   ' sent to an incompatible broker. See the broker logs'
+                   ' for more details.')
+
+
+class UnsupportedForMessageFormatError(BrokerResponseError):
+    errno = 43
+    message = 'UNSUPPORTED_FOR_MESSAGE_FORMAT'
+    description = ('The message format version on the broker does not'
+                   ' support this request.')
+
+
+class PolicyViolationError(BrokerResponseError):
+    errno = 44
+    message = 'POLICY_VIOLATION'
+    description = 'Request parameters do not satisfy the configured policy.'
 
 
 class KafkaUnavailableError(KafkaError):

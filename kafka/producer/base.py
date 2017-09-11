@@ -56,7 +56,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
     Messages placed on the queue should be tuples that conform to this format:
         ((topic, partition), message, key)
 
-    Currently does not mark messages with task_done. Do not attempt to join()!
+    Currently does not mark messages with task_done. Do not attempt to
+    :meth:`join`!
 
     Arguments:
         queue (threading.Queue): the queue from which to get messages
@@ -216,8 +217,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                        else hash(orig_req.messages))
 
     if request_tries or not queue.empty():
-        log.error('Stopped producer with {0} unsent messages'
-                  .format(len(request_tries) + queue.qsize()))
+        log.error('Stopped producer with %d unsent messages', len(request_tries) + queue.qsize())
 
 
 class Producer(object):
@@ -227,7 +227,8 @@ class Producer(object):
     Arguments:
         client (kafka.SimpleClient): instance to use for broker
             communications. If async=True, the background thread will use
-            client.copy(), which is expected to return a thread-safe object.
+            :meth:`client.copy`, which is expected to return a thread-safe
+            object.
         codec (kafka.protocol.ALL_CODECS): compression codec to use.
         req_acks (int, optional): A value indicating the acknowledgements that
             the server must receive before responding to the request,
@@ -263,7 +264,7 @@ class Producer(object):
             will not allow you to identify the specific message that failed,
             but it will allow you to match failures with retries.
         async_stop_timeout (int or float, optional): seconds to continue
-            attempting to send queued messages after producer.stop(),
+            attempting to send queued messages after :meth:`producer.stop`,
             defaults to 30.
 
     Deprecated Arguments:

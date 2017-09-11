@@ -7,8 +7,9 @@ import six
 
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.commit import GroupCoordinatorRequest
-from kafka.protocol.fetch import FetchResponse
+from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.message import Message, MessageSet, PartialMessage
+from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Int16, Int32, Int64, String
 
 
@@ -64,6 +65,30 @@ def test_decode_message():
     msg = Message(b'test', key=b'key')
     msg.encode() # crc is recalculated during encoding
     assert decoded_message == msg
+
+
+def test_decode_message_validate_crc():
+    encoded = b''.join([
+        struct.pack('>i', -1427009701), # CRC
+        struct.pack('>bb', 0, 0),       # Magic, flags
+        struct.pack('>i', 3),           # Length of key
+        b'key',                         # key
+        struct.pack('>i', 4),           # Length of value
+        b'test',                        # value
+    ])
+    decoded_message = Message.decode(encoded)
+    assert decoded_message.validate_crc() is True
+
+    encoded = b''.join([
+        struct.pack('>i', 1234),           # Incorrect CRC
+        struct.pack('>bb', 0, 0),       # Magic, flags
+        struct.pack('>i', 3),           # Length of key
+        b'key',                         # key
+        struct.pack('>i', 4),           # Length of value
+        b'test',                        # value
+    ])
+    decoded_message = Message.decode(encoded)
+    assert decoded_message.validate_crc() is False
 
 
 def test_encode_message_set():
@@ -244,3 +269,16 @@ def test_decode_fetch_response_partial():
     m1 = partitions[0][3]
     assert len(m1) == 2
     assert m1[1] == (None, None, PartialMessage())
+
+
+def test_struct_unrecognized_kwargs():
+    try:
+        mr = MetadataRequest[0](topicz='foo')
+        assert False, 'Structs should not allow unrecognized kwargs'
+    except ValueError:
+        pass
+
+
+def test_struct_missing_kwargs():
+    fr = FetchRequest[0](max_wait_time=100)
+    assert fr.min_bytes is None

@@ -101,15 +101,19 @@ class RecordBatch(object):
         since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
         timeout = request_timeout_ms / 1000.0
 
-        if ((not self.in_retry() and is_full and timeout < since_append) or
-            (not self.in_retry() and timeout < since_ready) or
-            (self.in_retry() and timeout < since_backoff)):
+        error = None
+        if not self.in_retry() and is_full and timeout < since_append:
+            error = "%d seconds have passed since last append" % since_append
+        elif not self.in_retry() and timeout < since_ready:
+            error = "%d seconds have passed since batch creation plus linger time" % since_ready
+        elif self.in_retry() and timeout < since_backoff:
+            error = "%d seconds have passed since last attempt plus backoff time" % since_backoff
 
+        if error:
             self.records.close()
             self.done(-1, None, Errors.KafkaTimeoutError(
-                "Batch containing %s record(s) expired due to timeout while"
-                " requesting metadata from brokers for %s", self.record_count,
-                self.topic_partition))
+                "Batch for %s containing %s record(s) expired: %s" % (
+                self.topic_partition, self.record_count, error)))
             return True
         return False
 
@@ -522,8 +526,11 @@ class RecordAccumulator(object):
             for batch in self._incomplete.all():
                 log.debug('Waiting on produce to %s',
                           batch.produce_future.topic_partition)
-                assert batch.produce_future.wait(timeout=timeout), 'Timeout waiting for future'
-                assert batch.produce_future.is_done, 'Future not done?'
+                if not batch.produce_future.wait(timeout=timeout):
+                    raise Errors.KafkaTimeoutError('Timeout waiting for future')
+                if not batch.produce_future.is_done:
+                    raise Errors.UnknownError('Future not done')
+
                 if batch.produce_future.failed():
                     log.warning(batch.produce_future.exception)
         finally:

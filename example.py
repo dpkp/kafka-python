@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import threading, logging, time
+import multiprocessing
 
 from kafka import KafkaConsumer, KafkaProducer
 
@@ -16,7 +17,7 @@ class Producer(threading.Thread):
             time.sleep(1)
 
 
-class Consumer(threading.Thread):
+class Consumer(multiprocessing.Process):
     daemon = True
 
     def run(self):
@@ -29,12 +30,12 @@ class Consumer(threading.Thread):
 
 
 def main():
-    threads = [
+    tasks = [
         Producer(),
         Consumer()
     ]
 
-    for t in threads:
+    for t in tasks:
         t.start()
 
     time.sleep(10)

@@ -43,10 +43,10 @@ class BaseCoordinator(object):
        leader and begins processing.
 
     To leverage this protocol, an implementation must define the format of
-    metadata provided by each member for group registration in group_protocols()
-    and the format of the state assignment provided by the leader in
-    _perform_assignment() and which becomes available to members in
-    _on_join_complete().
+    metadata provided by each member for group registration in
+    :meth:`.group_protocols` and the format of the state assignment provided by
+    the leader in :meth:`._perform_assignment` and which becomes available to
+    members in :meth:`._on_join_complete`.
     """
 
     DEFAULT_CONFIG = {
@@ -212,25 +212,26 @@ class BaseCoordinator(object):
             # it as the "coordinator"
             if self.config['api_version'] < (0, 8, 2):
                 self.coordinator_id = self._client.least_loaded_node()
-                self._client.ready(self.coordinator_id)
+                if self.coordinator_id is not None:
+                    self._client.ready(self.coordinator_id)
                 continue
 
             future = self._send_group_coordinator_request()
             self._client.poll(future=future)
 
             if future.failed():
-                if isinstance(future.exception,
-                              Errors.GroupCoordinatorNotAvailableError):
-                    continue
                 if future.retriable():
                     if node_not_ready_retry_timeout_ms is not None and isinstance(future.exception, Errors.NodeNotReadyError):
                         self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
                         node_not_ready_retry_timeout_ms -= (time.time() - node_not_ready_retry_start_time) * 1000
                         if node_not_ready_retry_timeout_ms <= 0:
                             raise future.exception  # pylint: disable-msg=raising-bad-type
-                    else:
+                    elif getattr(future.exception, 'invalid_metadata', False):
+                        log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update)
+                    else:
+                        time.sleep(self.config['retry_backoff_ms'] / 1000)
                 else:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
@@ -257,13 +258,12 @@ class BaseCoordinator(object):
             # ensure that there are no pending requests to the coordinator.
             # This is important in particular to avoid resending a pending
             # JoinGroup request.
-            if self._client.in_flight_request_count(self.coordinator_id):
-                while not self.coordinator_unknown():
-                    self._client.poll(delayed_tasks=False)
-                    if not self._client.in_flight_request_count(self.coordinator_id):
-                        break
-                else:
-                    continue
+            while not self.coordinator_unknown():
+                if not self._client.in_flight_request_count(self.coordinator_id):
+                    break
+                self._client.poll(delayed_tasks=False)
+            else:
+                continue
 
             future = self._send_join_group_request()
             self._client.poll(future=future)
@@ -289,7 +289,7 @@ class BaseCoordinator(object):
         """Join the group and return the assignment for the next generation.
 
         This function handles both JoinGroup and SyncGroup, delegating to
-        _perform_assignment() if elected leader by the coordinator.
+        :meth:`._perform_assignment` if elected leader by the coordinator.
 
         Returns:
             Future: resolves to the encoded-bytes assignment returned from the
@@ -297,6 +297,10 @@ class BaseCoordinator(object):
         """
         if self.coordinator_unknown():
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            return Future().failure(e)
+
+        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
+            e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
         # send a join group request to the coordinator
@@ -429,6 +433,13 @@ class BaseCoordinator(object):
         if self.coordinator_unknown():
             e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
+
+        # We assume that coordinator is ready if we're sending SyncGroup
+        # as it typically follows a successful JoinGroup
+        # Also note that if client.ready() enforces a metadata priority policy,
+        # we can get into an infinite loop if the leader assignment process
+        # itself requests a metadata update
+
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
         _f.add_callback(self._handle_sync_group_response, future, time.time())
@@ -479,6 +490,10 @@ class BaseCoordinator(object):
         node_id = self._client.least_loaded_node()
         if node_id is None:
             return Future().failure(Errors.NoBrokersAvailable())
+
+        elif not self._client.ready(node_id, metadata_priority=False):
+            e = Errors.NodeNotReadyError(node_id)
+            return Future().failure(e)
 
         log.debug("Sending group coordinator request for group %s to broker %s",
                   self.group_id, node_id)
@@ -536,8 +551,8 @@ class BaseCoordinator(object):
             self.coordinator_id = None
 
     def close(self):
-        """Close the coordinator, leave the current group
-        and reset local generation/memberId."""
+        """Close the coordinator, leave the current group,
+        and reset local generation / member_id"""
         try:
             self._client.unschedule(self.heartbeat_task)
         except KeyError:
@@ -546,6 +561,7 @@ class BaseCoordinator(object):
         if not self.coordinator_unknown() and self.generation > 0:
             # this is a minimal effort attempt to leave the group. we do not
             # attempt any resending if the request fails or times out.
+            log.info('Leaving consumer group (%s).', self.group_id)
             request = LeaveGroupRequest[0](self.group_id, self.member_id)
             future = self._client.send(self.coordinator_id, request)
             future.add_callback(self._handle_leave_group_response)
@@ -565,6 +581,14 @@ class BaseCoordinator(object):
 
     def _send_heartbeat_request(self):
         """Send a heartbeat request"""
+        if self.coordinator_unknown():
+            e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            return Future().failure(e)
+
+        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
+            e = Errors.NodeNotReadyError(self.coordinator_id)
+            return Future().failure(e)
+
         request = HeartbeatRequest[0](self.group_id, self.generation, self.member_id)
         log.debug("Heartbeat: %s[%s] %s", request.group, request.generation_id, request.member_id)  # pylint: disable-msg=no-member
         future = Future()
@@ -708,7 +732,7 @@ class GroupCoordinatorMetrics(object):
         self.join_latency.add(metrics.metric_name(
             'join-time-max', self.metric_group_name,
             'The max time taken for a group rejoin',
-            tags), Avg())
+            tags), Max())
         self.join_latency.add(metrics.metric_name(
             'join-rate', self.metric_group_name,
             'The number of group joins per second',
@@ -722,7 +746,7 @@ class GroupCoordinatorMetrics(object):
         self.sync_latency.add(metrics.metric_name(
             'sync-time-max', self.metric_group_name,
             'The max time taken for a group sync',
-            tags), Avg())
+            tags), Max())
         self.sync_latency.add(metrics.metric_name(
             'sync-rate', self.metric_group_name,
             'The number of group syncs per second',

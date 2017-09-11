@@ -5,6 +5,8 @@ from io import BytesIO
 from .abstract import AbstractType
 from .types import Schema
 
+from ..util import WeakMethod
+
 
 class Struct(AbstractType):
     SCHEMA = Schema()
@@ -16,10 +18,17 @@ class Struct(AbstractType):
         elif len(args) > 0:
             raise ValueError('Args must be empty or mirror schema')
         else:
-            self.__dict__.update(kwargs)
+            for name in self.SCHEMA.names:
+                self.__dict__[name] = kwargs.pop(name, None)
+            if kwargs:
+                raise ValueError('Keyword(s) not in schema %s: %s'
+                                 % (list(self.SCHEMA.names),
+                                    ', '.join(kwargs.keys())))
 
         # overloading encode() to support both class and instance
-        self.encode = self._encode_self
+        # Without WeakMethod() this creates circular ref, which
+        # causes instances to "leak" to garbage
+        self.encode = WeakMethod(self._encode_self)
 
     @classmethod
     def encode(cls, item):  # pylint: disable=E0202

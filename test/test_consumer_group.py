@@ -16,7 +16,7 @@ from test.testutil import random_string
 
 
 def get_connect_str(kafka_broker):
-    return 'localhost:' + str(kafka_broker.port)
+    return kafka_broker.host + ':' + str(kafka_broker.port)
 
 
 @pytest.fixture
@@ -54,12 +54,14 @@ def test_group(kafka_broker, topic):
     stop = {}
     threads = {}
     messages = collections.defaultdict(list)
+    group_id = 'test-group-' + random_string(6)
     def consumer_thread(i):
         assert i not in consumers
         assert i not in stop
         stop[i] = threading.Event()
         consumers[i] = KafkaConsumer(topic,
                                      bootstrap_servers=connect_str,
+                                     group_id=group_id,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
             for tp, records in six.itervalues(consumers[i].poll(100)):

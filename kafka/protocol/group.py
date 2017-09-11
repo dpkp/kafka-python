@@ -1,10 +1,11 @@
 from __future__ import absolute_import
 
+from .api import Request, Response
 from .struct import Struct
 from .types import Array, Bytes, Int16, Int32, Schema, String
 
 
-class JoinGroupResponse_v0(Struct):
+class JoinGroupResponse_v0(Response):
     API_KEY = 11
     API_VERSION = 0
     SCHEMA = Schema(
@@ -19,13 +20,29 @@ class JoinGroupResponse_v0(Struct):
     )
 
 
-class JoinGroupResponse_v1(Struct):
+class JoinGroupResponse_v1(Response):
     API_KEY = 11
     API_VERSION = 1
     SCHEMA = JoinGroupResponse_v0.SCHEMA
 
 
-class JoinGroupRequest_v0(Struct):
+class JoinGroupResponse_v2(Response):
+    API_KEY = 11
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('generation_id', Int32),
+        ('group_protocol', String('utf-8')),
+        ('leader_id', String('utf-8')),
+        ('member_id', String('utf-8')),
+        ('members', Array(
+            ('member_id', String('utf-8')),
+            ('member_metadata', Bytes)))
+    )
+
+
+class JoinGroupRequest_v0(Request):
     API_KEY = 11
     API_VERSION = 0
     RESPONSE_TYPE = JoinGroupResponse_v0
@@ -41,7 +58,7 @@ class JoinGroupRequest_v0(Struct):
     UNKNOWN_MEMBER_ID = ''
 
 
-class JoinGroupRequest_v1(Struct):
+class JoinGroupRequest_v1(Request):
     API_KEY = 11
     API_VERSION = 1
     RESPONSE_TYPE = JoinGroupResponse_v1
@@ -58,8 +75,20 @@ class JoinGroupRequest_v1(Struct):
     UNKNOWN_MEMBER_ID = ''
 
 
-JoinGroupRequest = [JoinGroupRequest_v0, JoinGroupRequest_v1]
-JoinGroupResponse = [JoinGroupResponse_v0, JoinGroupResponse_v1]
+class JoinGroupRequest_v2(Request):
+    API_KEY = 11
+    API_VERSION = 2
+    RESPONSE_TYPE = JoinGroupResponse_v2
+    SCHEMA = JoinGroupRequest_v1.SCHEMA
+    UNKNOWN_MEMBER_ID = ''
+
+
+JoinGroupRequest = [
+    JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2
+]
+JoinGroupResponse = [
+    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v1
+]
 
 
 class ProtocolMetadata(Struct):
@@ -70,7 +99,7 @@ class ProtocolMetadata(Struct):
     )
 
 
-class SyncGroupResponse_v0(Struct):
+class SyncGroupResponse_v0(Response):
     API_KEY = 14
     API_VERSION = 0
     SCHEMA = Schema(
@@ -79,7 +108,17 @@ class SyncGroupResponse_v0(Struct):
     )
 
 
-class SyncGroupRequest_v0(Struct):
+class SyncGroupResponse_v1(Response):
+    API_KEY = 14
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('member_assignment', Bytes)
+    )
+
+
+class SyncGroupRequest_v0(Request):
     API_KEY = 14
     API_VERSION = 0
     RESPONSE_TYPE = SyncGroupResponse_v0
@@ -93,8 +132,15 @@ class SyncGroupRequest_v0(Struct):
     )
 
 
-SyncGroupRequest = [SyncGroupRequest_v0]
-SyncGroupResponse = [SyncGroupResponse_v0]
+class SyncGroupRequest_v1(Request):
+    API_KEY = 14
+    API_VERSION = 1
+    RESPONSE_TYPE = SyncGroupResponse_v1
+    SCHEMA = SyncGroupRequest_v0.SCHEMA
+
+
+SyncGroupRequest = [SyncGroupRequest_v0, SyncGroupRequest_v1]
+SyncGroupResponse = [SyncGroupResponse_v0, SyncGroupResponse_v1]
 
 
 class MemberAssignment(Struct):
@@ -107,7 +153,7 @@ class MemberAssignment(Struct):
     )
 
 
-class HeartbeatResponse_v0(Struct):
+class HeartbeatResponse_v0(Response):
     API_KEY = 12
     API_VERSION = 0
     SCHEMA = Schema(
@@ -115,7 +161,16 @@ class HeartbeatResponse_v0(Struct):
     )
 
 
-class HeartbeatRequest_v0(Struct):
+class HeartbeatResponse_v1(Response):
+    API_KEY = 12
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16)
+    )
+
+
+class HeartbeatRequest_v0(Request):
     API_KEY = 12
     API_VERSION = 0
     RESPONSE_TYPE = HeartbeatResponse_v0
@@ -126,11 +181,18 @@ class HeartbeatRequest_v0(Struct):
     )
 
 
-HeartbeatRequest = [HeartbeatRequest_v0]
-HeartbeatResponse = [HeartbeatResponse_v0]
+class HeartbeatRequest_v1(Request):
+    API_KEY = 12
+    API_VERSION = 1
+    RESPONSE_TYPE = HeartbeatResponse_v1
+    SCHEMA = HeartbeatRequest_v0
 
 
-class LeaveGroupResponse_v0(Struct):
+HeartbeatRequest = [HeartbeatRequest_v0, HeartbeatRequest_v1]
+HeartbeatResponse = [HeartbeatResponse_v0, HeartbeatResponse_v1]
+
+
+class LeaveGroupResponse_v0(Response):
     API_KEY = 13
     API_VERSION = 0
     SCHEMA = Schema(
@@ -138,7 +200,16 @@ class LeaveGroupResponse_v0(Struct):
     )
 
 
-class LeaveGroupRequest_v0(Struct):
+class LeaveGroupResponse_v1(Response):
+    API_KEY = 13
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16)
+    )
+
+
+class LeaveGroupRequest_v0(Request):
     API_KEY = 13
     API_VERSION = 0
     RESPONSE_TYPE = LeaveGroupResponse_v0
@@ -148,5 +219,12 @@ class LeaveGroupRequest_v0(Struct):
     )
 
 
-LeaveGroupRequest = [LeaveGroupRequest_v0]
-LeaveGroupResponse = [LeaveGroupResponse_v0]
+class LeaveGroupRequest_v1(Request):
+    API_KEY = 13
+    API_VERSION = 1
+    RESPONSE_TYPE = LeaveGroupResponse_v1
+    SCHEMA = LeaveGroupRequest_v0.SCHEMA
+
+
+LeaveGroupRequest = [LeaveGroupRequest_v0, LeaveGroupRequest_v1]
+LeaveGroupResponse = [LeaveGroupResponse_v0, LeaveGroupResponse_v1]

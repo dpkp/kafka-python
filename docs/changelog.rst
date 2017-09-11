@@ -1,6 +1,174 @@
 Changelog
 =========
 
+1.3.4 (Aug 13, 2017)
+####################
+
+Bugfixes
+--------
+* Avoid multiple connection attempts when refreshing metadata (dpkp #1067)
+* Catch socket.errors when sending / recving bytes on wake socketpair (dpkp #1069)
+* Deal with brokers that reappear with different IP address (originsmike #1085)
+* Fix join-time-max and sync-time-max metrics to use Max() measure function (billyevans #1146)
+* Raise AssertionError when decompression unsupported (bts-webber #1159)
+* Catch ssl.EOFErrors on Python3.3 so we close the failing conn (Ormod #1162)
+* Select on sockets to avoid busy polling during bootstrap (dpkp #1175)
+* Initialize metadata_snapshot in group coordinator to avoid unnecessary rebalance (dpkp #1174)
+
+Client
+------
+* Timeout idle connections via connections_max_idle_ms (dpkp #1068)
+* Warn, dont raise, on DNS lookup failures (dpkp #1091)
+* Support exponential backoff for broker reconnections -- KIP-144 (dpkp #1124)
+* Add gssapi support (Kerberos) for SASL (Harald-Berghoff #1152)
+* Add private map of api key -> min/max versions to BrokerConnection (dpkp #1169)
+
+Consumer
+--------
+* Backoff on unavailable group coordinator retry (dpkp #1125)
+* Only change_subscription on pattern subscription when topics change (Artimi #1132)
+* Add offsets_for_times, beginning_offsets and end_offsets APIs (tvoinarovskyi #1161)
+
+Producer
+--------
+* Raise KafkaTimeoutError when flush times out (infecto)
+* Set producer atexit timeout to 0 to match del (Ormod #1126)
+
+Core / Protocol
+---------------
+* 0.11.0.0 protocol updates (only - no client support yet) (dpkp #1127)
+* Make UnknownTopicOrPartitionError retriable error (tvoinarovskyi)
+
+Test Infrastructure
+-------------------
+* pylint 1.7.0+ supports python 3.6 and merge py36 into common testenv (jianbin-wei #1095)
+* Add kafka 0.10.2.1 into integration testing version (jianbin-wei #1096)
+* Disable automated tests for python 2.6 and kafka 0.8.0 and 0.8.1.1 (jianbin-wei #1096)
+* Support manual py26 testing; dont advertise 3.3 support (dpkp)
+* Add 0.11.0.0 server resources, fix tests for 0.11 brokers (dpkp)
+* Use fixture hostname, dont assume localhost (dpkp)
+* Add 0.11.0.0 to travis test matrix, remove 0.10.1.1; use scala 2.11 artifacts (dpkp #1176)
+
+Logging / Error Messages
+------------------------
+* Improve error message when expiring batches in KafkaProducer (dpkp #1077)
+* Update producer.send docstring -- raises KafkaTimeoutError (infecto)
+* Use logging's built-in string interpolation (jeffwidman)
+* Fix produce timeout message (melor #1151)
+* Fix producer batch expiry messages to use seconds (dnwe)
+
+Documentation
+-------------
+* Fix typo in KafkaClient docstring (jeffwidman #1054)
+* Update README: Prefer python-lz4 over lz4tools (kiri11 #1057)
+* Fix poll() hyperlink in KafkaClient (jeffwidman)
+* Update RTD links with https / .io (jeffwidman #1074)
+* Describe consumer thread-safety (ecksun)
+* Fix typo in consumer integration test (jeffwidman)
+* Note max_in_flight_requests_per_connection > 1 may change order of messages (tvoinarovskyi #1149)
+
+
+1.3.3 (Mar 14, 2017)
+####################
+
+Core / Protocol
+---------------
+* Derive all api classes from Request / Response base classes (dpkp 1030)
+* Prefer python-lz4 if available (dpkp 1024)
+* Fix kwarg handing in kafka.protocol.struct.Struct (dpkp 1025)
+* Fixed couple of "leaks" when gc is disabled (Mephius 979)
+* Added `max_bytes` option and FetchRequest_v3 usage. (Drizzt1991 962)
+* CreateTopicsRequest / Response v1 (dpkp 1012)
+* Add MetadataRequest_v2 and MetadataResponse_v2 structures for KIP-78 (Drizzt1991 974)
+* KIP-88 / KAFKA-3853: OffsetFetch v2 structs (jeffwidman 971)
+* DRY-up the MetadataRequest_v1 struct (jeffwidman 966)
+* Add JoinGroup v1 structs (jeffwidman 965)
+* DRY-up the OffsetCommitResponse Structs (jeffwidman 970)
+* DRY-up the OffsetFetch structs (jeffwidman 964)
+* time --> timestamp to match Java API (jeffwidman 969)
+* Add support for offsetRequestV1 messages (jlafaye 951)
+* Add FetchRequest/Response_v3 structs (jeffwidman 943)
+* Add CreateTopics / DeleteTopics Structs (jeffwidman 944)
+
+Test Infrastructure
+-------------------
+* Add python3.6 to travis test suite, drop python3.3 (exponea 992)
+* Update to 0.10.1.1 for integration testing (dpkp 953)
+* Update vendored berkerpeksag/selectors34 to ff61b82 (Mephius 979)
+* Remove dead code (jeffwidman 967)
+* Update pytest fixtures to new yield syntax (jeffwidman 919)
+
+Consumer
+--------
+* Avoid re-encoding message for crc check (dpkp 1027)
+* Optionally skip auto-commit during consumer.close (dpkp 1031)
+* Return copy of consumer subscription set (dpkp 1029)
+* Short-circuit group coordinator requests when NodeNotReady (dpkp 995)
+* Avoid unknown coordinator after client poll (dpkp 1023)
+* No longer configure a default consumer group (dpkp 1016)
+* Dont refresh metadata on failed group coordinator request unless needed (dpkp 1006)
+* Fail-fast on timeout constraint violations during KafkaConsumer creation (harelba 986)
+* Default max_poll_records to Java default of 500 (jeffwidman 947)
+* For 0.8.2, only attempt connection to coordinator if least_loaded_node succeeds (dpkp)
+
+Producer
+--------
+* change default timeout of KafkaProducer.close() to threading.TIMEOUT_MAX on py3 (mmyjona 991)
+
+Client
+------
+* Add optional kwarg to ready/is_ready to disable metadata-priority logic (dpkp 1017)
+* When closing a broker connection without error, fail in-flight-requests with Cancelled (dpkp 1010)
+* Catch socket errors during ssl handshake (dpkp 1007)
+* Drop old brokers when rebuilding broker metadata (dpkp 1005)
+* Drop bad disconnect test -- just use the mocked-socket test (dpkp 982)
+* Add support for Python built without ssl (minagawa-sho 954)
+* Do not re-close a disconnected connection (dpkp)
+* Drop unused last_failure time from BrokerConnection (dpkp)
+* Use connection state functions where possible (dpkp)
+* Pass error to BrokerConnection.close() (dpkp)
+
+Bugfixes
+--------
+* Free lz4 decompression context to avoid leak (dpkp 1024)
+* Fix sasl reconnect bug: auth future must be reset on close (dpkp 1003)
+* Fix raise exception from SubscriptionState.assign_from_subscribed (qntln 960)
+* Fix blackout calculation: mark last_attempt time during connection close (dpkp 1008)
+* Fix buffer pool reallocation after raising timeout (dpkp 999)
+
+Logging / Error Messages
+------------------------
+* Add client info logging re bootstrap; log connection attempts to balance with close (dpkp)
+* Minor additional logging for consumer coordinator (dpkp)
+* Add more debug-level connection logging (dpkp)
+* Do not need str(self) when formatting to %s (dpkp)
+* Add new broker response errors (dpkp)
+* Small style fixes in kafka.errors (dpkp)
+* Include the node id in BrokerConnection logging (dpkp 1009)
+* Replace %s with %r in producer debug log message (chekunkov 973)
+
+Documentation
+-------------
+* Sphinx documentation updates (jeffwidman 1019)
+* Add sphinx formatting to hyperlink methods (jeffwidman 898)
+* Fix BrokerConnection api_version docs default (jeffwidman 909)
+* PEP-8: Spacing & removed unused imports (jeffwidman 899)
+* Move BrokerConnection docstring to class (jeffwidman 968)
+* Move docstring so it shows up in Sphinx/RTD (jeffwidman 952)
+* Remove non-pip install instructions (jeffwidman 940)
+* Spelling and grammar changes (melissacrawford396 923)
+* Fix typo: coorelation --> correlation (jeffwidman 929)
+* Make SSL warning list the correct Python versions (jeffwidman 924)
+* Fixup comment reference to _maybe_connect (dpkp)
+* Add ClusterMetadata sphinx documentation (dpkp)
+
+Legacy Client
+-------------
+* Add send_list_offset_request for searching offset by timestamp (charsyam 1001)
+* Use select to poll sockets for read to reduce CPU usage (jianbin-wei 958)
+* Use select.select without instance bounding (adamwen829 949)
+
+
 1.3.2 (Dec 28, 2016)
 ####################
 

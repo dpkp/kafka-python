@@ -3,8 +3,9 @@ from __future__ import absolute_import
 import copy
 import logging
 import socket
-import sys
 import time
+
+from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
 
 from kafka.vendor import six
 
@@ -31,9 +32,12 @@ class KafkaConsumer(six.Iterator):
     to allow multiple consumers to load balance consumption of topics (requires
     kafka >= 0.9.0.0).
 
+    The consumer is not thread safe and should not be shared across threads.
+
     Arguments:
         *topics (str): optional list of topics to subscribe to. If not set,
-            call subscribe() or assign() before consuming records.
+            call :meth:`~kafka.KafkaConsumer.subscribe` or
+            :meth:`~kafka.KafkaConsumer.assign` before consuming records.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
@@ -51,7 +55,7 @@ class KafkaConsumer(six.Iterator):
             partition assignment (if enabled), and to use for fetching and
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
-            Default: 'kafka-python-default-group'
+            Default: None
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -63,6 +67,14 @@ class KafkaConsumer(six.Iterator):
             the server will block before answering the fetch request if
             there isn't sufficient data to immediately satisfy the
             requirement given by fetch_min_bytes. Default: 500.
+        fetch_max_bytes (int): The maximum amount of data the server should
+            return for a fetch request. This is not an absolute maximum, if the
+            first message in the first non-empty partition of the fetch is
+            larger than this value, the message will still be returned to
+            ensure that the consumer can make progress. NOTE: consumer performs
+            fetches to multiple brokers in parallel so memory usage will depend
+            on the number of brokers containing partitions for the topic.
+            Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 Mb).
         max_partition_fetch_bytes (int): The maximum amount of data
             per-partition the server will return. The maximum total memory
             used for a request = #partitions * max_partition_fetch_bytes.
@@ -78,6 +90,14 @@ class KafkaConsumer(six.Iterator):
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
+        reconnect_backoff_max_ms (int): The maximum amount of time in
+            milliseconds to wait when reconnecting to a broker that has
+            repeatedly failed to connect. If provided, the backoff per host
+            will increase exponentially for each consecutive connection
+            failure, up to this maximum. To avoid connection storms, a
+            randomization factor of 0.2 will be applied to the backoff
+            resulting in a random range between 20% below and 20% above
+            the computed value. Default: 1000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -117,7 +137,7 @@ class KafkaConsumer(six.Iterator):
         session_timeout_ms (int): The timeout used to detect failures when
             using Kafka's group management facilities. Default: 30000
         max_poll_records (int): The maximum number of records returned in a
-            single call to poll(). Default: 500
+            single call to :meth:`~kafka.KafkaConsumer.poll`. Default: 500
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -159,9 +179,10 @@ class KafkaConsumer(six.Iterator):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             Default: None.
-        api_version (tuple): Specify which kafka API version to use.
-            If set to None, the client will attempt to infer the broker version
-            by probing various APIs. Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to infer the broker version by probing
+            various APIs. Different versions enable different functionality.
+
             Examples:
                 (0, 9) enables full group coordination features with automatic
                     partition assignment and rebalancing,
@@ -171,7 +192,9 @@ class KafkaConsumer(six.Iterator):
                     partition assignment only,
                 (0, 8, 0) enables basic functionality but requires manual
                     partition assignment and offset management.
-            For a full list of supported versions, see KafkaClient.API_VERSIONS
+
+            For the full list of supported versions, see
+            KafkaClient.API_VERSIONS. Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -202,20 +225,22 @@ class KafkaConsumer(six.Iterator):
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/0100/configuration.html#newconsumerconfigs
+        https://kafka.apache.org/documentation/#newconsumerconfigs
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
-        'group_id': 'kafka-python-default-group',
+        'group_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
         'fetch_min_bytes': 1,
+        'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
         'request_timeout_ms': 40 * 1000,
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
+        'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
         'auto_offset_reset': 'latest',
         'enable_auto_commit': True,
@@ -242,7 +267,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_password': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
-        'connections_max_idle_ms': 9 * 60 * 1000,  # Not implemented yet
+        'connections_max_idle_ms': 9 * 60 * 1000,
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
@@ -270,6 +295,17 @@ class KafkaConsumer(six.Iterator):
             log.warning('use auto_offset_reset=%s (%s is deprecated)',
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
+
+        request_timeout_ms = self.config['request_timeout_ms']
+        session_timeout_ms = self.config['session_timeout_ms']
+        fetch_max_wait_ms = self.config['fetch_max_wait_ms']
+        if request_timeout_ms <= session_timeout_ms:
+            raise KafkaConfigurationError(
+                "Request timeout (%s) must be larger than session timeout (%s)" %
+                (request_timeout_ms, session_timeout_ms))
+        if request_timeout_ms <= fetch_max_wait_ms:
+            raise KafkaConfigurationError("Request timeout (%s) must be larger than fetch-max-wait-ms (%s)" %
+                                          (request_timeout_ms, fetch_max_wait_ms))
 
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
@@ -317,11 +353,13 @@ class KafkaConsumer(six.Iterator):
             partitions (list of TopicPartition): Assignment for this instance.
 
         Raises:
-            IllegalStateError: If consumer has already called subscribe()
+            IllegalStateError: If consumer has already called
+            :meth:`~kafka.KafkaConsumer.subscribe`.
 
         Warning:
             It is not possible to use both manual partition assignment with
-            assign() and group assignment with subscribe().
+            :meth:`~kafka.KafkaConsumer.assign` and group assignment with
+            :meth:`~kafka.KafkaConsumer.subscribe`.
 
         Note:
             This interface does not support incremental assignment and will
@@ -339,25 +377,32 @@ class KafkaConsumer(six.Iterator):
     def assignment(self):
         """Get the TopicPartitions currently assigned to this consumer.
 
-        If partitions were directly assigned using assign(), then this will
-        simply return the same partitions that were previously assigned.
-        If topics were subscribed using subscribe(), then this will give the
-        set of topic partitions currently assigned to the consumer (which may
-        be None if the assignment hasn't happened yet, or if the partitions are
-        in the process of being reassigned).
+        If partitions were directly assigned using
+        :meth:`~kafka.KafkaConsumer.assign`, then this will simply return the
+        same partitions that were previously assigned.  If topics were
+        subscribed using :meth:`~kafka.KafkaConsumer.subscribe`, then this will
+        give the set of topic partitions currently assigned to the consumer
+        (which may be None if the assignment hasn't happened yet, or if the
+        partitions are in the process of being reassigned).
 
         Returns:
             set: {TopicPartition, ...}
         """
         return self._subscription.assigned_partitions()
 
-    def close(self):
-        """Close the consumer, waiting indefinitely for any needed cleanup."""
+    def close(self, autocommit=True):
+        """Close the consumer, waiting indefinitely for any needed cleanup.
+
+        Keyword Arguments:
+            autocommit (bool): If auto-commit is configured for this consumer,
+                this optional flag causes the consumer to attempt to commit any
+                pending consumed offsets prior to close. Default: True
+        """
         if self._closed:
             return
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
-        self._coordinator.close()
+        self._coordinator.close(autocommit=autocommit)
         self._metrics.close()
         self._client.close()
         try:
@@ -497,8 +542,8 @@ class KafkaConsumer(six.Iterator):
         Records are fetched and returned in batches by topic-partition.
         On each poll, consumer will try to use the last consumed offset as the
         starting offset and fetch sequentially. The last consumed offset can be
-        manually set through seek(partition, offset) or automatically set as
-        the last committed offset for the subscribed list of partitions.
+        manually set through :meth:`~kafka.KafkaConsumer.seek` or automatically
+        set as the last committed offset for the subscribed list of partitions.
 
         Incompatible with iterator interface -- use one or the other, not both.
 
@@ -508,8 +553,8 @@ class KafkaConsumer(six.Iterator):
                 with any records that are available currently in the buffer,
                 else returns empty. Must not be negative. Default: 0
             max_records (int, optional): The maximum number of records returned
-                in a single call to :meth:`poll`. Default: Inherit value from
-                max_poll_records.
+                in a single call to :meth:`~kafka.KafkaConsumer.poll`.
+                Default: Inherit value from max_poll_records.
 
         Returns:
             dict: Topic to list of records since the last fetch for the
@@ -571,7 +616,7 @@ class KafkaConsumer(six.Iterator):
         # Send any new fetches (won't resend pending fetches)
         self._fetcher.send_fetches()
 
-        self._client.poll(timeout_ms=timeout_ms, sleep=True)
+        self._client.poll(timeout_ms=timeout_ms)
         records, _ = self._fetcher.fetched_records(max_records)
         return records
 
@@ -620,10 +665,12 @@ class KafkaConsumer(six.Iterator):
     def pause(self, *partitions):
         """Suspend fetching from the requested partitions.
 
-        Future calls to poll() will not return any records from these partitions
-        until they have been resumed using resume(). Note that this method does
-        not affect partition subscription. In particular, it does not cause a
-        group rebalance when automatic assignment is used.
+        Future calls to :meth:`~kafka.KafkaConsumer.poll` will not return any
+        records from these partitions until they have been resumed using
+        :meth:`~kafka.KafkaConsumer.resume`.
+
+        Note: This method does not affect partition subscription. In particular,
+        it does not cause a group rebalance when automatic assignment is used.
 
         Arguments:
             *partitions (TopicPartition): Partitions to pause.
@@ -635,7 +682,8 @@ class KafkaConsumer(six.Iterator):
             self._subscription.pause(partition)
 
     def paused(self):
-        """Get the partitions that were previously paused by a call to pause().
+        """Get the partitions that were previously paused using
+        :meth:`~kafka.KafkaConsumer.pause`.
 
         Returns:
             set: {partition (TopicPartition), ...}
@@ -658,10 +706,12 @@ class KafkaConsumer(six.Iterator):
         """Manually specify the fetch offset for a TopicPartition.
 
         Overrides the fetch offsets that the consumer will use on the next
-        poll(). If this API is invoked for the same partition more than once,
-        the latest offset will be used on the next poll(). Note that you may
-        lose data if this API is arbitrarily used in the middle of consumption,
-        to reset the fetch offsets.
+        :meth:`~kafka.KafkaConsumer.poll`. If this API is invoked for the same
+        partition more than once, the latest offset will be used on the next
+        :meth:`~kafka.KafkaConsumer.poll`.
+
+        Note: You may lose data if this API is arbitrarily used in the middle of
+        consumption to reset the fetch offsets.
 
         Arguments:
             partition (TopicPartition): Partition for seek operation
@@ -733,7 +783,7 @@ class KafkaConsumer(six.Iterator):
         Topic subscriptions are not incremental: this list will replace the
         current assignment (if there is one).
 
-        This method is incompatible with assign().
+        This method is incompatible with :meth:`~kafka.KafkaConsumer.assign`.
 
         Arguments:
             topics (list): List of topics for subscription.
@@ -762,7 +812,8 @@ class KafkaConsumer(six.Iterator):
                 through this interface are from topics subscribed in this call.
 
         Raises:
-            IllegalStateError: If called after previously calling assign().
+            IllegalStateError: If called after previously calling
+                :meth:`~kafka.KafkaConsumer.assign`.
             AssertionError: If neither topics or pattern is provided.
             TypeError: If listener is not a ConsumerRebalanceListener.
         """
@@ -788,7 +839,7 @@ class KafkaConsumer(six.Iterator):
         Returns:
             set: {topic, ...}
         """
-        return self._subscription.subscription
+        return self._subscription.subscription.copy()
 
     def unsubscribe(self):
         """Unsubscribe from all topics and clear all assigned partitions."""
@@ -812,6 +863,105 @@ class KafkaConsumer(six.Iterator):
                 metrics[k.group][k.name] = {}
             metrics[k.group][k.name] = v.value()
         return metrics
+
+    def offsets_for_times(self, timestamps):
+        """Look up the offsets for the given partitions by timestamp. The
+        returned offset for each partition is the earliest offset whose
+        timestamp is greater than or equal to the given timestamp in the
+        corresponding partition.
+
+        This is a blocking call. The consumer does not have to be assigned the
+        partitions.
+
+        If the message format version in a partition is before 0.10.0, i.e.
+        the messages do not have timestamps, ``None`` will be returned for that
+        partition. ``None`` will also be returned for the partition if there
+        are no messages in it.
+
+        Note:
+            This method may block indefinitely if the partition does not exist.
+
+        Arguments:
+            timestamps (dict): ``{TopicPartition: int}`` mapping from partition
+                to the timestamp to look up. Unit should be milliseconds since
+                beginning of the epoch (midnight Jan 1, 1970 (UTC))
+
+        Returns:
+            ``{TopicPartition: OffsetAndTimestamp}``: mapping from partition
+            to the timestamp and offset of the first message with timestamp
+            greater than or equal to the target timestamp.
+
+        Raises:
+            ValueError: If the target timestamp is negative
+            UnsupportedVersionError: If the broker does not support looking
+                up the offsets by timestamp.
+            KafkaTimeoutError: If fetch failed in request_timeout_ms
+        """
+        if self.config['api_version'] <= (0, 10, 0):
+            raise UnsupportedVersionError(
+                "offsets_for_times API not supported for cluster version {}"
+                .format(self.config['api_version']))
+        for tp, ts in timestamps.items():
+            timestamps[tp] = int(ts)
+            if ts < 0:
+                raise ValueError(
+                    "The target time for partition {} is {}. The target time "
+                    "cannot be negative.".format(tp, ts))
+        return self._fetcher.get_offsets_by_times(
+            timestamps, self.config['request_timeout_ms'])
+
+    def beginning_offsets(self, partitions):
+        """Get the first offset for the given partitions.
+
+        This method does not change the current consumer position of the
+        partitions.
+
+        Note:
+            This method may block indefinitely if the partition does not exist.
+
+        Arguments:
+            partitions (list): List of TopicPartition instances to fetch
+                offsets for.
+
+        Returns:
+            ``{TopicPartition: int}``: The earliest available offsets for the
+            given partitions.
+
+        Raises:
+            UnsupportedVersionError: If the broker does not support looking
+                up the offsets by timestamp.
+            KafkaTimeoutError: If fetch failed in request_timeout_ms.
+        """
+        offsets = self._fetcher.beginning_offsets(
+            partitions, self.config['request_timeout_ms'])
+        return offsets
+
+    def end_offsets(self, partitions):
+        """Get the last offset for the given partitions. The last offset of a
+        partition is the offset of the upcoming message, i.e. the offset of the
+        last available message + 1.
+
+        This method does not change the current consumer position of the
+        partitions.
+
+        Note:
+            This method may block indefinitely if the partition does not exist.
+
+        Arguments:
+            partitions (list): List of TopicPartition instances to fetch
+                offsets for.
+
+        Returns:
+            ``{TopicPartition: int}``: The end offsets for the given partitions.
+
+        Raises:
+            UnsupportedVersionError: If the broker does not support looking
+                up the offsets by timestamp.
+            KafkaTimeoutError: If fetch failed in request_timeout_ms
+        """
+        offsets = self._fetcher.end_offsets(
+            partitions, self.config['request_timeout_ms'])
+        return offsets
 
     def _use_consumer_group(self):
         """Return True iff this consumer can/should join a broker-coordinated group."""
@@ -864,7 +1014,7 @@ class KafkaConsumer(six.Iterator):
             poll_ms = 1000 * (self._consumer_timeout - time.time())
             if not self._fetcher.in_flight_fetches():
                 poll_ms = 0
-            self._client.poll(timeout_ms=poll_ms, sleep=True)
+            self._client.poll(timeout_ms=poll_ms)
 
             # We need to make sure we at least keep up with scheduled tasks,
             # like heartbeats, auto-commits, and metadata refreshes
@@ -890,6 +1040,8 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout_at:
                     log.debug("internal iterator timeout - breaking for poll")
                     break
+                if self._client.in_flight_request_count():
+                    self._client.poll(timeout_ms=0)
 
             # An else block on a for loop only executes if there was no break
             # so this should only be called on a StopIteration from the fetcher

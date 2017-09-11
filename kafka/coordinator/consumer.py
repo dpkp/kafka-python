@@ -91,7 +91,7 @@ class ConsumerCoordinator(BaseCoordinator):
             assert self.config['assignors'], 'Coordinator requires assignors'
 
         self._subscription = subscription
-        self._metadata_snapshot = {}
+        self._metadata_snapshot = self._build_metadata_snapshot(subscription, client.cluster)
         self._assignment_snapshot = None
         self._cluster = client.cluster
         self._cluster.request_update()
@@ -144,8 +144,9 @@ class ConsumerCoordinator(BaseCoordinator):
                 if self._subscription.subscribed_pattern.match(topic):
                     topics.append(topic)
 
-            self._subscription.change_subscription(topics)
-            self._client.set_topics(self._subscription.group_subscription())
+            if set(topics) != self._subscription.subscription:
+                self._subscription.change_subscription(topics)
+                self._client.set_topics(self._subscription.group_subscription())
 
         # check if there are any changes to the metadata which should trigger
         # a rebalance
@@ -165,15 +166,18 @@ class ConsumerCoordinator(BaseCoordinator):
                     for partition in self._metadata_snapshot[topic]
                 ])
 
+    def _build_metadata_snapshot(self, subscription, cluster):
+        metadata_snapshot = {}
+        for topic in subscription.group_subscription():
+            partitions = cluster.partitions_for_topic(topic) or []
+            metadata_snapshot[topic] = set(partitions)
+        return metadata_snapshot
+
     def _subscription_metadata_changed(self, cluster):
         if not self._subscription.partitions_auto_assigned():
             return False
 
-        metadata_snapshot = {}
-        for topic in self._subscription.group_subscription():
-            partitions = cluster.partitions_for_topic(topic) or []
-            metadata_snapshot[topic] = set(partitions)
-
+        metadata_snapshot = self._build_metadata_snapshot(self._subscription, cluster)
         if self._metadata_snapshot != metadata_snapshot:
             self._metadata_snapshot = metadata_snapshot
             return True
@@ -329,9 +333,18 @@ class ConsumerCoordinator(BaseCoordinator):
 
             time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
-    def close(self):
+    def close(self, autocommit=True):
+        """Close the coordinator, leave the current group,
+        and reset local generation / member_id.
+
+        Keyword Arguments:
+            autocommit (bool): If auto-commit is configured for this consumer,
+                this optional flag causes the consumer to attempt to commit any
+                pending consumed offsets prior to close. Default: True
+        """
         try:
-            self._maybe_auto_commit_offsets_sync()
+            if autocommit:
+                self._maybe_auto_commit_offsets_sync()
         finally:
             super(ConsumerCoordinator, self).close()
 

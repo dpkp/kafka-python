@@ -1,8 +1,8 @@
 kafka-python
 ############
 
-.. image:: https://img.shields.io/badge/kafka-0.10%2C%200.9%2C%200.8.2%2C%200.8.1%2C%200.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.org/compatibility.html
+.. image:: https://img.shields.io/badge/kafka-0.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
@@ -16,9 +16,9 @@ Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with newer brokers (0.10 or 0.9), but is backwards-compatible with
-older versions (to 0.8.0). Some features will only be enabled on newer brokers,
-however; for example, fully coordinated consumer groups -- i.e., dynamic
+kafka-python is best used with newer brokers (0.9+), but is backwards-compatible with
+older versions (to 0.8.0). Some features will only be enabled on newer brokers.
+For example, fully coordinated consumer groups -- i.e., dynamic
 partition assignment to multiple consumers in the same group -- requires use of
 0.9 kafka brokers. Supporting this feature for earlier broker releases would
 require writing and maintaining custom leadership election and membership /
@@ -51,6 +51,12 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> for msg in consumer:
 ...     print (msg)
 
+>>> # join a consumer group for dynamic partition assignment and offset commits
+>>> from kafka import KafkaConsumer
+>>> consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group')
+>>> for msg in consumer:
+...     print (msg)
+
 >>> # manually assign the partition list for the consumer
 >>> from kafka import TopicPartition
 >>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234')
@@ -76,11 +82,14 @@ client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
 >>> for _ in range(100):
 ...     producer.send('foobar', b'some_message_bytes')
 
->>> # Block until all pending messages are sent
->>> producer.flush()
-
 >>> # Block until a single message is sent (or timeout)
->>> producer.send('foobar', b'another_message').get(timeout=60)
+>>> future = producer.send('foobar', b'another_message')
+>>> result = future.get(timeout=60)
+
+>>> # Block until all pending messages are at least put on the network
+>>> # NOTE: This does not guarantee delivery or success! It is really
+>>> # only useful if you configure internal batching using linger_ms
+>>> producer.flush()
 
 >>> # Use a key for hashed-partitioning
 >>> producer.send('foobar', key=b'foo', value=b'bar')
@@ -100,13 +109,22 @@ client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
 ...     producer.send('foobar', b'msg %d' % i)
 
 
+Thread safety
+*************
+
+The KafkaProducer can be used across threads without issue, unlike the
+KafkaConsumer which cannot.
+
+While it is possible to use the KafkaConsumer in a thread-local manner,
+multiprocessing is recommended.
+
+
 Compression
 ***********
 
 kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you must install lz4tools and xxhash (modules
-may not work on python2.6). To enable snappy, install python-snappy (also
-requires snappy library).
+consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
+To enable snappy, install python-snappy (also requires snappy library).
 See `Installation <install.html#optional-snappy-install>`_ for more information.
 
 
@@ -118,7 +136,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 0.10).
+attempts to identify which version it is running (0.8.0 to 0.11).
 
 
 Low-level

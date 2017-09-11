@@ -6,11 +6,12 @@ import time
 from ..codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
+from .frame import KafkaBytes
 from .struct import Struct
 from .types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
-from ..util import crc32
+from ..util import crc32, WeakMethod
 
 
 class Message(Struct):
@@ -48,11 +49,12 @@ class Message(Struct):
             timestamp = int(time.time() * 1000)
         self.timestamp = timestamp
         self.crc = crc
+        self._validated_crc = None
         self.magic = magic
         self.attributes = attributes
         self.key = key
         self.value = value
-        self.encode = self._encode_self
+        self.encode = WeakMethod(self._encode_self)
 
     @property
     def timestamp_type(self):
@@ -85,7 +87,9 @@ class Message(Struct):
 
     @classmethod
     def decode(cls, data):
+        _validated_crc = None
         if isinstance(data, bytes):
+            _validated_crc = crc32(data[4:])
             data = io.BytesIO(data)
         # Partial decode required to determine message version
         base_fields = cls.SCHEMAS[0].fields[0:3]
@@ -96,14 +100,17 @@ class Message(Struct):
             timestamp = fields[0]
         else:
             timestamp = None
-        return cls(fields[-1], key=fields[-2],
-                   magic=magic, attributes=attributes, crc=crc,
-                   timestamp=timestamp)
+        msg = cls(fields[-1], key=fields[-2],
+                  magic=magic, attributes=attributes, crc=crc,
+                  timestamp=timestamp)
+        msg._validated_crc = _validated_crc
+        return msg
 
     def validate_crc(self):
-        raw_msg = self._encode_self(recalc_crc=False)
-        crc = crc32(raw_msg[4:])
-        if crc == self.crc:
+        if self._validated_crc is None:
+            raw_msg = self._encode_self(recalc_crc=False)
+            self._validated_crc = crc32(raw_msg[4:])
+        if self.crc == self._validated_crc:
             return True
         return False
 
@@ -149,10 +156,10 @@ class MessageSet(AbstractType):
     @classmethod
     def encode(cls, items):
         # RecordAccumulator encodes messagesets internally
-        if isinstance(items, io.BytesIO):
+        if isinstance(items, (io.BytesIO, KafkaBytes)):
             size = Int32.decode(items)
             # rewind and return all the bytes
-            items.seek(-4, 1)
+            items.seek(items.tell() - 4)
             return items.read(size + 4)
 
         encoded_values = []
@@ -192,7 +199,7 @@ class MessageSet(AbstractType):
 
     @classmethod
     def repr(cls, messages):
-        if isinstance(messages, io.BytesIO):
+        if isinstance(messages, (KafkaBytes, io.BytesIO)):
             offset = messages.tell()
             decoded = cls.decode(messages)
             messages.seek(offset)

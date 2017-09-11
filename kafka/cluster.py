@@ -16,6 +16,20 @@ log = logging.getLogger(__name__)
 
 
 class ClusterMetadata(object):
+    """
+    A class to manage kafka cluster metadata.
+
+    This class does not perform any IO. It simply updates internal state
+    given API responses (MetadataResponse, GroupCoordinatorResponse).
+
+    Keyword Arguments:
+        retry_backoff_ms (int): Milliseconds to backoff when retrying on
+            errors. Default: 100.
+        metadata_max_age_ms (int): The period of time in milliseconds after
+            which we force a refresh of metadata even if we haven't seen any
+            partition leadership changes to proactively discover any new
+            brokers or partitions. Default: 300000
+    """
     DEFAULT_CONFIG = {
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
@@ -199,20 +213,21 @@ class ClusterMetadata(object):
         if not metadata.brokers:
             log.warning("No broker metadata found in MetadataResponse")
 
+        _new_brokers = {}
         for broker in metadata.brokers:
             if metadata.API_VERSION == 0:
                 node_id, host, port = broker
                 rack = None
             else:
                 node_id, host, port, rack = broker
-            self._brokers.update({
+            _new_brokers.update({
                 node_id: BrokerMetadata(node_id, host, port, rack)
             })
 
         if metadata.API_VERSION == 0:
-            self.controller = None
+            _new_controller = None
         else:
-            self.controller = self._brokers.get(metadata.controller_id)
+            _new_controller = _new_brokers.get(metadata.controller_id)
 
         _new_partitions = {}
         _new_broker_partitions = collections.defaultdict(set)
@@ -253,6 +268,8 @@ class ClusterMetadata(object):
                           topic, error_type)
 
         with self._lock:
+            self._brokers = _new_brokers
+            self.controller = _new_controller
             self._partitions = _new_partitions
             self._broker_partitions = _new_broker_partitions
             self.unauthorized_topics = _new_unauthorized_topics
