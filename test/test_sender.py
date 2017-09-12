@@ -19,7 +19,7 @@ from kafka.structs import TopicPartition, OffsetAndMetadata
 
 @pytest.fixture
 def client(mocker):
-    _cli = mocker.Mock(spec=KafkaClient(bootstrap_servers=[], api_version=(0, 9)))
+    _cli = mocker.Mock(spec=KafkaClient(bootstrap_servers=(), api_version=(0, 9)))
     _cli.cluster = mocker.Mock(spec=ClusterMetadata())
     return _cli
 

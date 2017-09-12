@@ -398,7 +398,7 @@ class TestSimpleClient(unittest.TestCase):
     def test_correlation_rollover(self):
         with patch.object(SimpleClient, 'load_metadata_for_topics'):
             big_num = 2**31 - 3
-            client = SimpleClient(hosts=[], correlation_id=big_num)
+            client = SimpleClient(hosts=(), correlation_id=big_num)
             self.assertEqual(big_num + 1, client._next_id())
             self.assertEqual(big_num + 2, client._next_id())
             self.assertEqual(0, client._next_id())

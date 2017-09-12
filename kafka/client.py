@@ -588,21 +588,21 @@ class SimpleClient(object):
                         leader, None, None, None
                     )
 
-    def send_metadata_request(self, payloads=[], fail_on_error=True,
+    def send_metadata_request(self, payloads=(), fail_on_error=True,
                               callback=None):
         encoder = KafkaProtocol.encode_metadata_request
         decoder = KafkaProtocol.decode_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_consumer_metadata_request(self, payloads=[], fail_on_error=True,
+    def send_consumer_metadata_request(self, payloads=(), fail_on_error=True,
                                        callback=None):
         encoder = KafkaProtocol.encode_consumer_metadata_request
         decoder = KafkaProtocol.decode_consumer_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_produce_request(self, payloads=[], acks=1, timeout=1000,
+    def send_produce_request(self, payloads=(), acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
         """
         Encode and send some ProduceRequests
@@ -652,7 +652,7 @@ class SimpleClient(object):
                 if resp is not None and
                 (not fail_on_error or not self._raise_on_response_error(resp))]
 
-    def send_fetch_request(self, payloads=[], fail_on_error=True,
+    def send_fetch_request(self, payloads=(), fail_on_error=True,
                            callback=None, max_wait_time=100, min_bytes=4096):
         """
         Encode and send a FetchRequest
@@ -672,7 +672,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_request(self, payloads=[], fail_on_error=True,
+    def send_offset_request(self, payloads=(), fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
             payloads,
@@ -682,7 +682,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+    def send_list_offset_request(self, payloads=(), fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
             payloads,
@@ -692,7 +692,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_commit_request(self, group, payloads=[],
+    def send_offset_commit_request(self, group, payloads=(),
                                    fail_on_error=True, callback=None):
         encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
                           group=group)
@@ -702,7 +702,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request(self, group, payloads=[],
+    def send_offset_fetch_request(self, group, payloads=(),
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
@@ -713,7 +713,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request_kafka(self, group, payloads=[],
+    def send_offset_fetch_request_kafka(self, group, payloads=(),
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
