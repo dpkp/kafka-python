@@ -495,7 +495,7 @@ class SimpleClient(object):
         """Fetch broker and topic-partition metadata from the server.
 
         Updates internal data: broker list, topic/partition list, and
-        topic/parition -> broker map. This method should be called after
+        topic/partition -> broker map. This method should be called after
         receiving any error.
 
         Note: Exceptions *will not* be raised in a full refresh (i.e. no topic
