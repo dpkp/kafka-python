@@ -113,7 +113,7 @@ def test_send_max_ifr(conn):
 def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = ProduceRequest[0](required_acks=0, timeout=0, topics=[])
+    req = ProduceRequest[0](required_acks=0, timeout=0, topics=())
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3

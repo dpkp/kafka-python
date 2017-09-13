@@ -22,7 +22,7 @@ from kafka.errors import (
 
 @pytest.fixture
 def client(mocker):
-    return mocker.Mock(spec=KafkaClient(bootstrap_servers=[], api_version=(0, 9)))
+    return mocker.Mock(spec=KafkaClient(bootstrap_servers=(), api_version=(0, 9)))
 
 
 @pytest.fixture
