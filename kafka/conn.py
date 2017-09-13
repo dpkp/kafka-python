@@ -577,7 +577,7 @@ class BrokerConnection(object):
             return 999999999
 
     def connected(self):
-        """Return True iff socket is connected."""
+        """Return True if socket is connected."""
         return self.state is ConnectionStates.CONNECTED
 
     def connecting(self):
@@ -588,7 +588,7 @@ class BrokerConnection(object):
                               ConnectionStates.AUTHENTICATING)
 
     def disconnected(self):
-        """Return True iff socket is closed"""
+        """Return True if socket is closed"""
         return self.state is ConnectionStates.DISCONNECTED
 
     def _reset_reconnect_backoff(self):
