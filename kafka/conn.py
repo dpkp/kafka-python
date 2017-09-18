@@ -7,7 +7,6 @@ import logging
 from random import shuffle, uniform
 import socket
 import time
-import traceback
 
 from kafka.vendor import six
 
@@ -614,8 +613,7 @@ class BrokerConnection(object):
         """
         if self.state is ConnectionStates.DISCONNECTED:
             if error is not None:
-                log.warning('%s: close() called on disconnected connection with error: %s', self, error)
-                traceback.print_stack()
+                log.warning('%s: close() called on disconnected connection with error: %s', self, error, stack_info=True)
             return
 
         log.info('%s: Closing connection. %s', self, error or '')
