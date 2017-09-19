@@ -1,6 +1,11 @@
 Changelog
 =========
 
+1.3.3.post3 (Sept 19, 2017)
+##########################
+* Initialize metadata_snapshot correctly to avoid group rejoin after fixed metadata update
+* Fix seek logic used with poll method
+
 1.3.3.post2 (Apr 24, 2017)
 ##########################
 Fix locale-gen not found
