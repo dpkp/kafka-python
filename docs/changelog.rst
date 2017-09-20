@@ -1,6 +1,11 @@
 Changelog
 =========
 
+1.3.3.post4 (Sept 20, 2017)
+##########################
+* Remove coveralls dependency
+
+
 1.3.3.post3 (Sept 19, 2017)
 ##########################
 * Initialize metadata_snapshot correctly to avoid group rejoin after fixed metadata update
