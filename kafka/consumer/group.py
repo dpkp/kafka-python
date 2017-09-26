@@ -597,6 +597,7 @@ class KafkaConsumer(six.Iterator):
             # fetched records.
             if not partial:
                 self._fetcher.send_fetches()
+            self._client.poll(timeout_ms=timeout_ms)
             return records
 
         # Send any new fetches (won't resend pending fetches)
