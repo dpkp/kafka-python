@@ -507,7 +507,7 @@ class KafkaClient(object):
             future (Future, optional): if provided, blocks until future.is_done
             sleep (bool): if True and there is nothing to do (no connections
                 or requests in flight), will sleep for duration timeout before
-                returning empty results. Default: False.
+                returning empty results. Default: True.
 
         Returns:
             list: responses received (can be empty)
