@@ -1,6 +1,10 @@
 Changelog
 =========
 
+1.3.3.post5 (Oct 2, 2017)
+##########################
+* Fix for rebalance not getting triggered (poll)
+
 1.3.3.post4 (Sept 20, 2017)
 ##########################
 * Remove coveralls dependency
