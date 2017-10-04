@@ -414,7 +414,7 @@ class Fetcher(six.Iterator):
                     return 0
                 next_offset = part_records[-1].offset + 1
 
-                log.log(0, "Returning fetched records at offset %d for assigned"
+                log.debug("Returning fetched records at offset %d for assigned"
                            " partition %s and update position to %s", position,
                            tp, next_offset)
 
@@ -477,7 +477,7 @@ class Fetcher(six.Iterator):
                           " %s since it is no longer fetchable", tp)
 
             elif fetch_offset == position:
-                log.log(0, "Returning fetched records at offset %d for assigned"
+                log.debug("Returning fetched records at offset %d for assigned"
                            " partition %s", position, tp)
 
                 # We can ignore any prior signal to drop pending message sets
