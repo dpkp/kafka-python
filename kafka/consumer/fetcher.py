@@ -821,7 +821,7 @@ class Fetcher(six.Iterator):
                 # `fetch_max_bytes` option we need this shuffle
                 # NOTE: we do have partition_data in random order due to usage
                 #       of unordered structures like dicts, but that does not
-                #       guaranty equal distribution, and starting Python3.6
+                #       guarantee equal distribution, and starting in Python3.6
                 #       dicts retain insert order.
                 partition_data = list(partition_data.items())
                 random.shuffle(partition_data)
