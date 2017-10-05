@@ -409,25 +409,28 @@ class Fetcher(six.Iterator):
                           " %s since it is no longer fetchable", tp)
 
             elif fetch_offset == position:
-                part_records = part.take(max_records)
-                if not part_records:
-                    return 0
-                next_offset = part_records[-1].offset + 1
+                records_found = 0
+                while records_found < max_records:
+                    part_records = part.take(max_records - records_found)
+                    if not part_records:
+                        break
+                    next_offset = part_records[-1].offset + 1
 
-                log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s and update position to %s", position,
-                           tp, next_offset)
+                    log.log(0, "Returning fetched records at offset %d for assigned"
+                               " partition %s and update position to %s", position,
+                               tp, next_offset)
 
-                for record in part_records:
-                    # Fetched compressed messages may include additional records
-                    if record.offset < fetch_offset:
-                        log.debug("Skipping message offset: %s (expecting %s)",
-                                  record.offset, fetch_offset)
-                        continue
-                    drained[tp].append(record)
+                    for record in part_records:
+                        # Fetched compressed messages may include additional records
+                        if record.offset < fetch_offset:
+                            log.debug("Skipping message offset: %s (expecting %s)",
+                                      record.offset, fetch_offset)
+                            continue
+                        drained[tp].append(record)
+                        records_found += 1
 
-                self._subscriptions.assignment[tp].position = next_offset
-                return len(part_records)
+                    self._subscriptions.assignment[tp].position = next_offset
+                return records_found
 
             else:
                 # these records aren't next in line based on the last consumed
