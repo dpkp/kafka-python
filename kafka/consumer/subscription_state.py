@@ -142,13 +142,13 @@ class SubscriptionState(object):
         if not isinstance(topic, six.string_types):
             raise TypeError('All topics must be strings')
         if len(topic) == 0:
-            raise TypeError('All topics must be non-empty strings')
+            raise ValueError('All topics must be non-empty strings')
         if topic == '.' or topic == '..':
-            raise TypeError('Topic name cannot be "." or ".."')
+            raise ValueError('Topic name cannot be "." or ".."')
         if len(topic) > self._MAX_NAME_LENGTH:
-            raise TypeError('Topic name is illegal, it can\'t be longer than {0} characters, topic: "{1}"'.format(self._MAX_NAME_LENGTH, topic))
+            raise ValueError('Topic name is illegal, it can\'t be longer than {0} characters, topic: "{1}"'.format(self._MAX_NAME_LENGTH, topic))
         if not self._TOPIC_LEGAL_CHARS.match(topic):
-            raise TypeError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
+            raise ValueError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
 
     def change_subscription(self, topics):
         """Change the topic subscription.
