@@ -7,7 +7,7 @@ import itertools
 from collections import OrderedDict
 
 from kafka.client_async import KafkaClient
-from kafka.consumer.fetcher import Fetcher, NoOffsetForPartitionError
+from kafka.consumer.fetcher import ConsumerRecord, Fetcher, NoOffsetForPartitionError
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest
@@ -282,3 +282,26 @@ def test__handle_offset_response(fetcher, mocker):
     fetcher._handle_offset_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
+
+
+def test_partition_records_offset():
+    """Test that compressed messagesets are handle correctly
+    when fetch offset is in the middle of the message list
+    """
+    batch_start = 120
+    batch_end = 130
+    fetch_offset = 123
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', 'checksum', 0, 0)
+                for i in range(batch_start, batch_end)]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert records.has_more()
+    msgs = records.take(1)
+    assert msgs[0].offset == 123
+    assert records.fetch_offset == 124
+    msgs = records.take(2)
+    assert len(msgs) == 2
+    assert records.has_more()
+    records.discard()
+    assert not records.has_more()
