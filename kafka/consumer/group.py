@@ -846,8 +846,13 @@ class KafkaConsumer(six.Iterator):
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
 
     def metrics(self, raw=False):
-        """Warning: this is an unstable interface.
-        It may change in future releases without warning"""
+        """Get metrics on consumer performance.
+
+        This is ported from the Java Consumer, for details see:
+        https://kafka.apache.org/documentation/#new_consumer_monitoring
+
+        Warning: This is an unstable interface. It may change in future
+        releases without warning."""
         if raw:
             return self._metrics.metrics
 
