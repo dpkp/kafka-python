@@ -125,15 +125,7 @@ class SubscriptionState(object):
         self.listener = listener
 
     def _ensure_valid_topic_name(self, topic):
-        """ Ensures that the topic name is valid according to the kafka source.
-
-        Raises:
-            TypeError: if the topic is
-                        - a non-str or
-                        - an empty string or
-                        - the topic name is '.' or '..' or
-                        - the topic name does not consist of ASCII-characters/'-'/'_'/'.'
-        """
+        """ Ensures that the topic name is valid according to the kafka source. """
 
         # See Kafka Source:
         # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
@@ -158,11 +150,10 @@ class SubscriptionState(object):
 
         Raises:
             IllegalStateErrror: if assign_from_user has been used already
-            TypeError: if a topic is
-                        - a non-str or
-                        - an empty string or
-                        - the topic name is '.' or '..' or
-                        - the topic name does not consist of ASCII-characters/'-'/'_'/'.'
+            TypeError: if a topic is None or a non-str
+            ValueError: if a topic is an empty string or
+                        - a topic name is '.' or '..' or
+                        - a topic name does not consist of ASCII-characters/'-'/'_'/'.'
         """
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
