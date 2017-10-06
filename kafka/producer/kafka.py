@@ -8,6 +8,8 @@ import threading
 import time
 import weakref
 
+from ..vendor import six
+
 from .. import errors as Errors
 from ..client_async import KafkaClient, selectors
 from ..metrics import MetricConfig, Metrics
@@ -666,7 +668,7 @@ class KafkaProducer(object):
             return self._metrics.metrics
 
         metrics = {}
-        for k, v in self._metrics.metrics.items():
+        for k, v in six.iteritems(self._metrics.metrics):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
