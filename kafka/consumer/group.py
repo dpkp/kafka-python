@@ -851,8 +851,10 @@ class KafkaConsumer(six.Iterator):
         This is ported from the Java Consumer, for details see:
         https://kafka.apache.org/documentation/#new_consumer_monitoring
 
-        Warning: This is an unstable interface. It may change in future
-        releases without warning."""
+        Warning:
+            This is an unstable interface. It may change in future
+            releases without warning.
+        """
         if raw:
             return self._metrics.metrics
 

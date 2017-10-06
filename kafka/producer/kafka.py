@@ -662,8 +662,10 @@ class KafkaProducer(object):
         This is ported from the Java Producer, for details see:
         https://kafka.apache.org/documentation/#producer_monitoring
 
-        Warning: This is an unstable interface. It may change in future
-        releases without warning."""
+        Warning:
+            This is an unstable interface. It may change in future
+            releases without warning.
+        """
         if raw:
             return self._metrics.metrics
 
