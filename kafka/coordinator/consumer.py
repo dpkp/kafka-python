@@ -190,7 +190,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # if we were the assignor, then we need to make sure that there have
         # been no metadata updates since the rebalance begin. Otherwise, we
         # won't rebalance again until the next metadata change
-        if self._assignment_snapshot and self._assignment_snapshot != self._metadata_snapshot:
+        if self._assignment_snapshot is not None and self._assignment_snapshot != self._metadata_snapshot:
             self._subscription.mark_for_reassignment()
             return
 
