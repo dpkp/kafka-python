@@ -902,7 +902,7 @@ class BrokerConnection(object):
         # The logic here is to check the list of supported request versions
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
-            # format (<broker verion>, <needed struct>)
+            # format (<broker version>, <needed struct>)
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),
