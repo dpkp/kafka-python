@@ -92,9 +92,10 @@ def test_group(kafka_broker, topic):
             # If all consumers exist and have an assignment
             else:
 
+                logging.info('All consumers have assignment... checking for stable group')
                 # Verify all consumers are in the same generation
                 # then log state and break while loop
-                generations = set([consumer._coordinator.generation
+                generations = set([consumer._coordinator._generation.generation_id
                                    for consumer in list(consumers.values())])
 
                 # New generation assignment is not complete until
@@ -105,12 +106,16 @@ def test_group(kafka_broker, topic):
                 if not rejoining and len(generations) == 1:
                     for c, consumer in list(consumers.items()):
                         logging.info("[%s] %s %s: %s", c,
-                                     consumer._coordinator.generation,
-                                     consumer._coordinator.member_id,
+                                     consumer._coordinator._generation.generation_id,
+                                     consumer._coordinator._generation.member_id,
                                      consumer.assignment())
                     break
+                else:
+                    logging.info('Rejoining: %s, generations: %s', rejoining, generations)
+                    time.sleep(1)
             assert time.time() < timeout, "timeout waiting for assignments"
 
+        logging.info('Group stabilized; verifying assignment')
         group_assignment = set()
         for c in range(num_consumers):
             assert len(consumers[c].assignment()) != 0
@@ -120,9 +125,12 @@ def test_group(kafka_broker, topic):
         assert group_assignment == set([
             TopicPartition(topic, partition)
             for partition in range(num_partitions)])
+        logging.info('Assignment looks good!')
 
     finally:
+        logging.info('Shutting down %s consumers', num_consumers)
         for c in range(num_consumers):
+            logging.info('Stopping consumer %s', c)
             stop[c].set()
             threads[c].join()
 

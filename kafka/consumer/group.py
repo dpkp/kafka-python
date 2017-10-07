@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import copy
 import logging
@@ -125,19 +125,34 @@ class KafkaConsumer(six.Iterator):
             distribute partition ownership amongst consumer instances when
             group management is used.
             Default: [RangePartitionAssignor, RoundRobinPartitionAssignor]
+        max_poll_records (int): The maximum number of records returned in a
+            single call to :meth:`~kafka.KafkaConsumer.poll`. Default: 500
+        max_poll_interval_ms (int): The maximum delay between invocations of
+            :meth:`~kafka.KafkaConsumer.poll` when using consumer group
+            management. This places an upper bound on the amount of time that
+            the consumer can be idle before fetching more records. If
+            :meth:`~kafka.KafkaConsumer.poll` is not called before expiration
+            of this timeout, then the consumer is considered failed and the
+            group will rebalance in order to reassign the partitions to another
+            member. Default 300000
+        session_timeout_ms (int): The timeout used to detect failures when
+            using Kafka's group management facilities. The consumer sends
+            periodic heartbeats to indicate its liveness to the broker. If
+            no heartbeats are received by the broker before the expiration of
+            this session timeout, then the broker will remove this consumer
+            from the group and initiate a rebalance. Note that the value must
+            be in the allowable range as configured in the broker configuration
+            by group.min.session.timeout.ms and group.max.session.timeout.ms.
+            Default: 10000
         heartbeat_interval_ms (int): The expected time in milliseconds
             between heartbeats to the consumer coordinator when using
-            Kafka's group management feature. Heartbeats are used to ensure
+            Kafka's group management facilities. Heartbeats are used to ensure
             that the consumer's session stays active and to facilitate
             rebalancing when new consumers join or leave the group. The
             value must be set lower than session_timeout_ms, but typically
             should be set no higher than 1/3 of that value. It can be
             adjusted even lower to control the expected time for normal
             rebalances. Default: 3000
-        session_timeout_ms (int): The timeout used to detect failures when
-            using Kafka's group management facilities. Default: 30000
-        max_poll_records (int): The maximum number of records returned in a
-            single call to :meth:`~kafka.KafkaConsumer.poll`. Default: 500
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -236,7 +251,7 @@ class KafkaConsumer(six.Iterator):
         'fetch_min_bytes': 1,
         'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
-        'request_timeout_ms': 40 * 1000,
+        'request_timeout_ms': 305000, # chosen to be higher than the default of max_poll_interval_ms
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -248,9 +263,10 @@ class KafkaConsumer(six.Iterator):
         'check_crcs': True,
         'metadata_max_age_ms': 5 * 60 * 1000,
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
-        'heartbeat_interval_ms': 3000,
-        'session_timeout_ms': 30000,
         'max_poll_records': 500,
+        'max_poll_interval_ms': 300000,
+        'session_timeout_ms': 10000, # XXX should be 30000 if < 0.11
+        'heartbeat_interval_ms': 3000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
@@ -281,12 +297,13 @@ class KafkaConsumer(six.Iterator):
 
     def __init__(self, *topics, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
+        configs_copy = copy.copy(configs)
         for key in self.config:
             if key in configs:
-                self.config[key] = configs.pop(key)
+                self.config[key] = configs_copy.pop(key)
 
         # Only check for extra config keys in top-level class
-        assert not configs, 'Unrecognized configs: %s' % configs
+        assert not configs_copy, 'Unrecognized configs: %s' % configs_copy
 
         deprecated = {'smallest': 'earliest', 'largest': 'latest'}
         if self.config['auto_offset_reset'] in deprecated:
@@ -298,7 +315,7 @@ class KafkaConsumer(six.Iterator):
         request_timeout_ms = self.config['request_timeout_ms']
         session_timeout_ms = self.config['session_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
-        if request_timeout_ms <= session_timeout_ms:
+        if self.config['group_id'] is not None and request_timeout_ms <= session_timeout_ms:
             raise KafkaConfigurationError(
                 "Request timeout (%s) must be larger than session timeout (%s)" %
                 (request_timeout_ms, session_timeout_ms))
@@ -588,7 +605,7 @@ class KafkaConsumer(six.Iterator):
             dict: Map of topic to list of records (may be empty).
         """
         if self._use_consumer_group():
-            self._coordinator.ensure_active_group()
+            self._coordinator.poll()
 
         # 0.8.2 brokers support kafka-backed offset storage via group coordinator
         elif self.config['group_id'] is not None and self.config['api_version'] >= (0, 8, 2):
@@ -614,6 +631,7 @@ class KafkaConsumer(six.Iterator):
         # Send any new fetches (won't resend pending fetches)
         self._fetcher.send_fetches()
 
+        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll())
         self._client.poll(timeout_ms=timeout_ms)
         records, _ = self._fetcher.fetched_records(max_records)
         return records
@@ -1015,8 +1033,7 @@ class KafkaConsumer(six.Iterator):
         while time.time() < self._consumer_timeout:
 
             if self._use_consumer_group():
-                self._coordinator.ensure_coordinator_ready()
-                self._coordinator.ensure_active_group()
+                self._coordinator.poll()
 
             # 0.8.2 brokers support kafka-backed offset storage via group coordinator
             elif self.config['group_id'] is not None and self.config['api_version'] >= (0, 8, 2):
@@ -1068,7 +1085,6 @@ class KafkaConsumer(six.Iterator):
 
     def _next_timeout(self):
         timeout = min(self._consumer_timeout,
-                      self._client._delayed_tasks.next_at() + time.time(),
                       self._client.cluster.ttl() / 1000.0 + time.time())
 
         # Although the delayed_tasks timeout above should cover processing
@@ -1079,7 +1095,7 @@ class KafkaConsumer(six.Iterator):
         # the next heartbeat from being sent. This check should help
         # avoid that.
         if self._use_consumer_group():
-            heartbeat = time.time() + self._coordinator.heartbeat.ttl()
+            heartbeat = time.time() + self._coordinator.heartbeat.time_to_next_heartbeat()
             timeout = min(timeout, heartbeat)
         return timeout
 

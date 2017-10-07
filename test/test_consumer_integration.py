@@ -739,7 +739,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_offsets_for_times_errors(self):
-        consumer = self.kafka_consumer()
+        consumer = self.kafka_consumer(fetch_max_wait_ms=200,
+                                       request_timeout_ms=500)
         tp = TopicPartition(self.topic, 0)
         bad_tp = TopicPartition(self.topic, 100)
 

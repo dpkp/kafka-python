@@ -59,7 +59,17 @@ class UnrecognizedBrokerVersion(KafkaError):
 
 
 class CommitFailedError(KafkaError):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(CommitFailedError, self).__init__(
+            """Commit cannot be completed since the group has already
+            rebalanced and assigned the partitions to another member.
+            This means that the time between subsequent calls to poll()
+            was longer than the configured max.poll.interval.ms, which
+            typically implies that the poll loop is spending too much
+            time message processing. You can address this either by
+            increasing the session timeout or by reducing the maximum
+            size of batches returned in poll() with max.poll.records.
+            """, *args, **kwargs)
 
 
 class AuthenticationMethodNotSupported(KafkaError):
