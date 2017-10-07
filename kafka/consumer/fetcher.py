@@ -326,9 +326,6 @@ class Fetcher(six.Iterator):
             max_records = self.config['max_poll_records']
         assert max_records > 0
 
-        if self._subscriptions.needs_partition_assignment:
-            return {}, False
-
         drained = collections.defaultdict(list)
         records_remaining = max_records
 
@@ -397,9 +394,6 @@ class Fetcher(six.Iterator):
 
     def _message_generator(self):
         """Iterate over fetched_records"""
-        if self._subscriptions.needs_partition_assignment:
-            raise StopIteration('Subscription needs partition assignment')
-
         while self._next_partition_records or self._completed_fetches:
 
             if not self._next_partition_records:
