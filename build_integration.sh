@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.1 0.11.0.0"}
+: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.1 0.11.0.1"}
 : ${SCALA_VERSION:=2.11}
 : ${DIST_BASE_URL:=https://archive.apache.org/dist/kafka/}
 : ${KAFKA_SRC_GIT:=https://github.com/apache/kafka.git}
