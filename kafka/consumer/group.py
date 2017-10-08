@@ -846,13 +846,20 @@ class KafkaConsumer(six.Iterator):
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
 
     def metrics(self, raw=False):
-        """Warning: this is an unstable interface.
-        It may change in future releases without warning"""
+        """Get metrics on consumer performance.
+
+        This is ported from the Java Consumer, for details see:
+        https://kafka.apache.org/documentation/#new_consumer_monitoring
+
+        Warning:
+            This is an unstable interface. It may change in future
+            releases without warning.
+        """
         if raw:
             return self._metrics.metrics
 
         metrics = {}
-        for k, v in self._metrics.metrics.items():
+        for k, v in six.iteritems(self._metrics.metrics):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -897,7 +904,7 @@ class KafkaConsumer(six.Iterator):
             raise UnsupportedVersionError(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
-        for tp, ts in timestamps.items():
+        for tp, ts in six.iteritems(timestamps):
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
