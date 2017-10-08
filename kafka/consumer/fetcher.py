@@ -400,6 +400,11 @@ class Fetcher(six.Iterator):
 
             tp = self._next_partition_records.topic_partition
 
+            # We can ignore any prior signal to drop pending message sets
+            # because we are starting from a fresh one where fetch_offset == position
+            # i.e., the user seek()'d to this position
+            self._subscriptions.assignment[tp].drop_pending_message_set = False
+
             for msg in self._next_partition_records.take():
 
                 # Because we are in a generator, it is possible for
