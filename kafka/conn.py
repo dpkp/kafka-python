@@ -445,9 +445,9 @@ class BrokerConnection(object):
             self._sasl_auth_future = future
         self._recv()
         if self._sasl_auth_future.failed():
-            ex = self._sasl_auth_future.exception  # pylint: disable-msg=raising-bad-type
+            ex = self._sasl_auth_future.exception
             if not isinstance(ex, Errors.ConnectionError):
-                raise ex
+                raise ex  # pylint: disable-msg=raising-bad-type
         return self._sasl_auth_future.succeeded()
 
     def _handle_sasl_handshake_response(self, future, response):
