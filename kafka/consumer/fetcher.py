@@ -400,7 +400,7 @@ class Fetcher(six.Iterator):
 
             tp = self._next_partition_records.topic_partition
 
-            for msg in self._next_partition_records.take(sys.maxint):
+            for msg in self._next_partition_records.take():
 
                 # Because we are in a generator, it is possible for
                 # subscription state to change between yield calls
@@ -881,9 +881,11 @@ class Fetcher(six.Iterator):
         def discard(self):
             self.messages = None
 
-        def take(self, n):
+        def take(self, n=None):
             if not len(self):
                 return []
+            if n is None or n > len(self):
+                n = len(self)
             next_idx = self.message_idx + n
             res = self.messages[self.message_idx:next_idx]
             self.message_idx = next_idx
