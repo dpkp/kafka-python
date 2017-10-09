@@ -533,7 +533,9 @@ class BrokerConnection(object):
                     # establishes a security context, or it needs further token exchange.
                     # The gssapi will be able to identify the needed next step.
                     # The connection is closed on failure.
-                    response = self._sock.recv(2000)
+                    header = self._sock.recv(4)
+                    token_size = struct.unpack('>i', header)
+                    received_token = self._sock.recv(token_size)
                     self._sock.setblocking(False)
 
                 except ConnectionError as e:
@@ -541,13 +543,6 @@ class BrokerConnection(object):
                     error = Errors.ConnectionError("%s: %s" % (self, e))
                     self.close(error=error)
                     return future.failure(error)
-
-                # pass the received token back to gssapi, strip the first 4 bytes
-                # dpkp note: what are the first four bytes here?
-                # it seems likely that this is the encoded message size
-                # which we should receive and parse first, then use to parse
-                # the remainder of the token
-                received_token = response[4:]
 
         except Exception as e:
             return future.failure(e)
