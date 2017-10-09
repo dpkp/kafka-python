@@ -154,12 +154,13 @@ class MessageSet(AbstractType):
     HEADER_SIZE = 12  # offset + message_size
 
     @classmethod
-    def encode(cls, items):
+    def encode(cls, items, prepend_size=True):
         # RecordAccumulator encodes messagesets internally
         if isinstance(items, (io.BytesIO, KafkaBytes)):
             size = Int32.decode(items)
-            # rewind and return all the bytes
-            items.seek(items.tell() - 4)
+            if prepend_size:
+                # rewind and return all the bytes
+                items.seek(items.tell() - 4)
             return items.read(size + 4)
 
         encoded_values = []
@@ -167,7 +168,10 @@ class MessageSet(AbstractType):
             encoded_values.append(Int64.encode(offset))
             encoded_values.append(Bytes.encode(message))
         encoded = b''.join(encoded_values)
-        return Bytes.encode(encoded)
+        if prepend_size:
+            return Bytes.encode(encoded)
+        else:
+            return encoded
 
     @classmethod
     def decode(cls, data, bytes_to_read=None):

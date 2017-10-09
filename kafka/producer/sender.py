@@ -288,7 +288,6 @@ class Sender(threading.Thread):
             topic = batch.topic_partition.topic
             partition = batch.topic_partition.partition
 
-            # TODO: bytearray / memoryview
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
