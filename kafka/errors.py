@@ -33,7 +33,11 @@ class NodeNotReadyError(KafkaError):
     retriable = True
 
 
-class CorrelationIdError(KafkaError):
+class KafkaProtocolError(KafkaError):
+    retriable = True
+
+
+class CorrelationIdError(KafkaProtocolError):
     retriable = True
 
 
