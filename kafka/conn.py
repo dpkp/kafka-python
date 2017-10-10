@@ -6,8 +6,9 @@ import errno
 import logging
 from random import shuffle, uniform
 import socket
-import time
+import struct
 import sys
+import time
 
 from kafka.vendor import six
 
