@@ -234,7 +234,7 @@ def test_fetch_committed_offsets(mocker, coordinator):
     assert coordinator._client.poll.call_count == 0
 
     # general case -- send offset fetch request, get successful future
-    mocker.patch.object(coordinator, 'ensure_coordinator_known')
+    mocker.patch.object(coordinator, 'ensure_coordinator_ready')
     mocker.patch.object(coordinator, '_send_offset_fetch_request',
                         return_value=Future().success('foobar'))
     partitions = [TopicPartition('foobar', 0)]
@@ -295,16 +295,15 @@ def offsets():
 
 def test_commit_offsets_async(mocker, coordinator, offsets):
     mocker.patch.object(coordinator._client, 'poll')
-    mocker.patch.object(coordinator, 'ensure_coordinator_known')
+    mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
     mocker.patch.object(coordinator, '_send_offset_commit_request',
                         return_value=Future().success('fizzbuzz'))
-    ret = coordinator.commit_offsets_async(offsets)
-    assert isinstance(ret, Future)
+    coordinator.commit_offsets_async(offsets)
     assert coordinator._send_offset_commit_request.call_count == 1
 
 
 def test_commit_offsets_sync(mocker, coordinator, offsets):
-    mocker.patch.object(coordinator, 'ensure_coordinator_known')
+    mocker.patch.object(coordinator, 'ensure_coordinator_ready')
     mocker.patch.object(coordinator, '_send_offset_commit_request',
                         return_value=Future().success('fizzbuzz'))
     cli = coordinator._client
