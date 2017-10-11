@@ -412,15 +412,16 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
 
     def _maybe_compress(self):
         if self._compression_type:
+            data = bytes(self._buffer)
             if self._compression_type == self.CODEC_GZIP:
-                compressed = gzip_encode(bytes(self._buffer))
+                compressed = gzip_encode(data)
             elif self._compression_type == self.CODEC_SNAPPY:
-                compressed = snappy_encode(self._buffer)
+                compressed = snappy_encode(data)
             elif self._compression_type == self.CODEC_LZ4:
                 if self._magic == 0:
-                    compressed = lz4_encode_old_kafka(bytes(self._buffer))
+                    compressed = lz4_encode_old_kafka(data)
                 else:
-                    compressed = lz4_encode(bytes(self._buffer))
+                    compressed = lz4_encode(data)
             size = self.size_in_bytes(
                 0, timestamp=0, key=None, value=compressed)
             # We will try to reuse the same buffer if we have enough space
