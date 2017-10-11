@@ -546,8 +546,6 @@ class KafkaProducer(object):
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
-            if timestamp_ms is None:
-                timestamp_ms = int(time.time() * 1000)
             log.debug("Sending (key=%r value=%r) to %s", key, value, tp)
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes,

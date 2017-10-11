@@ -467,12 +467,6 @@ class Fetcher(six.Iterator):
             log.exception('StopIteration raised unpacking messageset: %s', e)
             raise Exception('StopIteration raised unpacking messageset')
 
-        # If unpacking raises AssertionError, it means decompression unsupported
-        # See Issue 1033
-        except AssertionError as e:
-            log.exception('AssertionError raised unpacking messageset: %s', e)
-            raise
-
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
 

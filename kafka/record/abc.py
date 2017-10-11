@@ -36,28 +36,21 @@ class ABCRecord(object):
             be the checksum for v0 and v1 and None for v2 and above.
         """
 
-    @abc.abstractproperty
-    def headers(self):
-        """ If supported by version list of key-value tuples, or empty list if
-            not supported by format.
-        """
-
 
 class ABCRecordBatchBuilder(object):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def append(self, offset, timestamp, key, value, headers):
+    def append(self, offset, timestamp, key, value):
         """ Writes record to internal buffer.
 
         Arguments:
             offset (int): Relative offset of record, starting from 0
-            timestamp (int): Timestamp in milliseconds since beginning of the
-                epoch (midnight Jan 1, 1970 (UTC))
+            timestamp (int or None): Timestamp in milliseconds since beginning
+                of the epoch (midnight Jan 1, 1970 (UTC)). If omited, will be
+                set to current time.
             key (bytes or None): Key of the record
             value (bytes or None): Value of the record
-            headers (List[Tuple[str, bytes]]): Headers of the record. Header
-                keys can not be ``None``.
 
         Returns:
             (bytes, int): Checksum of the written record (or None for v2 and
@@ -74,10 +67,10 @@ class ABCRecordBatchBuilder(object):
     @abc.abstractmethod
     def build(self):
         """ Close for append, compress if needed, write size and header and
-            return a ready to send bytes object.
+            return a ready to send buffer object.
 
             Return:
-                io.BytesIO: finished batch, ready to send.
+                bytearray: finished batch, ready to send.
         """
 
 
@@ -105,7 +98,7 @@ class ABCRecords(object):
 
     @abc.abstractmethod
     def size_in_bytes(self):
-        """ Returns the size of buffer.
+        """ Returns the size of inner buffer.
         """
 
     @abc.abstractmethod
