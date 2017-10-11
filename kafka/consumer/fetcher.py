@@ -728,7 +728,6 @@ class Fetcher(six.Iterator):
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
-        partition = completed_fetch.partition_data
         fetch_offset = completed_fetch.fetched_offset
         num_bytes = 0
         records_count = 0
@@ -736,7 +735,6 @@ class Fetcher(six.Iterator):
 
         error_code, highwater = completed_fetch.partition_data[:2]
         error_type = Errors.for_code(error_code)
-        records = MemoryRecords(partition_data[-1])
 
         try:
             if not self._subscriptions.is_fetchable(tp):
@@ -760,6 +758,7 @@ class Fetcher(six.Iterator):
                               position)
                     return None
 
+                records = MemoryRecords(completed_fetch.partition_data[-1])
                 if records.has_next():
                     log.debug("Adding fetched record for partition %s with"
                               " offset %d to buffered record list", tp,
