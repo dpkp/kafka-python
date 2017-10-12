@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import print_function
-import perf
-from kafka.record.memory_records import MemoryRecordsBuilder
-import itertools
-import random
 import hashlib
+import itertools
 import os
+import random
+
+import perf
+
+from kafka.record.memory_records import MemoryRecordsBuilder
 
 
 DEFAULT_BATCH_SIZE = 1600 * 1024
@@ -13,7 +15,7 @@ KEY_SIZE = 6
 VALUE_SIZE = 60
 TIMESTAMP_RANGE = [1505824130000, 1505824140000]
 
-# With values above v1 record is 100 bytes, so 10_000 bytes for 100 messages
+# With values above v1 record is 100 bytes, so 10 000 bytes for 100 messages
 MESSAGES_PER_BATCH = 100
 
 

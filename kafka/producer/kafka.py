@@ -370,7 +370,7 @@ class KafkaProducer(object):
         else:
             checker, compression_attrs = self._COMPRESSORS[ct]
             assert checker(), "Libraries for {} compression codec not found".format(ct)
-            self.config['compression_type'] = compression_attrs
+            self.config['compression_attrs'] = compression_attrs
 
         message_version = self._max_usable_produce_magic()
         self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)

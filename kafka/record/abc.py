@@ -47,7 +47,7 @@ class ABCRecordBatchBuilder(object):
         Arguments:
             offset (int): Relative offset of record, starting from 0
             timestamp (int or None): Timestamp in milliseconds since beginning
-                of the epoch (midnight Jan 1, 1970 (UTC)). If omited, will be
+                of the epoch (midnight Jan 1, 1970 (UTC)). If omitted, will be
                 set to current time.
             key (bytes or None): Key of the record
             value (bytes or None): Value of the record

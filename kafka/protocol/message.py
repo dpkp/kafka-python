@@ -161,7 +161,8 @@ class MessageSet(AbstractType):
             if prepend_size:
                 # rewind and return all the bytes
                 items.seek(items.tell() - 4)
-            return items.read(size + 4)
+                size += 4
+            return items.read(size)
 
         encoded_values = []
         for (offset, message) in items:
