@@ -88,6 +88,7 @@ class BaseCoordinator(object):
         self.member_id = JoinGroupRequest[0].UNKNOWN_MEMBER_ID
         self.group_id = self.config['group_id']
         self.coordinator_id = None
+        self._find_coordinator_future = None
         self.rejoin_needed = True
         self.rejoining = False
         self.heartbeat = Heartbeat(**self.config)
@@ -195,12 +196,11 @@ class BaseCoordinator(object):
 
         return False
 
-    def ensure_coordinator_known(self):
+    def ensure_coordinator_ready(self):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
         while self.coordinator_unknown():
-
             # Prior to 0.8.2 there was no group coordinator
             # so we will just pick a node at random and treat
             # it as the "coordinator"
@@ -210,7 +210,7 @@ class BaseCoordinator(object):
                     self._client.ready(self.coordinator_id)
                 continue
 
-            future = self._send_group_coordinator_request()
+            future = self.lookup_coordinator()
             self._client.poll(future=future)
 
             if future.failed():
@@ -224,6 +224,16 @@ class BaseCoordinator(object):
                 else:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
+    def _reset_find_coordinator_future(self, result):
+        self._find_coordinator_future = None
+
+    def lookup_coordinator(self):
+        if self._find_coordinator_future is None:
+            self._find_coordinator_future = self._send_group_coordinator_request()
+
+            self._find_coordinator_future.add_both(self._reset_find_coordinator_future)
+        return self._find_coordinator_future
+
     def need_rejoin(self):
         """Check whether the group should be rejoined (e.g. if metadata changes)
 
@@ -234,6 +244,11 @@ class BaseCoordinator(object):
 
     def ensure_active_group(self):
         """Ensure that the group is active (i.e. joined and synced)"""
+        # always ensure that the coordinator is ready because we may have been
+        # disconnected when sending heartbeats and does not necessarily require
+        # us to rejoin the group.
+        self.ensure_coordinator_ready()
+
         if not self.need_rejoin():
             return
 
@@ -242,7 +257,7 @@ class BaseCoordinator(object):
             self.rejoining = True
 
         while self.need_rejoin():
-            self.ensure_coordinator_known()
+            self.ensure_coordinator_ready()
 
             # ensure that there are no pending requests to the coordinator.
             # This is important in particular to avoid resending a pending
