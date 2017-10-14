@@ -1,26 +1,31 @@
 # Some simple testing tasks (sorry, UNIX only).
 
 FLAGS=
-KAFKA_VERSION=0.11.0.0
-SCALA_VERSION=2.11
+KAFKA_VERSION=0.11.0.1
+SCALA_VERSION=2.12
 
 setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
 
+servers/$(KAFKA_VERSION)/kafka-bin:
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) ./build_integration.sh
+
+build-integration: servers/$(KAFKA_VERSION)/kafka-bin
+
 # Test and produce coverage using tox. This is the same as is run on Travis
-test36:
+test36: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py36 -- $(FLAGS)
 
-test27:
+test27: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
 
 # Test using py.test directly if you want to use local python. Useful for other
 # platforms that require manual installation for C libraries, ie. Windows.
-test-local:
+test-local: build-integration
 	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF kafka test
 
-cov-local:
+cov-local: build-integration
 	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
 		--cov-config=.covrc --cov-report html kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
