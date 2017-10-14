@@ -98,6 +98,10 @@ class Bytes(AbstractType):
             raise ValueError('Buffer underrun decoding Bytes')
         return value
 
+    @classmethod
+    def repr(cls, value):
+        return repr(value[:100] + b'...' if len(value) > 100 else b'')
+
 
 class Boolean(AbstractType):
     @classmethod
