@@ -26,6 +26,8 @@ from test.testutil import (
 
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):
+    maxDiff = None
+
     @classmethod
     def setUpClass(cls):
         if not os.environ.get('KAFKA_VERSION'):
@@ -648,10 +650,10 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         kafka_producer = self.kafka_producer()
         early_msg = kafka_producer.send(
             self.topic, partition=0, value=b"first",
-            timestamp_ms=early_time).get()
+            timestamp_ms=early_time).get(1)
         late_msg = kafka_producer.send(
             self.topic, partition=0, value=b"last",
-            timestamp_ms=late_time).get()
+            timestamp_ms=late_time).get(1)
 
         consumer = self.kafka_consumer()
         offsets = consumer.offsets_for_times({tp: early_time})

@@ -1,8 +1,7 @@
 from __future__ import absolute_import
 
 from .api import Request, Response
-from .message import MessageSet
-from .types import Int16, Int32, Int64, String, Array, Schema
+from .types import Int16, Int32, Int64, String, Array, Schema, Bytes
 
 
 class ProduceResponse_v0(Response):
@@ -64,7 +63,7 @@ class ProduceRequest_v0(Request):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('messages', MessageSet)))))
+                ('messages', Bytes)))))
     )
 
     def expect_response(self):
@@ -109,7 +108,7 @@ class ProduceRequest_v3(Request):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('messages', MessageSet)))))
+                ('messages', Bytes)))))
     )
 
     def expect_response(self):

@@ -101,11 +101,14 @@ class OffsetOutOfRangeError(BrokerResponseError):
                    ' maintained by the server for the given topic/partition.')
 
 
-class InvalidMessageError(BrokerResponseError):
+class CorruptRecordException(BrokerResponseError):
     errno = 2
-    message = 'INVALID_MESSAGE'
+    message = 'CORRUPT_MESSAGE'
     description = ('This message has failed its CRC checksum, exceeds the'
                    ' valid size, or is otherwise corrupt.')
+
+# Backward compatibility
+InvalidMessageError = CorruptRecordException
 
 
 class UnknownTopicOrPartitionError(BrokerResponseError):
