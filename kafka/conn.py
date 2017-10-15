@@ -443,7 +443,7 @@ class BrokerConnection(object):
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)
             sasl_response.add_errback(lambda f, e: f.failure(e), future)
             self._sasl_auth_future = future
-        self._recv()
+        self.recv()
         if self._sasl_auth_future.failed():
             ex = self._sasl_auth_future.exception
             if not isinstance(ex, Errors.ConnectionError):
