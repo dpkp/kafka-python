@@ -532,20 +532,19 @@ class BrokerConnection(object):
         return future.success(True)
 
     def _try_authenticate_gssapi(self, future):
-        data = b''
-        gssname = self.config['sasl_kerberos_service_name'] + '@' + self.hostname
-        ctx_Name = gssapi.Name(gssname, name_type=gssapi.NameType.hostbased_service)
-        ctx_CanonName = ctx_Name.canonicalize(gssapi.MechType.kerberos)
-        log.debug('%s: canonical Servicename: %s', self, ctx_CanonName)
-        ctx_Context = gssapi.SecurityContext(name=ctx_CanonName, usage='initiate')
-        log.debug("%s: initiator name: %s", self, ctx_Context.initiator_name)
+        gssapi_name = gssapi.Name(
+            self.config['sasl_kerberos_service_name'] + '@' + self.hostname,
+            name_type=gssapi.NameType.hostbased_service
+        ).canonicalize(gssapi.MechType.kerberos)
+        log.debug('%s: GSSAPI name: %s', self, gssapi_name)
 
         # Exchange tokens until authentication either succeeds or fails
+        client_ctx = gssapi.SecurityContext(name=gssapi_name, usage='initiate')
         received_token = None
         try:
-            while not ctx_Context.complete:
+            while not client_ctx.complete:
                 # calculate an output token from kafka token (or None if first iteration)
-                output_token = ctx_Context.step(received_token)
+                output_token = client_ctx.step(received_token)
 
                 # pass output token to kafka
                 try:
@@ -570,7 +569,7 @@ class BrokerConnection(object):
         except Exception as e:
             return future.failure(e)
 
-        log.info('%s: Authenticated as %s via GSSAPI', self, gssname)
+        log.info('%s: Authenticated as %s via GSSAPI', self, gssapi_name)
         return future.success(True)
 
     def blacked_out(self):
