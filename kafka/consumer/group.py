@@ -990,9 +990,10 @@ class KafkaConsumer(six.Iterator):
                 partition and no offset reset policy is defined.
         """
         # Lookup any positions for partitions which are awaiting reset (which may be the
-        # case if the user called seekToBeginning or seekToEnd. We do this check first to
-        # avoid an unnecessary lookup of committed offsets (which typically occurs when
-        # the user is manually assigning partitions and managing their own offsets).
+        # case if the user called :meth:`seek_to_beginning` or :meth:`seek_to_end`. We do
+        # this check first to avoid an unnecessary lookup of committed offsets (which
+        # typically occurs when the user is manually assigning partitions and managing
+        # their own offsets).
         self._fetcher.reset_offsets_if_needed(partitions)
 
         if not self._subscription.has_all_fetch_positions():
