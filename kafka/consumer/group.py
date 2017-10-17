@@ -219,6 +219,8 @@ class KafkaConsumer(six.Iterator):
             Default: None
         sasl_plain_password (str): Password for sasl PLAIN authentication.
             Default: None
+        sasl_kerberos_service_name (str): Service name to include in GSSAPI
+            sasl mechanism handshake. Default: 'kafka'
 
     Note:
         Configuration parameters are described in more detail at
@@ -274,6 +276,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
+        'sasl_kerberos_service_name': 'kafka'
     }
 
     def __init__(self, *topics, **configs):

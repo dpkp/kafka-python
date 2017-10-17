@@ -263,6 +263,8 @@ class KafkaProducer(object):
             Default: None
         sasl_plain_password (str): password for sasl PLAIN authentication.
             Default: None
+        sasl_kerberos_service_name (str): Service name to include in GSSAPI
+            sasl mechanism handshake. Default: 'kafka'
 
     Note:
         Configuration parameters are described in more detail at
@@ -309,6 +311,7 @@ class KafkaProducer(object):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
+        'sasl_kerberos_service_name': 'kafka'
     }
 
     _COMPRESSORS = {
