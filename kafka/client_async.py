@@ -539,7 +539,7 @@ class KafkaClient(object):
                         task_future.success(result)
 
             # If we got a future that is already done, don't block in _poll
-            if future and future.is_done:
+            if future is not None and future.is_done:
                 timeout = 0
             else:
                 idle_connection_timeout_ms = self._idle_expiry_manager.next_check_ms()
@@ -555,7 +555,7 @@ class KafkaClient(object):
 
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
-            if not future or future.is_done:
+            if future is None or future.is_done:
                 break
 
         return responses
@@ -660,7 +660,7 @@ class KafkaClient(object):
             conn = self._conns.get(node_id)
             connected = conn is not None and conn.connected()
             blacked_out = conn is not None and conn.blacked_out()
-            curr_inflight = len(conn.in_flight_requests) if conn else 0
+            curr_inflight = len(conn.in_flight_requests) if conn is not None else 0
             if connected and curr_inflight == 0:
                 # if we find an established connection
                 # with no in-flight requests, we can stop right away
