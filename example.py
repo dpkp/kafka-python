@@ -33,13 +33,15 @@ class Consumer(multiprocessing.Process):
         
     def run(self):
         consumer = KafkaConsumer(bootstrap_servers='localhost:9092',
-                                 auto_offset_reset='earliest')
+                                 auto_offset_reset='earliest',
+                                 consumer_timeout_ms=1000)
         consumer.subscribe(['my-topic'])
 
         while not self.stop_event.is_set():
-            message = consumer.poll(timeout_ms=0, max_records=1)
-            if len(message) > 0:
-                print (message.values()[0])
+            for message in consumer:
+                print(message)
+                if self.stop_event.is_set():
+                    break
 
         consumer.close()
         
