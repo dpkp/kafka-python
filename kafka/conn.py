@@ -455,7 +455,10 @@ class BrokerConnection(object):
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)
             sasl_response.add_errback(lambda f, e: f.failure(e), future)
             self._sasl_auth_future = future
-        self.recv()
+
+        for r, f in self.recv():
+            f.success(r)
+
         # A connection error could trigger close() which will reset the future
         if self._sasl_auth_future is None:
             return False
