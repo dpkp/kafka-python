@@ -482,8 +482,8 @@ class BaseCoordinator(object):
                     future.failure(UnjoinedGroupException())
                 else:
                     self._generation = Generation(response.generation_id,
-                                                 response.member_id,
-                                                 response.group_protocol)
+                                                  response.member_id,
+                                                  response.group_protocol)
                     self.rejoin_needed = False
 
                 if response.leader_id == response.member_id:
