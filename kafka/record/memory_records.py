@@ -131,14 +131,13 @@ class MemoryRecordsBuilder(object):
             return None, 0
 
         offset = self._next_offset
-        checksum, actual_size = self._builder.append(
-            offset, timestamp, key, value)
+        metadata = self._builder.append(offset, timestamp, key, value)
         # Return of 0 size means there's no space to add a new message
-        if actual_size == 0:
-            return None, 0
+        if metadata is None:
+            return None
 
         self._next_offset += 1
-        return checksum, actual_size
+        return metadata
 
     def close(self):
         # This method may be called multiple times on the same batch
