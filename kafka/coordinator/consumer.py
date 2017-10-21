@@ -251,7 +251,7 @@ class ConsumerCoordinator(BaseCoordinator):
             # track of the fact that we need to rebalance again to reflect the
             # change to the topic subscription. Without ensuring that the
             # metadata is fresh, any metadata update that changes the topic
-            # subscriptions and arrives with a rebalance in progress will
+            # subscriptions and arrives while a rebalance is in progress will
             # essentially be ignored. See KAFKA-3949 for the complete
             # description of the problem.
             if self._subscription.subscribed_pattern:
@@ -264,11 +264,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self._maybe_auto_commit_offsets_async()
 
     def time_to_next_poll(self):
-        """
-        Return the time to the next needed invocation of {@link #poll(long)}.
-        @param now current time in milliseconds
-        @return the maximum time in milliseconds the caller should wait before the next invocation of poll()
-        """
+        """Return seconds (float) remaining until :meth:`.poll` should be called again"""
         if not self.config['enable_auto_commit']:
             return self.time_to_next_heartbeat()
 
@@ -396,12 +392,9 @@ class ConsumerCoordinator(BaseCoordinator):
             super(ConsumerCoordinator, self).close()
 
     def _invoke_completed_offset_commit_callbacks(self):
-        try:
-            while True:
-                callback, offsets, exception = self.completed_offset_commits.popleft()
-                callback(offsets, exception)
-        except IndexError:
-            pass
+        while self.completed_offset_commits:
+            callback, offsets, exception = self.completed_offset_commits.popleft()
+            callback(offsets, exception)
 
     def commit_offsets_async(self, offsets, callback=None):
         """Commit specific offsets asynchronously.

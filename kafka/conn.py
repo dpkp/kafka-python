@@ -685,7 +685,7 @@ class BrokerConnection(object):
     def recv(self):
         """Non-blocking network receive.
 
-        Return list of (response, future)
+        Return list of (response, future) tuples
         """
         if not self.connected() and not self.state is ConnectionStates.AUTHENTICATING:
             log.warning('%s cannot recv: socket not connected', self)

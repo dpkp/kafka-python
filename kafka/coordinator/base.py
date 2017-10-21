@@ -292,10 +292,10 @@ class BaseCoordinator(object):
         """
         Check the status of the heartbeat thread (if it is active) and indicate
         the liveness of the client. This must be called periodically after
-        joining with :meth:`.ensureActiveGroup` to ensure that the member stays
+        joining with :meth:`.ensure_active_group` to ensure that the member stays
         in the group. If an interval of time longer than the provided rebalance
-        timeout expires without calling this method, then the client will
-        proactively leave the group.
+        timeout (max_poll_interval_ms) expires without calling this method, then
+        the client will proactively leave the group.
 
         Raises: RuntimeError for unexpected errors raised from the heartbeat thread
         """
@@ -330,7 +330,7 @@ class BaseCoordinator(object):
                                self._generation.protocol,
                                member_assignment_bytes)
 
-    def _handle_join_failure(self, exception):
+    def _handle_join_failure(self, _):
         with self._lock:
             self.join_future = None
             self.state = MemberState.UNJOINED

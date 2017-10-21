@@ -735,14 +735,13 @@ class KafkaClient(object):
         self._topics.add(topic)
         return self.cluster.request_update()
 
-    # request metadata update on disconnect and timedout
+    # This method should be locked when running multi-threaded
     def _maybe_refresh_metadata(self):
         """Send a metadata request if needed.
 
         Returns:
             int: milliseconds until next refresh
         """
-        # This should be locked when running multi-threaded
         ttl = self.cluster.ttl()
         wait_for_in_progress_ms = self.config['request_timeout_ms'] if self._metadata_refresh_in_progress else 0
         metadata_timeout = max(ttl, wait_for_in_progress_ms)

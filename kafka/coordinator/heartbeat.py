@@ -44,6 +44,7 @@ class Heartbeat(object):
         self.last_receive = time.time()
 
     def time_to_next_heartbeat(self):
+        """Returns seconds (float) remaining before next heartbeat should be sent"""
         time_since_last_heartbeat = time.time() - max(self.last_send, self.last_reset)
         if self.heartbeat_failed:
             delay_to_next_heartbeat = self.config['retry_backoff_ms'] / 1000
@@ -57,9 +58,6 @@ class Heartbeat(object):
     def session_timeout_expired(self):
         last_recv = max(self.last_receive, self.last_reset)
         return (time.time() - last_recv) > (self.config['session_timeout_ms'] / 1000)
-
-    def interval(self):
-        return self.config['heartbeat_interval_ms'] / 1000
 
     def reset_timeouts(self):
         self.last_reset = time.time()
