@@ -604,12 +604,7 @@ class KafkaConsumer(six.Iterator):
         Returns:
             dict: Map of topic to list of records (may be empty).
         """
-        if self._use_consumer_group():
-            self._coordinator.poll()
-
-        # 0.8.2 brokers support kafka-backed offset storage via group coordinator
-        elif self.config['group_id'] is not None and self.config['api_version'] >= (0, 8, 2):
-            self._coordinator.ensure_coordinator_ready()
+        self._coordinator.poll()
 
         # Fetch positions if we have partitions we're subscribed to that we
         # don't know the offset for
@@ -1032,12 +1027,7 @@ class KafkaConsumer(six.Iterator):
         assert self.assignment() or self.subscription() is not None, 'No topic subscription or manual partition assignment'
         while time.time() < self._consumer_timeout:
 
-            if self._use_consumer_group():
-                self._coordinator.poll()
-
-            # 0.8.2 brokers support kafka-backed offset storage via group coordinator
-            elif self.config['group_id'] is not None and self.config['api_version'] >= (0, 8, 2):
-                self._coordinator.ensure_coordinator_ready()
+            self._coordinator.poll()
 
             # Fetch offsets for any subscribed partitions that we arent tracking yet
             if not self._subscription.has_all_fetch_positions():
