@@ -712,6 +712,7 @@ class BaseCoordinator(object):
         with self._lock:
             if self._heartbeat_thread is not None:
                 self._heartbeat_thread.close()
+                self._heartbeat_thread = None
             self.maybe_leave_group()
 
     def maybe_leave_group(self):
