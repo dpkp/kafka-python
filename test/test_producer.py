@@ -87,8 +87,7 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
                              max_block_ms=10000,
-                             compression_type=compression,
-                             value_serializer=str.encode)
+                             compression_type=compression)
     if producer.config['api_version'] >= (0, 10):
         magic = 1
     else:
