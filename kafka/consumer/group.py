@@ -265,7 +265,7 @@ class KafkaConsumer(six.Iterator):
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'max_poll_records': 500,
         'max_poll_interval_ms': 300000,
-        'session_timeout_ms': 10000, # XXX should be 30000 if < 0.11
+        'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
@@ -294,16 +294,16 @@ class KafkaConsumer(six.Iterator):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka'
     }
+    DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
     def __init__(self, *topics, **configs):
-        self.config = copy.copy(self.DEFAULT_CONFIG)
-        configs_copy = copy.copy(configs)
-        for key in self.config:
-            if key in configs:
-                self.config[key] = configs_copy.pop(key)
-
         # Only check for extra config keys in top-level class
-        assert not configs_copy, 'Unrecognized configs: %s' % configs_copy
+        extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
+        if extra_configs:
+            raise Errors.KafkaConfigurationError("Unrecognized configs: %s" % extra_configs)
+
+        self.config = copy.copy(self.DEFAULT_CONFIG)
+        self.config.update(configs)
 
         deprecated = {'smallest': 'earliest', 'largest': 'latest'}
         if self.config['auto_offset_reset'] in deprecated:
@@ -313,12 +313,7 @@ class KafkaConsumer(six.Iterator):
             self.config['auto_offset_reset'] = new_config
 
         request_timeout_ms = self.config['request_timeout_ms']
-        session_timeout_ms = self.config['session_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
-        if self.config['group_id'] is not None and request_timeout_ms <= session_timeout_ms:
-            raise KafkaConfigurationError(
-                "Request timeout (%s) must be larger than session timeout (%s)" %
-                (request_timeout_ms, session_timeout_ms))
         if request_timeout_ms <= fetch_max_wait_ms:
             raise KafkaConfigurationError("Request timeout (%s) must be larger than fetch-max-wait-ms (%s)" %
                                           (request_timeout_ms, fetch_max_wait_ms))
@@ -346,6 +341,25 @@ class KafkaConsumer(six.Iterator):
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
             self.config['api_version'] = self._client.config['api_version']
+
+        # Coordinator configurations are different for older brokers
+        # max_poll_interval_ms is not supported directly -- it must the be
+        # the same as session_timeout_ms. If the user provides one of them,
+        # use it for both. Otherwise use the old default of 30secs
+        if self.config['api_version'] < (0, 10, 1):
+            if 'session_timeout_ms' not in configs:
+                if 'max_poll_interval_ms' in configs:
+                    self.config['session_timeout_ms'] = configs['max_poll_interval_ms']
+                else:
+                    self.config['session_timeout_ms'] = self.DEFAULT_SESSION_TIMEOUT_MS_0_9
+            if 'max_poll_interval_ms' not in configs:
+                self.config['max_poll_interval_ms'] = self.config['session_timeout_ms']
+
+        if self.config['group_id'] is not None:
+            if self.config['request_timeout_ms'] <= self.config['session_timeout_ms']:
+                raise KafkaConfigurationError(
+                    "Request timeout (%s) must be larger than session timeout (%s)" %
+                    (self.config['request_timeout_ms'], self.config['session_timeout_ms']))
 
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(

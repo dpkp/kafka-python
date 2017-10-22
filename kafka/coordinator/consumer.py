@@ -35,7 +35,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
         'retry_backoff_ms': 100,
-        'api_version': (0, 9),
+        'api_version': (0, 10, 1),
         'exclude_internal_topics': True,
         'metric_group_prefix': 'consumer'
     }
@@ -83,12 +83,6 @@ class ConsumerCoordinator(BaseCoordinator):
             if key in configs:
                 self.config[key] = configs[key]
 
-        if self.config['default_offset_commit_callback'] is None:
-            self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
-
-        if self.config['api_version'] >= (0, 9) and self.config['group_id'] is not None:
-            assert self.config['assignors'], 'Coordinator requires assignors'
-
         self._subscription = subscription
         self._metadata_snapshot = self._build_metadata_snapshot(subscription, client.cluster)
         self._assignment_snapshot = None
@@ -96,6 +90,19 @@ class ConsumerCoordinator(BaseCoordinator):
         self.auto_commit_interval = self.config['auto_commit_interval_ms'] / 1000
         self.next_auto_commit_deadline = None
         self.completed_offset_commits = collections.deque()
+
+        if self.config['default_offset_commit_callback'] is None:
+            self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
+
+        if self.config['group_id'] is not None:
+            if self.config['api_version'] >= (0, 9):
+                if not self.config['assignors']:
+                    raise Errors.KafkaConfigurationError('Coordinator requires assignors')
+            if self.config['api_version'] < (0, 10, 1):
+                if self.config['max_poll_interval_ms'] != self.config['session_timeout_ms']:
+                    raise Errors.KafkaConfigurationError("Broker version %s does not support "
+                                                         "different values for max_poll_interval_ms "
+                                                         "and session_timeout_ms")
 
         if self.config['enable_auto_commit']:
             if self.config['api_version'] < (0, 8, 1):

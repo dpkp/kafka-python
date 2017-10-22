@@ -83,11 +83,11 @@ class BaseCoordinator(object):
 
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
-        'session_timeout_ms': 10000, # XXX 30000 for < 0.11 brokers
+        'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
         'retry_backoff_ms': 100,
-        'api_version': (0, 9),
+        'api_version': (0, 10, 1),
         'metric_group_prefix': '',
     }
 
@@ -115,6 +115,12 @@ class BaseCoordinator(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        if self.config['api_version'] < (0, 10, 1):
+            if self.config['max_poll_interval_ms'] != self.config['session_timeout_ms']:
+                raise Errors.KafkaConfigurationError("Broker version %s does not support "
+                                                     "different values for max_poll_interval_ms "
+                                                     "and session_timeout_ms")
 
         self._client = client
         self.group_id = self.config['group_id']
