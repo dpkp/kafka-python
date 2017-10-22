@@ -530,6 +530,8 @@ class KafkaProducer(object):
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
+        assert timestamp_ms is None or isinstance(timestamp_ms, int), (
+            'timestamp_ms must be either None or an integer') 
         key_bytes = value_bytes = None
         try:
             # first make sure the metadata for the topic is
