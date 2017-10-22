@@ -139,6 +139,8 @@ class KafkaClient(object):
             Default: None
         sasl_plain_password (str): password for sasl PLAIN authentication.
             Default: None
+        sasl_kerberos_service_name (str): Service name to include in GSSAPI
+            sasl mechanism handshake. Default: 'kafka'
     """
 
     DEFAULT_CONFIG = {
@@ -170,6 +172,7 @@ class KafkaClient(object):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
+        'sasl_kerberos_service_name': 'kafka',
     }
     API_VERSIONS = [
         (0, 10, 1),
