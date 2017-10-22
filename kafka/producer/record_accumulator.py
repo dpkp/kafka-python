@@ -56,15 +56,14 @@ class ProducerBatch(object):
         return self.records.next_offset()
 
     def try_append(self, timestamp_ms, key, value):
-        offset = self.records.next_offset()
-        checksum, record_size = self.records.append(timestamp_ms, key, value)
-        if record_size == 0:
+        metadata = self.records.append(timestamp_ms, key, value)
+        if metadata is None:
             return None
 
-        self.max_record_size = max(self.max_record_size, record_size)
+        self.max_record_size = max(self.max_record_size, metadata.size)
         self.last_append = time.time()
-        future = FutureRecordMetadata(self.produce_future, offset,
-                                      timestamp_ms, checksum,
+        future = FutureRecordMetadata(self.produce_future, metadata.offset,
+                                      metadata.timestamp, metadata.crc,
                                       len(key) if key is not None else -1,
                                       len(value) if value is not None else -1)
         return future
