@@ -244,7 +244,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self._invoke_completed_offset_commit_callbacks()
         self.ensure_coordinator_ready()
 
-        if self._subscription.partitions_auto_assigned():
+        if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
             if self.need_rejoin():
                 # due to a race condition between the initial metadata fetch and the
                 # initial rebalance, we need to ensure that the metadata is fresh
