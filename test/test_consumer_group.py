@@ -9,6 +9,7 @@ import six
 from kafka import SimpleClient
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
+from kafka.coordinator.base import MemberState, Generation
 from kafka.structs import TopicPartition
 
 from test.conftest import version
@@ -151,3 +152,33 @@ def test_paused(kafka_broker, topic):
 
     consumer.unsubscribe()
     assert set() == consumer.paused()
+
+
+@pytest.mark.skipif(version() < (0, 9), reason='Unsupported Kafka Version')
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+def test_heartbeat_thread(kafka_broker, topic):
+    group_id = 'test-group-' + random_string(6)
+    consumer = KafkaConsumer(topic,
+                             bootstrap_servers=get_connect_str(kafka_broker),
+                             group_id=group_id,
+                             heartbeat_interval_ms=500)
+
+    # poll until we have joined group / have assignment
+    while not consumer.assignment():
+        consumer.poll(timeout_ms=100)
+
+    assert consumer._coordinator.state is MemberState.STABLE
+    last_poll = consumer._coordinator.heartbeat.last_poll
+    last_beat = consumer._coordinator.heartbeat.last_send
+
+    timeout = time.time() + 30
+    while True:
+        if time.time() > timeout:
+            raise RuntimeError('timeout waiting for heartbeat')
+        if consumer._coordinator.heartbeat.last_send > last_beat:
+            break
+        time.sleep(0.5)
+
+    assert consumer._coordinator.heartbeat.last_poll == last_poll
+    consumer.poll(timeout_ms=100)
+    assert consumer._coordinator.heartbeat.last_poll > last_poll
