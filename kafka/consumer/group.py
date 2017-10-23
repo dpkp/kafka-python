@@ -300,7 +300,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise Errors.KafkaConfigurationError("Unrecognized configs: %s" % extra_configs)
+            raise KafkaConfigurationError("Unrecognized configs: %s" % extra_configs)
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
