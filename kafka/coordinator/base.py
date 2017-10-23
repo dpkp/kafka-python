@@ -919,7 +919,7 @@ class HeartbeatThread(threading.Thread):
             self.coordinator._client.poll(timeout_ms=0)
 
             if self.coordinator.coordinator_unknown():
-                if not self.coordinator.lookup_coordinator().is_done():
+                if not self.coordinator.lookup_coordinator().is_done:
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
             elif self.coordinator.heartbeat.session_timeout_expired():
