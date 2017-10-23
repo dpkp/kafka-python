@@ -434,7 +434,7 @@ class BaseCoordinator(object):
         elif (0, 9) <= self.config['api_version'] < (0, 10, 1):
             request = JoinGroupRequest[0](
                 self.group_id,
-                self.config['session_timeout_ms'], # or max(session, max_poll_interval_ms) ?
+                self.config['session_timeout_ms'],
                 self._generation.member_id,
                 self.protocol_type(),
                 member_metadata)
@@ -913,9 +913,9 @@ class HeartbeatThread(threading.Thread):
                 self.disable()
                 return
 
-            # When consumer.wakeup() is implemented, we need to
-            # disable here to prevent propagating an exception
-            # to this heartbeat thread
+            # TODO: When consumer.wakeup() is implemented, we need to
+            # disable here to prevent propagating an exception to this
+            # heartbeat thread
             self.coordinator._client.poll(timeout_ms=0)
 
             if self.coordinator.coordinator_unknown():
