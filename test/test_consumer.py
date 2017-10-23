@@ -18,7 +18,7 @@ class TestKafkaConsumer(unittest.TestCase):
 
     def test_session_timeout_larger_than_request_timeout_raises(self):
         with self.assertRaises(KafkaConfigurationError):
-            KafkaConsumer(bootstrap_servers='localhost:9092', group_id='foo', session_timeout_ms=60000, request_timeout_ms=40000)
+            KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(0,9), group_id='foo', session_timeout_ms=60000, request_timeout_ms=40000)
 
     def test_fetch_max_wait_larger_than_request_timeout_raises(self):
         with self.assertRaises(KafkaConfigurationError):

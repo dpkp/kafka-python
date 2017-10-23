@@ -44,6 +44,8 @@ def test_autocommit_enable_api_version(client, api_version):
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
                                       Metrics(),
                                       enable_auto_commit=True,
+                                      session_timeout_ms=30000,   # session_timeout_ms and max_poll_interval_ms
+                                      max_poll_interval_ms=30000, # should be the same to avoid KafkaConfigurationError
                                       group_id='foobar',
                                       api_version=api_version)
     if api_version < (0, 8, 1):
@@ -362,6 +364,8 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
                                       Metrics(),
                                       api_version=api_version,
+                                      session_timeout_ms=30000,
+                                      max_poll_interval_ms=30000,
                                       enable_auto_commit=enable,
                                       group_id=group_id)
     commit_sync = mocker.patch.object(coordinator, 'commit_offsets_sync',
