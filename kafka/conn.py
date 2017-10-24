@@ -561,6 +561,9 @@ class BrokerConnection(object):
                 # calculate an output token from kafka token (or None if first iteration)
                 output_token = client_ctx.step(received_token)
 
+                if output_token is None:
+                    continue
+
                 # pass output token to kafka
                 try:
                     msg = output_token
@@ -572,7 +575,7 @@ class BrokerConnection(object):
                     # The gssapi will be able to identify the needed next step.
                     # The connection is closed on failure.
                     header = self._recv_bytes_blocking(4)
-                    token_size = struct.unpack('>i', header)
+                    (token_size,) = struct.unpack('>i', header)
                     received_token = self._recv_bytes_blocking(token_size)
 
                 except ConnectionError as e:
