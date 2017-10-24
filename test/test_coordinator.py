@@ -590,3 +590,11 @@ def test_heartbeat(patched_coord):
     patched_coord.heartbeat_task()
     assert patched_coord._client.schedule.call_count == 1
     assert patched_coord.heartbeat_task._handle_heartbeat_failure.call_count == 1
+
+
+def test_lookup_coordinator_failure(mocker, coordinator):
+
+    mocker.patch.object(coordinator, '_send_group_coordinator_request',
+                        return_value=Future().failure(Exception('foobar')))
+    future = coordinator.lookup_coordinator()
+    assert future.failed()
