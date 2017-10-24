@@ -223,6 +223,11 @@ class KafkaFixture(Fixture):
         self.transport = transport.upper()
         self.ssl_dir = self.test_resource('ssl')
 
+        # TODO: checking for port connection would be better than scanning logs
+        # until then, we need the pattern to work across all supported broker versions
+        # The logging format changed slightly in 1.0.0
+        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % broker_id
+
         self.zk_host = zk_host
         self.zk_port = zk_port
         self.zk_chroot = zk_chroot
@@ -303,8 +308,7 @@ class KafkaFixture(Fixture):
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
-            if self.child.wait_for(r"\[Kafka Server %d\], Started" %
-                                   self.broker_id, timeout=timeout):
+            if self.child.wait_for(self.start_pattern, timeout=timeout):
                 break
             self.child.dump_logs()
             self.child.stop()
