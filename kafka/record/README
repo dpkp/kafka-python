@@ -1,0 +1,8 @@
+Module structured mostly based on 
+kafka/clients/src/main/java/org/apache/kafka/common/record/ module of Java
+Client.
+
+See abc.py for abstract declarations. `ABCRecords` is used as a facade to hide
+version differences. `ABCRecordBatch` subclasses will implement actual parsers
+for different versions (v0/v1 as LegacyBatch and v2 as DefaultBatch. Names
+taken from Java).

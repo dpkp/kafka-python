@@ -35,7 +35,8 @@ def prepare(magic):
             size = batch.append(
                 random.randint(*TIMESTAMP_RANGE),
                 random_bytes(KEY_SIZE),
-                random_bytes(VALUE_SIZE))
+                random_bytes(VALUE_SIZE),
+                headers=[])
             assert size
         batch.close()
         samples.append(bytes(batch.buffer()))
@@ -78,3 +79,4 @@ def func(loops, magic):
 runner = perf.Runner()
 runner.bench_time_func('batch_read_v0', func, 0)
 runner.bench_time_func('batch_read_v1', func, 1)
+runner.bench_time_func('batch_read_v2', func, 2)

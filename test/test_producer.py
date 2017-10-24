@@ -88,10 +88,7 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
                              retries=5,
                              max_block_ms=10000,
                              compression_type=compression)
-    if producer.config['api_version'] >= (0, 10):
-        magic = 1
-    else:
-        magic = 0
+    magic = producer._max_usable_produce_magic()
 
     topic = random_string(5)
     future = producer.send(
@@ -109,7 +106,9 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     else:
         assert record.timestamp == -1  # NO_TIMESTAMP
 
-    if magic == 1:
+    if magic >= 2:
+        assert record.checksum is None
+    elif magic == 1:
         assert record.checksum == 1370034956
     else:
         assert record.checksum == 3296137851
