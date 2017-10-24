@@ -228,11 +228,17 @@ class BaseCoordinator(object):
         self._find_coordinator_future = None
 
     def lookup_coordinator(self):
-        if self._find_coordinator_future is None:
-            self._find_coordinator_future = self._send_group_coordinator_request()
+        if self._find_coordinator_future is not None:
+            return self._find_coordinator_future
 
-            self._find_coordinator_future.add_both(self._reset_find_coordinator_future)
-        return self._find_coordinator_future
+        # If there is an error sending the group coordinator request
+        # then _reset_find_coordinator_future will immediately fire and
+        # set _find_coordinator_future = None
+        # To avoid returning None, we capture the future in a local variable
+        self._find_coordinator_future = self._send_group_coordinator_request()
+        future = self._find_coordinator_future
+        self._find_coordinator_future.add_both(self._reset_find_coordinator_future)
+        return future
 
     def need_rejoin(self):
         """Check whether the group should be rejoined (e.g. if metadata changes)
