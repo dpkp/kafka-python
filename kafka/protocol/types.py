@@ -12,8 +12,13 @@ def _pack(f, value):
         raise ValueError(error)
 
 
-def _unpack(f, data):
+def _unpack(f, data, length=None):
     try:
+        if type(data) is not str:
+            assert length is not None, 'length is required when unpacking from stream'
+            data = data.read(length)
+        assert length is None or length == len(data), \
+               'data for unpacking is not of the expected length'
         (value,) = unpack(f, data)
         return value
     except error:
@@ -27,7 +32,7 @@ class Int8(AbstractType):
 
     @classmethod
     def decode(cls, data):
-        return _unpack('>b', data.read(1))
+        return _unpack('>b', data, 1)
 
 
 class Int16(AbstractType):
@@ -37,7 +42,7 @@ class Int16(AbstractType):
 
     @classmethod
     def decode(cls, data):
-        return _unpack('>h', data.read(2))
+        return _unpack('>h', data, 2)
 
 
 class Int32(AbstractType):
@@ -47,7 +52,7 @@ class Int32(AbstractType):
 
     @classmethod
     def decode(cls, data):
-        return _unpack('>i', data.read(4))
+        return _unpack('>i', data, 4)
 
 
 class Int64(AbstractType):
@@ -57,7 +62,7 @@ class Int64(AbstractType):
 
     @classmethod
     def decode(cls, data):
-        return _unpack('>q', data.read(8))
+        return _unpack('>q', data, 8)
 
 
 class String(AbstractType):
@@ -110,7 +115,7 @@ class Boolean(AbstractType):
 
     @classmethod
     def decode(cls, data):
-        return _unpack('>?', data.read(1))
+        return _unpack('>?', data, 1)
 
 
 class Schema(AbstractType):
