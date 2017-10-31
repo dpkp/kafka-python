@@ -150,6 +150,10 @@ class Sender(threading.Thread):
                  .add_errback(
                      self._failed_produce, batches, node_id))
 
+        # fix high cpu load if client communicate to kafka node error
+        if not poll_timeout_ms and not requests:
+            poll_timeout_ms = self.config["request_timeout_ms"]
+
         # if some partitions are already ready to be sent, the select time
         # would be 0; otherwise if some partition already has some data
         # accumulated but not ready yet, the select time will be the time
