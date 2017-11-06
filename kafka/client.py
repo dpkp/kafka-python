@@ -404,7 +404,7 @@ class SimpleClient(object):
         return [responses[tp] for tp in original_ordering]
 
     def __repr__(self):
-        return '<KafkaClient client_id=%s>' % (self.client_id)
+        return '<SimpleClient client_id=%s>' % (self.client_id)
 
     def _raise_on_response_error(self, resp):
 
