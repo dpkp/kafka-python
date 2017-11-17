@@ -437,7 +437,7 @@ class KafkaProducer(object):
             return
         if timeout is None:
             # threading.TIMEOUT_MAX is available in Python3.3+
-            timeout = getattr(threading, 'TIMEOUT_MAX', 999999999)
+            timeout = getattr(threading, 'TIMEOUT_MAX', float('inf'))
         if getattr(threading, 'TIMEOUT_MAX', False):
             assert 0 <= timeout <= getattr(threading, 'TIMEOUT_MAX')
         else:

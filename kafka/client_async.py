@@ -947,7 +947,7 @@ class DelayedTaskQueue(object):
         """Number of seconds until next task is ready."""
         self._drop_removed()
         if not self._tasks:
-            return 9999999999
+            return float('inf')
         else:
             return max(self._tasks[0][0] - time.time(), 0)
 
