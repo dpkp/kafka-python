@@ -100,7 +100,7 @@ class Bytes(AbstractType):
 
     @classmethod
     def repr(cls, value):
-        return repr(value[:100] + b'...' if len(value) > 100 else b'')
+        return repr(value[:100] + b'...' if value is not None and len(value) > 100 else value)
 
 
 class Boolean(AbstractType):
