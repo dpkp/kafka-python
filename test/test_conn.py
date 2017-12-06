@@ -70,7 +70,7 @@ def test_connect_dns_failure(_socket, conn):
     assert conn.state is ConnectionStates.DISCONNECTED
     assert conn._gai is None
     # Setup _gai / index to state where we need gai and there are no more entries to test
-    conn._init_afi = socket.AF_UNSPEC
+    conn.afi = socket.AF_UNSPEC
     conn._gai = ['foo']
     conn._gai_index = 1
     conn.connect()

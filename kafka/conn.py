@@ -203,7 +203,6 @@ class BrokerConnection(object):
         self.afi = afi
         self._init_host = host
         self._init_port = port
-        self._init_afi = afi
         self.in_flight_requests = collections.deque()
         self._api_versions = None
 
@@ -264,7 +263,7 @@ class BrokerConnection(object):
             log.debug('%s: creating new socket', self)
             # if self.afi is set to AF_UNSPEC, then we need to do a name
             # resolution and try all available address families
-            if self._init_afi == socket.AF_UNSPEC:
+            if self.afi == socket.AF_UNSPEC:
                 if self._gai is None:
                     # XXX: all DNS functions in Python are blocking. If we really
                     # want to be non-blocking here, we need to use a 3rd-party
@@ -291,10 +290,10 @@ class BrokerConnection(object):
                     self._gai_index += 1
                 while True:
                     if self._gai_index >= len(self._gai):
-                        error = 'Unable to connect to any of the names for {0}:{1}'.format(
-                            self._init_host, self._init_port)
-                        log.error(error)
-                        self.close(Errors.ConnectionError(error))
+                        log.error('Unable to connect to any of the names for {0}:{1}'
+                                  .format(self._init_host, self._init_port))
+                        self._gai = None
+                        self._gai_index = 0
                         return
                     afi, _, __, ___, sockaddr = self._gai[self._gai_index]
                     if afi not in (socket.AF_INET, socket.AF_INET6):
@@ -304,7 +303,7 @@ class BrokerConnection(object):
                 self.host, self.port = sockaddr[:2]
                 self._sock = socket.socket(afi, socket.SOCK_STREAM)
             else:
-                self._sock = socket.socket(self._init_afi, socket.SOCK_STREAM)
+                self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
 
             for option in self.config['socket_options']:
                 log.debug('%s: setting socket option %s', self, option)
@@ -328,10 +327,10 @@ class BrokerConnection(object):
             ret = None
             try:
                 ret = self._sock.connect_ex((self.host, self.port))
-                # if we got here through a host lookup, we've found a host,port,af tuple
-                # that works save it so we don't do a GAI lookup again
+                # if we got here through a host lookup,
+                # we've found a (host, port, af) tuple that works
+                # and we can stop iterating through the getaddrinfo list
                 if self._gai is not None:
-                    self.afi = self._sock.family
                     self._gai = None
             except socket.error as err:
                 ret = err.errno
