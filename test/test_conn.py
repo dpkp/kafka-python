@@ -66,18 +66,6 @@ def test_connect_timeout(_socket, conn):
     assert conn.state is ConnectionStates.DISCONNECTED
 
 
-def test_connect_dns_failure(_socket, conn):
-    assert conn.state is ConnectionStates.DISCONNECTED
-    assert conn._gai is None
-    # Setup _gai / index to state where we need gai and there are no more entries to test
-    conn.afi = socket.AF_UNSPEC
-    conn._gai = ['foo']
-    conn._gai_index = 1
-    conn.connect()
-    assert conn.state is ConnectionStates.DISCONNECTED
-    assert conn._gai is None
-
-
 def test_blacked_out(conn):
     assert conn.blacked_out() is False
     conn.last_attempt = time.time()
@@ -268,6 +256,31 @@ def test_lookup_on_connect():
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
         assert conn.host == ip1
+
+    ip2 = '127.0.0.2'
+    mock_return2 = [
+        (2, 2, 17, '', (ip2, 9092)),
+    ]
+
+    with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        conn.close()
+        assert conn.host == ip2
+
+
+def test_relookup_on_failure():
+    hostname = 'example.org'
+    port = 9092
+    conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
+    assert conn.host == conn.hostname == hostname
+    mock_return1 = []
+    with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
+        last_attempt = conn.last_attempt
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn.disconnected()
+        assert conn.last_attempt > last_attempt
 
     ip2 = '127.0.0.2'
     mock_return2 = [
