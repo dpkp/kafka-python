@@ -330,8 +330,7 @@ class BrokerConnection(object):
                 # if we got here through a host lookup,
                 # we've found a (host, port, af) tuple that works
                 # and we can stop iterating through the getaddrinfo list
-                if self._gai is not None:
-                    self._gai = None
+                self._gai = None
             except socket.error as err:
                 ret = err.errno
 
