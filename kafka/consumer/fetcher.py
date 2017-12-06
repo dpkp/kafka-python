@@ -838,17 +838,12 @@ class Fetcher(six.Iterator):
 
         return parsed_records
 
-    class PartitionRecords(object):
+    class PartitionRecords(six.Iterator):
         def __init__(self, fetch_offset, tp, messages):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
             self.messages = messages
-            # When fetching an offset that is in the middle of a
-            # compressed batch, we will get all messages in the batch.
-            # But we want to start 'take' at the fetch_offset
-            for i, msg in enumerate(messages):
-                if msg.offset == fetch_offset:
-                    self.message_idx = i
+            self.message_idx = 0
 
         # For truthiness evaluation we need to define __len__ or __nonzero__
         def __len__(self):
