@@ -747,13 +747,12 @@ class BrokerConnection(object):
             return ()
 
         # augment respones w/ correlation_id, future, and timestamp
-        for i in range(len(responses)):
+        for i, response in enumerate(responses):
             (correlation_id, future, timestamp) = self.in_flight_requests.popleft()
             latency_ms = (time.time() - timestamp) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
 
-            response = responses[i]
             log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
             responses[i] = (response, future)
 
