@@ -50,9 +50,9 @@ class MetricName(object):
             tags (dict, optional): Additional key/val attributes of the metric.
         """
         if not (name and group):
-            raise Exception('name and group must be non-empty.')
+            raise ValueError('name and group must be non-empty.')
         if tags is not None and not isinstance(tags, dict):
-            raise Exception('tags must be a dict if present.')
+            raise ValueError('tags must be a dict if present.')
 
         self._name = name
         self._group = group

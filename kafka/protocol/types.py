@@ -144,7 +144,7 @@ class Schema(AbstractType):
                     field_val = value[i]
                 key_vals.append('%s=%s' % (self.names[i], self.fields[i].repr(field_val)))
             return '(' + ', '.join(key_vals) + ')'
-        except:
+        except Exception:
             return repr(value)
 
 
