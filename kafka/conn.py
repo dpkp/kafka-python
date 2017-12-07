@@ -47,7 +47,7 @@ try:
         SSLWantReadError = ssl.SSLWantReadError
         SSLWantWriteError = ssl.SSLWantWriteError
         SSLZeroReturnError = ssl.SSLZeroReturnError
-    except:
+    except AttributeError:
         # support older ssl libraries
         log.warning('Old SSL module detected.'
                     ' SSL error handling may not operate cleanly.'

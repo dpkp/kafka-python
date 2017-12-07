@@ -478,8 +478,8 @@ class Fetcher(six.Iterator):
         # caught by the generator. We want all exceptions to be raised
         # back to the user. See Issue 545
         except StopIteration as e:
-            log.exception('StopIteration raised unpacking messageset: %s', e)
-            raise Exception('StopIteration raised unpacking messageset')
+            log.exception('StopIteration raised unpacking messageset')
+            raise RuntimeError('StopIteration raised unpacking messageset')
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self

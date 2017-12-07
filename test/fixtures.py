@@ -162,7 +162,7 @@ class ZookeeperFixture(Fixture):
             time.sleep(backoff)
             tries += 1
         else:
-            raise Exception('Failed to start Zookeeper before max_timeout')
+            raise RuntimeError('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
         atexit.register(self.close)
 
@@ -302,7 +302,7 @@ class KafkaFixture(Fixture):
             time.sleep(backoff)
             tries += 1
         else:
-            raise Exception('Failed to start KafkaInstance before max_timeout')
+            raise RuntimeError('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
         self.running = True
         atexit.register(self.close)
