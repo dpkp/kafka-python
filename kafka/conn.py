@@ -261,8 +261,8 @@ class BrokerConnection(object):
         if not self._gai:
             self._gai = dns_lookup(self._init_host, self._init_port, self._init_afi)
             if not self._gai:
-                log.error('DNS lookup failed for {0}:{1} ({2})'
-                          .format(self._init_host, self._init_port, self._init_afi))
+                log.error('DNS lookup failed for %s:%i (%s)',
+                          self._init_host, self._init_port, self._init_afi)
                 return
 
         afi, _, __, ___, sockaddr = self._gai.pop(0)
