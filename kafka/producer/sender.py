@@ -103,7 +103,7 @@ class Sender(threading.Thread):
             self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
-        not_ready_timeout = 999999999
+        not_ready_timeout = float('inf')
         for node in list(ready_nodes):
             if not self._client.ready(node):
                 log.debug('Node %s not ready; delaying produce of accumulated batch', node)

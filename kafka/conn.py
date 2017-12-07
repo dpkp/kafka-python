@@ -607,7 +607,7 @@ class BrokerConnection(object):
         elif self.connecting():
             return 0
         else:
-            return 999999999
+            return float('inf')
 
     def connected(self):
         """Return True iff socket is connected."""
