@@ -8,16 +8,20 @@ from .abstract import AbstractType
 def _pack(f, value):
     try:
         return pack(f, value)
-    except error:
-        raise ValueError(error)
+    except error as e:
+        raise ValueError("Error encountered when attempting to convert value: "
+                        "{} to struct format: '{}', hit error: {}"
+                        .format(value, f, e))
 
 
 def _unpack(f, data):
     try:
         (value,) = unpack(f, data)
         return value
-    except error:
-        raise ValueError(error)
+    except error as e:
+        raise ValueError("Error encountered when attempting to convert value: "
+                        "{} to struct format: '{}', hit error: {}"
+                        .format(value, f, e))
 
 
 class Int8(AbstractType):
