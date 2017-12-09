@@ -25,8 +25,7 @@ if six.PY3:
             crc -= TO_SIGNED
         return crc
 else:
-    def crc32(data):
-        return binascii.crc32(data)
+    from binascii import crc32
 
 
 def write_int_string(s):
