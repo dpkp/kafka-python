@@ -185,7 +185,7 @@ class HeartbeatRequest_v1(Request):
     API_KEY = 12
     API_VERSION = 1
     RESPONSE_TYPE = HeartbeatResponse_v1
-    SCHEMA = HeartbeatRequest_v0
+    SCHEMA = HeartbeatRequest_v0.SCHEMA
 
 
 HeartbeatRequest = [HeartbeatRequest_v0, HeartbeatRequest_v1]

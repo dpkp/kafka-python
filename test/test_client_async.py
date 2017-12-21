@@ -253,11 +253,9 @@ def test_poll(mocker):
     metadata = mocker.patch.object(KafkaClient, '_maybe_refresh_metadata')
     _poll = mocker.patch.object(KafkaClient, '_poll')
     cli = KafkaClient(api_version=(0, 9))
-    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
 
     # metadata timeout wins
     metadata.return_value = 1000
-    tasks.return_value = 2
     cli.poll()
     _poll.assert_called_with(1.0)
 
@@ -265,14 +263,8 @@ def test_poll(mocker):
     cli.poll(250)
     _poll.assert_called_with(0.25)
 
-    # tasks timeout wins
-    tasks.return_value = 0
-    cli.poll(250)
-    _poll.assert_called_with(0)
-
     # default is request_timeout_ms
     metadata.return_value = 1000000
-    tasks.return_value = 10000
     cli.poll()
     _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
 
@@ -324,9 +316,6 @@ def client(mocker):
                       reconnect_backoff_ms=2222,
                       connections_max_idle_ms=float('inf'),
                       api_version=(0, 9))
-
-    tasks = mocker.patch.object(cli._delayed_tasks, 'next_at')
-    tasks.return_value = 9999999
 
     ttl = mocker.patch.object(cli.cluster, 'ttl')
     ttl.return_value = 0
