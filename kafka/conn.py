@@ -180,6 +180,8 @@ class BrokerConnection(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096, # undocumented experimental option
+        'sock_chunk_buffer_count': 1000, # undocumented experimental option
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -750,11 +752,9 @@ class BrokerConnection(object):
     def _recv(self):
         """Take all available bytes from socket, return list of any responses from parser"""
         recvd = []
-        SOCK_CHUNK_BYTES = 4096
-        BUFFERED_CHUNKS = 1000
-        while len(recvd) < BUFFERED_CHUNKS:
+        while len(recvd) < self.config['sock_chunk_buffer_count']:
             try:
-                data = self._sock.recv(SOCK_CHUNK_BYTES)
+                data = self._sock.recv(self.config['sock_chunk_bytes'])
                 # We expect socket.recv to raise an exception if there are no
                 # bytes available to read from the socket in non-blocking mode.
                 # but if the socket is disconnected, we will get empty data
