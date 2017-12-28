@@ -506,7 +506,7 @@ class BrokerConnection(object):
 
             # The server will send a zero sized message (that is Int32(0)) on success.
             # The connection is closed on failure
-            self._recv_bytes_blocking(4)
+            data = self._recv_bytes_blocking(4)
 
         except ConnectionError as e:
             log.exception("%s: Error receiving reply from server",  self)
