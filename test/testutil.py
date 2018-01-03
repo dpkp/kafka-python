@@ -12,6 +12,7 @@ from six.moves import xrange
 from . import unittest
 
 from kafka import SimpleClient
+from kafka.client_async import KafkaClient
 from kafka.structs import OffsetRequestPayload
 
 __all__ = [
@@ -97,6 +98,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
         if self.create_client:
             self.client = SimpleClient('%s:%d' % (self.server.host, self.server.port))
+            self.client_async = KafkaClient(bootstrap_servers='%s:%d' % (self.server.host, self.server.port))
 
         self.client.ensure_topic_exists(self.topic)
 
