@@ -95,12 +95,9 @@ class AdminClient(object):
         """ Create topics on the cluster 
 
         Arguments:
-            new_topics (list of NewTopic): A list containing new 
+            topics (list of NewTopic): A list containing new 
                 topics to be created
-            validate_only (bool): True if we just want to validate the request
             timeout (int): timeout in seconds 
-            max_retry (int): num of times we want to retry to send a create
-                topic request when the controller in not available
 
         Returns:
             CreateTopicResponse: response from the broker
@@ -132,5 +129,3 @@ class AdminClient(object):
             timeout=timeout,
         )
         return self._send_request(request)
-         
-    
