@@ -628,6 +628,14 @@ class BrokerConnection(object):
             self._reconnect_backoff /= 1000.0
             log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
 
+    def _close_socket(self):
+        if self._sock:
+            self._sock.close()
+            self._sock = None
+
+    def __del__(self):
+        self._close_socket()
+
     def close(self, error=None):
         """Close socket and fail all in-flight-requests.
 
@@ -641,9 +649,7 @@ class BrokerConnection(object):
             self.state = ConnectionStates.DISCONNECTING
             self.config['state_change_callback'](self)
         self._update_reconnect_backoff()
-        if self._sock:
-            self._sock.close()
-            self._sock = None
+        self._close_socket()
         self.state = ConnectionStates.DISCONNECTED
         self._sasl_auth_future = None
         self._protocol = KafkaProtocol(
