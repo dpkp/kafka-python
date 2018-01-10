@@ -180,8 +180,8 @@ class BrokerConnection(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
-        'sock_chunk_bytes': 4096, # undocumented experimental option
-        'sock_chunk_buffer_count': 1000, # undocumented experimental option
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -790,7 +790,7 @@ class BrokerConnection(object):
             self.close(e)
             return []
         else:
-            return [resp for (_, resp) in responses] # drop correlation id
+            return [resp for (_, resp) in responses]  # drop correlation id
 
     def requests_timed_out(self):
         if self.in_flight_requests:
