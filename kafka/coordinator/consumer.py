@@ -125,6 +125,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def __del__(self):
         if hasattr(self, '_cluster') and self._cluster:
             self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
+        super(ConsumerCoordinator, self).__del__()
 
     def protocol_type(self):
         return ConsumerProtocol.PROTOCOL_TYPE

@@ -167,6 +167,14 @@ class WeakMethod(object):
         return self._target_id == other._target_id and self._method_id == other._method_id
 
 
+class Dict(dict):
+    """Utility class to support passing weakrefs to dicts
+
+    See: https://docs.python.org/2/library/weakref.html
+    """
+    pass
+
+
 def try_method_on_system_exit(obj, method, *args, **kwargs):
     def wrapper(_obj, _meth, *args, **kwargs):
         try:
