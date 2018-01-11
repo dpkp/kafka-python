@@ -88,7 +88,7 @@ class CreateTopicsRequest_v1(Request):
 
 
 CreateTopicsRequest = [CreateTopicsRequest_v0, CreateTopicsRequest_v1]
-CreateTopicsResponse = [CreateTopicsResponse_v0, CreateTopicsRequest_v1]
+CreateTopicsResponse = [CreateTopicsResponse_v0, CreateTopicsResponse_v1]
 
 
 class DeleteTopicsResponse_v0(Response):
