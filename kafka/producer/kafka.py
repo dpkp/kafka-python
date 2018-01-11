@@ -292,6 +292,8 @@ class KafkaProducer(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max': 1000,
         'max_in_flight_requests_per_connection': 5,

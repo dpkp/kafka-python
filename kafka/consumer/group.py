@@ -270,6 +270,8 @@ class KafkaConsumer(six.Iterator):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'consumer_timeout_ms': float('inf'),
         'skip_double_compressed_messages': False,
         'security_protocol': 'PLAINTEXT',
