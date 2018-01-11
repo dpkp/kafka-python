@@ -3,7 +3,7 @@ import pytest
 from kafka.client_async import KafkaClient
 from kafka.errors import BrokerNotAvailableError
 from kafka.protocol.metadata import MetadataResponse
-from kafka.protocol.admin import CreateTopicsResponse
+from kafka.protocol.admin import CreateTopicsResponse, DeleteTopicsResponse
 from kafka.admin_client import AdminClient
 from kafka.admin_client import NewTopic 
 from kafka.structs import BrokerMetadata
@@ -38,6 +38,11 @@ def topic_response():
         'topic',7,'timeout_exception'     
     )])
 
+@pytest.fixture
+def delete_response():
+    return DeleteTopicsResponse[0]([(
+        'topic',7
+    )])
 
 class TestTopicAdmin():
 
@@ -73,6 +78,24 @@ class TestTopicAdmin():
             mock_least_loaded_node
         mock_kafka_client.send.return_value = Future()
         admin = AdminClient(mock_kafka_client)
-        response = admin.create_topics(mock_new_topics, False)
+        response = admin.create_topics(mock_new_topics, 0)
         assert response == topic_response
-           
+
+    def delete_topics(
+        self,
+        mock_new_topics,
+        mock_least_loaded_node,
+        bootstrap_brokers,
+        delete_response,
+        metadata_response,
+    ):
+        mock_kafka_client = mock.Mock()
+        mock_kafka_client.poll = \
+            mock.Mock(side_effect=[metadata_response, delete_response])
+        mock_kafka_client.ready.return_value = True
+        mock_kafka_client.least_loaded_node.return_value = \
+            mock_least_loaded_node
+        mock_kafka_client.send.return_value = Future()
+        admin = AdminClient(mock_kafka_client)
+        response = admin.delete_topics(mock_new_topics, 0)
+        assert response == delete_response
