@@ -121,7 +121,7 @@ class AdminClient(object):
             topics (list of topic names): Topics to delete
             timeout (int): The requested timeout for this operation
         Raises:
-            NodeNotReadyError: if retry exceeds max_retry
+            NodeNotReadyError: if controller is not ready
         """
 
         request = self.delete_topics_request(
