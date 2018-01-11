@@ -735,6 +735,7 @@ class BaseCoordinator(object):
             self._heartbeat_thread = None
 
     def __del__(self):
+        log.debug('BaseCoordinator: __del__')
         self._close_heartbeat_thread()
 
     def close(self):

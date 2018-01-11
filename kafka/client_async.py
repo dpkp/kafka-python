@@ -414,6 +414,7 @@ class KafkaClient(object):
                 return
 
     def __del__(self):
+        log.debug('%s: __del__', self)
         self._close()
 
     def is_disconnected(self, node_id):

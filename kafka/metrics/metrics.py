@@ -71,6 +71,9 @@ class Metrics(object):
                                          'total number of registered metrics'),
                         AnonMeasurable(lambda config, now: len(self._metrics)))
 
+    def __del__(self):
+        logger.debug('%s: __del__', self)
+
     @property
     def config(self):
         return self._config

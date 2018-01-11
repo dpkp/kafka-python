@@ -120,6 +120,9 @@ class Fetcher(six.Iterator):
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
 
+    def __del__(self):
+        log.debug('%s: __del__', self)
+
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
         an in-flight fetch or pending fetch data.

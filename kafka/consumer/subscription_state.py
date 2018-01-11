@@ -73,6 +73,9 @@ class SubscriptionState(object):
         # initialize to true for the consumers to fetch offset upon starting up
         self.needs_fetch_committed_offsets = True
 
+    def __del__(self):
+        log.debug('%s: __del__', self)
+
     def subscribe(self, topics=(), pattern=None, listener=None):
         """Subscribe to a list of topics, or a topic regex pattern.
 

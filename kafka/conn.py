@@ -689,6 +689,7 @@ class BrokerConnection(object):
             self._sock = None
 
     def __del__(self):
+        log.debug('%s: __del__', self)
         self._close_socket()
 
     def close(self, error=None):

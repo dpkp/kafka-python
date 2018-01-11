@@ -125,6 +125,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
 
     def __del__(self):
+        log.debug('ConsumerCoordinator: __del__')
         if hasattr(self, '_cluster') and self._cluster:
             self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
         super(ConsumerCoordinator, self).__del__()

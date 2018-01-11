@@ -421,6 +421,9 @@ class KafkaConsumer(six.Iterator):
         """
         return self._subscription.assigned_partitions()
 
+    def __del__(self):
+        log.debug('%s: __del__', self)
+
     def close(self, autocommit=True):
         """Close the consumer, waiting indefinitely for any needed cleanup.
 
