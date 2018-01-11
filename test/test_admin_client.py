@@ -81,7 +81,7 @@ class TestTopicAdmin():
         response = admin.create_topics(mock_new_topics, 0)
         assert response == topic_response
 
-    def delete_topics(
+    def test_delete_topics(
         self,
         mock_new_topics,
         mock_least_loaded_node,

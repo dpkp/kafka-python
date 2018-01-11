@@ -34,6 +34,10 @@ class TestKafkaAdminClientIntegration(KafkaIntegrationTestCase):
         )
         metadata_request = MetadataRequest[1]()
         response = admin.create_topics(topics=[topic], timeout=1)
+        # Error code 7 means that RequestTimedOut but we can safely assume
+        # that topic is created or will be created eventually. 
+        # see this https://cwiki.apache.org/confluence/display/KAFKA/
+        # KIP-4+-+Command+line+and+centralized+administrative+operations
         self.assertTrue(
             response[0].topic_error_codes[0][1] == 0 or
             response[0].topic_error_codes[0][1] == 7
