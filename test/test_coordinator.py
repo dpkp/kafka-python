@@ -400,6 +400,7 @@ def patched_coord(mocker, coordinator):
                         return_value=1)
     mocker.patch.object(coordinator._client, 'ready', return_value=True)
     mocker.patch.object(coordinator._client, 'send')
+    mocker.patch.object(coordinator, '_heartbeat_thread')
     mocker.spy(coordinator, '_failed_request')
     mocker.spy(coordinator, '_handle_offset_commit_response')
     mocker.spy(coordinator, '_handle_offset_fetch_response')

@@ -72,6 +72,7 @@ def test_end_to_end(kafka_broker, compression):
 @pytest.mark.skipif(platform.python_implementation() != 'CPython',
                     reason='Test relies on CPython-specific gc policies')
 def test_kafka_producer_gc_cleanup():
+    gc.collect()
     threads = threading.active_count()
     producer = KafkaProducer(api_version='0.9') # set api_version explicitly to avoid auto-detection
     assert threading.active_count() == threads + 1
