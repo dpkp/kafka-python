@@ -278,7 +278,7 @@ class BrokerConnection(object):
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
-        if self.state is ConnectionStates.DISCONNECTED:
+        if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.last_attempt = time.time()
             next_lookup = self._next_afi_host_port()
             if not next_lookup:
