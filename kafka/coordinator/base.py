@@ -882,7 +882,7 @@ class GroupCoordinatorMetrics(object):
 class HeartbeatThread(threading.Thread):
     def __init__(self, coordinator):
         super(HeartbeatThread, self).__init__()
-        self.name = threading.current_thread().name + '-heartbeat'
+        self.name = coordinator.group_id + '-heartbeat'
         self.coordinator = coordinator
         self.enabled = False
         self.closed = False
@@ -936,7 +936,7 @@ class HeartbeatThread(threading.Thread):
             # TODO: When consumer.wakeup() is implemented, we need to
             # disable here to prevent propagating an exception to this
             # heartbeat thread
-            self.coordinator._client.poll(timeout_ms=0)
+            self.coordinator._client.poll(timeout_ms=self.coordinator.config['retry_backoff_ms'])
 
             if self.coordinator.coordinator_unknown():
                 if not self.coordinator.lookup_coordinator().is_done:
