@@ -638,11 +638,9 @@ class Fetcher(six.Iterator):
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
         if self._next_partition_records:
-            if self._next_partition_records.topic_partition in fetchable:
-                fetchable.remove(self._next_partition_records.topic_partition)
+            fetchable.discard(self._next_partition_records.topic_partition)
         for fetch in self._completed_fetches:
-            if fetch.topic_partition in fetchable:
-                fetchable.remove(fetch.topic_partition)
+            fetchable.discard(fetch.topic_partition)
         return fetchable
 
     def _create_fetch_requests(self):
