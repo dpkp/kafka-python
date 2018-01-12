@@ -68,8 +68,8 @@ def test_group(kafka_broker, topic):
             for tp, records in six.itervalues(consumers[i].poll(100)):
                 messages[i][tp].extend(records)
         consumers[i].close()
-        del consumers[i]
-        del stop[i]
+        consumers[i] = None
+        stop[i] = None
 
     num_consumers = 4
     for i in range(num_consumers):
@@ -134,6 +134,7 @@ def test_group(kafka_broker, topic):
             logging.info('Stopping consumer %s', c)
             stop[c].set()
             threads[c].join()
+            threads[c] = None
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
