@@ -12,7 +12,9 @@ unit_test_docker:
 
 itest:
 	docker build -t kafka_python_test .
-	docker run kafka_python_test /work/run_itest.sh
+#   travis build passes because ipv6 is disabled there
+#   it passes the integration test locally if we disable ipv6 here
+	docker run --sysctl net.ipv6.conf.all.disable_ipv6=1 kafka_python_test /work/run_itest.sh
 
 clean:
 	rm -rf kafka-python.egg-info/ .tox/

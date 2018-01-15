@@ -192,7 +192,7 @@ class KafkaFixture(Fixture):
             fixture = ExternalService(host, port)
         else:
             if host is None:
-                host = "::1"
+                host = "localhost"
             fixture = KafkaFixture(host, port, broker_id,
                                    zk_host, zk_port, zk_chroot,
                                    transport=transport,
