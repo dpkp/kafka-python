@@ -566,9 +566,9 @@ class BrokerConnection(object):
             # Kafka currently doesn't support integrity or confidentiality security layers, so we
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
-            msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0]))) + msg[1:]
+            msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
             # add authorization identity to the response, GSS-wrap and send it
-            msg = client_ctx.wrap(msg + auth_id, False).message
+            msg = client_ctx.wrap(msg + auth_id.encode(), False).message
             size = Int32.encode(len(msg))
             self._send_bytes_blocking(size + msg)
 
