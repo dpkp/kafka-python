@@ -5,7 +5,7 @@ pytest-catchlog==1.2.2
 docker-py==1.10.6
 coveralls==1.2.0
 Sphinx==1.6.4
-lz4==0.11.1
+lz4==0.19.1
 xxhash==1.0.1
 python-snappy==0.5.1
 tox==2.9.1
