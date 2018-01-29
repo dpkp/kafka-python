@@ -1,6 +1,10 @@
 Changelog
 =========
 
+1.3.3.post7 (Jan 29, 2018)
+##########################
+* Add kafka admin client 
+
 1.3.3.post6 (Oct 5, 2017)
 ##########################
 * Revert fix for rebalance not getting triggered (poll)
