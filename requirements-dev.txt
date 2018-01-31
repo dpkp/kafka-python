@@ -1,5 +1,5 @@
 flake8==3.4.1
-pytest==3.2.2
+pytest==3.4.0
 pytest-cov==2.5.1
 pytest-catchlog==1.2.2
 docker-py==1.10.6
@@ -11,6 +11,5 @@ python-snappy==0.5.1
 tox==2.9.1
 pylint==1.8.0
 pytest-pylint==0.7.1
-# pytest-sugar==0.9.0
 pytest-mock==1.6.3
 sphinx-rtd-theme==0.2.4
