@@ -10,13 +10,13 @@ import weakref
 
 from kafka.vendor import six
 
-from .heartbeat import Heartbeat
-from .. import errors as Errors
-from ..future import Future
-from ..metrics import AnonMeasurable
-from ..metrics.stats import Avg, Count, Max, Rate
-from ..protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
-from ..protocol.group import (HeartbeatRequest, JoinGroupRequest,
+from kafka.coordinator.heartbeat import Heartbeat
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Max, Rate
+from kafka.protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
+from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
                             LeaveGroupRequest, SyncGroupRequest)
 
 log = logging.getLogger('kafka.coordinator')

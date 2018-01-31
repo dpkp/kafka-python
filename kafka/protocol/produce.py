@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
-from .api import Request, Response
-from .types import Int16, Int32, Int64, String, Array, Schema, Bytes
+from kafka.protocol.api import Request, Response
+from kafka.protocol.types import Int16, Int32, Int64, String, Array, Schema, Bytes
 
 
 class ProduceResponse_v0(Response):

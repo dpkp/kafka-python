@@ -22,9 +22,9 @@
 import struct
 
 from kafka.errors import CorruptRecordException
-from .abc import ABCRecords
-from .legacy_records import LegacyRecordBatch, LegacyRecordBatchBuilder
-from .default_records import DefaultRecordBatch, DefaultRecordBatchBuilder
+from kafka.record.abc import ABCRecords
+from kafka.record.legacy_records import LegacyRecordBatch, LegacyRecordBatchBuilder
+from kafka.record.default_records import DefaultRecordBatch, DefaultRecordBatchBuilder
 
 
 class MemoryRecords(ABCRecords):

@@ -1,6 +1,6 @@
 import binascii
 
-from ._crc32c import crc as crc32c_py
+from kafka.record._crc32c import crc as crc32c_py
 
 
 def encode_varint(value, write):

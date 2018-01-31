@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 from struct import pack, unpack, error
 
-from .abstract import AbstractType
+from kafka.protocol.abstract import AbstractType
 
 
 def _pack(f, value):

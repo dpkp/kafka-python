@@ -13,26 +13,26 @@ try:
     import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from .vendor import selectors34 as selectors
+    from kafka.vendor import selectors34 as selectors
 
 import socket
 import time
 
 from kafka.vendor import six
 
-from .cluster import ClusterMetadata
-from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
-from . import errors as Errors
-from .future import Future
-from .metrics import AnonMeasurable
-from .metrics.stats import Avg, Count, Rate
-from .metrics.stats.rate import TimeUnit
-from .protocol.metadata import MetadataRequest
-from .util import Dict, WeakMethod
+from kafka.cluster import ClusterMetadata
+from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Rate
+from kafka.metrics.stats.rate import TimeUnit
+from kafka.protocol.metadata import MetadataRequest
+from kafka.util import Dict, WeakMethod
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
-from .vendor import socketpair
-from .version import __version__
+from kafka.vendor import socketpair
+from kafka.version import __version__
 
 if six.PY2:
     ConnectionError = None
