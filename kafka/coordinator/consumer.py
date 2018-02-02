@@ -121,7 +121,6 @@ class ConsumerCoordinator(BaseCoordinator):
         self.consumer_sensors = ConsumerCoordinatorMetrics(
             metrics, self.config['metric_group_prefix'], self._subscription)
 
-        #self._handle_metadata_update(self._cluster)
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
 
