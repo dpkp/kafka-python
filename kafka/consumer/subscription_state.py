@@ -68,7 +68,6 @@ class SubscriptionState(object):
         self._group_subscription = set()
         self._user_assignment = set()
         self.assignment = dict()
-        self.needs_partition_assignment = False
         self.listener = None
 
         # initialize to true for the consumers to fetch offset upon starting up
@@ -172,7 +171,6 @@ class SubscriptionState(object):
         log.info('Updating subscribed topics to: %s', topics)
         self.subscription = set(topics)
         self._group_subscription.update(topics)
-        self.needs_partition_assignment = True
 
         # Remove any assigned partitions which are no longer subscribed to
         for tp in set(self.assignment.keys()):
@@ -192,12 +190,12 @@ class SubscriptionState(object):
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
         self._group_subscription.update(topics)
 
-    def mark_for_reassignment(self):
+    def reset_group_subscription(self):
+        """Reset the group's subscription to only contain topics subscribed by this consumer."""
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
         assert self.subscription is not None, 'Subscription required'
         self._group_subscription.intersection_update(self.subscription)
-        self.needs_partition_assignment = True
 
     def assign_from_user(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
@@ -220,18 +218,17 @@ class SubscriptionState(object):
         if self.subscription is not None:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
-        self._user_assignment.clear()
-        self._user_assignment.update(partitions)
+        if self._user_assignment != set(partitions):
+            self._user_assignment = set(partitions)
 
-        for partition in partitions:
-            if partition not in self.assignment:
-                self._add_assigned_partition(partition)
+            for partition in partitions:
+                if partition not in self.assignment:
+                    self._add_assigned_partition(partition)
 
-        for tp in set(self.assignment.keys()) - self._user_assignment:
-            del self.assignment[tp]
+            for tp in set(self.assignment.keys()) - self._user_assignment:
+                del self.assignment[tp]
 
-        self.needs_partition_assignment = False
-        self.needs_fetch_committed_offsets = True
+            self.needs_fetch_committed_offsets = True
 
     def assign_from_subscribed(self, assignments):
         """Update the assignment to the specified partitions
@@ -245,16 +242,18 @@ class SubscriptionState(object):
             assignments (list of TopicPartition): partitions to assign to this
                 consumer instance.
         """
-        if self.subscription is None:
+        if not self.partitions_auto_assigned():
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
         for tp in assignments:
             if tp.topic not in self.subscription:
                 raise ValueError("Assigned partition %s for non-subscribed topic." % str(tp))
+
+        # after rebalancing, we always reinitialize the assignment state
         self.assignment.clear()
         for tp in assignments:
             self._add_assigned_partition(tp)
-        self.needs_partition_assignment = False
+        self.needs_fetch_committed_offsets = True
         log.info("Updated partition assignment: %s", assignments)
 
     def unsubscribe(self):
@@ -262,7 +261,6 @@ class SubscriptionState(object):
         self.subscription = None
         self._user_assignment.clear()
         self.assignment.clear()
-        self.needs_partition_assignment = True
         self.subscribed_pattern = None
 
     def group_subscription(self):

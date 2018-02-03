@@ -291,6 +291,13 @@ class ClusterMetadata(object):
         for listener in self._listeners:
             listener(self)
 
+        if self.need_all_topic_metadata:
+            # the listener may change the interested topics,
+            # which could cause another metadata refresh.
+            # If we have already fetched all topics, however,
+            # another fetch should be unnecessary.
+            self._need_update = False
+
     def add_listener(self, listener):
         """Add a callback function to be called on each metadata update"""
         self._listeners.add(listener)
