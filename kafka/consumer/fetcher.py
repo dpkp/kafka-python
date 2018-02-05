@@ -846,6 +846,10 @@ class Fetcher(six.Iterator):
             for i, msg in enumerate(messages):
                 if msg.offset == fetch_offset:
                     self.message_idx = i
+                    break
+            else:
+                self.message_idx = 0
+                self.messages = None
 
         # For truthiness evaluation we need to define __len__ or __nonzero__
         def __len__(self):
