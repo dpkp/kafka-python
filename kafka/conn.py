@@ -818,6 +818,7 @@ class BrokerConnection(object):
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker version>, <needed struct>)
+            ((1, 0, 0), MetadataRequest[5]),
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),

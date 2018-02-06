@@ -84,6 +84,16 @@ class FetchResponse_v5(Response):
     )
 
 
+class FetchResponse_v6(Response):
+    """
+    Same as FetchResponse_v5. The version number is bumped up to indicate that the client supports KafkaStorageException.
+    The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+    """
+    API_KEY = 1
+    API_VERSION = 6
+    SCHEMA = FetchResponse_v5.SCHEMA
+
+
 class FetchRequest_v0(Request):
     API_KEY = 1
     API_VERSION = 0
@@ -174,11 +184,25 @@ class FetchRequest_v5(Request):
     )
 
 
+class FetchRequest_v6(Request):
+    """
+    The body of FETCH_REQUEST_V6 is the same as FETCH_REQUEST_V5.
+    The version number is bumped up to indicate that the client supports KafkaStorageException.
+    The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+    """
+    API_KEY = 1
+    API_VERSION = 6
+    RESPONSE_TYPE = FetchResponse_v6
+    SCHEMA = FetchRequest_v5.SCHEMA
+
+
 FetchRequest = [
     FetchRequest_v0, FetchRequest_v1, FetchRequest_v2,
-    FetchRequest_v3, FetchRequest_v4, FetchRequest_v5
+    FetchRequest_v3, FetchRequest_v4, FetchRequest_v5,
+    FetchRequest_v6
 ]
 FetchResponse = [
     FetchResponse_v0, FetchResponse_v1, FetchResponse_v2,
-    FetchResponse_v3, FetchResponse_v4, FetchResponse_v5
+    FetchResponse_v3, FetchResponse_v4, FetchResponse_v5,
+    FetchResponse_v6
 ]

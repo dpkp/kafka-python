@@ -87,7 +87,7 @@ JoinGroupRequest = [
     JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2
 ]
 JoinGroupResponse = [
-    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v1
+    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2
 ]
 
 
