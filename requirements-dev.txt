@@ -9,7 +9,7 @@ lz4==0.19.1
 xxhash==1.0.1
 python-snappy==0.5.1
 tox==2.9.1
-pylint==1.8.0
+pylint==1.8.2
 pytest-pylint==0.7.1
 pytest-mock==1.6.3
 sphinx-rtd-theme==0.2.4
