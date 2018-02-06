@@ -498,3 +498,43 @@ def test__parse_fetched_data__out_of_range(fetcher, topic, mocker):
     partition_record = fetcher._parse_fetched_data(completed_fetch)
     assert partition_record is None
     assert fetcher._subscriptions.assignment[tp].awaiting_reset is True
+
+
+def test_partition_records_offset():
+    """Test that compressed messagesets are handle correctly
+    when fetch offset is in the middle of the message list
+    """
+    batch_start = 120
+    batch_end = 130
+    fetch_offset = 123
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', 'checksum', 0, 0)
+                for i in range(batch_start, batch_end)]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) > 0
+    msgs = records.take(1)
+    assert msgs[0].offset == 123
+    assert records.fetch_offset == 124
+    msgs = records.take(2)
+    assert len(msgs) == 2
+    assert len(records) > 0
+    records.discard()
+    assert len(records) == 0
+
+
+def test_partition_records_empty():
+    records = Fetcher.PartitionRecords(0, None, [])
+    assert len(records) == 0
+
+
+def test_partition_records_no_fetch_offset():
+    batch_start = 0
+    batch_end = 100
+    fetch_offset = 123
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', 'checksum', 0, 0)
+                for i in range(batch_start, batch_end)]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) == 0
