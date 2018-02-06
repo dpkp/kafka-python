@@ -57,8 +57,8 @@
 import io
 import struct
 import time
-from .abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
-from .util import decode_varint, encode_varint, calc_crc32c, size_of_varint
+from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
+from kafka.record.util import decode_varint, encode_varint, calc_crc32c, size_of_varint
 
 from kafka.errors import CorruptRecordException
 from kafka.codec import (

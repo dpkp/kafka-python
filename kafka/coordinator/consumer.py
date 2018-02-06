@@ -7,17 +7,17 @@ import time
 
 from kafka.vendor import six
 
-from .base import BaseCoordinator, Generation
-from .assignors.range import RangePartitionAssignor
-from .assignors.roundrobin import RoundRobinPartitionAssignor
-from .protocol import ConsumerProtocol
-from .. import errors as Errors
-from ..future import Future
-from ..metrics import AnonMeasurable
-from ..metrics.stats import Avg, Count, Max, Rate
-from ..protocol.commit import OffsetCommitRequest, OffsetFetchRequest
-from ..structs import OffsetAndMetadata, TopicPartition
-from ..util import WeakMethod
+from kafka.coordinator.base import BaseCoordinator, Generation
+from kafka.coordinator.assignors.range import RangePartitionAssignor
+from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.protocol import ConsumerProtocol
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Max, Rate
+from kafka.protocol.commit import OffsetCommitRequest, OffsetFetchRequest
+from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.util import WeakMethod
 
 
 log = logging.getLogger(__name__)

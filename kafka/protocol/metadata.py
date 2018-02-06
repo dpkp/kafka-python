@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
-from .api import Request, Response
-from .types import Array, Boolean, Int16, Int32, Schema, String
+from kafka.protocol.api import Request, Response
+from kafka.protocol.types import Array, Boolean, Int16, Int32, Schema, String
 
 
 class MetadataResponse_v0(Response):

@@ -12,7 +12,7 @@ try:
     import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from .vendor import selectors34 as selectors
+    from kafka.vendor import selectors34 as selectors
 
 import socket
 import struct
@@ -858,8 +858,8 @@ class BrokerConnection(object):
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from .protocol.admin import ApiVersionRequest, ListGroupsRequest
-        from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
+        from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
+        from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
         # Socket errors are logged as exceptions and can alarm users. Mute them
         from logging import Filter

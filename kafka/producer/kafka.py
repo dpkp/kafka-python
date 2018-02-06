@@ -8,20 +8,20 @@ import threading
 import time
 import weakref
 
-from ..vendor import six
+from kafka.vendor import six
 
-from .. import errors as Errors
-from ..client_async import KafkaClient, selectors
-from ..codec import has_gzip, has_snappy, has_lz4
-from ..metrics import MetricConfig, Metrics
-from ..partitioner.default import DefaultPartitioner
-from ..record.default_records import DefaultRecordBatchBuilder
-from ..record.legacy_records import LegacyRecordBatchBuilder
-from ..serializer import Serializer
-from ..structs import TopicPartition
-from .future import FutureRecordMetadata, FutureProduceResult
-from .record_accumulator import AtomicInteger, RecordAccumulator
-from .sender import Sender
+from kafka import errors as Errors
+from kafka.client_async import KafkaClient, selectors
+from kafka.codec import has_gzip, has_snappy, has_lz4
+from kafka.metrics import MetricConfig, Metrics
+from kafka.partitioner.default import DefaultPartitioner
+from kafka.record.default_records import DefaultRecordBatchBuilder
+from kafka.record.legacy_records import LegacyRecordBatchBuilder
+from kafka.serializer import Serializer
+from kafka.structs import TopicPartition
+from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
+from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
+from kafka.producer.sender import Sender
 
 
 log = logging.getLogger(__name__)
