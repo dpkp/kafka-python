@@ -14,3 +14,4 @@ docs/_build
 .idea/
 integration-test/
 tests-env/
+.pytest_cache/
