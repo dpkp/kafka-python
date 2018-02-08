@@ -141,7 +141,7 @@ class ZookeeperFixture(Fixture):
 
         # Party!
         timeout = 5
-        max_timeout = 30
+        max_timeout = 120
         backoff = 1
         end_at = time.time() + max_timeout
         tries = 1
@@ -161,6 +161,7 @@ class ZookeeperFixture(Fixture):
             timeout *= 2
             time.sleep(backoff)
             tries += 1
+            backoff += 1
         else:
             raise RuntimeError('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
@@ -278,7 +279,7 @@ class KafkaFixture(Fixture):
         env = self.kafka_run_class_env()
 
         timeout = 5
-        max_timeout = 30
+        max_timeout = 120
         backoff = 1
         end_at = time.time() + max_timeout
         tries = 1
@@ -301,6 +302,7 @@ class KafkaFixture(Fixture):
             timeout *= 2
             time.sleep(backoff)
             tries += 1
+            backoff += 1
         else:
             raise RuntimeError('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
