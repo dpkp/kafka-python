@@ -462,7 +462,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # its completion). Note that commits are treated as heartbeats by the
         # coordinator, so there is no need to explicitly allow heartbeats
         # through delayed task execution.
-        self._client.poll() # no wakeup if we add that feature
+        self._client.poll(timeout_ms=0) # no wakeup if we add that feature
 
     def _do_commit_offsets_async(self, offsets, callback=None):
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
