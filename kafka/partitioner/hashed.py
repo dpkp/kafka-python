@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 from kafka.vendor import six
 
-from .base import Partitioner
+from kafka.partitioner.base import Partitioner
 
 
 class Murmur2Partitioner(Partitioner):

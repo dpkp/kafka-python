@@ -43,6 +43,10 @@ class SubscriptionState(object):
         " (2) subscribe to topics matching a regex pattern,"
         " (3) assign itself specific topic-partitions.")
 
+    # Taken from: https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java#L29
+    _MAX_NAME_LENGTH = 249
+    _TOPIC_LEGAL_CHARS = re.compile('^[a-zA-Z0-9._-]+$')
+
     def __init__(self, offset_reset_strategy='earliest'):
         """Initialize a SubscriptionState instance
 
@@ -64,7 +68,6 @@ class SubscriptionState(object):
         self._group_subscription = set()
         self._user_assignment = set()
         self.assignment = dict()
-        self.needs_partition_assignment = False
         self.listener = None
 
         # initialize to true for the consumers to fetch offset upon starting up
@@ -120,6 +123,24 @@ class SubscriptionState(object):
             raise TypeError('listener must be a ConsumerRebalanceListener')
         self.listener = listener
 
+    def _ensure_valid_topic_name(self, topic):
+        """ Ensures that the topic name is valid according to the kafka source. """
+
+        # See Kafka Source:
+        # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
+        if topic is None:
+            raise TypeError('All topics must not be None')
+        if not isinstance(topic, six.string_types):
+            raise TypeError('All topics must be strings')
+        if len(topic) == 0:
+            raise ValueError('All topics must be non-empty strings')
+        if topic == '.' or topic == '..':
+            raise ValueError('Topic name cannot be "." or ".."')
+        if len(topic) > self._MAX_NAME_LENGTH:
+            raise ValueError('Topic name is illegal, it can\'t be longer than {0} characters, topic: "{1}"'.format(self._MAX_NAME_LENGTH, topic))
+        if not self._TOPIC_LEGAL_CHARS.match(topic):
+            raise ValueError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
+
     def change_subscription(self, topics):
         """Change the topic subscription.
 
@@ -128,7 +149,10 @@ class SubscriptionState(object):
 
         Raises:
             IllegalStateErrror: if assign_from_user has been used already
-            TypeError: if a non-str topic is given
+            TypeError: if a topic is None or a non-str
+            ValueError: if a topic is an empty string or
+                        - a topic name is '.' or '..' or
+                        - a topic name does not consist of ASCII-characters/'-'/'_'/'.'
         """
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
@@ -141,13 +165,12 @@ class SubscriptionState(object):
                         topics)
             return
 
-        if any(not isinstance(t, six.string_types) for t in topics):
-            raise TypeError('All topics must be strings')
+        for t in topics:
+            self._ensure_valid_topic_name(t)
 
         log.info('Updating subscribed topics to: %s', topics)
         self.subscription = set(topics)
         self._group_subscription.update(topics)
-        self.needs_partition_assignment = True
 
         # Remove any assigned partitions which are no longer subscribed to
         for tp in set(self.assignment.keys()):
@@ -167,12 +190,12 @@ class SubscriptionState(object):
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
         self._group_subscription.update(topics)
 
-    def mark_for_reassignment(self):
+    def reset_group_subscription(self):
+        """Reset the group's subscription to only contain topics subscribed by this consumer."""
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
         assert self.subscription is not None, 'Subscription required'
         self._group_subscription.intersection_update(self.subscription)
-        self.needs_partition_assignment = True
 
     def assign_from_user(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
@@ -195,18 +218,17 @@ class SubscriptionState(object):
         if self.subscription is not None:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
-        self._user_assignment.clear()
-        self._user_assignment.update(partitions)
+        if self._user_assignment != set(partitions):
+            self._user_assignment = set(partitions)
 
-        for partition in partitions:
-            if partition not in self.assignment:
-                self._add_assigned_partition(partition)
+            for partition in partitions:
+                if partition not in self.assignment:
+                    self._add_assigned_partition(partition)
 
-        for tp in set(self.assignment.keys()) - self._user_assignment:
-            del self.assignment[tp]
+            for tp in set(self.assignment.keys()) - self._user_assignment:
+                del self.assignment[tp]
 
-        self.needs_partition_assignment = False
-        self.needs_fetch_committed_offsets = True
+            self.needs_fetch_committed_offsets = True
 
     def assign_from_subscribed(self, assignments):
         """Update the assignment to the specified partitions
@@ -220,16 +242,18 @@ class SubscriptionState(object):
             assignments (list of TopicPartition): partitions to assign to this
                 consumer instance.
         """
-        if self.subscription is None:
+        if not self.partitions_auto_assigned():
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
         for tp in assignments:
             if tp.topic not in self.subscription:
                 raise ValueError("Assigned partition %s for non-subscribed topic." % str(tp))
+
+        # after rebalancing, we always reinitialize the assignment state
         self.assignment.clear()
         for tp in assignments:
             self._add_assigned_partition(tp)
-        self.needs_partition_assignment = False
+        self.needs_fetch_committed_offsets = True
         log.info("Updated partition assignment: %s", assignments)
 
     def unsubscribe(self):
@@ -237,7 +261,6 @@ class SubscriptionState(object):
         self.subscription = None
         self._user_assignment.clear()
         self.assignment.clear()
-        self.needs_partition_assignment = True
         self.subscribed_pattern = None
 
     def group_subscription(self):

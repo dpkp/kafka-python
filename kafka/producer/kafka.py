@@ -8,16 +8,20 @@ import threading
 import time
 import weakref
 
-from .. import errors as Errors
-from ..client_async import KafkaClient, selectors
-from ..metrics import MetricConfig, Metrics
-from ..partitioner.default import DefaultPartitioner
-from ..protocol.message import Message, MessageSet
-from ..serializer import Serializer
-from ..structs import TopicPartition
-from .future import FutureRecordMetadata, FutureProduceResult
-from .record_accumulator import AtomicInteger, RecordAccumulator
-from .sender import Sender
+from kafka.vendor import six
+
+from kafka import errors as Errors
+from kafka.client_async import KafkaClient, selectors
+from kafka.codec import has_gzip, has_snappy, has_lz4
+from kafka.metrics import MetricConfig, Metrics
+from kafka.partitioner.default import DefaultPartitioner
+from kafka.record.default_records import DefaultRecordBatchBuilder
+from kafka.record.legacy_records import LegacyRecordBatchBuilder
+from kafka.serializer import Serializer
+from kafka.structs import TopicPartition
+from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
+from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
+from kafka.producer.sender import Sender
 
 
 log = logging.getLogger(__name__)
@@ -260,6 +264,8 @@ class KafkaProducer(object):
             Default: None
         sasl_plain_password (str): password for sasl PLAIN authentication.
             Default: None
+        sasl_kerberos_service_name (str): Service name to include in GSSAPI
+            sasl mechanism handshake. Default: 'kafka'
 
     Note:
         Configuration parameters are described in more detail at
@@ -286,8 +292,10 @@ class KafkaProducer(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'reconnect_backoff_ms': 50,
-        'reconnect_backoff_max': 1000,
+        'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
@@ -306,6 +314,14 @@ class KafkaProducer(object):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
+        'sasl_kerberos_service_name': 'kafka'
+    }
+
+    _COMPRESSORS = {
+        'gzip': (has_gzip, LegacyRecordBatchBuilder.CODEC_GZIP),
+        'snappy': (has_snappy, LegacyRecordBatchBuilder.CODEC_SNAPPY),
+        'lz4': (has_lz4, LegacyRecordBatchBuilder.CODEC_LZ4),
+        None: (lambda: True, LegacyRecordBatchBuilder.CODEC_NONE),
     }
 
     def __init__(self, **configs):
@@ -353,7 +369,16 @@ class KafkaProducer(object):
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
 
-        message_version = 1 if self.config['api_version'] >= (0, 10) else 0
+        # Check compression_type for library support
+        ct = self.config['compression_type']
+        if ct not in self._COMPRESSORS:
+            raise ValueError("Not supported codec: {}".format(ct))
+        else:
+            checker, compression_attrs = self._COMPRESSORS[ct]
+            assert checker(), "Libraries for {} compression codec not found".format(ct)
+            self.config['compression_attrs'] = compression_attrs
+
+        message_version = self._max_usable_produce_magic()
         self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
         self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
@@ -414,7 +439,7 @@ class KafkaProducer(object):
             return
         if timeout is None:
             # threading.TIMEOUT_MAX is available in Python3.3+
-            timeout = getattr(threading, 'TIMEOUT_MAX', 999999999)
+            timeout = getattr(threading, 'TIMEOUT_MAX', float('inf'))
         if getattr(threading, 'TIMEOUT_MAX', False):
             assert 0 <= timeout <= getattr(threading, 'TIMEOUT_MAX')
         else:
@@ -462,6 +487,23 @@ class KafkaProducer(object):
         """Returns set of all known partitions for the topic."""
         max_wait = self.config['max_block_ms'] / 1000.0
         return self._wait_on_metadata(topic, max_wait)
+
+    def _max_usable_produce_magic(self):
+        if self.config['api_version'] >= (0, 11):
+            return 2
+        elif self.config['api_version'] >= (0, 10):
+            return 1
+        else:
+            return 0
+
+    def _estimate_size_in_bytes(self, key, value, headers=[]):
+        magic = self._max_usable_produce_magic()
+        if magic == 2:
+            return DefaultRecordBatchBuilder.estimate_size_in_bytes(
+                key, value, headers)
+        else:
+            return LegacyRecordBatchBuilder.estimate_size_in_bytes(
+                magic, self.config['compression_type'], key, value)
 
     def send(self, topic, value=None, key=None, partition=None, timestamp_ms=None):
         """Publish a message to a topic.
@@ -512,35 +554,26 @@ class KafkaProducer(object):
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
-            message_size = MessageSet.HEADER_SIZE + Message.HEADER_SIZE
-            if key_bytes is not None:
-                message_size += len(key_bytes)
-            if value_bytes is not None:
-                message_size += len(value_bytes)
+            message_size = self._estimate_size_in_bytes(key, value)
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
-            if timestamp_ms is None:
-                timestamp_ms = int(time.time() * 1000)
             log.debug("Sending (key=%r value=%r) to %s", key, value, tp)
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes,
-                                              self.config['max_block_ms'])
+                                              self.config['max_block_ms'],
+                                              estimated_size=message_size)
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
                 log.debug("Waking up the sender since %s is either full or"
-                           " getting a new batch", tp)
+                          " getting a new batch", tp)
                 self._sender.wakeup()
 
             return future
             # handling exceptions and record the errors;
             # for API exceptions return them in the future,
             # for other exceptions raise directly
-        except Errors.KafkaTimeoutError:
-            raise
-        except AssertionError:
-            raise
-        except Exception as e:
+        except Errors.BrokerResponseError as e:
             log.debug("Exception occurred during message send: %s", e)
             return FutureRecordMetadata(
                 FutureProduceResult(TopicPartition(topic, partition)),
@@ -566,10 +599,10 @@ class KafkaProducer(object):
 
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
-            
+
         Raises:
-            KafkaTimeoutError: failure to flush buffered records within the 
-                provided timeout 
+            KafkaTimeoutError: failure to flush buffered records within the
+                provided timeout
         """
         log.debug("Flushing accumulated records in producer.")  # trace
         self._accumulator.begin_flush()
@@ -655,13 +688,20 @@ class KafkaProducer(object):
                                           available)
 
     def metrics(self, raw=False):
-        """Warning: this is an unstable interface.
-        It may change in future releases without warning"""
+        """Get metrics on producer performance.
+
+        This is ported from the Java Producer, for details see:
+        https://kafka.apache.org/documentation/#producer_monitoring
+
+        Warning:
+            This is an unstable interface. It may change in future
+            releases without warning.
+        """
         if raw:
             return self._metrics.metrics
 
         metrics = {}
-        for k, v in self._metrics.metrics.items():
+        for k, v in six.iteritems(self._metrics.metrics):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:

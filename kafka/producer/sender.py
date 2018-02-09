@@ -8,12 +8,12 @@ import time
 
 from kafka.vendor import six
 
-from .. import errors as Errors
-from ..metrics.measurable import AnonMeasurable
-from ..metrics.stats import Avg, Max, Rate
-from ..protocol.produce import ProduceRequest
-from ..structs import TopicPartition
-from ..version import __version__
+from kafka import errors as Errors
+from kafka.metrics.measurable import AnonMeasurable
+from kafka.metrics.stats import Avg, Max, Rate
+from kafka.protocol.produce import ProduceRequest
+from kafka.structs import TopicPartition
+from kafka.version import __version__
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class Sender(threading.Thread):
             self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
-        not_ready_timeout = 999999999
+        not_ready_timeout = float('inf')
         for node in list(ready_nodes):
             if not self._client.ready(node):
                 log.debug('Node %s not ready; delaying produce of accumulated batch', node)
@@ -288,11 +288,14 @@ class Sender(threading.Thread):
             topic = batch.topic_partition.topic
             partition = batch.topic_partition.partition
 
-            # TODO: bytearray / memoryview
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        if self.config['api_version'] >= (0, 10):
+        kwargs = {}
+        if self.config['api_version'] >= (0, 11):
+            version = 3
+            kwargs = dict(transactional_id=None)
+        elif self.config['api_version'] >= (0, 10):
             version = 2
         elif self.config['api_version'] == (0, 9):
             version = 1
@@ -303,7 +306,8 @@ class Sender(threading.Thread):
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
                     for topic, partition_info
-                    in six.iteritems(produce_records_by_partition)]
+                    in six.iteritems(produce_records_by_partition)],
+            **kwargs
         )
 
     def wakeup(self):

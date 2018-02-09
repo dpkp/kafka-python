@@ -6,7 +6,7 @@ import random
 
 from kafka.vendor.six.moves import xrange # pylint: disable=import-error
 
-from .base import Producer
+from kafka.producer.base import Producer
 
 
 log = logging.getLogger(__name__)

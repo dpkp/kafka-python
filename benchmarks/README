@@ -1,0 +1,4 @@
+The `record_batch_*` benchmarks in this section are written using
+``perf`` library, created by Viktor Stinner. For more information on how to get
+reliable results of test runs please consult
+http://perf.readthedocs.io/en/latest/run_benchmark.html.

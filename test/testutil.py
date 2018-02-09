@@ -12,6 +12,7 @@ from six.moves import xrange
 from . import unittest
 
 from kafka import SimpleClient
+from kafka.errors import LeaderNotAvailableError, KafkaTimeoutError
 from kafka.structs import OffsetRequestPayload
 
 __all__ = [
@@ -98,7 +99,16 @@ class KafkaIntegrationTestCase(unittest.TestCase):
         if self.create_client:
             self.client = SimpleClient('%s:%d' % (self.server.host, self.server.port))
 
-        self.client.ensure_topic_exists(self.topic)
+        timeout = time.time() + 30
+        while time.time() < timeout:
+            try:
+                self.client.load_metadata_for_topics(self.topic, ignore_leadernotavailable=False)
+                if self.client.has_metadata_for_topic(topic):
+                    break
+            except LeaderNotAvailableError:
+                time.sleep(1)
+        else:
+            raise KafkaTimeoutError('Timeout loading topic metadata!')
 
         self._messages = {}
 
@@ -113,7 +123,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
     def current_offset(self, topic, partition):
         try:
             offsets, = self.client.send_offset_request([OffsetRequestPayload(topic, partition, -1, 1)])
-        except:
+        except Exception:
             # XXX: We've seen some UnknownErrors here and can't debug w/o server logs
             self.zk.child.dump_logs()
             self.server.child.dump_logs()

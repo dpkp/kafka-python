@@ -175,7 +175,8 @@ class SimpleClient(object):
 
             # Block
             while not future.is_done:
-                conn.recv()
+                for r, f in conn.recv():
+                    f.success(r)
 
             if future.failed():
                 log.error("Request failed: %s", future.exception)
@@ -288,7 +289,8 @@ class SimpleClient(object):
 
                 if not future.is_done:
                     conn, _ = connections_by_future[future]
-                    conn.recv()
+                    for r, f in conn.recv():
+                        f.success(r)
                     continue
 
                 _, broker = connections_by_future.pop(future)
@@ -352,8 +354,6 @@ class SimpleClient(object):
         try:
             host, port, afi = get_ip_port_afi(broker.host)
             conn = self._get_conn(host, broker.port, afi)
-            conn.send(request_id, request)
-
         except ConnectionError as e:
             log.warning('ConnectionError attempting to send request %s '
                         'to server %s: %s', request_id, broker, e)
@@ -364,6 +364,11 @@ class SimpleClient(object):
 
         # No exception, try to get response
         else:
+
+            future = conn.send(request_id, request)
+            while not future.is_done:
+                for r, f in conn.recv():
+                    f.success(r)
 
             # decoder_fn=None signal that the server is expected to not
             # send a response.  This probably only applies to
@@ -376,18 +381,17 @@ class SimpleClient(object):
                     responses[topic_partition] = None
                 return []
 
-            try:
-                response = conn.recv(request_id)
-            except ConnectionError as e:
-                log.warning('ConnectionError attempting to receive a '
+            if future.failed():
+                log.warning('Error attempting to receive a '
                             'response to request %s from server %s: %s',
-                            request_id, broker, e)
+                            request_id, broker, future.exception)
 
                 for payload in payloads:
                     topic_partition = (payload.topic, payload.partition)
                     responses[topic_partition] = FailedPayloadsError(payload)
 
             else:
+                response = future.value
                 _resps = []
                 for payload_response in decoder_fn(response):
                     topic_partition = (payload_response.topic,
@@ -495,7 +499,7 @@ class SimpleClient(object):
         """Fetch broker and topic-partition metadata from the server.
 
         Updates internal data: broker list, topic/partition list, and
-        topic/parition -> broker map. This method should be called after
+        topic/partition -> broker map. This method should be called after
         receiving any error.
 
         Note: Exceptions *will not* be raised in a full refresh (i.e. no topic
@@ -588,21 +592,21 @@ class SimpleClient(object):
                         leader, None, None, None
                     )
 
-    def send_metadata_request(self, payloads=[], fail_on_error=True,
+    def send_metadata_request(self, payloads=(), fail_on_error=True,
                               callback=None):
         encoder = KafkaProtocol.encode_metadata_request
         decoder = KafkaProtocol.decode_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_consumer_metadata_request(self, payloads=[], fail_on_error=True,
+    def send_consumer_metadata_request(self, payloads=(), fail_on_error=True,
                                        callback=None):
         encoder = KafkaProtocol.encode_consumer_metadata_request
         decoder = KafkaProtocol.decode_consumer_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_produce_request(self, payloads=[], acks=1, timeout=1000,
+    def send_produce_request(self, payloads=(), acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
         """
         Encode and send some ProduceRequests
@@ -652,7 +656,7 @@ class SimpleClient(object):
                 if resp is not None and
                 (not fail_on_error or not self._raise_on_response_error(resp))]
 
-    def send_fetch_request(self, payloads=[], fail_on_error=True,
+    def send_fetch_request(self, payloads=(), fail_on_error=True,
                            callback=None, max_wait_time=100, min_bytes=4096):
         """
         Encode and send a FetchRequest
@@ -672,7 +676,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_request(self, payloads=[], fail_on_error=True,
+    def send_offset_request(self, payloads=(), fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
             payloads,
@@ -682,7 +686,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+    def send_list_offset_request(self, payloads=(), fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
             payloads,
@@ -692,7 +696,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_commit_request(self, group, payloads=[],
+    def send_offset_commit_request(self, group, payloads=(),
                                    fail_on_error=True, callback=None):
         encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
                           group=group)
@@ -702,7 +706,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request(self, group, payloads=[],
+    def send_offset_fetch_request(self, group, payloads=(),
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
@@ -713,7 +717,7 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request_kafka(self, group, payloads=[],
+    def send_offset_fetch_request_kafka(self, group, payloads=(),
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,

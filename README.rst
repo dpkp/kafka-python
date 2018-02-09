@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-0.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-1.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -70,6 +70,8 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> for msg in consumer:
 ...     assert isinstance(msg.value, dict)
 
+>>> # Get consumer metrics
+>>> metrics = consumer.metrics()
 
 KafkaProducer
 *************
@@ -110,6 +112,9 @@ for more details.
 >>> for i in range(1000):
 ...     producer.send('foobar', b'msg %d' % i)
 
+>>> # Get producer performance metrics
+>>> metrics = producer.metrics()
+
 Thread safety
 *************
 
@@ -122,8 +127,8 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports gzip compression/decompression natively. To produce or consume lz4 
-compressed messages, you should install python-lz4 (pip install lz4). 
+kafka-python supports gzip compression/decompression natively. To produce or consume lz4
+compressed messages, you should install python-lz4 (pip install lz4).
 To enable snappy compression/decompression install python-snappy (also requires snappy library).
 See <https://kafka-python.readthedocs.io/en/master/install.html#optional-snappy-install>
 for more information.
@@ -136,8 +141,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 0.11).
-
+(0.8.0 to 1.0).
 
 Low-level
 *********

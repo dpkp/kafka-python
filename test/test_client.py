@@ -28,6 +28,7 @@ def mock_conn(conn, success=True):
     else:
         mocked.send.return_value = Future().failure(Exception())
     conn.return_value = mocked
+    conn.recv.return_value = []
 
 
 class TestSimpleClient(unittest.TestCase):
@@ -94,7 +95,7 @@ class TestSimpleClient(unittest.TestCase):
         mock_conn(mocked_conns[('kafka03', 9092)], success=False)
         future = Future()
         mocked_conns[('kafka02', 9092)].send.return_value = future
-        mocked_conns[('kafka02', 9092)].recv.side_effect = lambda: future.success('valid response')
+        mocked_conns[('kafka02', 9092)].recv.return_value = [('valid response', future)]
 
         def mock_get_conn(host, port, afi):
             return mocked_conns[(host, port)]
@@ -398,7 +399,7 @@ class TestSimpleClient(unittest.TestCase):
     def test_correlation_rollover(self):
         with patch.object(SimpleClient, 'load_metadata_for_topics'):
             big_num = 2**31 - 3
-            client = SimpleClient(hosts=[], correlation_id=big_num)
+            client = SimpleClient(hosts=(), correlation_id=big_num)
             self.assertEqual(big_num + 1, client._next_id())
             self.assertEqual(big_num + 2, client._next_id())
             self.assertEqual(0, client._next_id())

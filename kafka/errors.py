@@ -33,7 +33,11 @@ class NodeNotReadyError(KafkaError):
     retriable = True
 
 
-class CorrelationIdError(KafkaError):
+class KafkaProtocolError(KafkaError):
+    retriable = True
+
+
+class CorrelationIdError(KafkaProtocolError):
     retriable = True
 
 
@@ -55,7 +59,18 @@ class UnrecognizedBrokerVersion(KafkaError):
 
 
 class CommitFailedError(KafkaError):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(CommitFailedError, self).__init__(
+            """Commit cannot be completed since the group has already
+            rebalanced and assigned the partitions to another member.
+            This means that the time between subsequent calls to poll()
+            was longer than the configured max_poll_interval_ms, which
+            typically implies that the poll loop is spending too much
+            time message processing. You can address this either by
+            increasing the rebalance timeout with max_poll_interval_ms,
+            or by reducing the maximum size of batches returned in poll()
+            with max_poll_records.
+            """, *args, **kwargs)
 
 
 class AuthenticationMethodNotSupported(KafkaError):
@@ -97,11 +112,14 @@ class OffsetOutOfRangeError(BrokerResponseError):
                    ' maintained by the server for the given topic/partition.')
 
 
-class InvalidMessageError(BrokerResponseError):
+class CorruptRecordException(BrokerResponseError):
     errno = 2
-    message = 'INVALID_MESSAGE'
+    message = 'CORRUPT_MESSAGE'
     description = ('This message has failed its CRC checksum, exceeds the'
                    ' valid size, or is otherwise corrupt.')
+
+# Backward compatibility
+InvalidMessageError = CorruptRecordException
 
 
 class UnknownTopicOrPartitionError(BrokerResponseError):
