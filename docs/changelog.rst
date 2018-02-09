@@ -1,6 +1,17 @@
 Changelog
 =========
 
+1.4.1 (Feb 9, 2018)
+###################
+
+Bugfixes
+--------
+* Fix consumer poll stuck error when no available partition (ckyoog #1375)
+* Increase some integration test timeouts (dpkp #1374)
+* Use raw in case string overriden (jeffwidman #1373)
+* Fix pending completion IndexError bug caused by multiple threads (dpkp #1372)
+
+
 1.4.0 (Feb 6, 2018)
 ###################
 
