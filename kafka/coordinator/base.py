@@ -85,7 +85,7 @@ class BaseCoordinator(object):
         'group_id': 'kafka-python-default-group',
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
-        'node_not_ready_retry_timeout_ms': None,
+        'coordinator_not_ready_retry_timeout_ms': None,
         'max_poll_interval_ms': 300000,
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
@@ -109,8 +109,9 @@ class BaseCoordinator(object):
                 should be set no higher than 1/3 of that value. It can be
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
-            node_not_ready_retry_timeout_ms (int): The timeout used to detect
-                the broker not being available so that NodeNotReadyError is raised.
+            coordinator_not_ready_retry_timeout_ms (int): The timeout used to
+                detect that the Kafka coordinator is not available. If 'None',
+                the default behavior of polling indefinitely would be kept.
                 Default: None
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
@@ -244,12 +245,12 @@ class BaseCoordinator(object):
             else:
                 return self.coordinator_id
 
-    def ensure_coordinator_ready(self):
+    def ensure_coordinator_ready(self, timeout_ms=None):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        node_not_ready_retry_timeout_ms = self.config['node_not_ready_retry_timeout_ms']
-        node_not_ready_retry_start_time = time.time()
+        retry_timeout_ms = timeout_ms or self.config['coordinator_not_ready_retry_timeout_ms']
+        retry_start_time_in_secs = time.time()
         with self._lock:
             while self.coordinator_unknown():
 
@@ -267,11 +268,14 @@ class BaseCoordinator(object):
 
                 if future.failed():
                     if future.retriable():
-                        if node_not_ready_retry_timeout_ms is not None and isinstance(future.exception, Errors.NodeNotReadyError):
-                            self._client.poll(timeout_ms=node_not_ready_retry_timeout_ms)
-                            node_not_ready_retry_timeout_ms -= (time.time() - node_not_ready_retry_start_time) * 1000
-                            if node_not_ready_retry_timeout_ms <= 0:
+                        if retry_timeout_ms is not None and isinstance(
+                                future.exception, (Errors.NodeNotReadyError, Errors.NoBrokersAvailable)):
+                            remaining_retry_timeout_ms = retry_timeout_ms - (
+                                time.time() - retry_start_time_in_secs) * 1000
+                            if remaining_retry_timeout_ms <= 0:
                                 raise future.exception  # pylint: disable-msg=raising-bad-type
+                            self._client.poll(timeout_ms=min(
+                                self.config['retry_backoff_ms'], remaining_retry_timeout_ms))
                         elif getattr(future.exception, 'invalid_metadata', False):
                             log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                             metadata_update = self._client.cluster.request_update()
