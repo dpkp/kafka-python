@@ -326,9 +326,6 @@ class Fetcher(six.Iterator):
             max_records = self.config['max_poll_records']
         assert max_records > 0
 
-        if self._subscriptions.needs_partition_assignment:
-            return {}, False
-
         drained = collections.defaultdict(list)
         records_remaining = max_records
 
@@ -397,9 +394,6 @@ class Fetcher(six.Iterator):
 
     def _message_generator(self):
         """Iterate over fetched_records"""
-        if self._subscriptions.needs_partition_assignment:
-            raise StopIteration('Subscription needs partition assignment')
-
         while self._next_partition_records or self._completed_fetches:
 
             if not self._next_partition_records:
@@ -638,9 +632,9 @@ class Fetcher(six.Iterator):
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
         if self._next_partition_records:
-            fetchable.remove(self._next_partition_records.topic_partition)
+            fetchable.discard(self._next_partition_records.topic_partition)
         for fetch in self._completed_fetches:
-            fetchable.remove(fetch.topic_partition)
+            fetchable.discard(fetch.topic_partition)
         return fetchable
 
     def _create_fetch_requests(self):
@@ -841,12 +835,21 @@ class Fetcher(six.Iterator):
 
         return parsed_records
 
-    class PartitionRecords(six.Iterator):
+    class PartitionRecords(object):
         def __init__(self, fetch_offset, tp, messages):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
             self.messages = messages
-            self.message_idx = 0
+            # When fetching an offset that is in the middle of a
+            # compressed batch, we will get all messages in the batch.
+            # But we want to start 'take' at the fetch_offset
+            for i, msg in enumerate(messages):
+                if msg.offset == fetch_offset:
+                    self.message_idx = i
+                    break
+            else:
+                self.message_idx = 0
+                self.messages = None
 
         # For truthiness evaluation we need to define __len__ or __nonzero__
         def __len__(self):

@@ -10,13 +10,13 @@ import weakref
 
 from kafka.vendor import six
 
-from .heartbeat import Heartbeat
-from .. import errors as Errors
-from ..future import Future
-from ..metrics import AnonMeasurable
-from ..metrics.stats import Avg, Count, Max, Rate
-from ..protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
-from ..protocol.group import (HeartbeatRequest, JoinGroupRequest,
+from kafka.coordinator.heartbeat import Heartbeat
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Max, Rate
+from kafka.protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
+from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
                             LeaveGroupRequest, SyncGroupRequest)
 
 log = logging.getLogger('kafka.coordinator')
@@ -355,25 +355,24 @@ class BaseCoordinator(object):
     def ensure_active_group(self):
         """Ensure that the group is active (i.e. joined and synced)"""
         with self._lock:
-            if not self.need_rejoin():
-                return
-
-            # call on_join_prepare if needed. We set a flag to make sure that
-            # we do not call it a second time if the client is woken up before
-            # a pending rebalance completes.
-            if not self.rejoining:
-                self._on_join_prepare(self._generation.generation_id,
-                                      self._generation.member_id)
-                self.rejoining = True
-
             if self._heartbeat_thread is None:
-                log.debug('Starting new heartbeat thread')
-                self._heartbeat_thread = HeartbeatThread(weakref.proxy(self))
-                self._heartbeat_thread.daemon = True
-                self._heartbeat_thread.start()
+                self._start_heartbeat_thread()
 
             while self.need_rejoin():
                 self.ensure_coordinator_ready()
+
+                # call on_join_prepare if needed. We set a flag
+                # to make sure that we do not call it a second
+                # time if the client is woken up before a pending
+                # rebalance completes. This must be called on each
+                # iteration of the loop because an event requiring
+                # a rebalance (such as a metadata refresh which
+                # changes the matched subscription set) can occur
+                # while another rebalance is still in progress.
+                if not self.rejoining:
+                    self._on_join_prepare(self._generation.generation_id,
+                                          self._generation.member_id)
+                    self.rejoining = True
 
                 # ensure that there are no pending requests to the coordinator.
                 # This is important in particular to avoid resending a pending
@@ -391,19 +390,23 @@ class BaseCoordinator(object):
                 # before the pending rebalance has completed.
                 if self.join_future is None:
                     self.state = MemberState.REBALANCING
-                    self.join_future = self._send_join_group_request()
+                    future = self._send_join_group_request()
+
+                    self.join_future = future  # this should happen before adding callbacks
 
                     # handle join completion in the callback so that the
                     # callback will be invoked even if the consumer is woken up
                     # before finishing the rebalance
-                    self.join_future.add_callback(self._handle_join_success)
+                    future.add_callback(self._handle_join_success)
 
                     # we handle failures below after the request finishes.
                     # If the join completes after having been woken up, the
                     # exception is ignored and we will rejoin
-                    self.join_future.add_errback(self._handle_join_failure)
+                    future.add_errback(self._handle_join_failure)
 
-                future = self.join_future
+                else:
+                    future = self.join_future
+
                 self._client.poll(future=future)
 
                 if future.failed():
@@ -723,13 +726,30 @@ class BaseCoordinator(object):
     def request_rejoin(self):
         self.rejoin_needed = True
 
+    def _start_heartbeat_thread(self):
+        if self._heartbeat_thread is None:
+            log.info('Starting new heartbeat thread')
+            self._heartbeat_thread = HeartbeatThread(weakref.proxy(self))
+            self._heartbeat_thread.daemon = True
+            self._heartbeat_thread.start()
+
+    def _close_heartbeat_thread(self):
+        if self._heartbeat_thread is not None:
+            log.info('Stopping heartbeat thread')
+            try:
+                self._heartbeat_thread.close()
+            except ReferenceError:
+                pass
+            self._heartbeat_thread = None
+
+    def __del__(self):
+        self._close_heartbeat_thread()
+
     def close(self):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
         with self._lock:
-            if self._heartbeat_thread is not None:
-                self._heartbeat_thread.close()
-                self._heartbeat_thread = None
+            self._close_heartbeat_thread()
             self.maybe_leave_group()
 
     def maybe_leave_group(self):
@@ -875,7 +895,7 @@ class GroupCoordinatorMetrics(object):
 class HeartbeatThread(threading.Thread):
     def __init__(self, coordinator):
         super(HeartbeatThread, self).__init__()
-        self.name = threading.current_thread().name + '-heartbeat'
+        self.name = coordinator.group_id + '-heartbeat'
         self.coordinator = coordinator
         self.enabled = False
         self.closed = False
@@ -888,12 +908,11 @@ class HeartbeatThread(threading.Thread):
             self.coordinator._lock.notify()
 
     def disable(self):
-        with self.coordinator._lock:
-            self.enabled = False
+        self.enabled = False
 
     def close(self):
+        self.closed = True
         with self.coordinator._lock:
-            self.closed = True
             self.coordinator._lock.notify()
 
     def run(self):
@@ -901,7 +920,10 @@ class HeartbeatThread(threading.Thread):
             while not self.closed:
                 self._run_once()
 
-            log.debug('Heartbeat closed!')
+            log.debug('Heartbeat thread closed')
+
+        except ReferenceError:
+            log.debug('Heartbeat thread closed due to coordinator gc')
 
         except RuntimeError as e:
             log.error("Heartbeat thread for group %s failed due to unexpected error: %s",

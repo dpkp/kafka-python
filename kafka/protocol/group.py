@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 
-from .api import Request, Response
-from .struct import Struct
-from .types import Array, Bytes, Int16, Int32, Schema, String
+from kafka.protocol.api import Request, Response
+from kafka.protocol.struct import Struct
+from kafka.protocol.types import Array, Bytes, Int16, Int32, Schema, String
 
 
 class JoinGroupResponse_v0(Response):
@@ -87,7 +87,7 @@ JoinGroupRequest = [
     JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2
 ]
 JoinGroupResponse = [
-    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v1
+    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2
 ]
 
 

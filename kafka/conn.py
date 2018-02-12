@@ -12,7 +12,7 @@ try:
     import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from .vendor import selectors34 as selectors
+    from kafka.vendor import selectors34 as selectors
 
 import socket
 import struct
@@ -180,6 +180,8 @@ class BrokerConnection(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -276,7 +278,7 @@ class BrokerConnection(object):
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
-        if self.state is ConnectionStates.DISCONNECTED:
+        if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.last_attempt = time.time()
             next_lookup = self._next_afi_host_port()
             if not next_lookup:
@@ -564,9 +566,9 @@ class BrokerConnection(object):
             # Kafka currently doesn't support integrity or confidentiality security layers, so we
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
-            msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0]))) + msg[1:]
+            msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
             # add authorization identity to the response, GSS-wrap and send it
-            msg = client_ctx.wrap(msg + auth_id, False).message
+            msg = client_ctx.wrap(msg + auth_id.encode(), False).message
             size = Int32.encode(len(msg))
             self._send_bytes_blocking(size + msg)
 
@@ -628,6 +630,14 @@ class BrokerConnection(object):
             self._reconnect_backoff /= 1000.0
             log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
 
+    def _close_socket(self):
+        if self._sock:
+            self._sock.close()
+            self._sock = None
+
+    def __del__(self):
+        self._close_socket()
+
     def close(self, error=None):
         """Close socket and fail all in-flight-requests.
 
@@ -641,9 +651,7 @@ class BrokerConnection(object):
             self.state = ConnectionStates.DISCONNECTING
             self.config['state_change_callback'](self)
         self._update_reconnect_backoff()
-        if self._sock:
-            self._sock.close()
-            self._sock = None
+        self._close_socket()
         self.state = ConnectionStates.DISCONNECTED
         self._sasl_auth_future = None
         self._protocol = KafkaProtocol(
@@ -742,19 +750,21 @@ class BrokerConnection(object):
         return responses
 
     def _recv(self):
-        responses = []
-        SOCK_CHUNK_BYTES = 4096
-        while True:
+        """Take all available bytes from socket, return list of any responses from parser"""
+        recvd = []
+        while len(recvd) < self.config['sock_chunk_buffer_count']:
             try:
-                data = self._sock.recv(SOCK_CHUNK_BYTES)
-                # We expect socket.recv to raise an exception if there is not
-                # enough data to read the full bytes_to_read
+                data = self._sock.recv(self.config['sock_chunk_bytes'])
+                # We expect socket.recv to raise an exception if there are no
+                # bytes available to read from the socket in non-blocking mode.
                 # but if the socket is disconnected, we will get empty data
                 # without an exception raised
                 if not data:
                     log.error('%s: socket disconnected', self)
                     self.close(error=Errors.ConnectionError('socket disconnected'))
-                    break
+                    return []
+                else:
+                    recvd.append(data)
 
             except SSLWantReadError:
                 break
@@ -764,27 +774,23 @@ class BrokerConnection(object):
                 log.exception('%s: Error receiving network data'
                               ' closing socket', self)
                 self.close(error=Errors.ConnectionError(e))
-                break
+                return []
             except BlockingIOError:
                 if six.PY3:
                     break
                 raise
 
-            if self._sensors:
-                self._sensors.bytes_received.record(len(data))
+        recvd_data = b''.join(recvd)
+        if self._sensors:
+            self._sensors.bytes_received.record(len(recvd_data))
 
-            try:
-                more_responses = self._protocol.receive_bytes(data)
-            except Errors.KafkaProtocolError as e:
-                self.close(e)
-                break
-            else:
-                responses.extend([resp for (_, resp) in more_responses])
-
-            if len(data) < SOCK_CHUNK_BYTES:
-                break
-
-        return responses
+        try:
+            responses = self._protocol.receive_bytes(recvd_data)
+        except Errors.KafkaProtocolError as e:
+            self.close(e)
+            return []
+        else:
+            return [resp for (_, resp) in responses]  # drop correlation id
 
     def requests_timed_out(self):
         if self.in_flight_requests:
@@ -812,6 +818,7 @@ class BrokerConnection(object):
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker version>, <needed struct>)
+            ((1, 0, 0), MetadataRequest[5]),
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),
@@ -851,8 +858,8 @@ class BrokerConnection(object):
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from .protocol.admin import ApiVersionRequest, ListGroupsRequest
-        from .protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
+        from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
+        from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
         # Socket errors are logged as exceptions and can alarm users. Mute them
         from logging import Filter

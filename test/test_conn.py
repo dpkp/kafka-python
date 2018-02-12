@@ -263,6 +263,7 @@ def test_lookup_on_connect():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.last_attempt = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
@@ -288,6 +289,7 @@ def test_relookup_on_failure():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.last_attempt = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()

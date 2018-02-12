@@ -44,8 +44,8 @@
 import struct
 import time
 
-from .abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
-from .util import calc_crc32
+from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
+from kafka.record.util import calc_crc32
 
 from kafka.codec import (
     gzip_encode, snappy_encode, lz4_encode, lz4_encode_old_kafka,

@@ -647,13 +647,14 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         early_time = late_time - 2000
         tp = TopicPartition(self.topic, 0)
 
+        timeout = 10
         kafka_producer = self.kafka_producer()
         early_msg = kafka_producer.send(
             self.topic, partition=0, value=b"first",
-            timestamp_ms=early_time).get(1)
+            timestamp_ms=early_time).get(timeout)
         late_msg = kafka_producer.send(
             self.topic, partition=0, value=b"last",
-            timestamp_ms=late_time).get(1)
+            timestamp_ms=late_time).get(timeout)
 
         consumer = self.kafka_consumer()
         offsets = consumer.offsets_for_times({tp: early_time})
@@ -699,12 +700,13 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         kafka_producer = self.kafka_producer()
         send_time = int(time.time() * 1000)
+        timeout = 10
         p0msg = kafka_producer.send(
             self.topic, partition=0, value=b"XXX",
-            timestamp_ms=send_time).get()
+            timestamp_ms=send_time).get(timeout)
         p1msg = kafka_producer.send(
             self.topic, partition=1, value=b"XXX",
-            timestamp_ms=send_time).get()
+            timestamp_ms=send_time).get(timeout)
 
         consumer = self.kafka_consumer()
         offsets = consumer.offsets_for_times({

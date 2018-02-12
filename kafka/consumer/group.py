@@ -273,6 +273,8 @@ class KafkaConsumer(six.Iterator):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'consumer_timeout_ms': float('inf'),
         'skip_double_compressed_messages': False,
         'security_protocol': 'PLAINTEXT',
@@ -646,6 +648,11 @@ class KafkaConsumer(six.Iterator):
 
         timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll())
         self._client.poll(timeout_ms=timeout_ms)
+        # after the long poll, we should check whether the group needs to rebalance
+        # prior to returning data so that the group can stabilize faster
+        if self._coordinator.need_rejoin():
+            return {}
+
         records, _ = self._fetcher.fetched_records(max_records)
         return records
 
@@ -1056,6 +1063,11 @@ class KafkaConsumer(six.Iterator):
             if not self._fetcher.in_flight_fetches():
                 poll_ms = 0
             self._client.poll(timeout_ms=poll_ms)
+
+            # after the long poll, we should check whether the group needs to rebalance
+            # prior to returning data so that the group can stabilize faster
+            if self._coordinator.need_rejoin():
+                continue
 
             # We need to make sure we at least keep up with scheduled tasks,
             # like heartbeats, auto-commits, and metadata refreshes

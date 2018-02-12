@@ -6,31 +6,33 @@ import functools
 import logging
 import random
 import threading
+import weakref
 
 # selectors in stdlib as of py3.4
 try:
     import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from .vendor import selectors34 as selectors
+    from kafka.vendor import selectors34 as selectors
 
 import socket
 import time
 
 from kafka.vendor import six
 
-from .cluster import ClusterMetadata
-from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
-from . import errors as Errors
-from .future import Future
-from .metrics import AnonMeasurable
-from .metrics.stats import Avg, Count, Rate
-from .metrics.stats.rate import TimeUnit
-from .protocol.metadata import MetadataRequest
+from kafka.cluster import ClusterMetadata
+from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Rate
+from kafka.metrics.stats.rate import TimeUnit
+from kafka.protocol.metadata import MetadataRequest
+from kafka.util import Dict, WeakMethod
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
-from .vendor import socketpair
-from .version import __version__
+from kafka.vendor import socketpair
+from kafka.version import __version__
 
 if six.PY2:
     ConnectionError = None
@@ -152,6 +154,8 @@ class KafkaClient(object):
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'sock_chunk_bytes': 4096,  # undocumented experimental option
+        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
         'security_protocol': 'PLAINTEXT',
@@ -197,7 +201,7 @@ class KafkaClient(object):
         self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
         self._selector = self.config['selector']()
-        self._conns = {}
+        self._conns = Dict()  # object to support weakrefs
         self._connecting = set()
         self._refresh_on_disconnects = True
         self._last_bootstrap = 0
@@ -220,7 +224,7 @@ class KafkaClient(object):
         if self.config['metrics']:
             self._sensors = KafkaClientMetrics(self.config['metrics'],
                                                self.config['metric_group_prefix'],
-                                               self._conns)
+                                               weakref.proxy(self._conns))
 
         self._bootstrap(collect_hosts(self.config['bootstrap_servers']))
 
@@ -248,7 +252,7 @@ class KafkaClient(object):
 
         for host, port, afi in hosts:
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
-            cb = functools.partial(self._conn_state_change, 'bootstrap')
+            cb = functools.partial(WeakMethod(self._conn_state_change), 'bootstrap')
             bootstrap = BrokerConnection(host, port, afi,
                                          state_change_callback=cb,
                                          node_id='bootstrap',
@@ -357,7 +361,7 @@ class KafkaClient(object):
                 log.debug("Initiating connection to node %s at %s:%s",
                           node_id, broker.host, broker.port)
                 host, port, afi = get_ip_port_afi(broker.host)
-                cb = functools.partial(self._conn_state_change, node_id)
+                cb = functools.partial(WeakMethod(self._conn_state_change), node_id)
                 conn = BrokerConnection(host, broker.port, afi,
                                         state_change_callback=cb,
                                         node_id=node_id,
@@ -404,6 +408,13 @@ class KafkaClient(object):
                 return False
             return self._conns[node_id].connected()
 
+    def _close(self):
+        if not self._closed:
+            self._closed = True
+            self._wake_r.close()
+            self._wake_w.close()
+            self._selector.close()
+
     def close(self, node_id=None):
         """Close one or all broker connections.
 
@@ -412,17 +423,17 @@ class KafkaClient(object):
         """
         with self._lock:
             if node_id is None:
-                self._closed = True
+                self._close()
                 for conn in self._conns.values():
                     conn.close()
-                self._wake_r.close()
-                self._wake_w.close()
-                self._selector.close()
             elif node_id in self._conns:
                 self._conns[node_id].close()
             else:
                 log.warning("Node %s not found in current connection list; skipping", node_id)
                 return
+
+    def __del__(self):
+        self._close()
 
     def is_disconnected(self, node_id):
         """Check whether the node connection has been disconnected or failed.
@@ -654,8 +665,14 @@ class KafkaClient(object):
 
     def _fire_pending_completed_requests(self):
         responses = []
-        while self._pending_completion:
-            response, future = self._pending_completion.popleft()
+        while True:
+            try:
+                # We rely on deque.popleft remaining threadsafe
+                # to allow both the heartbeat thread and the main thread
+                # to process responses
+                response, future = self._pending_completion.popleft()
+            except IndexError:
+                break
             future.success(response)
             responses.append(response)
         return responses
@@ -841,8 +858,8 @@ class KafkaClient(object):
     def wakeup(self):
         with self._wake_lock:
             try:
-                assert self._wake_w.send(b'x') == 1
-            except (AssertionError, socket.error):
+                self._wake_w.sendall(b'x')
+            except socket.error:
                 log.warning('Unable to send to wakeup socket!')
 
     def _clear_wake_fd(self):

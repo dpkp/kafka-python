@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
-from .api import Request, Response
-from .types import Array, Int8, Int16, Int32, Int64, Schema, String
+from kafka.protocol.api import Request, Response
+from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String
 
 UNKNOWN_OFFSET = -1
 

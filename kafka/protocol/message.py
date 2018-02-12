@@ -3,15 +3,15 @@ from __future__ import absolute_import
 import io
 import time
 
-from ..codec import (has_gzip, has_snappy, has_lz4,
+from kafka.codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
-from .frame import KafkaBytes
-from .struct import Struct
-from .types import (
+from kafka.protocol.frame import KafkaBytes
+from kafka.protocol.struct import Struct
+from kafka.protocol.types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
-from ..util import crc32, WeakMethod
+from kafka.util import crc32, WeakMethod
 
 
 class Message(Struct):
