@@ -113,7 +113,7 @@ def test_send_max_ifr(conn):
 def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = ProduceRequest[0](required_acks=0, timeout=0, topics=[])
+    req = ProduceRequest[0](required_acks=0, timeout=0, topics=())
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
@@ -256,6 +256,31 @@ def test_lookup_on_connect():
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
         assert conn.host == ip1
+
+    ip2 = '127.0.0.2'
+    mock_return2 = [
+        (2, 2, 17, '', (ip2, 9092)),
+    ]
+
+    with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        conn.close()
+        assert conn.host == ip2
+
+
+def test_relookup_on_failure():
+    hostname = 'example.org'
+    port = 9092
+    conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
+    assert conn.host == conn.hostname == hostname
+    mock_return1 = []
+    with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
+        last_attempt = conn.last_attempt
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn.disconnected()
+        assert conn.last_attempt > last_attempt
 
     ip2 = '127.0.0.2'
     mock_return2 = [

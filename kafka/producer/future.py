@@ -44,7 +44,9 @@ class FutureRecordMetadata(Future):
         (relative_offset, timestamp_ms, checksum,
          serialized_key_size, serialized_value_size) = self.args
 
-        if produce_timestamp_ms is not None:
+        # None is when Broker does not support the API (<0.10) and
+        # -1 is when the broker is configured for CREATE_TIME timestamps
+        if produce_timestamp_ms is not None and produce_timestamp_ms != -1:
             timestamp_ms = produce_timestamp_ms
         if offset != -1 and relative_offset is not None:
             offset += relative_offset

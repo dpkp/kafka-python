@@ -3,26 +3,30 @@ from __future__ import absolute_import
 
 import pytest
 
-import itertools
 from collections import OrderedDict
+import itertools
+import time
 
 from kafka.client_async import KafkaClient
-from kafka.consumer.fetcher import Fetcher, NoOffsetForPartitionError
+from kafka.consumer.fetcher import (
+    CompletedFetch, ConsumerRecord, Fetcher, NoOffsetForPartitionError
+)
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.metrics import Metrics
-from kafka.protocol.fetch import FetchRequest
+from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.offset import OffsetResponse
 from kafka.structs import TopicPartition
 from kafka.future import Future
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
-    UnknownTopicOrPartitionError
+    UnknownTopicOrPartitionError, OffsetOutOfRangeError
 )
+from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
 
 
 @pytest.fixture
 def client(mocker):
-    return mocker.Mock(spec=KafkaClient(bootstrap_servers=[], api_version=(0, 9)))
+    return mocker.Mock(spec=KafkaClient(bootstrap_servers=(), api_version=(0, 9)))
 
 
 @pytest.fixture
@@ -31,28 +35,43 @@ def subscription_state():
 
 
 @pytest.fixture
-def fetcher(client, subscription_state):
-    subscription_state.subscribe(topics=['foobar'])
-    assignment = [TopicPartition('foobar', i) for i in range(3)]
+def topic():
+    return 'foobar'
+
+
+@pytest.fixture
+def fetcher(client, subscription_state, topic):
+    subscription_state.subscribe(topics=[topic])
+    assignment = [TopicPartition(topic, i) for i in range(3)]
     subscription_state.assign_from_subscribed(assignment)
     for tp in assignment:
         subscription_state.seek(tp, 0)
     return Fetcher(client, subscription_state, Metrics())
 
 
-def test_send_fetches(fetcher, mocker):
+def _build_record_batch(msgs, compression=0):
+    builder = MemoryRecordsBuilder(
+        magic=1, compression_type=0, batch_size=9999999)
+    for msg in msgs:
+        key, value, timestamp = msg
+        builder.append(key=key, value=value, timestamp=timestamp, headers=[])
+    builder.close()
+    return builder.buffer()
+
+
+def test_send_fetches(fetcher, topic, mocker):
     fetch_requests = [
         FetchRequest[0](
             -1, fetcher.config['fetch_max_wait_ms'],
             fetcher.config['fetch_min_bytes'],
-            [('foobar', [
+            [(topic, [
                 (0, 0, fetcher.config['max_partition_fetch_bytes']),
                 (1, 0, fetcher.config['max_partition_fetch_bytes']),
             ])]),
         FetchRequest[0](
             -1, fetcher.config['fetch_max_wait_ms'],
             fetcher.config['fetch_min_bytes'],
-            [('foobar', [
+            [(topic, [
                 (2, 0, fetcher.config['max_partition_fetch_bytes']),
             ])])
     ]
@@ -80,9 +99,9 @@ def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
     assert all([isinstance(r, FetchRequest[fetch_version]) for r in requests])
 
 
-def test_update_fetch_positions(fetcher, mocker):
+def test_update_fetch_positions(fetcher, topic, mocker):
     mocker.patch.object(fetcher, '_reset_offset')
-    partition = TopicPartition('foobar', 0)
+    partition = TopicPartition(topic, 0)
 
     # unassigned partition
     fetcher.update_fetch_positions([TopicPartition('fizzbuzz', 0)])
@@ -282,3 +301,200 @@ def test__handle_offset_response(fetcher, mocker):
     fetcher._handle_offset_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
+
+
+def test_fetched_records(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+
+    msgs = []
+    for i in range(10):
+        msgs.append((None, b"foo", None))
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [0, 100, _build_record_batch(msgs)],
+        mocker.MagicMock()
+    )
+    fetcher._completed_fetches.append(completed_fetch)
+    records, partial = fetcher.fetched_records()
+    assert tp in records
+    assert len(records[tp]) == len(msgs)
+    assert all(map(lambda x: isinstance(x, ConsumerRecord), records[tp]))
+    assert partial is False
+
+
+@pytest.mark.parametrize(("fetch_request", "fetch_response", "num_partitions"), [
+    (
+        FetchRequest[0](
+            -1, 100, 100,
+            [('foo', [(0, 0, 1000),])]),
+        FetchResponse[0](
+            [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
+        1,
+    ),
+    (
+        FetchRequest[1](
+            -1, 100, 100,
+            [('foo', [(0, 0, 1000), (1, 0, 1000),])]),
+        FetchResponse[1](
+            0,
+            [("foo", [
+                (0, 0, 1000, [(0, b'xxx'),]),
+                (1, 0, 1000, [(0, b'xxx'),]),
+            ]),]),
+        2,
+    ),
+    (
+        FetchRequest[2](
+            -1, 100, 100,
+            [('foo', [(0, 0, 1000),])]),
+        FetchResponse[2](
+            0, [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
+        1,
+    ),
+    (
+        FetchRequest[3](
+            -1, 100, 100, 10000,
+            [('foo', [(0, 0, 1000),])]),
+        FetchResponse[3](
+            0, [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
+        1,
+    ),
+    (
+        FetchRequest[4](
+            -1, 100, 100, 10000, 0,
+            [('foo', [(0, 0, 1000),])]),
+        FetchResponse[4](
+            0, [("foo", [(0, 0, 1000, 0, [], [(0, b'xxx'),])]),]),
+        1,
+    ),
+    (
+        # This may only be used in broker-broker api calls
+        FetchRequest[5](
+            -1, 100, 100, 10000, 0,
+            [('foo', [(0, 0, 1000),])]),
+        FetchResponse[5](
+            0, [("foo", [(0, 0, 1000, 0, 0, [], [(0, b'xxx'),])]),]),
+        1,
+    ),
+])
+def test__handle_fetch_response(fetcher, fetch_request, fetch_response, num_partitions):
+    fetcher._handle_fetch_response(fetch_request, time.time(), fetch_response)
+    assert len(fetcher._completed_fetches) == num_partitions
+
+
+def test__unpack_message_set(fetcher):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition('foo', 0)
+    messages = [
+        (None, b"a", None),
+        (None, b"b", None),
+        (None, b"c", None),
+    ]
+    memory_records = MemoryRecords(_build_record_batch(messages))
+    records = list(fetcher._unpack_message_set(tp, memory_records))
+    assert len(records) == 3
+    assert all(map(lambda x: isinstance(x, ConsumerRecord), records))
+    assert records[0].value == b'a'
+    assert records[1].value == b'b'
+    assert records[2].value == b'c'
+    assert records[0].offset == 0
+    assert records[1].offset == 1
+    assert records[2].offset == 2
+
+
+def test__message_generator(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    msgs = []
+    for i in range(10):
+        msgs.append((None, b"foo", None))
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [0, 100, _build_record_batch(msgs)],
+        mocker.MagicMock()
+    )
+    fetcher._completed_fetches.append(completed_fetch)
+    for i in range(10):
+        msg = next(fetcher)
+        assert isinstance(msg, ConsumerRecord)
+        assert msg.offset == i
+        assert msg.value == b'foo'
+
+
+def test__parse_fetched_data(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    msgs = []
+    for i in range(10):
+        msgs.append((None, b"foo", None))
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [0, 100, _build_record_batch(msgs)],
+        mocker.MagicMock()
+    )
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert isinstance(partition_record, fetcher.PartitionRecords)
+    assert len(partition_record) == 10
+
+
+def test__parse_fetched_data__paused(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    msgs = []
+    for i in range(10):
+        msgs.append((None, b"foo", None))
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [0, 100, _build_record_batch(msgs)],
+        mocker.MagicMock()
+    )
+    fetcher._subscriptions.pause(tp)
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert partition_record is None
+
+
+def test__parse_fetched_data__stale_offset(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    msgs = []
+    for i in range(10):
+        msgs.append((None, b"foo", None))
+    completed_fetch = CompletedFetch(
+        tp, 10, 0, [0, 100, _build_record_batch(msgs)],
+        mocker.MagicMock()
+    )
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert partition_record is None
+
+
+def test__parse_fetched_data__not_leader(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [NotLeaderForPartitionError.errno, -1, None],
+        mocker.MagicMock()
+    )
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert partition_record is None
+    fetcher._client.cluster.request_update.assert_called_with()
+
+
+def test__parse_fetched_data__unknown_tp(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [UnknownTopicOrPartitionError.errno, -1, None],
+        mocker.MagicMock()
+    )
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert partition_record is None
+    fetcher._client.cluster.request_update.assert_called_with()
+
+
+def test__parse_fetched_data__out_of_range(fetcher, topic, mocker):
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    completed_fetch = CompletedFetch(
+        tp, 0, 0, [OffsetOutOfRangeError.errno, -1, None],
+        mocker.MagicMock()
+    )
+    partition_record = fetcher._parse_fetched_data(completed_fetch)
+    assert partition_record is None
+    assert fetcher._subscriptions.assignment[tp].awaiting_reset is True

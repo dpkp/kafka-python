@@ -13,19 +13,28 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.fetch import FetchRequest
-from kafka.protocol.message import PartialMessage
 from kafka.protocol.offset import (
     OffsetRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
+from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
 from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 log = logging.getLogger(__name__)
 
 
+# Isolation levels
+READ_UNCOMMITTED = 0
+READ_COMMITTED = 1
+
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "offset", "timestamp", "timestamp_type",
      "key", "value", "checksum", "serialized_key_size", "serialized_value_size"])
+
+
+CompletedFetch = collections.namedtuple("CompletedFetch",
+    ["topic_partition", "fetched_offset", "response_version",
+     "partition_data", "metric_aggregator"])
 
 
 class NoOffsetForPartitionError(Errors.KafkaError):
@@ -76,7 +85,7 @@ class Fetcher(six.Iterator):
                 performs fetches to multiple brokers in parallel so memory
                 usage will depend on the number of brokers containing
                 partitions for the topic.
-                Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 Mb).
+                Supported Kafka version >= 0.10.1.0. Default: 52428800 (50 MB).
             max_partition_fetch_bytes (int): The maximum amount of data
                 per-partition the server will return. The maximum total memory
                 used for a request = #partitions * max_partition_fetch_bytes.
@@ -104,18 +113,16 @@ class Fetcher(six.Iterator):
 
         self._client = client
         self._subscriptions = subscriptions
-        self._records = collections.deque()  # (offset, topic_partition, messages)
-        self._unauthorized_topics = set()
-        self._offset_out_of_range_partitions = dict()  # {topic_partition: offset}
-        self._record_too_large_partitions = dict()  # {topic_partition: offset}
+        self._completed_fetches = collections.deque()  # Unparsed responses
+        self._next_partition_records = None  # Holds a single PartitionRecords until fully consumed
         self._iterator = None
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
+        self._isolation_level = READ_UNCOMMITTED
 
     def send_fetches(self):
-        """Send FetchRequests asynchronously for all assigned partitions.
-
-        Note: noop if there are unconsumed records internal to the fetcher
+        """Send FetchRequests for all assigned partitions that do not already have
+        an in-flight fetch or pending fetch data.
 
         Returns:
             List of Futures: each future resolves to a FetchResponse
@@ -125,13 +132,24 @@ class Fetcher(six.Iterator):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request)
-                future.error_on_callbacks=True
                 future.add_callback(self._handle_fetch_response, request, time.time())
                 future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
                 futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
         return futures
+
+    def reset_offsets_if_needed(self, partitions):
+        """Lookup and set offsets for any partitions which are awaiting an
+        explicit reset.
+
+        Arguments:
+            partitions (set of TopicPartitions): the partitions to reset
+        """
+        for tp in partitions:
+            # TODO: If there are several offsets to reset, we could submit offset requests in parallel
+            if self._subscriptions.is_assigned(tp) and self._subscriptions.is_offset_reset_needed(tp):
+                self._reset_offset(tp)
 
     def _clean_done_fetch_futures(self):
         while True:
@@ -167,9 +185,6 @@ class Fetcher(six.Iterator):
                             " update", tp)
                 continue
 
-            # TODO: If there are several offsets to reset,
-            # we could submit offset requests in parallel
-            # for now, each call to _reset_offset will block
             if self._subscriptions.is_offset_reset_needed(tp):
                 self._reset_offset(tp)
             elif self._subscriptions.assignment[tp].committed is None:
@@ -285,67 +300,6 @@ class Fetcher(six.Iterator):
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % timeout_ms)
 
-    def _raise_if_offset_out_of_range(self):
-        """Check FetchResponses for offset out of range.
-
-        Raises:
-            OffsetOutOfRangeError: if any partition from previous FetchResponse
-                contains OffsetOutOfRangeError and the default_reset_policy is
-                None
-        """
-        if not self._offset_out_of_range_partitions:
-            return
-
-        current_out_of_range_partitions = {}
-
-        # filter only the fetchable partitions
-        for partition, offset in six.iteritems(self._offset_out_of_range_partitions):
-            if not self._subscriptions.is_fetchable(partition):
-                log.debug("Ignoring fetched records for %s since it is no"
-                          " longer fetchable", partition)
-                continue
-            position = self._subscriptions.assignment[partition].position
-            # ignore partition if the current position != offset in FetchResponse
-            # e.g. after seek()
-            if position is not None and offset == position:
-                current_out_of_range_partitions[partition] = position
-
-        self._offset_out_of_range_partitions.clear()
-        if current_out_of_range_partitions:
-            raise Errors.OffsetOutOfRangeError(current_out_of_range_partitions)
-
-    def _raise_if_unauthorized_topics(self):
-        """Check FetchResponses for topic authorization failures.
-
-        Raises:
-            TopicAuthorizationFailedError
-        """
-        if self._unauthorized_topics:
-            topics = set(self._unauthorized_topics)
-            self._unauthorized_topics.clear()
-            raise Errors.TopicAuthorizationFailedError(topics)
-
-    def _raise_if_record_too_large(self):
-        """Check FetchResponses for messages larger than the max per partition.
-
-        Raises:
-            RecordTooLargeError: if there is a message larger than fetch size
-        """
-        if not self._record_too_large_partitions:
-            return
-
-        copied_record_too_large_partitions = dict(self._record_too_large_partitions)
-        self._record_too_large_partitions.clear()
-
-        raise RecordTooLargeError(
-            "There are some messages at [Partition=Offset]: %s "
-            " whose size is larger than the fetch size %s"
-            " and hence cannot be ever returned."
-            " Increase the fetch size, or decrease the maximum message"
-            " size the broker will allow.",
-            copied_record_too_large_partitions,
-            self.config['max_partition_fetch_bytes'])
-
     def fetched_records(self, max_records=None):
         """Returns previously fetched records and updates consumed offsets.
 
@@ -355,7 +309,7 @@ class Fetcher(six.Iterator):
 
         Raises:
             OffsetOutOfRangeError: if no subscription offset_reset_strategy
-            InvalidMessageError: if message crc validation fails (check_crcs
+            CorruptRecordException: if message crc validation fails (check_crcs
                 must be set to True)
             RecordTooLargeError: if a message is larger than the currently
                 configured max_partition_fetch_bytes
@@ -375,22 +329,25 @@ class Fetcher(six.Iterator):
         if self._subscriptions.needs_partition_assignment:
             return {}, False
 
-        self._raise_if_offset_out_of_range()
-        self._raise_if_unauthorized_topics()
-        self._raise_if_record_too_large()
-
         drained = collections.defaultdict(list)
-        partial = bool(self._records and max_records)
-        while self._records and max_records > 0:
-            part = self._records.popleft()
-            max_records -= self._append(drained, part, max_records)
-            if part.has_more():
-                self._records.appendleft(part)
+        records_remaining = max_records
+
+        while records_remaining > 0:
+            if not self._next_partition_records:
+                if not self._completed_fetches:
+                    break
+                completion = self._completed_fetches.popleft()
+                self._next_partition_records = self._parse_fetched_data(completion)
             else:
-                partial &= False
-        return dict(drained), partial
+                records_remaining -= self._append(drained,
+                                                  self._next_partition_records,
+                                                  records_remaining)
+        return dict(drained), bool(self._completed_fetches)
 
     def _append(self, drained, part, max_records):
+        if not part:
+            return 0
+
         tp = part.topic_partition
         fetch_offset = part.fetch_offset
         if not self._subscriptions.is_assigned(tp):
@@ -409,9 +366,8 @@ class Fetcher(six.Iterator):
                           " %s since it is no longer fetchable", tp)
 
             elif fetch_offset == position:
+                # we are ensured to have at least one record since we already checked for emptiness
                 part_records = part.take(max_records)
-                if not part_records:
-                    return 0
                 next_offset = part_records[-1].offset + 1
 
                 log.log(0, "Returning fetched records at offset %d for assigned"
@@ -444,169 +400,86 @@ class Fetcher(six.Iterator):
         if self._subscriptions.needs_partition_assignment:
             raise StopIteration('Subscription needs partition assignment')
 
-        while self._records:
+        while self._next_partition_records or self._completed_fetches:
 
-            # Check on each iteration since this is a generator
-            self._raise_if_offset_out_of_range()
-            self._raise_if_unauthorized_topics()
-            self._raise_if_record_too_large()
+            if not self._next_partition_records:
+                completion = self._completed_fetches.popleft()
+                self._next_partition_records = self._parse_fetched_data(completion)
+                continue
 
             # Send additional FetchRequests when the internal queue is low
             # this should enable moderate pipelining
-            if len(self._records) <= self.config['iterator_refetch_records']:
+            if len(self._completed_fetches) <= self.config['iterator_refetch_records']:
                 self.send_fetches()
 
-            part = self._records.popleft()
+            tp = self._next_partition_records.topic_partition
 
-            tp = part.topic_partition
-            fetch_offset = part.fetch_offset
-            if not self._subscriptions.is_assigned(tp):
-                # this can happen when a rebalance happened before
-                # fetched records are returned
-                log.debug("Not returning fetched records for partition %s"
-                          " since it is no longer assigned", tp)
-                continue
+            # We can ignore any prior signal to drop pending message sets
+            # because we are starting from a fresh one where fetch_offset == position
+            # i.e., the user seek()'d to this position
+            self._subscriptions.assignment[tp].drop_pending_message_set = False
 
-            # note that the position should always be available
-            # as long as the partition is still assigned
-            position = self._subscriptions.assignment[tp].position
-            if not self._subscriptions.is_fetchable(tp):
-                # this can happen when a partition is paused before
-                # fetched records are returned
-                log.debug("Not returning fetched records for assigned partition"
-                          " %s since it is no longer fetchable", tp)
+            for msg in self._next_partition_records.take():
 
-            elif fetch_offset == position:
-                log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s", position, tp)
+                # Because we are in a generator, it is possible for
+                # subscription state to change between yield calls
+                # so we need to re-check on each loop
+                # this should catch assignment changes, pauses
+                # and resets via seek_to_beginning / seek_to_end
+                if not self._subscriptions.is_fetchable(tp):
+                    log.debug("Not returning fetched records for partition %s"
+                              " since it is no longer fetchable", tp)
+                    self._next_partition_records = None
+                    break
 
-                # We can ignore any prior signal to drop pending message sets
-                # because we are starting from a fresh one where fetch_offset == position
-                # i.e., the user seek()'d to this position
-                self._subscriptions.assignment[tp].drop_pending_message_set = False
+                # If there is a seek during message iteration,
+                # we should stop unpacking this message set and
+                # wait for a new fetch response that aligns with the
+                # new seek position
+                elif self._subscriptions.assignment[tp].drop_pending_message_set:
+                    log.debug("Skipping remainder of message set for partition %s", tp)
+                    self._subscriptions.assignment[tp].drop_pending_message_set = False
+                    self._next_partition_records = None
+                    break
 
-                for msg in part.messages:
+                # Compressed messagesets may include earlier messages
+                elif msg.offset < self._subscriptions.assignment[tp].position:
+                    log.debug("Skipping message offset: %s (expecting %s)",
+                              msg.offset,
+                              self._subscriptions.assignment[tp].position)
+                    continue
 
-                    # Because we are in a generator, it is possible for
-                    # subscription state to change between yield calls
-                    # so we need to re-check on each loop
-                    # this should catch assignment changes, pauses
-                    # and resets via seek_to_beginning / seek_to_end
-                    if not self._subscriptions.is_fetchable(tp):
-                        log.debug("Not returning fetched records for partition %s"
-                                  " since it is no longer fetchable", tp)
-                        break
+                self._subscriptions.assignment[tp].position = msg.offset + 1
+                yield msg
 
-                    # If there is a seek during message iteration,
-                    # we should stop unpacking this message set and
-                    # wait for a new fetch response that aligns with the
-                    # new seek position
-                    elif self._subscriptions.assignment[tp].drop_pending_message_set:
-                        log.debug("Skipping remainder of message set for partition %s", tp)
-                        self._subscriptions.assignment[tp].drop_pending_message_set = False
-                        break
+            self._next_partition_records = None
 
-                    # Compressed messagesets may include earlier messages
-                    elif msg.offset < self._subscriptions.assignment[tp].position:
-                        log.debug("Skipping message offset: %s (expecting %s)",
-                                  msg.offset,
-                                  self._subscriptions.assignment[tp].position)
-                        continue
-
-                    self._subscriptions.assignment[tp].position = msg.offset + 1
-                    yield msg
-
-            else:
-                # these records aren't next in line based on the last consumed
-                # position, ignore them they must be from an obsolete request
-                log.debug("Ignoring fetched records for %s at offset %s since"
-                          " the current position is %d", tp, part.fetch_offset,
-                          position)
-
-    def _unpack_message_set(self, tp, messages):
+    def _unpack_message_set(self, tp, records):
         try:
-            for offset, size, msg in messages:
-                if self.config['check_crcs'] and not msg.validate_crc():
-                    raise Errors.InvalidMessageError(msg)
-                elif msg.is_compressed():
-                    # If relative offset is used, we need to decompress the entire message first to compute
-                    # the absolute offset.
-                    inner_mset = msg.decompress()
-
-                    # There should only ever be a single layer of compression
-                    if inner_mset[0][-1].is_compressed():
-                        log.warning('MessageSet at %s offset %d appears '
-                                    ' double-compressed. This should not'
-                                    ' happen -- check your producers!',
-                                    tp, offset)
-                        if self.config['skip_double_compressed_messages']:
-                            log.warning('Skipping double-compressed message at'
-                                        ' %s %d', tp, offset)
-                            continue
-
-                    if msg.magic > 0:
-                        last_offset, _, _ = inner_mset[-1]
-                        absolute_base_offset = offset - last_offset
-                    else:
-                        absolute_base_offset = -1
-
-                    for inner_offset, inner_size, inner_msg in inner_mset:
-                        if msg.magic > 0:
-                            # When magic value is greater than 0, the timestamp
-                            # of a compressed message depends on the
-                            # typestamp type of the wrapper message:
-
-                            if msg.timestamp_type == 0:  # CREATE_TIME (0)
-                                inner_timestamp = inner_msg.timestamp
-
-                            elif msg.timestamp_type == 1:  # LOG_APPEND_TIME (1)
-                                inner_timestamp = msg.timestamp
-
-                            else:
-                                raise ValueError('Unknown timestamp type: {0}'.format(msg.timestamp_type))
-                        else:
-                            inner_timestamp = msg.timestamp
-
-                        if absolute_base_offset >= 0:
-                            inner_offset += absolute_base_offset
-
-                        key = self._deserialize(
-                            self.config['key_deserializer'],
-                            tp.topic, inner_msg.key)
-                        value = self._deserialize(
-                            self.config['value_deserializer'],
-                            tp.topic, inner_msg.value)
-                        yield ConsumerRecord(tp.topic, tp.partition, inner_offset,
-                                             inner_timestamp, msg.timestamp_type,
-                                             key, value, inner_msg.crc,
-                                             len(inner_msg.key) if inner_msg.key is not None else -1,
-                                             len(inner_msg.value) if inner_msg.value is not None else -1)
-
-                else:
+            batch = records.next_batch()
+            while batch is not None:
+                for record in batch:
+                    key_size = len(record.key) if record.key is not None else -1
+                    value_size = len(record.value) if record.value is not None else -1
                     key = self._deserialize(
                         self.config['key_deserializer'],
-                        tp.topic, msg.key)
+                        tp.topic, record.key)
                     value = self._deserialize(
                         self.config['value_deserializer'],
-                        tp.topic, msg.value)
-                    yield ConsumerRecord(tp.topic, tp.partition, offset,
-                                         msg.timestamp, msg.timestamp_type,
-                                         key, value, msg.crc,
-                                         len(msg.key) if msg.key is not None else -1,
-                                         len(msg.value) if msg.value is not None else -1)
+                        tp.topic, record.value)
+                    yield ConsumerRecord(
+                        tp.topic, tp.partition, record.offset, record.timestamp,
+                        record.timestamp_type, key, value, record.checksum,
+                        key_size, value_size)
+
+                batch = records.next_batch()
 
         # If unpacking raises StopIteration, it is erroneously
         # caught by the generator. We want all exceptions to be raised
         # back to the user. See Issue 545
         except StopIteration as e:
-            log.exception('StopIteration raised unpacking messageset: %s', e)
-            raise Exception('StopIteration raised unpacking messageset')
-
-        # If unpacking raises AssertionError, it means decompression unsupported
-        # See Issue 1033
-        except AssertionError as e:
-            log.exception('AssertionError raised unpacking messageset: %s', e)
-            raise
+            log.exception('StopIteration raised unpacking messageset')
+            raise RuntimeError('StopIteration raised unpacking messageset')
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
         return self
@@ -764,8 +637,11 @@ class Fetcher(six.Iterator):
 
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
-        pending = set([part.topic_partition for part in self._records])
-        return fetchable.difference(pending)
+        if self._next_partition_records:
+            fetchable.remove(self._next_partition_records.topic_partition)
+        for fetch in self._completed_fetches:
+            fetchable.remove(fetch.topic_partition)
+        return fetchable
 
     def _create_fetch_requests(self):
         """Create fetch requests for all assigned partitions, grouped by node.
@@ -798,8 +674,13 @@ class Fetcher(six.Iterator):
                 fetchable[node_id][partition.topic].append(partition_info)
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
+            else:
+                log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
+                        partition, node_id)
 
-        if self.config['api_version'] >= (0, 10, 1):
+        if self.config['api_version'] >= (0, 11, 0):
+            version = 4
+        elif self.config['api_version'] >= (0, 10, 1):
             version = 3
         elif self.config['api_version'] >= (0, 10):
             version = 2
@@ -821,107 +702,144 @@ class Fetcher(six.Iterator):
                 # `fetch_max_bytes` option we need this shuffle
                 # NOTE: we do have partition_data in random order due to usage
                 #       of unordered structures like dicts, but that does not
-                #       guaranty equal distribution, and starting Python3.6
+                #       guarantee equal distribution, and starting in Python3.6
                 #       dicts retain insert order.
                 partition_data = list(partition_data.items())
                 random.shuffle(partition_data)
-                requests[node_id] = FetchRequest[version](
-                    -1,  # replica_id
-                    self.config['fetch_max_wait_ms'],
-                    self.config['fetch_min_bytes'],
-                    self.config['fetch_max_bytes'],
-                    partition_data)
+                if version == 3:
+                    requests[node_id] = FetchRequest[version](
+                        -1,  # replica_id
+                        self.config['fetch_max_wait_ms'],
+                        self.config['fetch_min_bytes'],
+                        self.config['fetch_max_bytes'],
+                        partition_data)
+                else:
+                    requests[node_id] = FetchRequest[version](
+                        -1,  # replica_id
+                        self.config['fetch_max_wait_ms'],
+                        self.config['fetch_min_bytes'],
+                        self.config['fetch_max_bytes'],
+                        self._isolation_level,
+                        partition_data)
         return requests
 
     def _handle_fetch_response(self, request, send_time, response):
         """The callback for fetch completion"""
-        total_bytes = 0
-        total_count = 0
-        recv_time = time.time()
-
         fetch_offsets = {}
         for topic, partitions in request.topics:
-            for partition, offset, _ in partitions:
+            for partition_data in partitions:
+                partition, offset = partition_data[:2]
                 fetch_offsets[TopicPartition(topic, partition)] = offset
+
+        partitions = set([TopicPartition(topic, partition_data[0])
+                          for topic, partitions in response.topics
+                          for partition_data in partitions])
+        metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
 
         # randomized ordering should improve balance for short-lived consumers
         random.shuffle(response.topics)
         for topic, partitions in response.topics:
             random.shuffle(partitions)
-            for partition, error_code, highwater, messages in partitions:
-                tp = TopicPartition(topic, partition)
-                error_type = Errors.for_code(error_code)
-                if not self._subscriptions.is_fetchable(tp):
-                    # this can happen when a rebalance happened or a partition
-                    # consumption paused while fetch is still in-flight
-                    log.debug("Ignoring fetched records for partition %s"
-                              " since it is no longer fetchable", tp)
+            for partition_data in partitions:
+                tp = TopicPartition(topic, partition_data[0])
+                completed_fetch = CompletedFetch(
+                    tp, fetch_offsets[tp],
+                    response.API_VERSION,
+                    partition_data[1:],
+                    metric_aggregator
+                )
+                self._completed_fetches.append(completed_fetch)
 
-                elif error_type is Errors.NoError:
-                    self._subscriptions.assignment[tp].highwater = highwater
-
-                    # we are interested in this fetch only if the beginning
-                    # offset (of the *request*) matches the current consumed position
-                    # Note that the *response* may return a messageset that starts
-                    # earlier (e.g., compressed messages) or later (e.g., compacted topic)
-                    fetch_offset = fetch_offsets[tp]
-                    position = self._subscriptions.assignment[tp].position
-                    if position is None or position != fetch_offset:
-                        log.debug("Discarding fetch response for partition %s"
-                                  " since its offset %d does not match the"
-                                  " expected offset %d", tp, fetch_offset,
-                                  position)
-                        continue
-
-                    num_bytes = 0
-                    partial = None
-                    if messages and isinstance(messages[-1][-1], PartialMessage):
-                        partial = messages.pop()
-
-                    if messages:
-                        log.debug("Adding fetched record for partition %s with"
-                                  " offset %d to buffered record list", tp,
-                                  position)
-                        unpacked = list(self._unpack_message_set(tp, messages))
-                        self._records.append(self.PartitionRecords(fetch_offset, tp, unpacked))
-                        last_offset, _, _ = messages[-1]
-                        self._sensors.records_fetch_lag.record(highwater - last_offset)
-                        num_bytes = sum(msg[1] for msg in messages)
-                    elif partial:
-                        # we did not read a single message from a non-empty
-                        # buffer because that message's size is larger than
-                        # fetch size, in this case record this exception
-                        self._record_too_large_partitions[tp] = fetch_offset
-
-                    self._sensors.record_topic_fetch_metrics(topic, num_bytes, len(messages))
-                    total_bytes += num_bytes
-                    total_count += len(messages)
-                elif error_type in (Errors.NotLeaderForPartitionError,
-                                    Errors.UnknownTopicOrPartitionError):
-                    self._client.cluster.request_update()
-                elif error_type is Errors.OffsetOutOfRangeError:
-                    fetch_offset = fetch_offsets[tp]
-                    log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
-                    if self._subscriptions.has_default_offset_reset_policy():
-                        self._subscriptions.need_offset_reset(tp)
-                        log.info("Resetting offset for topic-partition %s", tp)
-                    else:
-                        self._offset_out_of_range_partitions[tp] = fetch_offset
-                elif error_type is Errors.TopicAuthorizationFailedError:
-                    log.warn("Not authorized to read from topic %s.", tp.topic)
-                    self._unauthorized_topics.add(tp.topic)
-                elif error_type is Errors.UnknownError:
-                    log.warn("Unknown error fetching data for topic-partition %s", tp)
-                else:
-                    raise error_type('Unexpected error while fetching data')
-
-        # Because we are currently decompressing messages lazily, the sensors here
-        # will get compressed bytes / message set stats when compression is enabled
-        self._sensors.bytes_fetched.record(total_bytes)
-        self._sensors.records_fetched.record(total_count)
         if response.API_VERSION >= 1:
             self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
-        self._sensors.fetch_latency.record((recv_time - send_time) * 1000)
+        self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+
+    def _parse_fetched_data(self, completed_fetch):
+        tp = completed_fetch.topic_partition
+        fetch_offset = completed_fetch.fetched_offset
+        num_bytes = 0
+        records_count = 0
+        parsed_records = None
+
+        error_code, highwater = completed_fetch.partition_data[:2]
+        error_type = Errors.for_code(error_code)
+
+        try:
+            if not self._subscriptions.is_fetchable(tp):
+                # this can happen when a rebalance happened or a partition
+                # consumption paused while fetch is still in-flight
+                log.debug("Ignoring fetched records for partition %s"
+                          " since it is no longer fetchable", tp)
+
+            elif error_type is Errors.NoError:
+                self._subscriptions.assignment[tp].highwater = highwater
+
+                # we are interested in this fetch only if the beginning
+                # offset (of the *request*) matches the current consumed position
+                # Note that the *response* may return a messageset that starts
+                # earlier (e.g., compressed messages) or later (e.g., compacted topic)
+                position = self._subscriptions.assignment[tp].position
+                if position is None or position != fetch_offset:
+                    log.debug("Discarding fetch response for partition %s"
+                              " since its offset %d does not match the"
+                              " expected offset %d", tp, fetch_offset,
+                              position)
+                    return None
+
+                records = MemoryRecords(completed_fetch.partition_data[-1])
+                if records.has_next():
+                    log.debug("Adding fetched record for partition %s with"
+                              " offset %d to buffered record list", tp,
+                              position)
+                    unpacked = list(self._unpack_message_set(tp, records))
+                    parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
+                    last_offset = unpacked[-1].offset
+                    self._sensors.records_fetch_lag.record(highwater - last_offset)
+                    num_bytes = records.valid_bytes()
+                    records_count = len(unpacked)
+                elif records.size_in_bytes() > 0:
+                    # we did not read a single message from a non-empty
+                    # buffer because that message's size is larger than
+                    # fetch size, in this case record this exception
+                    record_too_large_partitions = {tp: fetch_offset}
+                    raise RecordTooLargeError(
+                        "There are some messages at [Partition=Offset]: %s "
+                        " whose size is larger than the fetch size %s"
+                        " and hence cannot be ever returned."
+                        " Increase the fetch size, or decrease the maximum message"
+                        " size the broker will allow." % (
+                            record_too_large_partitions,
+                            self.config['max_partition_fetch_bytes']),
+                        record_too_large_partitions)
+                self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
+
+            elif error_type in (Errors.NotLeaderForPartitionError,
+                                Errors.UnknownTopicOrPartitionError):
+                self._client.cluster.request_update()
+            elif error_type is Errors.OffsetOutOfRangeError:
+                position = self._subscriptions.assignment[tp].position
+                if position is None or position != fetch_offset:
+                    log.debug("Discarding stale fetch response for partition %s"
+                              " since the fetched offset %d does not match the"
+                              " current offset %d", tp, fetch_offset, position)
+                elif self._subscriptions.has_default_offset_reset_policy():
+                    log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
+                    self._subscriptions.need_offset_reset(tp)
+                else:
+                    raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
+
+            elif error_type is Errors.TopicAuthorizationFailedError:
+                log.warn("Not authorized to read from topic %s.", tp.topic)
+                raise Errors.TopicAuthorizationFailedError(set(tp.topic))
+            elif error_type is Errors.UnknownError:
+                log.warn("Unknown error fetching data for topic-partition %s", tp)
+            else:
+                raise error_type('Unexpected error while fetching data')
+
+        finally:
+            completed_fetch.metric_aggregator.record(tp, num_bytes, records_count)
+
+        return parsed_records
 
     class PartitionRecords(six.Iterator):
         def __init__(self, fetch_offset, tp, messages):
@@ -930,21 +848,55 @@ class Fetcher(six.Iterator):
             self.messages = messages
             self.message_idx = 0
 
+        # For truthiness evaluation we need to define __len__ or __nonzero__
+        def __len__(self):
+            if self.messages is None or self.message_idx >= len(self.messages):
+                return 0
+            return len(self.messages) - self.message_idx
+
         def discard(self):
             self.messages = None
 
-        def take(self, n):
-            if not self.has_more():
+        def take(self, n=None):
+            if not len(self):
                 return []
+            if n is None or n > len(self):
+                n = len(self)
             next_idx = self.message_idx + n
             res = self.messages[self.message_idx:next_idx]
             self.message_idx = next_idx
-            if self.has_more():
+            if len(self) > 0:
                 self.fetch_offset = self.messages[self.message_idx].offset
             return res
 
-        def has_more(self):
-            return self.messages and self.message_idx < len(self.messages)
+
+class FetchResponseMetricAggregator(object):
+    """
+    Since we parse the message data for each partition from each fetch
+    response lazily, fetch-level metrics need to be aggregated as the messages
+    from each partition are parsed. This class is used to facilitate this
+    incremental aggregation.
+    """
+    def __init__(self, sensors, partitions):
+        self.sensors = sensors
+        self.unrecorded_partitions = partitions
+        self.total_bytes = 0
+        self.total_records = 0
+
+    def record(self, partition, num_bytes, num_records):
+        """
+        After each partition is parsed, we update the current metric totals
+        with the total bytes and number of records parsed. After all partitions
+        have reported, we write the metric.
+        """
+        self.unrecorded_partitions.remove(partition)
+        self.total_bytes += num_bytes
+        self.total_records += num_records
+
+        # once all expected partitions from the fetch have reported in, record the metrics
+        if not self.unrecorded_partitions:
+            self.sensors.bytes_fetched.record(self.total_bytes)
+            self.sensors.records_fetched.record(self.total_records)
 
 
 class FetchManagerMetrics(object):

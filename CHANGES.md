@@ -1,3 +1,25 @@
+# 1.3.5 (Oct 7, 2017)
+
+Bugfixes
+* Fix partition assignment race condition (jeffwidman #1240)
+* Fix consumer bug when seeking / resetting to the middle of a compressed messageset (dpkp #1239)
+* Fix traceback sent to stderr not logging (dbgasaway #1221)
+* Stop using mutable types for default arg values (jeffwidman #1213)
+* Remove a few unused imports (jameslamb #1188)
+
+Client
+* Refactor BrokerConnection to use asynchronous receive_bytes pipe (dpkp #1032)
+
+Consumer
+* Drop unused sleep kwarg to poll (dpkp #1177)
+* Enable KafkaConsumer beginning_offsets() and end_offsets() with older broker versions (buptljy #1200)
+* Validate consumer subscription topic strings (nikeee #1238)
+
+Documentation
+* Small fixes to SASL documentation and logging; validate security_protocol (dpkp #1231)
+* Various typo and grammar fixes (jeffwidman)
+
+
 # 1.3.4 (Aug 13, 2017)
 
 Bugfixes
