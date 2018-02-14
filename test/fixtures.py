@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class Fixture(object):
-    kafka_version = os.environ.get('KAFKA_VERSION', '0.8.0')
+    kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
     scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
     project_root = os.environ.get('PROJECT_ROOT', os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     kafka_root = os.environ.get("KAFKA_ROOT", os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
@@ -162,7 +162,7 @@ class ZookeeperFixture(Fixture):
             time.sleep(backoff)
             tries += 1
         else:
-            raise Exception('Failed to start Zookeeper before max_timeout')
+            raise RuntimeError('Failed to start Zookeeper before max_timeout')
         self.out("Done!")
         atexit.register(self.close)
 
@@ -208,6 +208,11 @@ class KafkaFixture(Fixture):
         self.broker_id = broker_id
         self.transport = transport.upper()
         self.ssl_dir = self.test_resource('ssl')
+
+        # TODO: checking for port connection would be better than scanning logs
+        # until then, we need the pattern to work across all supported broker versions
+        # The logging format changed slightly in 1.0.0
+        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % broker_id
 
         self.zk_host = zk_host
         self.zk_port = zk_port
@@ -292,8 +297,7 @@ class KafkaFixture(Fixture):
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
-            if self.child.wait_for(r"\[Kafka Server %d\], Started" %
-                                   self.broker_id, timeout=timeout):
+            if self.child.wait_for(self.start_pattern, timeout=timeout):
                 break
             self.child.dump_logs()
             self.child.stop()
@@ -301,7 +305,7 @@ class KafkaFixture(Fixture):
             time.sleep(backoff)
             tries += 1
         else:
-            raise Exception('Failed to start KafkaInstance before max_timeout')
+            raise RuntimeError('Failed to start KafkaInstance before max_timeout')
         self.out("Done!")
         self.running = True
         atexit.register(self.close)

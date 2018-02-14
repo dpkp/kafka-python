@@ -8,15 +8,15 @@ import warnings
 
 from kafka.vendor.six.moves import queue # pylint: disable=import-error
 
-from ..common import KafkaError
-from .base import (
+from kafka.common import KafkaError
+from kafka.consumer.base import (
     Consumer,
     AUTO_COMMIT_MSG_COUNT, AUTO_COMMIT_INTERVAL,
     NO_MESSAGES_WAIT_TIME_SECONDS,
     FULL_QUEUE_WAIT_TIME_SECONDS,
     MAX_BACKOFF_SECONDS,
 )
-from .simple import SimpleConsumer
+from kafka.consumer.simple import SimpleConsumer
 
 
 log = logging.getLogger(__name__)

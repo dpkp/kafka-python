@@ -3,14 +3,16 @@ from __future__ import absolute_import
 import io
 import time
 
-from ..codec import (has_gzip, has_snappy, has_lz4,
+from kafka.codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
-from .struct import Struct
-from .types import (
+from ..util import crc32, WeakMethod
+from kafka.protocol.frame import KafkaBytes
+from kafka.protocol.struct import Struct
+from kafka.protocol.types import (
     Int8, Int32, Int64, Bytes, Schema, AbstractType
 )
-from ..util import crc32, WeakMethod
+from kafka.util import crc32, WeakMethod
 
 
 class Message(Struct):
@@ -153,20 +155,25 @@ class MessageSet(AbstractType):
     HEADER_SIZE = 12  # offset + message_size
 
     @classmethod
-    def encode(cls, items):
+    def encode(cls, items, prepend_size=True):
         # RecordAccumulator encodes messagesets internally
-        if isinstance(items, io.BytesIO):
+        if isinstance(items, (io.BytesIO, KafkaBytes)):
             size = Int32.decode(items)
-            # rewind and return all the bytes
-            items.seek(-4, 1)
-            return items.read(size + 4)
+            if prepend_size:
+                # rewind and return all the bytes
+                items.seek(items.tell() - 4)
+                size += 4
+            return items.read(size)
 
         encoded_values = []
         for (offset, message) in items:
             encoded_values.append(Int64.encode(offset))
             encoded_values.append(Bytes.encode(message))
         encoded = b''.join(encoded_values)
-        return Bytes.encode(encoded)
+        if prepend_size:
+            return Bytes.encode(encoded)
+        else:
+            return encoded
 
     @classmethod
     def decode(cls, data, bytes_to_read=None):
@@ -198,7 +205,7 @@ class MessageSet(AbstractType):
 
     @classmethod
     def repr(cls, messages):
-        if isinstance(messages, io.BytesIO):
+        if isinstance(messages, (KafkaBytes, io.BytesIO)):
             offset = messages.tell()
             decoded = cls.decode(messages)
             messages.seek(offset)

@@ -12,14 +12,20 @@ from kafka.vendor import six
 from kafka.errors import BufferUnderflowError
 
 
-def crc32(data):
-    crc = binascii.crc32(data)
-    # py2 and py3 behave a little differently
-    # CRC is encoded as a signed int in kafka protocol
-    # so we'll convert the py3 unsigned result to signed
-    if six.PY3 and crc >= 2**31:
-        crc -= 2**32
-    return crc
+if six.PY3:
+    MAX_INT = 2 ** 31
+    TO_SIGNED = 2 ** 32
+
+    def crc32(data):
+        crc = binascii.crc32(data)
+        # py2 and py3 behave a little differently
+        # CRC is encoded as a signed int in kafka protocol
+        # so we'll convert the py3 unsigned result to signed
+        if crc >= MAX_INT:
+            crc -= TO_SIGNED
+        return crc
+else:
+    from binascii import crc32
 
 
 def write_int_string(s):
@@ -159,6 +165,14 @@ class WeakMethod(object):
         if not isinstance(other, WeakMethod):
             return False
         return self._target_id == other._target_id and self._method_id == other._method_id
+
+
+class Dict(dict):
+    """Utility class to support passing weakrefs to dicts
+
+    See: https://docs.python.org/2/library/weakref.html
+    """
+    pass
 
 
 def try_method_on_system_exit(obj, method, *args, **kwargs):

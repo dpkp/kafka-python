@@ -19,6 +19,7 @@ from kafka.structs import ConsumerMetadataResponse
 from kafka.util import (
     crc32, read_short_string, relative_unpack,
     write_int_string, group_by_topic_and_partition)
+from kafka.protocol.message import MessageSet
 
 
 log = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ class KafkaProtocol(object):
                           magic=msg.magic, attributes=msg.attributes
                     )
                     partition_msgs.append((0, m.encode()))
-                topic_msgs.append((partition, partition_msgs))
+                topic_msgs.append((partition, MessageSet.encode(partition_msgs, prepend_size=False)))
             topics.append((topic, topic_msgs))
 
 
@@ -215,7 +216,8 @@ class KafkaProtocol(object):
         ]
 
     @classmethod
-    def decode_message_set(cls, messages):
+    def decode_message_set(cls, raw_data):
+        messages = MessageSet.decode(raw_data, bytes_to_read=len(raw_data))
         for offset, _, message in messages:
             if isinstance(message, kafka.protocol.message.Message) and message.is_compressed():
                 inner_messages = message.decompress()
@@ -345,30 +347,7 @@ class KafkaProtocol(object):
                     payload.metadata)
                 for partition, payload in six.iteritems(topic_payloads)])
             for topic, topic_payloads in six.iteritems(group_by_topic_and_partition(payloads))])
-
-    @classmethod
-    def encode_offset_commit_request_kafka(cls, group, payloads):
-        """
-        Encode an OffsetCommitRequest struct
-        Arguments:
-            group: string, the consumer group you are committing offsets for
-            payloads: list of OffsetCommitRequestPayload
-        """
-        return kafka.protocol.commit.OffsetCommitRequest[2](
-            consumer_group=group,
-            consumer_group_generation_id=kafka.protocol.commit.OffsetCommitRequest[2].DEFAULT_GENERATION_ID,
-            consumer_id='',
-            retention_time=kafka.protocol.commit.OffsetCommitRequest[2].DEFAULT_RETENTION_TIME,
-            topics=[(
-                topic,
-                [(
-                    partition,
-                    payload.offset,
-                    payload.metadata)
-                for partition, payload in six.iteritems(topic_payloads)])
-            for topic, topic_payloads in six.iteritems(group_by_topic_and_partition(payloads))])
-
-
+    
     @classmethod
     def decode_offset_commit_response(cls, response):
         """

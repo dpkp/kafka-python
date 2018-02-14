@@ -9,6 +9,7 @@ import six
 from kafka import SimpleClient
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
+from kafka.coordinator.base import MemberState, Generation
 from kafka.structs import TopicPartition
 
 from test.conftest import version
@@ -16,7 +17,7 @@ from test.testutil import random_string
 
 
 def get_connect_str(kafka_broker):
-    return 'localhost:' + str(kafka_broker.port)
+    return kafka_broker.host + ':' + str(kafka_broker.port)
 
 
 @pytest.fixture
@@ -67,8 +68,8 @@ def test_group(kafka_broker, topic):
             for tp, records in six.itervalues(consumers[i].poll(100)):
                 messages[i][tp].extend(records)
         consumers[i].close()
-        del consumers[i]
-        del stop[i]
+        consumers[i] = None
+        stop[i] = None
 
     num_consumers = 4
     for i in range(num_consumers):
@@ -92,9 +93,10 @@ def test_group(kafka_broker, topic):
             # If all consumers exist and have an assignment
             else:
 
+                logging.info('All consumers have assignment... checking for stable group')
                 # Verify all consumers are in the same generation
                 # then log state and break while loop
-                generations = set([consumer._coordinator.generation
+                generations = set([consumer._coordinator._generation.generation_id
                                    for consumer in list(consumers.values())])
 
                 # New generation assignment is not complete until
@@ -105,12 +107,16 @@ def test_group(kafka_broker, topic):
                 if not rejoining and len(generations) == 1:
                     for c, consumer in list(consumers.items()):
                         logging.info("[%s] %s %s: %s", c,
-                                     consumer._coordinator.generation,
-                                     consumer._coordinator.member_id,
+                                     consumer._coordinator._generation.generation_id,
+                                     consumer._coordinator._generation.member_id,
                                      consumer.assignment())
                     break
+                else:
+                    logging.info('Rejoining: %s, generations: %s', rejoining, generations)
+                    time.sleep(1)
             assert time.time() < timeout, "timeout waiting for assignments"
 
+        logging.info('Group stabilized; verifying assignment')
         group_assignment = set()
         for c in range(num_consumers):
             assert len(consumers[c].assignment()) != 0
@@ -120,11 +126,15 @@ def test_group(kafka_broker, topic):
         assert group_assignment == set([
             TopicPartition(topic, partition)
             for partition in range(num_partitions)])
+        logging.info('Assignment looks good!')
 
     finally:
+        logging.info('Shutting down %s consumers', num_consumers)
         for c in range(num_consumers):
+            logging.info('Stopping consumer %s', c)
             stop[c].set()
             threads[c].join()
+            threads[c] = None
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
@@ -143,3 +153,33 @@ def test_paused(kafka_broker, topic):
 
     consumer.unsubscribe()
     assert set() == consumer.paused()
+
+
+@pytest.mark.skipif(version() < (0, 9), reason='Unsupported Kafka Version')
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+def test_heartbeat_thread(kafka_broker, topic):
+    group_id = 'test-group-' + random_string(6)
+    consumer = KafkaConsumer(topic,
+                             bootstrap_servers=get_connect_str(kafka_broker),
+                             group_id=group_id,
+                             heartbeat_interval_ms=500)
+
+    # poll until we have joined group / have assignment
+    while not consumer.assignment():
+        consumer.poll(timeout_ms=100)
+
+    assert consumer._coordinator.state is MemberState.STABLE
+    last_poll = consumer._coordinator.heartbeat.last_poll
+    last_beat = consumer._coordinator.heartbeat.last_send
+
+    timeout = time.time() + 30
+    while True:
+        if time.time() > timeout:
+            raise RuntimeError('timeout waiting for heartbeat')
+        if consumer._coordinator.heartbeat.last_send > last_beat:
+            break
+        time.sleep(0.5)
+
+    assert consumer._coordinator.heartbeat.last_poll == last_poll
+    consumer.poll(timeout_ms=100)
+    assert consumer._coordinator.heartbeat.last_poll > last_poll

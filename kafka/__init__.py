@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 __title__ = 'kafka'
-from .version import __version__
+from kafka.version import __version__
 __author__ = 'Dana Powers'
 __license__ = 'Apache License 2.0'
 __copyright__ = 'Copyright 2016 Dana Powers, David Arthur, and Contributors'
@@ -27,6 +27,7 @@ from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message)
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner, Murmur2Partitioner
 from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.serializer import Serializer, Deserializer
 
 # To be deprecated when KafkaProducer interface is released
 from kafka.client import SimpleClient

@@ -70,7 +70,7 @@ class TestFailover(KafkaIntegrationTestCase):
         # kill leader for partition
         self._kill_leader(topic, partition)
 
-        # expect failure, but dont wait more than 60 secs to recover
+        # expect failure, but don't wait more than 60 secs to recover
         recovered = False
         started = time.time()
         timeout = 60
@@ -197,7 +197,7 @@ class TestFailover(KafkaIntegrationTestCase):
             while True:
                 try:
                     producer.send_messages(topic, partition, msg.encode('utf-8'))
-                except:
+                except Exception:
                     log.exception('failure in _send_random_messages - retrying')
                     continue
                 else:

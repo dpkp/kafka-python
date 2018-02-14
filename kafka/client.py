@@ -8,13 +8,6 @@ import random
 import time
 import select
 
-# selectors in stdlib as of py3.4
-try:
-    import selectors # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from .vendor import selectors34 as selectors
-
 from kafka.vendor import six
 
 import kafka.errors
@@ -216,7 +209,8 @@ class SimpleClient(object):
             # Block, also waste CPU cycle here, but broker unaware requests
             # shouldn't be very frequent.
             while not future.is_done:
-                conn.recv()
+                for r, f in conn.recv():
+                    f.success(r)
 
             if future.failed():
                 log.error("Request failed: %s", future.exception)
@@ -279,11 +273,11 @@ class SimpleClient(object):
         def failed_payloads(payloads):
             for payload in payloads:
                 topic_partition = (str(payload.topic), payload.partition)
-                responses[topic_partition] = FailedPayloadsError(payload)
+                responses[(topic_partition)] = FailedPayloadsError(payload)
 
-        futures_by_connection = {}
-        selector = selectors.DefaultSelector()
-
+        # For each BrokerConnection keep the real socket so that we can use
+        # a select to perform unblocking I/O
+        connections_by_future = {}
         for broker, broker_payloads in six.iteritems(payloads_by_broker):
             if broker is None:
                 failed_payloads(broker_payloads)
@@ -291,20 +285,16 @@ class SimpleClient(object):
 
             host, port, afi = get_ip_port_afi(broker.host)
             try:
-                conn = self._get_conn(host, broker.port, afi, broker.nodeId)
+                conn = self._get_conn(host, broker.port, afi)
             except ConnectionError:
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
                 continue
 
             request = encoder_fn(payloads=broker_payloads)
-            if request.expect_response():
-                selector.register(conn._sock, selectors.EVENT_READ, conn)
             future = conn.send(request)
 
             if future.failed():
-                log.error("Request failed: %s", future.exception)
-                selector.unregister(conn._sock)
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
                 continue
@@ -315,24 +305,30 @@ class SimpleClient(object):
                     responses[topic_partition] = None
                 continue
 
-            futures_by_connection[conn] = (future, broker)
+            connections_by_future[future] = (conn, broker)
 
-        timeout = self.timeout
-        while futures_by_connection:
-            start_time = time.time()
+        conn = None
+        while connections_by_future:
+            futures = list(connections_by_future.keys())
 
-            ready = selector.select(timeout)
+            # block until a socket is ready to be read
+            sockets = [
+                conn._sock
+                for future, (conn, _) in six.iteritems(connections_by_future)
+                if not future.is_done and conn._sock is not None]
+            if sockets:
+                read_socks, _, _ = select.select(sockets, [], [])
 
-            for key, _ in ready:
+            for future in futures:
 
-                conn = key.data
-                future, _ = futures_by_connection[conn]
-                while not future.is_done:
-                    conn.recv()
-                _, broker = futures_by_connection.pop(conn)
+                if not future.is_done:
+                    conn, _ = connections_by_future[future]
+                    for r, f in conn.recv():
+                        f.success(r)
+                    continue
 
+                _, broker = connections_by_future.pop(future)
                 if future.failed():
-                    log.error("Request failed: %s", future.exception)
                     refresh_metadata = True
                     failed_payloads(payloads_by_broker[broker])
 
@@ -342,18 +338,9 @@ class SimpleClient(object):
                                            payload_response.partition)
                         responses[topic_partition] = payload_response
 
-            timeout -= time.time() - start_time
-            if timeout < 0:
-                log.error("%s requests timed out.", len(futures_by_connection))
-                for _, broker in six.itervalues(futures_by_connection):
-                    failed_payloads(payloads_by_broker[broker])
-                    refresh_metadata = True
-                break
-
         if refresh_metadata:
             self.reset_all_metadata()
 
-        selector.close()
         # Return responses in the same order as provided
         return [responses[tp] for tp in original_ordering]
 
@@ -363,77 +350,83 @@ class SimpleClient(object):
         specified using the supplied encode/decode functions. As the payloads
         that use consumer-aware requests do not contain the group (e.g.
         OffsetFetchRequest), all payloads must be for a single group.
-
         Arguments:
-
         group: the name of the consumer group (str) the payloads are for
         payloads: list of object-like entities with topic (str) and
             partition (int) attributes; payloads with duplicate
             topic+partition are not supported.
-
         encode_fn: a method to encode the list of payloads to a request body,
             must accept client_id, correlation_id, and payloads as
             keyword arguments
-
         decode_fn: a method to decode a response body into response objects.
             The response objects must be object-like and have topic
             and partition attributes
-
         Returns:
-
         List of response objects in the same order as the supplied payloads
         """
         # encoders / decoders do not maintain ordering currently
         # so we need to keep this so we can rebuild order before returning
         original_ordering = [(p.topic, p.partition) for p in payloads]
 
-        retries = 0
-        broker = None
-        while not broker:
-            try:
-                broker = self._get_coordinator_for_group(group)
-            except (GroupCoordinatorNotAvailableError, GroupLoadInProgressError) as e:
-                if retries == CONSUMER_OFFSET_TOPIC_CREATION_RETRIES:
-                    raise e
-                time.sleep(CONSUMER_OFFSET_RETRY_INTERVAL_SEC)
-                retries += 1
+        broker = self._get_coordinator_for_group(group)
 
         # Send the list of request payloads and collect the responses and
         # errors
         responses = {}
+        request_id = self._next_id()
+        log.debug('Request %s to %s: %s', request_id, broker, payloads)
+        request = encoder_fn(client_id=self.client_id,
+                             correlation_id=request_id, payloads=payloads)
 
-        def failed_payloads(payloads):
+        # Send the request, recv the response
+        try:
+            host, port, afi = get_ip_port_afi(broker.host)
+            conn = self._get_conn(host, broker.port, afi)
+        except ConnectionError as e:
+            log.warning('ConnectionError attempting to send request %s '
+                        'to server %s: %s', request_id, broker, e)
+
             for payload in payloads:
-                topic_partition = (str(payload.topic), payload.partition)
+                topic_partition = (payload.topic, payload.partition)
                 responses[topic_partition] = FailedPayloadsError(payload)
 
-        host, port, afi = get_ip_port_afi(broker.host)
-        try:
-            conn = self._get_conn(host, broker.port, afi, broker.nodeId)
-        except ConnectionError:
-            failed_payloads(payloads)
-
+        # No exception, try to get response
         else:
-            request = encoder_fn(payloads=payloads)
+
+            future = conn.send(request_id, request)
+            while not future.is_done:
+                for r, f in conn.recv():
+                    f.success(r)
+
             # decoder_fn=None signal that the server is expected to not
             # send a response.  This probably only applies to
             # ProduceRequest w/ acks = 0
-            future = conn.send(request)
-
-            while not future.is_done:
-                conn.recv()
+            if decoder_fn is None:
+                log.debug('Request %s does not expect a response '
+                          '(skipping conn.recv)', request_id)
+                for payload in payloads:
+                    topic_partition = (payload.topic, payload.partition)
+                    responses[topic_partition] = None
+                return []
 
             if future.failed():
-                failed_payloads(payloads)
+                log.warning('Error attempting to receive a '
+                            'response to request %s from server %s: %s',
+                            request_id, broker, future.exception)
 
-            elif not request.expect_response():
-                failed_payloads(payloads)
+                for payload in payloads:
+                    topic_partition = (payload.topic, payload.partition)
+                    responses[topic_partition] = FailedPayloadsError(payload)
 
             else:
-                for payload_response in decoder_fn(future.value):
-                    topic_partition = (str(payload_response.topic),
+                response = future.value
+                _resps = []
+                for payload_response in decoder_fn(response):
+                    topic_partition = (payload_response.topic,
                                        payload_response.partition)
                     responses[topic_partition] = payload_response
+                    _resps.append(payload_response)
+                log.debug('Response %s: %s', request_id, _resps)
 
         # Return responses in the same order as provided
         return [responses[tp] for tp in original_ordering]
@@ -543,7 +536,7 @@ class SimpleClient(object):
         """Fetch broker and topic-partition metadata from the server.
 
         Updates internal data: broker list, topic/partition list, and
-        topic/parition -> broker map. This method should be called after
+        topic/partition -> broker map. This method should be called after
         receiving any error.
 
         Note: Exceptions *will not* be raised in a full refresh (i.e. no topic
@@ -629,7 +622,7 @@ class SimpleClient(object):
                 if leader in self.brokers:
                     self.topics_to_brokers[topic_part] = self.brokers[leader]
 
-                # If Unknown Broker, fake BrokerMetadata so we dont lose the id
+                # If Unknown Broker, fake BrokerMetadata so we don't lose the id
                 # (not sure how this could happen. server could be in bad state)
                 else:
                     self.topics_to_brokers[topic_part] = BrokerMetadata(
@@ -657,11 +650,9 @@ class SimpleClient(object):
                              fail_on_error=True, callback=None):
         """
         Encode and send some ProduceRequests
-
         ProduceRequests will be grouped by (topic, partition) and then
         sent to a specific broker. Output is a list of responses in the
         same order as the list of payloads specified
-
         Arguments:
             payloads (list of ProduceRequest): produce requests to send to kafka
                 ProduceRequest payloads must not contain duplicates for any
@@ -681,7 +672,6 @@ class SimpleClient(object):
                 server response errors, defaults to True.
             callback (function, optional): instead of returning the ProduceResponse,
                 first pass it through this function, defaults to None.
-
         Returns:
             list of ProduceResponses, or callback results if supplied, in the
             order of input payloads
@@ -708,7 +698,6 @@ class SimpleClient(object):
                            callback=None, max_wait_time=100, min_bytes=4096):
         """
         Encode and send a FetchRequest
-
         Payloads are grouped by topic and partition so they can be pipelined
         to the same brokers.
         """
@@ -795,7 +784,6 @@ class SimpleClient(object):
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
-
 
 class SimpleClientMetrics(object):
 

@@ -1,11 +1,11 @@
 import gc
 import platform
-import sys
+import time
 import threading
 
 import pytest
 
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.producer.buffer import SimpleBufferPool
 from test.conftest import version
 from test.testutil import random_string
@@ -35,7 +35,7 @@ def test_end_to_end(kafka_broker, compression):
         elif platform.python_implementation() == 'PyPy':
             return
 
-    connect_str = 'localhost:' + str(kafka_broker.port)
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
                              max_block_ms=10000,
@@ -72,9 +72,59 @@ def test_end_to_end(kafka_broker, compression):
 @pytest.mark.skipif(platform.python_implementation() != 'CPython',
                     reason='Test relies on CPython-specific gc policies')
 def test_kafka_producer_gc_cleanup():
+    gc.collect()
     threads = threading.active_count()
     producer = KafkaProducer(api_version='0.9') # set api_version explicitly to avoid auto-detection
     assert threading.active_count() == threads + 1
     del(producer)
     gc.collect()
     assert threading.active_count() == threads
+
+
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    producer = KafkaProducer(bootstrap_servers=connect_str,
+                             retries=5,
+                             max_block_ms=10000,
+                             compression_type=compression)
+    magic = producer._max_usable_produce_magic()
+
+    topic = random_string(5)
+    future = producer.send(
+        topic,
+        value=b"Simple value", key=b"Simple key", timestamp_ms=9999999,
+        partition=0)
+    record = future.get(timeout=5)
+    assert record is not None
+    assert record.topic == topic
+    assert record.partition == 0
+    assert record.topic_partition == TopicPartition(topic, 0)
+    assert record.offset == 0
+    if magic >= 1:
+        assert record.timestamp == 9999999
+    else:
+        assert record.timestamp == -1  # NO_TIMESTAMP
+
+    if magic >= 2:
+        assert record.checksum is None
+    elif magic == 1:
+        assert record.checksum == 1370034956
+    else:
+        assert record.checksum == 3296137851
+
+    assert record.serialized_key_size == 10
+    assert record.serialized_value_size == 12
+
+    # generated timestamp case is skipped for broker 0.9 and below
+    if magic == 0:
+        return
+
+    send_time = time.time() * 1000
+    future = producer.send(
+        topic,
+        value=b"Simple value", key=b"Simple key", timestamp_ms=None,
+        partition=0)
+    record = future.get(timeout=5)
+    assert abs(record.timestamp - send_time) <= 1000  # Allow 1s deviation

@@ -260,13 +260,14 @@ def test_decode_fetch_response_partial():
         struct.pack('>i', 8),          # Length of value
         b'ar',                         # Value (truncated)
     ])
-
     resp = FetchResponse[0].decode(io.BytesIO(encoded))
     assert len(resp.topics) == 1
     topic, partitions = resp.topics[0]
     assert topic == 'foobar'
     assert len(partitions) == 2
-    m1 = partitions[0][3]
+
+    m1 = MessageSet.decode(
+        partitions[0][3], bytes_to_read=len(partitions[0][3]))
     assert len(m1) == 2
     assert m1[1] == (None, None, PartialMessage())
 
