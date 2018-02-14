@@ -347,6 +347,28 @@ class KafkaProtocol(object):
                     payload.metadata)
                 for partition, payload in six.iteritems(topic_payloads)])
             for topic, topic_payloads in six.iteritems(group_by_topic_and_partition(payloads))])
+
+    @classmethod
+    def encode_offset_commit_request_kafka(cls, group, payloads):
+        """
+        Encode an OffsetCommitRequest struct
+        Arguments:
+            group: string, the consumer group you are committing offsets for
+            payloads: list of OffsetCommitRequestPayload
+        """
+        return kafka.protocol.commit.OffsetCommitRequest[2](
+            consumer_group=group,
+            consumer_group_generation_id=kafka.protocol.commit.OffsetCommitRequest[2].DEFAULT_GENERATION_ID,
+            consumer_id='',
+            retention_time=kafka.protocol.commit.OffsetCommitRequest[2].DEFAULT_RETENTION_TIME,
+            topics=[(
+                topic,
+                [(
+                    partition,
+                    payload.offset,
+                    payload.metadata)
+                for partition, payload in six.iteritems(topic_payloads)])
+            for topic, topic_payloads in six.iteritems(group_by_topic_and_partition(payloads))])
     
     @classmethod
     def decode_offset_commit_response(cls, response):

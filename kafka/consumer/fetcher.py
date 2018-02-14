@@ -367,21 +367,20 @@ class Fetcher(six.Iterator):
                 part_records = part.take(max_records)
                 next_offset = part_records[-1].offset + 1
 
-                    log.log(0, "Returning fetched records at offset %d for assigned"
-                               " partition %s and update position to %s", position,
-                               tp, next_offset)
+                log.log(0, "Returning fetched records at offset %d for assigned"
+                           " partition %s and update position to %s", position,
+                           tp, next_offset)
 
-                    for record in part_records:
-                        # Fetched compressed messages may include additional records
-                        if record.offset < fetch_offset:
-                            log.debug("Skipping message offset: %s (expecting %s)",
-                                      record.offset, fetch_offset)
-                            continue
-                        drained[tp].append(record)
-                        records_found += 1
+                for record in part_records:
+                    # Fetched compressed messages may include additional records
+                    if record.offset < fetch_offset:
+                        log.debug("Skipping message offset: %s (expecting %s)",
+                                  record.offset, fetch_offset)
+                        continue
+                    drained[tp].append(record)
 
-                    self._subscriptions.assignment[tp].position = next_offset
-                return records_found
+                self._subscriptions.assignment[tp].position = next_offset
+                return len(part_records)
 
             else:
                 # these records aren't next in line based on the last consumed
