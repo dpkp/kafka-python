@@ -1,0 +1,56 @@
+state machine
+
+events = receive_bytes(data)
+send(request)
+bytes_to_send()
+
+
+current broker connection methods:
+
+    check state:
+        blacked_out
+        connected
+        connecting
+        disconnected
+        can_send_more
+
+    connect
+    close
+    send
+    recv
+    check_version
+
+connection state transitions:
+
+    connecting
+        handshake
+        authenticating
+        connected
+        disconnected
+    handshake
+        authenticating
+        connected
+        disconnected
+    authenticating
+        connected
+        disconnected
+    connected
+        disconnected
+
+    
+
+
+consumer:
+    coordinator_unknown
+    coordinator_check_pending
+    coordinator_known
+    join_group_needed
+    join_group_pending
+    join_group_follower
+    join_group_leader
+    join_group_sync
+    group_active
+    leave_group_pending
+
+
+
