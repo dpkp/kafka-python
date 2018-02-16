@@ -1,0 +1,46 @@
+Group coordinator state machine:
+
+    - process received events
+    - generate events to send
+    - state
+        - coordinator unknown
+        - inactive
+        - joined
+        - 
+        - rebalancing
+        - active
+
+coordinator unknown, GroupCoordinatorResponse -> coordinator unknown
+coordinator unknown, GroupCoordinatorResponse -> inactive
+inactive, JoinGroupResponse -> joined
+, JoinGroupResponse -> syncing
+syncing, SyncGroupRequest -> syncing
+syncing, SyncGroupResponse -> active
+
+
+
+KafkaClient router
+
+    - send request
+    - route request to node
+      - all:
+        - apiversions
+        - saslhandshake
+      - any:
+        - metadata
+        - groupcoordinator
+        - offsetfetch / offsetcommit v0
+        - createtopics / deletetopics
+        - listgroups / describegroups
+      - partition leader:
+        - fetch
+        - produce
+        - offset
+      - group coordinator:
+        - joingroup
+        - syncgroup
+        - leavegroup
+        - heartbeat
+        - offsetfetch / offsetcommit v1+
+    - encode request to bytes
+    - queue bytes per node
