@@ -256,7 +256,6 @@ class DescribeGroupsResponse_v1(Response):
     )
 
 
-
 class DescribeGroupsRequest_v0(Request):
     API_KEY = 15
     API_VERSION = 0
@@ -333,3 +332,33 @@ class SaslAuthenticateRequest_v0(Request):
 
 SaslAuthenticateRequest = [SaslAuthenticateRequest_v0]
 SaslAuthenticateResponse = [SaslAuthenticateResponse_v0]
+
+
+class CreatePartitionsResponse_v0(Response):
+    API_KEY = 37
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('topic_error_codes', Array(
+            ('topic', String('utf-8')),
+            ('error_code', Int16),
+            ('error_message', String('utf-8'))))
+    )
+
+
+class CreatePartitionsRequest_v0(Request):
+    API_KEY = 37
+    API_VERSION = 0
+    RESPONSE_TYPE = CreatePartitionsResponse_v0
+    SCHEMA = Schema(
+        ('topic_partitions', Array(
+            ('topic', String('utf-8')),
+            ('new_partitions', Schema(
+                ('count', Int32),
+                ('assignment', Array(Int32)))))),
+        ('timeout', Int32),
+        ('validate_only', Boolean)
+    )
+
+
+CreatePartitionsRequest = [CreatePartitionsRequest_v0]
+CreatePartitionsResponse = [CreatePartitionsResponse_v0]
