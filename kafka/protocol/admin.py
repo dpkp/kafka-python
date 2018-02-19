@@ -338,7 +338,8 @@ class CreatePartitionsResponse_v0(Response):
     API_KEY = 37
     API_VERSION = 0
     SCHEMA = Schema(
-        ('topic_error_codes', Array(
+        ('throttle_time_ms', Int32),
+        ('topic_errors', Array(
             ('topic', String('utf-8')),
             ('error_code', Int16),
             ('error_message', String('utf-8'))))
