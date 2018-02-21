@@ -27,6 +27,9 @@ cache:
     - servers/
 
 before_install:
+    - mkdir -p $HOME/bin
+    - curl -fsSL https://testspace-client.s3.amazonaws.com/testspace-linux.tgz | tar -zxvf- -C $HOME/bin
+    - testspace config url $TS_ORG.testspace.com
     - ./build_integration.sh
 
 install:
@@ -34,7 +37,10 @@ install:
     - pip install .
 
 script:
-  - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
+  - tox -e `if [ \"$TRAVIS_PYTHON_VERSION\" == \"pypy\" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi` -- --junit-xml=testresults.xml
 
+after_script:
+  - testspace [Kafka-${KAFKA_VERSION}/Python-${TRAVIS_PYTHON_VERSION}]testresults.xml{test}
+ 
 after_success:
   - coveralls
