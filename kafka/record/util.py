@@ -1,6 +1,10 @@
 import binascii
 
 from kafka.record._crc32c import crc as crc32c_py
+try:
+    from crc32c import crc32 as crc32c_c
+except ImportError:
+    crc32c_c = None
 
 
 def encode_varint(value, write):
@@ -113,11 +117,15 @@ def decode_varint(buffer, pos=0):
             raise ValueError("Out of int64 range")
 
 
-def calc_crc32c(memview):
+_crc32c = crc32c_py
+if crc32c_c is not None:
+    _crc32c = crc32c_c
+
+
+def calc_crc32c(memview, _crc32c=_crc32c):
     """ Calculate CRC-32C (Castagnoli) checksum over a memoryview of data
     """
-    crc = crc32c_py(memview)
-    return crc
+    return _crc32c(memview)
 
 
 def calc_crc32(memview):
