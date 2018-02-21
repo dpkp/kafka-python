@@ -642,7 +642,7 @@ class KafkaConsumer(six.Iterator):
         # Send any new fetches (won't resend pending fetches)
         self._fetcher.send_fetches()
 
-        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll())
+        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll() * 1000)
         self._client.poll(timeout_ms=timeout_ms)
         # after the long poll, we should check whether the group needs to rebalance
         # prior to returning data so that the group can stabilize faster
