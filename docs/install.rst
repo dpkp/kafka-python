@@ -70,3 +70,16 @@ Install the `python-snappy` module
 .. code:: bash
 
     pip install python-snappy
+
+
+Optional crc32c install
+***********************
+Highly recommended if you are using Kafka 11+ brokers. For those `kafka-python`
+uses a new message protocol version, that requires calculation of `crc32c`,
+which differs from `zlib.crc32` hash implementation. By default `kafka-python`
+calculates it in pure python, which is quite slow. To speed it up we optionally
+support https://pypi.python.org/pypi/crc32c package if it's installed.
+
+.. code:: bash
+
+    pip install crc32c
