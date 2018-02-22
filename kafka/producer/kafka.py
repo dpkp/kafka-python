@@ -554,7 +554,7 @@ class KafkaProducer(object):
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
-            message_size = self._estimate_size_in_bytes(key, value)
+            message_size = self._estimate_size_in_bytes(key_bytes, value_bytes)
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
