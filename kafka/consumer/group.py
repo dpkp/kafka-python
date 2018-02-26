@@ -595,6 +595,8 @@ class KafkaConsumer(six.Iterator):
         assert timeout_ms >= 0, 'Timeout must not be negative'
         if max_records is None:
             max_records = self.config['max_poll_records']
+        assert isinstance(max_records, int), 'max_records must be an integer'
+        assert max_records > 0, 'max_records must be positive'
 
         # Poll for new data until the timeout expires
         start = time.time()
