@@ -333,7 +333,7 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
                     # security_protocol PLAINTEXT
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                 self.config['state_change_callback'](self)
@@ -362,7 +362,7 @@ class BrokerConnection(object):
                     log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -371,7 +371,7 @@ class BrokerConnection(object):
             if self._try_authenticate():
                 # _try_authenticate has side-effects: possibly disconnected on socket errors
                 if self.state is ConnectionStates.AUTHENTICATING:
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self)
