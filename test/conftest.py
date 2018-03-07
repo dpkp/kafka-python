@@ -128,6 +128,7 @@ def conn(mocker):
         return state
     conn._set_conn_state = _set_conn_state
     conn.connect.side_effect = lambda: conn.state
+    conn.connect_blocking.return_value = True
     conn.connecting = lambda: conn.state in (ConnectionStates.CONNECTING,
                                              ConnectionStates.HANDSHAKE)
     conn.connected = lambda: conn.state is ConnectionStates.CONNECTED
