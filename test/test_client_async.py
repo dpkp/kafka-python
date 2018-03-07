@@ -96,6 +96,7 @@ def test_can_connect(cli, conn):
     conn.blacked_out.return_value = True
     assert not cli._can_connect(0)
 
+
 def test_maybe_connect(cli, conn):
     try:
         # Node not in metadata, raises AssertionError
