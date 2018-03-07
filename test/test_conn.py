@@ -255,20 +255,26 @@ def test_lookup_on_connect():
     hostname = 'example.org'
     port = 9092
     conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
-    assert conn.host == conn.hostname == hostname
+    assert conn.host == hostname
+    assert conn.port == port
+    assert conn.afi == socket.AF_UNSPEC
     ip1 = '127.0.0.1'
+    afi1 = socket.AF_INET
     mock_return1 = [
-        (2, 2, 17, '', (ip1, 9092)),
+        (afi1, socket.SOCK_STREAM, 6, '', (ip1, 9092)),
     ]
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
-        assert conn.host == ip1
+        assert conn._sock_ip == ip1
+        assert conn._sock_port == 9092
+        assert conn._sock_afi == afi1
 
-    ip2 = '127.0.0.2'
+    ip2 = '::1'
+    afi2 = socket.AF_INET6
     mock_return2 = [
-        (2, 2, 17, '', (ip2, 9092)),
+        (afi2, socket.SOCK_STREAM, 6, '', (ip2, 9092)),
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
@@ -276,14 +282,16 @@ def test_lookup_on_connect():
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
-        assert conn.host == ip2
+        assert conn._sock_ip == ip2
+        assert conn._sock_port == 9092
+        assert conn._sock_afi == afi2
 
 
 def test_relookup_on_failure():
     hostname = 'example.org'
     port = 9092
     conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
-    assert conn.host == conn.hostname == hostname
+    assert conn.host == hostname
     mock_return1 = []
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         last_attempt = conn.last_attempt
@@ -293,8 +301,9 @@ def test_relookup_on_failure():
         assert conn.last_attempt > last_attempt
 
     ip2 = '127.0.0.2'
+    afi2 = socket.AF_INET
     mock_return2 = [
-        (2, 2, 17, '', (ip2, 9092)),
+        (afi2, socket.SOCK_STREAM, 6, '', (ip2, 9092)),
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
@@ -302,4 +311,6 @@ def test_relookup_on_failure():
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
         conn.close()
-        assert conn.host == ip2
+        assert conn._sock_ip == ip2
+        assert conn._sock_port == 9092
+        assert conn._sock_afi == afi2
