@@ -71,17 +71,7 @@ class SimpleClient(object):
             )
 
         conn = self._conns[host_key]
-        conn.connect()
-        if conn.connected():
-            return conn
-
-        timeout = time.time() + self.timeout
-        while time.time() < timeout and conn.connecting():
-            if conn.connect() is ConnectionStates.CONNECTED:
-                break
-            else:
-                time.sleep(0.05)
-        else:
+        if not conn.connect_blocking(self.timeout):
             conn.close()
             raise ConnectionError("%s:%s (%s)" % (host, port, afi))
         return conn
