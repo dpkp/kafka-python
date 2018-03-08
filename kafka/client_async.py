@@ -257,11 +257,7 @@ class KafkaClient(object):
                                          state_change_callback=cb,
                                          node_id='bootstrap',
                                          **self.config)
-            bootstrap.connect()
-            while bootstrap.connecting():
-                self._selector.select(1)
-                bootstrap.connect()
-            if not bootstrap.connected():
+            if not bootstrap.connect_blocking():
                 bootstrap.close()
                 continue
             future = bootstrap.send(metadata_request)
