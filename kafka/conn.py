@@ -343,7 +343,8 @@ class BrokerConnection(object):
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
-                self.close(Errors.ConnectionError(ret))
+                errstr = errno.errorcode.get(ret, 'UNKNOWN')
+                self.close(Errors.ConnectionError('{} {}'.format(ret, errstr)))
 
             # Connection timed out
             elif time.time() > request_timeout + self.last_attempt:
