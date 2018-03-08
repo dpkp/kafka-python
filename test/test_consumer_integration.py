@@ -44,7 +44,7 @@ def test_kafka_consumer(simple_client, topic, kafka_consumer_factory):
 
     assert len(messages[0]) == 100
     assert len(messages[1]) == 100
-    consumer.close()
+    kafka_consumer.close()
 
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):
