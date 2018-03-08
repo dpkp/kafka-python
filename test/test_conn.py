@@ -72,6 +72,15 @@ def test_blacked_out(conn):
     assert conn.blacked_out() is True
 
 
+def test_connection_delay(conn):
+    conn.last_attempt = time.time()
+    assert round(conn.connection_delay()) == round(conn.config['reconnect_backoff_ms'])
+    conn.state = ConnectionStates.CONNECTING
+    assert conn.connection_delay() == 0
+    conn.state = ConnectionStates.CONNECTED
+    assert conn.connection_delay() == float('inf')
+
+
 def test_connected(conn):
     assert conn.connected() is False
     conn.state = ConnectionStates.CONNECTED

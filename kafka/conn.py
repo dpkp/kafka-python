@@ -594,9 +594,16 @@ class BrokerConnection(object):
         return False
 
     def connection_delay(self):
-        time_waited_ms = time.time() - (self.last_attempt or 0)
+        """
+        Return the number of milliseconds to wait, based on the connection
+        state, before attempting to send data. When disconnected, this respects
+        the reconnect backoff time. When connecting, returns 0 to allow
+        non-blocking connect to finish. When connected, returns a very large
+        number to handle slow/stalled connections.
+        """
+        time_waited = time.time() - (self.last_attempt or 0)
         if self.state is ConnectionStates.DISCONNECTED:
-            return max(self._reconnect_backoff - time_waited_ms, 0)
+            return max(self._reconnect_backoff - time_waited, 0) * 1000
         elif self.connecting():
             return 0
         else:
