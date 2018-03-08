@@ -44,6 +44,7 @@ def test_consumer(kafka_broker, version):
     assert len(consumer._client._conns) > 0
     node_id = list(consumer._client._conns.keys())[0]
     assert consumer._client._conns[node_id].state is ConnectionStates.CONNECTED
+    consumer.close()
 
 
 @pytest.mark.skipif(version() < (0, 9), reason='Unsupported Kafka Version')
@@ -153,6 +154,7 @@ def test_paused(kafka_broker, topic):
 
     consumer.unsubscribe()
     assert set() == consumer.paused()
+    consumer.close()
 
 
 @pytest.mark.skipif(version() < (0, 9), reason='Unsupported Kafka Version')
@@ -183,3 +185,4 @@ def test_heartbeat_thread(kafka_broker, topic):
     assert consumer._coordinator.heartbeat.last_poll == last_poll
     consumer.poll(timeout_ms=100)
     assert consumer._coordinator.heartbeat.last_poll > last_poll
+    consumer.close()
