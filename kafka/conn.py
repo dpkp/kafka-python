@@ -629,6 +629,9 @@ class BrokerConnection(object):
         self._reconnect_backoff = self.config['reconnect_backoff_ms'] / 1000.0
 
     def _update_reconnect_backoff(self):
+        # Do not mark as failure if there are more dns entries available to try
+        if len(self._gai) > 0:
+            return
         if self.config['reconnect_backoff_max_ms'] > self.config['reconnect_backoff_ms']:
             self._failures += 1
             self._reconnect_backoff = self.config['reconnect_backoff_ms'] * 2 ** (self._failures - 1)
