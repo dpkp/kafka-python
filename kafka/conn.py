@@ -257,7 +257,7 @@ class BrokerConnection(object):
             self._ssl_context = self.config['ssl_context']
         self._sasl_auth_future = None
         self.last_attempt = 0
-        self._gai = None
+        self._gai = []
         self._sensors = None
         if self.config['metrics']:
             self._sensors = BrokerConnectionMetrics(self.config['metrics'],
