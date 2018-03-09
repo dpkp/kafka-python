@@ -665,10 +665,13 @@ class BrokerConnection(object):
                 will be failed with this exception.
                 Default: kafka.errors.ConnectionError.
         """
+        if self.state is ConnectionStates.DISCONNECTED:
+            if error is not None:
+                log.warning('%s: Duplicate close() with error: %s', self, error)
+            return
         log.info('%s: Closing connection. %s', self, error or '')
-        if self.state is not ConnectionStates.DISCONNECTED:
-            self.state = ConnectionStates.DISCONNECTING
-            self.config['state_change_callback'](self)
+        self.state = ConnectionStates.DISCONNECTING
+        self.config['state_change_callback'](self)
         self._update_reconnect_backoff()
         self._close_socket()
         self.state = ConnectionStates.DISCONNECTED
