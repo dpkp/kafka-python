@@ -208,8 +208,7 @@ class KafkaConsumer(six.Iterator):
                 (0, 8, 0) enables basic functionality but requires manual
                     partition assignment and offset management.
 
-            For the full list of supported versions, see
-            KafkaClient.API_VERSIONS. Default: None
+            Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
