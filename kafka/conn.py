@@ -906,6 +906,7 @@ class BrokerConnection(object):
 
         Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
         """
+        log.info('Probing node %s broker version', self.node_id)
         # Monkeypatch some connection configurations to avoid timeouts
         override_config = {
             'request_timeout_ms': timeout * 1000,
@@ -923,17 +924,6 @@ class BrokerConnection(object):
         # socket.error (32, 54, or 104)
         from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
         from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
-
-        # Socket errors are logged as exceptions and can alarm users. Mute them
-        from logging import Filter
-
-        class ConnFilter(Filter):
-            def filter(self, record):
-                if record.funcName == 'check_version':
-                    return True
-                return False
-        log_filter = ConnFilter()
-        log.addFilter(log_filter)
 
         test_cases = [
             # All cases starting from 0.10 will be based on ApiVersionResponse
@@ -1004,7 +994,6 @@ class BrokerConnection(object):
         else:
             raise Errors.UnrecognizedBrokerVersion()
 
-        log.removeFilter(log_filter)
         for key in stashed:
             self.config[key] = stashed[key]
         return version
