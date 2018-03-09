@@ -928,6 +928,7 @@ class BrokerConnection(object):
                 for response, future in self.recv():
                     future.success(response)
                 selector.select(1)
+            selector.close()
 
             if f.succeeded():
                 if isinstance(request, ApiVersionRequest[0]):
