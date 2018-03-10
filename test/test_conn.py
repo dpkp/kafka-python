@@ -258,33 +258,31 @@ def test_lookup_on_connect():
     assert conn.host == hostname
     assert conn.port == port
     assert conn.afi == socket.AF_UNSPEC
-    ip1 = '127.0.0.1'
     afi1 = socket.AF_INET
+    sockaddr1 = ('127.0.0.1', 9092)
     mock_return1 = [
-        (afi1, socket.SOCK_STREAM, 6, '', (ip1, 9092)),
+        (afi1, socket.SOCK_STREAM, 6, '', sockaddr1),
     ]
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
-        conn.close()
-        assert conn._sock_ip == ip1
-        assert conn._sock_port == 9092
         assert conn._sock_afi == afi1
+        assert conn._sock_addr == sockaddr1
+        conn.close()
 
-    ip2 = '::1'
     afi2 = socket.AF_INET6
+    sockaddr2 = ('::1', 9092, 0, 0)
     mock_return2 = [
-        (afi2, socket.SOCK_STREAM, 6, '', (ip2, 9092)),
+        (afi2, socket.SOCK_STREAM, 6, '', sockaddr2),
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
-        conn.close()
-        assert conn._sock_ip == ip2
-        assert conn._sock_port == 9092
         assert conn._sock_afi == afi2
+        assert conn._sock_addr == sockaddr2
+        conn.close()
 
 
 def test_relookup_on_failure():
@@ -300,17 +298,16 @@ def test_relookup_on_failure():
         assert conn.disconnected()
         assert conn.last_attempt > last_attempt
 
-    ip2 = '127.0.0.2'
     afi2 = socket.AF_INET
+    sockaddr2 = ('127.0.0.2', 9092)
     mock_return2 = [
-        (afi2, socket.SOCK_STREAM, 6, '', (ip2, 9092)),
+        (afi2, socket.SOCK_STREAM, 6, '', sockaddr2),
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, 1)
-        conn.close()
-        assert conn._sock_ip == ip2
-        assert conn._sock_port == 9092
         assert conn._sock_afi == afi2
+        assert conn._sock_addr == sockaddr2
+        conn.close()
