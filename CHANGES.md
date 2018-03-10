@@ -1,3 +1,47 @@
+# 1.4.2 (Unreleased)
+
+Bugfixes
+* Close leaked selector in version check (dpkp #1425)
+* Fix `BrokerConnection.connection_delay()` to return milliseconds (dpkp #1414)
+* Use local copies in `Fetcher._fetchable_partitions` to avoid mutation errors (dpkp #1400)
+* Fix error var name in `_unpack` (j2gg0s #1403)
+* Fix KafkaConsumer compacted offset handling (dpkp #1397)
+* Fix byte size estimation with kafka producer (blakeembrey #1393)
+* Fix coordinator timeout in consumer poll interface (braedon #1384)
+
+Client
+* Add `BrokerConnection.connect_blocking()` to improve bootstrap to multi-address hostnames (dpkp #1411)
+* Short-circuit `BrokerConnection.close()` if already disconnected (dpkp #1424)
+* Only increase reconnect backoff if all addrinfos have been tried (dpkp #1423)
+* Make BrokerConnection .host / .port / .afi immutable to avoid incorrect 'metadata changed' checks (dpkp #1422)
+* Connect with sockaddrs to support non-zero ipv6 scope ids (dpkp #1433)
+* Check timeout type in KafkaClient constructor (asdaraujo #1293)
+* Update string representation of SimpleClient (asdaraujo #1293)
+* Do not validate `api_version` against known versions (dpkp #1434)
+
+Consumer
+* Avoid tight poll loop in consumer when brokers are down (dpkp #1415)
+* Validate `max_records` in KafkaConsumer.poll (dpkp #1398)
+
+Producer
+* Validate that serializers generate bytes-like (or None) data (dpkp #1420)
+
+Core / Protocol
+* Support alternative lz4 package: lz4framed (everpcpc #1395)
+* Use hardware accelerated CRC32C function if available (tvoinarovskyi #1389)
+* Add Admin CreatePartitions API call (alexef #1386)
+
+Test Infrastructure
+* Close KafkaConsumer instances during tests (dpkp #1410)
+* Introduce new fixtures to prepare for migration to pytest (asdaraujo #1293)
+* Removed pytest-catchlog dependency (asdaraujo #1380)
+* Fixes racing condition when message is sent to broker before topic logs are created (asdaraujo #1293)
+
+Logging / Error Messages
+* Re-enable logging during broker version check (dpkp #1430)
+* Connection logging cleanups (dpkp #1432)
+
+
 # 1.4.1 (Feb 9, 2018)
 
 Bugfixes
