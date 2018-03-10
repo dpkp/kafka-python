@@ -121,8 +121,7 @@ class KafkaClient(object):
             default: none.
         api_version (tuple): Specify which Kafka API version to use. If set
             to None, KafkaClient will attempt to infer the broker version by
-            probing various APIs. For the full list of supported versions,
-            see KafkaClient.API_VERSIONS. Default: None
+            probing various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version is None
@@ -176,26 +175,12 @@ class KafkaClient(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
     }
-    API_VERSIONS = [
-        (0, 10, 1),
-        (0, 10, 0),
-        (0, 10),
-        (0, 9),
-        (0, 8, 2),
-        (0, 8, 1),
-        (0, 8, 0)
-    ]
 
     def __init__(self, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
-
-        if self.config['api_version'] is not None:
-            assert self.config['api_version'] in self.API_VERSIONS, (
-                'api_version [{0}] must be one of: {1}'.format(
-                    self.config['api_version'], str(self.API_VERSIONS)))
 
         self.cluster = ClusterMetadata(**self.config)
         self._topics = set()  # empty set will fetch all topic metadata
