@@ -668,17 +668,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error)
                     self.reset_generation()
-                    future.failure(Errors.CommitFailedError(
-                        "Commit cannot be completed since the group has"
-                        " already rebalanced and assigned the partitions to"
-                        " another member. This means that the time between"
-                        " subsequent calls to poll() was longer than the"
-                        " configured session_timeout_ms, which typically"
-                        " implies that the poll loop is spending too much time"
-                        " message processing. You can address this either by"
-                        " increasing the session timeout or by reducing the"
-                        " maximum size of batches returned in poll() with"
-                        " max_poll_records."))
+                    future.failure(Errors.CommitFailedError())
                     return
                 else:
                     log.error("Group %s failed to commit partition %s at offset"
