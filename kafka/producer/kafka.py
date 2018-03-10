@@ -540,8 +540,6 @@ class KafkaProducer(object):
         assert not (value is None and key is None), 'Need at least one: key or value'
         key_bytes = value_bytes = None
         try:
-            # first make sure the metadata for the topic is
-            # available
             self._wait_on_metadata(topic, self.config['max_block_ms'] / 1000.0)
 
             key_bytes = self._serialize(
@@ -550,6 +548,9 @@ class KafkaProducer(object):
             value_bytes = self._serialize(
                 self.config['value_serializer'],
                 topic, value)
+            assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
+            assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
+
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
