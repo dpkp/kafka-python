@@ -314,6 +314,10 @@ class BaseCoordinator(object):
                     cause = self._heartbeat_thread.failed
                     self._heartbeat_thread = None
                     raise cause  # pylint: disable-msg=raising-bad-type
+
+                # Awake the heartbeat thread if needed
+                if self.heartbeat.should_heartbeat():
+                    self._lock.notify()
                 self.heartbeat.poll()
 
     def time_to_next_heartbeat(self):
