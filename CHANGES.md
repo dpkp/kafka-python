@@ -1,4 +1,4 @@
-# 1.4.2 (Unreleased)
+# 1.4.2 (Mar 10, 2018)
 
 Bugfixes
 * Close leaked selector in version check (dpkp #1425)
@@ -22,6 +22,7 @@ Client
 Consumer
 * Avoid tight poll loop in consumer when brokers are down (dpkp #1415)
 * Validate `max_records` in KafkaConsumer.poll (dpkp #1398)
+* KAFKA-5512: Awake heartbeat thread when it is time to poll (dpkp #1439)
 
 Producer
 * Validate that serializers generate bytes-like (or None) data (dpkp #1420)
@@ -36,10 +37,12 @@ Test Infrastructure
 * Introduce new fixtures to prepare for migration to pytest (asdaraujo #1293)
 * Removed pytest-catchlog dependency (asdaraujo #1380)
 * Fixes racing condition when message is sent to broker before topic logs are created (asdaraujo #1293)
+* Add kafka 1.0.1 release to test fixtures (dpkp #1437)
 
 Logging / Error Messages
 * Re-enable logging during broker version check (dpkp #1430)
 * Connection logging cleanups (dpkp #1432)
+* Remove old CommitFailed error message from coordinator (dpkp #1436)
 
 
 # 1.4.1 (Feb 9, 2018)
