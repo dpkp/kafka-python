@@ -420,9 +420,6 @@ class KafkaProducer(object):
                     pass
         self._cleanup = None
 
-    def __del__(self):
-        self.close(timeout=0)
-
     def close(self, timeout=None):
         """Close this producer.
 
