@@ -1,10 +1,12 @@
+from __future__ import absolute_import
+
+import functools
 import operator
 import os
 import socket
 import time
 import uuid
 
-import decorator
 import pytest
 from . import unittest
 
@@ -45,6 +47,7 @@ def kafka_versions(*versions):
     validators = map(construct_lambda, versions)
 
     def real_kafka_versions(func):
+        @functools.wraps(func)
         def wrapper(func, *args, **kwargs):
             version = kafka_version()
 
@@ -56,7 +59,7 @@ def kafka_versions(*versions):
                     pytest.skip("unsupported kafka version")
 
             return func(*args, **kwargs)
-        return decorator.decorator(wrapper, func)
+        return wrapper
 
     return real_kafka_versions
 
