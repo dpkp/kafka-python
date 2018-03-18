@@ -18,6 +18,7 @@
 #
 # So we can iterate over batches just by knowing offsets of Length. Magic is
 # used to construct the correct class for Batch itself.
+from __future__ import division
 
 import struct
 
@@ -131,15 +132,14 @@ class MemoryRecordsBuilder(object):
     def append(self, timestamp, key, value, headers=[]):
         """ Append a message to the buffer.
 
-        Returns:
-            (int, int): checksum and bytes written
+        Returns: RecordMetadata or None if unable to append
         """
         if self._closed:
-            return None, 0
+            return None
 
         offset = self._next_offset
         metadata = self._builder.append(offset, timestamp, key, value, headers)
-        # Return of 0 size means there's no space to add a new message
+        # Return of None means there's no space to add a new message
         if metadata is None:
             return None
 
