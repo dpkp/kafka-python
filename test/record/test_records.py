@@ -173,6 +173,7 @@ def test_memory_records_builder(magic, compression_type):
             assert metadata.timestamp == 10000 + offset
         else:
             assert metadata.timestamp == -1
+        assert builder.next_offset() == offset + 1
 
     # Error appends should not leave junk behind, like null bytes or something
     with pytest.raises(TypeError):
@@ -200,3 +201,21 @@ def test_memory_records_builder(magic, compression_type):
     # Can't append after close
     meta = builder.append(timestamp=None, key=b"test", value=b"Super")
     assert meta is None
+
+
+@pytest.mark.parametrize("compression_type", [0, 1, 2, 3])
+@pytest.mark.parametrize("magic", [0, 1, 2])
+def test_memory_records_builder_full(magic, compression_type):
+    builder = MemoryRecordsBuilder(
+        magic=magic, compression_type=compression_type, batch_size=1024 * 10)
+
+    # 1 message should always be appended
+    metadata = builder.append(
+        key=None, timestamp=None, value=b"M" * 10240)
+    assert metadata is not None
+    assert builder.is_full()
+
+    metadata = builder.append(
+        key=None, timestamp=None, value=b"M")
+    assert metadata is None
+    assert builder.next_offset() == 1
