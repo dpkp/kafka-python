@@ -135,7 +135,7 @@ class MemoryRecordsBuilder(object):
             (int, int): checksum and bytes written
         """
         if self._closed:
-            return None, 0
+            return None
 
         offset = self._next_offset
         metadata = self._builder.append(offset, timestamp, key, value, headers)
@@ -166,7 +166,7 @@ class MemoryRecordsBuilder(object):
 
     def compression_rate(self):
         assert self._closed
-        return self.size_in_bytes() / self._bytes_written
+        return self.size_in_bytes() / float(self._bytes_written)
 
     def is_full(self):
         if self._closed:

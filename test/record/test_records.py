@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 import pytest
-from kafka.record import MemoryRecords
+from kafka.record import MemoryRecords, MemoryRecordsBuilder
 from kafka.errors import CorruptRecordException
 
 # This is real live data from Kafka 11 broker
@@ -152,3 +154,49 @@ def test_memory_records_corrupt():
     )
     with pytest.raises(CorruptRecordException):
         records.next_batch()
+
+
+@pytest.mark.parametrize("compression_type", [0, 1, 2, 3])
+@pytest.mark.parametrize("magic", [0, 1, 2])
+def test_memory_records_builder(magic, compression_type):
+    builder = MemoryRecordsBuilder(
+        magic=magic, compression_type=compression_type, batch_size=1024 * 10)
+    base_size = builder.size_in_bytes()  # V2 has a header before
+
+    msg_sizes = []
+    for offset in range(10):
+        metadata = builder.append(
+            timestamp=10000 + offset, key=b"test", value=b"Super")
+        msg_sizes.append(metadata.size)
+        assert metadata.offset == offset
+        if magic > 0:
+            assert metadata.timestamp == 10000 + offset
+        else:
+            assert metadata.timestamp == -1
+
+    # Error appends should not leave junk behind, like null bytes or something
+    with pytest.raises(TypeError):
+        builder.append(
+            timestamp=None, key="test", value="Super")  # Not bytes, but str
+
+    assert not builder.is_full()
+    size_before_close = builder.size_in_bytes()
+    assert size_before_close == sum(msg_sizes) + base_size
+
+    # Size should remain the same after closing. No traling bytes
+    builder.close()
+    assert builder.compression_rate() > 0
+    expected_size = size_before_close * builder.compression_rate()
+    assert builder.is_full()
+    assert builder.size_in_bytes() == expected_size
+    buffer = builder.buffer()
+    assert len(buffer) == expected_size
+
+    # We can close second time, as in retry
+    builder.close()
+    assert builder.size_in_bytes() == expected_size
+    assert builder.buffer() == buffer
+
+    # Can't append after close
+    meta = builder.append(timestamp=None, key=b"test", value=b"Super")
+    assert meta is None
