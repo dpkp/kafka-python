@@ -132,7 +132,7 @@ class MemoryRecordsBuilder(object):
         """ Append a message to the buffer.
 
         Returns:
-            (int, int): checksum and bytes written
+            RecordMetadata: object containing checksum, bytes written, etc.
         """
         if self._closed:
             return None, 0

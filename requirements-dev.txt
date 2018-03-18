@@ -1,7 +1,6 @@
 flake8==3.4.1
 pytest==3.4.0
 pytest-cov==2.5.1
-pytest-catchlog==1.2.2
 docker-py==1.10.6
 coveralls==1.2.0
 Sphinx==1.6.4
@@ -13,3 +12,4 @@ pylint==1.8.2
 pytest-pylint==0.7.1
 pytest-mock==1.6.3
 sphinx-rtd-theme==0.2.4
+crc32c==1.2
