@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import inspect
 
 import pytest
-from decorator import decorate
 
 from test.fixtures import KafkaFixture, ZookeeperFixture
 from test.testutil import kafka_version, random_string
@@ -73,6 +72,7 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     def factory(**kafka_consumer_params):
         params = {} if kafka_consumer_params is None else kafka_consumer_params.copy()
         params.setdefault('client_id', 'consumer_%s' % (request.node.name,))
+        params.setdefault('auto_offset_reset', 'earliest')
         _consumer[0] = next(kafka_broker.get_consumers(cnt=1, topics=[topic], **params))
         return _consumer[0]
 
