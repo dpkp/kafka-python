@@ -909,10 +909,9 @@ class HeartbeatThread(threading.Thread):
 
     def run(self):
         try:
+            log.debug('Heartbeat thread started')
             while not self.closed:
                 self._run_once()
-
-            log.debug('Heartbeat thread closed')
 
         except ReferenceError:
             log.debug('Heartbeat thread closed due to coordinator gc')
@@ -921,6 +920,9 @@ class HeartbeatThread(threading.Thread):
             log.error("Heartbeat thread for group %s failed due to unexpected error: %s",
                       self.coordinator.group_id, e)
             self.failed = e
+
+        finally:
+            log.debug('Heartbeat thread closed')
 
     def _run_once(self):
         with self.coordinator._lock:
