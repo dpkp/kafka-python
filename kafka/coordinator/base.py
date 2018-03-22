@@ -953,25 +953,24 @@ class HeartbeatThread(threading.Thread):
                     # to connect to (and the future is automatically failed).
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
-        elif self.coordinator.heartbeat.session_timeout_expired():
-            # the session timeout has expired without seeing a
-            # successful heartbeat, so we should probably make sure
-            # the coordinator is still healthy.
-            log.warning('Heartbeat session expired, marking coordinator dead')
-            self.coordinator.coordinator_dead('Heartbeat session expired')
+            elif self.coordinator.heartbeat.session_timeout_expired():
+                # the session timeout has expired without seeing a
+                # successful heartbeat, so we should probably make sure
+                # the coordinator is still healthy.
+                log.warning('Heartbeat session expired, marking coordinator dead')
+                self.coordinator.coordinator_dead('Heartbeat session expired')
 
-        elif self.coordinator.heartbeat.poll_timeout_expired():
-            # the poll timeout has expired, which means that the
-            # foreground thread has stalled in between calls to
-            # poll(), so we explicitly leave the group.
-            log.warning('Heartbeat poll expired, leaving group')
-            self.coordinator.maybe_leave_group()
+            elif self.coordinator.heartbeat.poll_timeout_expired():
+                # the poll timeout has expired, which means that the
+                # foreground thread has stalled in between calls to
+                # poll(), so we explicitly leave the group.
+                log.warning('Heartbeat poll expired, leaving group')
+                self.coordinator.maybe_leave_group()
 
-        elif not self.coordinator.heartbeat.should_heartbeat():
-            # poll again after waiting for the retry backoff in case
-            # the heartbeat failed or the coordinator disconnected
-            log.log(0, 'Not ready to heartbeat, waiting')
-            with self.coordinator._lock:
+            elif not self.coordinator.heartbeat.should_heartbeat():
+                # poll again after waiting for the retry backoff in case
+                # the heartbeat failed or the coordinator disconnected
+                log.log(0, 'Not ready to heartbeat, waiting')
                 self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
         else:
