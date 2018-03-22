@@ -945,7 +945,11 @@ class HeartbeatThread(threading.Thread):
             self.coordinator._client.poll(timeout_ms=0)
 
             if self.coordinator.coordinator_unknown():
-                if not self.coordinator.lookup_coordinator().is_done:
+                future = self.coordinator.lookup_coordinator()
+                if not future.is_done or future.failed():
+                    # the immediate future check ensures that we backoff
+                    # properly in the case that no brokers are available
+                    # to connect to (and the future is automatically failed).
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
             elif self.coordinator.heartbeat.session_timeout_expired():
