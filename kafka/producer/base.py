@@ -268,6 +268,8 @@ class Producer(object):
             defaults to 30.
 
     Deprecated Arguments:
+        async (bool, optional): send message using a background thread,
+            defaults to False. Deprecated, use 'async_send'
         batch_send (bool, optional): If True, messages are sent by a background
             thread in batches, defaults to False. Deprecated, use 'async_send'
     """
@@ -292,7 +294,13 @@ class Producer(object):
                  async_queue_maxsize=ASYNC_QUEUE_MAXSIZE,
                  async_queue_put_timeout=ASYNC_QUEUE_PUT_TIMEOUT,
                  async_log_messages_on_error=ASYNC_LOG_MESSAGES_ON_ERROR,
-                 async_stop_timeout=ASYNC_STOP_TIMEOUT_SECS):
+                 async_stop_timeout=ASYNC_STOP_TIMEOUT_SECS,
+                 **kwargs):
+
+        # async renamed async_send for python3.7 support
+        if 'async' in kwargs:
+            log.warning('Deprecated async option found -- use async_send')
+            async_send = kwargs['async']
 
         if async_send:
             assert batch_send_every_n > 0
