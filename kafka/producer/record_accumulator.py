@@ -169,6 +169,7 @@ class RecordAccumulator(object):
         'batch_size': 16384,
         'compression_attrs': 0,
         'linger_ms': 0,
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'message_version': 0,
         'metrics': None,

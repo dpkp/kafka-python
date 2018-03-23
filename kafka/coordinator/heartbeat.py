@@ -10,6 +10,7 @@ class Heartbeat(object):
         'heartbeat_interval_ms': 3000,
         'session_timeout_ms': 10000,
         'max_poll_interval_ms': 300000,
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
     }
 

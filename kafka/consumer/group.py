@@ -251,6 +251,7 @@ class KafkaConsumer(six.Iterator):
         'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
         'request_timeout_ms': 305000, # chosen to be higher than the default of max_poll_interval_ms
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,

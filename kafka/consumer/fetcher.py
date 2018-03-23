@@ -59,6 +59,7 @@ class Fetcher(six.Iterator):
         'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
         'api_version': (0, 8, 0),
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100
     }
 

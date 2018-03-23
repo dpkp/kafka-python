@@ -31,6 +31,7 @@ class ClusterMetadata(object):
             brokers or partitions. Default: 300000
     """
     DEFAULT_CONFIG = {
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
     }

@@ -155,6 +155,7 @@ class KafkaClient(object):
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'sock_chunk_bytes': 4096,  # undocumented experimental option
         'sock_chunk_buffer_count': 1000,  # undocumented experimental option
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
         'security_protocol': 'PLAINTEXT',

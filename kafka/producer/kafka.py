@@ -286,6 +286,7 @@ class KafkaProducer(object):
         'max_block_ms': 60000,
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
         'receive_buffer_bytes': None,
