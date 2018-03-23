@@ -116,7 +116,7 @@ class BrokerConnection(object):
             resulting in a random range between 20% below and 20% above
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -181,7 +181,7 @@ class BrokerConnection(object):
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
         'node_id': 0,
-        'request_timeout_ms': 40000,
+        'request_timeout_ms': 30000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
