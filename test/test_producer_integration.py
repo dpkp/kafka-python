@@ -213,7 +213,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         partition = self.client.get_partition_ids_for_topic(self.topic)[0]
         start_offset = self.current_offset(self.topic, partition)
 
-        producer = SimpleProducer(self.client, async=True, random_start=False)
+        producer = SimpleProducer(self.client, async_send=True, random_start=False)
         resp = producer.send_messages(self.topic, self.msg("one"))
         self.assertEqual(len(resp), 0)
 
@@ -232,7 +232,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         batch_interval = 5
         producer = SimpleProducer(
             self.client,
-            async=True,
+            async_send=True,
             batch_send_every_n=batch_messages,
             batch_send_every_t=batch_interval,
             random_start=False)
@@ -297,7 +297,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
         batch_interval = 5
         producer = SimpleProducer(
             self.client,
-            async=True,
+            async_send=True,
             batch_send_every_n=100,
             batch_send_every_t=batch_interval,
             random_start=False)
@@ -429,7 +429,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         producer = KeyedProducer(self.client,
                                  partitioner=RoundRobinPartitioner,
-                                 async=True,
+                                 async_send=True,
                                  batch_send_every_t=1)
 
         resp = producer.send_messages(self.topic, self.key("key1"), self.msg("one"))

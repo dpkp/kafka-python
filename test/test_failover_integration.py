@@ -60,7 +60,7 @@ class TestFailover(KafkaIntegrationTestCase):
         # require that the server commit messages to all in-sync replicas
         # so that failover doesn't lose any messages on server-side
         # and we can assert that server-side message count equals client-side
-        producer = Producer(self.client, async=False,
+        producer = Producer(self.client, async_send=False,
                             req_acks=Producer.ACK_AFTER_CLUSTER_COMMIT)
 
         # Send 100 random messages to a specific partition
@@ -101,7 +101,7 @@ class TestFailover(KafkaIntegrationTestCase):
         partition = 0
 
         # Test the base class Producer -- send_messages to a specific partition
-        producer = Producer(self.client, async=True,
+        producer = Producer(self.client, async_send=True,
                             batch_send_every_n=15,
                             batch_send_every_t=3,
                             req_acks=Producer.ACK_AFTER_CLUSTER_COMMIT,
@@ -146,7 +146,7 @@ class TestFailover(KafkaIntegrationTestCase):
     def test_switch_leader_keyed_producer(self):
         topic = self.topic
 
-        producer = KeyedProducer(self.client, async=False)
+        producer = KeyedProducer(self.client, async_send=False)
 
         # Send 10 random messages
         for _ in range(10):
@@ -182,7 +182,7 @@ class TestFailover(KafkaIntegrationTestCase):
             producer.send_messages(topic, key, msg)
 
     def test_switch_leader_simple_consumer(self):
-        producer = Producer(self.client, async=False)
+        producer = Producer(self.client, async_send=False)
         consumer = SimpleConsumer(self.client, None, self.topic, partitions=None, auto_commit=False, iter_timeout=10)
         self._send_random_messages(producer, self.topic, 0, 2)
         consumer.get_messages()

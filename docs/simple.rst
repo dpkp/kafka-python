@@ -49,7 +49,7 @@ Asynchronous Mode
 
     # To send messages asynchronously
     client = SimpleClient('localhost:9092')
-    producer = SimpleProducer(client, async=True)
+    producer = SimpleProducer(client, async_send=True)
     producer.send_messages('my-topic', b'async message')
 
     # To send messages in batch. You can use any of the available
@@ -60,7 +60,7 @@ Asynchronous Mode
     # * If the producer dies before the messages are sent, there will be losses
     # * Call producer.stop() to send the messages and cleanup
     producer = SimpleProducer(client,
-                              async=True,
+                              async_send=True,
                               batch_send_every_n=20,
                               batch_send_every_t=60)
 
@@ -73,7 +73,7 @@ Synchronous Mode
 
     # To send messages synchronously
     client = SimpleClient('localhost:9092')
-    producer = SimpleProducer(client, async=False)
+    producer = SimpleProducer(client, async_send=False)
 
     # Note that the application is responsible for encoding messages to type bytes
     producer.send_messages('my-topic', b'some message')
@@ -88,7 +88,7 @@ Synchronous Mode
     # ACK_AFTER_CLUSTER_COMMIT : server will block until the message is committed
     #                            by all in sync replicas before sending a response
     producer = SimpleProducer(client,
-                              async=False,
+                              async_send=False,
                               req_acks=SimpleProducer.ACK_AFTER_LOCAL_WRITE,
                               ack_timeout=2000,
                               sync_fail_on_error=False)
