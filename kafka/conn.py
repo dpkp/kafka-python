@@ -390,7 +390,7 @@ class BrokerConnection(object):
 
             # Needs retry
             else:
-                pass
+                time.sleep(self.config['reconnect_backoff_ms'] / 1000)
 
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
