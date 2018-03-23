@@ -59,6 +59,7 @@ class Sender(threading.Thread):
             try:
                 self.run_once()
             except Exception:
+                self._force_close = True
                 log.exception("Uncaught error in kafka producer I/O thread")
 
         log.debug("Beginning shutdown of Kafka producer I/O thread, sending"
