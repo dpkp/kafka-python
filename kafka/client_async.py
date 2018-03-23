@@ -623,6 +623,8 @@ class KafkaClient(object):
                 conn.close(error=Errors.RequestTimedOutError(
                     'Request timed out after %s ms' %
                     conn.config['request_timeout_ms']))
+            elif conn.state == '<disconnected>':
+                raise Errors.ConnectionError
 
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
