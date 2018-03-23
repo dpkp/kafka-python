@@ -78,7 +78,7 @@ class KafkaClient(object):
             resulting in a random range between 20% below and 20% above
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 30000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -145,7 +145,7 @@ class KafkaClient(object):
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
-        'request_timeout_ms': 40000,
+        'request_timeout_ms': 30000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
