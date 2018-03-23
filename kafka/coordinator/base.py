@@ -263,14 +263,14 @@ class BaseCoordinator(object):
 
                 if future.failed():
                     if future.retriable():
-                        if self.config['max_retry_backoff'] == retry:
-                            raise future.exception  # pylint: disable-msg=raising-bad-type
-                        retry += 1
                         if getattr(future.exception, 'invalid_metadata', False):
                             log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                             metadata_update = self._client.cluster.request_update()
                             self._client.poll(future=metadata_update)
                         else:
+                            if self.config['max_retry_backoff'] == retry:
+                                raise future.exception  # pylint: disable-msg=raising-bad-type
+                            retry += 1
                             time.sleep(self.config['retry_backoff_ms'] / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
