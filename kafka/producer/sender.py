@@ -61,10 +61,11 @@ class Sender(threading.Thread):
             try:
                 self.run_once()
             except Exception:
+                log.exception("Uncaught error in kafka producer I/O thread")
                 if self.config['max_retry_backoff'] == retry:
                     self._force_close = True
+                    break
                 retry += 1
-                log.exception("Uncaught error in kafka producer I/O thread")
 
         log.debug("Beginning shutdown of Kafka producer I/O thread, sending"
                   " remaining records.")
@@ -79,10 +80,11 @@ class Sender(threading.Thread):
             try:
                 self.run_once()
             except Exception:
+                log.exception("Uncaught error in kafka producer I/O thread")
                 if self.config['max_retry_backoff'] == retry:
                     self._force_close = True
+                    break
                 retry += 1
-                log.exception("Uncaught error in kafka producer I/O thread")
 
         if self._force_close:
             # We need to fail all the incomplete batches and wake up the
