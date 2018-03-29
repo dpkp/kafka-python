@@ -78,6 +78,14 @@ except ImportError:
     gssapi = None
     GSSError = None
 
+
+AFI_NAMES = {
+    socket.AF_UNSPEC: "unspecified",
+    socket.AF_INET: "IPv4",
+    socket.AF_INET6: "IPv6",
+}
+
+
 class ConnectionStates(object):
     DISCONNECTING = '<disconnecting>'
     DISCONNECTED = '<disconnected>'
@@ -108,7 +116,7 @@ class BrokerConnection(object):
             resulting in a random range between 20% below and 20% above
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -173,7 +181,7 @@ class BrokerConnection(object):
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
         'node_id': 0,
-        'request_timeout_ms': 40000,
+        'request_timeout_ms': 30000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
@@ -204,13 +212,11 @@ class BrokerConnection(object):
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI')
 
     def __init__(self, host, port, afi, **configs):
-        self.hostname = host
         self.host = host
         self.port = port
         self.afi = afi
-        self._init_host = host
-        self._init_port = port
-        self._init_afi = afi
+        self._sock_afi = afi
+        self._sock_addr = None
         self.in_flight_requests = collections.deque()
         self._api_versions = None
 
@@ -257,37 +263,76 @@ class BrokerConnection(object):
             self._ssl_context = self.config['ssl_context']
         self._sasl_auth_future = None
         self.last_attempt = 0
-        self._gai = None
+        self._gai = []
         self._sensors = None
         if self.config['metrics']:
             self._sensors = BrokerConnectionMetrics(self.config['metrics'],
                                                     self.config['metric_group_prefix'],
                                                     self.node_id)
 
-    def _next_afi_host_port(self):
+    def _dns_lookup(self):
+        self._gai = dns_lookup(self.host, self.port, self.afi)
         if not self._gai:
-            self._gai = dns_lookup(self._init_host, self._init_port, self._init_afi)
-            if not self._gai:
-                log.error('DNS lookup failed for %s:%i (%s)',
-                          self._init_host, self._init_port, self._init_afi)
-                return
+            log.error('DNS lookup failed for %s:%i (%s)',
+                      self.host, self.port, self.afi)
+            return False
+        return True
 
+    def _next_afi_sockaddr(self):
+        if not self._gai:
+            if not self._dns_lookup():
+                return
         afi, _, __, ___, sockaddr = self._gai.pop(0)
-        host, port = sockaddr[:2]
-        return (afi, host, port)
+        return (afi, sockaddr)
+
+    def connect_blocking(self, timeout=float('inf')):
+        if self.connected():
+            return True
+        timeout += time.time()
+        # First attempt to perform dns lookup
+        # note that the underlying interface, socket.getaddrinfo,
+        # has no explicit timeout so we may exceed the user-specified timeout
+        while time.time() < timeout:
+            if self._dns_lookup():
+                break
+        else:
+            return False
+
+        # Loop once over all returned dns entries
+        selector = None
+        while self._gai:
+            while time.time() < timeout:
+                self.connect()
+                if self.connected():
+                    if selector is not None:
+                        selector.close()
+                    return True
+                elif self.connecting():
+                    if selector is None:
+                        selector = self.config['selector']()
+                        selector.register(self._sock, selectors.EVENT_WRITE)
+                    selector.select(1)
+                elif self.disconnected():
+                    if selector is not None:
+                        selector.close()
+                        selector = None
+                    break
+            else:
+                break
+        return False
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.last_attempt = time.time()
-            next_lookup = self._next_afi_host_port()
+            next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
                 self.close(Errors.ConnectionError('DNS failure'))
                 return
             else:
                 log.debug('%s: creating new socket', self)
-                self.afi, self.host, self.port = next_lookup
-                self._sock = socket.socket(self.afi, socket.SOCK_STREAM)
+                self._sock_afi, self._sock_addr = next_lookup
+                self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
 
             for option in self.config['socket_options']:
                 log.debug('%s: setting socket option %s', self, option)
@@ -301,7 +346,8 @@ class BrokerConnection(object):
             # so we need to double check that we are still connecting before
             if self.connecting():
                 self.config['state_change_callback'](self)
-                log.info('%s: connecting to %s:%d', self, self.host, self.port)
+                log.info('%s: connecting to %s:%d [%s %s]', self, self.host,
+                         self.port, self._sock_addr, AFI_NAMES[self._sock_afi])
 
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
@@ -309,7 +355,7 @@ class BrokerConnection(object):
             request_timeout = self.config['request_timeout_ms'] / 1000.0
             ret = None
             try:
-                ret = self._sock.connect_ex((self.host, self.port))
+                ret = self._sock.connect_ex(self._sock_addr)
             except socket.error as err:
                 ret = err.errno
 
@@ -324,7 +370,7 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
                     # security_protocol PLAINTEXT
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                 self.config['state_change_callback'](self)
@@ -334,7 +380,8 @@ class BrokerConnection(object):
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
-                self.close(Errors.ConnectionError(ret))
+                errstr = errno.errorcode.get(ret, 'UNKNOWN')
+                self.close(Errors.ConnectionError('{} {}'.format(ret, errstr)))
 
             # Connection timed out
             elif time.time() > request_timeout + self.last_attempt:
@@ -352,7 +399,7 @@ class BrokerConnection(object):
                     log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
                 else:
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
 
@@ -361,7 +408,7 @@ class BrokerConnection(object):
             if self._try_authenticate():
                 # _try_authenticate has side-effects: possibly disconnected on socket errors
                 if self.state is ConnectionStates.AUTHENTICATING:
-                    log.debug('%s: Connection complete.', self)
+                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self)
@@ -400,7 +447,7 @@ class BrokerConnection(object):
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
-                server_hostname=self.hostname,
+                server_hostname=self.host,
                 do_handshake_on_connect=False)
         except ssl.SSLError as e:
             log.exception('%s: Failed to wrap socket in SSLContext!', self)
@@ -524,7 +571,7 @@ class BrokerConnection(object):
         return future.success(True)
 
     def _try_authenticate_gssapi(self, future):
-        auth_id = self.config['sasl_kerberos_service_name'] + '@' + self.hostname
+        auth_id = self.config['sasl_kerberos_service_name'] + '@' + self.host
         gssapi_name = gssapi.Name(
             auth_id,
             name_type=gssapi.NameType.hostbased_service
@@ -594,9 +641,16 @@ class BrokerConnection(object):
         return False
 
     def connection_delay(self):
-        time_waited_ms = time.time() - (self.last_attempt or 0)
+        """
+        Return the number of milliseconds to wait, based on the connection
+        state, before attempting to send data. When disconnected, this respects
+        the reconnect backoff time. When connecting, returns 0 to allow
+        non-blocking connect to finish. When connected, returns a very large
+        number to handle slow/stalled connections.
+        """
+        time_waited = time.time() - (self.last_attempt or 0)
         if self.state is ConnectionStates.DISCONNECTED:
-            return max(self._reconnect_backoff - time_waited_ms, 0)
+            return max(self._reconnect_backoff - time_waited, 0) * 1000
         elif self.connecting():
             return 0
         else:
@@ -622,6 +676,9 @@ class BrokerConnection(object):
         self._reconnect_backoff = self.config['reconnect_backoff_ms'] / 1000.0
 
     def _update_reconnect_backoff(self):
+        # Do not mark as failure if there are more dns entries available to try
+        if len(self._gai) > 0:
+            return
         if self.config['reconnect_backoff_max_ms'] > self.config['reconnect_backoff_ms']:
             self._failures += 1
             self._reconnect_backoff = self.config['reconnect_backoff_ms'] * 2 ** (self._failures - 1)
@@ -646,10 +703,13 @@ class BrokerConnection(object):
                 will be failed with this exception.
                 Default: kafka.errors.ConnectionError.
         """
+        if self.state is ConnectionStates.DISCONNECTED:
+            if error is not None:
+                log.warning('%s: Duplicate close() with error: %s', self, error)
+            return
         log.info('%s: Closing connection. %s', self, error or '')
-        if self.state is not ConnectionStates.DISCONNECTED:
-            self.state = ConnectionStates.DISCONNECTING
-            self.config['state_change_callback'](self)
+        self.state = ConnectionStates.DISCONNECTING
+        self.config['state_change_callback'](self)
         self._update_reconnect_backoff()
         self._close_socket()
         self.state = ConnectionStates.DISCONNECTED
@@ -843,6 +903,7 @@ class BrokerConnection(object):
 
         Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
         """
+        log.info('Probing node %s broker version', self.node_id)
         # Monkeypatch some connection configurations to avoid timeouts
         override_config = {
             'request_timeout_ms': timeout * 1000,
@@ -861,17 +922,6 @@ class BrokerConnection(object):
         from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
         from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
-        # Socket errors are logged as exceptions and can alarm users. Mute them
-        from logging import Filter
-
-        class ConnFilter(Filter):
-            def filter(self, record):
-                if record.funcName == 'check_version':
-                    return True
-                return False
-        log_filter = ConnFilter()
-        log.addFilter(log_filter)
-
         test_cases = [
             # All cases starting from 0.10 will be based on ApiVersionResponse
             ((0, 10), ApiVersionRequest[0]()),
@@ -881,19 +931,9 @@ class BrokerConnection(object):
             ((0, 8, 0), MetadataRequest[0]([])),
         ]
 
-        def connect():
-            self.connect()
-            if self.connected():
-                return
-            timeout_at = time.time() + timeout
-            while time.time() < timeout_at and self.connecting():
-                if self.connect() is ConnectionStates.CONNECTED:
-                    return
-                time.sleep(0.05)
-            raise Errors.NodeNotReadyError()
-
         for version, request in test_cases:
-            connect()
+            if not self.connect_blocking(timeout):
+                raise Errors.NodeNotReadyError()
             f = self.send(request)
             # HACK: sleeping to wait for socket to send bytes
             time.sleep(0.1)
@@ -912,6 +952,7 @@ class BrokerConnection(object):
                 for response, future in self.recv():
                     future.success(response)
                 selector.select(1)
+            selector.close()
 
             if f.succeeded():
                 if isinstance(request, ApiVersionRequest[0]):
@@ -950,14 +991,14 @@ class BrokerConnection(object):
         else:
             raise Errors.UnrecognizedBrokerVersion()
 
-        log.removeFilter(log_filter)
         for key in stashed:
             self.config[key] = stashed[key]
         return version
 
-    def __repr__(self):
-        return "<BrokerConnection node_id=%s host=%s/%s port=%d>" % (
-            self.node_id, self.hostname, self.host, self.port)
+    def __str__(self):
+        return "<BrokerConnection node_id=%s host=%s:%d %s [%s %s]>" % (
+            self.node_id, self.host, self.port, self.state,
+            AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
 class BrokerConnectionMetrics(object):

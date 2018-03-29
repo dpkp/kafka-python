@@ -514,8 +514,8 @@ def test_partition_records_offset():
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
     assert len(records) > 0
     msgs = records.take(1)
-    assert msgs[0].offset == 123
-    assert records.fetch_offset == 124
+    assert msgs[0].offset == fetch_offset
+    assert records.fetch_offset == fetch_offset + 1
     msgs = records.take(2)
     assert len(msgs) == 2
     assert len(records) > 0
@@ -538,3 +538,20 @@ def test_partition_records_no_fetch_offset():
                 for i in range(batch_start, batch_end)]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
     assert len(records) == 0
+
+
+def test_partition_records_compacted_offset():
+    """Test that messagesets are handle correctly
+    when the fetch offset points to a message that has been compacted
+    """
+    batch_start = 0
+    batch_end = 100
+    fetch_offset = 42
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', 'checksum', 0, 0)
+                for i in range(batch_start, batch_end) if i != fetch_offset]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) == batch_end - fetch_offset - 1
+    msgs = records.take(1)
+    assert msgs[0].offset == fetch_offset + 1

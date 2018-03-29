@@ -21,7 +21,7 @@ def _unpack(f, data):
     except error as e:
         raise ValueError("Error encountered when attempting to convert value: "
                         "{!r} to struct format: '{}', hit error: {}"
-                        .format(value, f, e))
+                        .format(data, f, e))
 
 
 class Int8(AbstractType):

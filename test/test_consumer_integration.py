@@ -2,6 +2,7 @@ import logging
 import os
 import time
 
+import pytest
 from six.moves import xrange
 import six
 
@@ -19,10 +20,34 @@ from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
 )
 
+from test.conftest import version
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions, random_string, Timer
+    KafkaIntegrationTestCase, kafka_versions, random_string, Timer,
+    send_messages
 )
+
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+def test_kafka_consumer(simple_client, topic, kafka_consumer_factory):
+    """Test KafkaConsumer
+    """
+    kafka_consumer = kafka_consumer_factory(auto_offset_reset='earliest')
+
+    send_messages(simple_client, topic, 0, range(0, 100))
+    send_messages(simple_client, topic, 1, range(100, 200))
+
+    cnt = 0
+    messages = {0: set(), 1: set()}
+    for message in kafka_consumer:
+        logging.debug("Consumed message %s", repr(message))
+        cnt += 1
+        messages[message.partition].add(message.offset)
+        if cnt >= 200:
+            break
+
+    assert len(messages[0]) == 100
+    assert len(messages[1]) == 100
+    kafka_consumer.close()
 
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):
@@ -35,9 +60,9 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         cls.zk = ZookeeperFixture.instance()
         chroot = random_string(10)
-        cls.server1 = KafkaFixture.instance(0, cls.zk.host, cls.zk.port,
+        cls.server1 = KafkaFixture.instance(0, cls.zk,
                                             zk_chroot=chroot)
-        cls.server2 = KafkaFixture.instance(1, cls.zk.host, cls.zk.port,
+        cls.server2 = KafkaFixture.instance(1, cls.zk,
                                             zk_chroot=chroot)
 
         cls.server = cls.server1 # Bootstrapping server
@@ -501,24 +526,6 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         messages = [ message for message in consumer ]
         self.assertEqual(len(messages), 2)
 
-    def test_kafka_consumer(self):
-        self.send_messages(0, range(0, 100))
-        self.send_messages(1, range(100, 200))
-
-        # Start a consumer
-        consumer = self.kafka_consumer(auto_offset_reset='earliest')
-        n = 0
-        messages = {0: set(), 1: set()}
-        for m in consumer:
-            logging.debug("Consumed message %s" % repr(m))
-            n += 1
-            messages[m.partition].add(m.offset)
-            if n >= 200:
-                break
-
-        self.assertEqual(len(messages[0]), 100)
-        self.assertEqual(len(messages[1]), 100)
-
     def test_kafka_consumer__blocking(self):
         TIMEOUT_MS = 500
         consumer = self.kafka_consumer(auto_offset_reset='earliest',
@@ -555,6 +562,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
                     messages.add((msg.partition, msg.offset))
         self.assertEqual(len(messages), 5)
         self.assertGreaterEqual(t.interval, TIMEOUT_MS / 1000.0 )
+        consumer.close()
 
     @kafka_versions('>=0.8.1')
     def test_kafka_consumer__offset_commit_resume(self):
@@ -594,6 +602,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             output_msgs2.append(m)
         self.assert_message_count(output_msgs2, 20)
         self.assertEqual(len(set(output_msgs1) | set(output_msgs2)), 200)
+        consumer2.close()
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_max_bytes_simple(self):
@@ -614,6 +623,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEqual(
             seen_partitions, set([
                 TopicPartition(self.topic, 0), TopicPartition(self.topic, 1)]))
+        consumer.close()
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_max_bytes_one_msg(self):
@@ -639,6 +649,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         fetched_msgs = [next(consumer) for i in range(10)]
         self.assertEqual(len(fetched_msgs), 10)
+        consumer.close()
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_offsets_for_time(self):
@@ -692,6 +703,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         self.assertEqual(offsets, {
             tp: late_msg.offset + 1
         })
+        consumer.close()
 
     @kafka_versions('>=0.10.1')
     def test_kafka_consumer_offsets_search_many_partitions(self):
@@ -730,6 +742,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
             tp0: p0msg.offset + 1,
             tp1: p1msg.offset + 1
         })
+        consumer.close()
 
     @kafka_versions('<0.10.1')
     def test_kafka_consumer_offsets_for_time_old(self):

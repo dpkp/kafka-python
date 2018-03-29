@@ -68,9 +68,10 @@ def test_size_of_varint(encoded, decoded):
     assert util.size_of_varint(decoded) == len(encoded)
 
 
-def test_crc32c():
+@pytest.mark.parametrize("crc32_func", [util.crc32c_c, util.crc32c_py])
+def test_crc32c(crc32_func):
     def make_crc(data):
-        crc = util.calc_crc32c(data)
+        crc = crc32_func(data)
         return struct.pack(">I", crc)
     assert make_crc(b"") == b"\x00\x00\x00\x00"
     assert make_crc(b"a") == b"\xc1\xd0\x43\x30"

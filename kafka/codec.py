@@ -27,6 +27,11 @@ except ImportError:
     lz4f = None
 
 try:
+    import lz4framed
+except ImportError:
+    lz4framed = None
+
+try:
     import xxhash
 except ImportError:
     xxhash = None
@@ -45,6 +50,8 @@ def has_lz4():
     if lz4 is not None:
         return True
     if lz4f is not None:
+        return True
+    if lz4framed is not None:
         return True
     return False
 
@@ -198,6 +205,8 @@ if lz4:
     lz4_encode = lz4.compress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_encode = lz4f.compressFrame # pylint: disable-msg=no-member
+elif lz4framed:
+    lz4_encode = lz4framed.compress # pylint: disable-msg=no-member
 else:
     lz4_encode = None
 
@@ -220,6 +229,8 @@ if lz4:
     lz4_decode = lz4.decompress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_decode = lz4f_decode
+elif lz4framed:
+    lz4_decode = lz4framed.decompress # pylint: disable-msg=no-member
 else:
     lz4_decode = None
 
