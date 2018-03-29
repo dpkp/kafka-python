@@ -97,7 +97,7 @@ KafkaProducer
         print(record_metadata.offset)
 
     def on_send_error(excp):
-        log.exception()
+        log.error('I am an errback', exc_info=excp)
         # handle exception
 
     # produce asynchronously with callbacks 
