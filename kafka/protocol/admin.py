@@ -450,7 +450,7 @@ class CreatePartitionsRequest_v0(Request):
             ('topic', String('utf-8')),
             ('new_partitions', Schema(
                 ('count', Int32),
-                ('assignment', Array(Int32)))))),
+                ('assignment', Array(Array(Int32))))))),
         ('timeout', Int32),
         ('validate_only', Boolean)
     )
