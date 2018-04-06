@@ -34,6 +34,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'exclude_internal_topics': True,

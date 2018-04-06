@@ -25,6 +25,7 @@ class Sender(threading.Thread):
     cluster and then sends produce requests to the appropriate nodes.
     """
     DEFAULT_CONFIG = {
+        'max_retry_backoff': float('inf'),
         'max_request_size': 1048576,
         'acks': 1,
         'retries': 0,
@@ -55,11 +56,16 @@ class Sender(threading.Thread):
         log.debug("Starting Kafka producer I/O thread.")
 
         # main loop, runs until close is called
+        retry = 0
         while self._running:
             try:
                 self.run_once()
             except Exception:
                 log.exception("Uncaught error in kafka producer I/O thread")
+                if self.config['max_retry_backoff'] == retry:
+                    self._force_close = True
+                    break
+                retry += 1
 
         log.debug("Beginning shutdown of Kafka producer I/O thread, sending"
                   " remaining records.")
@@ -67,6 +73,7 @@ class Sender(threading.Thread):
         # okay we stopped accepting requests but there may still be
         # requests in the accumulator or waiting for acknowledgment,
         # wait until these are completed.
+        retry = 0
         while (not self._force_close
                and (self._accumulator.has_unsent()
                     or self._client.in_flight_request_count() > 0)):
@@ -74,6 +81,10 @@ class Sender(threading.Thread):
                 self.run_once()
             except Exception:
                 log.exception("Uncaught error in kafka producer I/O thread")
+                if self.config['max_retry_backoff'] == retry:
+                    self._force_close = True
+                    break
+                retry += 1
 
         if self._force_close:
             # We need to fail all the incomplete batches and wake up the

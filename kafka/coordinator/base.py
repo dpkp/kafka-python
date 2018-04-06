@@ -86,6 +86,7 @@ class BaseCoordinator(object):
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
+        'max_retry_backoff': float('inf'),
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'metric_group_prefix': '',
@@ -245,6 +246,7 @@ class BaseCoordinator(object):
         (and we have an active connection -- java client uses unsent queue).
         """
         with self._lock:
+            retry = 0
             while self.coordinator_unknown():
 
                 # Prior to 0.8.2 there was no group coordinator
@@ -266,6 +268,9 @@ class BaseCoordinator(object):
                             metadata_update = self._client.cluster.request_update()
                             self._client.poll(future=metadata_update)
                         else:
+                            if self.config['max_retry_backoff'] == retry:
+                                raise future.exception  # pylint: disable-msg=raising-bad-type
+                            retry += 1
                             time.sleep(self.config['retry_backoff_ms'] / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
