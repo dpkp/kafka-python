@@ -948,7 +948,6 @@ class BrokerConnection(object):
 
             selector = self.config['selector']()
             selector.register(self._sock, selectors.EVENT_READ)
-
             while not (f.is_done and mr.is_done):
                 selector.select(1)
                 for response, future in self.recv():
