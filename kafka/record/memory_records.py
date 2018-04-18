@@ -166,7 +166,7 @@ class MemoryRecordsBuilder(object):
 
     def compression_rate(self):
         assert self._closed
-        return self.size_in_bytes() / self._bytes_written
+        return self.size_in_bytes() / float(self._bytes_written)
 
     def is_full(self):
         if self._closed:
