@@ -18,6 +18,12 @@ except ImportError:
 
 try:
     import lz4.frame as lz4
+
+    def _lz4_compress(payload, **kwargs):
+        kwargs.pop('block_linked', None)
+        # Kafka does not support block linked mode
+        return lz4.compress(payload, block_linked=False, **kwargs)
+
 except ImportError:
     lz4 = None
 
@@ -202,7 +208,7 @@ def snappy_decode(payload):
 
 
 if lz4:
-    lz4_encode = lz4.compress # pylint: disable-msg=no-member
+    lz4_encode = _lz4_compress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_encode = lz4f.compressFrame # pylint: disable-msg=no-member
 elif lz4framed:
