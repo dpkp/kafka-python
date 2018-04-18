@@ -20,9 +20,15 @@ try:
     import lz4.frame as lz4
 
     def _lz4_compress(payload, **kwargs):
-        kwargs.pop('block_linked', None)
-        # Kafka does not support block linked mode
-        return lz4.compress(payload, block_linked=False, **kwargs)
+        # Kafka does not support LZ4 dependent blocks
+        try:
+            # For lz4>=0.12.0
+            kwargs.pop('block_linked', None)
+            return lz4.compress(payload, block_linked=False, **kwargs)
+        except TypeError:
+            # For earlier versions of lz4
+            kwargs.pop('block_mode', None)
+            return lz4.compress(payload, block_mode=1, **kwargs)
 
 except ImportError:
     lz4 = None
