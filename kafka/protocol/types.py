@@ -10,7 +10,7 @@ def _pack(f, value):
         return pack(f, value)
     except error as e:
         raise ValueError("Error encountered when attempting to convert value: "
-                        "{} to struct format: '{}', hit error: {}"
+                        "{!r} to struct format: '{}', hit error: {}"
                         .format(value, f, e))
 
 
@@ -20,8 +20,8 @@ def _unpack(f, data):
         return value
     except error as e:
         raise ValueError("Error encountered when attempting to convert value: "
-                        "{} to struct format: '{}', hit error: {}"
-                        .format(value, f, e))
+                        "{!r} to struct format: '{}', hit error: {}"
+                        .format(data, f, e))
 
 
 class Int8(AbstractType):

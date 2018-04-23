@@ -242,8 +242,7 @@ class KafkaProducer(object):
             default: none.
         api_version (tuple): Specify which Kafka API version to use. If set to
             None, the client will attempt to infer the broker version by probing
-            various APIs. For a full list of supported versions, see
-            KafkaClient.API_VERSIONS. Default: None
+            various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -541,8 +540,6 @@ class KafkaProducer(object):
         assert not (value is None and key is None), 'Need at least one: key or value'
         key_bytes = value_bytes = None
         try:
-            # first make sure the metadata for the topic is
-            # available
             self._wait_on_metadata(topic, self.config['max_block_ms'] / 1000.0)
 
             key_bytes = self._serialize(
@@ -551,10 +548,13 @@ class KafkaProducer(object):
             value_bytes = self._serialize(
                 self.config['value_serializer'],
                 topic, value)
+            assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
+            assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
+
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
-            message_size = self._estimate_size_in_bytes(key, value)
+            message_size = self._estimate_size_in_bytes(key_bytes, value_bytes)
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)

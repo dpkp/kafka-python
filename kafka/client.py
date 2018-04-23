@@ -104,17 +104,7 @@ class SimpleClient(object):
             )
 
         conn = self._conns[host_key]
-        conn.connect()
-        if conn.connected():
-            return conn
-
-        timeout = time.time() + self.timeout
-        while time.time() < timeout and conn.connecting():
-            if conn.connect() is ConnectionStates.CONNECTED:
-                break
-            else:
-                time.sleep(0.05)
-        else:
+        if not conn.connect_blocking(self.timeout):
             conn.close()
             raise ConnectionError("%s:%s (%s)" % (host, port, afi))
         return conn
@@ -432,7 +422,7 @@ class SimpleClient(object):
         return [responses[tp] for tp in original_ordering]
 
     def __repr__(self):
-        return '<KafkaClient client_id=%s>' % (self.client_id)
+        return '<SimpleClient client_id=%s>' % (self.client_id)
 
     def _raise_on_response_error(self, resp):
 

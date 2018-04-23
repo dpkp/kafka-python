@@ -42,4 +42,6 @@ API_KEYS = {
     31: 'DeleteAcls',
     32: 'DescribeConfigs',
     33: 'AlterConfigs',
+    36: 'SaslAuthenticate',
+    37: 'CreatePartitions',
 }

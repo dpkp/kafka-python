@@ -463,7 +463,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # its completion). Note that commits are treated as heartbeats by the
         # coordinator, so there is no need to explicitly allow heartbeats
         # through delayed task execution.
-        self._client.poll() # no wakeup if we add that feature
+        self._client.poll(timeout_ms=0) # no wakeup if we add that feature
 
     def _do_commit_offsets_async(self, offsets, callback=None):
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
@@ -669,17 +669,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error)
                     self.reset_generation()
-                    future.failure(Errors.CommitFailedError(
-                        "Commit cannot be completed since the group has"
-                        " already rebalanced and assigned the partitions to"
-                        " another member. This means that the time between"
-                        " subsequent calls to poll() was longer than the"
-                        " configured session_timeout_ms, which typically"
-                        " implies that the poll loop is spending too much time"
-                        " message processing. You can address this either by"
-                        " increasing the session timeout or by reducing the"
-                        " maximum size of batches returned in poll() with"
-                        " max_poll_records."))
+                    future.failure(Errors.CommitFailedError())
                     return
                 else:
                     log.error("Group %s failed to commit partition %s at offset"

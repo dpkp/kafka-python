@@ -38,12 +38,12 @@ def test_end_to_end(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
-                             max_block_ms=10000,
+                             max_block_ms=30000,
                              compression_type=compression,
                              value_serializer=str.encode)
     consumer = KafkaConsumer(bootstrap_servers=connect_str,
                              group_id=None,
-                             consumer_timeout_ms=10000,
+                             consumer_timeout_ms=30000,
                              auto_offset_reset='earliest',
                              value_deserializer=bytes.decode)
 
@@ -55,7 +55,6 @@ def test_end_to_end(kafka_broker, compression):
         futures.append(producer.send(topic, 'msg %d' % i))
     ret = [f.get(timeout=30) for f in futures]
     assert len(ret) == messages
-
     producer.close()
 
     consumer.subscribe([topic])
@@ -67,6 +66,7 @@ def test_end_to_end(kafka_broker, compression):
             break
 
     assert msgs == set(['msg %d' % i for i in range(messages)])
+    consumer.close()
 
 
 @pytest.mark.skipif(platform.python_implementation() != 'CPython',
@@ -87,7 +87,7 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
-                             max_block_ms=10000,
+                             max_block_ms=30000,
                              compression_type=compression)
     magic = producer._max_usable_produce_magic()
 
