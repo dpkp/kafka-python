@@ -14,7 +14,7 @@ class TestKafkaAdminClientIntegration(KafkaIntegrationTestCase):
             return
 
         cls.zk = ZookeeperFixture.instance()
-        cls.server = KafkaFixture.instance(0, cls.zk.host, cls.zk.port)
+        cls.server = KafkaFixture.instance(0, cls.zk)
 
     @classmethod
     def tearDownClass(cls):  
