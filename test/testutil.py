@@ -121,6 +121,7 @@ class KafkaIntegrationTestCase(unittest.TestCase):
 
         if self.create_client:
             self.client = SimpleClient('%s:%d' % (self.server.host, self.server.port))
+            self.client_async = KafkaClient(bootstrap_servers='%s:%d' % (self.server.host, self.server.port))
 
         timeout = time.time() + 30
         while time.time() < timeout:

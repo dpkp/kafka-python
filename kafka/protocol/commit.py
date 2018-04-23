@@ -162,7 +162,6 @@ class OffsetFetchResponse_v3(Response):
         ('error_code', Int16)
     )
 
-
 class OffsetFetchRequest_v0(Request):
     API_KEY = 9
     API_VERSION = 0  # zookeeper-backed storage

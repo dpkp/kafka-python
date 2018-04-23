@@ -106,6 +106,7 @@ class ProduceRequest_v1(ProduceRequest):
     RESPONSE_TYPE = ProduceResponse_v1
     SCHEMA = ProduceRequest_v0.SCHEMA
 
+
 class ProduceRequest_v2(ProduceRequest):
     API_VERSION = 2
     RESPONSE_TYPE = ProduceResponse_v2

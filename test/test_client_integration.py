@@ -91,3 +91,4 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.offset, 42)
         self.assertEqual(resp.metadata, '')  # Metadata isn't stored for now
+

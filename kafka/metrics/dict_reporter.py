@@ -81,3 +81,6 @@ class DictReporter(AbstractMetricsReporter):
 
     def close(self):
         pass
+
+    def record(self, sensor_name, metric, value, timestamp, config):
+        pass

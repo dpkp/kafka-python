@@ -43,7 +43,8 @@ class Consumer(object):
     """
     def __init__(self, client, group, topic, partitions=None, auto_commit=True,
                  auto_commit_every_n=AUTO_COMMIT_MSG_COUNT,
-                 auto_commit_every_t=AUTO_COMMIT_INTERVAL):
+                 auto_commit_every_t=AUTO_COMMIT_INTERVAL,
+                 offset_storage='zookeeper'):
 
         warnings.warn('deprecated -- this class will be removed in a future'
                       ' release. Use KafkaConsumer instead.',
@@ -66,6 +67,7 @@ class Consumer(object):
         self.auto_commit = auto_commit
         self.auto_commit_every_n = auto_commit_every_n
         self.auto_commit_every_t = auto_commit_every_t
+        self.offset_storage = offset_storage
 
         # Set up the auto-commit timer
         if auto_commit is True and auto_commit_every_t is not None:
@@ -101,11 +103,19 @@ class Consumer(object):
         if partitions is None:
             partitions = self.client.get_partition_ids_for_topic(self.topic)
 
-        responses = self.client.send_offset_fetch_request(
-            self.group,
-            [OffsetFetchRequestPayload(self.topic, p) for p in partitions],
-            fail_on_error=False
-        )
+        responses = []
+        if self.offset_storage in ['zookeeper', 'dual']:
+            responses += self.client.send_offset_fetch_request(
+                self.group,
+                [OffsetFetchRequestPayload(self.topic, p) for p in partitions],
+                fail_on_error=False
+            )
+        if self.offset_storage in ['kafka', 'dual']:
+            responses += self.client.send_offset_fetch_request_kafka(
+                self.group,
+                [OffsetFetchRequestPayload(self.topic, p) for p in partitions],
+                fail_on_error=False
+            )
 
         for resp in responses:
             try:
@@ -115,14 +125,15 @@ class Consumer(object):
             except UnknownTopicOrPartitionError:
                 pass
 
+            prev = self.offsets.get(resp.partition, 0)
             # -1 offset signals no commit is currently stored
             if resp.offset == -1:
-                self.offsets[resp.partition] = 0
+                self.offsets[resp.partition] = prev
 
             # Otherwise we committed the stored offset
             # and need to fetch the next one
             else:
-                self.offsets[resp.partition] = resp.offset
+                self.offsets[resp.partition] = max(prev, resp.offset)
 
     def commit(self, partitions=None):
         """Commit stored offsets to Kafka via OffsetCommitRequest (v0)
@@ -161,7 +172,10 @@ class Consumer(object):
                                                 offset, None))
 
             try:
-                self.client.send_offset_commit_request(self.group, reqs)
+                if self.offset_storage in ['zookeeper', 'dual']:
+                    self.client.send_offset_commit_request(self.group, reqs)
+                if self.offset_storage in ['kafka', 'dual']:
+                    self.client.send_offset_commit_request_kafka(self.group, reqs)
             except KafkaError as e:
                 log.error('%s saving offsets: %s', e.__class__.__name__, e)
                 return False

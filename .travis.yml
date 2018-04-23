@@ -8,8 +8,8 @@ python:
     - pypy
 
 env:
-    - KAFKA_VERSION=0.8.2.2
     - KAFKA_VERSION=0.9.0.1
+    - KAFKA_VERSION=0.10.1.1
     - KAFKA_VERSION=0.10.2.1
     - KAFKA_VERSION=0.11.0.2
     - KAFKA_VERSION=1.0.1

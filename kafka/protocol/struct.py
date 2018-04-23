@@ -7,6 +7,8 @@ from kafka.protocol.types import Schema
 
 from kafka.util import WeakMethod
 
+from ..util import WeakMethod
+
 
 class Struct(AbstractType):
     SCHEMA = Schema()

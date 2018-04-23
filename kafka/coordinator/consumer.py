@@ -202,6 +202,7 @@ class ConsumerCoordinator(BaseCoordinator):
             metadata_snapshot[topic] = set(partitions)
         return metadata_snapshot
 
+
     def _lookup_assignor(self, name):
         for assignor in self.config['assignors']:
             if assignor.name == name:

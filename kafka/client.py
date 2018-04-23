@@ -14,8 +14,11 @@ import kafka.errors
 from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
-                          NotLeaderForPartitionError, ReplicaNotAvailableError)
+                          NotLeaderForPartitionError, ReplicaNotAvailableError,
+                          GroupCoordinatorNotAvailableError, GroupLoadInProgressError)
 from kafka.structs import TopicPartition, BrokerMetadata
+from kafka.metrics.metrics import Metrics
+from kafka.metrics.stats.avg import Avg
 
 from kafka.conn import (
     collect_hosts, BrokerConnection,
@@ -28,7 +31,31 @@ from kafka.protocol import KafkaProtocol
 from kafka.client_async import KafkaClient
 
 
+# If the __consumer_offsets topic is missing, the first consumer coordinator
+# request will fail and it will trigger the creation of the topic; for this
+# reason, we will retry few times until the creation is completed.
+CONSUMER_OFFSET_TOPIC_CREATION_RETRIES = 20
+CONSUMER_OFFSET_RETRY_INTERVAL_SEC = 0.5
+
+
 log = logging.getLogger(__name__)
+
+
+def time_metric(metric_name):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            start_time = time.time()
+            ret = fn(self, *args, **kwargs)
+
+            self.metrics.record(
+                metric_name,
+                (time.time() - start_time) * 1000,
+            )
+
+            return ret
+        return wrapper
+    return decorator
 
 
 # Legacy KafkaClient interface -- will be deprecated soon
@@ -42,12 +69,14 @@ class SimpleClient(object):
     # socket timeout.
     def __init__(self, hosts, client_id=CLIENT_ID,
                  timeout=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-                 correlation_id=0):
+                 correlation_id=0, metrics=None):
         # We need one connection to bootstrap
         self.client_id = client_id
         self.timeout = timeout
-        self.hosts = collect_hosts(hosts)
+        self.hosts = [host + ('bootstrap',) for host in collect_hosts(hosts)]
         self.correlation_id = correlation_id
+        self._metrics_registry = metrics
+        self.metrics = SimpleClientMetrics(metrics if metrics else Metrics())
 
         self._conns = {}
         self.brokers = {}            # broker_id -> BrokerMetadata
@@ -60,14 +89,18 @@ class SimpleClient(object):
     #   Private API  #
     ##################
 
-    def _get_conn(self, host, port, afi):
+    def _get_conn(self, host, port, afi, node_id='bootstrap'):
         """Get or create a connection to a broker using host and port"""
         host_key = (host, port)
         if host_key not in self._conns:
+
             self._conns[host_key] = BrokerConnection(
                 host, port, afi,
                 request_timeout_ms=self.timeout * 1000,
-                client_id=self.client_id
+                client_id=self.client_id,
+                metrics=self._metrics_registry,
+                metric_group_prefix='simple-client',
+                node_id=node_id,
             )
 
         conn = self._conns[host_key]
@@ -145,17 +178,17 @@ class SimpleClient(object):
         brokers. Keep trying until you succeed.
         """
         hosts = set()
-        for broker in self.brokers.values():
+        for node_id, broker in self.brokers.items():
             host, port, afi = get_ip_port_afi(broker.host)
-            hosts.add((host, broker.port, afi))
+            hosts.add((host, broker.port, afi, node_id))
 
         hosts.update(self.hosts)
         hosts = list(hosts)
         random.shuffle(hosts)
 
-        for (host, port, afi) in hosts:
+        for (host, port, afi, node_id) in hosts:
             try:
-                conn = self._get_conn(host, port, afi)
+                conn = self._get_conn(host, port, afi, node_id)
             except ConnectionError:
                 log.warning("Skipping unconnected connection: %s:%s (AFI %s)",
                             host, port, afi)
@@ -163,7 +196,8 @@ class SimpleClient(object):
             request = encoder_fn(payloads=payloads)
             future = conn.send(request)
 
-            # Block
+            # Block, also waste CPU cycle here, but broker unaware requests
+            # shouldn't be very frequent.
             while not future.is_done:
                 for r, f in conn.recv():
                     f.success(r)
@@ -306,24 +340,18 @@ class SimpleClient(object):
         specified using the supplied encode/decode functions. As the payloads
         that use consumer-aware requests do not contain the group (e.g.
         OffsetFetchRequest), all payloads must be for a single group.
-
         Arguments:
-
         group: the name of the consumer group (str) the payloads are for
         payloads: list of object-like entities with topic (str) and
             partition (int) attributes; payloads with duplicate
             topic+partition are not supported.
-
         encode_fn: a method to encode the list of payloads to a request body,
             must accept client_id, correlation_id, and payloads as
             keyword arguments
-
         decode_fn: a method to decode a response body into response objects.
             The response objects must be object-like and have topic
             and partition attributes
-
         Returns:
-
         List of response objects in the same order as the supplied payloads
         """
         # encoders / decoders do not maintain ordering currently
@@ -429,8 +457,17 @@ class SimpleClient(object):
         """
         _conns = self._conns
         self._conns = {}
+        _metrics_registry = self._metrics_registry
+        self._metrics_registry = None
+        _metrics = self.metrics
+        self.metrics = None
+
         c = copy.deepcopy(self)
         self._conns = _conns
+        self.metrics = _metrics
+        self._metrics_registry = _metrics_registry
+        c.metrics = _metrics
+        c._metrics_registry = _metrics_registry
         return c
 
     def reinit(self):
@@ -582,29 +619,30 @@ class SimpleClient(object):
                         leader, None, None, None
                     )
 
-    def send_metadata_request(self, payloads=(), fail_on_error=True,
+    @time_metric('metadata')
+    def send_metadata_request(self, payloads=[], fail_on_error=True,
                               callback=None):
         encoder = KafkaProtocol.encode_metadata_request
         decoder = KafkaProtocol.decode_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_consumer_metadata_request(self, payloads=(), fail_on_error=True,
+    @time_metric('consumer_metadata')
+    def send_consumer_metadata_request(self, payloads=[], fail_on_error=True,
                                        callback=None):
         encoder = KafkaProtocol.encode_consumer_metadata_request
         decoder = KafkaProtocol.decode_consumer_metadata_response
 
         return self._send_broker_unaware_request(payloads, encoder, decoder)
 
-    def send_produce_request(self, payloads=(), acks=1, timeout=1000,
+    @time_metric('produce')
+    def send_produce_request(self, payloads=[], acks=1, timeout=1000,
                              fail_on_error=True, callback=None):
         """
         Encode and send some ProduceRequests
-
         ProduceRequests will be grouped by (topic, partition) and then
         sent to a specific broker. Output is a list of responses in the
         same order as the list of payloads specified
-
         Arguments:
             payloads (list of ProduceRequest): produce requests to send to kafka
                 ProduceRequest payloads must not contain duplicates for any
@@ -624,7 +662,6 @@ class SimpleClient(object):
                 server response errors, defaults to True.
             callback (function, optional): instead of returning the ProduceResponse,
                 first pass it through this function, defaults to None.
-
         Returns:
             list of ProduceResponses, or callback results if supplied, in the
             order of input payloads
@@ -646,11 +683,11 @@ class SimpleClient(object):
                 if resp is not None and
                 (not fail_on_error or not self._raise_on_response_error(resp))]
 
-    def send_fetch_request(self, payloads=(), fail_on_error=True,
+    @time_metric('fetch')
+    def send_fetch_request(self, payloads=[], fail_on_error=True,
                            callback=None, max_wait_time=100, min_bytes=4096):
         """
         Encode and send a FetchRequest
-
         Payloads are grouped by topic and partition so they can be pipelined
         to the same brokers.
         """
@@ -666,7 +703,8 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_request(self, payloads=(), fail_on_error=True,
+    @time_metric('offset')
+    def send_offset_request(self, payloads=[], fail_on_error=True,
                             callback=None):
         resps = self._send_broker_aware_request(
             payloads,
@@ -676,8 +714,9 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_list_offset_request(self, payloads=(), fail_on_error=True,
-                            callback=None):
+    @time_metric('offset_list')
+    def send_list_offset_request(self, payloads=[], fail_on_error=True,
+                                callback=None):
         resps = self._send_broker_aware_request(
             payloads,
             KafkaProtocol.encode_list_offset_request,
@@ -686,17 +725,34 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_commit_request(self, group, payloads=(),
+    @time_metric('offset_commit')
+    def send_offset_commit_request(self, group, payloads=[],
                                    fail_on_error=True, callback=None):
-        encoder = functools.partial(KafkaProtocol.encode_offset_commit_request,
-                          group=group)
+        encoder = functools.partial(
+            KafkaProtocol.encode_offset_commit_request,
+            group=group,
+        )
         decoder = KafkaProtocol.decode_offset_commit_response
         resps = self._send_broker_aware_request(payloads, encoder, decoder)
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request(self, group, payloads=(),
+    @time_metric('offset_commit_kafka')
+    def send_offset_commit_request_kafka(self, group, payloads=[],
+                                         fail_on_error=True, callback=None):
+        encoder = functools.partial(
+            KafkaProtocol.encode_offset_commit_request_kafka,
+            group=group,
+        )
+        decoder = KafkaProtocol.decode_offset_commit_response
+        resps = self._send_consumer_aware_request(group, payloads, encoder, decoder)
+
+        return [resp if not callback else callback(resp) for resp in resps
+                if not fail_on_error or not self._raise_on_response_error(resp)]
+
+    @time_metric('offset_fetch')
+    def send_offset_fetch_request(self, group, payloads=[],
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
@@ -707,7 +763,8 @@ class SimpleClient(object):
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
 
-    def send_offset_fetch_request_kafka(self, group, payloads=(),
+    @time_metric('offset_fetch_kafka')
+    def send_offset_fetch_request_kafka(self, group, payloads=[],
                                   fail_on_error=True, callback=None):
 
         encoder = functools.partial(KafkaProtocol.encode_offset_fetch_request,
@@ -717,3 +774,30 @@ class SimpleClient(object):
 
         return [resp if not callback else callback(resp) for resp in resps
                 if not fail_on_error or not self._raise_on_response_error(resp)]
+
+class SimpleClientMetrics(object):
+
+    def __init__(self, metrics):
+        self.metrics = metrics
+        self.group_name = 'simple-client'
+        self.request_timers = {}
+
+    def record(self, request_name, value):
+        # Note: there is a possible race condition here when using async simple
+        # producer. A metric can be added twice to the same sensor and reported
+        # twice. This case should be extremely rare and shouldn't be too bad for
+        # metrics.
+        timer = self.request_timers.get(request_name)
+        if not timer:
+            timer = self.metrics.sensor(request_name.replace('_', '-'))
+            timer.add(
+                self.metrics.metric_name(
+                    'request-time-avg',
+                    self.group_name,
+                    "Time latency for request {}".format(request_name),
+                    {'request-type': request_name.replace('_', '-')},
+                ),
+                Avg(),
+            )
+            self.request_timers[request_name] = timer
+        timer.record(value)

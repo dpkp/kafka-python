@@ -638,6 +638,7 @@ class KafkaConsumer(six.Iterator):
             # fetched records.
             if not partial:
                 self._fetcher.send_fetches()
+
             return records
 
         # Send any new fetches (won't resend pending fetches)

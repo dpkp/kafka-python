@@ -16,7 +16,7 @@ class Sensor(object):
     of metrics about request sizes such as the average or max.
     """
     def __init__(self, registry, name, parents, config,
-                 inactive_sensor_expiration_time_seconds):
+                 inactive_sensor_expiration_time_seconds, reporters):
         if not name:
             raise ValueError('name must be non-empty')
         self._lock = threading.RLock()
@@ -30,6 +30,7 @@ class Sensor(object):
             inactive_sensor_expiration_time_seconds * 1000)
         self._last_record_time = time.time() * 1000
         self._check_forest(set())
+        self.reporters = reporters
 
     def _check_forest(self, sensors):
         """Validate that this sensor doesn't end up referencing itself."""
@@ -69,6 +70,18 @@ class Sensor(object):
         self._last_record_time = time_ms
         with self._lock:  # XXX high volume, might be performance issue
             # increment all the stats
+            for metric in self._metrics:
+                # Some metrics are not stats and they don't have any measurable
+                # we cannot report them.
+                if hasattr(metric, 'measurable'):
+                    for reporter in self.reporters:
+                        reporter.record(
+                            self._name,
+                            metric,
+                            value,
+                            time_ms,
+                            self._config,
+                        )
             for stat in self._stats:
                 stat.record(self._config, value, time_ms)
             self._check_quotas(time_ms)

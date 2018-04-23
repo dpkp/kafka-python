@@ -6,6 +6,7 @@ import time
 from kafka.codec import (has_gzip, has_snappy, has_lz4,
                      gzip_decode, snappy_decode,
                      lz4_decode, lz4_decode_old_kafka)
+from ..util import crc32, WeakMethod
 from kafka.protocol.frame import KafkaBytes
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import (

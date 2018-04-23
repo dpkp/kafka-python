@@ -19,6 +19,7 @@ logging.getLogger(__name__).addHandler(NullHandler())
 
 
 from kafka.consumer import KafkaConsumer
+from kafka.consumer.kafka import KafkaConsumer as OldKafkaConsumer
 from kafka.consumer.subscription_state import ConsumerRebalanceListener
 from kafka.producer import KafkaProducer
 from kafka.conn import BrokerConnection
