@@ -8,7 +8,8 @@ import decorator
 import pytest
 from . import unittest
 
-from kafka import SimpleClient, KafkaClient, create_message
+from kafka import SimpleClient, create_message
+from kafka.client_async import KafkaClient
 from kafka.errors import LeaderNotAvailableError, KafkaTimeoutError, InvalidTopicError
 from kafka.structs import OffsetRequestPayload, ProduceRequestPayload, \
                           NotLeaderForPartitionError, UnknownTopicOrPartitionError, \
