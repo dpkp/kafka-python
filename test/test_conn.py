@@ -5,6 +5,7 @@ from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
 import time
 
+import mock
 import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
@@ -71,6 +72,15 @@ def test_blacked_out(conn):
     assert conn.blacked_out() is True
 
 
+def test_connection_delay(conn):
+    conn.last_attempt = time.time()
+    assert round(conn.connection_delay()) == round(conn.config['reconnect_backoff_ms'])
+    conn.state = ConnectionStates.CONNECTING
+    assert conn.connection_delay() == 0
+    conn.state = ConnectionStates.CONNECTED
+    assert conn.connection_delay() == float('inf')
+
+
 def test_connected(conn):
     assert conn.connected() is False
     conn.state = ConnectionStates.CONNECTED
@@ -112,7 +122,7 @@ def test_send_max_ifr(conn):
 def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
-    req = ProduceRequest[0](required_acks=0, timeout=0, topics=[])
+    req = ProduceRequest[0](required_acks=0, timeout=0, topics=())
     header = RequestHeader(req, client_id=conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
@@ -239,3 +249,65 @@ def test_collect_hosts__with_spaces():
         ('localhost', 1234, socket.AF_UNSPEC),
         ('localhost', 9092, socket.AF_UNSPEC),
     ])
+
+
+def test_lookup_on_connect():
+    hostname = 'example.org'
+    port = 9092
+    conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
+    assert conn.host == hostname
+    assert conn.port == port
+    assert conn.afi == socket.AF_UNSPEC
+    afi1 = socket.AF_INET
+    sockaddr1 = ('127.0.0.1', 9092)
+    mock_return1 = [
+        (afi1, socket.SOCK_STREAM, 6, '', sockaddr1),
+    ]
+    with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn._sock_afi == afi1
+        assert conn._sock_addr == sockaddr1
+        conn.close()
+
+    afi2 = socket.AF_INET6
+    sockaddr2 = ('::1', 9092, 0, 0)
+    mock_return2 = [
+        (afi2, socket.SOCK_STREAM, 6, '', sockaddr2),
+    ]
+
+    with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.last_attempt = 0
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn._sock_afi == afi2
+        assert conn._sock_addr == sockaddr2
+        conn.close()
+
+
+def test_relookup_on_failure():
+    hostname = 'example.org'
+    port = 9092
+    conn = BrokerConnection(hostname, port, socket.AF_UNSPEC)
+    assert conn.host == hostname
+    mock_return1 = []
+    with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
+        last_attempt = conn.last_attempt
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn.disconnected()
+        assert conn.last_attempt > last_attempt
+
+    afi2 = socket.AF_INET
+    sockaddr2 = ('127.0.0.2', 9092)
+    mock_return2 = [
+        (afi2, socket.SOCK_STREAM, 6, '', sockaddr2),
+    ]
+
+    with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
+        conn.last_attempt = 0
+        conn.connect()
+        m.assert_called_once_with(hostname, port, 0, 1)
+        assert conn._sock_afi == afi2
+        assert conn._sock_addr == sockaddr2
+        conn.close()

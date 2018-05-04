@@ -74,6 +74,9 @@ PartitionMetadata = namedtuple("PartitionMetadata",
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
     ["offset", "metadata"])
 
+OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
+    ["offset", "timestamp"])
+
 
 # Deprecated structs
 OffsetAndMessage = namedtuple("OffsetAndMessage",

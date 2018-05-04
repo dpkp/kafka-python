@@ -48,7 +48,7 @@ if not hasattr(socket, "socketpair"):
                             raise
                 csock.setblocking(True)
                 ssock, _ = lsock.accept()
-            except:
+            except Exception:
                 csock.close()
                 raise
         finally:

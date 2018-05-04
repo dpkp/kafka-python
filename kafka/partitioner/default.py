@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import random
 
-from .hashed import murmur2
+from kafka.partitioner.hashed import murmur2
 
 
 class DefaultPartitioner(object):
@@ -14,6 +14,13 @@ class DefaultPartitioner(object):
     """
     @classmethod
     def __call__(cls, key, all_partitions, available):
+        """
+        Get the partition corresponding to key
+        :param key: partitioning key
+        :param all_partitions: list of all partitions sorted by partition ID
+        :param available: list of available partitions in no particular order
+        :return: one of the values from all_partitions or available
+        """
         if key is None:
             if available:
                 return random.choice(available)

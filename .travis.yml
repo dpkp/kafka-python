@@ -2,6 +2,7 @@ language: python
 
 python:
     - 2.7
+    - 3.4
     - 3.5
     - 3.6
     - pypy
@@ -9,6 +10,9 @@ python:
 env:
     - KAFKA_VERSION=0.9.0.1
     - KAFKA_VERSION=0.10.1.1
+    - KAFKA_VERSION=0.10.2.1
+    - KAFKA_VERSION=0.11.0.2
+    - KAFKA_VERSION=1.0.1
 
 sudo: false
 

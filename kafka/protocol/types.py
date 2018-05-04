@@ -2,22 +2,26 @@ from __future__ import absolute_import
 
 from struct import pack, unpack, error
 
-from .abstract import AbstractType
+from kafka.protocol.abstract import AbstractType
 
 
 def _pack(f, value):
     try:
         return pack(f, value)
-    except error:
-        raise ValueError(error)
+    except error as e:
+        raise ValueError("Error encountered when attempting to convert value: "
+                        "{!r} to struct format: '{}', hit error: {}"
+                        .format(value, f, e))
 
 
 def _unpack(f, data):
     try:
         (value,) = unpack(f, data)
         return value
-    except error:
-        raise ValueError(error)
+    except error as e:
+        raise ValueError("Error encountered when attempting to convert value: "
+                        "{!r} to struct format: '{}', hit error: {}"
+                        .format(data, f, e))
 
 
 class Int8(AbstractType):
@@ -98,6 +102,10 @@ class Bytes(AbstractType):
             raise ValueError('Buffer underrun decoding Bytes')
         return value
 
+    @classmethod
+    def repr(cls, value):
+        return repr(value[:100] + b'...' if value is not None and len(value) > 100 else value)
+
 
 class Boolean(AbstractType):
     @classmethod
@@ -140,7 +148,7 @@ class Schema(AbstractType):
                     field_val = value[i]
                 key_vals.append('%s=%s' % (self.names[i], self.fields[i].repr(field_val)))
             return '(' + ', '.join(key_vals) + ')'
-        except:
+        except Exception:
             return repr(value)
 
 

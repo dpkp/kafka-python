@@ -1,3 +1,6 @@
 [TYPECHECK]
 ignored-classes=SyncManager,_socketobject
+generated-members=py.*
+
+[MESSAGES CONTROL]
 disable=E1129

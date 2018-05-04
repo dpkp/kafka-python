@@ -45,5 +45,7 @@
 * Lou Marvin Caraig, [@se7entyse7en](https://github.com/se7entyse7en)
 * waliaashish85, [@waliaashish85](https://github.com/waliaashish85)
 * Mark Roberts, [@wizzat](https://github.com/wizzat)
+* Christophe Lecointe [@christophelec](https://github.com/christophelec)
+* Mohamed Helmi Hichri [@hellich](https://github.com/hellich)
 
 Thanks to all who have contributed!

@@ -105,7 +105,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         msgset = defaultdict(list)
 
         # Merging messages will require a bit more work to manage correctly
-        # for now, dont look for new batches if we have old ones to retry
+        # for now, don't look for new batches if we have old ones to retry
         if request_tries:
             count = 0
             log.debug('Skipping new batch collection to handle retries')
@@ -217,8 +217,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
                                        else hash(orig_req.messages))
 
     if request_tries or not queue.empty():
-        log.error('Stopped producer with {0} unsent messages'
-                  .format(len(request_tries) + queue.qsize()))
+        log.error('Stopped producer with %d unsent messages', len(request_tries) + queue.qsize())
 
 
 class Producer(object):
