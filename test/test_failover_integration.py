@@ -4,7 +4,7 @@ import time
 
 from kafka import SimpleClient, SimpleConsumer, KeyedProducer
 from kafka.errors import (
-    FailedPayloadsError, ConnectionError, RequestTimedOutError,
+    FailedPayloadsError, KafkaConnectionError, RequestTimedOutError,
     NotLeaderForPartitionError)
 from kafka.producer.base import Producer
 from kafka.structs import TopicPartition
@@ -79,7 +79,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, partition, b'success')
                 log.debug("success!")
                 recovered = True
-            except (FailedPayloadsError, ConnectionError, RequestTimedOutError,
+            except (FailedPayloadsError, KafkaConnectionError, RequestTimedOutError,
                     NotLeaderForPartitionError):
                 log.debug("caught exception sending message -- will retry")
                 continue
@@ -167,7 +167,7 @@ class TestFailover(KafkaIntegrationTestCase):
                 producer.send_messages(topic, key, msg)
                 if producer.partitioners[topic].partition(key) == 0:
                     recovered = True
-            except (FailedPayloadsError, ConnectionError, RequestTimedOutError,
+            except (FailedPayloadsError, KafkaConnectionError, RequestTimedOutError,
                     NotLeaderForPartitionError):
                 log.debug("caught exception sending message -- will retry")
                 continue

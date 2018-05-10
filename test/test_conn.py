@@ -99,7 +99,7 @@ def test_send_disconnected(conn):
     conn.state = ConnectionStates.DISCONNECTED
     f = conn.send('foobar')
     assert f.failed() is True
-    assert isinstance(f.exception, Errors.ConnectionError)
+    assert isinstance(f.exception, Errors.KafkaConnectionError)
 
 
 def test_send_connecting(conn):
@@ -162,7 +162,7 @@ def test_send_error(_socket, conn):
         _socket.send.side_effect = socket.error
     f = conn.send(req)
     assert f.failed() is True
-    assert isinstance(f.exception, Errors.ConnectionError)
+    assert isinstance(f.exception, Errors.KafkaConnectionError)
     assert _socket.close.call_count == 1
     assert conn.state is ConnectionStates.DISCONNECTED
 
