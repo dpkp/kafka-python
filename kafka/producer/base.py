@@ -372,7 +372,6 @@ class Producer(object):
         Raises:
             FailedPayloadsError: low-level connection error, can be caused by
                 networking failures, or a malformed request.
-            ConnectionError:
             KafkaUnavailableError: all known brokers are down when attempting
                 to refresh metadata.
             LeaderNotAvailableError: topic or partition is initializing or
