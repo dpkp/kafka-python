@@ -6,8 +6,6 @@ import pytest
 from kafka.cluster import ClusterMetadata
 from kafka.protocol.metadata import MetadataResponse
 
-import kafka.common as Errors
-
 
 def test_empty_broker_list():
     cluster = ClusterMetadata()
