@@ -54,6 +54,10 @@ class StaleMetadata(KafkaError):
     invalid_metadata = True
 
 
+class MetadataEmptyBrokerList(KafkaError):
+    retriable = True
+
+
 class UnrecognizedBrokerVersion(KafkaError):
     pass
 
