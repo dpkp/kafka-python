@@ -211,7 +211,8 @@ class ClusterMetadata(object):
             return self.failed_update(error)
 
         if not metadata.brokers:
-            log.warning("No broker metadata found in MetadataResponse")
+            log.warning("No broker metadata found in MetadataResponse -- ignoring.")
+            return self.failed_update(Errors.MetadataEmptyBrokerList(metadata))
 
         _new_brokers = {}
         for broker in metadata.brokers:
