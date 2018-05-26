@@ -292,11 +292,7 @@ class BrokerConnection(object):
         # First attempt to perform dns lookup
         # note that the underlying interface, socket.getaddrinfo,
         # has no explicit timeout so we may exceed the user-specified timeout
-        while time.time() < timeout:
-            if self._dns_lookup():
-                break
-        else:
-            return False
+        self._dns_lookup()
 
         # Loop once over all returned dns entries
         selector = None
@@ -903,6 +899,7 @@ class BrokerConnection(object):
 
         Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
         """
+        timeout_at = time.time() + timeout
         log.info('Probing node %s broker version', self.node_id)
         # Monkeypatch some connection configurations to avoid timeouts
         override_config = {
@@ -932,7 +929,7 @@ class BrokerConnection(object):
         ]
 
         for version, request in test_cases:
-            if not self.connect_blocking(timeout):
+            if not self.connect_blocking(timeout_at - time.time()):
                 raise Errors.NodeNotReadyError()
             f = self.send(request)
             # HACK: sleeping to wait for socket to send bytes
