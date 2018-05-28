@@ -6,12 +6,12 @@ import logging
 import threading
 import time
 
-from kafka import errors as Errors
+import kafka.errors as Errors
 from kafka.producer.buffer import SimpleBufferPool
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
-from kafka.structs import TopicPartition
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
+from kafka.structs import TopicPartition
 
 
 log = logging.getLogger(__name__)

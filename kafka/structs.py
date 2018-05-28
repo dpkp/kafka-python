@@ -93,7 +93,3 @@ KafkaMessage = namedtuple("KafkaMessage",
 # Limit value: int >= 0, 0 means no retries
 RetryOptions = namedtuple("RetryOptions",
     ["limit", "backoff_ms", "retry_on_timeouts"])
-
-
-# Support legacy imports from kafka.common
-from kafka.errors import *
