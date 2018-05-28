@@ -12,16 +12,16 @@ from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher, NoOffsetForPartitionError
 )
 from kafka.consumer.subscription_state import SubscriptionState
+from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.offset import OffsetResponse
-from kafka.structs import TopicPartition
-from kafka.future import Future
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
 )
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
+from kafka.structs import TopicPartition
 
 
 @pytest.fixture

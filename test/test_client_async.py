@@ -13,14 +13,13 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient, IdleConnectionManager
+from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse, MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
-from kafka.cluster import ClusterMetadata
-from kafka.future import Future
 
 
 @pytest.fixture
