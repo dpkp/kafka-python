@@ -8,6 +8,7 @@ KafkaConsumer
 .. code:: python
 
     from kafka import KafkaConsumer
+    import msgpack
 
     # To consume latest messages and auto-commit offsets
     consumer = KafkaConsumer('my-topic',
