@@ -7,7 +7,6 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5BB92C09DB82666C C2
 RUN echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
 RUN apt-get update && apt-get install -y python2.7-dev \
     python3.5-dev \
-    pypy-dev \
     python-pkg-resources \
     python-setuptools \
     python-virtualenv \
@@ -17,7 +16,12 @@ RUN apt-get update && apt-get install -y python2.7-dev \
     g++ \
     ca-certificates \
     python-pip \
-    python-tox
+    python-tox 
+
+# python-lz4 crashes with pypy 5.1.2, using v5.8.0 pypy here
+RUN wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.8.0-linux64.tar.bz2
+RUN tar xf pypy2-v5.8.0-linux64.tar.bz2
+RUN ln -s $PWD/pypy2-v5.8.0-linux64/bin/pypy /usr/local/bin/pypy
 
 RUN /usr/sbin/locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
