@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y python2.7-dev \
     python-pip \
     python-tox 
 
-# python-lz4 crashes with pypy 5.1.2, using v5.8.0 pypy here
+# python-lz4 requires minium pypy version 5.x.y
 RUN wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.8.0-linux64.tar.bz2
 RUN tar xf pypy2-v5.8.0-linux64.tar.bz2
 RUN ln -s $PWD/pypy2-v5.8.0-linux64/bin/pypy /usr/local/bin/pypy
