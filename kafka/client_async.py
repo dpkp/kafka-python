@@ -79,6 +79,11 @@ class KafkaClient(object):
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         max_in_flight_requests_per_connection (int): Requests are pipelined
