@@ -171,6 +171,11 @@ class KafkaProducer(object):
             will block up to max_block_ms, raising an exception on timeout.
             In the current implementation, this setting is an approximation.
             Default: 33554432 (32MB)
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         max_block_ms (int): Number of milliseconds to block during
             :meth:`~kafka.KafkaProducer.send` and
             :meth:`~kafka.KafkaProducer.partitions_for`. These methods can be
