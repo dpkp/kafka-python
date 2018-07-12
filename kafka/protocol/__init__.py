@@ -44,4 +44,9 @@ API_KEYS = {
     33: 'AlterConfigs',
     36: 'SaslAuthenticate',
     37: 'CreatePartitions',
+    38: 'CreateDelegationToken',
+    39: 'RenewDelegationToken',
+    40: 'ExpireDelegationToken',
+    41: 'DescribeDelegationToken',
+    42: 'DeleteGroups',
 }
