@@ -892,7 +892,7 @@ class BrokerConnection(object):
         # so if all else fails, choose that
         return (0, 10, 0)
 
-    def check_version(self, timeout=2, strict=False):
+    def check_version(self, timeout=2, strict=False, topics=[]):
         """Attempt to guess the broker version.
 
         Note: This is a blocking call.
@@ -925,7 +925,7 @@ class BrokerConnection(object):
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
-            ((0, 8, 0), MetadataRequest[0]([])),
+            ((0, 8, 0), MetadataRequest[0](topics)),
         ]
 
         for version, request in test_cases:
@@ -941,7 +941,7 @@ class BrokerConnection(object):
             # the attempt to write to a disconnected socket should
             # immediately fail and allow us to infer that the prior
             # request was unrecognized
-            mr = self.send(MetadataRequest[0]([]))
+            mr = self.send(MetadataRequest[0](topics))
 
             selector = self.config['selector']()
             selector.register(self._sock, selectors.EVENT_READ)
