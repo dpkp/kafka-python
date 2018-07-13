@@ -276,6 +276,7 @@ class KafkaProducer(object):
         'key_serializer': None,
         'value_serializer': None,
         'acks': 1,
+        'bootstrap_topics_filter': set(),
         'compression_type': None,
         'retries': 0,
         'batch_size': 16384,

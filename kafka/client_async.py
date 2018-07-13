@@ -144,6 +144,7 @@ class KafkaClient(object):
 
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
+        'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
         'connections_max_idle_ms': 9 * 60 * 1000,
@@ -231,9 +232,15 @@ class KafkaClient(object):
         self._last_bootstrap = time.time()
 
         if self.config['api_version'] is None or self.config['api_version'] < (0, 10):
-            metadata_request = MetadataRequest[0]([])
+            if self.config['bootstrap_topics_filter']:
+                metadata_request = MetadataRequest[0](list(self.config['bootstrap_topics_filter']))
+            else:
+                metadata_request = MetadataRequest[0]([])
         else:
-            metadata_request = MetadataRequest[1](None)
+            if self.config['bootstrap_topics_filter']:
+                metadata_request = MetadataRequest[1](list(self.config['bootstrap_topics_filter']))
+            else:
+                metadata_request = MetadataRequest[1](None)
 
         for host, port, afi in hosts:
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
@@ -825,7 +832,7 @@ class KafkaClient(object):
             self._refresh_on_disconnects = False
             try:
                 remaining = end - time.time()
-                version = conn.check_version(timeout=remaining, strict=strict)
+                version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
                 return version
             except Errors.NodeNotReadyError:
                 # Only raise to user if this is a node-specific request
