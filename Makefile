@@ -16,16 +16,9 @@ itest:
 #   it passes the integration test locally if we disable ipv6 here
 	docker run --sysctl net.ipv6.conf.all.disable_ipv6=1 kafka_python_test /work/run_itest.sh
 
-clean:
-	rm -rf kafka-python.egg-info/ .tox/
-	find . -name '*.pyc' -delete
-	find . -name '__pycache__' -delete
-	docker rmi -f kafka_python_test
-
 docs:
 	tox -e docs
 
-.PHONY: docs test all
 
 FLAGS=
 KAFKA_VERSION=0.11.0.2
@@ -76,9 +69,9 @@ clean:
 	rm -rf docs/_build/
 	rm -rf cover
 	rm -rf dist
+	rm -rf kafka-python.egg-info/ .tox/
+	find . -name '*.pyc' -delete
+	find . -name '__pycache__' -delete
+	docker rmi -f kafka_python_test
 
-doc:
-	make -C docs html
-	@echo "open file://`pwd`/docs/_build/html/index.html"
-
-.PHONY: all test36 test27 test-local cov-local clean doc
+.PHONY: all test36 test27 test-local cov-local clean doc docs test

@@ -2,6 +2,7 @@ import os
 import time
 import uuid
 
+import pytest
 from six.moves import range
 
 from kafka import (
@@ -14,6 +15,7 @@ from kafka.errors import UnknownTopicOrPartitionError, LeaderNotAvailableError
 from kafka.producer.base import Producer
 from kafka.structs import FetchRequestPayload, ProduceRequestPayload
 
+from test.conftest import version
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions, current_offset
 
@@ -39,6 +41,7 @@ def assert_produce_response(resp, initial_offset):
     assert resp[0].error == 0
     assert resp[0].offset == initial_offset
 
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
 def test_produce_many_simple(simple_client, topic):
     """Test multiple produces using the SimpleClient
     """

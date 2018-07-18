@@ -296,9 +296,6 @@ class KafkaFixture(Fixture):
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # Fix bugs where integration tests hang in docker container by sending
-        # blank line to stdin
-        proc.communicate('')
 
         if proc.wait() != 0 or proc.returncode != 0:
             self.out("Failed to create Zookeeper chroot node")

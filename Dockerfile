@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y python2.7-dev \
     g++ \
     ca-certificates \
     python-pip \
-    python-tox 
+    python-tox
 
 # python-lz4 requires minium pypy version 5.8.0
 RUN wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.8.0-linux64.tar.bz2

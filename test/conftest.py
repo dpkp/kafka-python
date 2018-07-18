@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import inspect
 
 import pytest
-from decorator import decorate
 
 from test.fixtures import KafkaFixture, ZookeeperFixture
 from test.testutil import kafka_version, random_string
