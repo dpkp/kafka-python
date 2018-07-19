@@ -69,7 +69,8 @@ class ProducerBatch(object):
         return future
 
     def done(self, base_offset=None, timestamp_ms=None, exception=None):
-        log.debug("Produced messages to topic-partition %s with base offset"
+        level = logging.DEBUG if exception is None else logging.WARNING
+        log.log(level, "Produced messages to topic-partition %s with base offset"
                   " %s and error %s.", self.topic_partition, base_offset,
                   exception)  # trace
         if self.produce_future.is_done:
@@ -327,7 +328,7 @@ class RecordAccumulator(object):
                     to_remove = []
 
         if expired_batches:
-            log.debug("Expired %d batches in accumulator", count) # trace
+            log.warning("Expired %d batches in accumulator", count) # trace
 
         return expired_batches
 
