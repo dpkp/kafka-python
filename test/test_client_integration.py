@@ -80,7 +80,6 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
     #   Offset Tests   #
     ####################
 
-    @kafka_versions('>=0.8.1')
     def test_commit_fetch_offsets(self):
         req = OffsetCommitRequestPayload(self.topic, 0, 42, 'metadata')
         (resp,) = self.client.send_offset_commit_request('group', [req])
@@ -92,3 +91,14 @@ class TestKafkaClientIntegration(KafkaIntegrationTestCase):
         self.assertEqual(resp.offset, 42)
         self.assertEqual(resp.metadata, '')  # Metadata isn't stored for now
 
+    @kafka_versions('>=0.9.0.0')
+    def test_commit_fetch_offsets_dual(self):
+        req = OffsetCommitRequestPayload(self.topic, 0, 42, 'metadata')
+        (resp,) = self.client.send_offset_commit_request_kafka('group', [req])
+        self.assertEqual(resp.error, 0)
+
+        (resp,) = self.client.send_offset_fetch_request_kafka('group', [req])
+        self.assertEqual(resp.error, 0)
+        self.assertEqual(resp.offset, 42)
+        # Metadata is stored in kafka
+        self.assertEqual(resp.metadata, 'metadata')
