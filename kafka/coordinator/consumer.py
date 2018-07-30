@@ -441,10 +441,13 @@ class ConsumerCoordinator(BaseCoordinator):
                 response will be either an Exception or a OffsetCommitResponse
                 struct. This callback can be used to trigger custom actions when
                 a commit request completes.
+
+        Returns:
+            kafka.future.Future
         """
         self._invoke_completed_offset_commit_callbacks()
         if not self.coordinator_unknown():
-            self._do_commit_offsets_async(offsets, callback)
+            future = self._do_commit_offsets_async(offsets, callback)
         else:
             # we don't know the current coordinator, so try to find it and then
             # send the commit or fail (we don't want recursive retries which can
@@ -463,6 +466,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # coordinator, so there is no need to explicitly allow heartbeats
         # through delayed task execution.
         self._client.poll(timeout_ms=0) # no wakeup if we add that feature
+
+        return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
