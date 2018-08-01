@@ -406,7 +406,7 @@ class SimpleClient(object):
         host, port, afi = get_ip_port_afi(broker.host)
         try:
             conn = self._get_conn(host, broker.port, afi, broker.nodeId)
-        except ConnectionError:
+        except KafkaConnectionError:
             failed_payloads(payloads)
 
         else:
