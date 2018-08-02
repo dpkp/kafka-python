@@ -9,6 +9,7 @@ python:
 
 env:
     - KAFKA_VERSION=0.10.2.2
+    - KAFKA_VERSION=0.11.0.2
     - KAFKA_VERSION=1.0.1
 
 sudo: false
