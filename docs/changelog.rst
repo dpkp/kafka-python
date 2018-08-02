@@ -1,5 +1,9 @@
 Changelog
 =========
+1.4.3.post2 (Aug 2, 2018)
+##########################
+* Remove unused versions of kafka for integration testing
+
 1.4.3.post1 (Aug 2, 2018)
 ##########################
 * Upgrade to kafka-python 1.4.3
