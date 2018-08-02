@@ -1,3 +1,7 @@
+# 1.4.3.post1 (Aug 2, 2018)
+1. Upgrade to upstream kafka-python 1.4.3
+2. Remove support of 0.8, 0.9, 0.10.1.1, 0.10.2.1 and added support of kafka 0.10.2.2 testing
+
 # 1.4.3 (May 26, 2018)
 
 Compatibility

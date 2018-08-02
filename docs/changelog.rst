@@ -1,5 +1,9 @@
 Changelog
 =========
+1.4.3.post1 (Aug 2, 2018)
+##########################
+* Upgrade to kafka-python 1.4.3
+* Change testing environment for supported kafka version testing
 
 1.3.3.post7 (Jan 29, 2018)
 ##########################
