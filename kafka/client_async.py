@@ -78,7 +78,7 @@ class KafkaClient(object):
             resulting in a random range between 20% below and 20% above
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 30000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -99,26 +99,26 @@ class KafkaClient(object):
             brokers or partitions. Default: 300000
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
-        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+        ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
-        ssl_check_hostname (bool): flag to configure whether ssl handshake
-            should verify that the certificate matches the brokers hostname.
-            default: true.
-        ssl_cafile (str): optional filename of ca file to use in certificate
-            veriication. default: none.
-        ssl_certfile (str): optional filename of file in pem format containing
-            the client certificate, as well as any ca certificates needed to
-            establish the certificate's authenticity. default: none.
-        ssl_keyfile (str): optional filename containing the client private key.
-            default: none.
-        ssl_password (str): optional password to be used when loading the
-            certificate chain. default: none.
-        ssl_crlfile (str): optional filename containing the CRL to check for
+        ssl_check_hostname (bool): Flag to configure whether SSL handshake
+            should verify that the certificate matches the broker's hostname.
+            Default: True.
+        ssl_cafile (str): Optional filename of CA file to use in certificate
+            veriication. Default: None.
+        ssl_certfile (str): Optional filename of file in PEM format containing
+            the client certificate, as well as any CA certificates needed to
+            establish the certificate's authenticity. Default: None.
+        ssl_keyfile (str): Optional filename containing the client private key.
+            Default: None.
+        ssl_password (str): Optional password to be used when loading the
+            certificate chain. Default: None.
+        ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            default: none.
+            Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set
             to None, KafkaClient will attempt to infer the broker version by
             probing various APIs. Example: (0, 10, 2). Default: None
@@ -145,7 +145,7 @@ class KafkaClient(object):
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
-        'request_timeout_ms': 40000,
+        'request_timeout_ms': 30000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -602,7 +602,7 @@ class KafkaClient(object):
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
                     pass
-                conn.close(Errors.ConnectionError('Socket EVENT_READ without in-flight-requests'))
+                conn.close(Errors.KafkaConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
 
             self._idle_expiry_manager.update(conn.node_id)

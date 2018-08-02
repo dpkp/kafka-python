@@ -96,6 +96,7 @@ class ClusterMetadata(object):
 
         Returns:
             set: {partition (int), ...}
+            None if topic not found.
         """
         if topic not in self._partitions:
             return None
@@ -119,6 +120,7 @@ class ClusterMetadata(object):
 
         Returns:
             set: {TopicPartition, ...}
+            None if the broker either has no partitions or does not exist.
         """
         return self._broker_partitions.get(broker_id)
 
@@ -130,6 +132,7 @@ class ClusterMetadata(object):
 
         Returns:
             int: node_id for group coordinator
+            None if the group does not exist.
         """
         return self._groups.get(group)
 
@@ -211,7 +214,8 @@ class ClusterMetadata(object):
             return self.failed_update(error)
 
         if not metadata.brokers:
-            log.warning("No broker metadata found in MetadataResponse")
+            log.warning("No broker metadata found in MetadataResponse -- ignoring.")
+            return self.failed_update(Errors.MetadataEmptyBrokerList(metadata))
 
         _new_brokers = {}
         for broker in metadata.brokers:

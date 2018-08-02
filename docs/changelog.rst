@@ -1,5 +1,9 @@
 Changelog
 =========
+1.4.3.post1 (Aug 2, 2018)
+##########################
+* Upgrade to kafka-python 1.4.3
+* Change testing environment for supported kafka version testing
 
 1.3.3.post7 (Jan 29, 2018)
 ##########################
@@ -29,6 +33,51 @@ Fix locale-gen not found
 1.3.3.post1 (Apr 17, 2017)
 ##########################
 Resolve merge conflicts while merging changes for version 1.3.3
+=======
+1.4.3 (May 26, 2018)
+####################
+
+Compatibility
+-------------
+* Fix for python 3.7 support: remove 'async' keyword from SimpleProducer (dpkp #1454)
+
+Client
+------
+* Improve BrokerConnection initialization time (romulorosa #1475)
+* Ignore MetadataResponses with empty broker list (dpkp #1506)
+* Improve connection handling when bootstrap list is invalid (dpkp #1507)
+
+Consumer
+--------
+* Check for immediate failure when looking up coordinator in heartbeat thread (dpkp #1457)
+
+Core / Protocol
+---------------
+* Always acquire client lock before coordinator lock to avoid deadlocks (dpkp #1464)
+* Added AlterConfigs and DescribeConfigs apis (StephenSorriaux #1472)
+* Fix CreatePartitionsRequest_v0 (StephenSorriaux #1469)
+* Add codec validators to record parser and builder for all formats (tvoinarovskyi #1447)
+* Fix MemoryRecord bugs re error handling and add test coverage (tvoinarovskyi #1448)
+* Force lz4 to disable Kafka-unsupported block linking when encoding (mnito #1476)
+* Stop shadowing `ConnectionError` (jeffwidman #1492)
+
+Documentation
+-------------
+* Document methods that return None (jeffwidman #1504)
+* Minor doc capitalization cleanup (jeffwidman)
+* Adds add_callback/add_errback example to docs (Berkodev #1441)
+* Fix KafkaConsumer docstring for request_timeout_ms default (dpkp #1459)
+
+Test Infrastructure
+-------------------
+* Skip flakey SimpleProducer test (dpkp)
+* Fix skipped integration tests if KAFKA_VERSION unset (dpkp #1453)
+
+Logging / Error Messages
+------------------------
+* Stop using deprecated log.warn() (jeffwidman)
+* Change levels for some heartbeat thread logging (dpkp #1456)
+* Log Heartbeat thread start / close for debugging (dpkp)
 
 1.4.2 (Mar 10, 2018)
 ####################

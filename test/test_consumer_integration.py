@@ -1,6 +1,9 @@
 import logging
 import os
 import time
+from mock import patch
+import pytest
+import kafka.codec
 
 import pytest
 from six.moves import xrange
@@ -13,8 +16,8 @@ from kafka import (
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
 from kafka.errors import (
-    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, ConsumerTimeout, UnsupportedVersionError,
-    KafkaTimeoutError
+    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, ConsumerTimeout,
+    UnsupportedVersionError, KafkaTimeoutError, UnsupportedCodecError
 )
 from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
@@ -26,6 +29,7 @@ from test.testutil import (
     KafkaIntegrationTestCase, kafka_versions, random_string, Timer,
     send_messages
 )
+
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer(simple_client, topic, kafka_consumer_factory):
@@ -48,6 +52,24 @@ def test_kafka_consumer(simple_client, topic, kafka_consumer_factory):
     assert len(messages[0]) == 100
     assert len(messages[1]) == 100
     kafka_consumer.close()
+
+
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+def test_kafka_consumer_unsupported_encoding(
+        topic, kafka_producer_factory, kafka_consumer_factory):
+    # Send a compressed message
+    producer = kafka_producer_factory(compression_type="gzip")
+    fut = producer.send(topic, b"simple message" * 200)
+    fut.get(timeout=5)
+    producer.close()
+
+    # Consume, but with the related compression codec not available
+    with patch.object(kafka.codec, "has_gzip") as mocked:
+        mocked.return_value = False
+        consumer = kafka_consumer_factory(auto_offset_reset='earliest')
+        error_msg = "Libraries for gzip compression codec not found"
+        with pytest.raises(UnsupportedCodecError, match=error_msg):
+            consumer.poll(timeout_ms=2000)
 
 
 class TestConsumerIntegration(KafkaIntegrationTestCase):

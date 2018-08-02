@@ -18,7 +18,7 @@ except ImportError:
 from kafka.vendor import six
 
 import kafka.errors
-from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
+from kafka.errors import (UnknownError, KafkaConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
                           NotLeaderForPartitionError, ReplicaNotAvailableError,
@@ -113,7 +113,7 @@ class SimpleClient(object):
         conn = self._conns[host_key]
         if not conn.connect_blocking(self.timeout):
             conn.close()
-            raise ConnectionError("%s:%s (%s)" % (host, port, afi))
+            raise KafkaConnectionError("%s:%s (%s)" % (host, port, afi))
         return conn
 
     def _get_leader_for_partition(self, topic, partition):
@@ -196,7 +196,7 @@ class SimpleClient(object):
         for (host, port, afi, node_id) in hosts:
             try:
                 conn = self._get_conn(host, port, afi, node_id)
-            except ConnectionError:
+            except KafkaConnectionError:
                 log.warning("Skipping unconnected connection: %s:%s (AFI %s)",
                             host, port, afi)
                 continue
@@ -283,7 +283,7 @@ class SimpleClient(object):
             host, port, afi = get_ip_port_afi(broker.host)
             try:
                 conn = self._get_conn(host, broker.port, afi, broker.nodeId)
-            except ConnectionError:
+            except KafkaConnectionError:
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
                 continue
@@ -406,7 +406,7 @@ class SimpleClient(object):
         host, port, afi = get_ip_port_afi(broker.host)
         try:
             conn = self._get_conn(host, broker.port, afi, broker.nodeId)
-        except ConnectionError:
+        except KafkaConnectionError:
             failed_payloads(payloads)
 
         else:

@@ -8,7 +8,7 @@ from . import unittest
 from kafka import SimpleClient
 from kafka.errors import (
     KafkaUnavailableError, LeaderNotAvailableError, KafkaTimeoutError,
-    UnknownTopicOrPartitionError, ConnectionError, FailedPayloadsError)
+    UnknownTopicOrPartitionError, FailedPayloadsError)
 from kafka.future import Future
 from kafka.protocol import KafkaProtocol, create_message
 from kafka.protocol.metadata import MetadataResponse

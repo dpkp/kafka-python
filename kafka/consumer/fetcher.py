@@ -610,7 +610,7 @@ class Fetcher(six.Iterator):
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
-                    log.warn("Received unknown topic or partition error in ListOffset "
+                    log.warning("Received unknown topic or partition error in ListOffset "
                              "request for partition %s. The topic/partition " +
                              "may not exist or the user may not have Describe access "
                              "to it.", partition)
@@ -821,10 +821,10 @@ class Fetcher(six.Iterator):
                     raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
 
             elif error_type is Errors.TopicAuthorizationFailedError:
-                log.warn("Not authorized to read from topic %s.", tp.topic)
+                log.warning("Not authorized to read from topic %s.", tp.topic)
                 raise Errors.TopicAuthorizationFailedError(set(tp.topic))
             elif error_type is Errors.UnknownError:
-                log.warn("Unknown error fetching data for topic-partition %s", tp)
+                log.warning("Unknown error fetching data for topic-partition %s", tp)
             else:
                 raise error_type('Unexpected error while fetching data')
 
