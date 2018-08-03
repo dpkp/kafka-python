@@ -1,3 +1,6 @@
+# 1.4.3.post3 (Aug 3, 2018)
+* Change prospectus
+
 # 1.4.3.post2 (Aug 2, 2018)
 * Remove unused versions of kafka for integration testing
 
