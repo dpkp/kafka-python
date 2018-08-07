@@ -1,7 +1,7 @@
 import os
 import time
 import unittest
-from kafka.admin_client import AdminClient, NewTopic
+from kafka.admin_client import AdminClient, NewTopic, TopicPartition
 from kafka.protocol.metadata import MetadataRequest 
 from test.fixtures import ZookeeperFixture, KafkaFixture
 from test.testutil import KafkaIntegrationTestCase, kafka_versions
@@ -47,4 +47,26 @@ class TestKafkaAdminClientIntegration(KafkaIntegrationTestCase):
         self.assertTrue(
             response[0].topic_error_codes[0][1] == 0 or
             response[0].topic_error_codes[0][1] == 7
+        )
+
+    @kafka_versions('>=1.0.0')
+    def test_create_partitions(self):
+        admin = AdminClient(self.client_async)
+        topic = NewTopic(
+            name='topic',
+            num_partitions=1,
+            replication_factor=1,
+        )
+        metadata_request = MetadataRequest[1]()
+        admin.create_topics(topics=[topic], timeout=1)
+
+        time.sleep(1) # allows the topic to be created
+
+        topic_partition = TopicPartition('topic', 2, [[0]])
+
+
+        response = admin.create_partitions([topic_partition], timeout=1, validate_only=False)
+
+        self.assertTrue(
+            response[0].topic_error_codes[0][1] == 0
         )
