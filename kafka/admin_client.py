@@ -5,7 +5,7 @@ from .protocol.admin import CreateTopicsRequest, DeleteTopicsRequest, CreatePart
 from .protocol.metadata import MetadataRequest
 
 
-"""TopicPartition
+"""NewPartitionsInfo
 
 Fields:
     name (string): name of topic
@@ -14,8 +14,8 @@ Fields:
         the sizes of inner lists are the replica factor of current topic
         the size of outer list is the increased partition num of current topic
 """
-TopicPartition = collections.namedtuple(
-    'TopicPartition',
+NewPartitionsInfo = collections.namedtuple(
+    'NewPartitionsInfo',
     ['name', 'count', 'broker_ids_matrix']
 )
 
@@ -114,15 +114,32 @@ class AdminClient(object):
         
     def create_partitions(
         self,
-        topic_partitions,
+        new_partitions_infos,
         timeout,
         validate_only,
     ):
         """ Create partitions on topics
 
         Arguments:
-            topic_partitions (list of TopicPartition): A list containing
-                infos on increasing partitions
+            new_partitions_infos (list of NewPartitionsInfo): A list containing
+                infos on increasing partitions with following format
+                [
+                    NewPartitionsInfo(
+                        'name': String,
+                        'count': Int,
+                        'broker_ids_matrix':
+                        [
+                            [id1, id2, id3],
+                            [id1, id3, id4],
+                            ...
+                        ]
+                    ),
+                    ...
+                ]
+                especially, broker_ids_matrix is a matrix of broker ids. The row size is
+                the number of newly added partitions and the col size is the replication
+                factor of the topic
+
             timeout (int): timeout in seconds
             validate_only (Boolean): If true then validate the
                 request without actually increasing the number of
@@ -137,8 +154,8 @@ class AdminClient(object):
 
         request = self.create_partitions_request(
             topic_partitions = [
-                convert_topic_partitions_requst_format(topic_partition)
-                for topic_partition in topic_partitions
+                convert_topic_partitions_requst_format(new_partitions_info)
+                for new_partitions_info in new_partitions_infos
             ],
             timeout=timeout,
             validate_only = validate_only, 

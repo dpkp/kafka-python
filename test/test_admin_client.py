@@ -6,7 +6,7 @@ from kafka.protocol.metadata import MetadataResponse
 from kafka.protocol.admin import CreateTopicsResponse, DeleteTopicsResponse, CreatePartitionsResponse
 from kafka.admin_client import AdminClient
 from kafka.admin_client import NewTopic 
-from kafka.admin_client import TopicPartition
+from kafka.admin_client import NewPartitionsInfo
 from kafka.structs import BrokerMetadata
 from kafka.future import Future
 
@@ -35,7 +35,7 @@ def mock_new_topics():
 
 @pytest.fixture
 def mock_topic_partitions():
-    return [TopicPartition('topic', 5, 4*[[1,2,3]]) ]
+    return [NewPartitionsInfo('topic', 5, 4*[[1,2,3]]) ]
 
 @pytest.fixture
 def topic_response():
