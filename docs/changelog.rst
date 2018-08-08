@@ -1,5 +1,9 @@
 Changelog
 =========
+1.4.3.post4 (Aug 8, 2018)
+##########################
+* Add usage of CreatePartition protocol in adminClient
+
 1.4.3.post3 (Aug 3, 2018)
 ##########################
 * Change prospectus
