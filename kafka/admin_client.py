@@ -1,7 +1,23 @@
+import collections
 import time
 from .errors import NodeNotReadyError
-from .protocol.admin import CreateTopicsRequest, DeleteTopicsRequest
+from .protocol.admin import CreateTopicsRequest, DeleteTopicsRequest, CreatePartitionsRequest
 from .protocol.metadata import MetadataRequest
+
+
+"""NewPartitionsInfo
+
+Fields:
+    name (string): name of topic
+    count (int): the new partition count
+    broker_ids_matrix: list(list(brokerids))
+        the sizes of inner lists are the replica factor of current topic
+        the size of outer list is the increased partition num of current topic
+"""
+NewPartitionsInfo = collections.namedtuple(
+    'NewPartitionsInfo',
+    ['name', 'count', 'broker_ids_matrix']
+)
 
 def convert_new_topic_request_format(new_topic):
     return (
@@ -16,6 +32,15 @@ def convert_new_topic_request_format(new_topic):
             (config_key, config_value)
             for config_key, config_value in new_topic.configs.items()
         ],
+    )
+
+def convert_topic_partitions_requst_format(topic_partition):
+    return (
+        topic_partition.name,
+        (
+            topic_partition.count,
+            topic_partition.broker_ids_matrix
+        ) 
     )
 
 class NewTopic(object):
@@ -67,6 +92,7 @@ class AdminClient(object):
         self.metadata_request = MetadataRequest[1]([])
         self.topic_request = CreateTopicsRequest[0]
         self.delete_topics_request = DeleteTopicsRequest[0]
+        self.create_partitions_request = CreatePartitionsRequest[0]
 
     def _send_controller_request(self):
         response = self._send(
@@ -86,6 +112,56 @@ class AdminClient(object):
         else:
             return self._send(controller_id, request)
         
+    def create_partitions(
+        self,
+        new_partitions_infos,
+        timeout,
+        validate_only,
+    ):
+        """ Create partitions on topics
+
+        Arguments:
+            new_partitions_infos (list of NewPartitionsInfo): A list containing
+                infos on increasing partitions with following format
+                [
+                    NewPartitionsInfo(
+                        'name': String,
+                        'count': Int,
+                        'broker_ids_matrix':
+                        [
+                            [id1, id2, id3],
+                            [id1, id3, id4],
+                            ...
+                        ]
+                    ),
+                    ...
+                ]
+                especially, broker_ids_matrix is a matrix of broker ids. The row size is
+                the number of newly added partitions and the col size is the replication
+                factor of the topic
+
+            timeout (int): timeout in seconds
+            validate_only (Boolean): If true then validate the
+                request without actually increasing the number of
+                partitions
+
+        Returns:
+            CreatePartitionsResponse: response from the broker
+
+        Raises:
+            NodeNotReadyError: if controller is not ready
+        """
+
+        request = self.create_partitions_request(
+            topic_partitions = [
+                convert_topic_partitions_requst_format(new_partitions_info)
+                for new_partitions_info in new_partitions_infos
+            ],
+            timeout=timeout,
+            validate_only = validate_only, 
+        )
+
+        return self._send_request(request)
      
     def create_topics(
         self,
