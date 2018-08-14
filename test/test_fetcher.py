@@ -509,7 +509,7 @@ def test_partition_records_offset():
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
     messages = [ConsumerRecord(tp.topic, tp.partition, i,
-                               None, None, 'key', 'value', 'checksum', 0, 0)
+                               None, None, 'key', 'value', [], 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end)]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
     assert len(records) > 0
@@ -534,7 +534,7 @@ def test_partition_records_no_fetch_offset():
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
     messages = [ConsumerRecord(tp.topic, tp.partition, i,
-                               None, None, 'key', 'value', 'checksum', 0, 0)
+                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end)]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
     assert len(records) == 0
@@ -549,7 +549,7 @@ def test_partition_records_compacted_offset():
     fetch_offset = 42
     tp = TopicPartition('foo', 0)
     messages = [ConsumerRecord(tp.topic, tp.partition, i,
-                               None, None, 'key', 'value', 'checksum', 0, 0)
+                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end) if i != fetch_offset]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
     assert len(records) == batch_end - fetch_offset - 1
