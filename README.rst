@@ -117,6 +117,10 @@ for more details.
 >>> for i in range(1000):
 ...     producer.send('foobar', b'msg %d' % i)
 
+>>> # Include record headers. The format is list of tuples with string key
+>>> # and bytes value.
+>>> producer.send('foobar', value=b'c29tZSB2YWx1ZQ==', headers=[('content-encoding', b'base64')])
+
 >>> # Get producer performance metrics
 >>> metrics = producer.metrics()
 
