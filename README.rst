@@ -70,6 +70,11 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> for msg in consumer:
 ...     assert isinstance(msg.value, dict)
 
+>>> # Access record headers. The returned value is a list of tuples
+>>> # with str, bytes for key and value
+>>> for msg in consumer:
+...     print (msg.headers)
+
 >>> # Get consumer metrics
 >>> metrics = consumer.metrics()
 
