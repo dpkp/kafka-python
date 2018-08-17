@@ -151,6 +151,7 @@ class KafkaClient(object):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
+        'max_block_ms': 60000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -198,6 +199,7 @@ class KafkaClient(object):
         self._bootstrap_fails = 0
         self._wake_r, self._wake_w = socket.socketpair()
         self._wake_r.setblocking(False)
+        self._wake_w.settimeout(self.config['max_block_ms'] / 1000.0)
         self._wake_lock = threading.Lock()
 
         self._lock = threading.RLock()
@@ -847,6 +849,9 @@ class KafkaClient(object):
         with self._wake_lock:
             try:
                 self._wake_w.sendall(b'x')
+            except socket.timeout:
+                log.warning('Timeout to send to wakeup socket!')
+                raise Errors.KafkaTimeoutError()
             except socket.error:
                 log.warning('Unable to send to wakeup socket!')
 
