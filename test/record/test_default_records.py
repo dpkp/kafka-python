@@ -119,8 +119,12 @@ def test_default_batch_builder_validates_arguments():
     builder.append(
         5, timestamp=9999999, key=b"123", value=None, headers=[])
 
+    # Check record with headers
+    builder.append(
+        6, timestamp=9999999, key=b"234", value=None, headers=[("hkey", b"hval")])
+
     # in case error handling code fails to fix inner buffer in builder
-    assert len(builder.build()) == 104
+    assert len(builder.build()) == 124
 
 
 def test_default_correct_metadata_response():

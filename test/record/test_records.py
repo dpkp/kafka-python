@@ -22,6 +22,11 @@ record_batch_data_v2 = [
     b'\x85\xb7\x00\x00\x00\x00\x00\x00\x00\x00\x01]\xff|\xe7\x9d\x00\x00\x01]'
     b'\xff|\xe7\x9d\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
     b'\x00\x00\x00\x01\x12\x00\x00\x00\x01\x06123\x00'
+    # Fourth batch value = "hdr" with header hkey=hval
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00E\x00\x00\x00\x00\x02\\'
+    b'\xd8\xefR\x00\x00\x00\x00\x00\x00\x00\x00\x01e\x85\xb6\xf3\xc1\x00\x00'
+    b'\x01e\x85\xb6\xf3\xc1\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
+    b'\xff\xff\x00\x00\x00\x01&\x00\x00\x00\x01\x06hdr\x02\x08hkey\x08hval'
 ]
 
 record_batch_data_v1 = [
@@ -60,8 +65,8 @@ def test_memory_records_v2():
     data_bytes = b"".join(record_batch_data_v2) + b"\x00" * 4
     records = MemoryRecords(data_bytes)
 
-    assert records.size_in_bytes() == 222
-    assert records.valid_bytes() == 218
+    assert records.size_in_bytes() == 303
+    assert records.valid_bytes() == 299
 
     assert records.has_next() is True
     batch = records.next_batch()
@@ -76,6 +81,12 @@ def test_memory_records_v2():
 
     assert records.next_batch() is not None
     assert records.next_batch() is not None
+
+    batch = records.next_batch()
+    recs = list(batch)
+    assert len(recs) == 1
+    assert recs[0].value == b"hdr"
+    assert recs[0].headers == [('hkey', b'hval')]
 
     assert records.has_next() is False
     assert records.next_batch() is None
