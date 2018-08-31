@@ -176,6 +176,8 @@ class BrokerConnection(object):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
     """
 
     DEFAULT_CONFIG = {
@@ -206,7 +208,8 @@ class BrokerConnection(object):
         'sasl_mechanism': 'PLAIN',
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_kerberos_service_name': 'kafka'
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI')
@@ -567,7 +570,8 @@ class BrokerConnection(object):
         return future.success(True)
 
     def _try_authenticate_gssapi(self, future):
-        auth_id = self.config['sasl_kerberos_service_name'] + '@' + self.host
+        kerberos_damin_name = self.config['sasl_kerberos_domain_name'] or self.host
+        auth_id = self.config['sasl_kerberos_service_name'] + '@' + kerberos_damin_name
         gssapi_name = gssapi.Name(
             auth_id,
             name_type=gssapi.NameType.hostbased_service
