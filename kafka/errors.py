@@ -476,10 +476,6 @@ class ConsumerNoMoreData(KafkaError):
     pass
 
 
-class ConsumerTimeout(KafkaError):
-    pass
-
-
 class ProtocolError(KafkaError):
     pass
 
