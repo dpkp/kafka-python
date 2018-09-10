@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${ALL_RELEASES:="0.10.2.2 0.11.0.2 1.0.1"}
+: ${ALL_RELEASES:="0.10.2.2 1.0.1"}
 : ${SCALA_VERSION:=2.11}
 : ${DIST_BASE_URL:=https://archive.apache.org/dist/kafka/}
 : ${KAFKA_SRC_GIT:=https://github.com/apache/kafka.git}
@@ -33,12 +33,7 @@ pushd servers
         echo "-------------------------------------"
         echo "Checking kafka binaries for ${kafka}"
         echo
-        # kafka 0.8.0 is only available w/ scala 2.8.0
-        if [ "$kafka" == "0.8.0" ]; then
-          KAFKA_ARTIFACT="kafka_2.8.0-${kafka}.tar.gz"
-        else
-          KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
-        fi
+        KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
           if [ -f "${KAFKA_ARTIFACT}" ]; then
             echo "Using cached artifact: ${KAFKA_ARTIFACT}"

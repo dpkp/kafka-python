@@ -54,7 +54,7 @@ try:
         SSLZeroReturnError = ssl.SSLZeroReturnError
     except AttributeError:
         # support older ssl libraries
-        log.warning('Old SSL module detected.'
+        log.debug('Old SSL module detected.'
                     ' SSL error handling may not operate cleanly.'
                     ' Consider upgrading to Python 3.3 or 2.7.9')
         SSLEOFError = ssl.SSLError

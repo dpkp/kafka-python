@@ -42,8 +42,8 @@ def get_open_port():
     return port
 
 class Fixture(object):
-    kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
-    scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
+    kafka_version = os.environ.get('KAFKA_VERSION', '1.0.1')
+    scala_version = os.environ.get("SCALA_VERSION", '2.11')
     project_root = os.environ.get('PROJECT_ROOT',
                                   os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     kafka_root = os.environ.get("KAFKA_ROOT",
