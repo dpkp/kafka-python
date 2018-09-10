@@ -1,4 +1,8 @@
-# 1.4.3.post4 (Aug 8, 2019)
+# 1.4.3.post5 (Sep 10, 2018)
+* Remove tests for kafka version 0.11.0.2
+* Fix failing build when logging warning
+
+# 1.4.3.post4 (Aug 8, 2018)
 * Add usage of CreatePartition protocol in adminClient
 
 # 1.4.3.post3 (Aug 3, 2018)
