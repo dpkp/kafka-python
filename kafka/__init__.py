@@ -50,5 +50,5 @@ __all__ = [
     'SimpleClient', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner',
     'create_message', 'create_gzip_message', 'create_snappy_message',
-    'SimpleConsumer', 'MultiProcessConsumer',
+    'SimpleConsumer', 'MultiProcessConsumer', 'ConsumerRebalanceListener',
 ]
