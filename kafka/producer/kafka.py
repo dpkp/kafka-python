@@ -86,6 +86,9 @@ class KafkaProducer(object):
             It just needs to have at least one broker that will respond to a
             Metadata API Request. Default port is 9092. If no servers are
             specified, will default to localhost:9092.
+        client (kafka.client_async.KafkaClient): a kafka client to
+            use, or if unprovided, one is constructed from the provided
+            configuration.
         client_id (str): a name for this client. This string is passed in
             each request to servers and can be used to identify specific
             server-side log entries that correspond to this client.
@@ -279,6 +282,7 @@ class KafkaProducer(object):
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
+        'client': None,
         'client_id': None,
         'key_serializer': None,
         'value_serializer': None,
@@ -367,8 +371,11 @@ class KafkaProducer(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
-                             **self.config)
+        client = self.config['client'] or KafkaClient(
+            metrics=self._metrics,
+            metric_group_prefix='producer',
+            **self.config
+        )
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
