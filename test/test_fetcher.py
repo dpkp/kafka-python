@@ -12,16 +12,16 @@ from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher, NoOffsetForPartitionError
 )
 from kafka.consumer.subscription_state import SubscriptionState
+from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.offset import OffsetResponse
-from kafka.structs import TopicPartition
-from kafka.future import Future
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
 )
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
+from kafka.structs import TopicPartition
 
 
 @pytest.fixture
@@ -498,3 +498,60 @@ def test__parse_fetched_data__out_of_range(fetcher, topic, mocker):
     partition_record = fetcher._parse_fetched_data(completed_fetch)
     assert partition_record is None
     assert fetcher._subscriptions.assignment[tp].awaiting_reset is True
+
+
+def test_partition_records_offset():
+    """Test that compressed messagesets are handle correctly
+    when fetch offset is in the middle of the message list
+    """
+    batch_start = 120
+    batch_end = 130
+    fetch_offset = 123
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', [], 'checksum', 0, 0, -1)
+                for i in range(batch_start, batch_end)]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) > 0
+    msgs = records.take(1)
+    assert msgs[0].offset == fetch_offset
+    assert records.fetch_offset == fetch_offset + 1
+    msgs = records.take(2)
+    assert len(msgs) == 2
+    assert len(records) > 0
+    records.discard()
+    assert len(records) == 0
+
+
+def test_partition_records_empty():
+    records = Fetcher.PartitionRecords(0, None, [])
+    assert len(records) == 0
+
+
+def test_partition_records_no_fetch_offset():
+    batch_start = 0
+    batch_end = 100
+    fetch_offset = 123
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
+                for i in range(batch_start, batch_end)]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) == 0
+
+
+def test_partition_records_compacted_offset():
+    """Test that messagesets are handle correctly
+    when the fetch offset points to a message that has been compacted
+    """
+    batch_start = 0
+    batch_end = 100
+    fetch_offset = 42
+    tp = TopicPartition('foo', 0)
+    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
+                for i in range(batch_start, batch_end) if i != fetch_offset]
+    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
+    assert len(records) == batch_end - fetch_offset - 1
+    msgs = records.take(1)
+    assert msgs[0].offset == fetch_offset + 1

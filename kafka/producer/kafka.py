@@ -8,20 +8,20 @@ import threading
 import time
 import weakref
 
-from ..vendor import six
+from kafka.vendor import six
 
-from .. import errors as Errors
-from ..client_async import KafkaClient, selectors
-from ..codec import has_gzip, has_snappy, has_lz4
-from ..metrics import MetricConfig, Metrics
-from ..partitioner.default import DefaultPartitioner
-from ..record.default_records import DefaultRecordBatchBuilder
-from ..record.legacy_records import LegacyRecordBatchBuilder
-from ..serializer import Serializer
-from ..structs import TopicPartition
-from .future import FutureRecordMetadata, FutureProduceResult
-from .record_accumulator import AtomicInteger, RecordAccumulator
-from .sender import Sender
+import kafka.errors as Errors
+from kafka.client_async import KafkaClient, selectors
+from kafka.codec import has_gzip, has_snappy, has_lz4
+from kafka.metrics import MetricConfig, Metrics
+from kafka.partitioner.default import DefaultPartitioner
+from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
+from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
+from kafka.producer.sender import Sender
+from kafka.record.default_records import DefaultRecordBatchBuilder
+from kafka.record.legacy_records import LegacyRecordBatchBuilder
+from kafka.serializer import Serializer
+from kafka.structs import TopicPartition
 
 
 log = logging.getLogger(__name__)
@@ -174,6 +174,11 @@ class KafkaProducer(object):
             will block up to max_block_ms, raising an exception on timeout.
             In the current implementation, this setting is an approximation.
             Default: 33554432 (32MB)
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         max_block_ms (int): Number of milliseconds to block during
             :meth:`~kafka.KafkaProducer.send` and
             :meth:`~kafka.KafkaProducer.partitions_for`. These methods can be
@@ -245,8 +250,7 @@ class KafkaProducer(object):
             default: none.
         api_version (tuple): Specify which Kafka API version to use. If set to
             None, the client will attempt to infer the broker version by probing
-            various APIs. For a full list of supported versions, see
-            KafkaClient.API_VERSIONS. Default: None
+            various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
@@ -269,6 +273,8 @@ class KafkaProducer(object):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
 
     Note:
         Configuration parameters are described in more detail at
@@ -281,6 +287,7 @@ class KafkaProducer(object):
         'key_serializer': None,
         'value_serializer': None,
         'acks': 1,
+        'bootstrap_topics_filter': set(),
         'compression_type': None,
         'retries': 0,
         'batch_size': 16384,
@@ -318,7 +325,8 @@ class KafkaProducer(object):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_kerberos_service_name': 'kafka'
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
 
     _COMPRESSORS = {
@@ -512,7 +520,7 @@ class KafkaProducer(object):
             return LegacyRecordBatchBuilder.estimate_size_in_bytes(
                 magic, self.config['compression_type'], key, value)
 
-    def send(self, topic, value=None, key=None, partition=None, timestamp_ms=None):
+    def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None):
         """Publish a message to a topic.
 
         Arguments:
@@ -533,6 +541,8 @@ class KafkaProducer(object):
                 partition (but if key is None, partition is chosen randomly).
                 Must be type bytes, or be serializable to bytes via configured
                 key_serializer.
+            headers (optional): a list of header key value pairs. List items
+                are tuples of str key and bytes value.
             timestamp_ms (int, optional): epoch milliseconds (from Jan 1 1970 UTC)
                 to use as the message timestamp. Defaults to current time.
 
@@ -548,8 +558,6 @@ class KafkaProducer(object):
         assert not (value is None and key is None), 'Need at least one: key or value'
         key_bytes = value_bytes = None
         try:
-            # first make sure the metadata for the topic is
-            # available
             self._wait_on_metadata(topic, self.config['max_block_ms'] / 1000.0)
 
             key_bytes = self._serialize(
@@ -558,16 +566,24 @@ class KafkaProducer(object):
             value_bytes = self._serialize(
                 self.config['value_serializer'],
                 topic, value)
+            assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
+            assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
+
             partition = self._partition(topic, partition, key, value,
                                         key_bytes, value_bytes)
 
-            message_size = self._estimate_size_in_bytes(key, value)
+            if headers is None:
+                headers = []
+            assert type(headers) == list
+            assert all(type(item) == tuple and len(item) == 2 and type(item[0]) == str and type(item[1]) == bytes for item in headers)
+
+            message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
-            log.debug("Sending (key=%r value=%r) to %s", key, value, tp)
+            log.debug("Sending (key=%r value=%r headers=%r) to %s", key, value, headers, tp)
             result = self._accumulator.append(tp, timestamp_ms,
-                                              key_bytes, value_bytes,
+                                              key_bytes, value_bytes, headers,
                                               self.config['max_block_ms'],
                                               estimated_size=message_size)
             future, batch_is_full, new_batch_created = result
@@ -586,7 +602,8 @@ class KafkaProducer(object):
                 FutureProduceResult(TopicPartition(topic, partition)),
                 -1, None, None,
                 len(key_bytes) if key_bytes is not None else -1,
-                len(value_bytes) if value_bytes is not None else -1
+                len(value_bytes) if value_bytes is not None else -1,
+                sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
             ).failure(e)
 
     def flush(self, timeout=None):

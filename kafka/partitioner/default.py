@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import random
 
-from .hashed import murmur2
+from kafka.partitioner.hashed import murmur2
 
 
 class DefaultPartitioner(object):

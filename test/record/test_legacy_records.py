@@ -1,8 +1,11 @@
 from __future__ import unicode_literals
 import pytest
+from mock import patch
 from kafka.record.legacy_records import (
     LegacyRecordBatch, LegacyRecordBatchBuilder
 )
+import kafka.codec
+from kafka.errors import UnsupportedCodecError
 
 
 @pytest.mark.parametrize("magic", [0, 1])
@@ -164,3 +167,31 @@ def test_legacy_batch_size_limit(magic):
     meta = builder.append(2, timestamp=None, key=None, value=b"M" * 700)
     assert meta is None
     assert len(builder.build()) < 1000
+
+
+@pytest.mark.parametrize("compression_type,name,checker_name", [
+    (LegacyRecordBatch.CODEC_GZIP, "gzip", "has_gzip"),
+    (LegacyRecordBatch.CODEC_SNAPPY, "snappy", "has_snappy"),
+    (LegacyRecordBatch.CODEC_LZ4, "lz4", "has_lz4")
+])
+@pytest.mark.parametrize("magic", [0, 1])
+def test_unavailable_codec(magic, compression_type, name, checker_name):
+    builder = LegacyRecordBatchBuilder(
+        magic=magic, compression_type=compression_type, batch_size=1024)
+    builder.append(0, timestamp=None, key=None, value=b"M")
+    correct_buffer = builder.build()
+
+    with patch.object(kafka.codec, checker_name) as mocked:
+        mocked.return_value = False
+        # Check that builder raises error
+        builder = LegacyRecordBatchBuilder(
+            magic=magic, compression_type=compression_type, batch_size=1024)
+        error_msg = "Libraries for {} compression codec not found".format(name)
+        with pytest.raises(UnsupportedCodecError, match=error_msg):
+            builder.append(0, timestamp=None, key=None, value=b"M")
+            builder.build()
+
+        # Check that reader raises same error
+        batch = LegacyRecordBatch(bytes(correct_buffer), magic)
+        with pytest.raises(UnsupportedCodecError, match=error_msg):
+            list(batch)

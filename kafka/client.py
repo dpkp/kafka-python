@@ -11,7 +11,7 @@ import select
 from kafka.vendor import six
 
 import kafka.errors
-from kafka.errors import (UnknownError, ConnectionError, FailedPayloadsError,
+from kafka.errors import (UnknownError, KafkaConnectionError, FailedPayloadsError,
                           KafkaTimeoutError, KafkaUnavailableError,
                           LeaderNotAvailableError, UnknownTopicOrPartitionError,
                           NotLeaderForPartitionError, ReplicaNotAvailableError)
@@ -71,19 +71,9 @@ class SimpleClient(object):
             )
 
         conn = self._conns[host_key]
-        conn.connect()
-        if conn.connected():
-            return conn
-
-        timeout = time.time() + self.timeout
-        while time.time() < timeout and conn.connecting():
-            if conn.connect() is ConnectionStates.CONNECTED:
-                break
-            else:
-                time.sleep(0.05)
-        else:
+        if not conn.connect_blocking(self.timeout):
             conn.close()
-            raise ConnectionError("%s:%s (%s)" % (host, port, afi))
+            raise KafkaConnectionError("%s:%s (%s)" % (host, port, afi))
         return conn
 
     def _get_leader_for_partition(self, topic, partition):
@@ -166,7 +156,7 @@ class SimpleClient(object):
         for (host, port, afi) in hosts:
             try:
                 conn = self._get_conn(host, port, afi)
-            except ConnectionError:
+            except KafkaConnectionError:
                 log.warning("Skipping unconnected connection: %s:%s (AFI %s)",
                             host, port, afi)
                 continue
@@ -252,7 +242,7 @@ class SimpleClient(object):
             host, port, afi = get_ip_port_afi(broker.host)
             try:
                 conn = self._get_conn(host, broker.port, afi)
-            except ConnectionError:
+            except KafkaConnectionError:
                 refresh_metadata = True
                 failed_payloads(broker_payloads)
                 continue
@@ -354,8 +344,8 @@ class SimpleClient(object):
         try:
             host, port, afi = get_ip_port_afi(broker.host)
             conn = self._get_conn(host, broker.port, afi)
-        except ConnectionError as e:
-            log.warning('ConnectionError attempting to send request %s '
+        except KafkaConnectionError as e:
+            log.warning('KafkaConnectionError attempting to send request %s '
                         'to server %s: %s', request_id, broker, e)
 
             for payload in payloads:
@@ -404,7 +394,7 @@ class SimpleClient(object):
         return [responses[tp] for tp in original_ordering]
 
     def __repr__(self):
-        return '<KafkaClient client_id=%s>' % (self.client_id)
+        return '<SimpleClient client_id=%s>' % (self.client_id)
 
     def _raise_on_response_error(self, resp):
 

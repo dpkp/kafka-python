@@ -54,6 +54,10 @@ class StaleMetadata(KafkaError):
     invalid_metadata = True
 
 
+class MetadataEmptyBrokerList(KafkaError):
+    retriable = True
+
+
 class UnrecognizedBrokerVersion(KafkaError):
     pass
 
@@ -447,9 +451,13 @@ class FailedPayloadsError(KafkaError):
         self.payload = payload
 
 
-class ConnectionError(KafkaError):
+class KafkaConnectionError(KafkaError):
     retriable = True
     invalid_metadata = True
+
+
+class ConnectionError(KafkaConnectionError):
+    """Deprecated"""
 
 
 class BufferUnderflowError(KafkaError):
@@ -465,10 +473,6 @@ class ConsumerFetchSizeTooSmall(KafkaError):
 
 
 class ConsumerNoMoreData(KafkaError):
-    pass
-
-
-class ConsumerTimeout(KafkaError):
     pass
 
 
@@ -517,13 +521,13 @@ def check_error(response):
 
 RETRY_BACKOFF_ERROR_TYPES = (
     KafkaUnavailableError, LeaderNotAvailableError,
-    ConnectionError, FailedPayloadsError
+    KafkaConnectionError, FailedPayloadsError
 )
 
 
 RETRY_REFRESH_ERROR_TYPES = (
     NotLeaderForPartitionError, UnknownTopicOrPartitionError,
-    LeaderNotAvailableError, ConnectionError
+    LeaderNotAvailableError, KafkaConnectionError
 )
 
 

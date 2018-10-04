@@ -18,6 +18,18 @@ except ImportError:
 
 try:
     import lz4.frame as lz4
+
+    def _lz4_compress(payload, **kwargs):
+        # Kafka does not support LZ4 dependent blocks
+        try:
+            # For lz4>=0.12.0
+            kwargs.pop('block_linked', None)
+            return lz4.compress(payload, block_linked=False, **kwargs)
+        except TypeError:
+            # For earlier versions of lz4
+            kwargs.pop('block_mode', None)
+            return lz4.compress(payload, block_mode=1, **kwargs)
+
 except ImportError:
     lz4 = None
 
@@ -25,6 +37,11 @@ try:
     import lz4f
 except ImportError:
     lz4f = None
+
+try:
+    import lz4framed
+except ImportError:
+    lz4framed = None
 
 try:
     import xxhash
@@ -45,6 +62,8 @@ def has_lz4():
     if lz4 is not None:
         return True
     if lz4f is not None:
+        return True
+    if lz4framed is not None:
         return True
     return False
 
@@ -195,9 +214,11 @@ def snappy_decode(payload):
 
 
 if lz4:
-    lz4_encode = lz4.compress # pylint: disable-msg=no-member
+    lz4_encode = _lz4_compress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_encode = lz4f.compressFrame # pylint: disable-msg=no-member
+elif lz4framed:
+    lz4_encode = lz4framed.compress # pylint: disable-msg=no-member
 else:
     lz4_encode = None
 
@@ -220,6 +241,8 @@ if lz4:
     lz4_decode = lz4.decompress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_decode = lz4f_decode
+elif lz4framed:
+    lz4_decode = lz4framed.decompress # pylint: disable-msg=no-member
 else:
     lz4_decode = None
 

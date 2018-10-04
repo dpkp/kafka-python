@@ -8,15 +8,15 @@ import warnings
 
 from kafka.vendor.six.moves import queue # pylint: disable=import-error
 
-from ..common import KafkaError
-from .base import (
+from kafka.errors import KafkaError
+from kafka.consumer.base import (
     Consumer,
     AUTO_COMMIT_MSG_COUNT, AUTO_COMMIT_INTERVAL,
     NO_MESSAGES_WAIT_TIME_SECONDS,
     FULL_QUEUE_WAIT_TIME_SECONDS,
     MAX_BACKOFF_SECONDS,
 )
-from .simple import SimpleConsumer
+from kafka.consumer.simple import SimpleConsumer
 
 
 log = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def _mp_consume(client, group, topic, message_queue, size, events, **consumer_op
 
         except KafkaError as e:
             # Retry with exponential backoff
-            log.error("Problem communicating with Kafka (%s), retrying in %d seconds..." % (e, interval))
+            log.exception("Problem communicating with Kafka, retrying in %d seconds...", interval)
             time.sleep(interval)
             interval = interval*2 if interval*2 < MAX_BACKOFF_SECONDS else MAX_BACKOFF_SECONDS
 

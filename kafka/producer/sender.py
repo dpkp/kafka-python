@@ -8,12 +8,12 @@ import time
 
 from kafka.vendor import six
 
-from .. import errors as Errors
-from ..metrics.measurable import AnonMeasurable
-from ..metrics.stats import Avg, Max, Rate
-from ..protocol.produce import ProduceRequest
-from ..structs import TopicPartition
-from ..version import __version__
+from kafka import errors as Errors
+from kafka.metrics.measurable import AnonMeasurable
+from kafka.metrics.stats import Avg, Max, Rate
+from kafka.protocol.produce import ProduceRequest
+from kafka.structs import TopicPartition
+from kafka.version import __version__
 
 log = logging.getLogger(__name__)
 

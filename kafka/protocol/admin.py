@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
-from .api import Request, Response
-from .types import Array, Boolean, Bytes, Int16, Int32, Schema, String
+from kafka.protocol.api import Request, Response
+from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Schema, String
 
 
 class ApiVersionResponse_v0(Response):
@@ -256,7 +256,6 @@ class DescribeGroupsResponse_v1(Response):
     )
 
 
-
 class DescribeGroupsRequest_v0(Request):
     API_KEY = 15
     API_VERSION = 0
@@ -286,6 +285,12 @@ class SaslHandShakeResponse_v0(Response):
     )
 
 
+class SaslHandShakeResponse_v1(Response):
+    API_KEY = 17
+    API_VERSION = 1
+    SCHEMA = SaslHandShakeResponse_v0.SCHEMA
+
+
 class SaslHandShakeRequest_v0(Request):
     API_KEY = 17
     API_VERSION = 0
@@ -294,5 +299,162 @@ class SaslHandShakeRequest_v0(Request):
         ('mechanism', String('utf-8'))
     )
 
-SaslHandShakeRequest = [SaslHandShakeRequest_v0]
-SaslHandShakeResponse = [SaslHandShakeResponse_v0]
+
+class SaslHandShakeRequest_v1(Request):
+    API_KEY = 17
+    API_VERSION = 1
+    RESPONSE_TYPE = SaslHandShakeResponse_v1
+    SCHEMA = SaslHandShakeRequest_v0.SCHEMA
+
+
+SaslHandShakeRequest = [SaslHandShakeRequest_v0, SaslHandShakeRequest_v1]
+SaslHandShakeResponse = [SaslHandShakeResponse_v0, SaslHandShakeResponse_v1]
+
+class AlterConfigsResponse_v0(Response):
+    API_KEY = 33
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('resources', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8'))))
+    )
+
+class AlterConfigsRequest_v0(Request):
+    API_KEY = 33
+    API_VERSION = 0
+    RESPONSE_TYPE = AlterConfigsResponse_v0
+    SCHEMA = Schema(
+        ('resources', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_entries', Array(
+                ('config_name', String('utf-8')),
+                ('config_value', String('utf-8')))))),
+        ('validate_only', Boolean)
+    )
+
+AlterConfigsRequest = [AlterConfigsRequest_v0]
+AlterConfigsResponse = [AlterConfigsResponse_v0]
+
+
+class DescribeConfigsResponse_v0(Response):
+    API_KEY = 32
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('resources', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_entries', Array(
+                ('config_names', String('utf-8')),
+                ('config_value', String('utf-8')),
+                ('read_only', Boolean),
+                ('is_default', Boolean),
+                ('is_sensitive', Boolean)))))
+    )
+
+class DescribeConfigsResponse_v1(Response):
+    API_KEY = 32
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('resources', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_entries', Array(
+                ('config_names', String('utf-8')),
+                ('config_value', String('utf-8')),
+                ('read_only', Boolean),
+                ('is_default', Boolean),
+                ('is_sensitive', Boolean),
+                ('config_synonyms', Array(
+                    ('config_name', String('utf-8')),
+                    ('config_value', String('utf-8')),
+                    ('config_source', Int8)))))))
+    )
+
+class DescribeConfigsRequest_v0(Request):
+    API_KEY = 32
+    API_VERSION = 0
+    RESPONSE_TYPE = DescribeConfigsResponse_v0
+    SCHEMA = Schema(
+        ('resources', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_names', Array(String('utf-8')))))
+    )
+
+class DescribeConfigsRequest_v1(Request):
+    API_KEY = 32
+    API_VERSION = 1
+    RESPONSE_TYPE = DescribeConfigsResponse_v1
+    SCHEMA = Schema(
+        ('resources', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_names', Array(String('utf-8'))))),
+        ('include_synonyms', Boolean)
+    )
+
+DescribeConfigsRequest = [DescribeConfigsRequest_v0, DescribeConfigsRequest_v1]
+DescribeConfigsResponse = [DescribeConfigsResponse_v0, DescribeConfigsResponse_v1]
+
+class SaslAuthenticateResponse_v0(Request):
+    API_KEY = 36
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('sasl_auth_bytes', Bytes)
+    )
+
+
+class SaslAuthenticateRequest_v0(Request):
+    API_KEY = 36
+    API_VERSION = 0
+    RESPONSE_TYPE = SaslAuthenticateResponse_v0
+    SCHEMA = Schema(
+        ('sasl_auth_bytes', Bytes)
+    )
+
+
+SaslAuthenticateRequest = [SaslAuthenticateRequest_v0]
+SaslAuthenticateResponse = [SaslAuthenticateResponse_v0]
+
+
+class CreatePartitionsResponse_v0(Response):
+    API_KEY = 37
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('topic_errors', Array(
+            ('topic', String('utf-8')),
+            ('error_code', Int16),
+            ('error_message', String('utf-8'))))
+    )
+
+
+class CreatePartitionsRequest_v0(Request):
+    API_KEY = 37
+    API_VERSION = 0
+    RESPONSE_TYPE = CreatePartitionsResponse_v0
+    SCHEMA = Schema(
+        ('topic_partitions', Array(
+            ('topic', String('utf-8')),
+            ('new_partitions', Schema(
+                ('count', Int32),
+                ('assignment', Array(Array(Int32))))))),
+        ('timeout', Int32),
+        ('validate_only', Boolean)
+    )
+
+
+CreatePartitionsRequest = [CreatePartitionsRequest_v0]
+CreatePartitionsResponse = [CreatePartitionsResponse_v0]

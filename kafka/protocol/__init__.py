@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from .legacy import (
+from kafka.protocol.legacy import (
     create_message, create_gzip_message,
     create_snappy_message, create_message_set,
     CODEC_NONE, CODEC_GZIP, CODEC_SNAPPY, ALL_CODECS,
@@ -42,4 +42,6 @@ API_KEYS = {
     31: 'DeleteAcls',
     32: 'DescribeConfigs',
     33: 'AlterConfigs',
+    36: 'SaslAuthenticate',
+    37: 'CreatePartitions',
 }

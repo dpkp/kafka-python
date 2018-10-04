@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 
-from .kafka import KafkaProducer
-from .simple import SimpleProducer
-from .keyed import KeyedProducer
+from kafka.producer.kafka import KafkaProducer
+from kafka.producer.simple import SimpleProducer
+from kafka.producer.keyed import KeyedProducer
 
 __all__ = [
     'KafkaProducer',

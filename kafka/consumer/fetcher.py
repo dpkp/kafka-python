@@ -29,7 +29,7 @@ READ_COMMITTED = 1
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "offset", "timestamp", "timestamp_type",
-     "key", "value", "checksum", "serialized_key_size", "serialized_value_size"])
+     "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
 
 
 CompletedFetch = collections.namedtuple("CompletedFetch",
@@ -326,9 +326,6 @@ class Fetcher(six.Iterator):
             max_records = self.config['max_poll_records']
         assert max_records > 0
 
-        if self._subscriptions.needs_partition_assignment:
-            return {}, False
-
         drained = collections.defaultdict(list)
         records_remaining = max_records
 
@@ -375,11 +372,6 @@ class Fetcher(six.Iterator):
                            tp, next_offset)
 
                 for record in part_records:
-                    # Fetched compressed messages may include additional records
-                    if record.offset < fetch_offset:
-                        log.debug("Skipping message offset: %s (expecting %s)",
-                                  record.offset, fetch_offset)
-                        continue
                     drained[tp].append(record)
 
                 self._subscriptions.assignment[tp].position = next_offset
@@ -397,9 +389,6 @@ class Fetcher(six.Iterator):
 
     def _message_generator(self):
         """Iterate over fetched_records"""
-        if self._subscriptions.needs_partition_assignment:
-            raise StopIteration('Subscription needs partition assignment')
-
         while self._next_partition_records or self._completed_fetches:
 
             if not self._next_partition_records:
@@ -467,10 +456,12 @@ class Fetcher(six.Iterator):
                     value = self._deserialize(
                         self.config['value_deserializer'],
                         tp.topic, record.value)
+                    headers = record.headers
+                    header_size = sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1
                     yield ConsumerRecord(
                         tp.topic, tp.partition, record.offset, record.timestamp,
-                        record.timestamp_type, key, value, record.checksum,
-                        key_size, value_size)
+                        record.timestamp_type, key, value, headers, record.checksum,
+                        key_size, value_size, header_size)
 
                 batch = records.next_batch()
 
@@ -621,7 +612,7 @@ class Fetcher(six.Iterator):
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
-                    log.warn("Received unknown topic or partition error in ListOffset "
+                    log.warning("Received unknown topic or partition error in ListOffset "
                              "request for partition %s. The topic/partition " +
                              "may not exist or the user may not have Describe access "
                              "to it.", partition)
@@ -637,9 +628,12 @@ class Fetcher(six.Iterator):
 
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
-        if self._next_partition_records:
-            fetchable.discard(self._next_partition_records.topic_partition)
-        for fetch in self._completed_fetches:
+        # do not fetch a partition if we have a pending fetch response to process
+        current = self._next_partition_records
+        pending = copy.copy(self._completed_fetches)
+        if current:
+            fetchable.discard(current.topic_partition)
+        for fetch in pending:
             fetchable.discard(fetch.topic_partition)
         return fetchable
 
@@ -829,10 +823,10 @@ class Fetcher(six.Iterator):
                     raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
 
             elif error_type is Errors.TopicAuthorizationFailedError:
-                log.warn("Not authorized to read from topic %s.", tp.topic)
+                log.warning("Not authorized to read from topic %s.", tp.topic)
                 raise Errors.TopicAuthorizationFailedError(set(tp.topic))
             elif error_type is Errors.UnknownError:
-                log.warn("Unknown error fetching data for topic-partition %s", tp)
+                log.warning("Unknown error fetching data for topic-partition %s", tp)
             else:
                 raise error_type('Unexpected error while fetching data')
 
@@ -841,12 +835,26 @@ class Fetcher(six.Iterator):
 
         return parsed_records
 
-    class PartitionRecords(six.Iterator):
+    class PartitionRecords(object):
         def __init__(self, fetch_offset, tp, messages):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
             self.messages = messages
-            self.message_idx = 0
+            # When fetching an offset that is in the middle of a
+            # compressed batch, we will get all messages in the batch.
+            # But we want to start 'take' at the fetch_offset
+            # (or the next highest offset in case the message was compacted)
+            for i, msg in enumerate(messages):
+                if msg.offset < fetch_offset:
+                    log.debug("Skipping message offset: %s (expecting %s)",
+                              msg.offset, fetch_offset)
+                else:
+                    self.message_idx = i
+                    break
+
+            else:
+                self.message_idx = 0
+                self.messages = None
 
         # For truthiness evaluation we need to define __len__ or __nonzero__
         def __len__(self):
@@ -865,8 +873,9 @@ class Fetcher(six.Iterator):
             next_idx = self.message_idx + n
             res = self.messages[self.message_idx:next_idx]
             self.message_idx = next_idx
-            if len(self) > 0:
-                self.fetch_offset = self.messages[self.message_idx].offset
+            # fetch_offset should be incremented by 1 to parallel the
+            # subscription position (also incremented by 1)
+            self.fetch_offset = max(self.fetch_offset, res[-1].offset + 1)
             return res
 
 

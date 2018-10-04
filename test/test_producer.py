@@ -38,12 +38,12 @@ def test_end_to_end(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
-                             max_block_ms=10000,
+                             max_block_ms=30000,
                              compression_type=compression,
                              value_serializer=str.encode)
     consumer = KafkaConsumer(bootstrap_servers=connect_str,
                              group_id=None,
-                             consumer_timeout_ms=10000,
+                             consumer_timeout_ms=30000,
                              auto_offset_reset='earliest',
                              value_deserializer=bytes.decode)
 
@@ -55,7 +55,6 @@ def test_end_to_end(kafka_broker, compression):
         futures.append(producer.send(topic, 'msg %d' % i))
     ret = [f.get(timeout=30) for f in futures]
     assert len(ret) == messages
-
     producer.close()
 
     consumer.subscribe([topic])
@@ -67,6 +66,7 @@ def test_end_to_end(kafka_broker, compression):
             break
 
     assert msgs == set(['msg %d' % i for i in range(messages)])
+    consumer.close()
 
 
 @pytest.mark.skipif(platform.python_implementation() != 'CPython',
@@ -87,14 +87,20 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
-                             max_block_ms=10000,
+                             max_block_ms=30000,
                              compression_type=compression)
     magic = producer._max_usable_produce_magic()
+
+    # record headers are supported in 0.11.0
+    if version() < (0, 11, 0):
+        headers = None
+    else:
+        headers = [("Header Key", b"Header Value")]
 
     topic = random_string(5)
     future = producer.send(
         topic,
-        value=b"Simple value", key=b"Simple key", timestamp_ms=9999999,
+        value=b"Simple value", key=b"Simple key", headers=headers, timestamp_ms=9999999,
         partition=0)
     record = future.get(timeout=5)
     assert record is not None
@@ -116,6 +122,8 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
 
     assert record.serialized_key_size == 10
     assert record.serialized_value_size == 12
+    if headers:
+        assert record.serialized_header_size == 22
 
     # generated timestamp case is skipped for broker 0.9 and below
     if magic == 0:
