@@ -337,7 +337,6 @@ class BrokerConnection(object):
                 log.debug('%s: setting socket option %s', self, option)
                 self._sock.setsockopt(*option)
 
-            self._sock.setblocking(False)
             self.state = ConnectionStates.CONNECTING
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()
@@ -401,6 +400,8 @@ class BrokerConnection(object):
                     log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
+
+        self._sock.setblocking(False)
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
