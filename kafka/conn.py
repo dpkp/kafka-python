@@ -78,6 +78,13 @@ except ImportError:
     gssapi = None
     GSSError = None
 
+# needed for setblocking()
+try:
+    from gevent import monkey
+    is_ssl_gevent_patched = monkey.is_module_patched('ssl')
+except ImportError:
+    is_ssl_gevent_patched = False
+
 
 AFI_NAMES = {
     socket.AF_UNSPEC: "unspecified",
@@ -337,7 +344,7 @@ class BrokerConnection(object):
                 log.debug('%s: setting socket option %s', self, option)
                 self._sock.setsockopt(*option)
 
-            self._sock.setblocking(False)
+            self._sock.setblocking(is_ssl_gevent_patched)
             self.state = ConnectionStates.CONNECTING
             if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                 self._wrap_ssl()
@@ -401,6 +408,9 @@ class BrokerConnection(object):
                     log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                 self.config['state_change_callback'](self)
+
+        if is_ssl_gevent_patched:
+            self._sock.setblocking(False)
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
