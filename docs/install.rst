@@ -37,7 +37,7 @@ Optional Snappy install
 Install Development Libraries
 =============================
 
-Download and build Snappy from http://code.google.com/p/snappy/downloads/list
+Download and build Snappy from https://google.github.io/snappy/
 
 Ubuntu:
 
@@ -55,9 +55,9 @@ From Source:
 
 .. code:: bash
 
-    wget http://snappy.googlecode.com/files/snappy-1.0.5.tar.gz
-    tar xzvf snappy-1.0.5.tar.gz
-    cd snappy-1.0.5
+    wget https://github.com/google/snappy/releases/download/1.1.3/snappy-1.1.3.tar.gz
+    tar xzvf snappy-1.1.3.tar.gz
+    cd snappy-1.1.3
     ./configure
     make
     sudo make install
