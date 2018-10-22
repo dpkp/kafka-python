@@ -16,7 +16,7 @@ from kafka.protocol import CODEC_NONE
 from kafka.structs import (
     ProduceResponsePayload, RetryOptions, TopicPartition)
 
-from six.moves import queue, xrange
+from kafka.vendor.six.moves import queue, range
 
 
 class TestKafkaProducer(unittest.TestCase):
@@ -84,7 +84,7 @@ class TestKafkaProducer(unittest.TestCase):
             message_list = [message] * (queue_size + 1)
             producer.send_messages(topic, partition, *message_list)
         self.assertEqual(producer.queue.qsize(), queue_size)
-        for _ in xrange(producer.queue.qsize()):
+        for _ in range(producer.queue.qsize()):
             producer.queue.get()
 
     def test_producer_sync_fail_on_error(self):
@@ -253,5 +253,5 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         self.assertEqual(self.client.send_produce_request.call_count, 5)
 
     def tearDown(self):
-        for _ in xrange(self.queue.qsize()):
+        for _ in range(self.queue.qsize()):
             self.queue.get()

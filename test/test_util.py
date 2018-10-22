@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import struct
 
-import six
+from kafka.vendor import six
 from . import unittest
 
 import kafka.errors

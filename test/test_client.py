@@ -2,7 +2,7 @@ import socket
 
 from mock import ANY, MagicMock, patch
 from operator import itemgetter
-import six
+from kafka.vendor import six
 from . import unittest
 
 from kafka import SimpleClient

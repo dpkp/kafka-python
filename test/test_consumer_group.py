@@ -4,7 +4,7 @@ import threading
 import time
 
 import pytest
-import six
+from kafka.vendor import six
 
 from kafka import SimpleClient
 from kafka.conn import ConnectionStates
