@@ -4,7 +4,7 @@ from itertools import cycle
 import logging
 import random
 
-from kafka.vendor.six.moves import xrange # pylint: disable=import-error
+from kafka.vendor.six.moves import range
 
 from kafka.producer.base import Producer
 
@@ -39,7 +39,7 @@ class SimpleProducer(Producer):
             # Randomize the initial partition that is returned
             if self.random_start:
                 num_partitions = len(self.client.get_partition_ids_for_topic(topic))
-                for _ in xrange(random.randint(0, num_partitions-1)):
+                for _ in range(random.randint(0, num_partitions-1)):
                     next(self.partition_cycles[topic])
 
         return next(self.partition_cycles[topic])

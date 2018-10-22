@@ -12,8 +12,8 @@ import time
 import uuid
 
 import py
-from six.moves import urllib, xrange
-from six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+from kafka.vendor.six.moves import urllib, range
+from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaConsumer, KafkaProducer, SimpleClient
 from kafka.client_async import KafkaClient
@@ -24,7 +24,7 @@ from test.service import ExternalService, SpawnedService
 log = logging.getLogger(__name__)
 
 def random_string(length):
-    return "".join(random.choice(string.ascii_letters) for i in xrange(length))
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
 def version_str_to_list(version_str):
     return tuple(map(int, version_str.split('.'))) # e.g., (0, 8, 1, 1)
