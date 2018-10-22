@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from kafka.partitioner import DefaultPartitioner, Murmur2Partitioner, RoundRobinPartitioner
+from kafka.partitioner import DefaultPartitioner, Murmur2Partitioner, RoundRobinPartitioner, RandStartRoundRobinPartitioner
 from kafka.partitioner.hashed import murmur2
 
 
@@ -68,3 +68,40 @@ def test_murmur2_not_ascii():
     # Verify no regression of murmur2() bug encoding py2 bytes that don't ascii encode
     murmur2(b'\xa4')
     murmur2(b'\x81' * 1000)
+
+
+def _get_expected_partitions(self, partitioner, all_partitions, available):
+    max_partition = available[len(available) - 1]
+    first_partition = partitioner(None, all_partitions, available)
+
+    # create expected partitions based on range of first_partition -> max
+    expected_partitions = list(range(first_partition, max_partition + 1, 1)) + list(range(0, first_partition, 1))
+
+    # swap first and last elements as next call to partitioner(...) will return first_partition + 1
+    expected_partitions.append(expected_partitions.pop(0))
+    return expected_partitions
+
+
+def test_randstartroundrobin_partitioner(self):
+    partitioner = RandStartRoundRobinPartitioner()
+    all_partitions = list(range(100))
+
+    # partitioner should cycle between partition - first partition is random
+    available = all_partitions
+
+    expected_partitions = self._get_expected_partitions(partitioner, all_partitions, available)
+    for expected in expected_partitions:
+        assert expected == partitioner(None, all_partitions, available)
+
+    # test dynamic partition re-assignment
+    available = available[:-25]
+
+    expected_partitions = self._get_expected_partitions(partitioner, all_partitions, available)
+    for expected in expected_partitions:
+        assert expected == partitioner(None, all_partitions, available)
+
+    all_partitions = list(range(200))
+    available = all_partitions
+    expected_partitions = self._get_expected_partitions(partitioner, all_partitions, available)
+    for expected in expected_partitions:
+        assert expected == partitioner(None, all_partitions, available)
