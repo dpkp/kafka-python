@@ -134,7 +134,7 @@ class ReentrantTimer(object):
 class WeakMethod(object):
     """
     Callable that weakly references a method and the object it is bound to. It
-    is based on http://stackoverflow.com/a/24287465.
+    is based on https://stackoverflow.com/a/24287465.
 
     Arguments:
 

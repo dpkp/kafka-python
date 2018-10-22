@@ -51,7 +51,7 @@ class KafkaProducer(object):
     'retries' is configured to 0. Enabling retries also opens up the
     possibility of duplicates (see the documentation on message
     delivery semantics for details:
-    http://kafka.apache.org/documentation.html#semantics
+    https://kafka.apache.org/documentation.html#semantics
     ).
 
     The producer maintains buffers of unsent records for each partition. These
@@ -522,7 +522,7 @@ class KafkaProducer(object):
                 serializable to bytes via configured value_serializer. If value
                 is None, key is required and message acts as a 'delete'.
                 See kafka compaction documentation for more details:
-                http://kafka.apache.org/documentation.html#compaction
+                https://kafka.apache.org/documentation.html#compaction
                 (compaction requires kafka >= 0.8.1)
             partition (int, optional): optionally specify a partition. If not
                 set, the partition will be selected using the configured
