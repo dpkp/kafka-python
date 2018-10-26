@@ -139,5 +139,7 @@ def crc(data):
 
 if __name__ == "__main__":
     import sys
-    data = sys.stdin.read()
+    # TODO remove the pylint disable once pylint fixes
+    # https://github.com/PyCQA/pylint/issues/2571
+    data = sys.stdin.read()  # pylint: disable=assignment-from-no-return
     print(hex(crc(data)))
