@@ -24,9 +24,9 @@ from kafka.structs import (
 )
 
 from test.conftest import version
-from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.fixtures import ZookeeperFixture, KafkaFixture, random_string
 from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions, random_string, Timer,
+    KafkaIntegrationTestCase, kafka_versions, Timer,
     send_messages
 )
 
