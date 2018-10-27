@@ -13,7 +13,7 @@ from kafka.coordinator.base import MemberState, Generation
 from kafka.structs import TopicPartition
 
 from test.conftest import version
-from test.testutil import random_string
+from test.fixtures import random_string
 
 
 def get_connect_str(kafka_broker):

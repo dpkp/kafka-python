@@ -19,6 +19,7 @@ from kafka.errors import (
 from kafka.structs import OffsetRequestPayload, ProduceRequestPayload
 from test.fixtures import random_string, version_str_to_list, version as kafka_version #pylint: disable=wrong-import-order
 
+
 def kafka_versions(*versions):
 
     def construct_lambda(s):
@@ -65,12 +66,6 @@ def kafka_versions(*versions):
 
     return real_kafka_versions
 
-def get_open_port():
-    sock = socket.socket()
-    sock.bind(("", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
 
 _MESSAGES = {}
 def msg(message):
