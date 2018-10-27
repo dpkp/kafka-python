@@ -48,7 +48,6 @@ class Fixture(object):
                                   os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     kafka_root = os.environ.get("KAFKA_ROOT",
                                 os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
-    ivy_root = os.environ.get('IVY_ROOT', os.path.expanduser("~/.ivy2/cache"))
 
     def __init__(self):
         self.child = None
