@@ -14,8 +14,8 @@ servers/$(KAFKA_VERSION)/kafka-bin:
 build-integration: servers/$(KAFKA_VERSION)/kafka-bin
 
 # Test and produce coverage using tox. This is the same as is run on Travis
-test36: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py36 -- $(FLAGS)
+test37: build-integration
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py37 -- $(FLAGS)
 
 test27: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
@@ -56,4 +56,4 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test36 test27 test-local cov-local clean doc
+.PHONY: all test37 test27 test-local cov-local clean doc
