@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 class KafkaAdmin(object):
     """An class for administering the kafka cluster.
 
+    Warning:
+        This is an unstable interface that was recently added and is subject to
+        change without warning. In particular, many methods currently return
+        raw protocol tuples. In future releases, we plan to make these into
+        nicer, more pythonic objects. Unfortunately, this will likely break
+        those interfaces.
+
     The KafkaAdmin class will negotiate for the latest version of each message protocol format supported
     by both the kafka-python client library and the kafka broker.  Usage of optional fields from protocol
     versions that are not supported by the broker will result in UnsupportedVersionError exceptions.
