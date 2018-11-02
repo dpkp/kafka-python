@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import functools
 import itertools
+import itertools
 import atexit
 import logging
 import time
@@ -65,7 +66,7 @@ def _get_pending_messages():
     try:
         with open(KAFKA_UNSENT_FILE) as f:
             return json.load(f)
-    except (FileNotFoundError, ValueError):
+    except (IOError, ValueError):
         return []
 
 
@@ -123,7 +124,9 @@ def _send_upstream(
     stop_at = None
 
     def transform_pending_msg(m):
-        return TopicPartition(m['topic'], m['partition']), m['msg'], m['key']
+        for msg in m['msgs']:
+            yield TopicPartition(m['topic'], m['partition']), \
+                msg, m['key']
 
     def queue_iterator(q):
         """
@@ -137,8 +140,8 @@ def _send_upstream(
         except Empty:
             pass
 
-    all_messages = itertools.chain(map(transform_pending_msg, pending_messages),
-                                   queue_iterator(queue))
+    all_messages = itertools.chain(
+        queue_iterator(queue), *map(transform_pending_msg, pending_messages))
 
     start = dtime.now()
     queue_timeout = timedelta(seconds=1)
@@ -170,7 +173,12 @@ def _send_upstream(
         # timeout is reached
         while count > 0 and timeout >= 0:
             try:
-                topic_partition, msg, key = next(all_messages)
+                val = next(all_messages)
+                try:
+                    topic_partition, msg, key = val
+                except ValueError:
+                    print("Val: {}".format(val))
+                    raise
             except StopIteration:
                 break
 
@@ -187,6 +195,8 @@ def _send_upstream(
         # Send collected requests upstream
         for topic_partition, msg in msgset.items():
             messages = create_message_set(msg, codec, key, codec_compresslevel)
+            print("Send collected requests upstream")
+            print(msg, codec, key, codec_compresslevel)
             req = ProduceRequestPayload(
                 topic_partition.topic,
                 topic_partition.partition,
@@ -217,10 +227,12 @@ def _send_upstream(
 
         requests = list(request_tries.keys())
         log.debug('Sending: %s', requests)
+        print('About to send a produce request, client: {}'.format(client))
         responses = client.send_produce_request(requests,
                                                 acks=req_acks,
                                                 timeout=ack_timeout,
                                                 fail_on_error=False)
+        print("CALLS: {}".format(client.send_produce_request.call_count))
 
         log.debug('Received: %s', responses)
         for i, response in enumerate(responses):
@@ -272,14 +284,15 @@ def _send_upstream(
                 request_tries_filtered[req]['key'] = key
                 request_tries_filtered[req]['msg'] = msg
             else:
-                if isinstance(key, str):
-                    print("key: {}".format(key))
                 failed_msgs.append({
                     'key': key,
                     'topic': req.topic,
                     'partition': req.partition,
-                    'msg': msg,
+                    'msgs': [m[0] for m in msg],
                 })
+                print("key: {}, topic: {}, partition: {}, msg: {}".format(
+                    key, req.topic, req.partition, msg
+                ))
 
         request_tries = request_tries_filtered
 
@@ -529,7 +542,7 @@ class Producer(object):
                     '_topic': pending_msg_data['topic'],
                     '_partition': pending_msg_data['partition'],
                     'key': pending_msg_data.get('key'),
-                    '_msg': pending_msg_data['msg'],
+                    '_msg': pending_msg_data['msgs'],
                 }
                 do_actual_send(**args)
             except KafkaError:
@@ -541,7 +554,7 @@ class Producer(object):
             failed_msgs.append({
                 'topic': topic,
                 'partition': partition,
-                'msg': msg,
+                'msgs': msg,  # an array of binary strings
                 'key': kwargs.get('key'),
             })
             raise
@@ -554,7 +567,7 @@ class Producer(object):
             failed_msgs = [{
                 'topic': msg['topic'].decode('ascii'),
                 'partition': msg['partition'],
-                'msg': [m.decode('ascii') for m in msg['msg']],
+                'msgs': [m.decode('ascii') for m in msg['msgs']],
                 'key': kwargs.get('key'),
             } for msg in failed_msgs]
 
