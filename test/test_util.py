@@ -2,7 +2,7 @@
 import struct
 
 import six
-from . import unittest
+from test import unittest
 
 import kafka.errors
 import kafka.structs

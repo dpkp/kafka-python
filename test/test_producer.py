@@ -136,3 +136,10 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
         partition=0)
     record = future.get(timeout=5)
     assert abs(record.timestamp - send_time) <= 1000  # Allow 1s deviation
+
+
+def test_failed_messages():
+    producer = KafkaProducer()
+    future = producer.send(
+        "abba",
+        value=b"Simple value", key=b"Simple key", timestamp_ms=9999999, partition=0)

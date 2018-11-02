@@ -4,7 +4,7 @@ import struct
 
 import six
 from mock import patch, sentinel
-from . import unittest
+from test import unittest
 
 from kafka.codec import has_snappy, gzip_decode, snappy_decode
 from kafka.errors import (

@@ -1,6 +1,6 @@
 import socket
 
-from mock import ANY, MagicMock, patch
+from mock import MagicMock, patch
 from operator import itemgetter
 import six
 from . import unittest

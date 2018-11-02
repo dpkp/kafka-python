@@ -6,7 +6,7 @@ import threading
 import time
 
 from mock import MagicMock, patch
-from . import unittest
+from test import unittest
 
 from kafka import SimpleClient, SimpleProducer, KeyedProducer
 from kafka.errors import (
@@ -103,7 +103,7 @@ class TestKafkaProducer(unittest.TestCase):
 
                         producer = SimpleProducer(client, async_send=False, sync_fail_on_error=True)
                         with self.assertRaises(FailedPayloadsError):
-                            producer.send_messages('foobar', b'test message')
+                            producer.send_messages(b'foobar', b'test message')
 
     def test_cleanup_is_not_called_on_stopped_producer(self):
         producer = Producer(MagicMock(), async_send=True)
@@ -132,19 +132,27 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         retry_options = RetryOptions(limit=retries_limit,
                                      backoff_ms=50,
                                      retry_on_timeouts=False)
-        self.thread = threading.Thread(
-            target=_send_upstream,
-            args=(self.queue, self.client, CODEC_NONE,
-                  0.3, # batch time (seconds)
-                  3, # batch length
-                  Producer.ACK_AFTER_LOCAL_WRITE,
-                  Producer.DEFAULT_ACK_TIMEOUT,
-                  retry_options,
-                  stop_event))
-        self.thread.daemon = True
-        self.thread.start()
-        time.sleep(sleep_timeout)
-        stop_event.set()
+        _send_upstream(
+            self.queue, self.client, CODEC_NONE,
+            0.3, # batch time (seconds)
+            3, # batch length
+            Producer.ACK_AFTER_LOCAL_WRITE,
+            Producer.DEFAULT_ACK_TIMEOUT,
+            retry_options,
+            stop_event)
+        # self.thread = threading.Thread(
+        #     target=_send_upstream,
+        #     args=(self.queue, self.client, CODEC_NONE,
+        #           0.3, # batch time (seconds)
+        #           3, # batch length
+        #           Producer.ACK_AFTER_LOCAL_WRITE,
+        #           Producer.DEFAULT_ACK_TIMEOUT,
+        #           retry_options,
+        #           stop_event))
+        # self.thread.daemon = True
+        # self.thread.start()
+        # time.sleep(sleep_timeout)
+        # stop_event.set()
 
     def test_wo_retries(self):
 
@@ -171,6 +179,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # Mock offsets counter for closure
         offsets = collections.defaultdict(lambda: collections.defaultdict(lambda: 0))
         self.client.is_first_time = True
+
         def send_side_effect(reqs, *args, **kwargs):
             if self.client.is_first_time:
                 self.client.is_first_time = False
@@ -225,6 +234,7 @@ class TestKafkaProducerSendUpstream(unittest.TestCase):
         # Mock offsets counter for closure
         offsets = collections.defaultdict(lambda: collections.defaultdict(lambda: 0))
         self.client.is_first_time = True
+
         def send_side_effect(reqs, *args, **kwargs):
             if self.client.is_first_time:
                 self.client.is_first_time = False

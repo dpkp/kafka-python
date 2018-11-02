@@ -8,7 +8,7 @@ import time
 import uuid
 
 import pytest
-from . import unittest
+from test import unittest
 
 from kafka import SimpleClient, create_message
 from kafka.errors import (
