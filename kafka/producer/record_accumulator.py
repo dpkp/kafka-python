@@ -6,12 +6,12 @@ import logging
 import threading
 import time
 
-from .. import errors as Errors
-from .buffer import SimpleBufferPool
-from .future import FutureRecordMetadata, FutureProduceResult
-from ..structs import TopicPartition
+import kafka.errors as Errors
+from kafka.producer.buffer import SimpleBufferPool
+from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
+from kafka.structs import TopicPartition
 
 
 log = logging.getLogger(__name__)
@@ -55,8 +55,8 @@ class ProducerBatch(object):
     def record_count(self):
         return self.records.next_offset()
 
-    def try_append(self, timestamp_ms, key, value):
-        metadata = self.records.append(timestamp_ms, key, value)
+    def try_append(self, timestamp_ms, key, value, headers):
+        metadata = self.records.append(timestamp_ms, key, value, headers)
         if metadata is None:
             return None
 
@@ -65,7 +65,8 @@ class ProducerBatch(object):
         future = FutureRecordMetadata(self.produce_future, metadata.offset,
                                       metadata.timestamp, metadata.crc,
                                       len(key) if key is not None else -1,
-                                      len(value) if value is not None else -1)
+                                      len(value) if value is not None else -1,
+                                      sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
         return future
 
     def done(self, base_offset=None, timestamp_ms=None, exception=None):
@@ -196,7 +197,7 @@ class RecordAccumulator(object):
         self.muted = set()
         self._drain_index = 0
 
-    def append(self, tp, timestamp_ms, key, value, max_time_to_block_ms,
+    def append(self, tp, timestamp_ms, key, value, headers, max_time_to_block_ms,
                estimated_size=0):
         """Add a record to the accumulator, return the append result.
 
@@ -209,6 +210,7 @@ class RecordAccumulator(object):
             timestamp_ms (int): The timestamp of the record (epoch ms)
             key (bytes): The key for the record
             value (bytes): The value for the record
+            headers (List[Tuple[str, bytes]]): The header fields for the record
             max_time_to_block_ms (int): The maximum time in milliseconds to
                 block for buffer memory to be available
 
@@ -231,7 +233,7 @@ class RecordAccumulator(object):
                 dq = self._batches[tp]
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(timestamp_ms, key, value)
+                    future = last.try_append(timestamp_ms, key, value, headers)
                     if future is not None:
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
@@ -246,7 +248,7 @@ class RecordAccumulator(object):
 
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(timestamp_ms, key, value)
+                    future = last.try_append(timestamp_ms, key, value, headers)
                     if future is not None:
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
@@ -261,7 +263,7 @@ class RecordAccumulator(object):
                 )
 
                 batch = ProducerBatch(tp, records, buf)
-                future = batch.try_append(timestamp_ms, key, value)
+                future = batch.try_append(timestamp_ms, key, value, headers)
                 if not future:
                     raise Exception()
 

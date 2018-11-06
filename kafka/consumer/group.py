@@ -87,7 +87,7 @@ class KafkaConsumer(six.Iterator):
             happens, the consumer can get stuck trying to fetch a large
             message on a certain partition. Default: 1048576.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 305000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         reconnect_backoff_ms (int): The amount of time in milliseconds to
@@ -211,11 +211,15 @@ class KafkaConsumer(six.Iterator):
                 (0, 8, 0) enables basic functionality but requires manual
                     partition assignment and offset management.
 
-            For the full list of supported versions, see
-            KafkaClient.API_VERSIONS. Default: None
+            Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
@@ -239,6 +243,8 @@ class KafkaConsumer(six.Iterator):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
 
     Note:
         Configuration parameters are described in more detail at
@@ -298,7 +304,8 @@ class KafkaConsumer(six.Iterator):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_kerberos_service_name': 'kafka'
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -603,6 +610,8 @@ class KafkaConsumer(six.Iterator):
         assert timeout_ms >= 0, 'Timeout must not be negative'
         if max_records is None:
             max_records = self.config['max_poll_records']
+        assert isinstance(max_records, int), 'max_records must be an integer'
+        assert max_records > 0, 'max_records must be positive'
 
         # Poll for new data until the timeout expires
         start = time.time()
@@ -650,8 +659,13 @@ class KafkaConsumer(six.Iterator):
         # Send any new fetches (won't resend pending fetches)
         self._fetcher.send_fetches()
 
-        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll())
+        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll() * 1000)
         self._client.poll(timeout_ms=timeout_ms)
+        # after the long poll, we should check whether the group needs to rebalance
+        # prior to returning data so that the group can stabilize faster
+        if self._coordinator.need_rejoin():
+            return {}
+
         records, _ = self._fetcher.fetched_records(max_records)
         return records
 
@@ -1060,8 +1074,13 @@ class KafkaConsumer(six.Iterator):
 
             poll_ms = 1000 * (self._consumer_timeout - time.time())
             if not self._fetcher.in_flight_fetches():
-                poll_ms = 0
+                poll_ms = min(poll_ms, self.config['reconnect_backoff_ms'])
             self._client.poll(timeout_ms=poll_ms)
+
+            # after the long poll, we should check whether the group needs to rebalance
+            # prior to returning data so that the group can stabilize faster
+            if self._coordinator.need_rejoin():
+                continue
 
             # We need to make sure we at least keep up with scheduled tasks,
             # like heartbeats, auto-commits, and metadata refreshes

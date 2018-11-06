@@ -23,11 +23,13 @@ test27: build-integration
 # Test using py.test directly if you want to use local python. Useful for other
 # platforms that require manual installation for C libraries, ie. Windows.
 test-local: build-integration
-	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF kafka test
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) py.test \
+		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF $(FLAGS) kafka test
 
 cov-local: build-integration
-	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
-		--cov-config=.covrc --cov-report html kafka test
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) py.test \
+		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
+		--cov-config=.covrc --cov-report html $(FLAGS) kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on

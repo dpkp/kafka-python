@@ -3,8 +3,8 @@ from __future__ import absolute_import
 import collections
 import threading
 
-from .. import errors as Errors
-from ..future import Future
+from kafka import errors as Errors
+from kafka.future import Future
 
 
 class FutureProduceResult(Future):
@@ -29,11 +29,11 @@ class FutureProduceResult(Future):
 
 
 class FutureRecordMetadata(Future):
-    def __init__(self, produce_future, relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size):
+    def __init__(self, produce_future, relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
         super(FutureRecordMetadata, self).__init__()
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
-        self.args = (relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size)
+        self.args = (relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)
         produce_future.add_callback(self._produce_success)
         produce_future.add_errback(self.failure)
 
@@ -42,7 +42,7 @@ class FutureRecordMetadata(Future):
 
         # Unpacking from args tuple is minor speed optimization
         (relative_offset, timestamp_ms, checksum,
-         serialized_key_size, serialized_value_size) = self.args
+         serialized_key_size, serialized_value_size, serialized_header_size) = self.args
 
         # None is when Broker does not support the API (<0.10) and
         # -1 is when the broker is configured for CREATE_TIME timestamps
@@ -53,7 +53,7 @@ class FutureRecordMetadata(Future):
         tp = self._produce_future.topic_partition
         metadata = RecordMetadata(tp[0], tp[1], tp, offset, timestamp_ms,
                                   checksum, serialized_key_size,
-                                  serialized_value_size)
+                                  serialized_value_size, serialized_header_size)
         self.success(metadata)
 
     def get(self, timeout=None):
@@ -68,4 +68,4 @@ class FutureRecordMetadata(Future):
 
 RecordMetadata = collections.namedtuple(
     'RecordMetadata', ['topic', 'partition', 'topic_partition', 'offset', 'timestamp',
-                       'checksum', 'serialized_key_size', 'serialized_value_size'])
+                       'checksum', 'serialized_key_size', 'serialized_value_size', 'serialized_header_size'])

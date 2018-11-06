@@ -3,8 +3,8 @@ from __future__ import absolute_import
 import logging
 import warnings
 
-from .base import Producer
-from ..partitioner import HashedPartitioner
+from kafka.producer.base import Producer
+from kafka.partitioner import HashedPartitioner
 
 
 log = logging.getLogger(__name__)
@@ -46,4 +46,4 @@ class KeyedProducer(Producer):
         return self.send_messages(topic, key, msg)
 
     def __repr__(self):
-        return '<KeyedProducer batch=%s>' % self.async
+        return '<KeyedProducer batch=%s>' % self.async_send

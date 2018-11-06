@@ -13,26 +13,26 @@ try:
     import selectors  # pylint: disable=import-error
 except ImportError:
     # vendored backport module
-    from .vendor import selectors34 as selectors
+    from kafka.vendor import selectors34 as selectors
 
 import socket
 import time
 
 from kafka.vendor import six
 
-from .cluster import ClusterMetadata
-from .conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
-from . import errors as Errors
-from .future import Future
-from .metrics import AnonMeasurable
-from .metrics.stats import Avg, Count, Rate
-from .metrics.stats.rate import TimeUnit
-from .protocol.metadata import MetadataRequest
-from .util import Dict, WeakMethod
+from kafka.cluster import ClusterMetadata
+from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
+from kafka import errors as Errors
+from kafka.future import Future
+from kafka.metrics import AnonMeasurable
+from kafka.metrics.stats import Avg, Count, Rate
+from kafka.metrics.stats.rate import TimeUnit
+from kafka.protocol.metadata import MetadataRequest
+from kafka.util import Dict, WeakMethod
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
-from .vendor import socketpair
-from .version import __version__
+from kafka.vendor import socketpair
+from kafka.version import __version__
 
 if six.PY2:
     ConnectionError = None
@@ -78,7 +78,12 @@ class KafkaClient(object):
             resulting in a random range between 20% below and 20% above
             the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
-            Default: 40000.
+            Default: 30000.
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -99,30 +104,29 @@ class KafkaClient(object):
             brokers or partitions. Default: 300000
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
-        ssl_context (ssl.SSLContext): pre-configured SSLContext for wrapping
+        ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
-        ssl_check_hostname (bool): flag to configure whether ssl handshake
-            should verify that the certificate matches the brokers hostname.
-            default: true.
-        ssl_cafile (str): optional filename of ca file to use in certificate
-            veriication. default: none.
-        ssl_certfile (str): optional filename of file in pem format containing
-            the client certificate, as well as any ca certificates needed to
-            establish the certificate's authenticity. default: none.
-        ssl_keyfile (str): optional filename containing the client private key.
-            default: none.
-        ssl_password (str): optional password to be used when loading the
-            certificate chain. default: none.
-        ssl_crlfile (str): optional filename containing the CRL to check for
+        ssl_check_hostname (bool): Flag to configure whether SSL handshake
+            should verify that the certificate matches the broker's hostname.
+            Default: True.
+        ssl_cafile (str): Optional filename of CA file to use in certificate
+            veriication. Default: None.
+        ssl_certfile (str): Optional filename of file in PEM format containing
+            the client certificate, as well as any CA certificates needed to
+            establish the certificate's authenticity. Default: None.
+        ssl_keyfile (str): Optional filename containing the client private key.
+            Default: None.
+        ssl_password (str): Optional password to be used when loading the
+            certificate chain. Default: None.
+        ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            default: none.
+            Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set
             to None, KafkaClient will attempt to infer the broker version by
-            probing various APIs. For the full list of supported versions,
-            see KafkaClient.API_VERSIONS. Default: None
+            probing various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version is None
@@ -141,12 +145,15 @@ class KafkaClient(object):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
     """
 
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
+        'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
-        'request_timeout_ms': 40000,
+        'request_timeout_ms': 30000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -175,27 +182,14 @@ class KafkaClient(object):
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
-    API_VERSIONS = [
-        (0, 10, 1),
-        (0, 10, 0),
-        (0, 10),
-        (0, 9),
-        (0, 8, 2),
-        (0, 8, 1),
-        (0, 8, 0)
-    ]
 
     def __init__(self, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
-
-        if self.config['api_version'] is not None:
-            assert self.config['api_version'] in self.API_VERSIONS, (
-                'api_version [{0}] must be one of: {1}'.format(
-                    self.config['api_version'], str(self.API_VERSIONS)))
 
         self.cluster = ClusterMetadata(**self.config)
         self._topics = set()  # empty set will fetch all topic metadata
@@ -246,9 +240,15 @@ class KafkaClient(object):
         self._last_bootstrap = time.time()
 
         if self.config['api_version'] is None or self.config['api_version'] < (0, 10):
-            metadata_request = MetadataRequest[0]([])
+            if self.config['bootstrap_topics_filter']:
+                metadata_request = MetadataRequest[0](list(self.config['bootstrap_topics_filter']))
+            else:
+                metadata_request = MetadataRequest[0]([])
         else:
-            metadata_request = MetadataRequest[1](None)
+            if self.config['bootstrap_topics_filter']:
+                metadata_request = MetadataRequest[1](list(self.config['bootstrap_topics_filter']))
+            else:
+                metadata_request = MetadataRequest[1](None)
 
         for host, port, afi in hosts:
             log.debug("Attempting to bootstrap via node at %s:%s", host, port)
@@ -257,11 +257,7 @@ class KafkaClient(object):
                                          state_change_callback=cb,
                                          node_id='bootstrap',
                                          **self.config)
-            bootstrap.connect()
-            while bootstrap.connecting():
-                self._selector.select(1)
-                bootstrap.connect()
-            if not bootstrap.connected():
+            if not bootstrap.connect_blocking():
                 bootstrap.close()
                 continue
             future = bootstrap.send(metadata_request)
@@ -545,6 +541,8 @@ class KafkaClient(object):
             timeout_ms = 100
         elif timeout_ms is None:
             timeout_ms = self.config['request_timeout_ms']
+        elif not isinstance(timeout_ms, (int, float)):
+            raise RuntimeError('Invalid type for timeout: %s' % type(timeout_ms))
 
         # Loop for futures, break after first loop if None
         responses = []
@@ -619,7 +617,7 @@ class KafkaClient(object):
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
                     pass
-                conn.close(Errors.ConnectionError('Socket EVENT_READ without in-flight-requests'))
+                conn.close(Errors.KafkaConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
 
             self._idle_expiry_manager.update(conn.node_id)
@@ -665,8 +663,14 @@ class KafkaClient(object):
 
     def _fire_pending_completed_requests(self):
         responses = []
-        while self._pending_completion:
-            response, future = self._pending_completion.popleft()
+        while True:
+            try:
+                # We rely on deque.popleft remaining threadsafe
+                # to allow both the heartbeat thread and the main thread
+                # to process responses
+                response, future = self._pending_completion.popleft()
+            except IndexError:
+                break
             future.success(response)
             responses.append(response)
         return responses
@@ -836,7 +840,7 @@ class KafkaClient(object):
             self._refresh_on_disconnects = False
             try:
                 remaining = end - time.time()
-                version = conn.check_version(timeout=remaining, strict=strict)
+                version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
                 return version
             except Errors.NodeNotReadyError:
                 # Only raise to user if this is a node-specific request

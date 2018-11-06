@@ -6,7 +6,7 @@ import random
 
 from kafka.vendor.six.moves import xrange # pylint: disable=import-error
 
-from .base import Producer
+from kafka.producer.base import Producer
 
 
 log = logging.getLogger(__name__)
@@ -51,4 +51,4 @@ class SimpleProducer(Producer):
         )
 
     def __repr__(self):
-        return '<SimpleProducer batch=%s>' % self.async
+        return '<SimpleProducer batch=%s>' % self.async_send

@@ -2,10 +2,10 @@ from __future__ import absolute_import
 
 from io import BytesIO
 
-from .abstract import AbstractType
-from .types import Schema
+from kafka.protocol.abstract import AbstractType
+from kafka.protocol.types import Schema
 
-from ..util import WeakMethod
+from kafka.util import WeakMethod
 
 
 class Struct(AbstractType):

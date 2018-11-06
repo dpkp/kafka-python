@@ -1,3 +1,182 @@
+# 1.4.3 (May 26, 2018)
+
+Compatibility
+* Fix for python 3.7 support: remove 'async' keyword from SimpleProducer (dpkp #1454)
+
+Client
+* Improve BrokerConnection initialization time (romulorosa #1475)
+* Ignore MetadataResponses with empty broker list (dpkp #1506)
+* Improve connection handling when bootstrap list is invalid (dpkp #1507)
+
+Consumer
+* Check for immediate failure when looking up coordinator in heartbeat thread (dpkp #1457)
+
+Core / Protocol
+* Always acquire client lock before coordinator lock to avoid deadlocks (dpkp #1464)
+* Added AlterConfigs and DescribeConfigs apis (StephenSorriaux #1472)
+* Fix CreatePartitionsRequest_v0 (StephenSorriaux #1469)
+* Add codec validators to record parser and builder for all formats (tvoinarovskyi #1447)
+* Fix MemoryRecord bugs re error handling and add test coverage (tvoinarovskyi #1448)
+* Force lz4 to disable Kafka-unsupported block linking when encoding (mnito #1476)
+* Stop shadowing `ConnectionError` (jeffwidman #1492)
+
+Documentation
+* Document methods that return None (jeffwidman #1504)
+* Minor doc capitalization cleanup (jeffwidman)
+* Adds add_callback/add_errback example to docs (Berkodev #1441)
+* Fix KafkaConsumer docstring for request_timeout_ms default (dpkp #1459)
+
+Test Infrastructure
+* Skip flakey SimpleProducer test (dpkp)
+* Fix skipped integration tests if KAFKA_VERSION unset (dpkp #1453)
+
+Logging / Error Messages
+* Stop using deprecated log.warn() (jeffwidman)
+* Change levels for some heartbeat thread logging (dpkp #1456)
+* Log Heartbeat thread start / close for debugging (dpkp)
+
+
+# 1.4.2 (Mar 10, 2018)
+
+Bugfixes
+* Close leaked selector in version check (dpkp #1425)
+* Fix `BrokerConnection.connection_delay()` to return milliseconds (dpkp #1414)
+* Use local copies in `Fetcher._fetchable_partitions` to avoid mutation errors (dpkp #1400)
+* Fix error var name in `_unpack` (j2gg0s #1403)
+* Fix KafkaConsumer compacted offset handling (dpkp #1397)
+* Fix byte size estimation with kafka producer (blakeembrey #1393)
+* Fix coordinator timeout in consumer poll interface (braedon #1384)
+
+Client
+* Add `BrokerConnection.connect_blocking()` to improve bootstrap to multi-address hostnames (dpkp #1411)
+* Short-circuit `BrokerConnection.close()` if already disconnected (dpkp #1424)
+* Only increase reconnect backoff if all addrinfos have been tried (dpkp #1423)
+* Make BrokerConnection .host / .port / .afi immutable to avoid incorrect 'metadata changed' checks (dpkp #1422)
+* Connect with sockaddrs to support non-zero ipv6 scope ids (dpkp #1433)
+* Check timeout type in KafkaClient constructor (asdaraujo #1293)
+* Update string representation of SimpleClient (asdaraujo #1293)
+* Do not validate `api_version` against known versions (dpkp #1434)
+
+Consumer
+* Avoid tight poll loop in consumer when brokers are down (dpkp #1415)
+* Validate `max_records` in KafkaConsumer.poll (dpkp #1398)
+* KAFKA-5512: Awake heartbeat thread when it is time to poll (dpkp #1439)
+
+Producer
+* Validate that serializers generate bytes-like (or None) data (dpkp #1420)
+
+Core / Protocol
+* Support alternative lz4 package: lz4framed (everpcpc #1395)
+* Use hardware accelerated CRC32C function if available (tvoinarovskyi #1389)
+* Add Admin CreatePartitions API call (alexef #1386)
+
+Test Infrastructure
+* Close KafkaConsumer instances during tests (dpkp #1410)
+* Introduce new fixtures to prepare for migration to pytest (asdaraujo #1293)
+* Removed pytest-catchlog dependency (asdaraujo #1380)
+* Fixes racing condition when message is sent to broker before topic logs are created (asdaraujo #1293)
+* Add kafka 1.0.1 release to test fixtures (dpkp #1437)
+
+Logging / Error Messages
+* Re-enable logging during broker version check (dpkp #1430)
+* Connection logging cleanups (dpkp #1432)
+* Remove old CommitFailed error message from coordinator (dpkp #1436)
+
+
+# 1.4.1 (Feb 9, 2018)
+
+Bugfixes
+* Fix consumer poll stuck error when no available partition (ckyoog #1375)
+* Increase some integration test timeouts (dpkp #1374)
+* Use raw in case string overriden (jeffwidman #1373)
+* Fix pending completion IndexError bug caused by multiple threads (dpkp #1372)
+
+
+# 1.4.0 (Feb 6, 2018)
+
+This is a substantial release. Although there are no known 'showstopper' bugs as of release,
+we do recommend you test any planned upgrade to your application prior to running in production.
+
+Some of the major changes include:
+* We have officially dropped python 2.6 support
+* The KafkaConsumer now includes a background thread to handle coordinator heartbeats
+* API protocol handling has been separated from networking code into a new class, KafkaProtocol
+* Added support for kafka message format v2
+* Refactored DNS lookups during kafka broker connections
+* SASL authentication is working (we think)
+* Removed several circular references to improve gc on close()
+
+Thanks to all contributors -- the state of the kafka-python community is strong!
+
+Detailed changelog are listed below:
+
+Client
+* Fixes for SASL support
+  * Refactor SASL/gssapi support (dpkp #1248 #1249 #1257 #1262 #1280)
+  * Add security layer negotiation to the GSSAPI authentication (asdaraujo #1283)
+  * Fix overriding sasl_kerberos_service_name in KafkaConsumer / KafkaProducer (natedogs911 #1264)
+  * Fix typo in _try_authenticate_plain (everpcpc #1333)
+  * Fix for Python 3 byte string handling in SASL auth (christophelec #1353)
+* Move callback processing from BrokerConnection to KafkaClient (dpkp #1258)
+* Use socket timeout of request_timeout_ms to prevent blocking forever on send (dpkp #1281)
+* Refactor dns lookup in BrokerConnection (dpkp #1312)
+* Read all available socket bytes (dpkp #1332)
+* Honor reconnect_backoff in conn.connect() (dpkp #1342)
+
+Consumer
+* KAFKA-3977: Defer fetch parsing for space efficiency, and to raise exceptions to user (dpkp #1245)
+* KAFKA-4034: Avoid unnecessary consumer coordinator lookup (dpkp #1254)
+* Handle lookup_coordinator send failures (dpkp #1279)
+* KAFKA-3888 Use background thread to process consumer heartbeats (dpkp #1266)
+* Improve KafkaConsumer cleanup (dpkp #1339)
+* Fix coordinator join_future race condition (dpkp #1338)
+* Avoid KeyError when filtering fetchable partitions (dpkp #1344)
+* Name heartbeat thread with group_id; use backoff when polling (dpkp #1345)
+* KAFKA-3949: Avoid race condition when subscription changes during rebalance (dpkp #1364)
+* Fix #1239 regression to avoid consuming duplicate compressed messages from mid-batch (dpkp #1367)
+
+Producer
+* Fix timestamp not passed to RecordMetadata (tvoinarovskyi #1273)
+* Raise non-API exceptions (jeffwidman #1316)
+* Fix reconnect_backoff_max_ms default config bug in KafkaProducer (YaoC #1352)
+
+Core / Protocol
+* Add kafka.protocol.parser.KafkaProtocol w/ receive and send (dpkp #1230)
+* Refactor MessageSet and Message into LegacyRecordBatch to later support v2 message format (tvoinarovskyi #1252)
+* Add DefaultRecordBatch implementation aka V2 message format parser/builder. (tvoinarovskyi #1185)
+* optimize util.crc32 (ofek #1304)
+* Raise better struct pack/unpack errors (jeffwidman #1320)
+* Add Request/Response structs for kafka broker 1.0.0 (dpkp #1368)
+
+Bugfixes
+* use python standard max value (lukekingbru #1303)
+* changed for to use enumerate() (TheAtomicOption #1301)
+* Explicitly check for None rather than falsey (jeffwidman #1269)
+* Minor Exception cleanup (jeffwidman #1317)
+* Use non-deprecated exception handling (jeffwidman a699f6a)
+* Remove assertion with side effect in client.wakeup() (bgedik #1348)
+* use absolute imports everywhere (kevinkjt2000 #1362)
+
+Test Infrastructure
+* Use 0.11.0.2 kafka broker for integration testing (dpkp #1357 #1244)
+* Add a Makefile to help build the project, generate docs, and run tests (tvoinarovskyi #1247)
+* Add fixture support for 1.0.0 broker (dpkp #1275)
+* Add kafka 1.0.0 to travis integration tests (dpkp #1365)
+* Change fixture default host to localhost (asdaraujo #1305)
+* Minor test cleanups (dpkp #1343)
+* Use latest pytest 3.4.0, but drop pytest-sugar due to incompatibility (dpkp #1361)
+
+Documentation
+* Expand metrics docs (jeffwidman #1243)
+* Fix docstring (jeffwidman #1261)
+* Added controlled thread shutdown to example.py (TheAtomicOption #1268)
+* Add license to wheel (jeffwidman #1286)
+* Use correct casing for MB (jeffwidman #1298)
+
+Logging / Error Messages
+* Fix two bugs in printing bytes instance (jeffwidman #1296)
+
+
 # 1.3.5 (Oct 7, 2017)
 
 Bugfixes

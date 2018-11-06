@@ -54,17 +54,18 @@
 # * Timestamp Type (3)
 # * Compression Type (0-2)
 
-import io
 import struct
 import time
-from .abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
-from .util import decode_varint, encode_varint, calc_crc32c, size_of_varint
-
-from kafka.errors import CorruptRecordException
+from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
+from kafka.record.util import (
+    decode_varint, encode_varint, calc_crc32c, size_of_varint
+)
+from kafka.errors import CorruptRecordException, UnsupportedCodecError
 from kafka.codec import (
     gzip_encode, snappy_encode, lz4_encode,
     gzip_decode, snappy_decode, lz4_decode
 )
+import kafka.codec as codecs
 
 
 class DefaultRecordBase(object):
@@ -100,6 +101,17 @@ class DefaultRecordBase(object):
 
     LOG_APPEND_TIME = 1
     CREATE_TIME = 0
+
+    def _assert_has_codec(self, compression_type):
+        if compression_type == self.CODEC_GZIP:
+            checker, name = codecs.has_gzip, "gzip"
+        elif compression_type == self.CODEC_SNAPPY:
+            checker, name = codecs.has_snappy, "snappy"
+        elif compression_type == self.CODEC_LZ4:
+            checker, name = codecs.has_lz4, "lz4"
+        if not checker():
+            raise UnsupportedCodecError(
+                "Libraries for {} compression codec not found".format(name))
 
 
 class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
@@ -156,6 +168,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         if not self._decompressed:
             compression_type = self.compression_type
             if compression_type != self.CODEC_NONE:
+                self._assert_has_codec(compression_type)
                 data = memoryview(self._buffer)[self._pos:]
                 if compression_type == self.CODEC_GZIP:
                     uncompressed = gzip_decode(data)
@@ -237,7 +250,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         # validate whether we have read all header bytes in the current record
         if pos - start_pos != length:
-            CorruptRecordException(
+            raise CorruptRecordException(
                 "Invalid record size: expected to read {} bytes in record "
                 "payload, but instead read {}".format(length, pos - start_pos))
         self._pos = pos
@@ -481,6 +494,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
     def _maybe_compress(self):
         if self._compression_type != self.CODEC_NONE:
+            self._assert_has_codec(self._compression_type)
             header_size = self.HEADER_STRUCT.size
             data = bytes(self._buffer[header_size:])
             if self._compression_type == self.CODEC_GZIP:

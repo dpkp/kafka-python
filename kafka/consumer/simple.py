@@ -12,7 +12,7 @@ import warnings
 from kafka.vendor import six
 from kafka.vendor.six.moves import queue # pylint: disable=import-error
 
-from .base import (
+from kafka.consumer.base import (
     Consumer,
     FETCH_DEFAULT_BLOCK_TIMEOUT,
     AUTO_COMMIT_MSG_COUNT,
@@ -24,13 +24,13 @@ from .base import (
     ITER_TIMEOUT_SECONDS,
     NO_MESSAGES_WAIT_TIME_SECONDS
 )
-from ..common import (
-    FetchRequestPayload, KafkaError, OffsetRequestPayload,
-    ConsumerFetchSizeTooSmall,
+from kafka.errors import (
+    KafkaError, ConsumerFetchSizeTooSmall,
     UnknownTopicOrPartitionError, NotLeaderForPartitionError,
     OffsetOutOfRangeError, FailedPayloadsError, check_error
 )
 from kafka.protocol.message import PartialMessage
+from kafka.structs import FetchRequestPayload, OffsetRequestPayload
 
 
 log = logging.getLogger(__name__)

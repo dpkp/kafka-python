@@ -13,14 +13,13 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient, IdleConnectionManager
+from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse, MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
-from kafka.cluster import ClusterMetadata
-from kafka.future import Future
 
 
 @pytest.fixture
@@ -55,21 +54,22 @@ def test_bootstrap_success(conn):
     kwargs.pop('state_change_callback')
     kwargs.pop('node_id')
     assert kwargs == cli.config
-    conn.connect.assert_called_with()
+    conn.connect_blocking.assert_called_with()
     conn.send.assert_called_once_with(MetadataRequest[0]([]))
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
                                          BrokerMetadata(1, 'bar', 34, None)])
 
+
 def test_bootstrap_failure(conn):
-    conn.state = ConnectionStates.DISCONNECTED
+    conn.connect_blocking.return_value = False
     cli = KafkaClient(api_version=(0, 9))
     args, kwargs = conn.call_args
     assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     kwargs.pop('node_id')
     assert kwargs == cli.config
-    conn.connect.assert_called_with()
+    conn.connect_blocking.assert_called_with()
     conn.close.assert_called_with()
     assert cli._bootstrap_fails == 1
     assert cli.cluster.brokers() == set()
@@ -94,6 +94,7 @@ def test_can_connect(cli, conn):
     # Node is disconnected, but blacked out
     conn.blacked_out.return_value = True
     assert not cli._can_connect(0)
+
 
 def test_maybe_connect(cli, conn):
     try:

@@ -1,3 +1,3 @@
-from .memory_records import MemoryRecords
+from kafka.record.memory_records import MemoryRecords, MemoryRecordsBuilder
 
-__all__ = ["MemoryRecords"]
+__all__ = ["MemoryRecords", "MemoryRecordsBuilder"]

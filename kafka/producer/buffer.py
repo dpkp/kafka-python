@@ -5,7 +5,7 @@ import io
 import threading
 import time
 
-from ..metrics.stats import Rate
+from kafka.metrics.stats import Rate
 
 import kafka.errors as Errors
 

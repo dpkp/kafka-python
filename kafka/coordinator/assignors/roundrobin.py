@@ -6,9 +6,9 @@ import logging
 
 from kafka.vendor import six
 
-from .abstract import AbstractPartitionAssignor
-from ...common import TopicPartition
-from ..protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
 
