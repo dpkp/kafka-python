@@ -209,7 +209,7 @@ class KafkaAdmin(object):
         self._metrics.close()
         self._client.close()
         self._closed = True
-        log.debug('Kafka administartion interface has closed')
+        log.debug('Kafka administration interface has closed')
 
     def _matching_api_version(self, operation):
         """Find matching api version, the lesser of either the latest api version the library supports, or
