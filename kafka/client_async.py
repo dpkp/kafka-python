@@ -571,9 +571,7 @@ class KafkaClient(object):
 
                 self._poll(timeout)
 
-            # called without the lock to avoid deadlock potential
-            # if handlers need to acquire locks
-            responses.extend(self._fire_pending_completed_requests())
+                responses.extend(self._fire_pending_completed_requests())
 
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
