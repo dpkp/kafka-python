@@ -347,7 +347,7 @@ class BaseCoordinator(object):
 
     def ensure_active_group(self):
         """Ensure that the group is active (i.e. joined and synced)"""
-        with self._lock:
+        with self._client._lock, self._lock:
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
 
