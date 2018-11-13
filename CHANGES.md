@@ -1,3 +1,51 @@
+# Unreleased
+
+Bugfixes
+* (Attempt to) Fix deadlock between consumer and heartbeat (zhgjun / dpkp #1628)
+* Fix Metrics dict memory leak (kishorenc #1569)
+
+Client
+* Support Kafka record headers (hnousiainen #1574)
+* Add KafkaAdmin class (llamahunter #1540)
+* Set socket timeout for the write-side of wake socketpair (Fleurer #1577)
+* Add kerberos domain name config for gssapi sasl mechanism handshake (the-sea #1542)
+* Support smaller topic metadata fetch during bootstrap (andyxning #1541)
+
+Consumer
+* Fix linter warning on import of ConsumerRebalanceListener (ben-harack #1591)
+* Remove ConsumerTimeout (emord #1587)
+* Return future from commit_offsets_async() (ekimekim #1560)
+
+Core / Protocol
+* Pre-compile pack/unpack function calls (billyevans / jeffwidman #1619)
+* Don't use `kafka.common` internally (jeffwidman #1509)
+
+Documentation
+* Document connections_max_idle_ms (jeffwidman #1531)
+* Fix sphinx url (jeffwidman #1610)
+* Update remote urls: snappy, https, etc (jeffwidman #1603)
+* Minor cleanup of testing doc (jeffwidman #1613)
+
+Test Infrastructure
+* Stop pinning `pylint` (jeffwidman #1611)
+* (partial) Migrate from `Unittest` to `pytest` (jeffwidman #1620)
+* Minor aesthetic cleanup of partitioner tests (jeffwidman #1618)
+* Cleanup fixture imports (jeffwidman #1616)
+* Fix typo in test file name (jeffwidman)
+* Remove unused ivy_root variable (jeffwidman)
+
+Logging / Error Messages
+* raising logging level on messages signalling data loss (sibiryakov #1553)
+* Stop using deprecated log.warn() (jeffwidman #1615)
+* Fix typo in logging message (jeffwidman)
+
+Compatibility
+* Vendor enum34 (jeffwidman #1604)
+* Bump vendored `six` to `1.11.0` (jeffwidman #1602)
+* Vendor `six` consistently (jeffwidman #1605)
+* Prevent `pylint` import errors on `six.moves` (jeffwidman #1609)
+
+
 # 1.4.3 (May 26, 2018)
 
 Compatibility
