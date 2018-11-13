@@ -102,7 +102,7 @@ class Fixture(object):
     def kafka_run_class_env(self):
         env = os.environ.copy()
         env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % \
-                                  self.test_resource("log4j.properties")
+                                  (self.test_resource("log4j.properties"),)
         return env
 
     @classmethod
@@ -110,7 +110,7 @@ class Fixture(object):
         log.info('Rendering %s from template %s', target_file.strpath, source_file)
         with open(source_file, "r") as handle:
             template = handle.read()
-            assert len(template) > 0, 'Empty template %s' % source_file
+            assert len(template) > 0, 'Empty template %s' % (source_file,)
         with open(target_file.strpath, "w") as handle:
             handle.write(template.format(**binding))
             handle.flush()
@@ -257,7 +257,7 @@ class KafkaFixture(Fixture):
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
         # The logging format changed slightly in 1.0.0
-        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % broker_id
+        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
@@ -291,7 +291,7 @@ class KafkaFixture(Fixture):
                                          "%s:%d" % (self.zookeeper.host,
                                                     self.zookeeper.port),
                                          "create",
-                                         "/%s" % self.zk_chroot,
+                                         "/%s" % (self.zk_chroot,),
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

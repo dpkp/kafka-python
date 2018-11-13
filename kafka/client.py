@@ -174,7 +174,7 @@ class SimpleClient(object):
 
             return decoder_fn(future.value)
 
-        raise KafkaUnavailableError('All servers failed to process request: %s' % hosts)
+        raise KafkaUnavailableError('All servers failed to process request: %s' % (hosts,))
 
     def _payloads_by_broker(self, payloads):
         payloads_by_broker = collections.defaultdict(list)

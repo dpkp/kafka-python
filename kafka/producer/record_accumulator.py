@@ -102,11 +102,11 @@ class ProducerBatch(object):
 
         error = None
         if not self.in_retry() and is_full and timeout < since_append:
-            error = "%d seconds have passed since last append" % since_append
+            error = "%d seconds have passed since last append" % (since_append,)
         elif not self.in_retry() and timeout < since_ready:
-            error = "%d seconds have passed since batch creation plus linger time" % since_ready
+            error = "%d seconds have passed since batch creation plus linger time" % (since_ready,)
         elif self.in_retry() and timeout < since_backoff:
-            error = "%d seconds have passed since last attempt plus backoff time" % since_backoff
+            error = "%d seconds have passed since last attempt plus backoff time" % (since_backoff,)
 
         if error:
             self.records.close()

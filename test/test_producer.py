@@ -65,7 +65,7 @@ def test_end_to_end(kafka_broker, compression):
         except StopIteration:
             break
 
-    assert msgs == set(['msg %d' % i for i in range(messages)])
+    assert msgs == set(['msg %d' % (i,) for i in range(messages)])
     consumer.close()
 
 

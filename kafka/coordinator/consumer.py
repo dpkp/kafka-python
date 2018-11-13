@@ -216,7 +216,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignment_snapshot = None
 
         assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % protocol
+        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
         assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
 
@@ -297,7 +297,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
-        assert assignor, 'Invalid assignment protocol: %s' % assignment_strategy
+        assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
         member_metadata = {}
         all_subscribed_topics = set()
         for member_id, metadata_bytes in members:
@@ -804,7 +804,7 @@ class ConsumerCoordinator(BaseCoordinator):
 class ConsumerCoordinatorMetrics(object):
     def __init__(self, metrics, metric_group_prefix, subscription):
         self.metrics = metrics
-        self.metric_group_name = '%s-coordinator-metrics' % metric_group_prefix
+        self.metric_group_name = '%s-coordinator-metrics' % (metric_group_prefix,)
 
         self.commit_latency = metrics.sensor('commit-latency')
         self.commit_latency.add(metrics.metric_name(
