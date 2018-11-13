@@ -316,7 +316,7 @@ class Producer(object):
         if codec is None:
             codec = CODEC_NONE
         elif codec not in ALL_CODECS:
-            raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)
+            raise UnsupportedCodecError("Codec 0x%02x unsupported" % (codec,))
 
         self.codec = codec
         self.codec_compresslevel = codec_compresslevel
@@ -419,7 +419,7 @@ class Producer(object):
                     raise AsyncProducerQueueFull(
                         msg[idx:],
                         'Producer async queue overfilled. '
-                        'Current queue size %d.' % self.queue.qsize())
+                        'Current queue size %d.' % (self.queue.qsize(),))
             resp = []
         else:
             messages = create_message_set([(m, key) for m in msg], self.codec, key, self.codec_compresslevel)

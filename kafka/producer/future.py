@@ -59,7 +59,7 @@ class FutureRecordMetadata(Future):
     def get(self, timeout=None):
         if not self.is_done and not self._produce_future.wait(timeout):
             raise Errors.KafkaTimeoutError(
-                "Timeout after waiting for %s secs." % timeout)
+                "Timeout after waiting for %s secs." % (timeout,))
         assert self.is_done
         if self.failed():
             raise self.exception # pylint: disable-msg=raising-bad-type

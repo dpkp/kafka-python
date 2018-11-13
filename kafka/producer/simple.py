@@ -51,4 +51,4 @@ class SimpleProducer(Producer):
         )
 
     def __repr__(self):
-        return '<SimpleProducer batch=%s>' % self.async_send
+        return '<SimpleProducer batch=%s>' % (self.async_send,)

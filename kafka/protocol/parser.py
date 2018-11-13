@@ -136,7 +136,7 @@ class KafkaProtocol(object):
             raise Errors.CorrelationIdError(
                 'No in-flight-request found for server response'
                 ' with correlation ID %d'
-                % recv_correlation_id)
+                % (recv_correlation_id,))
 
         (correlation_id, request) = self.in_flight_requests.popleft()
 

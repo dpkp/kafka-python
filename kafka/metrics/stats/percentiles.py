@@ -27,7 +27,7 @@ class Percentiles(AbstractSampledStat, AbstractCompoundStat):
                                  ' to be 0.0.')
             self.bin_scheme = Histogram.LinearBinScheme(self._buckets, max_val)
         else:
-            ValueError('Unknown bucket type: %s' % bucketing)
+            ValueError('Unknown bucket type: %s' % (bucketing,))
 
     def stats(self):
         measurables = []

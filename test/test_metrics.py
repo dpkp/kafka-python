@@ -469,7 +469,7 @@ def test_reporter(metrics):
 
     for key in list(expected.keys()):
         metrics = expected.pop(key)
-        expected['foo.%s' % key] = metrics
+        expected['foo.%s' % (key,)] = metrics
     assert expected == foo_reporter.snapshot()
 
 

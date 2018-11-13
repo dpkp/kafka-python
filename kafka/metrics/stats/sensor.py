@@ -35,7 +35,7 @@ class Sensor(object):
         """Validate that this sensor doesn't end up referencing itself."""
         if self in sensors:
             raise ValueError('Circular dependency in sensors: %s is its own'
-                             'parent.' % self.name)
+                             'parent.' % (self.name,))
         sensors.add(self)
         for parent in self._parents:
             parent._check_forest(sensors)

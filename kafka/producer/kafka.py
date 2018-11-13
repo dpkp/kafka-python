@@ -340,11 +340,11 @@ class KafkaProducer(object):
                 self.config[key] = configs.pop(key)
 
         # Only check for extra config keys in top-level class
-        assert not configs, 'Unrecognized configs: %s' % configs
+        assert not configs, 'Unrecognized configs: %s' % (configs,)
 
         if self.config['client_id'] is None:
             self.config['client_id'] = 'kafka-python-producer-%s' % \
-                                       PRODUCER_CLIENT_ID_SEQUENCE.increment()
+                                       (PRODUCER_CLIENT_ID_SEQUENCE.increment(),)
 
         if self.config['acks'] == 'all':
             self.config['acks'] = -1
@@ -633,12 +633,12 @@ class KafkaProducer(object):
             raise Errors.MessageSizeTooLargeError(
                 "The message is %d bytes when serialized which is larger than"
                 " the maximum request size you have configured with the"
-                " max_request_size configuration" % size)
+                " max_request_size configuration" % (size,))
         if size > self.config['buffer_memory']:
             raise Errors.MessageSizeTooLargeError(
                 "The message is %d bytes when serialized which is larger than"
                 " the total memory buffer you have configured with the"
-                " buffer_memory configuration." % size)
+                " buffer_memory configuration." % (size,))
 
     def _wait_on_metadata(self, topic, max_wait):
         """
@@ -679,7 +679,7 @@ class KafkaProducer(object):
             elapsed = time.time() - begin
             if not metadata_event.is_set():
                 raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %.1f secs." % max_wait)
+                    "Failed to update metadata after %.1f secs." % (max_wait,))
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(topic)
             else:

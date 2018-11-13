@@ -247,7 +247,7 @@ class SubscriptionState(object):
 
         for tp in assignments:
             if tp.topic not in self.subscription:
-                raise ValueError("Assigned partition %s for non-subscribed topic." % str(tp))
+                raise ValueError("Assigned partition %s for non-subscribed topic." % (tp,))
 
         # after rebalancing, we always reinitialize the assignment state
         self.assignment.clear()

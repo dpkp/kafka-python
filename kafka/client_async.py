@@ -355,7 +355,7 @@ class KafkaClient(object):
             conn = self._conns.get(node_id)
 
             if conn is None:
-                assert broker, 'Broker id %s not in current metadata' % node_id
+                assert broker, 'Broker id %s not in current metadata' % (node_id,)
 
                 log.debug("Initiating connection to node %s at %s:%s",
                           node_id, broker.host, broker.port)

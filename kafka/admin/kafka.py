@@ -166,7 +166,7 @@ class KafkaAdmin(object):
         log.debug("Starting Kafka administration interface")
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: %s" % extra_configs)
+            raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
