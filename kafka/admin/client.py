@@ -11,14 +11,15 @@ from kafka.client_async import KafkaClient, selectors
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
-    UnrecognizedBrokerVersion)
+    UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
-    ListGroupsRequest, DescribeGroupsRequest)
+    ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest)
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.admin.acl_resource import AclOperation, AclPermissionType
 from kafka.version import __version__
 
 
@@ -430,12 +431,141 @@ class KafkaAdminClient(object):
 
     # describe_acls protocol not yet implemented
     # Note: send the request to the least_loaded_node()
+    def describe_acls(self, acl_resource):
+        """Describe a set of ACLs
+        """
+
+        version = self._matching_api_version(DescribeAclsRequest)
+        if version == 0:
+            request = DescribeAclsRequest[version](
+                resource_type=acl_resource.resource_type,
+                resource_name=acl_resource.name,
+                principal=acl_resource.principal,
+                host=acl_resource.host,
+                operation=acl_resource.operation,
+                permission_type=acl_resource.permission_type
+            )
+        elif version <= 1:
+            request = DescribeAclsRequest[version](
+                resource_type=acl_resource.resource_type,
+                resource_name=acl_resource.name,
+                resource_pattern_type_filter=acl_resource.pattern_type,
+                principal=acl_resource.principal,
+                host=acl_resource.host,
+                operation=acl_resource.operation,
+                permission_type=acl_resource.permission_type
+
+            )
+        else:
+            raise UnsupportedVersionError(
+                "missing implementation of DescribeAcls for library supported version {}"
+                    .format(version)
+            )
+
+        return self._send(request)
+
+    @staticmethod
+    def _convert_create_acls_resource_request_v0(acl_resource):
+        if acl_resource.operation == AclOperation.ANY:
+            raise IllegalArgumentError("operation must not be ANY")
+        if acl_resource.permission_type == AclPermissionType.ANY:
+            raise IllegalArgumentError("permission_type must not be ANY")
+
+        return (
+            acl_resource.resource_type,
+            acl_resource.name,
+            acl_resource.principal,
+            acl_resource.host,
+            acl_resource.operation,
+            acl_resource.permission_type
+        )
+
+    @staticmethod
+    def _convert_create_acls_resource_request_v1(acl_resource):
+
+        if acl_resource.operation == AclOperation.ANY:
+            raise IllegalArgumentError("operation must not be ANY")
+        if acl_resource.permission_type == AclPermissionType.ANY:
+            raise IllegalArgumentError("permission_type must not be ANY")
+
+        return (
+            acl_resource.resource_type,
+            acl_resource.name,
+            acl_resource.pattern_type,
+            acl_resource.principal,
+            acl_resource.host,
+            acl_resource.operation,
+            acl_resource.permission_type
+        )
 
     # create_acls protocol not yet implemented
     # Note: send the request to the least_loaded_node()
+    def create_acls(self, acl_resources):
+        """Create a set of ACLs"""
+
+        version = self._matching_api_version(DescribeAclsRequest)
+        if version == 0:
+            request = CreateAclsRequest[version](
+                creations=[self._convert_create_acls_resource_request_v0(acl_resource) for acl_resource in acl_resources]
+            )
+        elif version <= 1:
+            request = CreateAclsRequest[version](
+                creations=[self._convert_create_acls_resource_request_v1(acl_resource) for acl_resource in acl_resources]
+            )
+        else:
+            raise UnsupportedVersionError(
+                "missing implementation of DescribeAcls for library supported version {}"
+                    .format(version)
+            )
+
+
+        return self._send(request)
+
+    @staticmethod
+    def _convert_delete_acls_resource_request_v0(acl_resource):
+        return (
+            acl_resource.resource_type,
+            acl_resource.name,
+            acl_resource.principal,
+            acl_resource.host,
+            acl_resource.operation,
+            acl_resource.permission_type
+        )
+
+    @staticmethod
+    def _convert_delete_acls_resource_request_v1(acl_resource):
+        return (
+            acl_resource.resource_type,
+            acl_resource.name,
+            acl_resource.pattern_type,
+            acl_resource.principal,
+            acl_resource.host,
+            acl_resource.operation,
+            acl_resource.permission_type
+        )
 
     # delete_acls protocol not yet implemented
     # Note: send the request to the least_loaded_node()
+    def delete_acls(self, acl_resources):
+        """Delete a set of ACLSs"""
+
+        version = self._matching_api_version(DescribeAclsRequest)
+
+        if version == 0:
+            request = DeleteAclsRequest[version](
+                filters=[self._convert_delete_acls_resource_request_v0(acl_resource) for acl_resource in acl_resources]
+            )
+        elif version <= 1:
+            request = DeleteAclsRequest[version](
+                filters=[self._convert_delete_acls_resource_request_v1(acl_resource) for acl_resource in acl_resources]
+            )
+        else:
+            raise UnsupportedVersionError(
+                "missing implementation of DescribeAcls for library supported version {}"
+                    .format(version)
+            )
+
+        return self._send(request)
 
     @staticmethod
     def _convert_describe_config_resource_request(config_resource):
