@@ -881,7 +881,7 @@ class BrokerConnection(object):
                 .format(version))
         # _api_versions is set as a side effect of check_versions() on a cluster
         # that supports 0.10.0 or later
-        return self._api_versions;
+        return self._api_versions
 
     def _infer_broker_version_from_api_versions(self, api_versions):
         # The logic here is to check the list of supported request versions
