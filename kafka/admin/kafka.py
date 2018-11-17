@@ -299,12 +299,13 @@ class KafkaAdmin(object):
             ]
         )
 
-    def create_topics(self, new_topics, timeout_ms=None, validate_only=None):
+    def create_topics(self, new_topics, timeout_ms=None, validate_only=False):
         """Create new topics in the cluster.
 
         :param new_topics: Array of NewTopic objects
         :param timeout_ms: Milliseconds to wait for new topics to be created before broker returns
-        :param validate_only: If True, don't actually create new topics.  Not supported by all versions.
+        :param validate_only: If True, don't actually create new topics.
+            Not supported by all versions. Default: False
         :return: Appropriate version of CreateTopicResponse class
         """
         version = self._matching_api_version(CreateTopicsRequest)
@@ -319,7 +320,6 @@ class KafkaAdmin(object):
                 timeout = timeout_ms
             )
         elif version <= 2:
-            validate_only = validate_only or False
             request = CreateTopicsRequest[version](
                 create_topic_requests = [self._convert_new_topic_request(new_topic) for new_topic in new_topics],
                 timeout = timeout_ms,
@@ -374,13 +374,14 @@ class KafkaAdmin(object):
             ] if config_resource.configs else None
         )
 
-    def describe_configs(self, config_resources, include_synonyms=None):
+    def describe_configs(self, config_resources, include_synonyms=False):
         """Fetch configuration parameters for one or more kafka resources.
 
         :param config_resources: An array of ConfigResource objects.
             Any keys in ConfigResource.configs dict will be used to filter the result.  The configs dict should be None
             to get all values.  An empty dict will get zero values (as per kafka protocol).
-        :param include_synonyms: If True, return synonyms in response.  Not supported by all versions.
+        :param include_synonyms: If True, return synonyms in response.  Not
+            supported by all versions. Default: False.
         :return: Appropriate version of DescribeConfigsResponse class
         """
         version = self._matching_api_version(DescribeConfigsRequest)
@@ -393,7 +394,6 @@ class KafkaAdmin(object):
                 resources = [self._convert_describe_config_resource_request(config_resource) for config_resource in config_resources]
             )
         elif version <= 1:
-            include_synonyms = include_synonyms or False
             request = DescribeConfigsRequest[version](
                 resources = [self._convert_describe_config_resource_request(config_resource) for config_resource in config_resources],
                 include_synonyms = include_synonyms
@@ -445,17 +445,17 @@ class KafkaAdmin(object):
             )
         )
 
-    def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=None):
+    def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False):
         """Create additional partitions for an existing topic.
 
         :param topic_partitions: A map of topic name strings to NewPartition objects
         :param timeout_ms: Milliseconds to wait for new partitions to be created before broker returns
         :param validate_only: If True, don't actually create new partitions.
+            Default: False
         :return: Appropriate version of CreatePartitionsResponse class
         """
         version = self._matching_api_version(CreatePartitionsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
-        validate_only = validate_only or False
         if version == 0:
             request = CreatePartitionsRequest[version](
                 topic_partitions = [self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
