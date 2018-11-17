@@ -62,6 +62,10 @@ class UnrecognizedBrokerVersion(KafkaError):
     pass
 
 
+class IncompatibleBrokerVersion(KafkaError):
+    pass
+
+
 class CommitFailedError(KafkaError):
     def __init__(self, *args, **kwargs):
         super(CommitFailedError, self).__init__(
