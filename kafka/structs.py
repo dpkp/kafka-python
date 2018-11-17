@@ -72,6 +72,7 @@ PartitionMetadata = namedtuple("PartitionMetadata",
     ["topic", "partition", "leader", "replicas", "isr", "error"])
 
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
+    # TODO add leaderEpoch: OffsetAndMetadata(offset, leaderEpoch, metadata)
     ["offset", "metadata"])
 
 OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
