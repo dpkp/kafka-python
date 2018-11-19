@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from kafka.errors import IllegalArgumentError
 
 # enum in stdlib as of py3.4
 try:
@@ -69,17 +70,17 @@ class ACLResource(object):
             pattern_type=ACLResourcePatternType.LITERAL
     ):
         if not isinstance(resource_type, ACLResourceType):
-            resource_type = ACLResourceType[str(resource_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+            raise IllegalArgumentError("resource_param must be of type ACLResourceType")
         self.resource_type = resource_type
         if not isinstance(operation, ACLOperation):
-            operation = ACLOperation[str(operation).upper()]  # pylint: disable-msg:unsubscriptable-object
+            raise IllegalArgumentError("operation must be of type ACLOperation")
         self.operation = operation
         if not isinstance(permission_type, ACLPermissionType):
-            permission_type = ACLPermissionType[str(permission_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+            raise IllegalArgumentError("permission_type must be of type ACLPermissionType")
         self.permission_type = permission_type
         self.name = name
         self.principal = principal
         self.host = host
         if not isinstance(pattern_type, ACLResourcePatternType):
-            pattern_type = ACLResourcePatternType[str(pattern_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+            raise IllegalArgumentError("pattern_type must be of type ACLResourcePatternType")
         self.pattern_type = pattern_type
