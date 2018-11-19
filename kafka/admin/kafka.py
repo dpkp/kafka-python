@@ -593,7 +593,9 @@ class KafkaAdmin(object):
         group_descriptions = []
         version = self._matching_api_version(DescribeGroupsRequest)
         for group_id in group_ids:
-            if group_coordinator_id is None:
+            if group_coordinator_id is not None:
+                this_groups_coordinator_id = group_coordinator_id
+            else:
                 this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
             if version <= 1:
                 # Note: KAFKA-6788 A potential optimization is to group the
