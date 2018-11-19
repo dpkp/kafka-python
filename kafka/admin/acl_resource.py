@@ -7,6 +7,7 @@ except ImportError:
     # vendored backport module
     from kafka.vendor.enum34 import IntEnum
 
+
 class ACLResourceType(IntEnum):
     """An enumerated type of config resources"""
 
