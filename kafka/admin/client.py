@@ -457,8 +457,8 @@ class KafkaAdminClient(object):
 
             )
         else:
-            raise UnsupportedVersionError(
-                "missing implementation of DescribeAcls for library supported version {}"
+            raise NotImplementedError(
+                "Support for DescribeAcls v{} has not yet been added to KafkaAdmin."
                     .format(version)
             )
 
@@ -513,11 +513,10 @@ class KafkaAdminClient(object):
                 creations=[self._convert_create_acls_resource_request_v1(acl_resource) for acl_resource in acl_resources]
             )
         else:
-            raise UnsupportedVersionError(
-                "missing implementation of DescribeAcls for library supported version {}"
+            raise NotImplementedError(
+                "Support for CreateAcls v{} has not yet been added to KafkaAdmin."
                     .format(version)
             )
-
 
         return self._send(request)
 
@@ -560,8 +559,8 @@ class KafkaAdminClient(object):
                 filters=[self._convert_delete_acls_resource_request_v1(acl_resource) for acl_resource in acl_resources]
             )
         else:
-            raise UnsupportedVersionError(
-                "missing implementation of DescribeAcls for library supported version {}"
+            raise NotImplementedError(
+                "Support for DeleteAcls v{} has not yet been added to KafkaAdmin."
                     .format(version)
             )
 
