@@ -503,7 +503,7 @@ class KafkaAdminClient(object):
     def create_acls(self, acl_resources):
         """Create a set of ACLs"""
 
-        version = self._matching_api_version(DescribeAclsRequest)
+        version = self._matching_api_version(CreateAclsRequest)
         if version == 0:
             request = CreateAclsRequest[version](
                 creations=[self._convert_create_acls_resource_request_v0(acl_resource) for acl_resource in acl_resources]
@@ -548,7 +548,7 @@ class KafkaAdminClient(object):
     def delete_acls(self, acl_resources):
         """Delete a set of ACLSs"""
 
-        version = self._matching_api_version(DescribeAclsRequest)
+        version = self._matching_api_version(DeleteAclsRequest)
 
         if version == 0:
             request = DeleteAclsRequest[version](
