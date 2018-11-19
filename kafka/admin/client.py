@@ -429,8 +429,6 @@ class KafkaAdminClient(object):
     # describe cluster functionality is in ClusterMetadata
     # Note: if implemented here, send the request to the least_loaded_node()
 
-    # describe_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
     def describe_acls(self, acl_resource):
         """Describe a set of ACLs
         """
@@ -462,7 +460,7 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        return self._send(request)
+        return self._send_request_to_node(self._client.least_loaded_node(), request)
 
     @staticmethod
     def _convert_create_acls_resource_request_v0(acl_resource):
@@ -498,8 +496,6 @@ class KafkaAdminClient(object):
             acl_resource.permission_type
         )
 
-    # create_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
     def create_acls(self, acl_resources):
         """Create a set of ACLs"""
 
@@ -518,7 +514,7 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        return self._send(request)
+        return self._send_request_to_node(self._client.least_loaded_node(), request)
 
     @staticmethod
     def _convert_delete_acls_resource_request_v0(acl_resource):
@@ -543,8 +539,6 @@ class KafkaAdminClient(object):
             acl_resource.permission_type
         )
 
-    # delete_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
     def delete_acls(self, acl_resources):
         """Delete a set of ACLSs"""
 
@@ -564,7 +558,7 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        return self._send(request)
+        return self._send_request_to_node(self._client.least_loaded_node(), request)
 
     @staticmethod
     def _convert_describe_config_resource_request(config_resource):
