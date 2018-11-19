@@ -27,12 +27,12 @@ def test_new_partitions():
 
 
 def test_acl_resource():
-    good_resource = kafka.admin.AclResource("TOPIC", "ALL", "ALLOW", "foo",
+    good_resource = kafka.admin.ACLResource("TOPIC", "ALL", "ALLOW", "foo",
                                             "User:bar", "*", "LITERAL")
-    assert(good_resource.resource_type == kafka.admin.AclResourceType.TOPIC)
-    assert(good_resource.operation == kafka.admin.AclOperation.ALL)
-    assert(good_resource.permission_type == kafka.admin.AclPermissionType.ALLOW)
-    assert(good_resource.pattern_type == kafka.admin.AclResourcePatternType.LITERAL)
+    assert(good_resource.resource_type == kafka.admin.ACLResourceType.TOPIC)
+    assert(good_resource.operation == kafka.admin.ACLOperation.ALL)
+    assert(good_resource.permission_type == kafka.admin.ACLPermissionType.ALLOW)
+    assert(good_resource.pattern_type == kafka.admin.ACLResourcePatternType.LITERAL)
 
 def test_new_topic():
     with pytest.raises(IllegalArgumentError):

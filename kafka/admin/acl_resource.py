@@ -7,7 +7,7 @@ except ImportError:
     # vendored backport module
     from kafka.vendor.enum34 import IntEnum
 
-class AclResourceType(IntEnum):
+class ACLResourceType(IntEnum):
     """An enumerated type of config resources"""
 
     ANY = 1,
@@ -17,7 +17,7 @@ class AclResourceType(IntEnum):
     TOPIC = 2,
     TRANSACTIONAL_ID = 5
 
-class AclOperation(IntEnum):
+class ACLOperation(IntEnum):
     """An enumerated type of acl operations"""
 
     ANY = 1,
@@ -34,14 +34,14 @@ class AclOperation(IntEnum):
     IDEMPOTENT_WRITE = 12
 
 
-class AclPermissionType(IntEnum):
+class ACLPermissionType(IntEnum):
     """An enumerated type of permissions"""
 
     ANY = 1,
     DENY = 2,
     ALLOW = 3
 
-class AclResourcePatternType(IntEnum):
+class ACLResourcePatternType(IntEnum):
     """An enumerated type of resource patterns"""
 
     ANY = 1,
@@ -49,7 +49,7 @@ class AclResourcePatternType(IntEnum):
     LITERAL = 3,
     PREFIXED = 4
 
-class AclResource(object):
+class ACLResource(object):
     """A class for specifying config resources.
     Arguments:
         resource_type (ConfigResourceType): the type of kafka resource
@@ -65,20 +65,20 @@ class AclResource(object):
             name=None,
             principal=None,
             host=None,
-            pattern_type=AclResourcePatternType.LITERAL
+            pattern_type=ACLResourcePatternType.LITERAL
     ):
-        if not isinstance(resource_type, AclResourceType):
-            resource_type = AclResourceType[str(resource_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+        if not isinstance(resource_type, ACLResourceType):
+            resource_type = ACLResourceType[str(resource_type).upper()]  # pylint: disable-msg=unsubscriptable-object
         self.resource_type = resource_type
-        if not isinstance(operation, AclOperation):
-            operation = AclOperation[str(operation).upper()]  # pylint: disable-msg:unsubscriptable-object
+        if not isinstance(operation, ACLOperation):
+            operation = ACLOperation[str(operation).upper()]  # pylint: disable-msg:unsubscriptable-object
         self.operation = operation
-        if not isinstance(permission_type, AclPermissionType):
-            permission_type = AclPermissionType[str(permission_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+        if not isinstance(permission_type, ACLPermissionType):
+            permission_type = ACLPermissionType[str(permission_type).upper()]  # pylint: disable-msg=unsubscriptable-object
         self.permission_type = permission_type
         self.name = name
         self.principal = principal
         self.host = host
-        if not isinstance(pattern_type, AclResourcePatternType):
-            pattern_type = AclResourcePatternType[str(pattern_type).upper()]  # pylint: disable-msg=unsubscriptable-object
+        if not isinstance(pattern_type, ACLResourcePatternType):
+            pattern_type = ACLResourcePatternType[str(pattern_type).upper()]  # pylint: disable-msg=unsubscriptable-object
         self.pattern_type = pattern_type

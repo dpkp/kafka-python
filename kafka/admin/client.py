@@ -19,7 +19,7 @@ from kafka.protocol.admin import (
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata
-from kafka.admin.acl_resource import AclOperation, AclPermissionType
+from kafka.admin.acl_resource import ACLOperation, ACLPermissionType
 from kafka.version import __version__
 
 
@@ -464,9 +464,9 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_create_acls_resource_request_v0(acl_resource):
-        if acl_resource.operation == AclOperation.ANY:
+        if acl_resource.operation == ACLOperation.ANY:
             raise IllegalArgumentError("operation must not be ANY")
-        if acl_resource.permission_type == AclPermissionType.ANY:
+        if acl_resource.permission_type == ACLPermissionType.ANY:
             raise IllegalArgumentError("permission_type must not be ANY")
 
         return (
@@ -481,9 +481,9 @@ class KafkaAdminClient(object):
     @staticmethod
     def _convert_create_acls_resource_request_v1(acl_resource):
 
-        if acl_resource.operation == AclOperation.ANY:
+        if acl_resource.operation == ACLOperation.ANY:
             raise IllegalArgumentError("operation must not be ANY")
-        if acl_resource.permission_type == AclPermissionType.ANY:
+        if acl_resource.permission_type == ACLPermissionType.ANY:
             raise IllegalArgumentError("permission_type must not be ANY")
 
         return (
