@@ -1,5 +1,5 @@
-KafkaAdmin
+KafkaAdminClient
 ===========
 
-.. autoclass:: kafka.admin.KafkaAdmin
+.. autoclass:: kafka.admin.KafkaAdminClient
     :members:
