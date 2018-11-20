@@ -876,7 +876,11 @@ class BrokerConnection(object):
     def get_api_versions(self):
         version = self.check_version()
         if version < (0, 10, 0):
-            raise Errors.UnsupportedVersionError(
+            # TODO this currently blocks using various KafkaAdmin methods
+            # against older brokers that are supported, such as
+            # list_consumer_groups(), list_consumer_group_offsets(),
+            # describe_consumer_groups(), and _find_group_coordinator()
+            raise Errors.IncompatibleBrokerVersion(
                 "ApiVersion not supported by cluster version {} < 0.10.0"
                 .format(version))
         # _api_versions is set as a side effect of check_versions() on a cluster

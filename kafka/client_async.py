@@ -814,6 +814,8 @@ class KafkaClient(object):
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
 
+        # TODO if I update the BrokerConnection.get_api_versions(), also update
+        # this docstring
         Note: A call to check_version must previously have succeeded and returned
         version 0.10.0 or later
 

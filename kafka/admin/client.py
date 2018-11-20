@@ -35,12 +35,23 @@ class KafkaAdminClient(object):
         nicer, more pythonic objects. Unfortunately, this will likely break
         those interfaces.
 
-    The KafkaAdminClient class will negotiate for the latest version of each message
-    protocol format supported by both the kafka-python client library and the
-    Kafka broker. Usage of optional fields from protocol versions that are not
-    supported by the broker will result in IncompatibleBrokerVersion exceptions.
+    The KafkaAdminClient class will negotiate for the latest version of each
+    Kafka protocol message format supported by both the kafka-python client
+    library and the Kafka broker. Two different exceptions can be raised when a
+    method needs to use a Kafka protocol message format that is not supported
+    by the broker. An IncompatibleBrokerVersion exception means kafka-python
+    does not think the broker supports that message format and does not even
+    try to send it. An UnsupportedVersionError exception means that
+    kafka-python tried to send the message and the broker rejected it. If you
+    encounter UnsupportedVersionError, please file a bug, as we would prefer
+    to identify the error client-side and raise a IncompatibleBrokerVersion.
 
-    Use of this class requires a minimum broker version >= 0.10.0.0.
+    Note:
+        If the KafkaAdminClient's `api_version` is unset, then the broker
+        version is ascertained by querying a random broker in the cluster. So
+        if the cluster is running a mixture of old and new brokers, there is a
+        chance the version-checking will be incorrect. In that case, please pin
+        the `api_version` of the KafkaAdminClient.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
@@ -252,7 +263,7 @@ class KafkaAdminClient(object):
             controller_version = self._client.check_version(controller_id)
             if controller_version < (0, 10, 0):
                 raise IncompatibleBrokerVersion(
-                    "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
+                    "The controller appears to be running Kafka {}. KafkaAdminClient requires controllers >= 0.10.0.0."
                     .format(controller_version))
             self._controller_id = controller_id
         else:
@@ -591,6 +602,10 @@ class KafkaAdminClient(object):
             partition assignments.
         """
         group_descriptions = []
+        # TODO this can be used against brokers older than 0.10.0.0, so either
+        # need to fix BrokerConnection.get_api_versions() (and the docstring of
+        # KafkaClient.get_api_versions()), or add a bypass here when api_version is
+        # old.
         version = self._matching_api_version(DescribeGroupsRequest)
         for group_id in group_ids:
             if group_coordinator_id is not None:
@@ -661,6 +676,10 @@ class KafkaAdminClient(object):
         consumer_groups = set()
         if broker_ids is None:
             broker_ids = [broker.nodeId for broker in self._client.cluster.brokers()]
+        # TODO this can be used against brokers older than 0.10.0.0, so either
+        # need to fix BrokerConnection.get_api_versions() (and the docstring of
+        # KafkaClient.get_api_versions()), or add a bypass here when api_version is
+        # old.
         version = self._matching_api_version(ListGroupsRequest)
         if version <= 2:
             request = ListGroupsRequest[version]()
@@ -707,6 +726,10 @@ class KafkaAdminClient(object):
         group_offsets_listing = {}
         if group_coordinator_id is None:
             group_coordinator_id = self._find_group_coordinator_id(group_id)
+        # TODO this can be used against brokers older than 0.10.0.0, so either
+        # need to fix BrokerConnection.get_api_versions() (and the docstring of
+        # KafkaClient.get_api_versions()), or add a bypass here when api_version is
+        # old.
         version = self._matching_api_version(OffsetFetchRequest)
         if version <= 3:
             if partitions is None:

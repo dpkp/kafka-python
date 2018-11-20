@@ -5,7 +5,7 @@ import logging
 import socket
 import time
 
-from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
+from kafka.errors import KafkaConfigurationError, IncompatibleBrokerVersion
 
 from kafka.vendor import six
 
@@ -943,12 +943,12 @@ class KafkaConsumer(six.Iterator):
 
         Raises:
             ValueError: If the target timestamp is negative
-            UnsupportedVersionError: If the broker does not support looking
-                up the offsets by timestamp.
+            IncompatibleBrokerVersion: Raised by kafka-python when it does not
+                think the broker supports looking up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
         if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
+            raise IncompatibleBrokerVersion(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
         for tp, ts in six.iteritems(timestamps):
@@ -978,8 +978,8 @@ class KafkaConsumer(six.Iterator):
             given partitions.
 
         Raises:
-            UnsupportedVersionError: If the broker does not support looking
-                up the offsets by timestamp.
+            IncompatibleBrokerVersion: Raised by kafka-python when it does not
+                think the broker supports looking up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms.
         """
         offsets = self._fetcher.beginning_offsets(
@@ -1005,8 +1005,8 @@ class KafkaConsumer(six.Iterator):
             ``{TopicPartition: int}``: The end offsets for the given partitions.
 
         Raises:
-            UnsupportedVersionError: If the broker does not support looking
-                up the offsets by timestamp.
+            IncompatibleBrokerVersion: Raised by kafka-python when it does not
+                think the broker supports looking up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
         offsets = self._fetcher.end_offsets(

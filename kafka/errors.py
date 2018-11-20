@@ -59,10 +59,18 @@ class MetadataEmptyBrokerList(KafkaError):
 
 
 class UnrecognizedBrokerVersion(KafkaError):
+    # Cannot determine the broker version
     pass
 
 
 class IncompatibleBrokerVersion(KafkaError):
+    # TODO convert this first comment to the default exception message... need to check message vs description is used when assembling the exception string
+    # kafka-python thinks the broker version is incompatible with this Kafka
+    # protocol message format and does not even try to send the message.
+
+    # See also UnsupportedBrokerVersion for the broker-side equivalent.
+    # Although the error is the same, we want to be able to differentiate
+    # between client-side and broker-side errors for easier debugging.
     pass
 
 
@@ -377,9 +385,16 @@ class IllegalSaslStateError(BrokerResponseError):
 
 
 class UnsupportedVersionError(BrokerResponseError):
+    # See also IncompatibleBrokerVersion for the client-side equivalent.
+    # Although the error is the same, we want to be able to differentiate
+    # between client-side and broker-side errors for easier debugging.
     errno = 35
     message = 'UNSUPPORTED_VERSION'
-    description = 'The version of API is not supported.'
+    description = 'The version of API is not supported. If you encounter this '
+                  'error while using normal kafka-python methods and not
+                  'directly using the low-level protocol structs, please file '
+                  'an issue as we would prefer to identify the error '
+                  'client-side and raise an IncompatibleBrokerVersion.'
 
 
 class TopicAlreadyExistsError(BrokerResponseError):
