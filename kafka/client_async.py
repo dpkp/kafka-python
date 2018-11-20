@@ -551,6 +551,8 @@ class KafkaClient(object):
         responses = []
         while True:
             with self._lock:
+                if self._closed:
+                    break
 
                 # Attempt to complete pending connections
                 for node_id in list(self._connecting):
