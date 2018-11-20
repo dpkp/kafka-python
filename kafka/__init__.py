@@ -18,7 +18,7 @@ except ImportError:
 logging.getLogger(__name__).addHandler(NullHandler())
 
 
-from kafka.admin import KafkaAdmin
+from kafka.admin import KafkaAdminClient
 from kafka.consumer import KafkaConsumer
 from kafka.consumer.subscription_state import ConsumerRebalanceListener
 from kafka.producer import KafkaProducer
@@ -47,7 +47,7 @@ class KafkaClient(SimpleClient):
 
 
 __all__ = [
-    'KafkaAdmin',
+    'KafkaAdminClient',
     'KafkaConsumer', 'KafkaProducer', 'KafkaClient', 'BrokerConnection',
     'SimpleClient', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner',
