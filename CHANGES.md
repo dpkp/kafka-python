@@ -1,4 +1,4 @@
-# Unreleased
+# 1.4.4 (Nov 20, 2018)
 
 Bugfixes
 * (Attempt to) Fix deadlock between consumer and heartbeat (zhgjun / dpkp #1628)
@@ -6,10 +6,23 @@ Bugfixes
 
 Client
 * Support Kafka record headers (hnousiainen #1574)
-* Add KafkaAdmin class (llamahunter #1540)
 * Set socket timeout for the write-side of wake socketpair (Fleurer #1577)
 * Add kerberos domain name config for gssapi sasl mechanism handshake (the-sea #1542)
 * Support smaller topic metadata fetch during bootstrap (andyxning #1541)
+* Use TypeError for invalid timeout type (jeffwidman #1636)
+* Break poll if closed (dpkp)
+
+Admin Client
+* Add KafkaAdminClient class (llamahunter #1540)
+* Fix list_consumer_groups() to query all brokers (jeffwidman #1635)
+* Stop using broker-errors for client-side problems (jeffwidman #1639)
+* Fix send to controller (jeffwidman #1640)
+* Add group coordinator lookup (jeffwidman #1641)
+* Fix describe_groups (jeffwidman #1642)
+* Add list_consumer_group_offsets() (jeffwidman #1643)
+* Remove support for api versions as strings from KafkaAdminClient (jeffwidman #1644)
+* Set a clear default value for `validate_only`/`include_synonyms` (jeffwidman #1645)
+* Bugfix: Always set this_groups_coordinator_id (jeffwidman #1650)
 
 Consumer
 * Fix linter warning on import of ConsumerRebalanceListener (ben-harack #1591)
@@ -17,14 +30,17 @@ Consumer
 * Return future from commit_offsets_async() (ekimekim #1560)
 
 Core / Protocol
+* Add protocol structs for {Describe,Create,Delete} Acls (ulrikjohansson #1646/partial)
 * Pre-compile pack/unpack function calls (billyevans / jeffwidman #1619)
 * Don't use `kafka.common` internally (jeffwidman #1509)
+* Be explicit with tuples for %s formatting (jeffwidman #1634)
 
 Documentation
 * Document connections_max_idle_ms (jeffwidman #1531)
 * Fix sphinx url (jeffwidman #1610)
 * Update remote urls: snappy, https, etc (jeffwidman #1603)
 * Minor cleanup of testing doc (jeffwidman #1613)
+* Various docstring / pep8 / code hygiene cleanups (jeffwidman #1647)
 
 Test Infrastructure
 * Stop pinning `pylint` (jeffwidman #1611)
@@ -33,6 +49,8 @@ Test Infrastructure
 * Cleanup fixture imports (jeffwidman #1616)
 * Fix typo in test file name (jeffwidman)
 * Remove unused ivy_root variable (jeffwidman)
+* Add test fixtures for kafka versions 1.0.2 -> 2.0.1 (dpkp)
+* Bump travis test for 1.x brokers to 1.1.1 (dpkp)
 
 Logging / Error Messages
 * raising logging level on messages signalling data loss (sibiryakov #1553)
