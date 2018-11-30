@@ -54,6 +54,9 @@ pushd servers
           fi
           echo
           echo "Extracting kafka ${kafka} binaries"
+          if [ ! -d ../$kafka ]; then
+            mkdir ../$kafka
+          fi
           tar xzvf ${KAFKA_ARTIFACT} -C ../$kafka/
           rm -rf ../$kafka/kafka-bin
           mv ../$kafka/${KAFKA_ARTIFACT/%.t*/} ../$kafka/kafka-bin
