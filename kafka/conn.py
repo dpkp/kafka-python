@@ -360,7 +360,7 @@ class BrokerConnection(object):
             except ValueError as err:
                 # Python 3.7 and higher raises ValueError if a socket
                 # is already connected
-                if sys.version_info[0] >= 3 and sys.version_info[1] >= 7:
+                if sys.version_info >= (3, 7):
                     ret = None
                 else:
                     raise err
