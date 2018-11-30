@@ -7,15 +7,6 @@ python:
     - 3.6
     - pypy
 
-# Enable 3.7 without globally enabling sudo and dist: xenial for other build jobs
-# See https://github.com/travis-ci/travis-ci/issues/9069#issuecomment-425720905
-matrix:
-  include:
-    - python: 3.7
-      dist: xenial
-      sudo: required
-
-
 env:
     - KAFKA_VERSION=0.8.2.2
     - KAFKA_VERSION=0.9.0.1
