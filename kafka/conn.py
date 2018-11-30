@@ -357,10 +357,13 @@ class BrokerConnection(object):
                 ret = self._sock.connect_ex(self._sock_addr)
             except socket.error as err:
                 ret = err.errno
-            except ValueError:
-                # Python 3.7 and higher rasies ValueError if a socket
+            except ValueError as err:
+                # Python 3.7 and higher raises ValueError if a socket
                 # is already connected
-                ret = None
+                if sys.version_info[0] >= 3 and sys.version_info[1] >= 7:
+                    ret = None
+                else:
+                    raise err
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
