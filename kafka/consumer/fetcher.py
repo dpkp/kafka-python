@@ -55,7 +55,6 @@ class Fetcher(six.Iterator):
         'max_partition_fetch_bytes': 1048576,
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
-        'skip_double_compressed_messages': False,
         'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
         'api_version': (0, 8, 0),
@@ -98,13 +97,6 @@ class Fetcher(six.Iterator):
                 consumed. This ensures no on-the-wire or on-disk corruption to
                 the messages occurred. This check adds some overhead, so it may
                 be disabled in cases seeking extreme performance. Default: True
-            skip_double_compressed_messages (bool): A bug in KafkaProducer
-                caused some messages to be corrupted via double-compression.
-                By default, the fetcher will return the messages as a compressed
-                blob of bytes with a single offset, i.e. how the message was
-                actually published to the cluster. If you prefer to have the
-                fetcher automatically detect corrupt messages and skip them,
-                set this option to True. Default: False.
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
