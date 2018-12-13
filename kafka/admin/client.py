@@ -334,7 +334,7 @@ class KafkaAdminClient(object):
             # DeleteTopicsResponse returns topic_error_codes rather than topic_errors
             for topic, error_code in getattr(response, "topic_errors", response.topic_error_codes):
                 error_type = Errors.for_code(error_code)
-                if tries and isinstance(error_type, NotControllerError):
+                if tries and error_type is NotControllerError:
                     # No need to inspect the rest of the errors for
                     # non-retriable errors because NotControllerError should
                     # either be thrown for all errors or no errors.
