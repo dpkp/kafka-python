@@ -332,7 +332,7 @@ class KafkaAdminClient(object):
             tries -= 1
             response = self._send_request_to_node(self._controller_id, request)
             # DeleteTopicsResponse returns topic_error_codes rather than topic_errors
-            for topic, error_code in getattr(response, "topic_errors", response.topic_error_codes):
+            for topic, error_code in map(lambda x: x[:2], getattr(response, "topic_errors", getattr(response, "topic_error_codes", None))):
                 error_type = Errors.for_code(error_code)
                 if tries and error_type is NotControllerError:
                     # No need to inspect the rest of the errors for
