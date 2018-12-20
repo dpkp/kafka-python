@@ -716,10 +716,10 @@ class KafkaProducer(object):
             releases without warning.
         """
         if raw:
-            return self._metrics.metrics
+            return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics):
+        for k, v in six.iteritems(self._metrics.metrics.copy()):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
