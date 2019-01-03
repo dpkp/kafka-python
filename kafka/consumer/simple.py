@@ -24,13 +24,13 @@ from kafka.consumer.base import (
     ITER_TIMEOUT_SECONDS,
     NO_MESSAGES_WAIT_TIME_SECONDS
 )
-from kafka.common import (
-    FetchRequestPayload, KafkaError, OffsetRequestPayload,
-    ConsumerFetchSizeTooSmall,
+from kafka.errors import (
+    KafkaError, ConsumerFetchSizeTooSmall,
     UnknownTopicOrPartitionError, NotLeaderForPartitionError,
     OffsetOutOfRangeError, FailedPayloadsError, check_error
 )
 from kafka.protocol.message import PartialMessage
+from kafka.structs import FetchRequestPayload, OffsetRequestPayload
 
 
 log = logging.getLogger(__name__)
@@ -253,7 +253,7 @@ class SimpleConsumer(Consumer):
                 self.offsets[resp.partition] = \
                     resp.offsets[0] + deltas[resp.partition]
         else:
-            raise ValueError('Unexpected value for `whence`, %d' % whence)
+            raise ValueError('Unexpected value for `whence`, %d' % (whence,))
 
         # Reset queue and fetch offsets since they are invalid
         self.fetch_offsets = self.offsets.copy()

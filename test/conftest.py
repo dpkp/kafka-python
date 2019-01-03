@@ -1,11 +1,9 @@
 from __future__ import absolute_import
 
-import inspect
-
 import pytest
 
-from test.fixtures import KafkaFixture, ZookeeperFixture
-from test.testutil import kafka_version, random_string
+from test.fixtures import KafkaFixture, ZookeeperFixture, random_string, version as kafka_version
+
 
 @pytest.fixture(scope="module")
 def version():

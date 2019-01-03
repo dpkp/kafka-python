@@ -14,13 +14,13 @@ from threading import Thread, Event
 
 from kafka.vendor import six
 
-from kafka.structs import (
-    ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions)
 from kafka.errors import (
     kafka_errors, UnsupportedCodecError, FailedPayloadsError,
     RequestTimedOutError, AsyncProducerQueueFull, UnknownError,
     RETRY_ERROR_TYPES, RETRY_BACKOFF_ERROR_TYPES, RETRY_REFRESH_ERROR_TYPES)
 from kafka.protocol import CODEC_NONE, ALL_CODECS, create_message_set
+from kafka.structs import (
+    ProduceRequestPayload, ProduceResponsePayload, TopicPartition, RetryOptions)
 
 log = logging.getLogger('kafka.producer')
 
@@ -83,7 +83,7 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
         try:
             client.reinit()
         except Exception as e:
-            log.warn('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms)
+            log.warning('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms)
             time.sleep(float(retry_options.backoff_ms) / 1000)
         else:
             break
@@ -189,12 +189,12 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
 
         # doing backoff before next retry
         if retry_state['do_backoff'] and retry_options.backoff_ms:
-            log.warn('Async producer backoff for %s(ms) before retrying', retry_options.backoff_ms)
+            log.warning('Async producer backoff for %s(ms) before retrying', retry_options.backoff_ms)
             time.sleep(float(retry_options.backoff_ms) / 1000)
 
         # refresh topic metadata before next retry
         if retry_state['do_refresh']:
-            log.warn('Async producer forcing metadata refresh metadata before retrying')
+            log.warning('Async producer forcing metadata refresh metadata before retrying')
             try:
                 client.load_metadata_for_topics()
             except Exception:
@@ -316,7 +316,7 @@ class Producer(object):
         if codec is None:
             codec = CODEC_NONE
         elif codec not in ALL_CODECS:
-            raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)
+            raise UnsupportedCodecError("Codec 0x%02x unsupported" % (codec,))
 
         self.codec = codec
         self.codec_compresslevel = codec_compresslevel
@@ -419,7 +419,7 @@ class Producer(object):
                     raise AsyncProducerQueueFull(
                         msg[idx:],
                         'Producer async queue overfilled. '
-                        'Current queue size %d.' % self.queue.qsize())
+                        'Current queue size %d.' % (self.queue.qsize(),))
             resp = []
         else:
             messages = create_message_set([(m, key) for m in msg], self.codec, key, self.codec_compresslevel)

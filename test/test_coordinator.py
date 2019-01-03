@@ -5,7 +5,6 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.consumer.subscription_state import (
     SubscriptionState, ConsumerRebalanceListener)
 from kafka.coordinator.assignors.range import RangePartitionAssignor
@@ -21,6 +20,7 @@ from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
+from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.util import WeakMethod
 
 
@@ -34,7 +34,7 @@ def coordinator(client):
 
 
 def test_init(client, coordinator):
-    # metadata update on init 
+    # metadata update on init
     assert client.cluster._need_update is True
     assert WeakMethod(coordinator._handle_metadata_update) in client.cluster._listeners
 
@@ -542,7 +542,7 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
     response = OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])])
     _f.success(response)
     patched_coord._handle_offset_fetch_response.assert_called_with(
-        future, response) 
+        future, response)
 
 
 @pytest.mark.parametrize('response,error,dead', [

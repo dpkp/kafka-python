@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 import struct
 
-import six
+from kafka.vendor import six
 from mock import patch, sentinel
 from . import unittest
 

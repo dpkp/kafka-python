@@ -12,8 +12,8 @@ import time
 import uuid
 
 import py
-from six.moves import urllib, xrange
-from six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+from kafka.vendor.six.moves import urllib, range
+from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaConsumer, KafkaProducer, SimpleClient
 from kafka.client_async import KafkaClient
@@ -24,7 +24,7 @@ from test.service import ExternalService, SpawnedService
 log = logging.getLogger(__name__)
 
 def random_string(length):
-    return "".join(random.choice(string.ascii_letters) for i in xrange(length))
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
 def version_str_to_list(version_str):
     return tuple(map(int, version_str.split('.'))) # e.g., (0, 8, 1, 1)
@@ -48,7 +48,6 @@ class Fixture(object):
                                   os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     kafka_root = os.environ.get("KAFKA_ROOT",
                                 os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
-    ivy_root = os.environ.get('IVY_ROOT', os.path.expanduser("~/.ivy2/cache"))
 
     def __init__(self):
         self.child = None
@@ -103,7 +102,7 @@ class Fixture(object):
     def kafka_run_class_env(self):
         env = os.environ.copy()
         env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % \
-                                  self.test_resource("log4j.properties")
+                                  (self.test_resource("log4j.properties"),)
         return env
 
     @classmethod
@@ -111,7 +110,7 @@ class Fixture(object):
         log.info('Rendering %s from template %s', target_file.strpath, source_file)
         with open(source_file, "r") as handle:
             template = handle.read()
-            assert len(template) > 0, 'Empty template %s' % source_file
+            assert len(template) > 0, 'Empty template %s' % (source_file,)
         with open(target_file.strpath, "w") as handle:
             handle.write(template.format(**binding))
             handle.flush()
@@ -258,7 +257,7 @@ class KafkaFixture(Fixture):
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
         # The logging format changed slightly in 1.0.0
-        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % broker_id
+        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
@@ -292,7 +291,7 @@ class KafkaFixture(Fixture):
                                          "%s:%d" % (self.zookeeper.host,
                                                     self.zookeeper.port),
                                          "create",
-                                         "/%s" % self.zk_chroot,
+                                         "/%s" % (self.zk_chroot,),
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

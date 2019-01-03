@@ -101,7 +101,7 @@ class Rate(AbstractMeasurableStat):
         elif self._unit == TimeUnit.DAYS:
             return time_ms / (24.0 * 60.0 * 60.0 * 1000.0)
         else:
-            raise ValueError('Unknown unit: %s' % self._unit)
+            raise ValueError('Unknown unit: %s' % (self._unit,))
 
 
 class SampledTotal(AbstractSampledStat):

@@ -5,6 +5,7 @@ kafka-python API
 
    KafkaConsumer
    KafkaProducer
+   KafkaAdminClient
    KafkaClient
    BrokerConnection
    ClusterMetadata

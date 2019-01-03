@@ -2,6 +2,7 @@ import sys
 
 from mock import MagicMock, patch
 from . import unittest
+import pytest
 
 from kafka import SimpleConsumer, KafkaConsumer, MultiProcessConsumer, OldKafkaConsumer
 from kafka.errors import (
@@ -12,16 +13,12 @@ from kafka.structs import (
 
 
 class TestKafkaConsumer(unittest.TestCase):
-    def test_non_integer_partitions(self):
-        with self.assertRaises(AssertionError):
-            SimpleConsumer(MagicMock(), 'group', 'topic', partitions=['0'])
-
     def test_session_timeout_larger_than_request_timeout_raises(self):
-        with self.assertRaises(KafkaConfigurationError):
+        with pytest.raises(KafkaConfigurationError):
             KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(0,9), group_id='foo', session_timeout_ms=60000, request_timeout_ms=40000)
 
     def test_fetch_max_wait_larger_than_request_timeout_raises(self):
-        with self.assertRaises(KafkaConfigurationError):
+        with pytest.raises(KafkaConfigurationError):
             KafkaConsumer(bootstrap_servers='localhost:9092', fetch_max_wait_ms=41000, request_timeout_ms=40000)
 
     def test_subscription_copy(self):
@@ -46,7 +43,12 @@ class TestMultiProcessConsumer(unittest.TestCase):
             self.assertEqual(fetch_last_known_offsets.call_args[0], (partitions,) )
         self.assertEqual(client.get_partition_ids_for_topic.call_count, 0) # pylint: disable=no-member
 
+
 class TestSimpleConsumer(unittest.TestCase):
+    def test_non_integer_partitions(self):
+        with self.assertRaises(AssertionError):
+            SimpleConsumer(MagicMock(), 'group', 'topic', partitions=['0'])
+
     def test_simple_consumer_failed_payloads(self):
         client = MagicMock()
         consumer = SimpleConsumer(client, group=None,

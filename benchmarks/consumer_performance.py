@@ -10,6 +10,8 @@ import sys
 import threading
 import traceback
 
+from kafka.vendor.six.moves import range
+
 from kafka import KafkaConsumer, KafkaProducer
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
@@ -64,7 +66,7 @@ class ConsumerPerformance(object):
                 record = bytes(bytearray(args.record_size))
                 producer = KafkaProducer(compression_type=args.fixture_compression,
                                          **props)
-                for i in xrange(args.num_records):
+                for i in range(args.num_records):
                     producer.send(topic=args.topic, value=record)
                 producer.flush()
                 producer.close()

@@ -489,4 +489,4 @@ def create_message_set(messages, codec=CODEC_NONE, key=None, compresslevel=None)
     elif codec == CODEC_SNAPPY:
         return [create_snappy_message(messages, key)]
     else:
-        raise UnsupportedCodecError("Codec 0x%02x unsupported" % codec)
+        raise UnsupportedCodecError("Codec 0x%02x unsupported" % (codec,))

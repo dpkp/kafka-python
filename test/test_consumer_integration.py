@@ -6,8 +6,8 @@ import pytest
 import kafka.codec
 
 import pytest
-from six.moves import xrange
-import six
+from kafka.vendor.six.moves import range
+from kafka.vendor import six
 
 from . import unittest
 from kafka import (
@@ -16,8 +16,8 @@ from kafka import (
 )
 from kafka.consumer.base import MAX_FETCH_BUFFER_SIZE_BYTES
 from kafka.errors import (
-    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, ConsumerTimeout,
-    UnsupportedVersionError, KafkaTimeoutError, UnsupportedCodecError
+    ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, UnsupportedVersionError,
+    KafkaTimeoutError, UnsupportedCodecError, ConsumerTimeout
 )
 from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
@@ -473,7 +473,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         )
 
         # Grab the first 195 messages
-        output_msgs1 = [ consumer1.get_message().message.value for _ in xrange(195) ]
+        output_msgs1 = [ consumer1.get_message().message.value for _ in range(195) ]
         self.assert_message_count(output_msgs1, 195)
 
         # The total offset across both partitions should be at 180
@@ -603,7 +603,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Grab the first 180 messages
         output_msgs1 = []
-        for _ in xrange(180):
+        for _ in range(180):
             m = next(consumer1)
             output_msgs1.append(m)
         self.assert_message_count(output_msgs1, 180)
@@ -619,7 +619,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # 181-200
         output_msgs2 = []
-        for _ in xrange(20):
+        for _ in range(20):
             m = next(consumer2)
             output_msgs2.append(m)
         self.assert_message_count(output_msgs2, 20)
@@ -866,7 +866,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
  
         # Grab the first 195 messages
         output_msgs1 = []
-        for _ in xrange(195):
+        for _ in range(195):
             m = consumer1.next()
             output_msgs1.append(m)
             consumer1.task_done(m)
@@ -910,7 +910,7 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
  
         # Grab the first 195 messages
         output_msgs1 = []
-        for _ in xrange(195):
+        for _ in range(195):
             m = consumer1.next()
             output_msgs1.append(m)
             consumer1.task_done(m)

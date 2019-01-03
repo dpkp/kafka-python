@@ -72,6 +72,7 @@ PartitionMetadata = namedtuple("PartitionMetadata",
     ["topic", "partition", "leader", "replicas", "isr", "error"])
 
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
+    # TODO add leaderEpoch: OffsetAndMetadata(offset, leaderEpoch, metadata)
     ["offset", "metadata"])
 
 OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
@@ -93,7 +94,3 @@ KafkaMessage = namedtuple("KafkaMessage",
 # Limit value: int >= 0, 0 means no retries
 RetryOptions = namedtuple("RetryOptions",
     ["limit", "backoff_ms", "retry_on_timeouts"])
-
-
-# Support legacy imports from kafka.common
-from kafka.errors import *
