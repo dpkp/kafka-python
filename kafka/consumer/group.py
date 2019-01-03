@@ -313,11 +313,15 @@ class KafkaConsumer(six.Iterator):
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
 
+        connections_max_idle_ms = self.config['connections_max_idle_ms']
         request_timeout_ms = self.config['request_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
-        if request_timeout_ms <= fetch_max_wait_ms:
-            raise KafkaConfigurationError("Request timeout (%s) must be larger than fetch-max-wait-ms (%s)" %
-                                          (request_timeout_ms, fetch_max_wait_ms))
+        if not (fetch_max_wait_ms < request_timeout_ms < connections_max_idle_ms):
+            raise KafkaConfigurationError(
+                "connections_max_idle_ms ({}) must be larger than "
+                "request_timeout_ms ({}) which must be larger than "
+                "fetch_max_wait_ms ({})."
+                .format(connections_max_idle_ms, request_timeout_ms, fetch_max_wait_ms))
 
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
