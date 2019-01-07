@@ -337,7 +337,8 @@ class KafkaAdminClient(object):
             # So this is a little brittle in that it assumes all responses have
             # one of these attributes and that they always unpack into
             # (topic, error_code) tuples.
-            topic_error_tuples = getattr(response, "topic_errors", response.topic_error_codes)
+            topic_error_tuples = (response.topic_errors if hasattr(response, 'topic_errors')
+                else response.topic_error_codes)
             # Also small py2/py3 compatibility -- py3 can ignore extra values
             # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
             # So for now we have to map across the list and explicitly drop any
