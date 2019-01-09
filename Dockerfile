@@ -44,6 +44,7 @@ COPY CHANGES.md /work
 COPY MANIFEST.in /work
 COPY run_itest.sh /work
 COPY run_utest.sh /work
+COPY requirements-dev.txt /work
 RUN chmod +x /work/run_itest.sh
 RUN chmod +x /work/run_utest.sh
 
