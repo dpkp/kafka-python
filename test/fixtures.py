@@ -295,11 +295,12 @@ class KafkaFixture(Fixture):
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
 
-        if proc.wait() != 0 or proc.returncode != 0:
+        if proc.returncode != 0:
             self.out("Failed to create Zookeeper chroot node")
-            self.out(proc.stdout.read())
-            self.out(proc.stderr.read())
+            self.out(stdout)
+            self.out(stderr)
             raise RuntimeError("Failed to create Zookeeper chroot node")
         self.out("Kafka chroot created in Zookeeper!")
 
@@ -458,13 +459,12 @@ class KafkaFixture(Fixture):
                 args.append('--if-not-exists')
             env = self.kafka_run_class_env()
             proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            ret = proc.wait()
-            if ret != 0 or proc.returncode != 0:
-                output = proc.stdout.read()
-                if not 'kafka.common.TopicExistsException' in output:
+            stdout, stderr = proc.communicate()
+            if proc.returncode != 0:
+                if not 'kafka.common.TopicExistsException' in stdout:
                     self.out("Failed to create topic %s" % (topic_name,))
-                    self.out(output)
-                    self.out(proc.stderr.read())
+                    self.out(stdout)
+                    self.out(stderr)
                     raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
     def create_topics(self, topic_names, num_partitions=None, replication_factor=None):
