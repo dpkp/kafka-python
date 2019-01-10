@@ -1,3 +1,11 @@
+# 1.4.4.post1 (Jan 10, 2019)
+
+* Added  proc.communicate() patch that got merged upstream to ensure tests don't deadlock
+* Only run tests for KAFKA_VERSION 1.1.0 (faster builds)
+* Use internal pypi when available
+* Remove py26 support (faster builds)
+*  Use requirements-dev.txt instead of pinning requirements in tox.ini
+
 # 1.4.4 (Nov 20, 2018)
 
 Bugfixes
