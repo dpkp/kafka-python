@@ -176,6 +176,8 @@ class BrokerConnection(object):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
     """
 
     DEFAULT_CONFIG = {
@@ -206,7 +208,8 @@ class BrokerConnection(object):
         'sasl_mechanism': 'PLAIN',
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_kerberos_service_name': 'kafka'
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI')
@@ -567,7 +570,8 @@ class BrokerConnection(object):
         return future.success(True)
 
     def _try_authenticate_gssapi(self, future):
-        auth_id = self.config['sasl_kerberos_service_name'] + '@' + self.host
+        kerberos_damin_name = self.config['sasl_kerberos_domain_name'] or self.host
+        auth_id = self.config['sasl_kerberos_service_name'] + '@' + kerberos_damin_name
         gssapi_name = gssapi.Name(
             auth_id,
             name_type=gssapi.NameType.hostbased_service
@@ -869,6 +873,16 @@ class BrokerConnection(object):
         ])
         return self._api_versions
 
+    def get_api_versions(self):
+        version = self.check_version()
+        if version < (0, 10, 0):
+            raise Errors.UnsupportedVersionError(
+                "ApiVersion not supported by cluster version {} < 0.10.0"
+                .format(version))
+        # _api_versions is set as a side effect of check_versions() on a cluster
+        # that supports 0.10.0 or later
+        return self._api_versions
+
     def _infer_broker_version_from_api_versions(self, api_versions):
         # The logic here is to check the list of supported request versions
         # in reverse order. As soon as we find one that works, return it
@@ -892,7 +906,7 @@ class BrokerConnection(object):
         # so if all else fails, choose that
         return (0, 10, 0)
 
-    def check_version(self, timeout=2, strict=False):
+    def check_version(self, timeout=2, strict=False, topics=[]):
         """Attempt to guess the broker version.
 
         Note: This is a blocking call.
@@ -925,7 +939,7 @@ class BrokerConnection(object):
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
-            ((0, 8, 0), MetadataRequest[0]([])),
+            ((0, 8, 0), MetadataRequest[0](topics)),
         ]
 
         for version, request in test_cases:
@@ -941,7 +955,7 @@ class BrokerConnection(object):
             # the attempt to write to a disconnected socket should
             # immediately fail and allow us to infer that the prior
             # request was unrecognized
-            mr = self.send(MetadataRequest[0]([]))
+            mr = self.send(MetadataRequest[0](topics))
 
             selector = self.config['selector']()
             selector.register(self._sock, selectors.EVENT_READ)

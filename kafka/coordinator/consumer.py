@@ -11,7 +11,7 @@ from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
-from kafka import errors as Errors
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
@@ -216,7 +216,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignment_snapshot = None
 
         assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % protocol
+        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
         assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
 
@@ -297,7 +297,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
-        assert assignor, 'Invalid assignment protocol: %s' % assignment_strategy
+        assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
         member_metadata = {}
         all_subscribed_topics = set()
         for member_id, metadata_bytes in members:
@@ -441,10 +441,13 @@ class ConsumerCoordinator(BaseCoordinator):
                 response will be either an Exception or a OffsetCommitResponse
                 struct. This callback can be used to trigger custom actions when
                 a commit request completes.
+
+        Returns:
+            kafka.future.Future
         """
         self._invoke_completed_offset_commit_callbacks()
         if not self.coordinator_unknown():
-            self._do_commit_offsets_async(offsets, callback)
+            future = self._do_commit_offsets_async(offsets, callback)
         else:
             # we don't know the current coordinator, so try to find it and then
             # send the commit or fail (we don't want recursive retries which can
@@ -463,6 +466,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # coordinator, so there is no need to explicitly allow heartbeats
         # through delayed task execution.
         self._client.poll(timeout_ms=0) # no wakeup if we add that feature
+
+        return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
@@ -799,7 +804,7 @@ class ConsumerCoordinator(BaseCoordinator):
 class ConsumerCoordinatorMetrics(object):
     def __init__(self, metrics, metric_group_prefix, subscription):
         self.metrics = metrics
-        self.metric_group_name = '%s-coordinator-metrics' % metric_group_prefix
+        self.metric_group_name = '%s-coordinator-metrics' % (metric_group_prefix,)
 
         self.commit_latency = metrics.sensor('commit-latency')
         self.commit_latency.add(metrics.metric_name(

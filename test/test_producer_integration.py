@@ -3,7 +3,7 @@ import time
 import uuid
 
 import pytest
-from six.moves import range
+from kafka.vendor.six.moves import range
 
 from kafka import (
     SimpleProducer, KeyedProducer,

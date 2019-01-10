@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import struct
 
-import six
+from kafka.vendor import six
 from . import unittest
 
 import kafka.errors
-import kafka.util
 import kafka.structs
+import kafka.util
 
 
 class UtilTest(unittest.TestCase):

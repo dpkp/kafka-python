@@ -406,6 +406,191 @@ class DescribeConfigsRequest_v1(Request):
 DescribeConfigsRequest = [DescribeConfigsRequest_v0, DescribeConfigsRequest_v1]
 DescribeConfigsResponse = [DescribeConfigsResponse_v0, DescribeConfigsResponse_v1]
 
+class DescribeAclsResponse_v0(Response):
+    API_KEY = 29
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('resources', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('acls', Array(
+                ('principal', String('utf-8')),
+                ('host', String('utf-8')),
+                ('operation', Int8),
+                ('permission_type', Int8)))))
+    )
+
+
+class DescribeAclsResponse_v1(Response):
+    API_KEY = 29
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('resources', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('resource_pattern_type', Int8),
+            ('acls', Array(
+                ('principal', String('utf-8')),
+                ('host', String('utf-8')),
+                ('operation', Int8),
+                ('permission_type', Int8)))))
+    )
+
+class DescribeAclsRequest_v0(Request):
+    API_KEY = 29
+    API_VERSION = 0
+    RESPONSE_TYPE = DescribeAclsResponse_v0
+    SCHEMA = Schema(
+        ('resource_type', Int8),
+        ('resource_name', String('utf-8')),
+        ('principal', String('utf-8')),
+        ('host', String('utf-8')),
+        ('operation', Int8),
+        ('permission_type', Int8)
+    )
+
+class DescribeAclsRequest_v1(Request):
+    API_KEY = 29
+    API_VERSION = 1
+    RESPONSE_TYPE = DescribeAclsResponse_v1
+    SCHEMA = Schema(
+        ('resource_type', Int8),
+        ('resource_name', String('utf-8')),
+        ('resource_pattern_type_filter', Int8),
+        ('principal', String('utf-8')),
+        ('host', String('utf-8')),
+        ('operation', Int8),
+        ('permission_type', Int8)
+    )
+
+DescribeAclsRequest = [DescribeAclsRequest_v0, DescribeAclsRequest_v1]
+DescribeAclsResponse = [DescribeAclsResponse_v0, DescribeAclsResponse_v1]
+
+class CreateAclsResponse_v0(Response):
+    API_KEY = 30
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('creation_responses', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8'))))
+    )
+
+class CreateAclsResponse_v1(Response):
+    API_KEY = 30
+    API_VERSION = 1
+    SCHEMA = CreateAclsResponse_v0.SCHEMA
+
+class CreateAclsRequest_v0(Request):
+    API_KEY = 30
+    API_VERSION = 0
+    RESPONSE_TYPE = CreateAclsResponse_v0
+    SCHEMA = Schema(
+        ('creations', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('principal', String('utf-8')),
+            ('host', String('utf-8')),
+            ('operation', Int8),
+            ('permission_type', Int8)))
+    )
+
+class CreateAclsRequest_v1(Request):
+    API_KEY = 30
+    API_VERSION = 1
+    RESPONSE_TYPE = CreateAclsResponse_v1
+    SCHEMA = Schema(
+        ('creations', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('resource_pattern_type', Int8),
+            ('principal', String('utf-8')),
+            ('host', String('utf-8')),
+            ('operation', Int8),
+            ('permission_type', Int8)))
+    )
+
+CreateAclsRequest = [CreateAclsRequest_v0, CreateAclsRequest_v1]
+CreateAclsResponse = [CreateAclsResponse_v0, CreateAclsResponse_v1]
+
+class DeleteAclsResponse_v0(Response):
+    API_KEY = 31
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('filter_responses', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('matching_acls', Array(
+                ('error_code', Int16),
+                ('error_message', String('utf-8')),
+                ('resource_type', Int8),
+                ('resource_name', String('utf-8')),
+                ('principal', String('utf-8')),
+                ('host', String('utf-8')),
+                ('operation', Int8),
+                ('permission_type', Int8)))))
+    )
+
+class DeleteAclsResponse_v1(Response):
+    API_KEY = 31
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('filter_responses', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('matching_acls', Array(
+                ('error_code', Int16),
+                ('error_message', String('utf-8')),
+                ('resource_type', Int8),
+                ('resource_name', String('utf-8')),
+                ('resource_pattern_type', Int8),
+                ('principal', String('utf-8')),
+                ('host', String('utf-8')),
+                ('operation', Int8),
+                ('permission_type', Int8)))))
+    )
+
+class DeleteAclsRequest_v0(Request):
+    API_KEY = 31
+    API_VERSION = 0
+    RESPONSE_TYPE = DeleteAclsResponse_v0
+    SCHEMA = Schema(
+        ('filters', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('principal', String('utf-8')),
+            ('host', String('utf-8')),
+            ('operation', Int8),
+            ('permission_type', Int8)))
+    )
+
+class DeleteAclsRequest_v1(Request):
+    API_KEY = 31
+    API_VERSION = 1
+    RESPONSE_TYPE = DeleteAclsResponse_v1
+    SCHEMA = Schema(
+        ('filters', Array(
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('resource_pattern_type_filter', Int8),
+            ('principal', String('utf-8')),
+            ('host', String('utf-8')),
+            ('operation', Int8),
+            ('permission_type', Int8)))
+    )
+
+DeleteAclsRequest = [DeleteAclsRequest_v0, DeleteAclsRequest_v1]
+DeleteAclsResponse = [DeleteAclsResponse_v0, DeleteAclsResponse_v1]
+
+
 class SaslAuthenticateResponse_v0(Request):
     API_KEY = 36
     API_VERSION = 0

@@ -18,6 +18,7 @@ except ImportError:
 logging.getLogger(__name__).addHandler(NullHandler())
 
 
+from kafka.admin import KafkaAdminClient
 from kafka.consumer import KafkaConsumer
 from kafka.consumer.kafka import KafkaConsumer as OldKafkaConsumer
 from kafka.consumer.subscription_state import ConsumerRebalanceListener
@@ -26,8 +27,8 @@ from kafka.conn import BrokerConnection
 from kafka.protocol import (
     create_message, create_gzip_message, create_snappy_message)
 from kafka.partitioner import RoundRobinPartitioner, HashedPartitioner, Murmur2Partitioner
-from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.serializer import Serializer, Deserializer
+from kafka.structs import TopicPartition, OffsetAndMetadata
 
 # To be deprecated when KafkaProducer interface is released
 from kafka.client import SimpleClient
@@ -47,9 +48,10 @@ class KafkaClient(SimpleClient):
 
 
 __all__ = [
+    'KafkaAdminClient',
     'KafkaConsumer', 'KafkaProducer', 'KafkaClient', 'BrokerConnection',
     'SimpleClient', 'SimpleProducer', 'KeyedProducer',
     'RoundRobinPartitioner', 'HashedPartitioner',
     'create_message', 'create_gzip_message', 'create_snappy_message',
-    'SimpleConsumer', 'MultiProcessConsumer',
+    'SimpleConsumer', 'MultiProcessConsumer', 'ConsumerRebalanceListener',
 ]

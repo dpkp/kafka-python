@@ -29,7 +29,7 @@ READ_COMMITTED = 1
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "offset", "timestamp", "timestamp_type",
-     "key", "value", "checksum", "serialized_key_size", "serialized_value_size"])
+     "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
 
 
 CompletedFetch = collections.namedtuple("CompletedFetch",
@@ -298,7 +298,7 @@ class Fetcher(six.Iterator):
             remaining_ms = timeout_ms - elapsed_ms
 
         raise Errors.KafkaTimeoutError(
-            "Failed to get offsets by timestamps in %s ms" % timeout_ms)
+            "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
 
     def fetched_records(self, max_records=None):
         """Returns previously fetched records and updates consumed offsets.
@@ -456,10 +456,12 @@ class Fetcher(six.Iterator):
                     value = self._deserialize(
                         self.config['value_deserializer'],
                         tp.topic, record.value)
+                    headers = record.headers
+                    header_size = sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1
                     yield ConsumerRecord(
                         tp.topic, tp.partition, record.offset, record.timestamp,
-                        record.timestamp_type, key, value, record.checksum,
-                        key_size, value_size)
+                        record.timestamp_type, key, value, headers, record.checksum,
+                        key_size, value_size, header_size)
 
                 batch = records.next_batch()
 
@@ -909,7 +911,7 @@ class FetchResponseMetricAggregator(object):
 class FetchManagerMetrics(object):
     def __init__(self, metrics, prefix):
         self.metrics = metrics
-        self.group_name = '%s-fetch-manager-metrics' % prefix
+        self.group_name = '%s-fetch-manager-metrics' % (prefix,)
 
         self.bytes_fetched = metrics.sensor('bytes-fetched')
         self.bytes_fetched.add(metrics.metric_name('fetch-size-avg', self.group_name,
@@ -953,15 +955,15 @@ class FetchManagerMetrics(object):
             bytes_fetched = self.metrics.sensor(name)
             bytes_fetched.add(self.metrics.metric_name('fetch-size-avg',
                     self.group_name,
-                    'The average number of bytes fetched per request for topic %s' % topic,
+                    'The average number of bytes fetched per request for topic %s' % (topic,),
                     metric_tags), Avg())
             bytes_fetched.add(self.metrics.metric_name('fetch-size-max',
                     self.group_name,
-                    'The maximum number of bytes fetched per request for topic %s' % topic,
+                    'The maximum number of bytes fetched per request for topic %s' % (topic,),
                     metric_tags), Max())
             bytes_fetched.add(self.metrics.metric_name('bytes-consumed-rate',
                     self.group_name,
-                    'The average number of bytes consumed per second for topic %s' % topic,
+                    'The average number of bytes consumed per second for topic %s' % (topic,),
                     metric_tags), Rate())
         bytes_fetched.record(num_bytes)
 
@@ -974,10 +976,10 @@ class FetchManagerMetrics(object):
             records_fetched = self.metrics.sensor(name)
             records_fetched.add(self.metrics.metric_name('records-per-request-avg',
                     self.group_name,
-                    'The average number of records in each request for topic %s' % topic,
+                    'The average number of records in each request for topic %s' % (topic,),
                     metric_tags), Avg())
             records_fetched.add(self.metrics.metric_name('records-consumed-rate',
                     self.group_name,
-                    'The average number of records consumed per second for topic %s' % topic,
+                    'The average number of records consumed per second for topic %s' % (topic,),
                     metric_tags), Rate())
         records_fetched.record(num_records)

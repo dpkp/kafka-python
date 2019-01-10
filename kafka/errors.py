@@ -62,6 +62,10 @@ class UnrecognizedBrokerVersion(KafkaError):
     pass
 
 
+class IncompatibleBrokerVersion(KafkaError):
+    pass
+
+
 class CommitFailedError(KafkaError):
     def __init__(self, *args, **kwargs):
         super(CommitFailedError, self).__init__(
@@ -476,10 +480,6 @@ class ConsumerNoMoreData(KafkaError):
     pass
 
 
-class ConsumerTimeout(KafkaError):
-    pass
-
-
 class ProtocolError(KafkaError):
     pass
 
@@ -489,6 +489,10 @@ class UnsupportedCodecError(KafkaError):
 
 
 class KafkaConfigurationError(KafkaError):
+    pass
+
+
+class ConsumerTimeout(KafkaError):
     pass
 
 

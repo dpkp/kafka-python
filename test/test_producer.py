@@ -8,7 +8,7 @@ import pytest
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.producer.buffer import SimpleBufferPool
 from test.conftest import version
-from test.testutil import random_string
+from test.fixtures import random_string
 
 
 def test_buffer_pool():
@@ -65,7 +65,7 @@ def test_end_to_end(kafka_broker, compression):
         except StopIteration:
             break
 
-    assert msgs == set(['msg %d' % i for i in range(messages)])
+    assert msgs == set(['msg %d' % (i,) for i in range(messages)])
     consumer.close()
 
 
@@ -91,10 +91,16 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
                              compression_type=compression)
     magic = producer._max_usable_produce_magic()
 
+    # record headers are supported in 0.11.0
+    if version() < (0, 11, 0):
+        headers = None
+    else:
+        headers = [("Header Key", b"Header Value")]
+
     topic = random_string(5)
     future = producer.send(
         topic,
-        value=b"Simple value", key=b"Simple key", timestamp_ms=9999999,
+        value=b"Simple value", key=b"Simple key", headers=headers, timestamp_ms=9999999,
         partition=0)
     record = future.get(timeout=5)
     assert record is not None
@@ -116,6 +122,8 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
 
     assert record.serialized_key_size == 10
     assert record.serialized_value_size == 12
+    if headers:
+        assert record.serialized_header_size == 22
 
     # generated timestamp case is skipped for broker 0.9 and below
     if magic == 0:

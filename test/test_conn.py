@@ -13,7 +13,7 @@ from kafka.protocol.api import RequestHeader
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 
-import kafka.common as Errors
+import kafka.errors as Errors
 
 
 @pytest.fixture

@@ -9,6 +9,8 @@ import sys
 import threading
 import traceback
 
+from kafka.vendor.six.moves import range
+
 from kafka import KafkaProducer
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
@@ -77,7 +79,7 @@ class ProducerPerformance(object):
             print('-> OK!')
             print()
 
-            for i in xrange(args.num_records):
+            for i in range(args.num_records):
                 producer.send(topic=args.topic, value=record)
             producer.flush()
 

@@ -254,7 +254,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                 # There should only ever be a single layer of compression
                 assert not attrs & self.CODEC_MASK, (
                     'MessageSet at offset %d appears double-compressed. This '
-                    'should not happen -- check your producers!' % offset)
+                    'should not happen -- check your producers!' % (offset,))
 
                 # When magic value is greater than 0, the timestamp
                 # of a compressed message depends on the

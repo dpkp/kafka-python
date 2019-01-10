@@ -212,6 +212,11 @@ class KafkaConsumer(six.Iterator):
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version set to 'auto'
+        connections_max_idle_ms: Close idle connections after the number of
+            milliseconds specified by this config. The broker closes idle
+            connections after connections.max.idle.ms, so this avoids hitting
+            unexpected socket disconnected errors on the client.
+            Default: 540000
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
@@ -235,6 +240,8 @@ class KafkaConsumer(six.Iterator):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
 
     Note:
         Configuration parameters are described in more detail at
@@ -293,7 +300,8 @@ class KafkaConsumer(six.Iterator):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
-        'sasl_kerberos_service_name': 'kafka'
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -301,7 +309,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: %s" % extra_configs)
+            raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)

@@ -1,5 +1,11 @@
 .DELETE_ON_ERROR:
 
+ifeq ($(findstring .yelpcorp.com,$(shell hostname -f)), .yelpcorp.com)
+	export PIP_INDEX_URL ?= https://pypi.yelpcorp.com/simple
+else
+	export PIP_INDEX_URL ?= https://pypi.python.org/simple
+endif
+
 all: test itest
 
 test:
@@ -21,7 +27,7 @@ docs:
 
 
 FLAGS=
-KAFKA_VERSION=1.0.1
+KAFKA_VERSION=1.1.0
 SCALA_VERSION=2.12
 
 setup:

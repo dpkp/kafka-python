@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-1.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-1.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -70,6 +70,11 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> for msg in consumer:
 ...     assert isinstance(msg.value, dict)
 
+>>> # Access record headers. The returned value is a list of tuples
+>>> # with str, bytes for key and value
+>>> for msg in consumer:
+...     print (msg.headers)
+
 >>> # Get consumer metrics
 >>> metrics = consumer.metrics()
 
@@ -112,6 +117,10 @@ for more details.
 >>> for i in range(1000):
 ...     producer.send('foobar', b'msg %d' % i)
 
+>>> # Include record headers. The format is list of tuples with string key
+>>> # and bytes value.
+>>> producer.send('foobar', value=b'c29tZSB2YWx1ZQ==', headers=[('content-encoding', b'base64')])
+
 >>> # Get producer performance metrics
 >>> metrics = producer.metrics()
 
@@ -141,7 +150,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 1.0).
+(0.8.0 to 1.1+).
 
 Low-level
 *********

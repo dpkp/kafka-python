@@ -12,8 +12,8 @@ import time
 import uuid
 
 import py
-from six.moves import urllib, xrange
-from six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+from kafka.vendor.six.moves import urllib, range
+from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaConsumer, KafkaProducer, SimpleClient
 from kafka.client_async import KafkaClient
@@ -24,7 +24,7 @@ from test.service import ExternalService, SpawnedService
 log = logging.getLogger(__name__)
 
 def random_string(length):
-    return "".join(random.choice(string.ascii_letters) for i in xrange(length))
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
 def version_str_to_list(version_str):
     return tuple(map(int, version_str.split('.'))) # e.g., (0, 8, 1, 1)
@@ -42,13 +42,12 @@ def get_open_port():
     return port
 
 class Fixture(object):
-    kafka_version = os.environ.get('KAFKA_VERSION', '1.0.1')
+    kafka_version = os.environ.get('KAFKA_VERSION', '1.1.0')
     scala_version = os.environ.get("SCALA_VERSION", '2.11')
     project_root = os.environ.get('PROJECT_ROOT',
                                   os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     kafka_root = os.environ.get("KAFKA_ROOT",
                                 os.path.join(project_root, 'servers', kafka_version, "kafka-bin"))
-    ivy_root = os.environ.get('IVY_ROOT', os.path.expanduser("~/.ivy2/cache"))
 
     def __init__(self):
         self.child = None
@@ -103,7 +102,7 @@ class Fixture(object):
     def kafka_run_class_env(self):
         env = os.environ.copy()
         env['KAFKA_LOG4J_OPTS'] = "-Dlog4j.configuration=file:%s" % \
-                                  self.test_resource("log4j.properties")
+                                  (self.test_resource("log4j.properties"),)
         return env
 
     @classmethod
@@ -111,7 +110,7 @@ class Fixture(object):
         log.info('Rendering %s from template %s', target_file.strpath, source_file)
         with open(source_file, "r") as handle:
             template = handle.read()
-            assert len(template) > 0, 'Empty template %s' % source_file
+            assert len(template) > 0, 'Empty template %s' % (source_file,)
         with open(target_file.strpath, "w") as handle:
             handle.write(template.format(**binding))
             handle.flush()
@@ -258,7 +257,7 @@ class KafkaFixture(Fixture):
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
         # The logging format changed slightly in 1.0.0
-        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % broker_id
+        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
@@ -292,15 +291,16 @@ class KafkaFixture(Fixture):
                                          "%s:%d" % (self.zookeeper.host,
                                                     self.zookeeper.port),
                                          "create",
-                                         "/%s" % self.zk_chroot,
+                                         "/%s" % (self.zk_chroot,),
                                          "kafka-python")
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
 
-        if proc.wait() != 0 or proc.returncode != 0:
+        if proc.returncode != 0:
             self.out("Failed to create Zookeeper chroot node")
-            self.out(proc.stdout.read())
-            self.out(proc.stderr.read())
+            self.out(stdout)
+            self.out(stderr)
             raise RuntimeError("Failed to create Zookeeper chroot node")
         self.out("Kafka chroot created in Zookeeper!")
 
@@ -459,13 +459,12 @@ class KafkaFixture(Fixture):
                 args.append('--if-not-exists')
             env = self.kafka_run_class_env()
             proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            ret = proc.wait()
-            if ret != 0 or proc.returncode != 0:
-                output = proc.stdout.read()
-                if not 'kafka.common.TopicExistsException' in output:
+            stdout, stderr = proc.communicate()
+            if proc.returncode != 0:
+                if not 'kafka.common.TopicExistsException' in stdout:
                     self.out("Failed to create topic %s" % (topic_name,))
-                    self.out(output)
-                    self.out(proc.stderr.read())
+                    self.out(stdout)
+                    self.out(stderr)
                     raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
     def create_topics(self, topic_names, num_partitions=None, replication_factor=None):

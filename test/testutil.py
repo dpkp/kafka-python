@@ -12,11 +12,12 @@ from . import unittest
 
 from kafka import SimpleClient, create_message
 from kafka.client_async import KafkaClient
-from kafka.errors import LeaderNotAvailableError, KafkaTimeoutError, InvalidTopicError
-from kafka.structs import OffsetRequestPayload, ProduceRequestPayload, \
+from kafka.errors import LeaderNotAvailableError, KafkaTimeoutError, InvalidTopicError, \
                           NotLeaderForPartitionError, UnknownTopicOrPartitionError, \
                           FailedPayloadsError
+from kafka.structs import OffsetRequestPayload, ProduceRequestPayload
 from test.fixtures import random_string, version_str_to_list, version as kafka_version #pylint: disable=wrong-import-order
+
 
 def kafka_versions(*versions):
 
@@ -31,7 +32,7 @@ def kafka_versions(*versions):
             op_str = s[0:2] # >= <=
             v_str = s[2:]
         else:
-            raise ValueError('Unrecognized kafka version / operator: %s' % s)
+            raise ValueError('Unrecognized kafka version / operator: %s' % (s,))
 
         op_map = {
             '=': operator.eq,
@@ -104,6 +105,7 @@ def current_offset(client, topic, partition, kafka_broker=None):
         raise
     else:
         return offsets.offsets[0]
+
 
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
