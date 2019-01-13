@@ -1,10 +1,6 @@
-dist: xenial    # required for Python >= 3.7 (travis-ci/travis-ci#9069)
-sudo: required  # required for Python >= 3.7 (travis-ci/travis-ci#9069)
+dist: xenial
 
 language: python
-
-jdk:
-    - openjdk8
 
 python:
     - 2.7
@@ -23,6 +19,7 @@ addons:
   apt:
     packages:
       - libsnappy-dev
+      - oracle-java8-set-default
 
 cache:
   directories:
@@ -37,7 +34,7 @@ install:
     - pip install .
 
 script:
-  - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
+  - tox -e py${TRAVIS_PYTHON_VERSION#py}
 
 after_success:
   - coveralls
