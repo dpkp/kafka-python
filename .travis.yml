@@ -1,3 +1,6 @@
+dist: xenial    # required for Python >= 3.7 (travis-ci/travis-ci#9069)
+sudo: required  # required for Python >= 3.7 (travis-ci/travis-ci#9069)
+
 language: python
 
 python:
@@ -5,20 +8,8 @@ python:
     - 3.4
     - 3.5
     - 3.6
-    # - 3.7  # TODO uncomment once Travis supports 3.7 w/o the `matrix` workaround used below
+    - 3.7
     - pypy
-
-# TODO: workaround pulled from:
-# https://github.com/travis-ci/travis-ci/issues/9815#issue-336465122
-# It only runs a single 3.7 test job against one version of Kafka but
-# that's good enough for now since we test all the other permutations,
-# especially since this workaround should be removed in the near future.
-# Enable 3.7 without globally enabling sudo and dist: xenial for other build jobs
-matrix:
-  include:
-    - python: 3.7
-      dist: xenial
-      sudo: true
 
 env:
     - KAFKA_VERSION=0.8.2.2
