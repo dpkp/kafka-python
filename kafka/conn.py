@@ -351,7 +351,6 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
             # to check connection status
-            request_timeout = self.config['request_timeout_ms'] / 1000.0
             ret = None
             try:
                 ret = self._sock.connect_ex(self._sock_addr)
@@ -389,11 +388,6 @@ class BrokerConnection(object):
                 errstr = errno.errorcode.get(ret, 'UNKNOWN')
                 self.close(Errors.KafkaConnectionError('{} {}'.format(ret, errstr)))
 
-            # Connection timed out
-            elif time.time() > request_timeout + self.last_attempt:
-                log.error('Connection attempt to %s timed out', self)
-                self.close(Errors.KafkaConnectionError('timeout'))
-
             # Needs retry
             else:
                 pass
@@ -418,6 +412,14 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self)
+
+        if self.state not in (ConnectionStates.CONNECTED,
+                              ConnectionStates.DISCONNECTED):
+            # Connection timed out
+            request_timeout = self.config['request_timeout_ms'] / 1000.0
+            if time.time() > request_timeout + self.last_attempt:
+                log.error('Connection attempt to %s timed out', self)
+                self.close(Errors.KafkaConnectionError('timeout'))
 
         return self.state
 
