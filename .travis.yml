@@ -3,11 +3,11 @@ sudo: required  # required for Python >= 3.7 (travis-ci/travis-ci#9069)
 
 language: python
 
+jdk: openjdk8
+
 python:
     - 2.7
     - 3.4
-    - 3.5
-    - 3.6
     - 3.7
     - pypy
 
@@ -17,8 +17,6 @@ env:
     - KAFKA_VERSION=0.10.2.1
     - KAFKA_VERSION=0.11.0.2
     - KAFKA_VERSION=1.1.1
-
-sudo: false
 
 addons:
   apt:
