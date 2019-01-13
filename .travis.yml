@@ -17,6 +17,8 @@ env:
 
 addons:
   apt:
+    sources:
+      - ppa:webupd8team/java
     packages:
       - libsnappy-dev
       - oracle-java8-set-default
