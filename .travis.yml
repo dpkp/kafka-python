@@ -1,5 +1,3 @@
-dist: xenial
-
 language: python
 
 python:
@@ -19,7 +17,6 @@ addons:
   apt:
     packages:
       - libsnappy-dev
-      - openjdk8
 
 cache:
   directories:
