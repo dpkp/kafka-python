@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
+import functools
 import logging
 import time
 
@@ -457,7 +458,7 @@ class ConsumerCoordinator(BaseCoordinator):
             # same order that they were added. Note also that BaseCoordinator
             # prevents multiple concurrent coordinator lookup requests.
             future = self.lookup_coordinator()
-            future.add_callback(self._do_commit_offsets_async, offsets, callback)
+            future.add_callback(lambda r: functools.partial(self._do_commit_offsets_async, offsets, callback))
             if callback:
                 future.add_errback(lambda e: self.completed_offset_commits.appendleft((callback, offsets, e)))
 
