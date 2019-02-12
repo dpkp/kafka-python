@@ -377,6 +377,12 @@ class KafkaConsumer(six.Iterator):
             self._subscription.subscribe(topics=topics)
             self._client.set_topics(topics)
 
+    def bootstrap_connected(self):
+        """Return True if the bootstrap is connected."""
+        if self._client._bootstrap_fails > 0:
+            return False
+        return True
+
     def assign(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
 

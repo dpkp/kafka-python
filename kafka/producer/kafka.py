@@ -402,6 +402,12 @@ class KafkaProducer(object):
         atexit.register(self._cleanup)
         log.debug("Kafka producer started")
 
+    def bootstrap_connected(self):
+        """Return True if the bootstrap is connected."""
+        if self._client._bootstrap_fails > 0:
+            return False
+        return True
+
     def _cleanup_factory(self):
         """Build a cleanup clojure that doesn't increase our ref count"""
         _self = weakref.proxy(self)
