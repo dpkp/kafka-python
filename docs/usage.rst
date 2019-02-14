@@ -24,7 +24,7 @@ KafkaConsumer
     KafkaConsumer(auto_offset_reset='earliest', enable_auto_commit=False)
 
     # consume json messages
-    KafkaConsumer(value_deserializer=lambda m: json.loads(m.decode('ascii')))
+    KafkaConsumer(value_deserializer=lambda m: json.loads(m).decode('ascii'))
 
     # consume msgpack 
     KafkaConsumer(value_deserializer=msgpack.unpackb)
