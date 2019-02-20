@@ -119,6 +119,7 @@ class Fetcher(six.Iterator):
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
+        self._last_offset_from_batch = {}
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -447,6 +448,13 @@ class Fetcher(six.Iterator):
         try:
             batch = records.next_batch()
             while batch is not None:
+
+                # LegacyRecordBatch cannot access either base_offset or last_offset_delta
+                try:
+                    self._last_offset_from_batch[tp] = batch.base_offset + batch.last_offset_delta
+                except AttributeError:
+                    pass
+
                 for record in batch:
                     key_size = len(record.key) if record.key is not None else -1
                     value_size = len(record.value) if record.value is not None else -1
@@ -651,6 +659,17 @@ class Fetcher(six.Iterator):
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
+
+            # advance extra if there are compacted messages that are skipped that we know of from a message batch header
+            if partition in self._last_offset_from_batch:
+                if self._last_offset_from_batch[partition] + 1 > self._subscriptions.assignment[partition].position:
+                    log.debug(
+                        "Advance position for partition %s from %s to %s (last message batch location plus one)"
+                        " to correct for deleted compacted messages",
+                        partition, self._subscriptions.assignment[partition].position,
+                        self._last_offset_from_batch[partition] + 1)
+                    self._subscriptions.assignment[partition].position = self._last_offset_from_batch[partition] + 1
+
             position = self._subscriptions.assignment[partition].position
 
             # fetch if there is a leader and no in-flight requests
