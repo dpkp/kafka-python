@@ -165,13 +165,6 @@ class KafkaConsumer(six.Iterator):
         consumer_timeout_ms (int): number of milliseconds to block during
             message iteration before raising StopIteration (i.e., ending the
             iterator). Default block forever [float('inf')].
-        skip_double_compressed_messages (bool): A bug in KafkaProducer <= 1.2.4
-            caused some messages to be corrupted via double-compression.
-            By default, the fetcher will return these messages as a compressed
-            blob of bytes with a single offset, i.e. how the message was
-            actually published to the cluster. If you prefer to have the
-            fetcher automatically detect corrupt messages and skip them,
-            set this option to True. Default: False.
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
@@ -279,7 +272,6 @@ class KafkaConsumer(six.Iterator):
         'sock_chunk_bytes': 4096,  # undocumented experimental option
         'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'consumer_timeout_ms': float('inf'),
-        'skip_double_compressed_messages': False,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -903,10 +895,10 @@ class KafkaConsumer(six.Iterator):
             releases without warning.
         """
         if raw:
-            return self._metrics.metrics
+            return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics):
+        for k, v in six.iteritems(self._metrics.metrics.copy()):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
