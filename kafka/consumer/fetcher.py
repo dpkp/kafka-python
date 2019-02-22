@@ -119,7 +119,6 @@ class Fetcher(six.Iterator):
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
-        self._last_offset_from_batch = {}
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -451,7 +450,8 @@ class Fetcher(six.Iterator):
 
                 # LegacyRecordBatch cannot access either base_offset or last_offset_delta
                 try:
-                    self._last_offset_from_batch[tp] = batch.base_offset + batch.last_offset_delta
+                    self._subscriptions.assignment[tp].last_offset_from_message_batch = batch.base_offset + \
+                                                                                        batch.last_offset_delta
                 except AttributeError:
                     pass
 
@@ -660,15 +660,15 @@ class Fetcher(six.Iterator):
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
 
-            # advance extra if there are compacted messages that are skipped that we know of from a message batch header
-            if partition in self._last_offset_from_batch:
-                if self._last_offset_from_batch[partition] + 1 > self._subscriptions.assignment[partition].position:
+            # advance position for any deleted compacted messages if required
+            if self._subscriptions.assignment[partition].last_offset_from_message_batch:
+                next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_message_batch + 1
+                if next_offset_from_batch_header > self._subscriptions.assignment[partition].position:
                     log.debug(
                         "Advance position for partition %s from %s to %s (last message batch location plus one)"
                         " to correct for deleted compacted messages",
-                        partition, self._subscriptions.assignment[partition].position,
-                        self._last_offset_from_batch[partition] + 1)
-                    self._subscriptions.assignment[partition].position = self._last_offset_from_batch[partition] + 1
+                        partition, self._subscriptions.assignment[partition].position, next_offset_from_batch_header)
+                    self._subscriptions.assignment[partition].position = next_offset_from_batch_header
 
             position = self._subscriptions.assignment[partition].position
 
