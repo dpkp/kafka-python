@@ -209,11 +209,12 @@ class OffsetMetadataTooLargeError(BrokerResponseError):
     description = ('If you specify a string larger than configured maximum for'
                    ' offset metadata.')
 
-
-# TODO is this deprecated? https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ErrorCodes
-class StaleLeaderEpochCodeError(BrokerResponseError):
+    
+class NetworkException(BrokerResponseError):
     errno = 13
-    message = 'STALE_LEADER_EPOCH_CODE'
+    message = 'NETWORK_EXCEPTION'
+    description = 'The server disconnected before a response was received.'
+    retriable = True
 
 
 class GroupLoadInProgressError(BrokerResponseError):
