@@ -1090,8 +1090,7 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout_at:
                     log.debug("internal iterator timeout - breaking for poll")
                     break
-                if self._client.in_flight_request_count():
-                    self._client.poll(timeout_ms=0)
+                self._client.poll(timeout_ms=0)
 
             # An else block on a for loop only executes if there was no break
             # so this should only be called on a StopIteration from the fetcher
