@@ -405,10 +405,11 @@ class KafkaFixture(Fixture):
         retries = 10
         while True:
             node_id = self._client.least_loaded_node()
-            for ready_retry in range(40):
-                if self._client.ready(node_id, False):
+            for connect_retry in range(40):
+                self._client.maybe_connect(node_id)
+                if self._client.connected(node_id):
                     break
-                time.sleep(.1)
+                self._client.poll(timeout_ms=100)
             else:
                 raise RuntimeError('Could not connect to broker with node id %d' % (node_id,))
 

@@ -125,8 +125,7 @@ def test_conn_state_change(mocker, cli, conn):
     conn.state = ConnectionStates.CONNECTED
     cli._conn_state_change(node_id, conn)
     assert node_id not in cli._connecting
-    sel.unregister.assert_called_with(conn._sock)
-    sel.register.assert_called_with(conn._sock, selectors.EVENT_READ, conn)
+    sel.modify.assert_called_with(conn._sock, selectors.EVENT_READ, conn)
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
@@ -145,7 +144,7 @@ def test_conn_state_change(mocker, cli, conn):
 
 
 def test_ready(mocker, cli, conn):
-    maybe_connect = mocker.patch.object(cli, '_maybe_connect')
+    maybe_connect = mocker.patch.object(cli, 'maybe_connect')
     node_id = 1
     cli.ready(node_id)
     maybe_connect.assert_called_with(node_id)
@@ -362,6 +361,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
     mocker.patch.object(client, '_can_connect', return_value=True)
     mocker.patch.object(client, '_maybe_connect', return_value=True)
+    mocker.patch.object(client, 'maybe_connect', return_value=True)
 
     now = time.time()
     t = mocker.patch('time.time')
@@ -370,8 +370,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(2.222) # reconnect backoff
-    client._can_connect.assert_called_once_with('foobar')
-    client._maybe_connect.assert_called_once_with('foobar')
+    client.maybe_connect.assert_called_once_with('foobar')
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
