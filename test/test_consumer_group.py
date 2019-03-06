@@ -11,8 +11,7 @@ from kafka.consumer.group import KafkaConsumer
 from kafka.coordinator.base import MemberState, Generation
 from kafka.structs import TopicPartition
 
-from test.conftest import version
-from test.fixtures import random_string
+from test.fixtures import random_string, version
 
 
 def get_connect_str(kafka_broker):
