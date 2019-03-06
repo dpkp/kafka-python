@@ -522,7 +522,17 @@ class KafkaClient(object):
             if not self._maybe_connect(node_id):
                 return Future().failure(Errors.NodeNotReadyError(node_id))
 
-            return self._conns[node_id].send(request)
+        # conn.send will queue the request internally
+        # we will need to call send_pending_requests()
+        # to trigger network I/O
+        future = self._conns[node_id].send(request, blocking=False)
+
+        # Wakeup signal is useful in case another thread is
+        # blocked waiting for incoming network traffic while holding
+        # the client lock in poll().
+        self.wakeup()
+
+        return future
 
     def poll(self, timeout_ms=None, future=None):
         """Try to read and write to sockets.
@@ -640,6 +650,8 @@ class KafkaClient(object):
                 conn.close(error=Errors.RequestTimedOutError(
                     'Request timed out after %s ms' %
                     conn.config['request_timeout_ms']))
+            else:
+                conn.send_pending_requests()
 
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
