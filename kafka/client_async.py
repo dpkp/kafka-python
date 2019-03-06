@@ -499,14 +499,15 @@ class KafkaClient(object):
         return True
 
     def _can_send_request(self, node_id):
-        with self._lock:
-            if node_id not in self._conns:
-                return False
-            conn = self._conns[node_id]
-            return conn.connected() and conn.can_send_more()
+        conn = self._conns.get(node_id)
+        if not conn:
+            return False
+        return conn.connected() and conn.can_send_more()
 
     def send(self, node_id, request):
-        """Send a request to a specific node.
+        """Send a request to a specific node. Bytes are placed on an
+        internal per-connection send-queue. Actual network I/O will be
+        triggered in a subsequent call to .poll()
 
         Arguments:
             node_id (int): destination node
@@ -518,7 +519,7 @@ class KafkaClient(object):
         Returns:
             Future: resolves to Response struct or Error
         """
-        with self._lock:
+        if not self._can_send_request(node_id):
             if not self._maybe_connect(node_id):
                 return Future().failure(Errors.NodeNotReadyError(node_id))
 
