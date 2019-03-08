@@ -733,11 +733,8 @@ class BrokerConnection(object):
             future.failure(error)
         self.config['state_change_callback'](self)
 
-    def send(self, request):
-        """send request, return Future()
-
-        Can block on network if request is larger than send_buffer_bytes
-        """
+    def send(self, request, blocking=True):
+        """Queue request for async network send, return Future()"""
         future = Future()
         if self.connecting():
             return future.failure(Errors.NodeNotReadyError(str(self)))
@@ -745,35 +742,49 @@ class BrokerConnection(object):
             return future.failure(Errors.KafkaConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
-        return self._send(request)
+        return self._send(request, blocking=blocking)
 
-    def _send(self, request):
+    def _send(self, request, blocking=True):
         assert self.state in (ConnectionStates.AUTHENTICATING, ConnectionStates.CONNECTED)
         future = Future()
         correlation_id = self._protocol.send_request(request)
+
+        # Attempt to replicate behavior from prior to introduction of
+        # send_pending_requests() / async sends
+        if blocking:
+            error = self.send_pending_requests()
+            if isinstance(error, Exception):
+                future.failure(error)
+                return future
+
+        log.debug('%s Request %d: %s', self, correlation_id, request)
+        if request.expect_response():
+            sent_time = time.time()
+            ifr = (correlation_id, future, sent_time)
+            self.in_flight_requests.append(ifr)
+        else:
+            future.success(None)
+        return future
+
+    def send_pending_requests(self):
+        """Can block on network if request is larger than send_buffer_bytes"""
+        if self.state not in (ConnectionStates.AUTHENTICATING,
+                              ConnectionStates.CONNECTED):
+            return Errors.NodeNotReadyError(str(self))
         data = self._protocol.send_bytes()
         try:
             # In the future we might manage an internal write buffer
             # and send bytes asynchronously. For now, just block
             # sending each request payload
-            sent_time = time.time()
             total_bytes = self._send_bytes_blocking(data)
             if self._sensors:
                 self._sensors.bytes_sent.record(total_bytes)
+            return total_bytes
         except ConnectionError as e:
-            log.exception("Error sending %s to %s", request, self)
+            log.exception("Error sending request data to %s", self)
             error = Errors.KafkaConnectionError("%s: %s" % (self, e))
             self.close(error=error)
-            return future.failure(error)
-        log.debug('%s Request %d: %s', self, correlation_id, request)
-
-        if request.expect_response():
-            ifr = (correlation_id, future, sent_time)
-            self.in_flight_requests.append(ifr)
-        else:
-            future.success(None)
-
-        return future
+            return error
 
     def can_send_more(self):
         """Return True unless there are max_in_flight_requests_per_connection."""

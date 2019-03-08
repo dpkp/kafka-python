@@ -1070,16 +1070,6 @@ class KafkaConsumer(six.Iterator):
             # like heartbeats, auto-commits, and metadata refreshes
             timeout_at = self._next_timeout()
 
-            # Because the consumer client poll does not sleep unless blocking on
-            # network IO, we need to explicitly sleep when we know we are idle
-            # because we haven't been assigned any partitions to fetch / consume
-            if self._use_consumer_group() and not self.assignment():
-                sleep_time = max(timeout_at - time.time(), 0)
-                if sleep_time > 0 and not self._client.in_flight_request_count():
-                    log.debug('No partitions assigned; sleeping for %s', sleep_time)
-                    time.sleep(sleep_time)
-                    continue
-
             # Short-circuit the fetch iterator if we are already timed out
             # to avoid any unintentional interaction with fetcher setup
             if time.time() > timeout_at:
@@ -1090,8 +1080,7 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout_at:
                     log.debug("internal iterator timeout - breaking for poll")
                     break
-                if self._client.in_flight_request_count():
-                    self._client.poll(timeout_ms=0)
+                self._client.poll(timeout_ms=0)
 
             # An else block on a for loop only executes if there was no break
             # so this should only be called on a StopIteration from the fetcher
