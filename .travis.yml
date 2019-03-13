@@ -24,6 +24,7 @@ cache:
     - servers/
 
 before_install:
+    - source travis_java_install.sh
     - ./build_integration.sh
 
 install:
