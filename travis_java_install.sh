@@ -33,3 +33,12 @@ export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64
 
 echo "New new java -version"
 java -version
+
+echo "Updating PATH"
+echo $PATH
+export PATH=$JAVA_HOME:$PATH
+echo $PATH
+
+echo "New new new java -version"
+which java
+java -version
