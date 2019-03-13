@@ -19,6 +19,7 @@ addons:
   apt:
     packages:
       - libsnappy-dev
+      - openjdk-8-jdk
 
 cache:
   directories:

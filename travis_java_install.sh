@@ -13,10 +13,19 @@ echo "Current java -version:"
 java -version
 
 # install Java 8
-sudo add-apt-repository -y ppa:openjdk-r/ppa
-sudo apt-get -qq update
-sudo apt-get install -y openjdk-8-jdk --no-install-recommends
+#sudo add-apt-repository -y ppa:openjdk-r/ppa
+#sudo apt-get -qq update
+#sudo apt-get install -y openjdk-8-jdk --no-install-recommends
+
+echo "Updating java alternatives..."
 sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
 
+echo "New java -version"
+java -version
+
+echo "Updating JAVA_HOME"
 # change JAVA_HOME to Java 8
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+echo "New new java -version"
+java -version
