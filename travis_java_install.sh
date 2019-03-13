@@ -18,7 +18,12 @@ java -version
 #sudo apt-get install -y openjdk-8-jdk --no-install-recommends
 
 echo "Updating java alternatives..."
+sudo update-java-alternatives -l
+sudo update-java-alternatives --help
 sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
+
+echo "update-alternatives --config java"
+sudo update-alternatives --config java
 
 echo "New java -version"
 java -version
