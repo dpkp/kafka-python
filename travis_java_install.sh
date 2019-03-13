@@ -36,7 +36,7 @@ java -version
 
 echo "Updating PATH"
 echo $PATH
-export PATH=$JAVA_HOME:$PATH
+export PATH=${PATH/\/usr\/local\/lib\/jvm\/openjdk11\/bin/$JAVA_HOME\/bin}
 echo $PATH
 
 echo "New new new java -version"
