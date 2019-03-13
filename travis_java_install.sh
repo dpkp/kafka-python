@@ -22,15 +22,14 @@ sudo update-java-alternatives -l
 sudo update-java-alternatives --help
 sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
 
-echo "update-alternatives --config java"
-sudo update-alternatives --config java
-
 echo "New java -version"
+which java
 java -version
+echo $JAVA_HOME
 
 echo "Updating JAVA_HOME"
 # change JAVA_HOME to Java 8
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64
 
 echo "New new java -version"
 java -version
