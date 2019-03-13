@@ -10,35 +10,16 @@
 # show current JAVA_HOME and java version
 echo "Current JAVA_HOME: $JAVA_HOME"
 echo "Current java -version:"
-java -version
-
-# install Java 8
-#sudo add-apt-repository -y ppa:openjdk-r/ppa
-#sudo apt-get -qq update
-#sudo apt-get install -y openjdk-8-jdk --no-install-recommends
-
-echo "Updating java alternatives..."
-sudo update-java-alternatives -l
-sudo update-java-alternatives --help
-sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
-
-echo "New java -version"
 which java
 java -version
-echo $JAVA_HOME
 
 echo "Updating JAVA_HOME"
 # change JAVA_HOME to Java 8
 export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64
 
-echo "New new java -version"
-java -version
-
 echo "Updating PATH"
-echo $PATH
 export PATH=${PATH/\/usr\/local\/lib\/jvm\/openjdk11\/bin/$JAVA_HOME\/bin}
-echo $PATH
 
-echo "New new new java -version"
+echo "New java -version"
 which java
 java -version
