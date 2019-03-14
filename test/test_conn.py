@@ -17,6 +17,13 @@ import kafka.errors as Errors
 
 
 @pytest.fixture
+def dns_lookup(mocker):
+    return mocker.patch('kafka.conn.dns_lookup',
+                        return_value=[(socket.AF_INET,
+                                       None, None, None,
+                                       ('localhost', 9092))])
+
+@pytest.fixture
 def _socket(mocker):
     socket = mocker.MagicMock()
     socket.connect_ex.return_value = 0
@@ -25,7 +32,7 @@ def _socket(mocker):
 
 
 @pytest.fixture
-def conn(_socket):
+def conn(_socket, dns_lookup):
     conn = BrokerConnection('localhost', 9092, socket.AF_INET)
     return conn
 
