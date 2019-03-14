@@ -912,6 +912,9 @@ class BrokerConnection(object):
         return self._api_versions
 
     def get_api_versions(self):
+        if self._api_versions is not None:
+            return self._api_versions
+
         version = self.check_version()
         if version < (0, 10, 0):
             raise Errors.UnsupportedVersionError(
