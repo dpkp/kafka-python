@@ -223,7 +223,7 @@ class KafkaClient(object):
                                                self.config['metric_group_prefix'],
                                                weakref.proxy(self._conns))
 
-        self._bootstrap_hosts = len(collect_hosts(self.config['bootstrap_servers']))
+        self._num_bootstrap_hosts = len(collect_hosts(self.config['bootstrap_servers']))
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
@@ -231,7 +231,7 @@ class KafkaClient(object):
             self.config['api_version'] = self.check_version(timeout=check_timeout)
 
     def _can_bootstrap(self):
-        effective_failures = self._bootstrap_fails // self._bootstrap_hosts
+        effective_failures = self._bootstrap_fails // self._num_bootstrap_hosts
         backoff_factor = 2 ** effective_failures
         backoff_ms = min(self.config['reconnect_backoff_ms'] * backoff_factor,
                          self.config['reconnect_backoff_max_ms'])

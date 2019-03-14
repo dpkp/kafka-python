@@ -163,22 +163,26 @@ def test_is_ready(mocker, cli, conn):
 def test_close(mocker, cli, conn):
     mocker.patch.object(cli, '_selector')
 
-    init_count = conn.close.call_count
+    call_count = conn.close.call_count
 
     # Unknown node - silent
     cli.close(2)
+    call_count += 0
+    assert conn.close.call_count == call_count
 
     # Single node close
     cli._maybe_connect(0)
-    assert conn.close.call_count == init_count
+    assert conn.close.call_count == call_count
     cli.close(0)
-    assert conn.close.call_count == init_count + 1
+    call_count += 1
+    assert conn.close.call_count == call_count
 
     # All node close
     cli._maybe_connect(1)
     cli.close()
     # +3 close: node 0, node 1, node bootstrap
-    assert conn.close.call_count == init_count + 4
+    call_count += 3
+    assert conn.close.call_count == call_count
 
 
 def test_is_disconnected(cli, conn):
