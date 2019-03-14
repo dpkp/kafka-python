@@ -5,7 +5,9 @@ import copy
 import functools
 import logging
 import random
+import socket
 import threading
+import time
 import weakref
 
 # selectors in stdlib as of py3.4
@@ -14,9 +16,6 @@ try:
 except ImportError:
     # vendored backport module
     from kafka.vendor import selectors34 as selectors
-
-import socket
-import time
 
 from kafka.vendor import six
 
@@ -611,7 +610,8 @@ class KafkaClient(object):
         return responses
 
     def _poll(self, timeout):
-        """Returns list of (response, future) tuples"""
+        # This needs to be locked, but since it is only called from within the
+        # locked section of poll(), there is no additional lock acquisition here
         processed = set()
 
         start_select = time.time()
