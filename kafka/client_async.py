@@ -825,9 +825,7 @@ class KafkaClient(object):
         # the client from unnecessarily connecting to additional nodes while a previous connection
         # attempt has not been completed.
         if self._connecting:
-            # Strictly the timeout we should return here is "connect timeout", but as we don't
-            # have such application level configuration, using request timeout instead.
-            return self.config['request_timeout_ms']
+            return self.config['reconnect_backoff_ms']
 
         if self.maybe_connect(node_id):
             log.debug("Initializing connection to node %s for metadata request", node_id)

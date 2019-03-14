@@ -376,7 +376,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     client._connecting.add('foobar')
     client._can_connect.reset_mock()
     client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(9999.999) # connection timeout (request timeout)
+    client._poll.assert_called_with(2.222) # connection timeout (reconnect timeout)
     assert not client._can_connect.called
 
     assert not client._metadata_refresh_in_progress
