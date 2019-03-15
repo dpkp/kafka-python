@@ -12,6 +12,6 @@ through 0.8.0 . kafka-python is not compatible with the 0.8.2-beta release.
 Because the kafka server protocol is backwards compatible, kafka-python is
 expected to work with newer broker releases as well (2.0+).
 
-kafka-python is tested on python 2.7, 3.4, 3.5, 3.6, 3.7, and pypy.
+kafka-python is tested on python 2.7, 3.4, 3.7, and pypy2.7.
 
 Builds and tests via Travis-CI.  See https://travis-ci.org/dpkp/kafka-python

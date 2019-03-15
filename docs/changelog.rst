@@ -2,6 +2,56 @@ Changelog
 =========
 
 
+1.4.5 (Mar 14, 2019)
+####################
+
+This release is primarily focused on addressing lock contention
+and other coordination issues between the KafkaConsumer and the
+background heartbeat thread that was introduced in the 1.4 release.
+
+Consumer
+--------
+* connections_max_idle_ms must be larger than request_timeout_ms (jeffwidman / PR #1688)
+* Avoid race condition during close() / join heartbeat thread (dpkp / PR #1735)
+* Use last offset from fetch v4 if available to avoid getting stuck in compacted topic (keithks / PR #1724)
+* Synchronize puts to KafkaConsumer protocol buffer during async sends (dpkp / PR #1733)
+* Improve KafkaConsumer join group / only enable Heartbeat Thread during stable group (dpkp / PR #1695)
+* Remove unused `skip_double_compressed_messages` (jeffwidman / PR #1677)
+* Fix commit_offsets_async() callback (Faqa / PR #1712)
+
+Client
+------
+* Retry bootstrapping after backoff when necessary (dpkp / PR #1736)
+* Recheck connecting nodes sooner when refreshing metadata (dpkp / PR #1737)
+* Avoid probing broker versions twice on newer brokers (dpkp / PR #1738)
+* Move all network connections and writes to KafkaClient.poll() (dpkp / PR #1729)
+* Do not require client lock for read-only operations (dpkp / PR #1730)
+* Timeout all unconnected conns (incl SSL) after request_timeout_ms (dpkp / PR #1696)
+
+Admin Client
+------------
+* Fix AttributeError in response topic error codes checking (jeffwidman)
+* Fix response error checking in KafkaAdminClient send_to_controller (jeffwidman)
+* Fix NotControllerError check (jeffwidman)
+
+Core/Protocol
+-------------
+* Fix default protocol parser version / 0.8.2 version probe (dpkp / PR #1740)
+* Make NotEnoughReplicasError/NotEnoughReplicasAfterAppendError retriable (le-linh / PR #1722)
+
+Bugfixes
+--------
+* Use copy() in metrics() to avoid thread safety issues (emeric254 / PR #1682)
+
+Test Infrastructure
+-------------------
+* Mock dns lookups in test_conn (dpkp / PR #1739)
+* Use test.fixtures.version not test.conftest.version to avoid warnings (dpkp / PR #1731)
+* Fix test_legacy_correct_metadata_response on x86 arch (stanislavlevin / PR #1718)
+* Travis CI: 'sudo' tag is now deprecated in Travis (cclauss / PR #1698)
+* Use Popen.communicate() instead of Popen.wait() (Baisang / PR #1689)
+
+
 1.4.4 (Nov 20, 2018)
 ##########
 
