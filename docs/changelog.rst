@@ -51,6 +51,14 @@ Test Infrastructure
 * Travis CI: 'sudo' tag is now deprecated in Travis (cclauss / PR #1698)
 * Use Popen.communicate() instead of Popen.wait() (Baisang / PR #1689)
 
+Compatibility
+-------------
+* Catch thrown OSError by python 3.7 when creating a connection (danjo133 / PR #1694)
+* Update travis test coverage: 2.7, 3.4, 3.7, pypy2.7 (jeffwidman, dpkp / PR #1614)
+* Drop dependency on sphinxcontrib-napoleon (stanislavlevin / PR #1715)
+* Remove unused import from kafka/producer/record_accumulator.py (jeffwidman / PR #1705)
+* Fix SSL connection testing in Python 3.7 (seanthegeek, silentben / PR #1669)
+
 
 1.4.4 (Nov 20, 2018)
 ##########
