@@ -72,8 +72,7 @@ class ClusterMetadata(object):
 
         while True:
             for host, port, afi in bootstrap_hosts:
-                for _, __, ___, ____, sockaddr in dns_lookup(host, port, afi):
-                    yield BrokerMetadata('bootstrap', sockaddr[0], sockaddr[1], None)
+                yield BrokerMetadata('bootstrap', host, port, None)
 
     def brokers(self):
         """Get all BrokerMetadata
