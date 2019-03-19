@@ -271,6 +271,8 @@ class BrokerConnection(object):
         # including tracking request futures and timestamps, we
         # can use a simple dictionary of correlation_id => request data
         self.in_flight_requests = dict()
+        # Ensures that all in_flight_requests futures are properly closed on disconnect.
+        self._ifr_lock = threading.Lock()
 
         self._protocol = KafkaProtocol(
             client_id=self.config['client_id'],
@@ -741,15 +743,19 @@ class BrokerConnection(object):
         self.config['state_change_callback'](self)
         self._update_reconnect_backoff()
         self._close_socket()
-        self.state = ConnectionStates.DISCONNECTED
-        self._sasl_auth_future = None
-        self._protocol = KafkaProtocol(
-            client_id=self.config['client_id'],
-            api_version=self.config['api_version'])
+
+        with self._ifr_lock:
+            self.state = ConnectionStates.DISCONNECTED
+            self._sasl_auth_future = None
+            self._protocol = KafkaProtocol(
+                client_id=self.config['client_id'],
+                api_version=self.config['api_version'])
+            fail_ifrs = dict(self.in_flight_requests)
+            self.in_flight_requests.clear()
+
         if error is None:
             error = Errors.Cancelled(str(self))
-        while self.in_flight_requests:
-            (_correlation_id, (future, _timestamp)) = self.in_flight_requests.popitem()
+        for future, _timestamp in fail_ifrs.values():
             future.failure(error)
         self.config['state_change_callback'](self)
 
@@ -772,9 +778,14 @@ class BrokerConnection(object):
 
         log.debug('%s Request %d: %s', self, correlation_id, request)
         if request.expect_response():
-            sent_time = time.time()
-            assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
-            self.in_flight_requests[correlation_id] = (future, sent_time)
+            with self._ifr_lock:
+                if self.disconnected():
+                    log.warning("%s: Race condition: connection already closed.")
+                    future.failure(Errors.Cancelled(str(self)))
+                else:
+                    sent_time = time.time()
+                    assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
+                    self.in_flight_requests[correlation_id] = (future, sent_time)
         else:
             future.success(None)
 
@@ -896,14 +907,15 @@ class BrokerConnection(object):
             return responses
 
     def requests_timed_out(self):
-        if self.in_flight_requests:
-            get_timestamp = lambda v: v[1]
-            oldest_at = min(map(get_timestamp,
-                                self.in_flight_requests.values()))
-            timeout = self.config['request_timeout_ms'] / 1000.0
-            if time.time() >= oldest_at + timeout:
-                return True
-        return False
+        with self._ifr_lock:
+            if self.in_flight_requests:
+                get_timestamp = lambda v: v[1]
+                oldest_at = min(map(get_timestamp,
+                                    self.in_flight_requests.values()))
+                timeout = self.config['request_timeout_ms'] / 1000.0
+                if time.time() >= oldest_at + timeout:
+                    return True
+            return False
 
     def _handle_api_version_response(self, response):
         error_type = Errors.for_code(response.error_code)
