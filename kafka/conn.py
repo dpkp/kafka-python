@@ -852,7 +852,8 @@ class BrokerConnection(object):
         # augment respones w/ correlation_id, future, and timestamp
         for i, (correlation_id, response) in enumerate(responses):
             try:
-                (future, timestamp) = self.in_flight_requests.pop(correlation_id)
+                with self._ifr_lock:
+                    (future, timestamp) = self.in_flight_requests.pop(correlation_id)
             except KeyError:
                 if self.disconnected():
                     log.warning('%s: Received response %s after the connection had been closed.',
