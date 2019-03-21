@@ -41,6 +41,35 @@ def get_open_port():
     sock.close()
     return port
 
+def gen_ssl_resources(directory):
+    os.system("""
+    cd {0}
+    echo Generating SSL resources in {0}
+
+    # Step 1
+    keytool -keystore kafka.server.keystore.jks -alias localhost -validity 1 \
+      -genkey -storepass foobar -keypass foobar \
+      -dname "CN=localhost, OU=kafka-python, O=kafka-python, L=SF, ST=CA, C=US" \
+      -ext SAN=dns:localhost
+
+    # Step 2
+    openssl genrsa -out ca-key 2048
+    openssl req -new -x509 -key ca-key -out ca-cert -days 1 \
+      -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=mydomain.com"
+    keytool -keystore kafka.server.truststore.jks -alias CARoot -import \
+      -file ca-cert -storepass foobar -noprompt
+
+    # Step 3
+    keytool -keystore kafka.server.keystore.jks -alias localhost -certreq \
+      -file cert-file -storepass foobar
+    openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed \
+      -days 1 -CAcreateserial -passin pass:foobar
+    keytool -keystore kafka.server.keystore.jks -alias CARoot -import \
+      -file ca-cert -storepass foobar -noprompt
+    keytool -keystore kafka.server.keystore.jks -alias localhost -import \
+      -file cert-signed -storepass foobar -noprompt
+    """.format(directory))
+
 class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
     scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
