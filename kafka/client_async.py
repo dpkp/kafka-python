@@ -612,7 +612,7 @@ class KafkaClient(object):
             conn = key.data
             processed.add(conn)
 
-            if not conn.in_flight_requests:
+            if not conn.has_in_flight_requests():
                 # if we got an EVENT_READ but there were no in-flight requests, one of
                 # two things has happened:
                 #
