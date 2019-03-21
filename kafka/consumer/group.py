@@ -187,6 +187,11 @@ class KafkaConsumer(six.Iterator):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             Default: None.
+        ssl_ciphers (str): optionally set the available ciphers for ssl
+            connections. It should be a string in the OpenSSL cipher list
+            format. If no cipher can be selected (because compile-time options
+            or other configuration forbids use of all the specified ciphers),
+            an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use. If set to
             None, the client will attempt to infer the broker version by probing
             various APIs. Different versions enable different functionality.
@@ -280,6 +285,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'ssl_password': None,
+        'ssl_ciphers': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000,
