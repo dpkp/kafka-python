@@ -25,6 +25,7 @@ from kafka.vendor import six
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
+from kafka.oauth.abstract import AbstractTokenProvider
 from kafka.protocol.admin import SaslHandShakeRequest
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -179,21 +180,8 @@ class BrokerConnection(object):
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
             sasl mechanism handshake. Default: one of bootstrap servers
-        sasl_oauth_token_provider (Object): OAuthBearer token provider instance
-            that implements method 'token'.
-            THE FOLLOWING INTERFACE MUST BE FULFILLED:
-            (required) #token(): Returns an ID/Access Token to be sent to the Kafka
-                client. The implementation should ensure token reuse so that multiple
-                calls at connect time do not create multiple tokens. The implementation
-                should also periodically refresh the token in order to guarantee
-                that each call returns an unexpired token. A timeout error should
-                be returned after a short period of inactivity so that the
-                broker can log debugging info and retry.
-            (OPTIONAL) #extensions() - Returns a map of key-value pairs that can
-                be sent with the SASL/OAUTHBEARER initial client request. If
-                not provided, the values are ignored. This feature is only available
-                in Kafka >= 2.1.0.
-            Default: None
+        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
+            instance. (See kafka.oauth.abstract). Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -276,7 +264,7 @@ class BrokerConnection(object):
             if self.config['sasl_mechanism'] == 'OAUTHBEARER':
                 token_provider = self.config['sasl_oauth_token_provider']
                 assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
-                assert callable(getattr(token_provider, "token", None)), 'sasl_oauth_token_provider must implement method #token()'
+                assert isinstance(token_provider, AbstractTokenProvider), 'sasl_oauth_token_provider must implement AbstractTokenProvider'
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to
@@ -682,7 +670,7 @@ class BrokerConnection(object):
 
     def _try_authenticate_oauth(self, future):
         data = b''
-        # Send PLAIN credentials per RFC-4616
+
         msg = bytes(self._build_oauth_client_request().encode("utf-8"))
         size = Int32.encode(len(msg))
         try:

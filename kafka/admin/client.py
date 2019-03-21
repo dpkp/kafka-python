@@ -133,20 +133,8 @@ class KafkaAdminClient(object):
             Default: None
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
-        sasl_oauth_token_provider (Object): OAuthBearer token provider instance.
-            THE FOLLOWING INTERFACE MUST BE FULFILLED:
-            (required) #token(): Returns an ID/Access Token to be sent to the Kafka
-                client. The implementation should ensure token reuse so that multiple
-                calls at connect time do not create multiple tokens. The implementation
-                should also periodically refresh the token in order to guarantee
-                that each call returns an unexpired token. A timeout error should
-                be returned after a short period of inactivity so that the
-                broker can log debugging info and retry.
-            (OPTIONAL) #extensions() - Returns a map of key-value pairs that can
-                be sent with the SASL/OAUTHBEARER initial client request. If
-                not provided, the values are ignored. This feature is only available
-                in Kafka >= 2.1.0.
-            Default: None
+        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
+            instance. (See kafka.oauth.abstract). Default: None
 
     """
     DEFAULT_CONFIG = {
