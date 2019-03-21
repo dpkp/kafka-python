@@ -790,7 +790,8 @@ class BrokerConnection(object):
         if self.state not in (ConnectionStates.AUTHENTICATING,
                               ConnectionStates.CONNECTED):
             return Errors.NodeNotReadyError(str(self))
-        data = self._protocol.send_bytes()
+        with self._lock:
+            data = self._protocol.send_bytes()
         try:
             # In the future we might manage an internal write buffer
             # and send bytes asynchronously. For now, just block
