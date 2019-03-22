@@ -74,18 +74,21 @@ def test_connect_timeout(_socket, conn):
 
 
 def test_blacked_out(conn):
-    assert conn.blacked_out() is False
-    conn.last_attempt = time.time()
-    assert conn.blacked_out() is True
+    with mock.patch("time.time", return_value=1000):
+        conn.last_attempt = 0
+        assert conn.blacked_out() is False
+        conn.last_attempt = 1000
+        assert conn.blacked_out() is True
 
 
 def test_connection_delay(conn):
-    conn.last_attempt = time.time()
-    assert round(conn.connection_delay()) == round(conn.config['reconnect_backoff_ms'])
-    conn.state = ConnectionStates.CONNECTING
-    assert conn.connection_delay() == 0
-    conn.state = ConnectionStates.CONNECTED
-    assert conn.connection_delay() == float('inf')
+    with mock.patch("time.time", return_value=1000):
+        conn.last_attempt = 1000
+        assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
+        conn.state = ConnectionStates.CONNECTING
+        assert conn.connection_delay() == 0
+        conn.state = ConnectionStates.CONNECTED
+        assert conn.connection_delay() == float('inf')
 
 
 def test_connected(conn):
