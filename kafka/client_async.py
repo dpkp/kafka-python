@@ -499,7 +499,7 @@ class KafkaClient(object):
             return False
         return conn.connected() and conn.can_send_more()
 
-    def send(self, node_id, request):
+    def send(self, node_id, request, wakeup=True):
         """Send a request to a specific node. Bytes are placed on an
         internal per-connection send-queue. Actual network I/O will be
         triggered in a subsequent call to .poll()
@@ -507,6 +507,7 @@ class KafkaClient(object):
         Arguments:
             node_id (int): destination node
             request (Struct): request object (not-encoded)
+            wakeup (bool): optional flag to disable thread-wakeup
 
         Raises:
             AssertionError: if node_id is not in current cluster metadata
@@ -526,7 +527,8 @@ class KafkaClient(object):
         # Wakeup signal is useful in case another thread is
         # blocked waiting for incoming network traffic while holding
         # the client lock in poll().
-        self.wakeup()
+        if wakeup:
+            self.wakeup()
 
         return future
 

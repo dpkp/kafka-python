@@ -144,7 +144,7 @@ class Sender(threading.Thread):
         for node_id, request in six.iteritems(requests):
             batches = batches_by_node[node_id]
             log.debug('Sending Produce Request: %r', request)
-            (self._client.send(node_id, request)
+            (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
                      self._handle_produce_response, node_id, time.time(), batches)
                  .add_errback(
