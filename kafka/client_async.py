@@ -592,6 +592,10 @@ class KafkaClient(object):
         # locked section of poll(), there is no additional lock acquisition here
         processed = set()
 
+        # Send pending requests first, before polling for responses
+        for conn in six.itervalues(self._conns):
+            conn.send_pending_requests()
+
         start_select = time.time()
         ready = self._selector.select(timeout)
         end_select = time.time()
@@ -644,8 +648,6 @@ class KafkaClient(object):
                 conn.close(error=Errors.RequestTimedOutError(
                     'Request timed out after %s ms' %
                     conn.config['request_timeout_ms']))
-            else:
-                conn.send_pending_requests()
 
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
