@@ -140,7 +140,7 @@ class BrokerConnection(object):
             should verify that the certificate matches the brokers hostname.
             default: True.
         ssl_cafile (str): optional filename of ca file to use in certificate
-            veriication. default: None.
+            verification. default: None.
         ssl_certfile (str): optional filename of file in pem format containing
             the client certificate, as well as any ca certificates needed to
             establish the certificate's authenticity. default: None.
@@ -154,6 +154,11 @@ class BrokerConnection(object):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             default: None.
+        ssl_ciphers (str): optionally set the available ciphers for ssl
+            connections. It should be a string in the OpenSSL cipher list
+            format. If no cipher can be selected (because compile-time options
+            or other configuration forbids use of all the specified ciphers),
+            an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use.
             Accepted values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9),
             (0, 10). Default: (0, 8, 2)
@@ -201,6 +206,7 @@ class BrokerConnection(object):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'ssl_password': None,
+        'ssl_ciphers': None,
         'api_version': (0, 8, 2),  # default to most restrictive
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda conn: True,
@@ -463,6 +469,9 @@ class BrokerConnection(object):
                 self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
                 # pylint: disable=no-member
                 self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+            if self.config['ssl_ciphers']:
+                log.info('%s: Setting SSL Ciphers: %s', self, self.config['ssl_ciphers'])
+                self._ssl_context.set_ciphers(self.config['ssl_ciphers'])
         log.debug('%s: wrapping socket in ssl context', self)
         try:
             self._sock = self._ssl_context.wrap_socket(
