@@ -9,7 +9,7 @@ class AbstractTokenProvider(ABC):
     """
     A Token Provider must be used for the SASL OAuthBearer protocol.
 
-    The implementation shsould ensure token reuse so that multiple
+    The implementation should ensure token reuse so that multiple
     calls at connect time do not create multiple tokens. The implementation
     should also periodically refresh the token in order to guarantee
     that each call returns an unexpired token. A timeout error should
@@ -17,12 +17,6 @@ class AbstractTokenProvider(ABC):
     broker can log debugging info and retry.
 
     Token Providers MUST be implemented from this ABC.
-
-    An optional method that may be implemented if the user chooses is:
-    #extensions() - Returns a map of key-value pairs that can
-        be sent with the SASL/OAUTHBEARER initial client request. If
-        not provided, the values are ignored. This feature is only available
-        in Kafka >= 2.1.0.
     """
 
     def __init__(self, **config):
@@ -36,3 +30,13 @@ class AbstractTokenProvider(ABC):
         """
         pass
 
+    def extensions(self):
+        """
+        This is an OPTIONAL method that may be implemented.
+
+        Returns a map of key-value pairs that can
+        be sent with the SASL/OAUTHBEARER initial client request. If
+        not implemented, the values are ignored. This feature is only available
+        in Kafka >= 2.1.0.
+        """
+        pass

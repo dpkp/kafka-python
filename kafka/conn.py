@@ -707,7 +707,7 @@ class BrokerConnection(object):
 
         # Only run if the #extensions() method is implemented by the clients Token Provider class
         # Builds up a string separated by \x01 via a dict of key value pairs
-        if callable(getattr(token_provider, "extensions", None)):
+        if callable(getattr(token_provider, "extensions", None)) and len(token_provider.extensions()) > 0:
             msg = "\x01".join(["{}={}".format(k, v) for k, v in token_provider.extensions().items()])
             return "\x01" + msg
         else:
