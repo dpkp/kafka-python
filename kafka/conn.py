@@ -861,9 +861,6 @@ class BrokerConnection(object):
                     return []
                 else:
                     recvd.append(data)
-
-            except SSLWantReadError:
-                break
             except ConnectionError as e:
                 if six.PY2 and e.errno == errno.EWOULDBLOCK:
                     break
@@ -873,6 +870,10 @@ class BrokerConnection(object):
                 return []
             except BlockingIOError:
                 if six.PY3:
+                    break
+                raise
+            except SSLWantReadError:
+                if ssl_available:
                     break
                 raise
 
