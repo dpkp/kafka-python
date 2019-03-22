@@ -40,7 +40,7 @@ class ClusterMetadata(object):
     DEFAULT_CONFIG = {
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
-        'bootstrap_servers': 'localhost',
+        'bootstrap_servers': [],
     }
 
     def __init__(self, **configs):
