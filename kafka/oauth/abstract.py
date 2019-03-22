@@ -39,4 +39,4 @@ class AbstractTokenProvider(ABC):
         not implemented, the values are ignored. This feature is only available
         in Kafka >= 2.1.0.
         """
-        pass
+        return {}
