@@ -264,7 +264,7 @@ class BrokerConnection(object):
             if self.config['sasl_mechanism'] == 'OAUTHBEARER':
                 token_provider = self.config['sasl_oauth_token_provider']
                 assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
-                assert isinstance(token_provider, AbstractTokenProvider), 'sasl_oauth_token_provider must implement AbstractTokenProvider'
+                assert callable(getattr(token_provider, "token", None)), 'sasl_oauth_token_provider must implement method #token()'
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to

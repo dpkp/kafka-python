@@ -16,7 +16,7 @@ class AbstractTokenProvider(ABC):
     be returned after a short period of inactivity so that the
     broker can log debugging info and retry.
 
-    Token Providers MUST be implemented from this ABC.
+    Token Providers MUST implement the token() method
     """
 
     def __init__(self, **config):
