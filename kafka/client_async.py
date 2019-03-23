@@ -151,6 +151,8 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
             sasl mechanism handshake. Default: one of bootstrap servers
+        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
+            instance. (See kafka.oauth.abstract). Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -188,7 +190,8 @@ class KafkaClient(object):
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
-        'sasl_kerberos_domain_name': None
+        'sasl_kerberos_domain_name': None,
+        'sasl_oauth_token_provider': None
     }
 
     def __init__(self, **configs):
