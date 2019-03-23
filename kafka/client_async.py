@@ -321,14 +321,15 @@ class KafkaClient(object):
                     log.warning("Node %s connection failed -- refreshing metadata", node_id)
                     self.cluster.request_update()
 
-    def maybe_connect(self, node_id):
+    def maybe_connect(self, node_id, wakeup=True):
         """Queues a node for asynchronous connection during the next .poll()"""
         if self._can_connect(node_id):
             self._connecting.add(node_id)
             # Wakeup signal is useful in case another thread is
             # blocked waiting for incoming network traffic while holding
             # the client lock in poll().
-            self.wakeup()
+            if wakeup:
+                self.wakeup()
             return True
         return False
 
