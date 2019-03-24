@@ -176,11 +176,11 @@ class BrokerConnection(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI. Default: PLAIN
+            PLAIN, GSSAPI, OAUTHBEARER.
         sasl_plain_username (str): username for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_plain_password (str): password for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -215,7 +215,7 @@ class BrokerConnection(object):
         'state_change_callback': lambda conn: True,
         'metrics': None,
         'metric_group_prefix': '',
-        'sasl_mechanism': 'PLAIN',
+        'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',

@@ -124,13 +124,13 @@ class KafkaAdminClient(object):
         metrics (kafka.metrics.Metrics): Optionally provide a metrics
             instance for capturing network IO stats. Default: None.
         metric_group_prefix (str): Prefix for metric names. Default: ''
-        sasl_mechanism (str): string picking sasl mechanism when security_protocol
-            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
-            Default: None
+        sasl_mechanism (str): Authentication mechanism when security_protocol
+            is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
+            PLAIN, GSSAPI, OAUTHBEARER.
         sasl_plain_username (str): username for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_plain_password (str): password for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
