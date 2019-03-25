@@ -776,18 +776,18 @@ class BrokerConnection(object):
         with self._lock:
             correlation_id = self._protocol.send_request(request)
 
-        log.debug('%s Request %d: %s', self, correlation_id, request)
-        if request.expect_response():
-            with self._ifr_lock:
-                if self.disconnected():
-                    log.debug("%s: Connection already closed.", self)
-                    future.failure(Errors.Cancelled(str(self)))
-                else:
-                    sent_time = time.time()
-                    assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
-                    self.in_flight_requests[correlation_id] = (future, sent_time)
-        else:
-            future.success(None)
+            log.debug('%s Request %d: %s', self, correlation_id, request)
+            if request.expect_response():
+                with self._ifr_lock:
+                    if self.disconnected():
+                        log.debug("%s: Connection already closed.", self)
+                        future.failure(Errors.Cancelled(str(self)))
+                    else:
+                        sent_time = time.time()
+                        assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
+                        self.in_flight_requests[correlation_id] = (future, sent_time)
+            else:
+                future.success(None)
 
         # Attempt to replicate behavior from prior to introduction of
         # send_pending_requests() / async sends
