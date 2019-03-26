@@ -517,7 +517,7 @@ class KafkaClient(object):
             Future: resolves to Response struct or Error
         """
         if not self._can_send_request(node_id):
-            self.maybe_connect(node_id)
+            self.maybe_connect(node_id, wakeup=wakeup)
             return Future().failure(Errors.NodeNotReadyError(node_id))
 
         # conn.send will queue the request internally
@@ -533,7 +533,7 @@ class KafkaClient(object):
 
         return future
 
-    def poll(self, timeout_ms=None, future=None):
+    def poll(self, timeout_ms=None, future=None, wakeup=True):
         """Try to read and write to sockets.
 
         This method will also attempt to complete node connections, refresh
@@ -545,6 +545,7 @@ class KafkaClient(object):
                 timeout will be the minimum of timeout, request timeout and
                 metadata timeout. Default: request_timeout_ms
             future (Future, optional): if provided, blocks until future.is_done
+            wakeup (bool): optional flag to disable thread-wakeup
 
         Returns:
             list: responses received (can be empty)
@@ -568,7 +569,7 @@ class KafkaClient(object):
                     self._maybe_connect(node_id)
 
                 # Send a metadata request if needed
-                metadata_timeout_ms = self._maybe_refresh_metadata()
+                metadata_timeout_ms = self._maybe_refresh_metadata(wakeup=wakeup)
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
@@ -759,8 +760,11 @@ class KafkaClient(object):
         return self.cluster.request_update()
 
     # This method should be locked when running multi-threaded
-    def _maybe_refresh_metadata(self):
+    def _maybe_refresh_metadata(self, wakeup=True):
         """Send a metadata request if needed.
+
+        Arguments:
+            wakeup (bool): optional flag to disable thread-wakeup
 
         Returns:
             int: milliseconds until next refresh
@@ -790,7 +794,7 @@ class KafkaClient(object):
             api_version = 0 if self.config['api_version'] < (0, 10) else 1
             request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
-            future = self.send(node_id, request)
+            future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)
             future.add_errback(self.cluster.failed_update)
 
@@ -807,7 +811,7 @@ class KafkaClient(object):
         if self._connecting:
             return self.config['reconnect_backoff_ms']
 
-        if self.maybe_connect(node_id):
+        if self.maybe_connect(node_id, wakeup=wakeup):
             log.debug("Initializing connection to node %s for metadata request", node_id)
             return self.config['reconnect_backoff_ms']
 
