@@ -617,7 +617,7 @@ class KafkaClient(object):
             conn = key.data
             processed.add(conn)
 
-            if not conn.in_flight_requests:
+            if not conn.has_in_flight_requests():
                 # if we got an EVENT_READ but there were no in-flight requests, one of
                 # two things has happened:
                 #
@@ -648,12 +648,7 @@ class KafkaClient(object):
                     self._pending_completion.extend(conn.recv())
 
         for conn in six.itervalues(self._conns):
-            if conn.requests_timed_out():
-                log.warning('%s timed out after %s ms. Closing connection.',
-                            conn, conn.config['request_timeout_ms'])
-                conn.close(error=Errors.RequestTimedOutError(
-                    'Request timed out after %s ms' %
-                    conn.config['request_timeout_ms']))
+            conn.close_if_timed_out()
 
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
