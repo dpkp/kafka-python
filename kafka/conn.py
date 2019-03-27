@@ -240,9 +240,6 @@ class BrokerConnection(object):
 
         self.node_id = self.config.pop('node_id')
 
-        if self.config['api_version'] is None:
-            self.config['api_version'] = self.DEFAULT_CONFIG['api_version']
-
         if self.config['receive_buffer_bytes'] is not None:
             self.config['socket_options'].append(
                 (socket.SOL_SOCKET, socket.SO_RCVBUF,
