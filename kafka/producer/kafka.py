@@ -377,7 +377,6 @@ class KafkaProducer(object):
         self._metrics = Metrics(metric_config, reporters)
 
         client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
-                             wakeup_timeout_ms=self.config['max_block_ms'],
                              **self.config)
 
         # Get auto-discovered version from client if necessary

@@ -160,7 +160,6 @@ class KafkaClient(object):
         'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
-        'wakeup_timeout_ms': 3000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -210,10 +209,10 @@ class KafkaClient(object):
         self._refresh_on_disconnects = True
         self._last_bootstrap = 0
         self._bootstrap_fails = 0
-        self._wake_r, self._wake_w = socket.socketpair()
-        self._wake_r.setblocking(False)
-        self._wake_w.settimeout(self.config['wakeup_timeout_ms'] / 1000.0)
+        self._wake_r = None
+        self._wake_w = None
         self._wake_lock = threading.Lock()
+        self._init_wakeup_socketpair()
 
         self._lock = threading.RLock()
 
@@ -222,7 +221,6 @@ class KafkaClient(object):
         # lock above.
         self._pending_completion = collections.deque()
 
-        self._selector.register(self._wake_r, selectors.EVENT_READ)
         self._idle_expiry_manager = IdleConnectionManager(self.config['connections_max_idle_ms'])
         self._closed = False
         self._sensors = None
@@ -237,6 +235,18 @@ class KafkaClient(object):
         if self.config['api_version'] is None:
             check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
             self.config['api_version'] = self.check_version(timeout=check_timeout)
+
+    def _init_wakeup_socketpair(self):
+        self._wake_r, self._wake_w = socket.socketpair()
+        self._wake_r.setblocking(False)
+        self._wake_w.setblocking(False)
+        log.debug("Wakeup socketpair (send): %s, bufsize: %s",
+                  self._wake_w,
+                  self._wake_w.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF))
+        log.debug("Wakeup socketpair (recv): %s, bufsize: %s",
+                  self._wake_r,
+                  self._wake_r.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF))
+        self._selector.register(self._wake_r, selectors.EVENT_READ)
 
     def _can_bootstrap(self):
         effective_failures = self._bootstrap_fails // self._num_bootstrap_hosts
@@ -881,18 +891,15 @@ class KafkaClient(object):
     def wakeup(self):
         with self._wake_lock:
             try:
-                self._wake_w.sendall(b'x')
-            except socket.timeout:
-                log.warning('Timeout to send to wakeup socket!')
-                raise Errors.KafkaTimeoutError()
-            except socket.error:
-                log.warning('Unable to send to wakeup socket!')
+                self._wake_w.send(b'x')
+            except socket.error as e:
+                log.warning('Unable to send to wakeup socket! (%s)', e)
 
     def _clear_wake_fd(self):
         # reading from wake socket should only happen in a single thread
         while True:
             try:
-                self._wake_r.recv(1024)
+                self._wake_r.recv(4096)
             except socket.error:
                 break
 
