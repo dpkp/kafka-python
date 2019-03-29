@@ -15,8 +15,7 @@ from kafka.errors import UnknownTopicOrPartitionError, LeaderNotAvailableError
 from kafka.producer.base import Producer
 from kafka.structs import FetchRequestPayload, ProduceRequestPayload
 
-from test.conftest import version
-from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.fixtures import ZookeeperFixture, KafkaFixture, version
 from test.testutil import KafkaIntegrationTestCase, kafka_versions, current_offset
 
 

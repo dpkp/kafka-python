@@ -141,6 +141,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[5]
 
     @property
+    def last_offset_delta(self):
+        return self._header_data[6]
+
+    @property
     def compression_type(self):
         return self.attributes & self.CODEC_MASK
 

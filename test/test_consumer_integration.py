@@ -23,8 +23,7 @@ from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
 )
 
-from test.conftest import version
-from test.fixtures import ZookeeperFixture, KafkaFixture, random_string
+from test.fixtures import ZookeeperFixture, KafkaFixture, random_string, version
 from test.testutil import KafkaIntegrationTestCase, kafka_versions, Timer
 
 

@@ -252,7 +252,7 @@ class BaseCoordinator(object):
                 if self.config['api_version'] < (0, 8, 2):
                     self.coordinator_id = self._client.least_loaded_node()
                     if self.coordinator_id is not None:
-                        self._client.ready(self.coordinator_id)
+                        self._client.maybe_connect(self.coordinator_id)
                     continue
 
                 future = self.lookup_coordinator()
@@ -686,7 +686,7 @@ class BaseCoordinator(object):
                 self.coordinator_id = response.coordinator_id
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
-                self._client.ready(self.coordinator_id)
+                self._client.maybe_connect(self.coordinator_id)
                 self.heartbeat.reset_timeouts()
             future.success(self.coordinator_id)
 
@@ -752,9 +752,8 @@ class BaseCoordinator(object):
     def close(self):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        with self._client._lock, self._lock:
-            self._close_heartbeat_thread()
-            self.maybe_leave_group()
+        self._close_heartbeat_thread()
+        self.maybe_leave_group()
 
     def maybe_leave_group(self):
         """Leave the current group and reset local generation/memberId."""
@@ -918,6 +917,10 @@ class HeartbeatThread(threading.Thread):
         self.closed = True
         with self.coordinator._lock:
             self.coordinator._lock.notify()
+        if self.is_alive():
+            self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
+        if self.is_alive():
+            log.warning("Heartbeat thread did not fully terminate during close")
 
     def run(self):
         try:

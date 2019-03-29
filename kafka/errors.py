@@ -268,6 +268,7 @@ class NotEnoughReplicasError(BrokerResponseError):
     description = ('Returned from a produce request when the number of in-sync'
                    ' replicas is lower than the configured minimum and'
                    ' requiredAcks is -1.')
+    retriable = True
 
 
 class NotEnoughReplicasAfterAppendError(BrokerResponseError):
@@ -276,6 +277,7 @@ class NotEnoughReplicasAfterAppendError(BrokerResponseError):
     description = ('Returned from a produce request when the message was'
                    ' written to the log, but with fewer in-sync replicas than'
                    ' required.')
+    retriable = True
 
 
 class InvalidRequiredAcksError(BrokerResponseError):

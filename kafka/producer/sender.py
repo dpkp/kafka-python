@@ -105,8 +105,9 @@ class Sender(threading.Thread):
         # remove any nodes we aren't ready to send to
         not_ready_timeout = float('inf')
         for node in list(ready_nodes):
-            if not self._client.ready(node):
+            if not self._client.is_ready(node):
                 log.debug('Node %s not ready; delaying produce of accumulated batch', node)
+                self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
                 not_ready_timeout = min(not_ready_timeout,
                                         self._client.connection_delay(node))
@@ -144,7 +145,7 @@ class Sender(threading.Thread):
         for node_id, request in six.iteritems(requests):
             batches = batches_by_node[node_id]
             log.debug('Sending Produce Request: %r', request)
-            (self._client.send(node_id, request)
+            (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
                      self._handle_produce_response, node_id, time.time(), batches)
                  .add_errback(
