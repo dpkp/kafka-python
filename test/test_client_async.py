@@ -332,7 +332,7 @@ def test_maybe_refresh_metadata_update(mocker, client):
     client._poll.assert_called_with(9999.999) # request_timeout_ms
     assert client._metadata_refresh_in_progress
     request = MetadataRequest[0]([])
-    send.assert_called_once_with('foobar', request)
+    send.assert_called_once_with('foobar', request, wakeup=False)
 
 
 def test_maybe_refresh_metadata_cant_send(mocker, client):
@@ -348,7 +348,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(2.222) # reconnect backoff
-    client.maybe_connect.assert_called_once_with('foobar')
+    client.maybe_connect.assert_called_once_with('foobar', wakeup=False)
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
