@@ -260,16 +260,17 @@ class KafkaClient(object):
         conn = self._conns[node_id]
         return conn.disconnected() and not conn.blacked_out()
 
-    def _conn_state_change(self, node_id, conn):
+    def _conn_state_change(self, node_id, sock, conn):
+        close_conns = []
         with self._lock:
             if conn.connecting():
                 # SSL connections can enter this state 2x (second during Handshake)
                 if node_id not in self._connecting:
                     self._connecting.add(node_id)
                 try:
-                    self._selector.register(conn._sock, selectors.EVENT_WRITE)
+                    key_selector = self._selector.register(sock, selectors.EVENT_WRITE)
                 except KeyError:
-                    self._selector.modify(conn._sock, selectors.EVENT_WRITE)
+                    key_selector = self._selector.modify(sock, selectors.EVENT_WRITE)
 
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
@@ -280,9 +281,9 @@ class KafkaClient(object):
                     self._connecting.remove(node_id)
 
                 try:
-                    self._selector.modify(conn._sock, selectors.EVENT_READ, conn)
+                    self._selector.modify(sock, selectors.EVENT_READ, conn)
                 except KeyError:
-                    self._selector.register(conn._sock, selectors.EVENT_READ, conn)
+                    self._selector.register(sock, selectors.EVENT_READ, conn)
 
                 if self._sensors:
                     self._sensors.connection_created.record()
@@ -298,11 +299,11 @@ class KafkaClient(object):
                             self._conns.pop(node_id).close()
 
             # Connection failures imply that our metadata is stale, so let's refresh
-            elif conn.state is ConnectionStates.DISCONNECTING:
+            elif conn.state is ConnectionStates.DISCONNECTED:
                 if node_id in self._connecting:
                     self._connecting.remove(node_id)
                 try:
-                    self._selector.unregister(conn._sock)
+                    self._selector.unregister(sock)
                 except KeyError:
                     pass
 
@@ -369,7 +370,7 @@ class KafkaClient(object):
                 log.debug("Initiating connection to node %s at %s:%s",
                           node_id, broker.host, broker.port)
                 host, port, afi = get_ip_port_afi(broker.host)
-                cb = functools.partial(WeakMethod(self._conn_state_change), node_id)
+                cb = WeakMethod(self._conn_state_change)
                 conn = BrokerConnection(host, broker.port, afi,
                                         state_change_callback=cb,
                                         node_id=node_id,
