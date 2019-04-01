@@ -516,14 +516,15 @@ class KafkaClient(object):
         Returns:
             Future: resolves to Response struct or Error
         """
-        if not self._can_send_request(node_id):
+        conn = self._conns.get(node_id)
+        if not conn or not self._can_send_request(node_id):
             self.maybe_connect(node_id, wakeup=wakeup)
             return Future().failure(Errors.NodeNotReadyError(node_id))
 
         # conn.send will queue the request internally
         # we will need to call send_pending_requests()
         # to trigger network I/O
-        future = self._conns[node_id].send(request, blocking=False)
+        future = conn.send(request, blocking=False)
 
         # Wakeup signal is useful in case another thread is
         # blocked waiting for incoming network traffic while holding
