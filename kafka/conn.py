@@ -769,7 +769,7 @@ class BrokerConnection(object):
             log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
 
     def _close_socket(self):
-        if self._sock:
+        if hasattr(self, '_sock') and self._sock is not None:
             self._sock.close()
             self._sock = None
 
