@@ -93,6 +93,7 @@ def test_conn_state_change(mocker, cli, conn):
     sel = mocker.patch.object(cli, '_selector')
 
     node_id = 0
+    cli._conns[node_id] = conn
     conn.state = ConnectionStates.CONNECTING
     cli._conn_state_change(node_id, conn)
     assert node_id in cli._connecting
@@ -180,8 +181,8 @@ def test_close(mocker, cli, conn):
     # All node close
     cli._maybe_connect(1)
     cli.close()
-    # +3 close: node 0, node 1, node bootstrap
-    call_count += 3
+    # +2 close: node 1, node bootstrap (node 0 already closed)
+    call_count += 2
     assert conn.close.call_count == call_count
 
 

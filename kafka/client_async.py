@@ -314,7 +314,12 @@ class KafkaClient(object):
                     idle_disconnect = True
                 self._idle_expiry_manager.remove(node_id)
 
-                if self.cluster.is_bootstrap(node_id):
+                # If the connection has already by popped from self._conns,
+                # we can assume the disconnect was intentional and not a failure
+                if node_id not in self._conns:
+                    pass
+
+                elif self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails += 1
 
                 elif self._refresh_on_disconnects and not self._closed and not idle_disconnect:
@@ -419,10 +424,12 @@ class KafkaClient(object):
         with self._lock:
             if node_id is None:
                 self._close()
-                for conn in self._conns.values():
+                conns = list(self._conns.values())
+                self._conns.clear()
+                for conn in conns:
                     conn.close()
             elif node_id in self._conns:
-                self._conns[node_id].close()
+                self._conns.pop(node_id).close()
             else:
                 log.warning("Node %s not found in current connection list; skipping", node_id)
                 return
