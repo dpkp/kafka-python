@@ -354,7 +354,7 @@ class BrokerConnection(object):
             next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
                 self.close(Errors.KafkaConnectionError('DNS failure'))
-                return
+                return self.state
             else:
                 log.debug('%s: creating new socket', self)
                 self._sock_afi, self._sock_addr = next_lookup
@@ -409,6 +409,7 @@ class BrokerConnection(object):
                           ' Disconnecting.', self, ret)
                 errstr = errno.errorcode.get(ret, 'UNKNOWN')
                 self.close(Errors.KafkaConnectionError('{} {}'.format(ret, errstr)))
+                return self.state
 
             # Needs retry
             else:
@@ -442,6 +443,7 @@ class BrokerConnection(object):
             if time.time() > request_timeout + self.last_attempt:
                 log.error('Connection attempt to %s timed out', self)
                 self.close(Errors.KafkaConnectionError('timeout'))
+                return self.state
 
         return self.state
 
