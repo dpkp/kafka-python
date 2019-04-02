@@ -423,6 +423,7 @@ class BrokerConnection(object):
                 else:
                     log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
+                    self._reset_reconnect_backoff()
                 self.config['state_change_callback'](self)
 
         if self.state is ConnectionStates.AUTHENTICATING:
