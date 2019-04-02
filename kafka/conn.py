@@ -803,6 +803,8 @@ class BrokerConnection(object):
                 will be failed with this exception.
                 Default: kafka.errors.KafkaConnectionError.
         """
+        if self.state is ConnectionStates.DISCONNECTED:
+            return
         with self._lock:
             if self.state is ConnectionStates.DISCONNECTED:
                 return
