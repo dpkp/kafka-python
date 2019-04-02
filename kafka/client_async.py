@@ -261,7 +261,6 @@ class KafkaClient(object):
         return conn.disconnected() and not conn.blacked_out()
 
     def _conn_state_change(self, node_id, sock, conn):
-        close_conns = []
         with self._lock:
             if conn.connecting():
                 # SSL connections can enter this state 2x (second during Handshake)
