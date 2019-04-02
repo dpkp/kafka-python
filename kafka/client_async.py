@@ -268,9 +268,9 @@ class KafkaClient(object):
                 if node_id not in self._connecting:
                     self._connecting.add(node_id)
                 try:
-                    key_selector = self._selector.register(sock, selectors.EVENT_WRITE)
+                    self._selector.register(sock, selectors.EVENT_WRITE)
                 except KeyError:
-                    key_selector = self._selector.modify(sock, selectors.EVENT_WRITE)
+                    self._selector.modify(sock, selectors.EVENT_WRITE)
 
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
