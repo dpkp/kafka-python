@@ -95,28 +95,29 @@ def test_conn_state_change(mocker, cli, conn):
     node_id = 0
     cli._conns[node_id] = conn
     conn.state = ConnectionStates.CONNECTING
-    cli._conn_state_change(node_id, conn)
+    sock = conn._sock
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id in cli._connecting
-    sel.register.assert_called_with(conn._sock, selectors.EVENT_WRITE)
+    sel.register.assert_called_with(sock, selectors.EVENT_WRITE)
 
     conn.state = ConnectionStates.CONNECTED
-    cli._conn_state_change(node_id, conn)
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
-    sel.modify.assert_called_with(conn._sock, selectors.EVENT_READ, conn)
+    sel.modify.assert_called_with(sock, selectors.EVENT_READ, conn)
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
-    conn.state = ConnectionStates.DISCONNECTING
-    cli._conn_state_change(node_id, conn)
+    conn.state = ConnectionStates.DISCONNECTED
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
     assert cli.cluster._need_update is True
-    sel.unregister.assert_called_with(conn._sock)
+    sel.unregister.assert_called_with(sock)
 
     conn.state = ConnectionStates.CONNECTING
-    cli._conn_state_change(node_id, conn)
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id in cli._connecting
-    conn.state = ConnectionStates.DISCONNECTING
-    cli._conn_state_change(node_id, conn)
+    conn.state = ConnectionStates.DISCONNECTED
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
 
 
