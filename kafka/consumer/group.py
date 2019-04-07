@@ -552,11 +552,8 @@ class KafkaConsumer(six.Iterator):
                 committed = None
         return committed
 
-    def topics(self):
-        """Get all topics the user is authorized to view.
-
-        Returns:
-            set: topics
+    def _fetch_all_topic_metadata(self):
+        """A blocking call that fetches topic metadata for all topics in the cluster.
         """
         cluster = self._client.cluster
         if self._client._metadata_refresh_in_progress and self._client._topics:
@@ -567,10 +564,21 @@ class KafkaConsumer(six.Iterator):
         future = cluster.request_update()
         self._client.poll(future=future)
         cluster.need_all_topic_metadata = stash
+
+    def topics(self):
+        """Get all topics the user is authorized to view.
+
+        Returns:
+            set: topics
+        """
+        cluster = self._client.cluster
+        self._fetch_all_topic_metadata()
         return cluster.topics()
 
     def partitions_for_topic(self, topic):
         """Get metadata about the partitions for a given topic.
+        This method will issue a remote call to the server if it does not already
+        have any metadata about the given topic.
 
         Arguments:
             topic (str): Topic to check.
@@ -578,7 +586,12 @@ class KafkaConsumer(six.Iterator):
         Returns:
             set: Partition ids
         """
-        return self._client.cluster.partitions_for_topic(topic)
+        cluster = self._client.cluster
+        partitions = cluster.partitions_for_topic(topic)
+        if not partitions:
+            self._fetch_all_topic_metadata()
+            partitions = cluster.partitions_for_topic(topic)
+        return partitions
 
     def poll(self, timeout_ms=0, max_records=None):
         """Fetch data from assigned topics / partitions.
