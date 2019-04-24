@@ -757,7 +757,7 @@ class BrokerConnection(object):
             return float('inf')
 
     def connected(self):
-        """Return True iff socket is connected."""
+        """Return True if socket is connected."""
         return self.state is ConnectionStates.CONNECTED
 
     def connecting(self):
@@ -768,7 +768,7 @@ class BrokerConnection(object):
                               ConnectionStates.AUTHENTICATING)
 
     def disconnected(self):
-        """Return True iff socket is closed"""
+        """Return True if socket is closed"""
         return self.state is ConnectionStates.DISCONNECTED
 
     def _reset_reconnect_backoff(self):
@@ -834,7 +834,7 @@ class BrokerConnection(object):
             future.failure(error)
 
     def _can_send_recv(self):
-        """Return True iff socket is ready for requests / responses"""
+        """Return True if socket is ready for requests / responses"""
         return self.state in (ConnectionStates.AUTHENTICATING,
                               ConnectionStates.CONNECTED)
 
@@ -1347,7 +1347,7 @@ def collect_hosts(hosts, randomize=True):
 
 
 def is_inet_4_or_6(gai):
-    """Given a getaddrinfo struct, return True iff ipv4 or ipv6"""
+    """Given a getaddrinfo struct, return True if ipv4 or ipv6"""
     return gai[0] in (socket.AF_INET, socket.AF_INET6)
 
 
