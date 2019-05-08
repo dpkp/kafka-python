@@ -588,7 +588,7 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
-    def describe_broker_consumer_group(self, group_coordinator_id, group_descriptions, group_id, version, request):
+    def describe_broker_consumer_group(self, group_coordinator_id, group_descriptions, group_id, version):
         if group_coordinator_id is not None:
             this_groups_coordinator_id = group_coordinator_id
         else:
@@ -644,9 +644,9 @@ class KafkaAdminClient(object):
         """
         group_descriptions = []
         version = self._matching_api_version(DescribeGroupsRequest)
-        thread = []
+        threads = []
         for group_id in group_ids:
-            t = Thread(target=self.describe_broker_consumer_group, args=(group_coordinator_id, group_descriptions, group_id, version, request))
+            t = Thread(target=self.describe_broker_consumer_group, args=(group_coordinator_id, group_descriptions, group_id, version))
             threads.append(t)
             t.start()
 
