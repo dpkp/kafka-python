@@ -21,6 +21,8 @@ from kafka.protocol.metadata import MetadataRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.version import __version__
 
+from threading import Thread
+
 
 log = logging.getLogger(__name__)
 
@@ -643,6 +645,16 @@ class KafkaAdminClient(object):
                     .format(version))
         return group_descriptions
 
+    def list_broker_consumer_offsets(self, broker_id, consumer_groups, process_number, request):
+        response = self._send_request_to_node(broker_id, request)
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "Request '{}' failed with response '{}'."
+                .format(request, response))
+
+        consumer_groups.append(response.groups)
+
     def list_consumer_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
 
@@ -672,24 +684,29 @@ class KafkaAdminClient(object):
         # because if a group coordinator fails after being queried, and its
         # consumer groups move to new brokers that haven't yet been queried,
         # then the same group could be returned by multiple brokers.
-        consumer_groups = set()
         if broker_ids is None:
             broker_ids = [broker.nodeId for broker in self._client.cluster.brokers()]
+
+        consumer_groups = set()
         version = self._matching_api_version(ListGroupsRequest)
         if version <= 2:
             request = ListGroupsRequest[version]()
+            thread_number = 0
+            threads = []
+
             for broker_id in broker_ids:
-                response = self._send_request_to_node(broker_id, request)
-                error_type = Errors.for_code(response.error_code)
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-                consumer_groups.update(response.groups)
+                t = Thread(target=self.list_broker_consumer_offsets, args=(broker_id, consumer_groups, thread_number, request))
+                thread_number += 1
+                threads.append(t)
+                t.start()
+
+            for thread in threads:
+                thread.join(timeout=None)
         else:
             raise NotImplementedError(
                 "Support for ListGroups v{} has not yet been added to KafkaAdminClient."
                 .format(version))
+
         return list(consumer_groups)
 
     def list_consumer_group_offsets(self, group_id, group_coordinator_id=None,
