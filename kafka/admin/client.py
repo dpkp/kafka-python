@@ -624,7 +624,7 @@ class KafkaAdminClient(object):
                 "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
                 .format(version))
 
-    def describe_consumer_groups(self, group_ids, group_coordinator_id=None):
+    def describe_consumer_groups(self, group_ids, group_coordinator_id=None, timeout=None):
         """Describe a set of consumer groups.
 
         Any errors are immediately raised.
@@ -651,7 +651,7 @@ class KafkaAdminClient(object):
             t.start()
 
         for thread in threads:
-            thread.join(timeout=None)
+            thread.join(timeout=timeout)
         return group_descriptions
 
     def list_broker_consumer_offsets(self, broker_id, consumer_groups, request):
@@ -664,7 +664,7 @@ class KafkaAdminClient(object):
 
         consumer_groups.update(response.groups)
 
-    def list_consumer_groups(self, broker_ids=None):
+    def list_consumer_groups(self, broker_ids=None, timeout=None):
         """List all consumer groups known to the cluster.
 
         This returns a list of Consumer Group tuples. The tuples are
@@ -708,7 +708,7 @@ class KafkaAdminClient(object):
                 t.start()
 
             for thread in threads:
-                thread.join(timeout=None)
+                thread.join(timeout=timeout)
         else:
             raise NotImplementedError(
                 "Support for ListGroups v{} has not yet been added to KafkaAdminClient."
