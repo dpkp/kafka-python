@@ -646,7 +646,8 @@ class KafkaAdminClient(object):
         version = self._matching_api_version(DescribeGroupsRequest)
         threads = []
         for group_id in group_ids:
-            t = Thread(target=self.describe_broker_consumer_group, args=(group_coordinator_id, group_descriptions, group_id, version))
+            t = Thread(target=self.describe_broker_consumer_group,
+                       args=(group_coordinator_id, group_descriptions, group_id, version))
             threads.append(t)
             t.start()
 
@@ -703,7 +704,8 @@ class KafkaAdminClient(object):
             threads = []
 
             for broker_id in broker_ids:
-                t = Thread(target=self.list_broker_consumer_offsets, args=(broker_id, consumer_groups, request))
+                t = Thread(target=self.list_broker_consumer_offsets,
+                           args=(broker_id, consumer_groups, request))
                 threads.append(t)
                 t.start()
 
