@@ -588,6 +588,42 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
+    def describe_broker_consumer_group(self, group_coordinator_id, group_descriptions, group_id, version, request):
+        if group_coordinator_id is not None:
+            this_groups_coordinator_id = group_coordinator_id
+        else:
+            this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
+        if version <= 1:
+            # Note: KAFKA-6788 A potential optimization is to group the
+            # request per coordinator and send one request with a list of
+            # all consumer groups. Java still hasn't implemented this
+            # because the error checking is hard to get right when some
+            # groups error and others don't.
+            request = DescribeGroupsRequest[version](groups=(group_id,))
+            response = self._send_request_to_node(this_groups_coordinator_id, request)
+            assert len(response.groups) == 1
+            # TODO need to implement converting the response tuple into
+            # a more accessible interface like a namedtuple and then stop
+            # hardcoding tuple indices here. Several Java examples,
+            # including KafkaAdminClient.java
+            group_description = response.groups[0]
+            error_code = group_description[0]
+            error_type = Errors.for_code(error_code)
+            # Java has the note: KAFKA-6789, we can retry based on the error code
+            if error_type is not Errors.NoError:
+                raise error_type(
+                    "Request '{}' failed with response '{}'."
+                    .format(request, response))
+            # TODO Java checks the group protocol type, and if consumer
+            # (ConsumerProtocol.PROTOCOL_TYPE) or empty string, it decodes
+            # the members' partition assignments... that hasn't yet been
+            # implemented here so just return the raw struct results
+            group_descriptions.append(group_description)
+        else:
+            raise NotImplementedError(
+                "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
+                .format(version))
+
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None):
         """Describe a set of consumer groups.
 
@@ -608,44 +644,17 @@ class KafkaAdminClient(object):
         """
         group_descriptions = []
         version = self._matching_api_version(DescribeGroupsRequest)
+        thread = []
         for group_id in group_ids:
-            if group_coordinator_id is not None:
-                this_groups_coordinator_id = group_coordinator_id
-            else:
-                this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
-            if version <= 1:
-                # Note: KAFKA-6788 A potential optimization is to group the
-                # request per coordinator and send one request with a list of
-                # all consumer groups. Java still hasn't implemented this
-                # because the error checking is hard to get right when some
-                # groups error and others don't.
-                request = DescribeGroupsRequest[version](groups=(group_id,))
-                response = self._send_request_to_node(this_groups_coordinator_id, request)
-                assert len(response.groups) == 1
-                # TODO need to implement converting the response tuple into
-                # a more accessible interface like a namedtuple and then stop
-                # hardcoding tuple indices here. Several Java examples,
-                # including KafkaAdminClient.java
-                group_description = response.groups[0]
-                error_code = group_description[0]
-                error_type = Errors.for_code(error_code)
-                # Java has the note: KAFKA-6789, we can retry based on the error code
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-                # TODO Java checks the group protocol type, and if consumer
-                # (ConsumerProtocol.PROTOCOL_TYPE) or empty string, it decodes
-                # the members' partition assignments... that hasn't yet been
-                # implemented here so just return the raw struct results
-                group_descriptions.append(group_description)
-            else:
-                raise NotImplementedError(
-                    "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
-                    .format(version))
+            t = Thread(target=self.describe_broker_consumer_group, args=(group_coordinator_id, group_descriptions, group_id, version, request))
+            threads.append(t)
+            t.start()
+
+        for thread in threads:
+            thread.join(timeout=None)
         return group_descriptions
 
-    def list_broker_consumer_offsets(self, broker_id, consumer_groups, process_number, request):
+    def list_broker_consumer_offsets(self, broker_id, consumer_groups, request):
         response = self._send_request_to_node(broker_id, request)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
@@ -653,7 +662,7 @@ class KafkaAdminClient(object):
                 "Request '{}' failed with response '{}'."
                 .format(request, response))
 
-        consumer_groups.append(response.groups)
+        consumer_groups.update(response.groups)
 
     def list_consumer_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
@@ -684,19 +693,17 @@ class KafkaAdminClient(object):
         # because if a group coordinator fails after being queried, and its
         # consumer groups move to new brokers that haven't yet been queried,
         # then the same group could be returned by multiple brokers.
+        consumer_groups = set()
         if broker_ids is None:
             broker_ids = [broker.nodeId for broker in self._client.cluster.brokers()]
 
-        consumer_groups = set()
         version = self._matching_api_version(ListGroupsRequest)
         if version <= 2:
             request = ListGroupsRequest[version]()
-            thread_number = 0
             threads = []
 
             for broker_id in broker_ids:
-                t = Thread(target=self.list_broker_consumer_offsets, args=(broker_id, consumer_groups, thread_number, request))
-                thread_number += 1
+                t = Thread(target=self.list_broker_consumer_offsets, args=(broker_id, consumer_groups, request))
                 threads.append(t)
                 t.start()
 
