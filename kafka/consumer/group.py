@@ -245,7 +245,7 @@ class KafkaConsumer(six.Iterator):
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/documentation/#newconsumerconfigs
+        https://kafka.apache.org/documentation/#consumerconfigs
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
