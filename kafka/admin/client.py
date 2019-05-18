@@ -251,7 +251,7 @@ class KafkaAdminClient(object):
             request = MetadataRequest[version]()
             future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-            wait_for_futures([future])
+            self.wait_for_futures([future])
 
             response = future.value
             controller_id = response.controller_id
@@ -287,7 +287,7 @@ class KafkaAdminClient(object):
         gc_request = GroupCoordinatorRequest[0](group_id)
         future = self._send_request_to_node(self._client.least_loaded_node(), gc_request)
 
-        wait_for_futures([future])
+        self.wait_for_futures([future])
 
         gc_response = future.value
         # use the extra error checking in add_group_coordinator() rather than
@@ -339,7 +339,7 @@ class KafkaAdminClient(object):
             tries -= 1
             future = self._send_request_to_node(self._controller_id, request)
 
-            wait_for_futures([future])
+            self.wait_for_futures([future])
 
             response = future.value
             # In Java, the error fieldname is inconsistent:
@@ -500,7 +500,7 @@ class KafkaAdminClient(object):
                 .format(version))
         future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-        wait_for_futures([future])
+        self.wait_for_futures([future])
 
         return future.value
 
@@ -543,7 +543,7 @@ class KafkaAdminClient(object):
         # So this is currently broken as it always sends to the least_loaded_node()
         future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-        wait_for_futures([future])
+        self.wait_for_futures([future])
 
         return future.value
 
@@ -641,7 +641,7 @@ class KafkaAdminClient(object):
                     "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
                     .format(version))
 
-        wait_for_futures(futures)
+        self.wait_for_futures(futures)
 
         for future in futures:
             response = future.value
@@ -705,7 +705,7 @@ class KafkaAdminClient(object):
             for broker_id in broker_ids:
                 futures.append(self._send_request_to_node(broker_id, request))
 
-            wait_for_futures(futures)
+            self.wait_for_futures(futures)
 
             for future in futures:
                 response = future.value
@@ -769,7 +769,7 @@ class KafkaAdminClient(object):
             request = OffsetFetchRequest[version](group_id, topics_partitions)
             future = self._send_request_to_node(group_coordinator_id, request)
 
-            wait_for_futures([future])
+            self.wait_for_futures([future])
 
             response = future.value
 
@@ -799,7 +799,7 @@ class KafkaAdminClient(object):
     # delete groups protocol not yet implemented
     # Note: send the request to the group's coordinator.
 
-    def wait_for_futures(futures):
+    def wait_for_futures(self, futures):
         while not all(future.succeeded() for future in futures):
             for future in futures:
                 self._client.poll(future=future)
