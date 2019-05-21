@@ -624,11 +624,12 @@ class KafkaAdminClient(object):
         futures = []
         version = self._matching_api_version(DescribeGroupsRequest)
         for group_id in group_ids:
+            if group_coordinator_id is not None:
+                this_groups_coordinator_id = group_coordinator_id
+            else:
+                this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
+
             if version <= 1:
-                if group_coordinator_id is not None:
-                    this_groups_coordinator_id = group_coordinator_id
-                else:
-                    this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
                 # Note: KAFKA-6788 A potential optimization is to group the
                 # request per coordinator and send one request with a list of
                 # all consumer groups. Java still hasn't implemented this
