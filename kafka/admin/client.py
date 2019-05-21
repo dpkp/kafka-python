@@ -251,7 +251,7 @@ class KafkaAdminClient(object):
             request = MetadataRequest[version]()
             future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-            self.wait_for_futures([future])
+            self._wait_for_futures([future])
 
             response = future.value
             controller_id = response.controller_id
@@ -287,7 +287,7 @@ class KafkaAdminClient(object):
         gc_request = GroupCoordinatorRequest[0](group_id)
         future = self._send_request_to_node(self._client.least_loaded_node(), gc_request)
 
-        self.wait_for_futures([future])
+        self._wait_for_futures([future])
 
         gc_response = future.value
         # use the extra error checking in add_group_coordinator() rather than
@@ -312,11 +312,11 @@ class KafkaAdminClient(object):
     def _send_request_to_node(self, node_id, request):
         """Send a Kafka protocol message to a specific broker.
 
-        Will block until the message result is received.
+        Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
-        :return: The Kafka protocol response for the message.
+        :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
         while not self._client.ready(node_id):
@@ -339,7 +339,7 @@ class KafkaAdminClient(object):
             tries -= 1
             future = self._send_request_to_node(self._controller_id, request)
 
-            self.wait_for_futures([future])
+            self._wait_for_futures([future])
 
             response = future.value
             # In Java, the error fieldname is inconsistent:
@@ -500,7 +500,7 @@ class KafkaAdminClient(object):
                 .format(version))
         future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-        self.wait_for_futures([future])
+        self._wait_for_futures([future])
 
         return future.value
 
@@ -543,7 +543,7 @@ class KafkaAdminClient(object):
         # So this is currently broken as it always sends to the least_loaded_node()
         future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-        self.wait_for_futures([future])
+        self._wait_for_futures([future])
 
         return future.value
 
@@ -641,7 +641,7 @@ class KafkaAdminClient(object):
                     "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
                     .format(version))
 
-        self.wait_for_futures(futures)
+        self._wait_for_futures(futures)
 
         for future in futures:
             response = future.value
@@ -705,7 +705,7 @@ class KafkaAdminClient(object):
             for broker_id in broker_ids:
                 futures.append(self._send_request_to_node(broker_id, request))
 
-            self.wait_for_futures(futures)
+            self._wait_for_futures(futures)
 
             for future in futures:
                 response = future.value
@@ -768,9 +768,7 @@ class KafkaAdminClient(object):
                 topics_partitions = list(six.iteritems(topics_partitions_dict))
             request = OffsetFetchRequest[version](group_id, topics_partitions)
             future = self._send_request_to_node(group_coordinator_id, request)
-
-            self.wait_for_futures([future])
-
+            self._wait_for_futures([future])
             response = future.value
 
             if version > 1:  # OffsetFetchResponse_v1 lacks a top-level error_code
@@ -799,12 +797,10 @@ class KafkaAdminClient(object):
     # delete groups protocol not yet implemented
     # Note: send the request to the group's coordinator.
 
-    def wait_for_futures(self, futures):
+    def _wait_for_futures(self, futures):
         while not all(future.succeeded() for future in futures):
             for future in futures:
                 self._client.poll(future=future)
 
                 if future.failed():
                     raise future.exception  # pylint: disable-msg=raising-bad-type
-
-        return True
