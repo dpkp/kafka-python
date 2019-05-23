@@ -552,7 +552,7 @@ class KafkaConsumer(six.Iterator):
                 committed = None
         return committed
 
-    def _fetch_all_topit_metadata(self):
+    def _fetch_all_topic_metadata(self):
         """A blocking call that fetches topic metadata for all topics in the
         cluster that the user is authorized to view.
         """
