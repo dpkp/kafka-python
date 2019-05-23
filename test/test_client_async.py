@@ -17,15 +17,13 @@ from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.metadata import MetadataResponse, MetadataRequest
+from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
 
 
 @pytest.fixture
 def cli(mocker, conn):
-    mocker.patch('kafka.cluster.dns_lookup',
-                 return_value=[(socket.AF_INET, None, None, None, ('localhost', 9092))])
     client = KafkaClient(api_version=(0, 9))
     client.poll(future=client.cluster.request_update())
     return client
@@ -33,8 +31,6 @@ def cli(mocker, conn):
 
 def test_bootstrap(mocker, conn):
     conn.state = ConnectionStates.CONNECTED
-    mocker.patch('kafka.cluster.dns_lookup',
-                 return_value=[(socket.AF_INET, None, None, None, ('localhost', 9092))])
     cli = KafkaClient(api_version=(0, 9))
     future = cli.cluster.request_update()
     cli.poll(future=future)

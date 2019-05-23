@@ -9,7 +9,7 @@ import time
 from kafka.vendor import six
 
 from kafka import errors as Errors
-from kafka.conn import collect_hosts, dns_lookup
+from kafka.conn import collect_hosts
 from kafka.future import Future
 from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
 
@@ -189,7 +189,7 @@ class ClusterMetadata(object):
         with self._lock:
             self._need_update = True
             if not self._future or self._future.is_done:
-              self._future = Future()
+                self._future = Future()
             return self._future
 
     def topics(self, exclude_internal_topics=True):
