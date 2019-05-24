@@ -340,16 +340,6 @@ class KafkaConsumer(six.Iterator):
         self._metrics = Metrics(metric_config, reporters)
         # TODO _metrics likely needs to be passed to KafkaClient, etc.
 
-        # api_version was previously a str. Accept old format for now
-        if isinstance(self.config['api_version'], str):
-            str_version = self.config['api_version']
-            if str_version == 'auto':
-                self.config['api_version'] = None
-            else:
-                self.config['api_version'] = tuple(map(int, str_version.split('.')))
-            log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
-                        str(self.config['api_version']), str_version)
-
         self._client = KafkaClient(metrics=self._metrics, **self.config)
 
         # Get auto-discovered version from client if necessary

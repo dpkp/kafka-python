@@ -73,9 +73,9 @@ def test_end_to_end(kafka_broker, compression):
 def test_kafka_producer_gc_cleanup():
     gc.collect()
     threads = threading.active_count()
-    producer = KafkaProducer(api_version='0.9') # set api_version explicitly to avoid auto-detection
+    producer = KafkaProducer(api_version=(0, 9))  # set api_version explicitly to avoid auto-detection
     assert threading.active_count() == threads + 1
-    del(producer)
+    del producer
     gc.collect()
     assert threading.active_count() == threads
 

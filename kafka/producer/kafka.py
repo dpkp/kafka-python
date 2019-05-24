@@ -358,16 +358,6 @@ class KafkaProducer(object):
         if self.config['acks'] == 'all':
             self.config['acks'] = -1
 
-        # api_version was previously a str. accept old format for now
-        if isinstance(self.config['api_version'], str):
-            deprecated = self.config['api_version']
-            if deprecated == 'auto':
-                self.config['api_version'] = None
-            else:
-                self.config['api_version'] = tuple(map(int, deprecated.split('.')))
-            log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
-                        str(self.config['api_version']), deprecated)
-
         # Configure metrics
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
