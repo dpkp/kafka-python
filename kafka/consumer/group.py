@@ -315,13 +315,6 @@ class KafkaConsumer(six.Iterator):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
 
-        deprecated = {'smallest': 'earliest', 'largest': 'latest'}
-        if self.config['auto_offset_reset'] in deprecated:
-            new_config = deprecated[self.config['auto_offset_reset']]
-            log.warning('use auto_offset_reset=%s (%s is deprecated)',
-                        new_config, self.config['auto_offset_reset'])
-            self.config['auto_offset_reset'] = new_config
-
         connections_max_idle_ms = self.config['connections_max_idle_ms']
         request_timeout_ms = self.config['request_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
