@@ -26,13 +26,17 @@ log = logging.getLogger(__name__)
 def random_string(length):
     return "".join(random.choice(string.ascii_letters) for i in range(length))
 
-def version_str_to_list(version_str):
-    return tuple(map(int, version_str.split('.'))) # e.g., (0, 8, 1, 1)
+def version_str_to_tuple(version_str):
+    """Transform a version string into a tuple.
+
+    Example: '0.8.1.1' --> (0, 8, 1, 1)
+    """
+    return tuple(map(int, version_str.split('.')))
 
 def version():
     if 'KAFKA_VERSION' not in os.environ:
         return ()
-    return version_str_to_list(os.environ['KAFKA_VERSION'])
+    return version_str_to_tuple(os.environ['KAFKA_VERSION'])
 
 def get_open_port():
     sock = socket.socket()

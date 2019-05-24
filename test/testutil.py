@@ -16,7 +16,7 @@ from kafka.errors import (
     FailedPayloadsError
 )
 from kafka.structs import OffsetRequestPayload
-from test.fixtures import random_string, version_str_to_list, version as kafka_version #pylint: disable=wrong-import-order
+from test.fixtures import random_string, version_str_to_tuple, version as kafka_version #pylint: disable=wrong-import-order
 
 
 def kafka_versions(*versions):
@@ -43,7 +43,7 @@ def kafka_versions(*versions):
             '<=': operator.le
         }
         op = op_map[op_str]
-        version = version_str_to_list(v_str)
+        version = version_str_to_tuple(v_str)
         return lambda a: op(a, version)
 
     validators = map(construct_lambda, versions)

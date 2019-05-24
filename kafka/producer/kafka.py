@@ -255,7 +255,7 @@ class KafkaProducer(object):
             various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version set to 'auto'
+            api version. Only applies if api_version set to None.
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
