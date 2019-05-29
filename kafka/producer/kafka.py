@@ -464,7 +464,6 @@ class KafkaProducer(object):
             assert timeout >= 0
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
-        #first_exception = AtomicReference() # this will keep track of the first encountered exception
         invoked_from_callback = bool(threading.current_thread() is self._sender)
         if timeout > 0:
             if invoked_from_callback:
