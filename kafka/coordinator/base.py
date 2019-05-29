@@ -676,14 +676,14 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             with self._client._lock, self._lock:
-                ok = self._client.cluster.add_group_coordinator(self.group_id, response)
-                if not ok:
+                coordinator_id = self._client.cluster.add_group_coordinator(self.group_id, response)
+                if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
                     future.failure(Errors.IllegalStateError())
                     return
 
-                self.coordinator_id = response.coordinator_id
+                self.coordinator_id = coordinator_id
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
                 self._client.maybe_connect(self.coordinator_id)
