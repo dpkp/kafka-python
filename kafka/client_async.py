@@ -591,9 +591,9 @@ class KafkaClient(object):
                     # if there are no requests in flight, do not block longer than the retry backoff
                     if self.in_flight_request_count() == 0:
                         timeout = min(timeout, self.config['retry_backoff_ms'])
-                    timeout = max(0, timeout / 1000)  # avoid negative timeouts
+                    timeout = max(0, timeout)  # avoid negative timeouts
 
-                self._poll(timeout)
+                self._poll(timeout / 1000)
 
                 responses.extend(self._fire_pending_completed_requests())
 
