@@ -355,7 +355,7 @@ class ClusterMetadata(object):
             self._groups[group] = -1
             return
 
-        # Use a coordinator-specific node id so that group requuests
+        # Use a coordinator-specific node id so that group requests
         # get a dedicated connection
         node_id = 'coordinator-{}'.format(response.coordinator_id)
         coordinator = BrokerMetadata(
