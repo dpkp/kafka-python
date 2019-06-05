@@ -51,7 +51,7 @@ class CreateTopicsResponse_v0(Response):
     API_KEY = 19
     API_VERSION = 0
     SCHEMA = Schema(
-        ('topic_error_codes', Array(
+        ('topic_errors', Array(
             ('topic', String('utf-8')),
             ('error_code', Int16)))
     )
@@ -61,7 +61,7 @@ class CreateTopicsResponse_v1(Response):
     API_KEY = 19
     API_VERSION = 1
     SCHEMA = Schema(
-        ('topic_error_codes', Array(
+        ('topic_errors', Array(
             ('topic', String('utf-8')),
             ('error_code', Int16),
             ('error_message', String('utf-8'))))
@@ -73,7 +73,7 @@ class CreateTopicsResponse_v2(Response):
     API_VERSION = 2
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
-        ('topic_error_codes', Array(
+        ('topic_errors', Array(
             ('topic', String('utf-8')),
             ('error_code', Int16),
             ('error_message', String('utf-8'))))

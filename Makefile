@@ -11,6 +11,7 @@ all: test itest
 test:
 	tox -e py27
 	tox -e py35
+	tox -e py36
 
 unit_test_docker:
 	docker build -t kafka_python_test .
@@ -40,8 +41,8 @@ servers/$(KAFKA_VERSION)/kafka-bin:
 build-integration: servers/$(KAFKA_VERSION)/kafka-bin
 
 # Test and produce coverage using tox. This is the same as is run on Travis
-test36: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py36 -- $(FLAGS)
+test35: build-integration
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py35 -- $(FLAGS)
 
 test27: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
@@ -82,4 +83,8 @@ clean:
 	find . -name '__pycache__' -delete
 	docker rmi -f kafka_python_test
 
-.PHONY: all test36 test27 test-local cov-local clean doc docs test
+doc:
+	make -C docs html
+	@echo "open file://`pwd`/docs/_build/html/index.html"
+
+.PHONY: all test test35 test27 test-local cov-local clean doc

@@ -23,12 +23,8 @@ from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
 )
 
-from test.conftest import version
-from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import (
-    KafkaIntegrationTestCase, kafka_versions, random_string, Timer,
-    send_messages
-)
+from test.fixtures import ZookeeperFixture, KafkaFixture, random_string, version
+from test.testutil import KafkaIntegrationTestCase, kafka_versions, Timer, send_messages
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
