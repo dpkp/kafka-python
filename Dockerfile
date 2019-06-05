@@ -1,17 +1,16 @@
 FROM ubuntu:xenial
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo "deb http://ppa.launchpad.net/webupd8team/java/ubuntu precise main" >> /etc/apt/sources.list
 RUN echo "deb http://ppa.launchpad.net/fkrull/deadsnakes/ubuntu precise main" >> /etc/apt/sources.list
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5BB92C09DB82666C C2518248EEA14886
-RUN echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5BB92C09DB82666C
 RUN apt-get update && apt-get install -y python2.7-dev \
     python3.5-dev \
     python-pkg-resources \
     python-setuptools \
     python-virtualenv \
     libsnappy-dev \
-    oracle-java8-installer \
+    locales \
+    openjdk-8-jdk \
     wget\
     g++ \
     ca-certificates \
@@ -25,7 +24,7 @@ RUN ln -s $PWD/pypy2-v5.8.0-linux64/bin/pypy /usr/local/bin/pypy
 
 RUN /usr/sbin/locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
-ENV JAVA_HOME="/usr/lib/jvm/java-8-oracle"
+ENV JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-amd64"
 ENV PATH="$PATH:$JAVA_HOME/bin"
 
 COPY servers /work/servers
