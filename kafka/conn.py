@@ -673,6 +673,7 @@ class BrokerConnection(object):
             self.close(error=error)
             return future.failure(error)
         except Exception as e:
+            log.exception('Error executing _try_authenticate_gssapi', exc_info=True)
             self._lock.release()
             return future.failure(e)
 

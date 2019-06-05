@@ -82,8 +82,8 @@ def _send_upstream(queue, client, codec, batch_time, batch_size,
     while not stop_event.is_set():
         try:
             client.reinit()
-        except Exception as e:
-            log.warning('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms)
+        except Exception:
+            log.warning('Async producer failed to connect to brokers; backoff for %s(ms) before retrying', retry_options.backoff_ms, exc_info=True)
             time.sleep(float(retry_options.backoff_ms) / 1000)
         else:
             break

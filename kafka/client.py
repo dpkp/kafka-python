@@ -346,7 +346,7 @@ class SimpleClient(object):
             conn = self._get_conn(host, broker.port, afi)
         except KafkaConnectionError as e:
             log.warning('KafkaConnectionError attempting to send request %s '
-                        'to server %s: %s', request_id, broker, e)
+                        'to server %s: %s', request_id, broker, e, exc_info=True)
 
             for payload in payloads:
                 topic_partition = (payload.topic, payload.partition)

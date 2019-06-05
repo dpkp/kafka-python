@@ -178,7 +178,7 @@ class SimpleConsumer(Consumer):
         try:
             (resp, ) = self.client.send_offset_request(reqs)
         except KafkaError as e:
-            log.error('%s sending offset request for %s:%d',
+            log.exception('%s sending offset request for %s:%d',
                       e.__class__.__name__, self.topic, partition)
         else:
             self.offsets[partition] = resp.offsets[0]

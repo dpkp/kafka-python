@@ -163,7 +163,7 @@ class Consumer(object):
             try:
                 self.client.send_offset_commit_request(self.group, reqs)
             except KafkaError as e:
-                log.error('%s saving offsets: %s', e.__class__.__name__, e)
+                log.exception('%s saving offsets: %s', e.__class__.__name__, e)
                 return False
             else:
                 self.count_since_commit = 0

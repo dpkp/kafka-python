@@ -932,7 +932,7 @@ class HeartbeatThread(threading.Thread):
             log.debug('Heartbeat thread closed due to coordinator gc')
 
         except RuntimeError as e:
-            log.error("Heartbeat thread for group %s failed due to unexpected error: %s",
+            log.exception("Heartbeat thread for group %s failed due to unexpected error: %s",
                       self.coordinator.group_id, e)
             self.failed = e
 

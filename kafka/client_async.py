@@ -644,7 +644,7 @@ class KafkaClient(object):
                     if unexpected_data:  # anything other than a 0-byte read means protocol issues
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
-                    pass
+                    log.warning('Socket error', exc_info=True)
                 conn.close(Errors.KafkaConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
 
@@ -899,10 +899,10 @@ class KafkaClient(object):
             try:
                 self._wake_w.sendall(b'x')
             except socket.timeout:
-                log.warning('Timeout to send to wakeup socket!')
+                log.warning('Timeout to send to wakeup socket!', exc_info=True)
                 raise Errors.KafkaTimeoutError()
             except socket.error:
-                log.warning('Unable to send to wakeup socket!')
+                log.warning('Unable to send to wakeup socket!', exc_info=True)
 
     def _clear_wake_fd(self):
         # reading from wake socket should only happen in a single thread
