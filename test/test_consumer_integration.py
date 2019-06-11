@@ -22,7 +22,7 @@ from kafka.errors import (
 from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
 )
-
+from kafka.zookeeper import ZSimpleConsumer
 from test.fixtures import ZookeeperFixture, KafkaFixture, random_string, version
 from test.testutil import KafkaIntegrationTestCase, kafka_versions, Timer
 
@@ -156,10 +156,127 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Start a consumer
         consumer = self.consumer()
-
         self.assert_message_count([ message for message in consumer ], 200)
 
         consumer.stop()
+
+    def test_zconsumer(self):
+        hosts = '%s:%d' % (self.server2.zk_host, self.server2.zk_port)
+        print(hosts)
+        # Produce 100 messages to partition 0
+        produce1 = self.send_messages(0, [("Test message 0 %d" % i) for i in range(100)])
+
+        # Produce 100 messages to partition 1
+        produce2 = self.send_messages(1,[
+            ("Test message 1 %d" % i) for i in range(100)])
+
+
+        # Start a consumer
+        consumer = ZSimpleConsumer(hosts, "group1", self.topic,
+                                   chroot=self.server2.zk_chroot)
+        #all_messages = []
+        #for message in consumer:
+        #  all_messages.append(message)
+        #all_messages = consumer.get_messages(block=True, timeout=5)
+        #self.assertEquals(len(all_messages), 200)
+        # Make sure there are no duplicates
+        #self.assertEquals(len(all_messages), len(set(all_messages)))
+        time.sleep(15)
+        consumer.seek(-10, 2)
+        all_messages = []        
+        all_messages = consumer.get_messages(count=10,block=True, timeout=5)
+
+        self.assertEquals(len(all_messages), 10)
+
+        consumer.seek(-13, 2)
+        all_messages = []
+        all_messages = consumer.get_messages(count=13,block=True, timeout=5)
+
+        self.assertEquals(len(all_messages), 13)
+
+        # Blocking API
+        with Timer() as t:
+            messages = consumer.get_messages(block=True, timeout=5)
+            self.assertEqual(len(messages), 0)
+        self.assertGreaterEqual(t.interval, 5)
+        
+        # Send 10 messages
+        self.send_messages(1,[
+            ("Test message 1 %d" % i) for i in range(10)])
+
+        # Fetch 5 messages
+        messages = consumer.get_messages(count=5, block=True, timeout=5)
+        self.assertEqual(len(messages), 5)
+
+        # Fetch 10 messages
+        with Timer() as t:
+            messages = consumer.get_messages(count=10, block=True, timeout=5)
+            self.assertEqual(len(messages), 5)
+        self.assertGreaterEqual(t.interval, 5)
+
+        consumer.stop()
+
+    def test_zconsumer_rebalance(self):
+        hosts = '%s:%d' % (self.server2.zk_host, self.server2.zk_port)
+
+        # Produce 100 messages to partition 0
+        produce1 = self.send_messages(0, [("Test message 0 %d" % i) for i in range(100)])
+
+        # Produce 100 messages to partition 1
+        produce2 = self.send_messages(1,[
+            ("Test message 1 %d" % i) for i in range(100)])
+
+        consumers = []
+
+        # Start first consumer (willing to have missed allocations)
+        consumer1 = ZSimpleConsumer(hosts, "group1", self.topic,
+                                   chroot=self.server2.zk_chroot,
+                                   ignore_non_allocation=True,
+                                   time_boundary=2)
+        time.sleep(5)
+        self.assertEquals(len(consumer1.consumer.offsets), 2)
+
+        consumers.append(consumer1)
+
+        # Start second consumer (willing to have missed allocations)
+        consumer2 = ZSimpleConsumer(hosts, "group1", self.topic,
+                                   chroot=self.server2.zk_chroot,
+                                   ignore_non_allocation=True,
+                                   time_boundary=2)
+
+        consumers.append(consumer2)
+        time.sleep(5)
+
+        for consumer in consumers:
+            self.assertEquals(len(consumer.consumer.offsets), 1)
+
+        # Start a third consumer which is willing to have missed allocations
+        consumer3 = ZSimpleConsumer(hosts, "group1", self.topic,
+                                   chroot=self.server2.zk_chroot,
+                                   ignore_non_allocation=True,
+                                   time_boundary=2)
+
+        consumers.append(consumer3)
+        time.sleep(5)
+        # Stop the first consumer. This third one should pick it up
+        consumer1.stop()
+
+        # Wait for a while for rebalancing
+        time.sleep(5)
+
+        self.assertEquals(len(consumer2.consumer.offsets), 1)
+        self.assertEquals(len(consumer3.consumer.offsets), 1)
+
+        # Stop the third consumer. This second one should pick up everything
+        consumer3.stop()
+      
+
+        # Wait for a while for rebalancing
+        time.sleep(5)
+
+        self.assertEquals(len(consumer2.consumer.offsets), 2)
+
+        consumer2.stop()
 
     def test_simple_consumer_gzip(self):
         self.send_gzip_message(0, range(0, 100))
@@ -167,7 +284,6 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         # Start a consumer
         consumer = self.consumer()
-
         self.assert_message_count([ message for message in consumer ], 200)
 
         consumer.stop()
@@ -421,43 +537,12 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         # full MessageSet is smaller than max_bytes.
         # For that reason, we set the max buffer size to a little more
         # than the size of all large messages combined
-        consumer = self.consumer(max_buffer_size=60000)
-
+        consumer = self.consumer(max_buffer_size=270000)
         expected_messages = set(small_messages + large_messages)
         actual_messages = set([ x.message.value for x in consumer ])
         self.assertEqual(expected_messages, actual_messages)
 
         consumer.stop()
-
-    def test_huge_messages(self):
-        huge_message, = self.send_messages(0, [
-            create_message(random_string(MAX_FETCH_BUFFER_SIZE_BYTES + 10)),
-        ])
-
-        # Create a consumer with the default buffer size
-        consumer = self.consumer()
-
-        # This consumer fails to get the message
-        with self.assertRaises(ConsumerFetchSizeTooSmall):
-            consumer.get_message(False, 0.1)
-
-        consumer.stop()
-
-        # Create a consumer with no fetch size limit
-        big_consumer = self.consumer(
-            max_buffer_size = None,
-            partitions = [0],
-        )
-
-        # Seek to the last message
-        big_consumer.seek(-1, 2)
-
-        # Consume giant message successfully
-        message = big_consumer.get_message(block=False, timeout=10)
-        self.assertIsNotNone(message)
-        self.assertEqual(message.message.value, huge_message)
-
-        big_consumer.stop()
 
     @kafka_versions('>=0.8.1')
     def test_offset_behavior__resuming_behavior(self):

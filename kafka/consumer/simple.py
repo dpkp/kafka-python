@@ -26,15 +26,16 @@ from kafka.consumer.base import (
 )
 from kafka.errors import (
     KafkaError, ConsumerFetchSizeTooSmall,
-    UnknownTopicOrPartitionError, NotLeaderForPartitionError,
-    OffsetOutOfRangeError, FailedPayloadsError, check_error
+    UnknownTopicOrPartitionError, NotLeaderForPartitionError, DefaultSimpleConsumerException,
+    OffsetOutOfRangeError, FailedPayloadsError, check_error, BufferTooLargeError
 )
 from kafka.protocol.message import PartialMessage
 from kafka.structs import FetchRequestPayload, OffsetRequestPayload
-
+from collections import namedtuple
 
 log = logging.getLogger(__name__)
-
+MAX_QUEUE_SIZE = 10 * 1024
+META = namedtuple("meta", ["partition", "high_water_mark"])
 
 class FetchContext(object):
     """
@@ -118,7 +119,9 @@ class SimpleConsumer(Consumer):
                  buffer_size=FETCH_BUFFER_SIZE_BYTES,
                  max_buffer_size=MAX_FETCH_BUFFER_SIZE_BYTES,
                  iter_timeout=None,
-                 auto_offset_reset='largest'):
+                 auto_offset_reset='largest',
+                 partition_info=False,
+                 skip_buffer_size_error=True):
         warnings.warn('deprecated - this class will be removed in a future'
                       ' release. Use KafkaConsumer instead.',
                       DeprecationWarning)
@@ -134,13 +137,17 @@ class SimpleConsumer(Consumer):
                              'max_buffer_size (%d)' %
                              (buffer_size, max_buffer_size))
         self.buffer_size = buffer_size
+        self.partition_info = partition_info
         self.max_buffer_size = max_buffer_size
         self.fetch_max_wait_time = FETCH_MAX_WAIT_TIME
         self.fetch_min_bytes = fetch_size_bytes
         self.fetch_offsets = self.offsets.copy()
         self.iter_timeout = iter_timeout
         self.auto_offset_reset = auto_offset_reset
-        self.queue = queue.Queue()
+        self.queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
+        self.skip_buffer_size_error = skip_buffer_size_error
+        self.error = DefaultSimpleConsumerException()
+
 
     def __repr__(self):
         return '<SimpleConsumer group=%s, topic=%s, partitions=%s>' % \
@@ -255,7 +262,7 @@ class SimpleConsumer(Consumer):
         if self.auto_commit:
             self.commit()
 
-        self.queue = queue.Queue()
+        self.queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
 
     def get_messages(self, count=1, block=True, timeout=0.1):
         """
@@ -289,10 +296,10 @@ class SimpleConsumer(Consumer):
                     continue
                 break
 
-            partition, message = result
-            _msg = (partition, message) if self.partition_info else message
+            meta, message = result
+            _msg = result if self.partition_info else message
             messages.append(_msg)
-            new_offsets[partition] = message.offset + 1
+            new_offsets[meta.partition] = message.offset + 1
 
         # Update and commit offsets if necessary
         self.offsets.update(new_offsets)
@@ -318,16 +325,14 @@ class SimpleConsumer(Consumer):
             log.debug('internal queue empty, fetching more messages')
             with FetchContext(self, block, timeout):
                 self._fetch()
-
             if not block or time.time() > (start_at + timeout):
                 break
 
         try:
-            partition, message = self.queue.get_nowait()
-
+            meta, message = self.queue.get_nowait()
             if update_offset:
                 # Update partition offset
-                self.offsets[partition] = message.offset + 1
+                self.offsets[meta.partition] = message.offset + 1
 
                 # Count, check and commit messages if necessary
                 self.count_since_commit += 1
@@ -336,12 +341,15 @@ class SimpleConsumer(Consumer):
             if get_partition_info is None:
                 get_partition_info = self.partition_info
             if get_partition_info:
-                return partition, message
+                return meta, message
             else:
                 return message
         except queue.Empty:
             log.debug('internal queue empty after fetch - returning None')
             return None
+
+    def stop(self):
+        super(SimpleConsumer, self).stop()
 
     def __iter__(self):
         if self.iter_timeout is None:
@@ -410,6 +418,7 @@ class SimpleConsumer(Consumer):
                     continue
 
                 partition = resp.partition
+                high_water_mark = resp.highwaterMark
                 buffer_size = partitions[partition]
 
                 # Check for partial message
@@ -426,6 +435,15 @@ class SimpleConsumer(Consumer):
 
                     if self.max_buffer_size is None:
                         buffer_size *= 2
+                        if self.skip_buffer_size_error:
+                            if self.buffer_size > MAX_FETCH_BUFFER_SIZE_BYTES:
+                                log.error('Message size exceeded maximum allowed of {0}'.format(MAX_FETCH_BUFFER_SIZE_BYTES))
+                                log.error('Current buffer_size is: {0}'.format(self.buffer_size))
+                                log.error('topic: {0}, partition: {1}, offset:{2}'.format(self.topic, partition, self.fetch_offsets[partition]))
+                                old_offset = self.fetch_offsets[partition]
+                                self.seek(1, 1, partition=partition)
+                                log.error('Incremented offset. New offset is: {0}'.format(self.offsets[partition]))
+                                raise BufferTooLargeError(self.topic, partition, old_offset, self.offsets[partition])
                     else:
                         buffer_size = min(buffer_size * 2, self.max_buffer_size)
                     log.warning('Fetch size too small, increase to %d (2x) '
@@ -439,6 +457,7 @@ class SimpleConsumer(Consumer):
                                   message)
                         continue
                     # Put the message in our queue
-                    self.queue.put((partition, message))
+                    meta = META(partition, high_water_mark)
+                    self.queue.put((meta, message), block=True)
                     self.fetch_offsets[partition] = message.offset + 1
             partitions = retry_partitions

@@ -23,7 +23,7 @@ def test_buffer_pool():
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
-@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy'])
 def test_end_to_end(kafka_broker, compression):
 
     if compression == 'lz4':
@@ -81,7 +81,7 @@ def test_kafka_producer_gc_cleanup():
 
 
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
-@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy'])
 def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,

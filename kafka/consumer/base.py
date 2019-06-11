@@ -12,7 +12,6 @@ from kafka.structs import (
     OffsetRequestPayload, OffsetCommitRequestPayload, OffsetFetchRequestPayload)
 from kafka.util import ReentrantTimer
 
-
 log = logging.getLogger('kafka.consumer')
 
 AUTO_COMMIT_MSG_COUNT = 100
@@ -21,8 +20,8 @@ AUTO_COMMIT_INTERVAL = 5000
 FETCH_DEFAULT_BLOCK_TIMEOUT = 1
 FETCH_MAX_WAIT_TIME = 100
 FETCH_MIN_BYTES = 4096
-FETCH_BUFFER_SIZE_BYTES = 4096
-MAX_FETCH_BUFFER_SIZE_BYTES = FETCH_BUFFER_SIZE_BYTES * 8
+FETCH_BUFFER_SIZE_BYTES = 262144
+MAX_FETCH_BUFFER_SIZE_BYTES = 157286400
 
 ITER_TIMEOUT_SECONDS = 60
 NO_MESSAGES_WAIT_TIME_SECONDS = 0.1
@@ -66,7 +65,7 @@ class Consumer(object):
         self.auto_commit = auto_commit
         self.auto_commit_every_n = auto_commit_every_n
         self.auto_commit_every_t = auto_commit_every_t
-
+        self.on_stop_callback = None
         # Set up the auto-commit timer
         if auto_commit is True and auto_commit_every_t is not None:
             self.commit_timer = ReentrantTimer(auto_commit_every_t,
@@ -87,6 +86,10 @@ class Consumer(object):
         atexit.register(cleanup, self)
 
         self.partition_info = False     # Do not return partition info in msgs
+
+    def register_on_stop_callback(self, fn):
+        if self.on_stop_callback is None:
+            self.on_stop_callback = fn
 
     def provide_partition_info(self):
         """
@@ -149,11 +152,11 @@ class Consumer(object):
             if partitions is None:  # commit all partitions
                 partitions = list(self.offsets.keys())
 
-            log.debug('Committing new offsets for %s, partitions %s',
+            log.info('Committing new offsets for %s, partitions %s',
                      self.topic, partitions)
             for partition in partitions:
                 offset = self.offsets[partition]
-                log.debug('Commit offset %d in SimpleConsumer: '
+                log.info('Commit offset %d in SimpleConsumer: '
                           'group=%s, topic=%s, partition=%s',
                           offset, self.group, self.topic, partition)
 
@@ -185,7 +188,12 @@ class Consumer(object):
         if self.commit_timer is not None:
             self.commit_timer.stop()
             self.commit()
-
+        if not self.auto_commit and self.on_stop_callback:
+            try:
+                log.info('executing "on_stop_callback"')
+                self.on_stop_callback()
+            except:
+                log.exception('There was an error executing "on_stop_callback"')
         if hasattr(self, '_cleanup_func'):
             # Remove cleanup handler now that we've stopped
 
@@ -205,6 +213,19 @@ class Consumer(object):
                     pass
 
             del self._cleanup_func
+
+
+    def commit_offsets(self, offsets):
+        assert not self.auto_commit, 'cannot manually commit offsets if autocommit is True'
+        with self.commit_lock:
+            reqs = []
+            for partition, offset in offsets.iteritems():
+                reqs.append(OffsetCommitRequestPayload(self.topic, partition,
+                                                offset, None))
+            resps = self.client.send_offset_commit_request(self.group, reqs)
+            for resp in resps:
+                check_error(resp)
+            self.count_since_commit = 0
 
     def pending(self, partitions=None):
         """

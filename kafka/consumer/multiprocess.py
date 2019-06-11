@@ -222,12 +222,12 @@ class MultiProcessConsumer(Consumer):
                 # a chance to run and put some messages in the queue
                 # TODO: This is a hack and will make the consumer block for
                 # at least one second. Need to find a better way of doing this
-                partition, message = self.queue.get(block=True, timeout=1)
+                meta, message = self.queue.get(block=True, timeout=1)
             except queue.Empty:
                 break
 
             # Count, check and commit messages if necessary
-            self.offsets[partition] = message.offset + 1
+            self.offsets[meta.partition] = message.offset + 1
             self.events.start.clear()
             self.count_since_commit += 1
             self._auto_commit()
@@ -271,14 +271,14 @@ class MultiProcessConsumer(Consumer):
 
             block_next_call = block is True or block > len(messages)
             try:
-                partition, message = self.queue.get(block_next_call,
+                meta, message = self.queue.get(block_next_call,
                                                     timeout)
             except queue.Empty:
                 break
 
-            _msg = (partition, message) if self.partition_info else message
+            _msg = (meta, message) if self.partition_info else message
             messages.append(_msg)
-            new_offsets[partition] = message.offset + 1
+            new_offsets[meta.partition] = message.offset + 1
             count -= 1
             if timeout is not None:
                 timeout = max_time - time.time()

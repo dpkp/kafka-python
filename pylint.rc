@@ -4,4 +4,4 @@ ignored-modules=kafka.vendor.six.moves
 generated-members=py.*
 
 [MESSAGES CONTROL]
-disable=E1129
+disable=E1129,E1102

@@ -1,8 +1,8 @@
 # Some simple testing tasks (sorry, UNIX only).
 
 FLAGS=
-KAFKA_VERSION=0.11.0.2
-SCALA_VERSION=2.12
+KAFKA_VERSION=0.8.1.1
+SCALA_VERSION=2.10
 
 setup:
 	pip install -r requirements-dev.txt
