@@ -450,9 +450,6 @@ class KafkaUnavailableError(KafkaError):
 class KafkaTimeoutError(KafkaError):
     pass
 
-class DefaultSimpleConsumerException(Exception):
-    pass
-
 
 class FailedPayloadsError(KafkaError):
     def __init__(self, payload, *args):

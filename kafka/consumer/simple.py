@@ -26,7 +26,7 @@ from kafka.consumer.base import (
 )
 from kafka.errors import (
     KafkaError, ConsumerFetchSizeTooSmall,
-    UnknownTopicOrPartitionError, NotLeaderForPartitionError, DefaultSimpleConsumerException,
+    UnknownTopicOrPartitionError, NotLeaderForPartitionError,
     OffsetOutOfRangeError, FailedPayloadsError, check_error, BufferTooLargeError
 )
 from kafka.protocol.message import PartialMessage
@@ -146,7 +146,6 @@ class SimpleConsumer(Consumer):
         self.auto_offset_reset = auto_offset_reset
         self.queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
         self.skip_buffer_size_error = skip_buffer_size_error
-        self.error = DefaultSimpleConsumerException()
 
 
     def __repr__(self):
@@ -458,6 +457,6 @@ class SimpleConsumer(Consumer):
                         continue
                     # Put the message in our queue
                     meta = META(partition, high_water_mark)
-                    self.queue.put((meta, message), block=True)
+                    self.queue.put((meta, message))
                     self.fetch_offsets[partition] = message.offset + 1
             partitions = retry_partitions
