@@ -42,7 +42,7 @@ setup(
     packages=find_packages(exclude=['test']),
     author="Dana Powers",
     author_email="dana.powers@gmail.com",
-    url="https://github.com/jkonomi/stack-kafka-python",
+    url="https://github.com/STACK-Fintech/kafka-python",
     license="Apache License 2.0",
     description="Pure Python client for Apache Kafka",
     long_description=README,
