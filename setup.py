@@ -7,6 +7,7 @@ from setuptools import setup, Command, find_packages
 # since we can't import something we haven't built yet :)
 exec(open('kafka/version.py').read())
 
+
 class Tox(Command):
 
     user_options = []
@@ -33,7 +34,7 @@ with open(os.path.join(here, 'README.rst')) as f:
     README = f.read()
 
 setup(
-    name="kafka-python",
+    name="stack-kafka-python",
     version=__version__,
 
     tests_require=test_require,
@@ -41,7 +42,7 @@ setup(
     packages=find_packages(exclude=['test']),
     author="Dana Powers",
     author_email="dana.powers@gmail.com",
-    url="https://github.com/dpkp/kafka-python",
+    url="https://github.com/jkonomi/stack-kafka-python",
     license="Apache License 2.0",
     description="Pure Python client for Apache Kafka",
     long_description=README,
