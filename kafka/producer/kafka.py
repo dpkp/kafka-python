@@ -279,6 +279,9 @@ class KafkaProducer(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
+        aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
+        aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
 
     Note:
         Configuration parameters are described in more detail at
@@ -331,7 +334,10 @@ class KafkaProducer(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'aws_user_id': None,
+        'aws_access_key': None,
+        'aws_access_secret': None,
     }
 
     _COMPRESSORS = {
@@ -397,7 +403,8 @@ class KafkaProducer(object):
             self.config['compression_attrs'] = compression_attrs
 
         message_version = self._max_usable_produce_magic()
-        self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
+        self._accumulator = RecordAccumulator(
+            message_version=message_version, metrics=self._metrics, **self.config)
         self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
@@ -415,6 +422,7 @@ class KafkaProducer(object):
     def _cleanup_factory(self):
         """Build a cleanup clojure that doesn't increase our ref count"""
         _self = weakref.proxy(self)
+
         def wrapper():
             try:
                 _self.close(timeout=0)
@@ -577,7 +585,8 @@ class KafkaProducer(object):
             if headers is None:
                 headers = []
             assert type(headers) == list
-            assert all(type(item) == tuple and len(item) == 2 and type(item[0]) == str and type(item[1]) == bytes for item in headers)
+            assert all(type(item) == tuple and len(item) == 2 and type(
+                item[0]) == str and type(item[1]) == bytes for item in headers)
 
             message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
             self._ensure_valid_record_size(message_size)
@@ -605,7 +614,8 @@ class KafkaProducer(object):
                 -1, None, None,
                 len(key_bytes) if key_bytes is not None else -1,
                 len(value_bytes) if value_bytes is not None else -1,
-                sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
+                sum(len(h_key.encode("utf-8")) + len(h_value)
+                    for h_key, h_value in headers) if headers else -1,
             ).failure(e)
 
     def flush(self, timeout=None):

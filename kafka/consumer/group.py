@@ -242,6 +242,9 @@ class KafkaConsumer(six.Iterator):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
+        aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
+        aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
 
     Note:
         Configuration parameters are described in more detail at
@@ -257,7 +260,7 @@ class KafkaConsumer(six.Iterator):
         'fetch_min_bytes': 1,
         'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
-        'request_timeout_ms': 305000, # chosen to be higher than the default of max_poll_interval_ms
+        'request_timeout_ms': 305000,  # chosen to be higher than the default of max_poll_interval_ms
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
@@ -302,7 +305,10 @@ class KafkaConsumer(six.Iterator):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'aws_user_id': None,
+        'aws_access_key': None,
+        'aws_access_secret': None,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -1068,7 +1074,7 @@ class KafkaConsumer(six.Iterator):
             # if we still don't have offsets for all partitions, then we should either seek
             # to the last committed position or reset using the auto reset policy
             if (self.config['api_version'] >= (0, 8, 1) and
-                self.config['group_id'] is not None):
+                    self.config['group_id'] is not None):
                 # first refresh commits for all assigned partitions
                 self._coordinator.refresh_committed_offsets_if_needed()
 
@@ -1076,7 +1082,8 @@ class KafkaConsumer(six.Iterator):
             self._fetcher.update_fetch_positions(partitions)
 
     def _message_generator(self):
-        assert self.assignment() or self.subscription() is not None, 'No topic subscription or manual partition assignment'
+        assert self.assignment() or self.subscription(
+        ) is not None, 'No topic subscription or manual partition assignment'
         while time.time() < self._consumer_timeout:
 
             self._coordinator.poll()

@@ -153,6 +153,9 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
+        aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
+        aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
     """
 
     DEFAULT_CONFIG = {
@@ -191,7 +194,10 @@ class KafkaClient(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'aws_user_id': None,
+        'aws_access_key': None,
+        'aws_access_secret': None,
     }
 
     def __init__(self, **configs):
@@ -645,7 +651,8 @@ class KafkaClient(object):
                         log.warning('Protocol out of sync on %r, closing', conn)
                 except socket.error:
                     pass
-                conn.close(Errors.KafkaConnectionError('Socket EVENT_READ without in-flight-requests'))
+                conn.close(Errors.KafkaConnectionError(
+                    'Socket EVENT_READ without in-flight-requests'))
                 continue
 
             self._idle_expiry_manager.update(conn.node_id)
@@ -779,7 +786,8 @@ class KafkaClient(object):
             int: milliseconds until next refresh
         """
         ttl = self.cluster.ttl()
-        wait_for_in_progress_ms = self.config['request_timeout_ms'] if self._metadata_refresh_in_progress else 0
+        wait_for_in_progress_ms = self.config[
+            'request_timeout_ms'] if self._metadata_refresh_in_progress else 0
         metadata_timeout = max(ttl, wait_for_in_progress_ms)
 
         if metadata_timeout > 0:
@@ -790,7 +798,7 @@ class KafkaClient(object):
         # least_loaded_node()
         node_id = self.least_loaded_node()
         if node_id is None:
-            log.debug("Give up sending metadata request since no node is available");
+            log.debug("Give up sending metadata request since no node is available")
             return self.config['reconnect_backoff_ms']
 
         if self._can_send_request(node_id):
@@ -808,6 +816,7 @@ class KafkaClient(object):
             future.add_errback(self.cluster.failed_update)
 
             self._metadata_refresh_in_progress = True
+
             def refresh_done(val_or_error):
                 self._metadata_refresh_in_progress = False
             future.add_callback(refresh_done)
@@ -874,7 +883,8 @@ class KafkaClient(object):
             self._refresh_on_disconnects = False
             try:
                 remaining = end - time.time()
-                version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
+                version = conn.check_version(timeout=remaining, strict=strict, topics=list(
+                    self.config['bootstrap_topics_filter']))
                 if version >= (0, 10, 0):
                     # cache the api versions map if it's available (starting
                     # in 0.10 cluster version)
@@ -930,6 +940,7 @@ except ImportError:
 
 
 class IdleConnectionManager(object):
+
     def __init__(self, connections_max_idle_ms):
         if connections_max_idle_ms > 0:
             self.connections_max_idle = connections_max_idle_ms / 1000
@@ -992,6 +1003,7 @@ class IdleConnectionManager(object):
 
 
 class KafkaClientMetrics(object):
+
     def __init__(self, metrics, metric_group_prefix, conns):
         self.metrics = metrics
         self.metric_group_name = metric_group_prefix + '-metrics'

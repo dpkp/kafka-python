@@ -67,8 +67,10 @@ try:
 except ImportError:
     # support Python without ssl libraries
     ssl_available = False
+
     class SSLWantReadError(Exception):
         pass
+
     class SSLWantWriteError(Exception):
         pass
 
@@ -77,7 +79,7 @@ try:
     import gssapi
     from gssapi.raw.misc import GSSError
 except ImportError:
-    #no gssapi available, will disable gssapi mechanism
+    # no gssapi available, will disable gssapi mechanism
     gssapi = None
     GSSError = None
 
@@ -188,6 +190,9 @@ class BrokerConnection(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
+        aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
+        aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
     """
 
     DEFAULT_CONFIG = {
@@ -221,10 +226,13 @@ class BrokerConnection(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'aws_user_id': None,
+        'aws_access_key': None,
+        'aws_access_secret': None,
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
-    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER')
+    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', 'AWS')
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -247,7 +255,7 @@ class BrokerConnection(object):
                  self.config['receive_buffer_bytes']))
         if self.config['send_buffer_bytes'] is not None:
             self.config['socket_options'].append(
-                 (socket.SOL_SOCKET, socket.SO_SNDBUF,
+                (socket.SOL_SOCKET, socket.SO_SNDBUF,
                  self.config['send_buffer_bytes']))
 
         assert self.config['security_protocol'] in self.SECURITY_PROTOCOLS, (
@@ -260,15 +268,26 @@ class BrokerConnection(object):
             assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
                 'sasl_mechanism must be in ' + ', '.join(self.SASL_MECHANISMS))
             if self.config['sasl_mechanism'] == 'PLAIN':
-                assert self.config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
-                assert self.config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
+                assert self.config[
+                    'sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
+                assert self.config[
+                    'sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
             if self.config['sasl_mechanism'] == 'GSSAPI':
                 assert gssapi is not None, 'GSSAPI lib not available'
-                assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
+                assert self.config[
+                    'sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
             if self.config['sasl_mechanism'] == 'OAUTHBEARER':
                 token_provider = self.config['sasl_oauth_token_provider']
                 assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
-                assert callable(getattr(token_provider, "token", None)), 'sasl_oauth_token_provider must implement method #token()'
+                assert callable(getattr(token_provider, "token", None)
+                                ), 'sasl_oauth_token_provider must implement method #token()'
+            if self.config['sasl_mechanism'] == 'AWS':
+                assert self.config[
+                    'aws_user_id'] is not None, 'aws_user_id is required for AWS sasl'
+                assert self.config[
+                    'aws_access_key'] is not None, 'aws_access_key is required for AWS sasl'
+                assert self.config[
+                    'aws_access_secret'] is not None, 'aws_access_secret is required for AWS sasl'
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to
@@ -501,7 +520,8 @@ class BrokerConnection(object):
             pass
         except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError):
             log.warning('SSL connection closed by server during handshake.')
-            self.close(Errors.KafkaConnectionError('SSL connection closed by server during handshake'))
+            self.close(Errors.KafkaConnectionError(
+                'SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
 
         return False
@@ -548,6 +568,8 @@ class BrokerConnection(object):
             return self._try_authenticate_gssapi(future)
         elif self.config['sasl_mechanism'] == 'OAUTHBEARER':
             return self._try_authenticate_oauth(future)
+        elif self.config['sasl_mechanism'] == 'AWS':
+            return self._try_authenticate_aws(future)
         else:
             return future.failure(
                 Errors.UnsupportedSaslMechanismError(
@@ -712,6 +734,35 @@ class BrokerConnection(object):
         log.info('%s: Authenticated via OAuth', self)
         return future.success(True)
 
+    def _try_authenticate_aws(self, future):
+        data = b''
+        msg = bytes('\0'.join([self.config['aws_user_id'],
+                               self.config['aws_access_key'],
+                               self.config['aws_access_secret']]).encode('utf-8'))
+        size = Int32.encode(len(msg))
+        try:
+            with self._lock:
+                if not self._can_send_recv():
+                    return future.failure(Errors.NodeNotReadyError(str(self)))
+                self._send_bytes_blocking(size + msg)
+
+                # The server will send a zero sized message (that is Int32(0)) on success.
+                # The connection is closed on failure
+                data = self._recv_bytes_blocking(4)
+
+        except ConnectionError as e:
+            log.exception("%s: Error receiving reply from server", self)
+            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
+            self.close(error=error)
+            return future.failure(error)
+
+        if data != b'\x00\x00\x00\x00':
+            error = Errors.AuthenticationFailedError('Unrecognized response during authentication')
+            return future.failure(error)
+
+        log.info('Authenticated using AWS credentials')
+        return future.success(True)
+
     def _build_oauth_client_request(self):
         token_provider = self.config['sasl_oauth_token_provider']
         return "n,,\x01auth=Bearer {}{}\x01\x01".format(token_provider.token(), self._token_extensions())
@@ -726,7 +777,8 @@ class BrokerConnection(object):
         # Only run if the #extensions() method is implemented by the clients Token Provider class
         # Builds up a string separated by \x01 via a dict of key value pairs
         if callable(getattr(token_provider, "extensions", None)) and len(token_provider.extensions()) > 0:
-            msg = "\x01".join(["{}={}".format(k, v) for k, v in token_provider.extensions().items()])
+            msg = "\x01".join(["{}={}".format(k, v)
+                               for k, v in token_provider.extensions().items()])
             return "\x01" + msg
         else:
             return ""
@@ -782,11 +834,14 @@ class BrokerConnection(object):
             return
         if self.config['reconnect_backoff_max_ms'] > self.config['reconnect_backoff_ms']:
             self._failures += 1
-            self._reconnect_backoff = self.config['reconnect_backoff_ms'] * 2 ** (self._failures - 1)
-            self._reconnect_backoff = min(self._reconnect_backoff, self.config['reconnect_backoff_max_ms'])
+            self._reconnect_backoff = self.config[
+                'reconnect_backoff_ms'] * 2 ** (self._failures - 1)
+            self._reconnect_backoff = min(self._reconnect_backoff, self.config[
+                                          'reconnect_backoff_max_ms'])
             self._reconnect_backoff *= uniform(0.8, 1.2)
             self._reconnect_backoff /= 1000.0
-            log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
+            log.debug('%s: reconnect backoff %s after %s failures',
+                      self, self._reconnect_backoff, self._failures)
 
     def _close_socket(self):
         if hasattr(self, '_sock') and self._sock is not None:
@@ -1146,6 +1201,7 @@ class BrokerConnection(object):
 
 
 class BrokerConnectionMetrics(object):
+
     def __init__(self, metrics, metric_group_prefix, node_id):
         self.metrics = metrics
 
