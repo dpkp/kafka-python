@@ -704,6 +704,9 @@ class BrokerConnection(object):
             error = Errors.KafkaConnectionError("%s: %s" % (self, e))
             self.close(error=error)
             return future.failure(error)
+        except Exception:
+            self._lock.release()
+            raise
 
         self._lock.release()
 
