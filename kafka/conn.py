@@ -624,6 +624,7 @@ class BrokerConnection(object):
 
         self._lock.acquire()
         if not self._can_send_recv():
+            self._lock.release()
             return future.failure(Errors.NodeNotReadyError(str(self)))
         # Establish security context and negotiate protection level
         # For reference RFC 2222, section 7.2.1
@@ -687,6 +688,7 @@ class BrokerConnection(object):
         size = Int32.encode(len(msg))
         self._lock.acquire()
         if not self._can_send_recv():
+            self._lock.release()
             return future.failure(Errors.NodeNotReadyError(str(self)))
         try:
             # Send SASL OAuthBearer request with OAuth token
