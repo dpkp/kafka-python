@@ -156,6 +156,7 @@ class KafkaClient(object):
         aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
         aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
         aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
+        aws_session_token (str): The AWS Session Token,
     """
 
     DEFAULT_CONFIG = {
@@ -198,6 +199,7 @@ class KafkaClient(object):
         'aws_user_id': None,
         'aws_access_key': None,
         'aws_access_secret': None,
+        'aws_session_token': None,
     }
 
     def __init__(self, **configs):

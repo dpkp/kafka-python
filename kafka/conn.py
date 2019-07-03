@@ -193,6 +193,7 @@ class BrokerConnection(object):
         aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
         aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
         aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
+        aws_session_token (str): The AWS Session Token,
     """
 
     DEFAULT_CONFIG = {
@@ -230,6 +231,7 @@ class BrokerConnection(object):
         'aws_user_id': None,
         'aws_access_key': None,
         'aws_access_secret': None,
+        'aws_session_token': None,
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', 'AWS')
@@ -288,6 +290,8 @@ class BrokerConnection(object):
                     'aws_access_key'] is not None, 'aws_access_key is required for AWS sasl'
                 assert self.config[
                     'aws_access_secret'] is not None, 'aws_access_secret is required for AWS sasl'
+                assert self.config[
+                    'aws_session_token'] is not None, 'aws_session_token is required for AWS sasl'
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to
@@ -738,7 +742,8 @@ class BrokerConnection(object):
         data = b''
         msg = bytes('\0'.join([self.config['aws_user_id'],
                                self.config['aws_access_key'],
-                               self.config['aws_access_secret']]).encode('utf-8'))
+                               self.config['aws_access_secret'],
+                               self.config['aws_session_token']]).encode('utf-8'))
         size = Int32.encode(len(msg))
         try:
             with self._lock:

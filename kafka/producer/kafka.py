@@ -282,6 +282,7 @@ class KafkaProducer(object):
         aws_user_id (str): The AWS UserId required when sasl_mechanism is AWS,
         aws_access_key (str): The AWS Access Key Id required when sasl_mechanism is AWS,
         aws_access_secret (str): The AWS Secret Access Key required when sasl_mechanism is AWS,
+        aws_session_token (str): The AWS Session Token,
 
     Note:
         Configuration parameters are described in more detail at
@@ -338,6 +339,7 @@ class KafkaProducer(object):
         'aws_user_id': None,
         'aws_access_key': None,
         'aws_access_secret': None,
+        'aws_session_token': None,
     }
 
     _COMPRESSORS = {
