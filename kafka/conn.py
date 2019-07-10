@@ -912,7 +912,7 @@ class BrokerConnection(object):
                 self.config['request_timeout_ms']))
             return ()
 
-        # augment respones w/ correlation_id, future, and timestamp
+        # augment responses w/ correlation_id, future, and timestamp
         for i, (correlation_id, response) in enumerate(responses):
             try:
                 with self._lock:
