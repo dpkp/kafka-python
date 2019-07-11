@@ -918,7 +918,7 @@ class KafkaConsumer(six.Iterator):
         """Get metrics on consumer performance.
 
         This is ported from the Java Consumer, for details see:
-        https://kafka.apache.org/documentation/#new_consumer_monitoring
+        https://kafka.apache.org/documentation/#consumer_monitoring
 
         Warning:
             This is an unstable interface. It may change in future
