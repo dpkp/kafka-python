@@ -1,3 +1,48 @@
+# 1.4.6 (Apr 2, 2019)
+
+This is a patch release primarily focused on bugs related to concurrency,
+SSL connections and testing, and SASL authentication:
+
+
+Client Concurrency Issues (Race Conditions / Deadlocks)
+
+* Fix race condition in `protocol.send_bytes` (isamaru / PR #1752)
+* Do not call `state_change_callback` with lock (dpkp / PR #1775)
+* Additional BrokerConnection locks to synchronize protocol/IFR state (dpkp / PR #1768)
+* Send pending requests before waiting for responses (dpkp / PR #1762)
+* Avoid race condition on `client._conns` in send() (dpkp / PR #1772)
+* Hold lock during `client.check_version` (dpkp / PR #1771)
+
+Producer Wakeup / TimeoutError
+
+* Dont wakeup during `maybe_refresh_metadata` -- it is only called by poll() (dpkp / PR #1769)
+* Dont do client wakeup when sending from sender thread (dpkp / PR #1761)
+
+SSL - Python3.7 Support / Bootstrap Hostname Verification / Testing
+
+* Wrap SSL sockets after connecting for python3.7 compatibility (dpkp / PR #1754)
+* Allow configuration of SSL Ciphers (dpkp / PR #1755)
+* Maintain shadow cluster metadata for bootstrapping (dpkp / PR #1753)
+* Generate SSL certificates for local testing (dpkp / PR #1756)
+* Rename ssl.keystore.location and ssl.truststore.location config files (dpkp)
+* Reset reconnect backoff on SSL connection (dpkp / PR #1777)
+
+SASL - OAuthBearer support / api version bugfix
+
+* Fix 0.8.2 protocol quick detection / fix SASL version check (dpkp / PR #1763)
+* Update sasl configuration docstrings to include supported mechanisms (dpkp)
+* Support SASL OAuthBearer Authentication (pt2pham / PR #1750)
+
+Miscellaneous Bugfixes
+
+* Dont force metadata refresh when closing unneeded bootstrap connections (dpkp / PR #1773)
+* Fix possible AttributeError during conn._close_socket (dpkp / PR #1776)
+* Return connection state explicitly after close in connect() (dpkp / PR #1778)
+* Fix flaky conn tests that use time.time (dpkp / PR #1758)
+* Add py to requirements-dev (dpkp)
+* Fixups to benchmark scripts for py3 / new KafkaFixture interface (dpkp)
+
+
 # 1.4.5 (Mar 14, 2019)
 
 This release is primarily focused on addressing lock contention

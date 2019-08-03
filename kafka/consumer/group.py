@@ -209,7 +209,7 @@ class KafkaConsumer(six.Iterator):
             Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version set to 'auto'
+            api version. Only applies if api_version set to None.
         connections_max_idle_ms: Close idle connections after the number of
             milliseconds specified by this config. The broker closes idle
             connections after connections.max.idle.ms, so this avoids hitting
@@ -245,7 +245,7 @@ class KafkaConsumer(six.Iterator):
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/documentation/#newconsumerconfigs
+        https://kafka.apache.org/documentation/#consumerconfigs
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
@@ -558,11 +558,9 @@ class KafkaConsumer(six.Iterator):
                 committed = None
         return committed
 
-    def topics(self):
-        """Get all topics the user is authorized to view.
-
-        Returns:
-            set: topics
+    def _fetch_all_topic_metadata(self):
+        """A blocking call that fetches topic metadata for all topics in the
+        cluster that the user is authorized to view.
         """
         cluster = self._client.cluster
         if self._client._metadata_refresh_in_progress and self._client._topics:
@@ -573,10 +571,24 @@ class KafkaConsumer(six.Iterator):
         future = cluster.request_update()
         self._client.poll(future=future)
         cluster.need_all_topic_metadata = stash
-        return cluster.topics()
+
+    def topics(self):
+        """Get all topics the user is authorized to view.
+        This will always issue a remote call to the cluster to fetch the latest
+        information.
+
+        Returns:
+            set: topics
+        """
+        self._fetch_all_topic_metadata()
+        return self._client.cluster.topics()
 
     def partitions_for_topic(self, topic):
-        """Get metadata about the partitions for a given topic.
+        """This method first checks the local metadata cache for information
+        about the topic. If the topic is not found (either because the topic
+        does not exist, the user is not authorized to view the topic, or the
+        metadata cache is not populated), then it will issue a metadata update
+        call to the cluster.
 
         Arguments:
             topic (str): Topic to check.
@@ -584,7 +596,12 @@ class KafkaConsumer(six.Iterator):
         Returns:
             set: Partition ids
         """
-        return self._client.cluster.partitions_for_topic(topic)
+        cluster = self._client.cluster
+        partitions = cluster.partitions_for_topic(topic)
+        if partitions is None:
+            self._fetch_all_topic_metadata()
+            partitions = cluster.partitions_for_topic(topic)
+        return partitions
 
     def poll(self, timeout_ms=0, max_records=None):
         """Fetch data from assigned topics / partitions.
@@ -907,7 +924,7 @@ class KafkaConsumer(six.Iterator):
         """Get metrics on consumer performance.
 
         This is ported from the Java Consumer, for details see:
-        https://kafka.apache.org/documentation/#new_consumer_monitoring
+        https://kafka.apache.org/documentation/#consumer_monitoring
 
         Warning:
             This is an unstable interface. It may change in future

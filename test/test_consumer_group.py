@@ -29,6 +29,15 @@ def test_consumer(kafka_broker, topic, version):
     assert consumer._client._conns[node_id].state is ConnectionStates.CONNECTED
     consumer.close()
 
+@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+def test_consumer_topics(kafka_broker, topic, version):
+    consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
+    # Necessary to drive the IO
+    consumer.poll(500)
+    consumer_topics = consumer.topics()
+    assert topic in consumer_topics
+    assert len(consumer.partitions_for_topic(topic)) > 0
+    consumer.close()
 
 @pytest.mark.skipif(version() < (0, 9), reason='Unsupported Kafka Version')
 @pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")

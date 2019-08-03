@@ -256,7 +256,7 @@ class ConsumerCoordinator(BaseCoordinator):
         ensures that the consumer has joined the group. This also handles
         periodic offset commits if they are enabled.
         """
-        if self.group_id is None or self.config['api_version'] < (0, 8, 2):
+        if self.group_id is None:
             return
 
         self._invoke_completed_offset_commit_callbacks()

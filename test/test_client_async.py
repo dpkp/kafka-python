@@ -17,15 +17,13 @@ from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.metadata import MetadataResponse, MetadataRequest
+from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
 
 
 @pytest.fixture
 def cli(mocker, conn):
-    mocker.patch('kafka.cluster.dns_lookup',
-                 return_value=[(socket.AF_INET, None, None, None, ('localhost', 9092))])
     client = KafkaClient(api_version=(0, 9))
     client.poll(future=client.cluster.request_update())
     return client
@@ -33,8 +31,6 @@ def cli(mocker, conn):
 
 def test_bootstrap(mocker, conn):
     conn.state = ConnectionStates.CONNECTED
-    mocker.patch('kafka.cluster.dns_lookup',
-                 return_value=[(socket.AF_INET, None, None, None, ('localhost', 9092))])
     cli = KafkaClient(api_version=(0, 9))
     future = cli.cluster.request_update()
     cli.poll(future=future)
@@ -93,29 +89,31 @@ def test_conn_state_change(mocker, cli, conn):
     sel = mocker.patch.object(cli, '_selector')
 
     node_id = 0
+    cli._conns[node_id] = conn
     conn.state = ConnectionStates.CONNECTING
-    cli._conn_state_change(node_id, conn)
+    sock = conn._sock
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id in cli._connecting
-    sel.register.assert_called_with(conn._sock, selectors.EVENT_WRITE)
+    sel.register.assert_called_with(sock, selectors.EVENT_WRITE)
 
     conn.state = ConnectionStates.CONNECTED
-    cli._conn_state_change(node_id, conn)
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
-    sel.modify.assert_called_with(conn._sock, selectors.EVENT_READ, conn)
+    sel.modify.assert_called_with(sock, selectors.EVENT_READ, conn)
 
     # Failure to connect should trigger metadata update
     assert cli.cluster._need_update is False
-    conn.state = ConnectionStates.DISCONNECTING
-    cli._conn_state_change(node_id, conn)
+    conn.state = ConnectionStates.DISCONNECTED
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
     assert cli.cluster._need_update is True
-    sel.unregister.assert_called_with(conn._sock)
+    sel.unregister.assert_called_with(sock)
 
     conn.state = ConnectionStates.CONNECTING
-    cli._conn_state_change(node_id, conn)
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id in cli._connecting
-    conn.state = ConnectionStates.DISCONNECTING
-    cli._conn_state_change(node_id, conn)
+    conn.state = ConnectionStates.DISCONNECTED
+    cli._conn_state_change(node_id, sock, conn)
     assert node_id not in cli._connecting
 
 
@@ -180,8 +178,8 @@ def test_close(mocker, cli, conn):
     # All node close
     cli._maybe_connect(1)
     cli.close()
-    # +3 close: node 0, node 1, node bootstrap
-    call_count += 3
+    # +2 close: node 1, node bootstrap (node 0 already closed)
+    call_count += 2
     assert conn.close.call_count == call_count
 
 
@@ -231,6 +229,8 @@ def test_send(cli, conn):
 def test_poll(mocker):
     metadata = mocker.patch.object(KafkaClient, '_maybe_refresh_metadata')
     _poll = mocker.patch.object(KafkaClient, '_poll')
+    ifrs = mocker.patch.object(KafkaClient, 'in_flight_request_count')
+    ifrs.return_value = 1
     cli = KafkaClient(api_version=(0, 9))
 
     # metadata timeout wins
@@ -246,6 +246,11 @@ def test_poll(mocker):
     metadata.return_value = 1000000
     cli.poll()
     _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
+
+    # If no in-flight-requests, drop timeout to retry_backoff_ms
+    ifrs.return_value = 0
+    cli.poll()
+    _poll.assert_called_with(cli.config['retry_backoff_ms'] / 1000.0)
 
 
 def test__poll():
@@ -302,12 +307,14 @@ def client(mocker):
 
 def test_maybe_refresh_metadata_ttl(mocker, client):
     client.cluster.ttl.return_value = 1234
+    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(1.234)
 
 
 def test_maybe_refresh_metadata_backoff(mocker, client):
+    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
     now = time.time()
     t = mocker.patch('time.time')
     t.return_value = now
@@ -318,6 +325,7 @@ def test_maybe_refresh_metadata_backoff(mocker, client):
 
 def test_maybe_refresh_metadata_in_progress(mocker, client):
     client._metadata_refresh_in_progress = True
+    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(9999.999) # request_timeout_ms
@@ -326,13 +334,14 @@ def test_maybe_refresh_metadata_in_progress(mocker, client):
 def test_maybe_refresh_metadata_update(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
     mocker.patch.object(client, '_can_send_request', return_value=True)
+    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
     send = mocker.patch.object(client, 'send')
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(9999.999) # request_timeout_ms
     assert client._metadata_refresh_in_progress
     request = MetadataRequest[0]([])
-    send.assert_called_once_with('foobar', request)
+    send.assert_called_once_with('foobar', request, wakeup=False)
 
 
 def test_maybe_refresh_metadata_cant_send(mocker, client):
@@ -340,6 +349,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, '_can_connect', return_value=True)
     mocker.patch.object(client, '_maybe_connect', return_value=True)
     mocker.patch.object(client, 'maybe_connect', return_value=True)
+    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     now = time.time()
     t = mocker.patch('time.time')
@@ -348,7 +358,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(2.222) # reconnect backoff
-    client.maybe_connect.assert_called_once_with('foobar')
+    client.maybe_connect.assert_called_once_with('foobar', wakeup=False)
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
