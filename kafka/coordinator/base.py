@@ -252,7 +252,7 @@ class BaseCoordinator(object):
                 if self.config['api_version'] < (0, 8, 2):
                     self.coordinator_id = self._client.least_loaded_node()
                     if self.coordinator_id is not None:
-                        self._client.ready(self.coordinator_id)
+                        self._client.maybe_connect(self.coordinator_id)
                     continue
 
                 future = self.lookup_coordinator()
@@ -331,18 +331,13 @@ class BaseCoordinator(object):
         with self._lock:
             log.info("Successfully joined group %s with generation %s",
                      self.group_id, self._generation.generation_id)
-            self.join_future = None
             self.state = MemberState.STABLE
-            self.rejoining = False
-            self._heartbeat_thread.enable()
-        self._on_join_complete(self._generation.generation_id,
-                               self._generation.member_id,
-                               self._generation.protocol,
-                               member_assignment_bytes)
+            self.rejoin_needed = False
+            if self._heartbeat_thread:
+                self._heartbeat_thread.enable()
 
     def _handle_join_failure(self, _):
         with self._lock:
-            self.join_future = None
             self.state = MemberState.UNJOINED
 
     def ensure_active_group(self):
@@ -351,7 +346,7 @@ class BaseCoordinator(object):
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
 
-            while self.need_rejoin():
+            while self.need_rejoin() or self._rejoin_incomplete():
                 self.ensure_coordinator_ready()
 
                 # call on_join_prepare if needed. We set a flag
@@ -382,6 +377,12 @@ class BaseCoordinator(object):
                 # This ensures that we do not mistakenly attempt to rejoin
                 # before the pending rebalance has completed.
                 if self.join_future is None:
+                    # Fence off the heartbeat thread explicitly so that it cannot
+                    # interfere with the join group. Note that this must come after
+                    # the call to _on_join_prepare since we must be able to continue
+                    # sending heartbeats if that callback takes some time.
+                    self._heartbeat_thread.disable()
+
                     self.state = MemberState.REBALANCING
                     future = self._send_join_group_request()
 
@@ -402,7 +403,16 @@ class BaseCoordinator(object):
 
                 self._client.poll(future=future)
 
-                if future.failed():
+                if future.succeeded():
+                    self._on_join_complete(self._generation.generation_id,
+                                           self._generation.member_id,
+                                           self._generation.protocol,
+                                           future.value)
+                    self.join_future = None
+                    self.rejoining = False
+
+                else:
+                    self.join_future = None
                     exception = future.exception
                     if isinstance(exception, (Errors.UnknownMemberIdError,
                                               Errors.RebalanceInProgressError,
@@ -411,6 +421,9 @@ class BaseCoordinator(object):
                     elif not future.retriable():
                         raise exception  # pylint: disable-msg=raising-bad-type
                     time.sleep(self.config['retry_backoff_ms'] / 1000)
+
+    def _rejoin_incomplete(self):
+        return self.join_future is not None
 
     def _send_join_group_request(self):
         """Join the group and return the assignment for the next generation.
@@ -497,7 +510,6 @@ class BaseCoordinator(object):
                     self._generation = Generation(response.generation_id,
                                                   response.member_id,
                                                   response.group_protocol)
-                    self.rejoin_needed = False
 
                 if response.leader_id == response.member_id:
                     log.info("Elected group leader -- performing partition"
@@ -674,7 +686,7 @@ class BaseCoordinator(object):
                 self.coordinator_id = response.coordinator_id
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
-                self._client.ready(self.coordinator_id)
+                self._client.maybe_connect(self.coordinator_id)
                 self.heartbeat.reset_timeouts()
             future.success(self.coordinator_id)
 
@@ -740,9 +752,8 @@ class BaseCoordinator(object):
     def close(self):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        with self._client._lock, self._lock:
-            self._close_heartbeat_thread()
-            self.maybe_leave_group()
+        self._close_heartbeat_thread()
+        self.maybe_leave_group()
 
     def maybe_leave_group(self):
         """Leave the current group and reset local generation/memberId."""
@@ -906,6 +917,10 @@ class HeartbeatThread(threading.Thread):
         self.closed = True
         with self.coordinator._lock:
             self.coordinator._lock.notify()
+        if self.is_alive():
+            self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
+        if self.is_alive():
+            log.warning("Heartbeat thread did not fully terminate during close")
 
     def run(self):
         try:

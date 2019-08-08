@@ -124,15 +124,17 @@ class KafkaAdminClient(object):
         metrics (kafka.metrics.Metrics): Optionally provide a metrics
             instance for capturing network IO stats. Default: None.
         metric_group_prefix (str): Prefix for metric names. Default: ''
-        sasl_mechanism (str): string picking sasl mechanism when security_protocol
-            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
-            Default: None
+        sasl_mechanism (str): Authentication mechanism when security_protocol
+            is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
+            PLAIN, GSSAPI, OAUTHBEARER.
         sasl_plain_username (str): username for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_plain_password (str): password for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
+            instance. (See kafka.oauth.abstract). Default: None
 
     """
     DEFAULT_CONFIG = {
@@ -166,6 +168,7 @@ class KafkaAdminClient(object):
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
+        'sasl_oauth_token_provider': None,
 
         # metrics configs
         'metric_reporters': [],
@@ -331,10 +334,21 @@ class KafkaAdminClient(object):
         while tries:
             tries -= 1
             response = self._send_request_to_node(self._controller_id, request)
-            # DeleteTopicsResponse returns topic_error_codes rather than topic_errors
-            for topic, error_code in getattr(response, "topic_errors", response.topic_error_codes):
+            # In Java, the error fieldname is inconsistent:
+            #  - CreateTopicsResponse / CreatePartitionsResponse uses topic_errors
+            #  - DeleteTopicsResponse uses topic_error_codes
+            # So this is a little brittle in that it assumes all responses have
+            # one of these attributes and that they always unpack into
+            # (topic, error_code) tuples.
+            topic_error_tuples = (response.topic_errors if hasattr(response, 'topic_errors')
+                else response.topic_error_codes)
+            # Also small py2/py3 compatibility -- py3 can ignore extra values
+            # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
+            # So for now we have to map across the list and explicitly drop any
+            # extra values (usually the error_message)
+            for topic, error_code in map(lambda e: e[:2], topic_error_tuples):
                 error_type = Errors.for_code(error_code)
-                if tries and isinstance(error_type, NotControllerError):
+                if tries and error_type is NotControllerError:
                     # No need to inspect the rest of the errors for
                     # non-retriable errors because NotControllerError should
                     # either be thrown for all errors or no errors.

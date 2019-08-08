@@ -165,13 +165,6 @@ class KafkaConsumer(six.Iterator):
         consumer_timeout_ms (int): number of milliseconds to block during
             message iteration before raising StopIteration (i.e., ending the
             iterator). Default block forever [float('inf')].
-        skip_double_compressed_messages (bool): A bug in KafkaProducer <= 1.2.4
-            caused some messages to be corrupted via double-compression.
-            By default, the fetcher will return these messages as a compressed
-            blob of bytes with a single offset, i.e. how the message was
-            actually published to the cluster. If you prefer to have the
-            fetcher automatically detect corrupt messages and skip them,
-            set this option to True. Default: False.
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
@@ -194,6 +187,11 @@ class KafkaConsumer(six.Iterator):
             providing a file, only the leaf certificate will be checked against
             this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
             Default: None.
+        ssl_ciphers (str): optionally set the available ciphers for ssl
+            connections. It should be a string in the OpenSSL cipher list
+            format. If no cipher can be selected (because compile-time options
+            or other configuration forbids use of all the specified ciphers),
+            an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use. If set to
             None, the client will attempt to infer the broker version by probing
             various APIs. Different versions enable different functionality.
@@ -231,17 +229,19 @@ class KafkaConsumer(six.Iterator):
             (such as offsets) should be exposed to the consumer. If set to True
             the only way to receive records from an internal topic is
             subscribing to it. Requires 0.10+ Default: True
-        sasl_mechanism (str): String picking sasl mechanism when security_protocol
-            is SASL_PLAINTEXT or SASL_SSL. Currently only PLAIN is supported.
-            Default: None
+        sasl_mechanism (str): Authentication mechanism when security_protocol
+            is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
+            PLAIN, GSSAPI, OAUTHBEARER.
         sasl_plain_username (str): Username for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_plain_password (str): Password for sasl PLAIN authentication.
-            Default: None
+            Required if sasl_mechanism is PLAIN.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
             sasl mechanism handshake. Default: one of bootstrap servers
+        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
+            instance. (See kafka.oauth.abstract). Default: None
 
     Note:
         Configuration parameters are described in more detail at
@@ -279,7 +279,6 @@ class KafkaConsumer(six.Iterator):
         'sock_chunk_bytes': 4096,  # undocumented experimental option
         'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'consumer_timeout_ms': float('inf'),
-        'skip_double_compressed_messages': False,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
@@ -288,6 +287,7 @@ class KafkaConsumer(six.Iterator):
         'ssl_keyfile': None,
         'ssl_crlfile': None,
         'ssl_password': None,
+        'ssl_ciphers': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000,
@@ -301,7 +301,8 @@ class KafkaConsumer(six.Iterator):
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
-        'sasl_kerberos_domain_name': None
+        'sasl_kerberos_domain_name': None,
+        'sasl_oauth_token_provider': None
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -321,11 +322,15 @@ class KafkaConsumer(six.Iterator):
                         new_config, self.config['auto_offset_reset'])
             self.config['auto_offset_reset'] = new_config
 
+        connections_max_idle_ms = self.config['connections_max_idle_ms']
         request_timeout_ms = self.config['request_timeout_ms']
         fetch_max_wait_ms = self.config['fetch_max_wait_ms']
-        if request_timeout_ms <= fetch_max_wait_ms:
-            raise KafkaConfigurationError("Request timeout (%s) must be larger than fetch-max-wait-ms (%s)" %
-                                          (request_timeout_ms, fetch_max_wait_ms))
+        if not (fetch_max_wait_ms < request_timeout_ms < connections_max_idle_ms):
+            raise KafkaConfigurationError(
+                "connections_max_idle_ms ({}) must be larger than "
+                "request_timeout_ms ({}) which must be larger than "
+                "fetch_max_wait_ms ({})."
+                .format(connections_max_idle_ms, request_timeout_ms, fetch_max_wait_ms))
 
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
@@ -903,10 +908,10 @@ class KafkaConsumer(six.Iterator):
             releases without warning.
         """
         if raw:
-            return self._metrics.metrics
+            return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics):
+        for k, v in six.iteritems(self._metrics.metrics.copy()):
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -1078,16 +1083,6 @@ class KafkaConsumer(six.Iterator):
             # like heartbeats, auto-commits, and metadata refreshes
             timeout_at = self._next_timeout()
 
-            # Because the consumer client poll does not sleep unless blocking on
-            # network IO, we need to explicitly sleep when we know we are idle
-            # because we haven't been assigned any partitions to fetch / consume
-            if self._use_consumer_group() and not self.assignment():
-                sleep_time = max(timeout_at - time.time(), 0)
-                if sleep_time > 0 and not self._client.in_flight_request_count():
-                    log.debug('No partitions assigned; sleeping for %s', sleep_time)
-                    time.sleep(sleep_time)
-                    continue
-
             # Short-circuit the fetch iterator if we are already timed out
             # to avoid any unintentional interaction with fetcher setup
             if time.time() > timeout_at:
@@ -1098,8 +1093,7 @@ class KafkaConsumer(six.Iterator):
                 if time.time() > timeout_at:
                     log.debug("internal iterator timeout - breaking for poll")
                     break
-                if self._client.in_flight_request_count():
-                    self._client.poll(timeout_ms=0)
+                self._client.poll(timeout_ms=0)
 
             # An else block on a for loop only executes if there was no break
             # so this should only be called on a StopIteration from the fetcher

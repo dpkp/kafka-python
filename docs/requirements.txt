@@ -1,5 +1,4 @@
 sphinx
-sphinxcontrib-napoleon
 sphinx_rtd_theme
 
 # Install kafka-python in editable mode

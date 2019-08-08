@@ -1,3 +1,102 @@
+# 1.4.6.post1 (Jun 4, 2019)
+This release merges in changes from 1.4.5 and 1.4.6 upstream.
+The only key differences are we focus on py35 still instead of py36/py37, and
+we only build for versions 0.10.2.2 and 1.1.0 and 1.1.1
+
+# 1.4.6 (Apr 2, 2019)
+
+This is a patch release primarily focused on bugs related to concurrency,
+SSL connections and testing, and SASL authentication:
+
+
+Client Concurrency Issues (Race Conditions / Deadlocks)
+
+* Fix race condition in `protocol.send_bytes` (isamaru / PR #1752)
+* Do not call `state_change_callback` with lock (dpkp / PR #1775)
+* Additional BrokerConnection locks to synchronize protocol/IFR state (dpkp / PR #1768)
+* Send pending requests before waiting for responses (dpkp / PR #1762)
+* Avoid race condition on `client._conns` in send() (dpkp / PR #1772)
+* Hold lock during `client.check_version` (dpkp / PR #1771)
+
+Producer Wakeup / TimeoutError
+
+* Dont wakeup during `maybe_refresh_metadata` -- it is only called by poll() (dpkp / PR #1769)
+* Dont do client wakeup when sending from sender thread (dpkp / PR #1761)
+
+SSL - Python3.7 Support / Bootstrap Hostname Verification / Testing
+
+* Wrap SSL sockets after connecting for python3.7 compatibility (dpkp / PR #1754)
+* Allow configuration of SSL Ciphers (dpkp / PR #1755)
+* Maintain shadow cluster metadata for bootstrapping (dpkp / PR #1753)
+* Generate SSL certificates for local testing (dpkp / PR #1756)
+* Rename ssl.keystore.location and ssl.truststore.location config files (dpkp)
+* Reset reconnect backoff on SSL connection (dpkp / PR #1777)
+
+SASL - OAuthBearer support / api version bugfix
+
+* Fix 0.8.2 protocol quick detection / fix SASL version check (dpkp / PR #1763)
+* Update sasl configuration docstrings to include supported mechanisms (dpkp)
+* Support SASL OAuthBearer Authentication (pt2pham / PR #1750)
+
+Miscellaneous Bugfixes
+
+* Dont force metadata refresh when closing unneeded bootstrap connections (dpkp / PR #1773)
+* Fix possible AttributeError during conn._close_socket (dpkp / PR #1776)
+* Return connection state explicitly after close in connect() (dpkp / PR #1778)
+* Fix flaky conn tests that use time.time (dpkp / PR #1758)
+* Add py to requirements-dev (dpkp)
+* Fixups to benchmark scripts for py3 / new KafkaFixture interface (dpkp)
+
+
+# 1.4.5 (Mar 14, 2019)
+
+This release is primarily focused on addressing lock contention
+and other coordination issues between the KafkaConsumer and the
+background heartbeat thread that was introduced in the 1.4 release.
+
+Consumer
+* connections_max_idle_ms must be larger than request_timeout_ms (jeffwidman / PR #1688)
+* Avoid race condition during close() / join heartbeat thread (dpkp / PR #1735)
+* Use last offset from fetch v4 if available to avoid getting stuck in compacted topic (keithks / PR #1724)
+* Synchronize puts to KafkaConsumer protocol buffer during async sends (dpkp / PR #1733)
+* Improve KafkaConsumer join group / only enable Heartbeat Thread during stable group (dpkp / PR #1695)
+* Remove unused `skip_double_compressed_messages` (jeffwidman / PR #1677)
+* Fix commit_offsets_async() callback (Faqa / PR #1712)
+
+Client
+* Retry bootstrapping after backoff when necessary (dpkp / PR #1736)
+* Recheck connecting nodes sooner when refreshing metadata (dpkp / PR #1737)
+* Avoid probing broker versions twice on newer brokers (dpkp / PR #1738)
+* Move all network connections and writes to KafkaClient.poll() (dpkp / PR #1729)
+* Do not require client lock for read-only operations (dpkp / PR #1730)
+* Timeout all unconnected conns (incl SSL) after request_timeout_ms (dpkp / PR #1696)
+
+Admin Client
+* Fix AttributeError in response topic error codes checking (jeffwidman)
+* Fix response error checking in KafkaAdminClient send_to_controller (jeffwidman)
+* Fix NotControllerError check (jeffwidman)
+
+Core/Protocol
+* Fix default protocol parser version / 0.8.2 version probe (dpkp / PR #1740)
+* Make NotEnoughReplicasError/NotEnoughReplicasAfterAppendError retriable (le-linh / PR #1722)
+
+Bugfixes
+* Use copy() in metrics() to avoid thread safety issues (emeric254 / PR #1682)
+
+Test Infrastructure
+* Mock dns lookups in test_conn (dpkp / PR #1739)
+* Use test.fixtures.version not test.conftest.version to avoid warnings (dpkp / PR #1731)
+* Fix test_legacy_correct_metadata_response on x86 arch (stanislavlevin / PR #1718)
+* Travis CI: 'sudo' tag is now deprecated in Travis (cclauss / PR #1698)
+* Use Popen.communicate() instead of Popen.wait() (Baisang / PR #1689)
+
+Compatibility
+* Catch thrown OSError by python 3.7 when creating a connection (danjo133 / PR #1694)
+* Update travis test coverage: 2.7, 3.4, 3.7, pypy2.7 (jeffwidman, dpkp / PR #1614)
+* Drop dependency on sphinxcontrib-napoleon (stanislavlevin / PR #1715)
+* Remove unused import from kafka/producer/record_accumulator.py (jeffwidman / PR #1705)
+* Fix SSL connection testing in Python 3.7 (seanthegeek, silentben / PR #1669)
+
 # 1.4.4.post1 (Jan 10, 2019)
 
 * Added  proc.communicate() patch that got merged upstream to ensure tests don't deadlock
