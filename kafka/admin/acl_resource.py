@@ -75,6 +75,8 @@ class ACLFilter(object):
     The difference between this class and the ACL class is mainly that
     we allow using ANY with the operation, permission, and resource type objects
     to fetch ALCs matching any of the properties.
+
+    To make a filter matching any principal, set principal to None
     """
 
     def __init__(
