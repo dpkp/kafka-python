@@ -524,7 +524,10 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        response = self._send_request_to_node(self._client.least_loaded_node(), request)
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
+
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             # optionally we could retry if error_type.retriable
@@ -612,7 +615,10 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        response = self._send_request_to_node(self._client.least_loaded_node(), request)
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
+
 
         return self._convert_create_acls_response_to_acls(acls, response)
 
@@ -704,7 +710,9 @@ class KafkaAdminClient(object):
                     .format(version)
             )
 
-        response = self._send_request_to_node(self._client.least_loaded_node(), request)
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
 
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 
