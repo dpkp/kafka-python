@@ -275,7 +275,7 @@ def test_lookup_on_connect():
     ]
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi1
         assert conn._sock_addr == sockaddr1
         conn.close()
@@ -289,7 +289,7 @@ def test_lookup_on_connect():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
@@ -304,7 +304,7 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         last_attempt = conn.last_attempt
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
         assert conn.last_attempt > last_attempt
 
@@ -317,7 +317,7 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
