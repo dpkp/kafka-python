@@ -464,6 +464,9 @@ class BrokerConnection(object):
                 log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_cafile'])
                 self._ssl_context.verify_mode = ssl.CERT_REQUIRED
+            else:
+                log.info('%s: Loading system default SSL CAs from %s', self, ssl.get_default_verify_paths())
+                self._ssl_context.load_default_certs()
             if self.config['ssl_certfile'] and self.config['ssl_keyfile']:
                 log.info('%s: Loading SSL Cert from %s', self, self.config['ssl_certfile'])
                 log.info('%s: Loading SSL Key from %s', self, self.config['ssl_keyfile'])
