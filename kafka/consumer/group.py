@@ -1086,9 +1086,7 @@ class KafkaConsumer(six.Iterator):
                 partitions = self._subscription.missing_fetch_positions()
                 self._update_fetch_positions(partitions)
 
-            poll_ms = 1000 * (self._consumer_timeout - time.time())
-            if not self._fetcher.in_flight_fetches():
-                poll_ms = min(poll_ms, self.config['reconnect_backoff_ms'])
+            poll_ms = min((1000 * (self._consumer_timeout - time.time())), self.config['retry_backoff_ms'])
             self._client.poll(timeout_ms=poll_ms)
 
             # after the long poll, we should check whether the group needs to rebalance
