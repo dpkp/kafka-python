@@ -2,14 +2,8 @@ from __future__ import absolute_import
 
 import pytest
 
-from test.fixtures import KafkaFixture, ZookeeperFixture, random_string, version as kafka_version
-
-
-@pytest.fixture(scope="module")
-def version():
-    """Return the Kafka version set in the OS environment"""
-    return kafka_version()
-
+from test.testutil import env_kafka_version, random_string
+from test.fixtures import KafkaFixture, ZookeeperFixture
 
 @pytest.fixture(scope="module")
 def zookeeper():
@@ -26,9 +20,9 @@ def kafka_broker(kafka_broker_factory):
 
 
 @pytest.fixture(scope="module")
-def kafka_broker_factory(version, zookeeper):
+def kafka_broker_factory(zookeeper):
     """Return a Kafka broker fixture factory"""
-    assert version, 'KAFKA_VERSION must be specified to run integration tests'
+    assert env_kafka_version(), 'KAFKA_VERSION must be specified to run integration tests'
 
     _brokers = []
     def factory(**broker_params):

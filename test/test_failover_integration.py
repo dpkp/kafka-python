@@ -9,8 +9,8 @@ from kafka.errors import (
 from kafka.producer.base import Producer
 from kafka.structs import TopicPartition
 
-from test.fixtures import ZookeeperFixture, KafkaFixture, random_string
-from test.testutil import KafkaIntegrationTestCase
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import KafkaIntegrationTestCase, random_string
 
 
 log = logging.getLogger(__name__)

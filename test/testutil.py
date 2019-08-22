@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 
-import functools
-import operator
 import os
+import random
+import string
 import time
 import uuid
 
@@ -16,72 +16,20 @@ from kafka.errors import (
     FailedPayloadsError
 )
 from kafka.structs import OffsetRequestPayload
-from test.fixtures import random_string, version_str_to_tuple, version as kafka_version #pylint: disable=wrong-import-order
 
 
-def kafka_versions(*versions):
+def random_string(length):
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
+
+
+def env_kafka_version():
+    """Return the Kafka version set in the OS environment as a tuple.
+
+     Example: '0.8.1.1' --> (0, 8, 1, 1)
     """
-    Describe the Kafka versions this test is relevant to.
-
-    The versions are passed in as strings, for example:
-        '0.11.0'
-        '>=0.10.1.0'
-        '>0.9', '<1.0'  # since this accepts multiple versions args
-
-    The current KAFKA_VERSION will be evaluated against this version. If the
-    result is False, then the test is skipped. Similarly, if KAFKA_VERSION is
-    not set the test is skipped.
-
-    Note: For simplicity, this decorator accepts Kafka versions as strings even
-    though the similarly functioning `api_version` only accepts tuples. Trying
-    to convert it to tuples quickly gets ugly due to mixing operator strings
-    alongside version tuples. While doable when one version is passed in, it
-    isn't pretty when multiple versions are passed in.
-    """
-
-    def construct_lambda(s):
-        if s[0].isdigit():
-            op_str = '='
-            v_str = s
-        elif s[1].isdigit():
-            op_str = s[0]  # ! < > =
-            v_str = s[1:]
-        elif s[2].isdigit():
-            op_str = s[0:2]  # >= <=
-            v_str = s[2:]
-        else:
-            raise ValueError('Unrecognized kafka version / operator: %s' % (s,))
-
-        op_map = {
-            '=': operator.eq,
-            '!': operator.ne,
-            '>': operator.gt,
-            '<': operator.lt,
-            '>=': operator.ge,
-            '<=': operator.le
-        }
-        op = op_map[op_str]
-        version = version_str_to_tuple(v_str)
-        return lambda a: op(a, version)
-
-    validators = map(construct_lambda, versions)
-
-    def real_kafka_versions(func):
-        @functools.wraps(func)
-        def wrapper(func, *args, **kwargs):
-            version = kafka_version()
-
-            if not version:
-                pytest.skip("no kafka version set in KAFKA_VERSION env var")
-
-            for f in validators:
-                if not f(version):
-                    pytest.skip("unsupported kafka version")
-
-            return func(*args, **kwargs)
-        return wrapper
-
-    return real_kafka_versions
+    if 'KAFKA_VERSION' not in os.environ:
+        return ()
+    return tuple(map(int, os.environ['KAFKA_VERSION'].split('.')))
 
 
 def current_offset(client, topic, partition, kafka_broker=None):
