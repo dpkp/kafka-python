@@ -7,7 +7,7 @@ import pytest
 from kafka.vendor.six.moves import range
 
 from kafka.codec import (
-    has_snappy, has_gzip, has_lz4,
+    has_snappy, has_lz4,
     gzip_encode, gzip_decode,
     snappy_encode, snappy_decode,
     lz4_encode, lz4_decode,

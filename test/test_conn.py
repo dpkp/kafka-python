@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
-import time
 
 import mock
 import pytest

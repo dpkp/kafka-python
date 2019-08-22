@@ -10,6 +10,7 @@ def version():
     """Return the Kafka version set in the OS environment"""
     return kafka_version()
 
+
 @pytest.fixture(scope="module")
 def zookeeper():
     """Return a Zookeeper fixture"""
@@ -17,10 +18,12 @@ def zookeeper():
     yield zk_instance
     zk_instance.close()
 
+
 @pytest.fixture(scope="module")
 def kafka_broker(kafka_broker_factory):
     """Return a Kafka broker fixture"""
     return kafka_broker_factory()[0]
+
 
 @pytest.fixture(scope="module")
 def kafka_broker_factory(version, zookeeper):
@@ -42,6 +45,7 @@ def kafka_broker_factory(version, zookeeper):
     for broker in _brokers:
         broker.close()
 
+
 @pytest.fixture
 def simple_client(kafka_broker, request, topic):
     """Return a SimpleClient fixture"""
@@ -50,6 +54,7 @@ def simple_client(kafka_broker, request, topic):
     yield client
     client.close()
 
+
 @pytest.fixture
 def kafka_client(kafka_broker, request):
     """Return a KafkaClient fixture"""
@@ -57,10 +62,12 @@ def kafka_client(kafka_broker, request):
     yield client
     client.close()
 
+
 @pytest.fixture
 def kafka_consumer(kafka_consumer_factory):
     """Return a KafkaConsumer fixture"""
     return kafka_consumer_factory()
+
 
 @pytest.fixture
 def kafka_consumer_factory(kafka_broker, topic, request):
@@ -79,10 +86,12 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     if _consumer[0]:
         _consumer[0].close()
 
+
 @pytest.fixture
 def kafka_producer(kafka_producer_factory):
     """Return a KafkaProducer fixture"""
     yield kafka_producer_factory()
+
 
 @pytest.fixture
 def kafka_producer_factory(kafka_broker, request):
@@ -100,12 +109,14 @@ def kafka_producer_factory(kafka_broker, request):
     if _producer[0]:
         _producer[0].close()
 
+
 @pytest.fixture
 def topic(kafka_broker, request):
     """Return a topic fixture"""
     topic_name = '%s_%s' % (request.node.name, random_string(10))
     kafka_broker.create_topics([topic_name])
     return topic_name
+
 
 @pytest.fixture
 def conn(mocker):
