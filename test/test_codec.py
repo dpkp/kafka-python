@@ -14,7 +14,7 @@ from kafka.codec import (
     lz4_encode_old_kafka, lz4_decode_old_kafka,
 )
 
-from test.fixtures import random_string
+from test.testutil import random_string
 
 
 def test_gzip():
