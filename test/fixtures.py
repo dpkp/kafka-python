@@ -23,8 +23,10 @@ from test.service import ExternalService, SpawnedService
 
 log = logging.getLogger(__name__)
 
+
 def random_string(length):
     return "".join(random.choice(string.ascii_letters) for i in range(length))
+
 
 def version_str_to_tuple(version_str):
     """Transform a version string into a tuple.
@@ -33,10 +35,12 @@ def version_str_to_tuple(version_str):
     """
     return tuple(map(int, version_str.split('.')))
 
+
 def version():
     if 'KAFKA_VERSION' not in os.environ:
         return ()
     return version_str_to_tuple(os.environ['KAFKA_VERSION'])
+
 
 def get_open_port():
     sock = socket.socket()
@@ -44,6 +48,7 @@ def get_open_port():
     port = sock.getsockname()[1]
     sock.close()
     return port
+
 
 def gen_ssl_resources(directory):
     os.system("""
@@ -73,6 +78,7 @@ def gen_ssl_resources(directory):
     keytool -keystore kafka.server.keystore.jks -alias localhost -import \
       -file cert-signed -storepass foobar -noprompt
     """.format(directory))
+
 
 class Fixture(object):
     kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
@@ -157,6 +163,7 @@ class Fixture(object):
 
     def dump_logs(self):
         self.child.dump_logs()
+
 
 class ZookeeperFixture(Fixture):
     @classmethod
@@ -496,7 +503,7 @@ class KafkaFixture(Fixture):
             proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = proc.communicate()
             if proc.returncode != 0:
-                if not 'kafka.common.TopicExistsException' in stdout:
+                if 'kafka.common.TopicExistsException' not in stdout:
                     self.out("Failed to create topic %s" % (topic_name,))
                     self.out(stdout)
                     self.out(stderr)

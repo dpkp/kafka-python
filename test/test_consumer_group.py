@@ -8,7 +8,7 @@ from kafka.vendor import six
 
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
-from kafka.coordinator.base import MemberState, Generation
+from kafka.coordinator.base import MemberState
 from kafka.structs import TopicPartition
 
 from test.fixtures import random_string, version
@@ -34,8 +34,7 @@ def test_consumer_topics(kafka_broker, topic, version):
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     # Necessary to drive the IO
     consumer.poll(500)
-    consumer_topics = consumer.topics()
-    assert topic in consumer_topics
+    assert topic in consumer.topics()
     assert len(consumer.partitions_for_topic(topic)) > 0
     consumer.close()
 

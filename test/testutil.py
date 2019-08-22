@@ -44,10 +44,10 @@ def kafka_versions(*versions):
             op_str = '='
             v_str = s
         elif s[1].isdigit():
-            op_str = s[0] # ! < > =
+            op_str = s[0]  # ! < > =
             v_str = s[1:]
         elif s[2].isdigit():
-            op_str = s[0:2] # >= <=
+            op_str = s[0:2]  # >= <=
             v_str = s[2:]
         else:
             raise ValueError('Unrecognized kafka version / operator: %s' % (s,))
