@@ -1,12 +1,12 @@
 #!/bin/bash
 
-: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.1 0.11.0.2 1.0.2 1.1.1 2.0.1"}
+: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.2 0.11.0.3 1.0.2 1.1.1 2.0.1"}
 : ${SCALA_VERSION:=2.11}
 : ${DIST_BASE_URL:=https://archive.apache.org/dist/kafka/}
 : ${KAFKA_SRC_GIT:=https://github.com/apache/kafka.git}
 
 # On travis CI, empty KAFKA_VERSION means skip integration tests
-# so we don't try to get binaries 
+# so we don't try to get binaries
 # Otherwise it means test all official releases, so we get all of them!
 if [ -z "$KAFKA_VERSION" -a -z "$TRAVIS" ]; then
   KAFKA_VERSION=$ALL_RELEASES
