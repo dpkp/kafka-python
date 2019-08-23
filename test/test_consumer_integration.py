@@ -631,7 +631,7 @@ def test_kafka_consumer_max_bytes_simple(kafka_consumer_factory, topic, send_mes
     consumer = kafka_consumer_factory(
         auto_offset_reset='earliest', fetch_max_bytes=300)
     seen_partitions = set()
-    for i in range(10):
+    for i in range(90):
         poll_res = consumer.poll(timeout_ms=100)
         for partition, msgs in poll_res.items():
             for msg in msgs:
