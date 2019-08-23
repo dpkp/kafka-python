@@ -47,6 +47,17 @@ def current_offset(client, topic, partition, kafka_broker=None):
         return offsets.offsets[0]
 
 
+def assert_message_count(messages, num_messages):
+    """Check that we received the expected number of messages with no duplicates."""
+    # Make sure we got them all
+    assert len(messages) == num_messages
+    # Make sure there are no duplicates
+    # Note: Currently duplicates are identified only using key/value. Other attributes like topic, partition, headers,
+    # timestamp, etc are ignored... this could be changed if necessary, but will be more tolerant of dupes.
+    unique_messages = {(m.key, m.value) for m in messages}
+    assert len(unique_messages) == num_messages
+
+
 class KafkaIntegrationTestCase(unittest.TestCase):
     create_client = True
     topic = None
