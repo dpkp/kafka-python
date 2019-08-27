@@ -1,3 +1,6 @@
+# 1.4.6.post2 (Aug 27, 2019)
+* Cherrypick change from upstream to make blocking calls for Kafka metadata if we don't have any
+
 # 1.4.6.post1 (Jun 4, 2019)
 This release merges in changes from 1.4.5 and 1.4.6 upstream.
 The only key differences are we focus on py35 still instead of py36/py37, and
