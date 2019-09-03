@@ -959,7 +959,7 @@ class BrokerConnection(object):
     def _recv(self):
         """Take all available bytes from socket, return list of any responses from parser"""
         recvd = []
-        exc = None
+        err = None
         with self._lock:
             if not self._can_send_recv():
                 log.warning('%s cannot recv: socket not connected', self)
@@ -974,7 +974,7 @@ class BrokerConnection(object):
                     # without an exception raised
                     if not data:
                         log.error('%s: socket disconnected', self)
-                        exc = Errors.KafkaConnectionError('socket disconnected')
+                        err = Errors.KafkaConnectionError('socket disconnected')
                         break
                     else:
                         recvd.append(data)
@@ -986,7 +986,7 @@ class BrokerConnection(object):
                         break
                     log.exception('%s: Error receiving network data'
                                   ' closing socket', self)
-                    exc = Errors.KafkaConnectionError(e)
+                    err = Errors.KafkaConnectionError(e)
                     break
                 except BlockingIOError:
                     if six.PY3:
@@ -995,7 +995,7 @@ class BrokerConnection(object):
                     raise
 
             # Only process bytes if there was no connection exception
-            if exc is None:
+            if err is None:
                 recvd_data = b''.join(recvd)
                 if self._sensors:
                     self._sensors.bytes_received.record(len(recvd_data))
@@ -1006,9 +1006,9 @@ class BrokerConnection(object):
                 try:
                     return self._protocol.receive_bytes(recvd_data)
                 except Errors.KafkaProtocolError as e:
-                    exc = e
+                    err = e
 
-        self.close(error=exc)
+        self.close(error=err)
         return ()
 
     def requests_timed_out(self):
