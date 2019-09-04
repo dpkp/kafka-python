@@ -826,7 +826,7 @@ class KafkaAdminClient(object):
         self._wait_for_futures(futures)
 
         # Use one of the results as the general response and add all other resources to it
-        response = copy.copy(futures[0])
+        response = copy.copy(futures[0].value)
         response.resources = []
 
         for future in futures:
