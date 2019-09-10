@@ -53,4 +53,5 @@ __all__ = [
     'RoundRobinPartitioner', 'HashedPartitioner',
     'create_message', 'create_gzip_message', 'create_snappy_message',
     'SimpleConsumer', 'MultiProcessConsumer', 'ConsumerRebalanceListener',
+    'errors'
 ]
