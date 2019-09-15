@@ -292,7 +292,7 @@ class Fetcher(six.Iterator):
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
 
-    def fetched_records(self, max_records=None):
+    def fetched_records(self, max_records=None, update_offsets=True):
         """Returns previously fetched records and updates consumed offsets.
 
         Arguments:
@@ -330,10 +330,11 @@ class Fetcher(six.Iterator):
             else:
                 records_remaining -= self._append(drained,
                                                   self._next_partition_records,
-                                                  records_remaining)
+                                                  records_remaining,
+                                                  update_offsets)
         return dict(drained), bool(self._completed_fetches)
 
-    def _append(self, drained, part, max_records):
+    def _append(self, drained, part, max_records, update_offsets):
         if not part:
             return 0
 
@@ -366,7 +367,8 @@ class Fetcher(six.Iterator):
                 for record in part_records:
                     drained[tp].append(record)
 
-                self._subscriptions.assignment[tp].position = next_offset
+                if update_offsets:
+                    self._subscriptions.assignment[tp].position = next_offset
                 return len(part_records)
 
             else:
