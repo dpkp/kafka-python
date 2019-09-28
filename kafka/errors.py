@@ -443,6 +443,12 @@ class PolicyViolationError(BrokerResponseError):
     description = 'Request parameters do not satisfy the configured policy.'
 
 
+class SecurityDisabledError(BrokerResponseError):
+    errno = 54
+    message = 'SECURITY_DISABLED'
+    description = 'Security features are disabled.'
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 
