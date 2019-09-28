@@ -94,7 +94,7 @@ def test_conn_state_change(mocker, cli, conn):
     sock = conn._sock
     cli._conn_state_change(node_id, sock, conn)
     assert node_id in cli._connecting
-    sel.register.assert_called_with(sock, selectors.EVENT_WRITE)
+    sel.register.assert_called_with(sock, selectors.EVENT_WRITE, conn)
 
     conn.state = ConnectionStates.CONNECTED
     cli._conn_state_change(node_id, sock, conn)
