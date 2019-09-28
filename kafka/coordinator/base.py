@@ -321,10 +321,14 @@ class BaseCoordinator(object):
                 self.heartbeat.poll()
 
     def time_to_next_heartbeat(self):
+        """Returns seconds (float) remaining before next heartbeat should be sent
+
+        Note: Returns infinite if group is not joined
+        """
         with self._lock:
             # if we have not joined the group, we don't need to send heartbeats
             if self.state is MemberState.UNJOINED:
-                return sys.maxsize
+                return float('inf')
             return self.heartbeat.time_to_next_heartbeat()
 
     def _handle_join_success(self, member_assignment_bytes):
