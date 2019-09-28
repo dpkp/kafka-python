@@ -1,8 +1,8 @@
 import pytest
 import os
 
-from test.fixtures import ZookeeperFixture, KafkaFixture, version
-from test.testutil import KafkaIntegrationTestCase, kafka_versions, current_offset
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import KafkaIntegrationTestCase, env_kafka_version, current_offset
 
 from kafka.errors import NoError
 from kafka.admin import KafkaAdminClient, ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL
@@ -11,7 +11,7 @@ from kafka.admin import KafkaAdminClient, ACLFilter, ACLOperation, ACLPermission
 class TestAdminClientIntegration(KafkaIntegrationTestCase):
     @classmethod
     def setUpClass(cls):  # noqa
-        if not os.environ.get('KAFKA_VERSION'):
+        if env_kafka_version() < (0, 10):
             return
 
         cls.zk = ZookeeperFixture.instance()
@@ -19,13 +19,22 @@ class TestAdminClientIntegration(KafkaIntegrationTestCase):
 
     @classmethod
     def tearDownClass(cls):  # noqa
-        if not os.environ.get('KAFKA_VERSION'):
+        if env_kafka_version() < (0, 10):
             return
 
         cls.server.close()
         cls.zk.close()
 
-    @kafka_versions('>=0.9.0')
+    def setUp(self):
+        if env_kafka_version() < (0, 10):
+            self.skipTest('Admin Integration test requires KAFKA_VERSION >= 0.10')
+        super(TestAdminClientIntegration, self).setUp()
+
+    def tearDown(self):
+        if env_kafka_version() < (0, 10):
+            return
+        super(TestAdminClientIntegration, self).tearDown()
+
     def test_create_describe_delete_acls(self):
         """Tests that we can add, list and remove ACLs
         """
