@@ -8,10 +8,13 @@ from kafka.errors import NoError
 from kafka.admin import KafkaAdminClient, ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL
 
 
+# TODO: Convert to pytest / fixtures
+# Note that ACL features require broker 0.11, but other admin apis may work on
+# earlier broker versions
 class TestAdminClientIntegration(KafkaIntegrationTestCase):
     @classmethod
     def setUpClass(cls):  # noqa
-        if env_kafka_version() < (0, 10):
+        if env_kafka_version() < (0, 11):
             return
 
         cls.zk = ZookeeperFixture.instance()
@@ -19,19 +22,19 @@ class TestAdminClientIntegration(KafkaIntegrationTestCase):
 
     @classmethod
     def tearDownClass(cls):  # noqa
-        if env_kafka_version() < (0, 10):
+        if env_kafka_version() < (0, 11):
             return
 
         cls.server.close()
         cls.zk.close()
 
     def setUp(self):
-        if env_kafka_version() < (0, 10):
-            self.skipTest('Admin Integration test requires KAFKA_VERSION >= 0.10')
+        if env_kafka_version() < (0, 11):
+            self.skipTest('Admin ACL Integration test requires KAFKA_VERSION >= 0.11')
         super(TestAdminClientIntegration, self).setUp()
 
     def tearDown(self):
-        if env_kafka_version() < (0, 10):
+        if env_kafka_version() < (0, 11):
             return
         super(TestAdminClientIntegration, self).tearDown()
 
