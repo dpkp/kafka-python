@@ -623,10 +623,11 @@ class KafkaClient(object):
             if key.fileobj is self._wake_r:
                 self._clear_wake_fd()
                 continue
-            elif not (events & selectors.EVENT_READ):
+            if events & selectors.EVENT_WRITE:
                 conn = key.data
-                if conn.node_id in self._connecting:
-                    self._maybe_connect(conn.node_id)
+                if conn.connecting():
+                    conn.connect()
+            if not (events & selectors.EVENT_READ):
                 continue
             conn = key.data
             processed.add(conn)
