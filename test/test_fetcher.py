@@ -81,7 +81,7 @@ def test_send_fetches(fetcher, topic, mocker):
 
     ret = fetcher.send_fetches()
     for node, request in enumerate(fetch_requests):
-        fetcher._client.send.assert_any_call(node, request)
+        fetcher._client.send.assert_any_call(node, request, wakeup=False)
     assert len(ret) == len(fetch_requests)
 
 

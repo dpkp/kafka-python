@@ -123,7 +123,7 @@ class Fetcher(six.Iterator):
         for node_id, request in six.iteritems(self._create_fetch_requests()):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
-                future = self._client.send(node_id, request)
+                future = self._client.send(node_id, request, wakeup=False)
                 future.add_callback(self._handle_fetch_response, request, time.time())
                 future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
                 futures.append(future)
