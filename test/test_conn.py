@@ -85,7 +85,7 @@ def test_connection_delay(conn):
         conn.last_attempt = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
-        assert conn.connection_delay() == 0
+        assert conn.connection_delay() == float('inf')
         conn.state = ConnectionStates.CONNECTED
         assert conn.connection_delay() == float('inf')
 
