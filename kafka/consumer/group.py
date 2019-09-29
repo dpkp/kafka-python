@@ -674,11 +674,15 @@ class KafkaConsumer(six.Iterator):
             # responses to enable pipelining while the user is handling the
             # fetched records.
             if not partial:
-                self._fetcher.send_fetches()
+                futures = self._fetcher.send_fetches()
+                if len(futures):
+                    self._client.poll(timeout_ms=0)
             return records
 
         # Send any new fetches (won't resend pending fetches)
-        self._fetcher.send_fetches()
+        futures = self._fetcher.send_fetches()
+        if len(futures):
+            self._client.poll(timeout_ms=0)
 
         timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll() * 1000)
         self._client.poll(timeout_ms=timeout_ms)
