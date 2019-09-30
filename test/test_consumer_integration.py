@@ -766,12 +766,11 @@ def test_kafka_consumer_offsets_for_time_old(kafka_consumer, topic):
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
 def test_kafka_consumer_offsets_for_times_errors(kafka_consumer_factory, topic):
     consumer = kafka_consumer_factory(fetch_max_wait_ms=200,
-                                    request_timeout_ms=500)
+                                      request_timeout_ms=500)
     tp = TopicPartition(topic, 0)
     bad_tp = TopicPartition(topic, 100)
 
     with pytest.raises(ValueError):
         consumer.offsets_for_times({tp: -1})
 
-    with pytest.raises(KafkaTimeoutError):
-        consumer.offsets_for_times({bad_tp: 0})
+    assert consumer.offsets_for_times({bad_tp: 0}) == {bad_tp: None}
