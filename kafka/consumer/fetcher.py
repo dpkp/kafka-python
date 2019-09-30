@@ -235,14 +235,16 @@ class Fetcher(six.Iterator):
         log.debug("Resetting offset for partition %s to %s offset.",
                   partition, strategy)
         offsets = self._retrieve_offsets({partition: timestamp})
-        if partition not in offsets:
-            raise NoOffsetForPartitionError(partition)
-        offset = offsets[partition][0]
 
-        # we might lose the assignment while fetching the offset,
-        # so check it is still active
-        if self._subscriptions.is_assigned(partition):
-            self._subscriptions.seek(partition, offset)
+        if partition in offsets:
+            offset = offsets[partition][0]
+
+            # we might lose the assignment while fetching the offset,
+            # so check it is still active
+            if self._subscriptions.is_assigned(partition):
+                self._subscriptions.seek(partition, offset)
+        else:
+            log.debug("Could not find offset for partition %s since it is probably deleted" % (partition,))
 
     def _retrieve_offsets(self, timestamps, timeout_ms=float("inf")):
         """Fetch offset for each partition passed in ``timestamps`` map.
@@ -267,6 +269,9 @@ class Fetcher(six.Iterator):
         start_time = time.time()
         remaining_ms = timeout_ms
         while remaining_ms > 0:
+            if not timestamps:
+                return {}
+
             future = self._send_offset_requests(timestamps)
             self._client.poll(future=future, timeout_ms=remaining_ms)
 
@@ -283,6 +288,15 @@ class Fetcher(six.Iterator):
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
                 self._client.poll(future=refresh_future, timeout_ms=remaining_ms)
+
+                # Issue #1780
+                # Recheck partition existance after after a successful metadata refresh
+                if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
+                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existance")
+                    unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
+                    if not self._client.cluster.leader_for_partition(unknown_partition):
+                        log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
+                        timestamps.pop(unknown_partition)
             else:
                 time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 

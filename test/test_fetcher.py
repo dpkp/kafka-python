@@ -138,10 +138,6 @@ def test__reset_offset(fetcher, mocker):
     fetcher._subscriptions.need_offset_reset(tp)
     mocked = mocker.patch.object(fetcher, '_retrieve_offsets')
 
-    mocked.return_value = {}
-    with pytest.raises(NoOffsetForPartitionError):
-        fetcher._reset_offset(tp)
-
     mocked.return_value = {tp: (1001, None)}
     fetcher._reset_offset(tp)
     assert not fetcher._subscriptions.assignment[tp].awaiting_reset

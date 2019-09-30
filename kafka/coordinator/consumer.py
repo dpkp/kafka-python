@@ -225,7 +225,11 @@ class ConsumerCoordinator(BaseCoordinator):
         self._subscription.needs_fetch_committed_offsets = True
 
         # update partition assignment
-        self._subscription.assign_from_subscribed(assignment.partitions())
+        try:
+            self._subscription.assign_from_subscribed(assignment.partitions())
+        except ValueError as e:
+            log.warning("%s. Probably due to a deleted topic. Requesting Re-join" % e)
+            self.request_rejoin()
 
         # give the assignor a chance to update internal state
         # based on the received assignment
