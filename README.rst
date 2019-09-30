@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-1.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-2.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -150,7 +150,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 1.1+).
+(0.8.0 to 2.3+).
 
 Low-level
 *********

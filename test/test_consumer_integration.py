@@ -17,6 +17,7 @@ from kafka.errors import (
     ConsumerFetchSizeTooSmall, OffsetOutOfRangeError, UnsupportedVersionError,
     KafkaTimeoutError, UnsupportedCodecError
 )
+from kafka.protocol.message import PartialMessage
 from kafka.structs import (
     ProduceRequestPayload, TopicPartition, OffsetAndTimestamp
 )
@@ -249,6 +250,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
 
         consumer.stop()
 
+    @pytest.mark.skipif(env_kafka_version() >= (2, 0),
+                        reason="SimpleConsumer blocking does not handle PartialMessage change in kafka 2.0+")
     def test_simple_consumer_blocking(self):
         consumer = self.consumer()
 
@@ -414,7 +417,8 @@ class TestConsumerIntegration(KafkaIntegrationTestCase):
         consumer = self.consumer(max_buffer_size=60000)
 
         expected_messages = set(small_messages + large_messages)
-        actual_messages = set([ x.message.value for x in consumer ])
+        actual_messages = set([x.message.value for x in consumer
+                               if not isinstance(x.message, PartialMessage)])
         self.assertEqual(expected_messages, actual_messages)
 
         consumer.stop()
