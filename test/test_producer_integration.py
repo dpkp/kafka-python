@@ -13,6 +13,7 @@ from kafka import (
 from kafka.codec import has_snappy
 from kafka.errors import UnknownTopicOrPartitionError, LeaderNotAvailableError
 from kafka.producer.base import Producer
+from kafka.protocol.message import PartialMessage
 from kafka.structs import FetchRequestPayload, ProduceRequestPayload
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
@@ -521,7 +522,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.partition, partition)
-        messages = [ x.message.value for x in resp.messages ]
+        messages = [ x.message.value for x in resp.messages
+                    if not isinstance(x.message, PartialMessage) ]
 
         self.assertEqual(messages, expected_messages)
         self.assertEqual(resp.highwaterMark, start_offset+len(expected_messages))
