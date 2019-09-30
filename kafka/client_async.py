@@ -951,6 +951,16 @@ class KafkaClient(object):
             log.info('Closing idle connection %s, last active %d ms ago', conn_id, idle_ms)
             self.close(node_id=conn_id)
 
+    def bootstrap_connected(self):
+        """Return True if a bootstrap node is connected"""
+        for node_id in self._conns:
+            if not self.cluster.is_bootstrap(node_id):
+                continue
+            if self._conns[node_id].connected():
+                return True
+        else:
+            return False
+
 
 # OrderedDict requires python2.7+
 try:

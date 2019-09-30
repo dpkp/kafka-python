@@ -393,9 +393,7 @@ class KafkaConsumer(six.Iterator):
 
     def bootstrap_connected(self):
         """Return True if the bootstrap is connected."""
-        if self._client._bootstrap_fails > 0:
-            return False
-        return True
+        return self._client.bootstrap_connected()
 
     def assign(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.

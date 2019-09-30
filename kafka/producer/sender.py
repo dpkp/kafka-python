@@ -315,6 +315,9 @@ class Sender(threading.Thread):
         """Wake up the selector associated with this send thread."""
         self._client.wakeup()
 
+    def bootstrap_connected(self):
+        return self._client.bootstrap_connected()
+
 
 class SenderMetrics(object):
 
