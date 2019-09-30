@@ -25,6 +25,7 @@ from kafka.structs import BrokerMetadata
 @pytest.fixture
 def cli(mocker, conn):
     client = KafkaClient(api_version=(0, 9))
+    mocker.patch.object(client, '_selector')
     client.poll(future=client.cluster.request_update())
     return client
 
@@ -32,6 +33,7 @@ def cli(mocker, conn):
 def test_bootstrap(mocker, conn):
     conn.state = ConnectionStates.CONNECTED
     cli = KafkaClient(api_version=(0, 9))
+    mocker.patch.object(cli, '_selector')
     future = cli.cluster.request_update()
     cli.poll(future=future)
 
@@ -86,7 +88,7 @@ def test_maybe_connect(cli, conn):
 
 
 def test_conn_state_change(mocker, cli, conn):
-    sel = mocker.patch.object(cli, '_selector')
+    sel = cli._selector
 
     node_id = 0
     cli._conns[node_id] = conn
