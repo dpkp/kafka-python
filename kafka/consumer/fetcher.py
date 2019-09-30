@@ -268,6 +268,7 @@ class Fetcher(six.Iterator):
 
         start_time = time.time()
         remaining_ms = timeout_ms
+        timestamps = copy.copy(timestamps)
         while remaining_ms > 0:
             if not timestamps:
                 return {}
@@ -294,7 +295,7 @@ class Fetcher(six.Iterator):
                 if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
                     log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existance")
                     unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
-                    if not self._client.cluster.leader_for_partition(unknown_partition):
+                    if self._client.cluster.leader_for_partition(unknown_partition) is None:
                         log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
                         timestamps.pop(unknown_partition)
             else:
