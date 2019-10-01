@@ -3,11 +3,15 @@ from . import unittest
 from .testutil import random_string
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import KafkaIntegrationTestCase, env_kafka_version
+from test.testutil import env_kafka_version
+# from kafka.client import SimpleClient, KafkaClient
+# from kafka.producer import KafkaProducer, SimpleProducer
+# from kafka.consumer import SimpleConsumer, KafkaConsumer
+from kafka.admin import KafkaAdminClient, NewTopic
 
 
 class SASLIntegrationTestCase(unittest.TestCase):
-    sasl_mechanism = "PLAIN"
+    sasl_mechanism = None
     sasl_transport = "SASL_PLAINTEXT"
     server = None
     zk = None
@@ -23,34 +27,44 @@ class SASLIntegrationTestCase(unittest.TestCase):
     def tearDownClass(cls) -> None:
         pass
 
+    @classmethod
+    def bootstrap_servers(cls) -> str:
+        return "{}:{}".format(cls.server.host, cls.server.port)
+
+    def test_admin(self):
+        admin = self.create_admin()
+        admin.create_topics([NewTopic('mytopic', 1, 1)])
+
+    def create_admin(self) -> KafkaAdminClient:
+        raise NotImplementedError()
+
 
 @pytest.mark.skipif(
     not env_kafka_version() or env_kafka_version() < (0, 10), reason="No KAFKA_VERSION or version too low"
 )
 class TestSaslPlain(SASLIntegrationTestCase):
-    def test_sasl_plain(self):
-        pass
+    sasl_mechanism = "PLAIN"
 
-    def test_sasl_scram(self, strength):
-        pass
+    def create_admin(self) -> KafkaAdminClient:
+        return KafkaAdminClient(
+            bootstrap_servers=self.bootstrap_servers(),
+            security_protocol=self.sasl_transport,
+            sasl_mechanism=self.sasl_mechanism,
+            sasl_plain_username=self.server.broker_user,
+            sasl_plain_password=self.server.broker_password
+        )
 
-
-@pytest.mark.skipif(
-    not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
-)
-class TestSaslScram256(SASLIntegrationTestCase):
-    sasl_mechanism = "SCRAM-SHA-256"
-
-    def test_sasl_plain(self):
-        pass
-
-    @pytest.mark.parametrize("strength", [256, 512])
-    def test_sasl_scram(self, strength):
-        pass
-
-
-@pytest.mark.skipif(
-    not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
-)
-class TestSaslScram512(SASLIntegrationTestCase):
-    sasl_mechanism = "SCRAM-SHA-512"
+#
+# @pytest.mark.skipif(
+#     not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
+# )
+# class TestSaslScram256(SASLIntegrationTestCase):
+#     sasl_mechanism = "SCRAM-SHA-256"
+#
+#
+#
+# @pytest.mark.skipif(
+#     not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
+# )
+# class TestSaslScram512(SASLIntegrationTestCase):
+#     sasl_mechanism = "SCRAM-SHA-512"
