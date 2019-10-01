@@ -233,6 +233,9 @@ class ZookeeperFixture(Fixture):
 
 
 class KafkaFixture(Fixture):
+    broker_user = 'alice'
+    broker_password = 'alice-secret'
+
     @classmethod
     def instance(cls, broker_id, zookeeper, zk_chroot=None,
                  host=None, port=None,
@@ -272,6 +275,7 @@ class KafkaFixture(Fixture):
         self.auto_create_topic = auto_create_topic
         self.transport = transport.upper()
         self.sasl_mechanism = sasl_mechanism.upper()
+        self.sasl_config = self._sasl_config()
         self.ssl_dir = self.test_resource('ssl')
 
         # TODO: checking for port connection would be better than scanning logs
@@ -292,6 +296,60 @@ class KafkaFixture(Fixture):
         self.running = False
 
         self._client = None
+
+    def _sasl_config(self):
+        if 'SASL' not in self.transport:
+            return ''
+
+        sasl_config = "sasl.enabled.mechanisms={mechanism}\n"
+        sasl_config += "sasl.mechanism.inter.broker.protocol={mechanism}\n"
+        if self.sasl_mechanism == 'PLAIN':
+            sasl_config += (
+                "listener.name.{transport_lower}.plain.sasl.jaas.config="
+                + "org.apache.kafka.common.security.plain.PlainLoginModule "
+                + 'required username="{user}" password="{password}" user_alice="{password}";\n'
+            )
+        elif self.sasl_mechanism in ("SCRAM-SHA-256", "SCRAM-SHA-512"):
+            sasl_config += (
+                    "listener.name.{transport_lower}.{mechanism_lower}.sasl.jaas.config="
+                    + "org.apache.kafka.common.security.scram.ScramLoginModule "
+                    + 'required username="{user}" password="{password}";\n'
+            )
+            # add user to zookeeper for the first server
+            if self.broker_id == 0:
+                self._add_scram_user()
+        else:
+            raise ValueError("SASL mechanism {} currently not supported".format(self.sasl_mechanism))
+        return sasl_config.format(
+            transport=self.transport, transport_lower=self.transport.lower(),
+            mechanism=self.sasl_mechanism, mechanism_lower=self.sasl_mechanism.lower(),
+            user=self.broker_user, password=self.broker_password
+        )
+
+    def _add_scram_user(self):
+        self.out("Adding SCRAM credentials for user {} to zookeeper.".format(self.broker_user))
+        args = self.kafka_run_class_args(
+            "kafka.admin.ConfigCommand",
+            "--zookeeper",
+            "%s:%d" % (self.zookeeper.host,
+                       self.zookeeper.port),
+            "--alter",
+            "--entity-type", "users",
+            "--entity-name", self.broker_user,
+            "--add-config",
+            "{}=[password={}]".format(self.sasl_mechanism, self.broker_password),
+        )
+        env = self.kafka_run_class_env()
+        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        stdout, stderr = proc.communicate()
+
+        if proc.returncode != 0:
+            self.out("Failed to save credentials to zookeeper!")
+            self.out(stdout)
+            self.out(stderr)
+            raise RuntimeError("Failed to save credentials to zookeeper!")
+        self.out("User created.")
 
     def bootstrap_server(self):
         return '%s:%d' % (self.host, self.port)
