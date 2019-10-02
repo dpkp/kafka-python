@@ -551,11 +551,13 @@ class KafkaFixture(Fixture):
         for topic_name in topic_names:
             self._create_topic(topic_name, num_partitions, replication_factor)
 
-    def get_clients(self, cnt=1, client_id=None):
-        if client_id is None:
-            client_id = 'client'
-        return tuple(KafkaClient(client_id='%s_%s' % (client_id, random_string(4)),
-                                 bootstrap_servers=self.bootstrap_server()) for x in range(cnt))
+    def get_clients(self, cnt=1, **params):
+        params.setdefault('client_id', 'client')
+        params['bootstrap_servers'] = self.bootstrap_server()
+        client_id = params['client_id']
+        for _ in range(cnt):
+            params['client_id'] = '%s_%s' % (client_id, random_string(4))
+            yield KafkaClient(**params)
 
     def get_admin_clients(self, cnt=1, **params):
         params.setdefault('client_id', 'admin_client')
@@ -570,7 +572,7 @@ class KafkaFixture(Fixture):
         params.setdefault('heartbeat_interval_ms', 500)
         params['bootstrap_servers'] = self.bootstrap_server()
         client_id = params['client_id']
-        for x in range(cnt):
+        for _ in range(cnt):
             params['client_id'] = '%s_%s' % (client_id, random_string(4))
             yield KafkaConsumer(*topics, **params)
 
@@ -578,6 +580,6 @@ class KafkaFixture(Fixture):
         params.setdefault('client_id', 'producer')
         params['bootstrap_servers'] = self.bootstrap_server()
         client_id = params['client_id']
-        for x in range(cnt):
+        for _ in range(cnt):
             params['client_id'] = '%s_%s' % (client_id, random_string(4))
             yield KafkaProducer(**params)
