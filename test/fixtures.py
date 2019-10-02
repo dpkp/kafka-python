@@ -275,13 +275,14 @@ class KafkaFixture(Fixture):
         self.auto_create_topic = auto_create_topic
         self.transport = transport.upper()
         self.sasl_mechanism = sasl_mechanism.upper()
-        self.sasl_config = self._sasl_config()
         self.ssl_dir = self.test_resource('ssl')
 
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
         # The logging format changed slightly in 1.0.0
         self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
+        # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
+        self.scram_pattern = r"Processing override for entityPath: users/%s" % (self.broker_user)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
@@ -296,6 +297,7 @@ class KafkaFixture(Fixture):
         self.running = False
 
         self._client = None
+        self.sasl_config = None
 
     def _sasl_config(self):
         if 'SASL' not in self.transport:
@@ -315,9 +317,6 @@ class KafkaFixture(Fixture):
                     + "org.apache.kafka.common.security.scram.ScramLoginModule "
                     + 'required username="{user}" password="{password}";\n'
             )
-            # add user to zookeeper for the first server
-            if self.broker_id == 0:
-                self._add_scram_user()
         else:
             raise ValueError("SASL mechanism {} currently not supported".format(self.sasl_mechanism))
         return sasl_config.format(
@@ -331,8 +330,9 @@ class KafkaFixture(Fixture):
         args = self.kafka_run_class_args(
             "kafka.admin.ConfigCommand",
             "--zookeeper",
-            "%s:%d" % (self.zookeeper.host,
-                       self.zookeeper.port),
+            "%s:%d/%s" % (self.zookeeper.host,
+                       self.zookeeper.port,
+                       self.zk_chroot),
             "--alter",
             "--entity-type", "users",
             "--entity-name", self.broker_user,
@@ -407,8 +407,12 @@ class KafkaFixture(Fixture):
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
-            if self.child.wait_for(self.start_pattern, timeout=timeout):
+            if self.child.wait_for(self.start_pattern, timeout=timeout) and (
+                not self.sasl_mechanism.startswith('SCRAM-SHA-')
+                or self.child.wait_for(self.scram_pattern, timeout=timeout)
+            ):
                 break
+
             self.child.dump_logs()
             self.child.stop()
             timeout *= 2
@@ -448,6 +452,10 @@ class KafkaFixture(Fixture):
         log.info("  tmp_dir    = %s", self.tmp_dir.strpath)
 
         self._create_zk_chroot()
+        self.sasl_config = self._sasl_config()
+        # add user to zookeeper for the first server
+        if self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
+            self._add_scram_user()
         self.start()
 
         atexit.register(self.close)
