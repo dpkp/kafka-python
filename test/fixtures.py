@@ -547,6 +547,24 @@ class KafkaFixture(Fixture):
                     self.out(stderr)
                     raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
+    def get_topic_names(self):
+        args = self.kafka_run_class_args('kafka.admin.TopicCommand',
+                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
+                                                                      self.zookeeper.port,
+                                                                      self.zk_chroot),
+                                         '--list'
+                                         )
+        env = self.kafka_run_class_env()
+        env.pop('KAFKA_LOG4J_OPTS')
+        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            self.out("Failed to list topics!")
+            self.out(stdout)
+            self.out(stderr)
+            raise RuntimeError("Failed to list topics!")
+        return stdout.decode().splitlines(keepends=False)
+
     def create_topics(self, topic_names, num_partitions=None, replication_factor=None):
         for topic_name in topic_names:
             self._create_topic(topic_name, num_partitions, replication_factor)
