@@ -600,7 +600,9 @@ class KafkaFixture(Fixture):
             yield client
 
     def get_consumers(self, cnt, topics, **params):
-        params = self._enrich_client_params(params, client_id='consumer', heartbeat_interval_ms=500)
+        params = self._enrich_client_params(
+            params, client_id='consumer', heartbeat_interval_ms=500, auto_offset_reset='earliest'
+        )
         for client in self._create_many_clients(cnt, KafkaConsumer, *topics, **params):
             yield client
 
