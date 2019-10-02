@@ -418,7 +418,7 @@ class KafkaFixture(Fixture):
         else:
             raise RuntimeError('Failed to start KafkaInstance before max_timeout')
 
-        (self._client,) = self.get_clients(1, '_internal_client')
+        (self._client,) = self.get_clients(1, client_id='_internal_client')
 
         self.out("Done!")
         self.running = True
@@ -551,35 +551,42 @@ class KafkaFixture(Fixture):
         for topic_name in topic_names:
             self._create_topic(topic_name, num_partitions, replication_factor)
 
-    def get_clients(self, cnt=1, **params):
-        params.setdefault('client_id', 'client')
-        params['bootstrap_servers'] = self.bootstrap_server()
+    def _enrich_client_params(self, params, **defaults):
+        params = params.copy()
+        for key, value in defaults.items():
+            params.setdefault(key, value)
+        params.setdefault('bootstrap_servers', self.bootstrap_server())
+        if 'SASL' in self.transport:
+            params.setdefault('sasl_mechanism', self.sasl_mechanism)
+            params.setdefault('security_protocol', self.transport)
+            if self.sasl_mechanism in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
+                params.setdefault('sasl_plain_username', self.broker_user)
+                params.setdefault('sasl_plain_password', self.broker_password)
+        return params
+
+    @staticmethod
+    def _create_many_clients(cnt, cls, *args, **params):
         client_id = params['client_id']
         for _ in range(cnt):
             params['client_id'] = '%s_%s' % (client_id, random_string(4))
-            yield KafkaClient(**params)
+            yield cls(*args, **params)
 
-    def get_admin_clients(self, cnt=1, **params):
-        params.setdefault('client_id', 'admin_client')
-        params['bootstrap_servers'] = self.bootstrap_server()
-        client_id = params['client_id']
-        for x in range(cnt):
-            params['client_id'] = '%s_%s' % (client_id, random_string(4))
-            yield KafkaAdminClient(**params)
+    def get_clients(self, cnt=1, **params):
+        params = self._enrich_client_params(params, client_id='client')
+        for client in self._create_many_clients(cnt, KafkaClient, **params):
+            yield client
+
+    def get_admin_clients(self, cnt, **params):
+        params = self._enrich_client_params(params, client_id='admin_client')
+        for client in self._create_many_clients(cnt, KafkaAdminClient, **params):
+            yield client
 
     def get_consumers(self, cnt, topics, **params):
-        params.setdefault('client_id', 'consumer')
-        params.setdefault('heartbeat_interval_ms', 500)
-        params['bootstrap_servers'] = self.bootstrap_server()
-        client_id = params['client_id']
-        for _ in range(cnt):
-            params['client_id'] = '%s_%s' % (client_id, random_string(4))
-            yield KafkaConsumer(*topics, **params)
+        params = self._enrich_client_params(params, client_id='consumer', heartbeat_interval_ms=500)
+        for client in self._create_many_clients(cnt, KafkaConsumer, *topics, **params):
+            yield client
 
     def get_producers(self, cnt, **params):
-        params.setdefault('client_id', 'producer')
-        params['bootstrap_servers'] = self.bootstrap_server()
-        client_id = params['client_id']
-        for _ in range(cnt):
-            params['client_id'] = '%s_%s' % (client_id, random_string(4))
-            yield KafkaProducer(**params)
+        params = self._enrich_client_params(params, client_id='producer')
+        for client in self._create_many_clients(cnt, KafkaProducer, **params):
+            yield client
