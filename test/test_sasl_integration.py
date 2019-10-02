@@ -1,70 +1,79 @@
+import logging
+import uuid
+
 import pytest
-from . import unittest
-from .testutil import random_string
 
-from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import env_kafka_version
-# from kafka.client import SimpleClient, KafkaClient
-# from kafka.producer import KafkaProducer, SimpleProducer
-# from kafka.consumer import SimpleConsumer, KafkaConsumer
-from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.admin import NewTopic
+from kafka.client import KafkaClient
+from kafka.protocol.metadata import MetadataRequest_v1
+from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 
 
-class SASLIntegrationTestCase(unittest.TestCase):
-    sasl_mechanism = None
-    sasl_transport = "SASL_PLAINTEXT"
-    server = None
-    zk = None
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.zk = ZookeeperFixture.instance()
-        cls.server = KafkaFixture.instance(
-            0, cls.zk, zk_chroot=random_string(10), transport=cls.sasl_transport, sasl_mechanism=cls.sasl_mechanism
-        )
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        pass
-
-    @classmethod
-    def bootstrap_servers(cls) -> str:
-        return "{}:{}".format(cls.server.host, cls.server.port)
-
-    def test_admin(self):
-        admin = self.create_admin()
-        admin.create_topics([NewTopic('mytopic', 1, 1)])
-
-    def create_admin(self) -> KafkaAdminClient:
-        raise NotImplementedError()
-
-
-@pytest.mark.skipif(
-    not env_kafka_version() or env_kafka_version() < (0, 10), reason="No KAFKA_VERSION or version too low"
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "PLAIN", marks=pytest.mark.skipif(env_kafka_version() < (0, 10), reason="Requires KAFKA_VERSION >= 0.10")
+        ),
+        pytest.param(
+            "SCRAM-SHA-256",
+            marks=pytest.mark.skipif(env_kafka_version() < (0, 10, 2), reason="Requires KAFKA_VERSION >= 0.10.2"),
+        ),
+        pytest.param(
+            "SCRAM-SHA-512",
+            marks=pytest.mark.skipif(env_kafka_version() < (0, 10, 2), reason="Requires KAFKA_VERSION >= 0.10.2"),
+        ),
+    ]
 )
-class TestSaslPlain(SASLIntegrationTestCase):
-    sasl_mechanism = "PLAIN"
+def sasl_kafka(request, kafka_broker_factory):
+    return kafka_broker_factory(transport="SASL_PLAINTEXT", sasl_mechanism=request.param)[0]
 
-    def create_admin(self) -> KafkaAdminClient:
-        return KafkaAdminClient(
-            bootstrap_servers=self.bootstrap_servers(),
-            security_protocol=self.sasl_transport,
-            sasl_mechanism=self.sasl_mechanism,
-            sasl_plain_username=self.server.broker_user,
-            sasl_plain_password=self.server.broker_password
-        )
 
-#
-# @pytest.mark.skipif(
-#     not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
-# )
-# class TestSaslScram256(SASLIntegrationTestCase):
-#     sasl_mechanism = "SCRAM-SHA-256"
-#
-#
-#
-# @pytest.mark.skipif(
-#     not env_kafka_version() or env_kafka_version() < (0, 10, 2), reason="No KAFKA_VERSION or version too low"
-# )
-# class TestSaslScram512(SASLIntegrationTestCase):
-#     sasl_mechanism = "SCRAM-SHA-512"
+def test_admin(request, sasl_kafka):
+    topic_name = special_to_underscore(request.node.name + random_string(4))
+    admin, = sasl_kafka.get_admin_clients(1)
+    admin.create_topics([NewTopic(topic_name, 1, 1)])
+    assert topic_name in sasl_kafka.get_topic_names()
+
+
+def test_produce_and_consume(request, sasl_kafka):
+    topic_name = special_to_underscore(request.node.name + random_string(4))
+    sasl_kafka.create_topics([topic_name], num_partitions=2)
+    producer, = sasl_kafka.get_producers(1)
+
+    messages_and_futures = []  # [(message, produce_future),]
+    for i in range(100):
+        encoded_msg = "{}-{}-{}".format(i, request.node.name, uuid.uuid4()).encode("utf-8")
+        future = producer.send(topic_name, value=encoded_msg, partition=i % 2)
+        messages_and_futures.append((encoded_msg, future))
+    producer.flush()
+
+    for (msg, f) in messages_and_futures:
+        assert f.succeeded()
+
+    consumer, = sasl_kafka.get_consumers(1, [topic_name])
+    messages = {0: [], 1: []}
+    for i, message in enumerate(consumer, 1):
+        logging.debug("Consumed message %s", repr(message))
+        messages[message.partition].append(message)
+        if i >= 100:
+            break
+
+    assert_message_count(messages[0], 50)
+    assert_message_count(messages[1], 50)
+
+
+def test_client(request, sasl_kafka):
+    topic_name = special_to_underscore(request.node.name + random_string(4))
+    sasl_kafka.create_topics([topic_name], num_partitions=1)
+
+    client: KafkaClient = next(sasl_kafka.get_clients(1), None)
+    request = MetadataRequest_v1(None)
+    client.send(0, request)
+    for _ in range(10):
+        result = client.poll(timeout_ms=10_000)
+        if len(result) > 0:
+            break
+    else:
+        raise TimeoutError("Couldn't fetch topic response from Broker.")
+    result = result[0]
+    assert topic_name in [t[1] for t in result.topics]
