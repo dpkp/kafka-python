@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division
 
 import base64
-import collections
 import copy
 import errno
 import hashlib
@@ -10,9 +9,9 @@ import io
 import logging
 from random import shuffle, uniform
 
-# selectors in stdlib as of py3.4
 from uuid import uuid4
 
+# selectors in stdlib as of py3.4
 try:
     import selectors  # pylint: disable=import-error
 except ImportError:
@@ -21,7 +20,6 @@ except ImportError:
 
 import socket
 import struct
-import sys
 import threading
 import time
 
@@ -43,6 +41,12 @@ if six.PY2:
     ConnectionError = socket.error
     TimeoutError = socket.error
     BlockingIOError = Exception
+
+    def xor_bytes(left, right):
+        return bytearray(ord(lb) ^ ord(rb) for lb, rb in zip(left, right))
+else:
+    def xor_bytes(left, right):
+        return bytes(lb ^ rb for lb, rb in zip(left, right))
 
 log = logging.getLogger(__name__)
 
@@ -101,10 +105,6 @@ class ConnectionStates(object):
     HANDSHAKE = '<handshake>'
     CONNECTED = '<connected>'
     AUTHENTICATING = '<authenticating>'
-
-
-def xor_bytes(left, right):
-    return bytes(lb ^ rb for lb, rb in zip(left, right))
 
 
 class ScramClient:
@@ -750,8 +750,7 @@ class BrokerConnection(object):
                     size = Int32.encode(len(client_first))
                     self._send_bytes_blocking(size + client_first)
 
-                    data_len = self._recv_bytes_blocking(4)
-                    data_len = int.from_bytes(data_len, 'big')
+                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
                     server_first = self._recv_bytes_blocking(data_len).decode()
                     scram_client.process_server_first_message(server_first)
 
@@ -759,8 +758,7 @@ class BrokerConnection(object):
                     size = Int32.encode(len(client_final))
                     self._send_bytes_blocking(size + client_final)
 
-                    data_len = self._recv_bytes_blocking(4)
-                    data_len = int.from_bytes(data_len, 'big')
+                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
                     server_final = self._recv_bytes_blocking(data_len).decode()
                     scram_client.process_server_final_message(server_final)
 

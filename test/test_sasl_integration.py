@@ -4,7 +4,6 @@ import uuid
 import pytest
 
 from kafka.admin import NewTopic
-from kafka.client import KafkaClient
 from kafka.protocol.metadata import MetadataRequest_v1
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 
@@ -66,14 +65,14 @@ def test_client(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
     sasl_kafka.create_topics([topic_name], num_partitions=1)
 
-    client: KafkaClient = next(sasl_kafka.get_clients(1), None)
+    client = next(sasl_kafka.get_clients(1), None)
     request = MetadataRequest_v1(None)
     client.send(0, request)
     for _ in range(10):
-        result = client.poll(timeout_ms=10_000)
+        result = client.poll(timeout_ms=10000)
         if len(result) > 0:
             break
     else:
-        raise TimeoutError("Couldn't fetch topic response from Broker.")
+        raise RuntimeError("Couldn't fetch topic response from Broker.")
     result = result[0]
     assert topic_name in [t[1] for t in result.topics]

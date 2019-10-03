@@ -571,7 +571,7 @@ class KafkaFixture(Fixture):
             self.out(stdout)
             self.out(stderr)
             raise RuntimeError("Failed to list topics!")
-        return stdout.decode().splitlines(keepends=False)
+        return stdout.decode().splitlines(False)
 
     def create_topics(self, topic_names, num_partitions=None, replication_factor=None):
         for topic_name in topic_names:
