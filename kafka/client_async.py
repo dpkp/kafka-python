@@ -102,7 +102,8 @@ class KafkaClient(object):
             partition leadership changes to proactively discover any new
             brokers or partitions. Default: 300000
         security_protocol (str): Protocol used to communicate with brokers.
-            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+            Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL.
+            Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
