@@ -665,11 +665,11 @@ class BrokerConnection(object):
         err = None
         close = False
         with self._lock:
-            if not self._can_send_recv():
-                raise Errors.NodeNotReadyError(str(self))
-
-            # SCRAM authentication as defined in RFC 5802
             try:
+                if not self._can_send_recv():
+                    raise Errors.NodeNotReadyError(str(self))
+
+                # SCRAM authentication as defined in RFC 5802
                 rand = SystemRandom()
                 client_nonce = "".join([rand.choice(string.ascii_letters + string.digits) for i in range(32)])
                 gs2_header = "n,,"
@@ -740,7 +740,6 @@ class BrokerConnection(object):
                     err_msg = "failed to validate server signature"
                     raise Errors.AuthenticationFailedError(err_msg)
             except Errors.NodeNotReadyError as e:
-                log.exception("%s: %s", self, e.message)
                 err = e
                 close = False
             except Errors.AuthenticationFailedError as e:
