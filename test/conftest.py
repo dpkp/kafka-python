@@ -105,6 +105,25 @@ def kafka_producer_factory(kafka_broker, request):
     if _producer[0]:
         _producer[0].close()
 
+@pytest.fixture
+def kafka_admin_client(kafka_admin_client_factory):
+    """Return a KafkaAdminClient fixture"""
+    yield kafka_admin_client_factory()
+
+@pytest.fixture
+def kafka_admin_client_factory(kafka_broker):
+    """Return a KafkaAdminClient factory fixture"""
+    _admin_client = [None]
+
+    def factory(**kafka_admin_client_params):
+        params = {} if kafka_admin_client_params is None else kafka_admin_client_params.copy()
+        _admin_client[0] = next(kafka_broker.get_admin_clients(cnt=1, **params))
+        return _admin_client[0]
+
+    yield factory
+
+    if _admin_client[0]:
+        _admin_client[0].close()
 
 @pytest.fixture
 def topic(kafka_broker, request):
