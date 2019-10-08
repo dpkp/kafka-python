@@ -820,19 +820,10 @@ class KafkaAdminClient(object):
                 ))
         else:
             raise NotImplementedError(
-                "Support for DescribeConfigs v{} has not yet been added to KafkaAdminClient."
-                    .format(version))
+                "Support for DescribeConfigs v{} has not yet been added to KafkaAdminClient.".format(version))
 
         self._wait_for_futures(futures)
-
-        # Use one of the results as the general response and add all other resources to it
-        response = copy.copy(futures[0].value)
-        response.resources = []
-
-        for future in futures:
-            response.resources.extend(future.value.resources)
-
-        return response
+        return [f.value for f in futures]
 
     @staticmethod
     def _convert_alter_config_resource_request(config_resource):
