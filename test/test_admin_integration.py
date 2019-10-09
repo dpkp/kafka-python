@@ -97,7 +97,7 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
-def test_describe_configs_topic_resource_returns_configs(kafka_admin_client, topic):
+def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for topic
     """
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.TOPIC, topic)])
@@ -109,7 +109,7 @@ def test_describe_configs_topic_resource_returns_configs(kafka_admin_client, top
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
-def test_describe_configs_mixed_resources_returns_configs(kafka_admin_client, topic):
+def test_describe_configs_mixed_resources_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for mixed resource types (topic + broker)
     """
     broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
