@@ -6,7 +6,7 @@ from kafka.errors import NoError
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 
-    
+
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
 def test_create_describe_delete_acls(kafka_admin_client):
     """Tests that we can add, list and remove ACLs
@@ -84,10 +84,10 @@ def test_create_describe_delete_acls(kafka_admin_client):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
-def test_describe_configs_broker_resource_returns_configs(simple_client, kafka_admin_client):
+def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     """Tests that describe config returns configs for broker
     """
-    broker_id = simple_client.brokers[0].nodeId
+    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
     assert len(configs) == 1
@@ -97,8 +97,9 @@ def test_describe_configs_broker_resource_returns_configs(simple_client, kafka_a
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
-def test_describe_configs_topic_resource_returns_configs(simple_client, kafka_admin_client):
-    topic = simple_client.topics[0]
+def test_describe_configs_topic_resource_returns_configs(kafka_admin_client, topic):
+    """Tests that describe config returns configs for topic
+    """
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.TOPIC, topic)])
 
     assert len(configs) == 1
@@ -108,9 +109,10 @@ def test_describe_configs_topic_resource_returns_configs(simple_client, kafka_ad
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
-def test_describe_configs_mixed_resources_returns_configs(simple_client, kafka_admin_client):
-    topic = simple_client.topics[0]
-    broker_id = simple_client.brokers[0].nodeId
+def test_describe_configs_mixed_resources_returns_configs(kafka_admin_client, topic):
+    """Tests that describe config returns configs for mixed resource types (topic + broker)
+    """
+    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
     configs = kafka_admin_client.describe_configs([
         ConfigResource(ConfigResourceType.TOPIC, topic),
         ConfigResource(ConfigResourceType.BROKER, broker_id)])
@@ -123,3 +125,13 @@ def test_describe_configs_mixed_resources_returns_configs(simple_client, kafka_a
                (config.resources[0][2] == ConfigResourceType.BROKER
                 and config.resources[0][3] == str(broker_id))
         assert len(config.resources[0][4]) > 1
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
+def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
+    """Tests that describe config raises exception on non-integer broker id
+    """
+    broker_id = "str"
+
+    with pytest.raises(ValueError):
+        configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])

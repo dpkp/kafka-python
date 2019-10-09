@@ -787,12 +787,14 @@ class KafkaAdminClient(object):
             if len(broker_resources) > 0:
                 for broker_resource in broker_resources:
                     try:
-                        futures.append(self._send_request_to_node(
-                            int(broker_resource[1]),
-                            DescribeConfigsRequest[version](resources=[broker_resource])
-                        ))
+                        broker_id = int(broker_resource[1])
                     except ValueError:
                         raise ValueError("Broker resource names must be an integer or a string represented integer")
+
+                    futures.append(self._send_request_to_node(
+                        broker_id,
+                        DescribeConfigsRequest[version](resources=[broker_resource])
+                    ))
 
             if len(topic_resources) > 0:
                 futures.append(self._send_request_to_node(
@@ -804,14 +806,16 @@ class KafkaAdminClient(object):
             if len(broker_resources) > 0:
                 for broker_resource in broker_resources:
                     try:
-                        futures.append(self._send_request_to_node(
-                            int(broker_resource[1]),
-                            DescribeConfigsRequest[version](
-                                resources=[broker_resource],
-                                include_synonyms=include_synonyms)
-                        ))
+                        broker_id = int(broker_resource[1])
                     except ValueError:
                         raise ValueError("Broker resource names must be an integer or a string represented integer")
+
+                    futures.append(self._send_request_to_node(
+                        broker_id,
+                        DescribeConfigsRequest[version](
+                            resources=[broker_resource],
+                            include_synonyms=include_synonyms)
+                    ))
 
             if len(topic_resources) > 0:
                 futures.append(self._send_request_to_node(
