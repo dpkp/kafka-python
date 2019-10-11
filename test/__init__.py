@@ -1,12 +1,5 @@
 from __future__ import absolute_import
 
-import sys
-
-if sys.version_info < (2, 7):
-    import unittest2 as unittest  # pylint: disable=import-error
-else:
-    import unittest
-
 # Set default logging handler to avoid "No handler found" warnings.
 import logging
 try:  # Python 2.7+

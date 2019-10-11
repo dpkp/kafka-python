@@ -472,22 +472,6 @@ class ConnectionError(KafkaConnectionError):
     """Deprecated"""
 
 
-class BufferUnderflowError(KafkaError):
-    pass
-
-
-class ChecksumError(KafkaError):
-    pass
-
-
-class ConsumerFetchSizeTooSmall(KafkaError):
-    pass
-
-
-class ConsumerNoMoreData(KafkaError):
-    pass
-
-
 class ProtocolError(KafkaError):
     pass
 

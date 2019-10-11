@@ -1207,28 +1207,3 @@ class KafkaConsumer(six.Iterator):
         if self.config['consumer_timeout_ms'] >= 0:
             self._consumer_timeout = time.time() + (
                 self.config['consumer_timeout_ms'] / 1000.0)
-
-    # Old KafkaConsumer methods are deprecated
-    def configure(self, **configs):
-        raise NotImplementedError(
-            'deprecated -- initialize a new consumer')
-
-    def set_topic_partitions(self, *topics):
-        raise NotImplementedError(
-            'deprecated -- use subscribe() or assign()')
-
-    def fetch_messages(self):
-        raise NotImplementedError(
-            'deprecated -- use poll() or iterator interface')
-
-    def get_partition_offsets(self, topic, partition,
-                              request_time_ms, max_num_offsets):
-        raise NotImplementedError(
-            'deprecated -- send an OffsetRequest with KafkaClient')
-
-    def offsets(self, group=None):
-        raise NotImplementedError('deprecated -- use committed(partition)')
-
-    def task_done(self, message):
-        raise NotImplementedError(
-            'deprecated -- commit offsets manually if needed')

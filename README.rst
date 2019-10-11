@@ -151,10 +151,3 @@ testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
 (0.8.0 to 2.3+).
-
-Low-level
-*********
-
-Legacy support is maintained for low-level consumer and producer classes,
-SimpleConsumer and SimpleProducer. See
-<https://kafka-python.readthedocs.io/en/master/simple.html?highlight=SimpleProducer> for API details.

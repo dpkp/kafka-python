@@ -24,8 +24,6 @@ class Tox(Command):
 
 
 test_require = ['tox', 'mock']
-if sys.version_info < (2, 7):
-    test_require.append('unittest2')
 
 here = os.path.abspath(os.path.dirname(__file__))
 

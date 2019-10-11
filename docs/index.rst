@@ -139,20 +139,12 @@ method that probes a kafka broker and
 attempts to identify which version it is running (0.8.0 to 2.3+).
 
 
-Low-level
-*********
-
-Legacy support is maintained for low-level consumer and producer classes,
-SimpleConsumer and SimpleProducer.
-
-
 .. toctree::
    :hidden:
    :maxdepth: 2
 
    Usage Overview <usage>
    API </apidoc/modules>
-   Simple Clients [deprecated] <simple>
    install
    tests
    compatibility

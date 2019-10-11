@@ -7,8 +7,6 @@ Tests
     :target: https://travis-ci.org/dpkp/kafka-python
 
 Test environments are managed via tox. The test suite is run via pytest.
-Individual tests are written using unittest, pytest, and in some cases,
-doctest.
 
 Linting is run via pylint, but is generally skipped on pypy due to pylint
 compatibility / performance issues.
