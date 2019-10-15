@@ -240,7 +240,7 @@ class KafkaFixture(Fixture):
     def instance(cls, broker_id, zookeeper, zk_chroot=None,
                  host=None, port=None,
                  transport='PLAINTEXT', replicas=1, partitions=2,
-                 sasl_mechanism='PLAIN', auto_create_topic=True, tmp_dir=None):
+                 sasl_mechanism=None, auto_create_topic=True, tmp_dir=None):
 
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
@@ -264,7 +264,7 @@ class KafkaFixture(Fixture):
 
     def __init__(self, host, port, broker_id, zookeeper, zk_chroot,
                  replicas=1, partitions=2, transport='PLAINTEXT',
-                 sasl_mechanism='PLAIN', auto_create_topic=True,
+                 sasl_mechanism=None, auto_create_topic=True,
                  tmp_dir=None):
         super(KafkaFixture, self).__init__()
 
@@ -274,7 +274,10 @@ class KafkaFixture(Fixture):
         self.broker_id = broker_id
         self.auto_create_topic = auto_create_topic
         self.transport = transport.upper()
-        self.sasl_mechanism = sasl_mechanism.upper()
+        if sasl_mechanism is not None:
+            self.sasl_mechanism = sasl_mechanism.upper()
+        else:
+            self.sasl_mechanism = None
         self.ssl_dir = self.test_resource('ssl')
 
         # TODO: checking for port connection would be better than scanning logs
@@ -300,30 +303,30 @@ class KafkaFixture(Fixture):
         self.sasl_config = None
 
     def _sasl_config(self):
-        if 'SASL' not in self.transport:
+        if not self.sasl_enabled:
             return ''
 
         sasl_config = "sasl.enabled.mechanisms={mechanism}\n"
         sasl_config += "sasl.mechanism.inter.broker.protocol={mechanism}\n"
-        if self.sasl_mechanism == 'PLAIN':
-            sasl_config += (
-                "listener.name.{transport_lower}.plain.sasl.jaas.config="
-                + "org.apache.kafka.common.security.plain.PlainLoginModule "
-                + 'required username="{user}" password="{password}" user_alice="{password}";\n'
+        return sasl_config.format(mechanism=self.sasl_mechanism)
+
+    def _jaas_config(self):
+        if not self.sasl_enabled:
+            return ''
+
+        elif self.sasl_mechanism == 'PLAIN':
+            jaas_config = (
+                "org.apache.kafka.common.security.plain.PlainLoginModule required\n"
+                '  username="{user}" password="{password}" user_{user}="{password}";\n'
             )
         elif self.sasl_mechanism in ("SCRAM-SHA-256", "SCRAM-SHA-512"):
-            sasl_config += (
-                    "listener.name.{transport_lower}.{mechanism_lower}.sasl.jaas.config="
-                    + "org.apache.kafka.common.security.scram.ScramLoginModule "
-                    + 'required username="{user}" password="{password}";\n'
+            jaas_config = (
+                "org.apache.kafka.common.security.scram.ScramLoginModule required\n"
+                '  username="{user}" password="{password}";\n'
             )
         else:
             raise ValueError("SASL mechanism {} currently not supported".format(self.sasl_mechanism))
-        return sasl_config.format(
-            transport=self.transport, transport_lower=self.transport.lower(),
-            mechanism=self.sasl_mechanism, mechanism_lower=self.sasl_mechanism.lower(),
-            user=self.broker_user, password=self.broker_password
-        )
+        return jaas_config.format(user=self.broker_user, password=self.broker_password)
 
     def _add_scram_user(self):
         self.out("Adding SCRAM credentials for user {} to zookeeper.".format(self.broker_user))
@@ -350,6 +353,10 @@ class KafkaFixture(Fixture):
             self.out(stderr)
             raise RuntimeError("Failed to save credentials to zookeeper!")
         self.out("User created.")
+
+    @property
+    def sasl_enabled(self):
+        return self.sasl_mechanism is not None
 
     def bootstrap_server(self):
         return '%s:%d' % (self.host, self.port)
@@ -386,9 +393,15 @@ class KafkaFixture(Fixture):
     def start(self):
         # Configure Kafka child process
         properties = self.tmp_dir.join("kafka.properties")
-        template = self.test_resource("kafka.properties")
+        jaas_conf = self.tmp_dir.join("kafka_server_jaas.conf")
+        properties_template = self.test_resource("kafka.properties")
+        jaas_conf_template = self.test_resource("kafka_server_jaas.conf")
+
         args = self.kafka_run_class_args("kafka.Kafka", properties.strpath)
         env = self.kafka_run_class_env()
+        if self.sasl_enabled:
+            env['KAFKA_OPTS'] = env.get('KAFKA_OPTS', '') + ' -Djava.security.auth.login.config={}'.format(jaas_conf)
+            self.render_template(jaas_conf_template, jaas_conf, vars(self))
 
         timeout = 5
         max_timeout = 120
@@ -403,14 +416,11 @@ class KafkaFixture(Fixture):
             if auto_port:
                 self.port = get_open_port()
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
-            self.render_template(template, properties, vars(self))
+            self.render_template(properties_template, properties, vars(self))
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
-            if self.child.wait_for(self.start_pattern, timeout=timeout) and (
-                not self.sasl_mechanism.startswith('SCRAM-SHA-')
-                or self.child.wait_for(self.scram_pattern, timeout=timeout)
-            ):
+            if self._broker_ready(timeout) and self._scram_user_present(timeout):
                 break
 
             self.child.dump_logs()
@@ -427,6 +437,15 @@ class KafkaFixture(Fixture):
         self.out("Done!")
         self.running = True
 
+    def _broker_ready(self, timeout):
+        return self.child.wait_for(self.start_pattern, timeout=timeout)
+
+    def _scram_user_present(self, timeout):
+        # no need to wait for scram user if scram is not used
+        if not self.sasl_enabled or not self.sasl_mechanism.startswith('SCRAM-SHA-'):
+            return True
+        return self.child.wait_for(self.scram_pattern, timeout=timeout)
+
     def open(self):
         if self.running:
             self.out("Instance already running")
@@ -440,21 +459,23 @@ class KafkaFixture(Fixture):
         self.tmp_dir.ensure('data', dir=True)
 
         self.out("Running local instance...")
-        log.info("  host       = %s", self.host)
-        log.info("  port       = %s", self.port or '(auto)')
-        log.info("  transport  = %s", self.transport)
-        log.info("  broker_id  = %s", self.broker_id)
-        log.info("  zk_host    = %s", self.zookeeper.host)
-        log.info("  zk_port    = %s", self.zookeeper.port)
-        log.info("  zk_chroot  = %s", self.zk_chroot)
-        log.info("  replicas   = %s", self.replicas)
-        log.info("  partitions = %s", self.partitions)
-        log.info("  tmp_dir    = %s", self.tmp_dir.strpath)
+        log.info("  host            = %s", self.host)
+        log.info("  port            = %s", self.port or '(auto)')
+        log.info("  transport       = %s", self.transport)
+        log.info("  sasl_mechanism  = %s", self.sasl_mechanism)
+        log.info("  broker_id       = %s", self.broker_id)
+        log.info("  zk_host         = %s", self.zookeeper.host)
+        log.info("  zk_port         = %s", self.zookeeper.port)
+        log.info("  zk_chroot       = %s", self.zk_chroot)
+        log.info("  replicas        = %s", self.replicas)
+        log.info("  partitions      = %s", self.partitions)
+        log.info("  tmp_dir         = %s", self.tmp_dir.strpath)
 
         self._create_zk_chroot()
         self.sasl_config = self._sasl_config()
+        self.jaas_config = self._jaas_config()
         # add user to zookeeper for the first server
-        if self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
+        if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
             self._add_scram_user()
         self.start()
 
@@ -582,7 +603,7 @@ class KafkaFixture(Fixture):
         for key, value in defaults.items():
             params.setdefault(key, value)
         params.setdefault('bootstrap_servers', self.bootstrap_server())
-        if 'SASL' in self.transport:
+        if self.sasl_enabled:
             params.setdefault('sasl_mechanism', self.sasl_mechanism)
             params.setdefault('security_protocol', self.transport)
             if self.sasl_mechanism in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
