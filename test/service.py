@@ -45,6 +45,11 @@ class SpawnedService(threading.Thread):
         self.child = None
         self.alive = False
         self.daemon = True
+        log.info("Created service for command:")
+        log.info(" "+' '.join(self.args))
+        log.info("With environment:")
+        for key, value in self.env.items():
+            log.info("  {key}={value}".format(key=key, value=value))
 
     def _spawn(self):
         if self.alive: return
