@@ -285,7 +285,7 @@ class KafkaFixture(Fixture):
         # The logging format changed slightly in 1.0.0
         self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
         # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
-        self.scram_pattern = r"Processing override for entityPath: users/%s" % (self.broker_user)
+        self.scram_pattern = r"Removing Produce quota for user %s" % (self.broker_user)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
