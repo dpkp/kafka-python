@@ -767,10 +767,7 @@ class KafkaClient(object):
                 inflight = curr_inflight
                 found = node_id
 
-        if found is not None:
-            return found
-
-        return None
+        return found
 
     def set_topics(self, topics):
         """Set specific topics to track for metadata.
