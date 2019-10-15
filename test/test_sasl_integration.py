@@ -65,7 +65,7 @@ def test_client(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
     sasl_kafka.create_topics([topic_name], num_partitions=1)
 
-    client = next(sasl_kafka.get_clients(1), None)
+    client, = sasl_kafka.get_clients(1)
     request = MetadataRequest_v1(None)
     client.send(0, request)
     for _ in range(10):
