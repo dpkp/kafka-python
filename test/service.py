@@ -62,7 +62,7 @@ class SpawnedService(threading.Thread):
             bufsize=1,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
-        self.alive = True
+        self.alive = self.child.poll() is None
 
     def _despawn(self):
         if self.child.poll() is None:
@@ -110,6 +110,9 @@ class SpawnedService(threading.Thread):
     def wait_for(self, pattern, timeout=30):
         start = time.time()
         while True:
+            if not self.is_alive():
+                raise RuntimeError("Child thread died already.")
+
             elapsed = time.time() - start
             if elapsed >= timeout:
                 log.error("Waiting for %r timed out after %d seconds", pattern, timeout)
