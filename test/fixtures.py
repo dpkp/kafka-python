@@ -400,7 +400,11 @@ class KafkaFixture(Fixture):
         args = self.kafka_run_class_args("kafka.Kafka", properties.strpath)
         env = self.kafka_run_class_env()
         if self.sasl_enabled:
-            env['KAFKA_OPTS'] = env.get('KAFKA_OPTS', '') + ' -Djava.security.auth.login.config={}'.format(jaas_conf)
+            opts = env.get('KAFKA_OPTS', '').strip()
+            if opts:
+                opts += ' '
+            opts += '-Djava.security.auth.login.config={}'.format(jaas_conf.strpath)
+            env['KAFKA_OPTS'] = opts
             self.render_template(jaas_conf_template, jaas_conf, vars(self))
 
         timeout = 5
