@@ -37,6 +37,11 @@ install:
     - pip install .
 
 script:
+  - |
+    for prop in $(find . -name kafka.properties | sort); do
+      printf "%s: %s\n" "$prop" "$(grep sasl $prop)"
+    done
+
   - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy2.7-6.0" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
 after_success:
