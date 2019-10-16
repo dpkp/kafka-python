@@ -419,6 +419,16 @@ class KafkaFixture(Fixture):
                 self.port = get_open_port()
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
             self.render_template(properties_template, properties, vars(self))
+
+            log.info("server.properties:")
+            with open(properties.strpath, 'r') as o:
+                for line in o:
+                    log.info('  '+line)
+            log.info("kafka_server_jaas.conf:")
+            with open(jaas_conf.strpath, 'r') as o:
+                for line in o:
+                    log.info('  '+line)
+
             self.child = SpawnedService(args, env)
             self.child.start()
             timeout = min(timeout, max(end_at - time.time(), 0))
@@ -427,14 +437,6 @@ class KafkaFixture(Fixture):
 
             self.child.dump_logs()
             self.child.stop()
-            log.info("server.properties:")
-            with open(properties, 'r') as o:
-                for line in o:
-                    log.info('  '+line)
-            log.info("kafka_server_jaas.conf:")
-            with open(jaas_conf, 'r') as o:
-                for line in o:
-                    log.info('  '+line)
 
             timeout *= 2
             time.sleep(backoff)
