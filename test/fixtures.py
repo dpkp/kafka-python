@@ -126,10 +126,10 @@ class Fixture(object):
 
     @classmethod
     def render_template(cls, source_file, target_file, binding):
-        log.info('Rendering %s from template %s', target_file.strpath, source_file)
-        with open(source_file, "r") as handle:
+        log.info('Rendering %s from template %s', target_file.strpath, source_file.strpath)
+        with open(source_file.strpath, "r") as handle:
             template = handle.read()
-            assert len(template) > 0, 'Empty template %s' % (source_file,)
+            assert len(template) > 0, 'Empty template %s' % (source_file.strpath,)
         with open(target_file.strpath, "w") as handle:
             handle.write(template.format(**binding))
             handle.flush()
