@@ -401,14 +401,12 @@ class KafkaFixture(Fixture):
         env = self.kafka_run_class_env()
         if self.sasl_enabled:
             opts = env.get('KAFKA_OPTS', '').strip()
-            if opts:
-                opts += ' '
-            opts += '-Djava.security.auth.login.config={}'.format(jaas_conf.strpath)
+            opts += '-Djava.security.auth.login.config={} '.format(jaas_conf.strpath)
             env['KAFKA_OPTS'] = opts
             self.render_template(jaas_conf_template, jaas_conf, vars(self))
 
         timeout = 5
-        max_timeout = 120
+        max_timeout = 30
         backoff = 1
         end_at = time.time() + max_timeout
         tries = 1
@@ -429,6 +427,15 @@ class KafkaFixture(Fixture):
 
             self.child.dump_logs()
             self.child.stop()
+            log.info("server.properties:")
+            with open(properties, 'r') as o:
+                for line in o:
+                    log.info('  '+line)
+            log.info("kafka_server_jaas.conf:")
+            with open(jaas_conf, 'r') as o:
+                for line in o:
+                    log.info('  '+line)
+
             timeout *= 2
             time.sleep(backoff)
             tries += 1
