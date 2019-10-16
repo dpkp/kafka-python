@@ -404,6 +404,10 @@ class KafkaFixture(Fixture):
             opts += '-Djava.security.auth.login.config={} '.format(jaas_conf.strpath)
             env['KAFKA_OPTS'] = opts
             self.render_template(jaas_conf_template, jaas_conf, vars(self))
+            log.info("kafka_server_jaas.conf:")
+            with open(jaas_conf.strpath, 'r') as o:
+                for line in o:
+                    log.info('  '+line.strip())
 
         timeout = 5
         max_timeout = 30
@@ -419,15 +423,12 @@ class KafkaFixture(Fixture):
                 self.port = get_open_port()
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
             self.render_template(properties_template, properties, vars(self))
+            log.info("vars(self): {}".format(vars(self)))
 
             log.info("server.properties:")
             with open(properties.strpath, 'r') as o:
                 for line in o:
-                    log.info('  '+line)
-            log.info("kafka_server_jaas.conf:")
-            with open(jaas_conf.strpath, 'r') as o:
-                for line in o:
-                    log.info('  '+line)
+                    log.info('  '+line.strip())
 
             self.child = SpawnedService(args, env)
             self.child.start()
