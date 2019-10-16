@@ -26,7 +26,7 @@ addons:
 cache:
   directories:
     - $HOME/.cache/pip
-    - servers/
+    - servers/dist
 
 before_install:
     - source travis_java_install.sh
