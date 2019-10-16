@@ -140,6 +140,14 @@ class Fixture(object):
         dirfd = os.open(os.path.dirname(target_file.strpath), os.O_DIRECTORY)
         os.fsync(dirfd)
         os.close(dirfd)
+        log.info("Template string:")
+        for line in template.splitlines():
+            log.info('  ' + line.strip())
+        log.info("Rendered template:")
+        with open(target_file.strpath, 'r') as o:
+            for line in o:
+                log.info('  ' + line.strip())
+        log.info("binding: {}".format(binding))
 
     def dump_logs(self):
         self.child.dump_logs()
@@ -300,7 +308,8 @@ class KafkaFixture(Fixture):
         self.running = False
 
         self._client = None
-        self.sasl_config = None
+        self.sasl_config = ''
+        self.jaas_config = ''
 
     def _sasl_config(self):
         if not self.sasl_enabled:
@@ -401,13 +410,9 @@ class KafkaFixture(Fixture):
         env = self.kafka_run_class_env()
         if self.sasl_enabled:
             opts = env.get('KAFKA_OPTS', '').strip()
-            opts += '-Djava.security.auth.login.config={} '.format(jaas_conf.strpath)
+            opts += ' -Djava.security.auth.login.config={}'.format(jaas_conf.strpath)
             env['KAFKA_OPTS'] = opts
             self.render_template(jaas_conf_template, jaas_conf, vars(self))
-            log.info("kafka_server_jaas.conf:")
-            with open(jaas_conf.strpath, 'r') as o:
-                for line in o:
-                    log.info('  '+line.strip())
 
         timeout = 5
         max_timeout = 30
@@ -423,12 +428,6 @@ class KafkaFixture(Fixture):
                 self.port = get_open_port()
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
             self.render_template(properties_template, properties, vars(self))
-            log.info("vars(self): {}".format(vars(self)))
-
-            log.info("server.properties:")
-            with open(properties.strpath, 'r') as o:
-                for line in o:
-                    log.info('  '+line.strip())
 
             self.child = SpawnedService(args, env)
             self.child.start()
