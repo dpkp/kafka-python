@@ -88,12 +88,14 @@ class SpawnedService(threading.Thread):
                     raise
 
             if self.child.stdout in rds:
-                line = self.child.stdout.readline()
-                self.captured_stdout.append(line.decode('utf-8').rstrip())
+                line = self.child.stdout.readline().decode('utf-8').rstrip()
+                if line:
+                    self.captured_stdout.append(line)
 
             if self.child.stderr in rds:
-                line = self.child.stderr.readline()
-                self.captured_stderr.append(line.decode('utf-8').rstrip())
+                line = self.child.stderr.readline().decode('utf-8').rstrip()
+                if line:
+                    self.captured_stderr.append(line)
 
             if self.child.poll() is not None:
                 self.dump_logs()
