@@ -574,8 +574,8 @@ class KafkaFixture(Fixture):
     def _create_topic_via_admin_api(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
         request = CreateTopicsRequest[0]([(topic_name, num_partitions,
                                            replication_factor, [], [])], timeout_ms)
-        result = self._send_request(request, timeout=timeout_ms)
-        for topic_result in result[0].topic_errors:
+        response = self._send_request(request, timeout=timeout_ms)
+        for topic_result in response.topic_errors:
             error_code = topic_result[1]
             if error_code != 0:
                 raise errors.for_code(error_code)
