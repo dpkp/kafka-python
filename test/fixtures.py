@@ -418,7 +418,7 @@ class KafkaFixture(Fixture):
             self.render_template(jaas_conf_template, jaas_conf, vars(self))
 
         timeout = 5
-        max_timeout = 30
+        max_timeout = 120
         backoff = 1
         end_at = time.time() + max_timeout
         tries = 1
