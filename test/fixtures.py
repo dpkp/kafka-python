@@ -14,6 +14,7 @@ from kafka.vendor.six.moves import urllib, range
 from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
+from kafka.errors import InvalidReplicationFactorError
 from kafka.protocol.admin import CreateTopicsRequest
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import env_kafka_version, random_string
@@ -546,48 +547,66 @@ class KafkaFixture(Fixture):
                 else:
                     pass # retry
 
-    def _create_topic(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
+    def _create_topic(self, topic_name, num_partitions=None, replication_factor=None, timeout_ms=10000):
         if num_partitions is None:
             num_partitions = self.partitions
         if replication_factor is None:
             replication_factor = self.replicas
+        if replication_factor > self.replicas:
+            msg = "Cannot have more replicas ({}) than brokers ({})".format(replication_factor, self.replicas)
+            raise ValueError(msg)
 
         # Try different methods to create a topic, from the fastest to the slowest
         if self.auto_create_topic and \
            num_partitions == self.partitions and \
            replication_factor == self.replicas:
-            self._send_request(MetadataRequest[0]([topic_name]))
+            self._create_topic_with_metadata(topic_name)
         elif env_kafka_version() >= (0, 10, 1, 0):
-            request = CreateTopicsRequest[0]([(topic_name, num_partitions,
-                                               replication_factor, [], [])], timeout_ms)
-            result = self._send_request(request, timeout=timeout_ms)
-            for topic_result in result[0].topic_errors:
-                error_code = topic_result[1]
-                if error_code != 0:
-                    raise errors.for_code(error_code)
+            try:
+                self._create_topic_with_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
+            except InvalidReplicationFactorError:
+                # wait and try again
+                # on travis the brokers sometimes take a while to find themselves
+                time.sleep(0.5)
+                self._create_topic_with_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
         else:
-            args = self.kafka_run_class_args('kafka.admin.TopicCommand',
-                                             '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                                          self.zookeeper.port,
-                                                                          self.zk_chroot),
-                                             '--create',
-                                             '--topic', topic_name,
-                                             '--partitions', self.partitions \
-                                                 if num_partitions is None else num_partitions,
-                                             '--replication-factor', self.replicas \
-                                                 if replication_factor is None \
-                                                 else replication_factor)
-            if env_kafka_version() >= (0, 10):
-                args.append('--if-not-exists')
-            env = self.kafka_run_class_env()
-            proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            if proc.returncode != 0:
-                if 'kafka.common.TopicExistsException' not in stdout:
-                    self.out("Failed to create topic %s" % (topic_name,))
-                    self.out(stdout)
-                    self.out(stderr)
-                    raise RuntimeError("Failed to create topic %s" % (topic_name,))
+            self._create_topic_with_cli(topic_name, num_partitions, replication_factor)
+
+    def _create_topic_with_metadata(self, topic_name):
+        self._send_request(MetadataRequest[0]([topic_name]))
+
+    def _create_topic_with_admin_api(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
+        request = CreateTopicsRequest[0]([(topic_name, num_partitions,
+                                           replication_factor, [], [])], timeout_ms)
+        result = self._send_request(request, timeout=timeout_ms)
+        for topic_result in result[0].topic_errors:
+            error_code = topic_result[1]
+            if error_code != 0:
+                raise errors.for_code(error_code)
+
+    def _create_topic_with_cli(self, topic_name, num_partitions, replication_factor):
+        args = self.kafka_run_class_args('kafka.admin.TopicCommand',
+                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
+                                                                      self.zookeeper.port,
+                                                                      self.zk_chroot),
+                                         '--create',
+                                         '--topic', topic_name,
+                                         '--partitions', self.partitions \
+                                             if num_partitions is None else num_partitions,
+                                         '--replication-factor', self.replicas \
+                                             if replication_factor is None \
+                                             else replication_factor)
+        if env_kafka_version() >= (0, 10):
+            args.append('--if-not-exists')
+        env = self.kafka_run_class_env()
+        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            if 'kafka.common.TopicExistsException' not in stdout:
+                self.out("Failed to create topic %s" % (topic_name,))
+                self.out(stdout)
+                self.out(stderr)
+                raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
     def get_topic_names(self):
         args = self.kafka_run_class_args('kafka.admin.TopicCommand',
