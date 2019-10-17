@@ -148,7 +148,7 @@ class Fixture(object):
         with open(target_file.strpath, 'r') as o:
             for line in o:
                 log.debug('  ' + line.strip())
-        log.debug("binding:".format(binding))
+        log.debug("binding:")
         for key, value in binding.items():
             log.debug("  {key}={value}".format(key=key, value=value))
 
