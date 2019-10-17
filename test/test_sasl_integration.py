@@ -37,8 +37,7 @@ def test_admin(request, sasl_kafka):
 
 
 def test_produce_and_consume(request, sasl_kafka):
-    topic_name = "shortname_" + random_string(4)
-    # topic_name = special_to_underscore(request.node.name + random_string(4))
+    topic_name = special_to_underscore(request.node.name + random_string(4))
     sasl_kafka.create_topics([topic_name], num_partitions=2)
     producer, = sasl_kafka.get_producers(1)
 

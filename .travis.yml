@@ -2,20 +2,19 @@ language: python
 
 dist: xenial
 
-# TODO revert changes
 python:
     - 2.7
-    # - 3.4
+    - 3.4
     - 3.7
-    # - pypy2.7-6.0
+    - pypy2.7-6.0
 
 env:
-    # - KAFKA_VERSION=0.8.2.2
-    # - KAFKA_VERSION=0.9.0.1
+    - KAFKA_VERSION=0.8.2.2
+    - KAFKA_VERSION=0.9.0.1
     - KAFKA_VERSION=0.10.2.2
-    # - KAFKA_VERSION=0.11.0.3
-    # - KAFKA_VERSION=1.1.1
-    # - KAFKA_VERSION=2.3.0
+    - KAFKA_VERSION=0.11.0.3
+    - KAFKA_VERSION=1.1.1
+    - KAFKA_VERSION=2.3.0
 
 addons:
   apt:
@@ -37,11 +36,6 @@ install:
     - pip install .
 
 script:
-  - |
-    for prop in $(find . -name kafka.properties | sort); do
-      printf "%s: %s\n" "$prop" "$(grep sasl $prop)"
-    done
-
   - tox -e `if [ "$TRAVIS_PYTHON_VERSION" == "pypy2.7-6.0" ]; then echo pypy; else echo py${TRAVIS_PYTHON_VERSION/./}; fi`
 
 after_success:

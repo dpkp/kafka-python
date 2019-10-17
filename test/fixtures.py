@@ -141,14 +141,16 @@ class Fixture(object):
         dirfd = os.open(os.path.dirname(target_file.strpath), os.O_DIRECTORY)
         os.fsync(dirfd)
         os.close(dirfd)
-        log.info("Template string:")
+        log.debug("Template string:")
         for line in template.splitlines():
-            log.info('  ' + line.strip())
-        log.info("Rendered template:")
+            log.debug('  ' + line.strip())
+        log.debug("Rendered template:")
         with open(target_file.strpath, 'r') as o:
             for line in o:
-                log.info('  ' + line.strip())
-        log.info("binding: {}".format(binding))
+                log.debug('  ' + line.strip())
+        log.debug("binding:".format(binding))
+        for key, value in binding.items():
+            log.debug("  {key}={value}".format(key=key, value=value))
 
     def dump_logs(self):
         self.child.dump_logs()
