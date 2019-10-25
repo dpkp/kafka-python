@@ -251,7 +251,7 @@ class BrokerConnection(object):
                  self.config['send_buffer_bytes']))
 
         assert self.config['security_protocol'] in self.SECURITY_PROTOCOLS, (
-            'security_protcol must be in ' + ', '.join(self.SECURITY_PROTOCOLS))
+            'security_protocol must be in ' + ', '.join(self.SECURITY_PROTOCOLS))
 
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
             assert ssl_available, "Python wasn't built with SSL support"
@@ -1196,7 +1196,7 @@ class BrokerConnection(object):
                     # by looking at ApiVersionResponse
                     api_versions = self._handle_api_version_response(f.value)
                     version = self._infer_broker_version_from_api_versions(api_versions)
-                log.info('Broker version identifed as %s', '.'.join(map(str, version)))
+                log.info('Broker version identified as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)
                 break

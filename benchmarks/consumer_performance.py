@@ -157,7 +157,7 @@ def get_args_parser():
         default=100)
     parser.add_argument(
         '--consumer-config', type=str, nargs='+', default=(),
-        help='kafka consumer related configuaration properties like '
+        help='kafka consumer related configuration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(
         '--fixture-compression', type=str,

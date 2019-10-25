@@ -155,7 +155,7 @@ class KafkaProducer(object):
             'linger' for the specified time waiting for more records to show
             up. This setting defaults to 0 (i.e. no delay). Setting linger_ms=5
             would have the effect of reducing the number of requests sent but
-            would add up to 5ms of latency to records sent in the absense of
+            would add up to 5ms of latency to records sent in the absence of
             load. Default: 0.
         partitioner (callable): Callable used to determine which partition
             each message is assigned to. Called (after key serialization):

@@ -255,7 +255,7 @@ class Fetcher(six.Iterator):
         Arguments:
             timestamps: {TopicPartition: int} dict with timestamps to fetch
                 offsets by. -1 for the latest available, -2 for the earliest
-                available. Otherwise timestamp is treated as epoch miliseconds.
+                available. Otherwise timestamp is treated as epoch milliseconds.
 
         Returns:
             {TopicPartition: (int, int)}: Mapping of partition to
@@ -291,7 +291,7 @@ class Fetcher(six.Iterator):
                 self._client.poll(future=refresh_future, timeout_ms=remaining_ms)
 
                 # Issue #1780
-                # Recheck partition existance after after a successful metadata refresh
+                # Recheck partition existence after after a successful metadata refresh
                 if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
                     log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existance")
                     unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata

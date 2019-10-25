@@ -69,7 +69,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
             exclude_internal_topics (bool): Whether records from internal topics
