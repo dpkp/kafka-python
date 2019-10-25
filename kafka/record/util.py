@@ -91,7 +91,7 @@ def decode_varint(buffer, pos=0):
     on how those can be produced.
 
         Arguments:
-            buffer (bytearry): buffer to read from.
+            buffer (bytearray): buffer to read from.
             pos (int): optional position to read from
 
         Returns:

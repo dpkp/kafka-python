@@ -111,7 +111,7 @@ class KafkaClient(object):
             should verify that the certificate matches the broker's hostname.
             Default: True.
         ssl_cafile (str): Optional filename of CA file to use in certificate
-            veriication. Default: None.
+            verification. Default: None.
         ssl_certfile (str): Optional filename of file in PEM format containing
             the client certificate, as well as any CA certificates needed to
             establish the certificate's authenticity. Default: None.
