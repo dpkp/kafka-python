@@ -7,14 +7,14 @@ import pytest
 from kafka.vendor.six.moves import range
 
 from kafka.codec import (
-    has_snappy, has_gzip, has_lz4,
+    has_snappy, has_lz4,
     gzip_encode, gzip_decode,
     snappy_encode, snappy_decode,
     lz4_encode, lz4_decode,
     lz4_encode_old_kafka, lz4_decode_old_kafka,
 )
 
-from test.fixtures import random_string
+from test.testutil import random_string
 
 
 def test_gzip():

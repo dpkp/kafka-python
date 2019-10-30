@@ -157,7 +157,7 @@ class Sender(threading.Thread):
         # difference between now and its linger expiry time; otherwise the
         # select time will be the time difference between now and the
         # metadata expiry time
-        self._client.poll(poll_timeout_ms)
+        self._client.poll(timeout_ms=poll_timeout_ms)
 
     def initiate_close(self):
         """Start closing the sender (won't complete until all data is sent)."""
@@ -314,6 +314,9 @@ class Sender(threading.Thread):
     def wakeup(self):
         """Wake up the selector associated with this send thread."""
         self._client.wakeup()
+
+    def bootstrap_connected(self):
+        return self._client.bootstrap_connected()
 
 
 class SenderMetrics(object):

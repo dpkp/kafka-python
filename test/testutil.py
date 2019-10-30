@@ -1,69 +1,38 @@
 from __future__ import absolute_import
 
-import functools
-import operator
 import os
 import socket
+import random
+import string
 import time
 import uuid
 
 import pytest
 from . import unittest
 
+
 from kafka import SimpleClient, create_message
 from kafka.client_async import KafkaClient
-from kafka.errors import LeaderNotAvailableError, KafkaTimeoutError, InvalidTopicError, \
-                          NotLeaderForPartitionError, UnknownTopicOrPartitionError, \
-                          FailedPayloadsError
+from kafka.errors import (
+    LeaderNotAvailableError, KafkaTimeoutError, InvalidTopicError,
+    NotLeaderForPartitionError, UnknownTopicOrPartitionError,
+    FailedPayloadsError
+)
 from kafka.structs import OffsetRequestPayload, ProduceRequestPayload
 from test.fixtures import random_string, version_str_to_list, version as kafka_version #pylint: disable=wrong-import-order
 
+def random_string(length):
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
-def kafka_versions(*versions):
 
-    def construct_lambda(s):
-        if s[0].isdigit():
-            op_str = '='
-            v_str = s
-        elif s[1].isdigit():
-            op_str = s[0] # ! < > =
-            v_str = s[1:]
-        elif s[2].isdigit():
-            op_str = s[0:2] # >= <=
-            v_str = s[2:]
-        else:
-            raise ValueError('Unrecognized kafka version / operator: %s' % (s,))
+def env_kafka_version():
+    """Return the Kafka version set in the OS environment as a tuple.
 
-        op_map = {
-            '=': operator.eq,
-            '!': operator.ne,
-            '>': operator.gt,
-            '<': operator.lt,
-            '>=': operator.ge,
-            '<=': operator.le
-        }
-        op = op_map[op_str]
-        version = version_str_to_list(v_str)
-        return lambda a: op(a, version)
-
-    validators = map(construct_lambda, versions)
-
-    def real_kafka_versions(func):
-        @functools.wraps(func)
-        def wrapper(func, *args, **kwargs):
-            version = kafka_version()
-
-            if not version:
-                pytest.skip("no kafka version set in KAFKA_VERSION env var")
-
-            for f in validators:
-                if not f(version):
-                    pytest.skip("unsupported kafka version")
-
-            return func(*args, **kwargs)
-        return wrapper
-
-    return real_kafka_versions
+     Example: '0.8.1.1' --> (0, 8, 1, 1)
+    """
+    if 'KAFKA_VERSION' not in os.environ:
+        return ()
+    return tuple(map(int, os.environ['KAFKA_VERSION'].split('.')))
 
 def get_open_port():
     sock = socket.socket()
@@ -105,6 +74,17 @@ def current_offset(client, topic, partition, kafka_broker=None):
         raise
     else:
         return offsets.offsets[0]
+
+
+def assert_message_count(messages, num_messages):
+    """Check that we received the expected number of messages with no duplicates."""
+    # Make sure we got them all
+    assert len(messages) == num_messages
+    # Make sure there are no duplicates
+    # Note: Currently duplicates are identified only using key/value. Other attributes like topic, partition, headers,
+    # timestamp, etc are ignored... this could be changed if necessary, but will be more tolerant of dupes.
+    unique_messages = {(m.key, m.value) for m in messages}
+    assert len(unique_messages) == num_messages
 
 
 class KafkaIntegrationTestCase(unittest.TestCase):

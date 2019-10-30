@@ -5,8 +5,7 @@ import pytest
 
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
-from kafka.coordinator.protocol import (
-    ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment)
+from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment
 
 
 @pytest.fixture

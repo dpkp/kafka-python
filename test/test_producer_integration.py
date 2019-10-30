@@ -13,10 +13,11 @@ from kafka import (
 from kafka.codec import has_snappy
 from kafka.errors import UnknownTopicOrPartitionError, LeaderNotAvailableError
 from kafka.producer.base import Producer
+from kafka.protocol.message import PartialMessage
 from kafka.structs import FetchRequestPayload, ProduceRequestPayload
 
-from test.fixtures import ZookeeperFixture, KafkaFixture, version
-from test.testutil import KafkaIntegrationTestCase, kafka_versions, current_offset
+from test.fixtures import ZookeeperFixture, KafkaFixture
+from test.testutil import KafkaIntegrationTestCase, env_kafka_version, current_offset
 
 
 # TODO: This duplicates a TestKafkaProducerIntegration method temporarily
@@ -43,7 +44,7 @@ def assert_produce_response(resp, initial_offset):
     assert resp[0].offset == initial_offset
 
 
-@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_produce_many_simple(simple_client, topic):
     """Test multiple produces using the SimpleClient
     """
@@ -353,7 +354,7 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
     #   KeyedProducer Tests    #
     ############################
 
-    @kafka_versions('>=0.8.1')
+    @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
     def test_keyedproducer_null_payload(self):
         partitions = self.client.get_partition_ids_for_topic(self.topic)
         start_offsets = [self.current_offset(self.topic, p) for p in partitions]
@@ -521,7 +522,8 @@ class TestKafkaProducerIntegration(KafkaIntegrationTestCase):
 
         self.assertEqual(resp.error, 0)
         self.assertEqual(resp.partition, partition)
-        messages = [ x.message.value for x in resp.messages ]
+        messages = [ x.message.value for x in resp.messages
+                    if not isinstance(x.message, PartialMessage) ]
 
         self.assertEqual(messages, expected_messages)
         self.assertEqual(resp.highwaterMark, start_offset+len(expected_messages))

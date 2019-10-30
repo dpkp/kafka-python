@@ -6,7 +6,7 @@
 : ${KAFKA_SRC_GIT:=https://github.com/apache/kafka.git}
 
 # On travis CI, empty KAFKA_VERSION means skip integration tests
-# so we don't try to get binaries 
+# so we don't try to get binaries
 # Otherwise it means test all official releases, so we get all of them!
 if [ -z "$KAFKA_VERSION" -a -z "$TRAVIS" ]; then
   KAFKA_VERSION=$ALL_RELEASES

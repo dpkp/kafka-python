@@ -36,6 +36,7 @@ from kafka.version import __version__
 
 if six.PY2:
     ConnectionError = socket.error
+    TimeoutError = socket.error
     BlockingIOError = Exception
 
 log = logging.getLogger(__name__)
@@ -288,6 +289,7 @@ class BrokerConnection(object):
         self.state = ConnectionStates.DISCONNECTED
         self._reset_reconnect_backoff()
         self._sock = None
+        self._send_buffer = b''
         self._ssl_context = None
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
@@ -463,6 +465,9 @@ class BrokerConnection(object):
                 log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_cafile'])
                 self._ssl_context.verify_mode = ssl.CERT_REQUIRED
+            else:
+                log.info('%s: Loading system default SSL CAs from %s', self, ssl.get_default_verify_paths())
+                self._ssl_context.load_default_certs()
             if self.config['ssl_certfile'] and self.config['ssl_keyfile']:
                 log.info('%s: Loading SSL Cert from %s', self, self.config['ssl_certfile'])
                 log.info('%s: Loading SSL Key from %s', self, self.config['ssl_keyfile'])
@@ -498,7 +503,7 @@ class BrokerConnection(object):
         # old ssl in python2.6 will swallow all SSLErrors here...
         except (SSLWantReadError, SSLWantWriteError):
             pass
-        except (SSLZeroReturnError, ConnectionError, SSLEOFError):
+        except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError):
             log.warning('SSL connection closed by server during handshake.')
             self.close(Errors.KafkaConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
@@ -553,6 +558,32 @@ class BrokerConnection(object):
                     'kafka-python does not support SASL mechanism %s' %
                     self.config['sasl_mechanism']))
 
+    def _send_bytes(self, data):
+        """Send some data via non-blocking IO
+
+        Note: this method is not synchronized internally; you should
+        always hold the _lock before calling
+
+        Returns: number of bytes
+        Raises: socket exception
+        """
+        total_sent = 0
+        while total_sent < len(data):
+            try:
+                sent_bytes = self._sock.send(data[total_sent:])
+                total_sent += sent_bytes
+            except (SSLWantReadError, SSLWantWriteError):
+                break
+            except (ConnectionError, TimeoutError) as e:
+                if six.PY2 and e.errno == errno.EWOULDBLOCK:
+                    break
+                raise
+            except BlockingIOError:
+                if six.PY3:
+                    break
+                raise
+        return total_sent
+
     def _send_bytes_blocking(self, data):
         self._sock.settimeout(self.config['request_timeout_ms'] / 1000)
         total_sent = 0
@@ -589,21 +620,30 @@ class BrokerConnection(object):
                                self.config['sasl_plain_username'],
                                self.config['sasl_plain_password']]).encode('utf-8'))
         size = Int32.encode(len(msg))
-        try:
-            with self._lock:
-                if not self._can_send_recv():
-                    return future.failure(Errors.NodeNotReadyError(str(self)))
-                self._send_bytes_blocking(size + msg)
 
-                # The server will send a zero sized message (that is Int32(0)) on success.
-                # The connection is closed on failure
-                data = self._recv_bytes_blocking(4)
+        err = None
+        close = False
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                try:
+                    self._send_bytes_blocking(size + msg)
 
-        except ConnectionError as e:
-            log.exception("%s: Error receiving reply from server", self)
-            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
-            self.close(error=error)
-            return future.failure(error)
+                    # The server will send a zero sized message (that is Int32(0)) on success.
+                    # The connection is closed on failure
+                    data = self._recv_bytes_blocking(4)
+
+                except (ConnectionError, TimeoutError) as e:
+                    log.exception("%s: Error receiving reply from server", self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
 
         if data != b'\x00\x00\x00\x00':
             error = Errors.AuthenticationFailedError('Unrecognized response during authentication')
@@ -621,61 +661,67 @@ class BrokerConnection(object):
         ).canonicalize(gssapi.MechType.kerberos)
         log.debug('%s: GSSAPI name: %s', self, gssapi_name)
 
-        self._lock.acquire()
-        if not self._can_send_recv():
-            return future.failure(Errors.NodeNotReadyError(str(self)))
-        # Establish security context and negotiate protection level
-        # For reference RFC 2222, section 7.2.1
-        try:
-            # Exchange tokens until authentication either succeeds or fails
-            client_ctx = gssapi.SecurityContext(name=gssapi_name, usage='initiate')
-            received_token = None
-            while not client_ctx.complete:
-                # calculate an output token from kafka token (or None if first iteration)
-                output_token = client_ctx.step(received_token)
+        err = None
+        close = False
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                # Establish security context and negotiate protection level
+                # For reference RFC 2222, section 7.2.1
+                try:
+                    # Exchange tokens until authentication either succeeds or fails
+                    client_ctx = gssapi.SecurityContext(name=gssapi_name, usage='initiate')
+                    received_token = None
+                    while not client_ctx.complete:
+                        # calculate an output token from kafka token (or None if first iteration)
+                        output_token = client_ctx.step(received_token)
 
-                # pass output token to kafka, or send empty response if the security
-                # context is complete (output token is None in that case)
-                if output_token is None:
-                    self._send_bytes_blocking(Int32.encode(0))
-                else:
-                    msg = output_token
+                        # pass output token to kafka, or send empty response if the security
+                        # context is complete (output token is None in that case)
+                        if output_token is None:
+                            self._send_bytes_blocking(Int32.encode(0))
+                        else:
+                            msg = output_token
+                            size = Int32.encode(len(msg))
+                            self._send_bytes_blocking(size + msg)
+
+                        # The server will send a token back. Processing of this token either
+                        # establishes a security context, or it needs further token exchange.
+                        # The gssapi will be able to identify the needed next step.
+                        # The connection is closed on failure.
+                        header = self._recv_bytes_blocking(4)
+                        (token_size,) = struct.unpack('>i', header)
+                        received_token = self._recv_bytes_blocking(token_size)
+
+                    # Process the security layer negotiation token, sent by the server
+                    # once the security context is established.
+
+                    # unwraps message containing supported protection levels and msg size
+                    msg = client_ctx.unwrap(received_token).message
+                    # Kafka currently doesn't support integrity or confidentiality security layers, so we
+                    # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
+                    # by the server
+                    msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
+                    # add authorization identity to the response, GSS-wrap and send it
+                    msg = client_ctx.wrap(msg + auth_id.encode(), False).message
                     size = Int32.encode(len(msg))
                     self._send_bytes_blocking(size + msg)
 
-                # The server will send a token back. Processing of this token either
-                # establishes a security context, or it needs further token exchange.
-                # The gssapi will be able to identify the needed next step.
-                # The connection is closed on failure.
-                header = self._recv_bytes_blocking(4)
-                (token_size,) = struct.unpack('>i', header)
-                received_token = self._recv_bytes_blocking(token_size)
+                except (ConnectionError, TimeoutError) as e:
+                    log.exception("%s: Error receiving reply from server",  self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+                except Exception as e:
+                    err = e
+                    close = True
 
-            # Process the security layer negotiation token, sent by the server
-            # once the security context is established.
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
 
-            # unwraps message containing supported protection levels and msg size
-            msg = client_ctx.unwrap(received_token).message
-            # Kafka currently doesn't support integrity or confidentiality security layers, so we
-            # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
-            # by the server
-            msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
-            # add authorization identity to the response, GSS-wrap and send it
-            msg = client_ctx.wrap(msg + auth_id.encode(), False).message
-            size = Int32.encode(len(msg))
-            self._send_bytes_blocking(size + msg)
-
-        except ConnectionError as e:
-            self._lock.release()
-            log.exception("%s: Error receiving reply from server",  self)
-            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
-            self.close(error=error)
-            return future.failure(error)
-        except Exception as e:
-            self._lock.release()
-            return future.failure(e)
-
-        self._lock.release()
         log.info('%s: Authenticated as %s via GSSAPI', self, gssapi_name)
         return future.success(True)
 
@@ -684,25 +730,31 @@ class BrokerConnection(object):
 
         msg = bytes(self._build_oauth_client_request().encode("utf-8"))
         size = Int32.encode(len(msg))
-        self._lock.acquire()
-        if not self._can_send_recv():
-            return future.failure(Errors.NodeNotReadyError(str(self)))
-        try:
-            # Send SASL OAuthBearer request with OAuth token
-            self._send_bytes_blocking(size + msg)
 
-            # The server will send a zero sized message (that is Int32(0)) on success.
-            # The connection is closed on failure
-            data = self._recv_bytes_blocking(4)
+        err = None
+        close = False
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                try:
+                    # Send SASL OAuthBearer request with OAuth token
+                    self._send_bytes_blocking(size + msg)
 
-        except ConnectionError as e:
-            self._lock.release()
-            log.exception("%s: Error receiving reply from server", self)
-            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
-            self.close(error=error)
-            return future.failure(error)
+                    # The server will send a zero sized message (that is Int32(0)) on success.
+                    # The connection is closed on failure
+                    data = self._recv_bytes_blocking(4)
 
-        self._lock.release()
+                except (ConnectionError, TimeoutError) as e:
+                    log.exception("%s: Error receiving reply from server", self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
 
         if data != b'\x00\x00\x00\x00':
             error = Errors.AuthenticationFailedError('Unrecognized response during authentication')
@@ -744,16 +796,16 @@ class BrokerConnection(object):
         """
         Return the number of milliseconds to wait, based on the connection
         state, before attempting to send data. When disconnected, this respects
-        the reconnect backoff time. When connecting, returns 0 to allow
-        non-blocking connect to finish. When connected, returns a very large
-        number to handle slow/stalled connections.
+        the reconnect backoff time. When connecting or connected, returns a very
+        large number to handle slow/stalled connections.
         """
         time_waited = time.time() - (self.last_attempt or 0)
         if self.state is ConnectionStates.DISCONNECTED:
             return max(self._reconnect_backoff - time_waited, 0) * 1000
-        elif self.connecting():
-            return 0
         else:
+            # When connecting or connected, we should be able to delay
+            # indefinitely since other events (connection or data acked) will
+            # cause a wakeup once data can be sent.
             return float('inf')
 
     def connected(self):
@@ -814,6 +866,7 @@ class BrokerConnection(object):
             self._protocol = KafkaProtocol(
                 client_id=self.config['client_id'],
                 api_version=self.config['api_version'])
+            self._send_buffer = b''
             if error is None:
                 error = Errors.Cancelled(str(self))
             ifrs = list(self.in_flight_requests.items())
@@ -853,6 +906,9 @@ class BrokerConnection(object):
         future = Future()
         with self._lock:
             if not self._can_send_recv():
+                # In this case, since we created the future above,
+                # we know there are no callbacks/errbacks that could fire w/
+                # lock. So failing + returning inline should be safe
                 return future.failure(Errors.NodeNotReadyError(str(self)))
 
             correlation_id = self._protocol.send_request(request)
@@ -873,24 +929,60 @@ class BrokerConnection(object):
         return future
 
     def send_pending_requests(self):
-        """Can block on network if request is larger than send_buffer_bytes"""
+        """Attempts to send pending requests messages via blocking IO
+        If all requests have been sent, return True
+        Otherwise, if the socket is blocked and there are more bytes to send,
+        return False.
+        """
         try:
             with self._lock:
                 if not self._can_send_recv():
-                    return Errors.NodeNotReadyError(str(self))
-                # In the future we might manage an internal write buffer
-                # and send bytes asynchronously. For now, just block
-                # sending each request payload
+                    return False
                 data = self._protocol.send_bytes()
                 total_bytes = self._send_bytes_blocking(data)
+
             if self._sensors:
                 self._sensors.bytes_sent.record(total_bytes)
-            return total_bytes
-        except ConnectionError as e:
+            return True
+
+        except (ConnectionError, TimeoutError) as e:
             log.exception("Error sending request data to %s", self)
             error = Errors.KafkaConnectionError("%s: %s" % (self, e))
             self.close(error=error)
-            return error
+            return False
+
+    def send_pending_requests_v2(self):
+        """Attempts to send pending requests messages via non-blocking IO
+        If all requests have been sent, return True
+        Otherwise, if the socket is blocked and there are more bytes to send,
+        return False.
+        """
+        try:
+            with self._lock:
+                if not self._can_send_recv():
+                    return False
+
+                # _protocol.send_bytes returns encoded requests to send
+                # we send them via _send_bytes()
+                # and hold leftover bytes in _send_buffer
+                if not self._send_buffer:
+                    self._send_buffer = self._protocol.send_bytes()
+
+                total_bytes = 0
+                if self._send_buffer:
+                    total_bytes = self._send_bytes(self._send_buffer)
+                    self._send_buffer = self._send_buffer[total_bytes:]
+
+            if self._sensors:
+                self._sensors.bytes_sent.record(total_bytes)
+            # Return True iff send buffer is empty
+            return len(self._send_buffer) == 0
+
+        except (ConnectionError, TimeoutError, Exception) as e:
+            log.exception("Error sending request data to %s", self)
+            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
+            self.close(error=error)
+            return False
 
     def can_send_more(self):
         """Return True unless there are max_in_flight_requests_per_connection."""
@@ -911,7 +1003,7 @@ class BrokerConnection(object):
                 self.config['request_timeout_ms']))
             return ()
 
-        # augment respones w/ correlation_id, future, and timestamp
+        # augment responses w/ correlation_id, future, and timestamp
         for i, (correlation_id, response) in enumerate(responses):
             try:
                 with self._lock:
@@ -931,56 +1023,57 @@ class BrokerConnection(object):
     def _recv(self):
         """Take all available bytes from socket, return list of any responses from parser"""
         recvd = []
-        self._lock.acquire()
-        if not self._can_send_recv():
-            log.warning('%s cannot recv: socket not connected', self)
-            self._lock.release()
-            return ()
+        err = None
+        with self._lock:
+            if not self._can_send_recv():
+                log.warning('%s cannot recv: socket not connected', self)
+                return ()
 
-        while len(recvd) < self.config['sock_chunk_buffer_count']:
-            try:
-                data = self._sock.recv(self.config['sock_chunk_bytes'])
-                # We expect socket.recv to raise an exception if there are no
-                # bytes available to read from the socket in non-blocking mode.
-                # but if the socket is disconnected, we will get empty data
-                # without an exception raised
-                if not data:
-                    log.error('%s: socket disconnected', self)
-                    self._lock.release()
-                    self.close(error=Errors.KafkaConnectionError('socket disconnected'))
-                    return []
-                else:
-                    recvd.append(data)
+            while len(recvd) < self.config['sock_chunk_buffer_count']:
+                try:
+                    data = self._sock.recv(self.config['sock_chunk_bytes'])
+                    # We expect socket.recv to raise an exception if there are no
+                    # bytes available to read from the socket in non-blocking mode.
+                    # but if the socket is disconnected, we will get empty data
+                    # without an exception raised
+                    if not data:
+                        log.error('%s: socket disconnected', self)
+                        err = Errors.KafkaConnectionError('socket disconnected')
+                        break
+                    else:
+                        recvd.append(data)
 
-            except SSLWantReadError:
-                break
-            except ConnectionError as e:
-                if six.PY2 and e.errno == errno.EWOULDBLOCK:
+                except (SSLWantReadError, SSLWantWriteError):
                     break
-                log.exception('%s: Error receiving network data'
-                              ' closing socket', self)
-                self._lock.release()
-                self.close(error=Errors.KafkaConnectionError(e))
-                return []
-            except BlockingIOError:
-                if six.PY3:
+                except (ConnectionError, TimeoutError) as e:
+                    if six.PY2 and e.errno == errno.EWOULDBLOCK:
+                        break
+                    log.exception('%s: Error receiving network data'
+                                  ' closing socket', self)
+                    err = Errors.KafkaConnectionError(e)
                     break
-                self._lock.release()
-                raise
+                except BlockingIOError:
+                    if six.PY3:
+                        break
+                    # For PY2 this is a catchall and should be re-raised
+                    raise
 
-        recvd_data = b''.join(recvd)
-        if self._sensors:
-            self._sensors.bytes_received.record(len(recvd_data))
+            # Only process bytes if there was no connection exception
+            if err is None:
+                recvd_data = b''.join(recvd)
+                if self._sensors:
+                    self._sensors.bytes_received.record(len(recvd_data))
 
-        try:
-            responses = self._protocol.receive_bytes(recvd_data)
-        except Errors.KafkaProtocolError as e:
-            self._lock.release()
-            self.close(e)
-            return []
-        else:
-            self._lock.release()
-            return responses
+                # We need to keep the lock through protocol receipt
+                # so that we ensure that the processed byte order is the
+                # same as the received byte order
+                try:
+                    return self._protocol.receive_bytes(recvd_data)
+                except Errors.KafkaProtocolError as e:
+                    err = e
+
+        self.close(error=err)
+        return ()
 
     def requests_timed_out(self):
         with self._lock:

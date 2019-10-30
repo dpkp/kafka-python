@@ -7,7 +7,7 @@ import pytest
 
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.producer.buffer import SimpleBufferPool
-from test.fixtures import random_string, version
+from test.testutil import env_kafka_version, random_string
 
 
 def test_buffer_pool():
@@ -22,13 +22,13 @@ def test_buffer_pool():
     assert buf2.read() == b''
 
 
-@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
 def test_end_to_end(kafka_broker, compression):
 
     if compression == 'lz4':
         # LZ4 requires 0.8.2
-        if version() < (0, 8, 2):
+        if env_kafka_version() < (0, 8, 2):
             return
         # python-lz4 crashes on older versions of pypy
         elif platform.python_implementation() == 'PyPy':
@@ -80,7 +80,7 @@ def test_kafka_producer_gc_cleanup():
     assert threading.active_count() == threads
 
 
-@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
 def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
@@ -91,7 +91,7 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     magic = producer._max_usable_produce_magic()
 
     # record headers are supported in 0.11.0
-    if version() < (0, 11, 0):
+    if env_kafka_version() < (0, 11, 0):
         headers = None
     else:
         headers = [("Header Key", b"Header Value")]

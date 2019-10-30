@@ -46,20 +46,18 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
             if partitions is None:
                 log.warning('No partition metadata for topic %s', topic)
                 continue
-            partitions = sorted(list(partitions))
-            partitions_for_topic = len(partitions)
+            partitions = sorted(partitions)
             consumers_for_topic.sort()
 
             partitions_per_consumer = len(partitions) // len(consumers_for_topic)
             consumers_with_extra = len(partitions) % len(consumers_for_topic)
 
-            for i in range(len(consumers_for_topic)):
+            for i, member in enumerate(consumers_for_topic):
                 start = partitions_per_consumer * i
                 start += min(i, consumers_with_extra)
                 length = partitions_per_consumer
                 if not i + 1 > consumers_with_extra:
                     length += 1
-                member = consumers_for_topic[i]
                 assignment[member][topic] = partitions[start:start+length]
 
         protocol_assignment = {}

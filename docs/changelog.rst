@@ -105,6 +105,69 @@ Logging / Error Messages
 * Log Heartbeat thread start / close for debugging (dpkp)
 
 
+1.4.7 (Sep 30, 2019)
+####################
+
+This is a minor release focused on KafkaConsumer performance, Admin Client
+improvements, and Client concurrency. The KafkaConsumer iterator implementation
+has been greatly simplified so that it just wraps consumer.poll(). The prior
+implementation will remain available for a few more releases using the optional
+KafkaConsumer config: `legacy_iterator=True` . This is expected to improve
+consumer throughput substantially and help reduce heartbeat failures / group
+rebalancing.
+
+Client
+------
+* Send socket data via non-blocking IO with send buffer (dpkp / PR #1912)
+* Rely on socket selector to detect completed connection attempts (dpkp / PR #1909)
+* Improve connection lock handling; always use context manager (melor,dpkp / PR #1895)
+* Reduce client poll timeout when there are no in-flight requests (dpkp / PR #1823)
+
+KafkaConsumer
+-------------
+* Do not use wakeup when sending fetch requests from consumer (dpkp / PR #1911)
+* Wrap `consumer.poll()` for KafkaConsumer iteration (dpkp / PR #1902)
+* Allow the coordinator to auto-commit on old brokers (justecorruptio / PR #1832)
+* Reduce internal client poll timeout for (legacy) consumer iterator interface (dpkp / PR #1824)
+* Use dedicated connection for group coordinator (dpkp / PR #1822)
+* Change coordinator lock acquisition order (dpkp / PR #1821)
+* Make `partitions_for_topic` a read-through cache (Baisang / PR #1781,#1809)
+* Fix consumer hanging indefinitely on topic deletion while rebalancing (commanderdishwasher / PR #1782)
+
+Miscellaneous Bugfixes / Improvements
+-------------------------------------
+* Fix crc32c avilability on non-intel architectures (ossdev07 / PR #1904)
+* Load system default SSL CAs if `ssl_cafile` is not provided (iAnomaly / PR #1883)
+* Catch py3 TimeoutError in BrokerConnection send/recv (dpkp / PR #1820)
+* Added a function to determine if bootstrap is successfully connected (Wayde2014 / PR #1876)
+
+Admin Client
+------------
+* Add ACL api support to KafkaAdminClient (ulrikjohansson / PR #1833)
+* Add `sasl_kerberos_domain_name` config to KafkaAdminClient (jeffwidman / PR #1852)
+* Update `security_protocol` config documentation for KafkaAdminClient (cardy31 / PR #1849)
+* Break FindCoordinator into request/response methods in KafkaAdminClient (jeffwidman / PR #1871)
+* Break consumer operations into request / response methods in KafkaAdminClient (jeffwidman / PR #1845)
+* Parallelize calls to `_send_request_to_node()` in KafkaAdminClient (davidheitman / PR #1807)
+
+Test Infrastructure / Documentation / Maintenance
+-------------------------------------------------
+* Add Kafka 2.3.0 to test matrix and compatibility docs (dpkp / PR #1915)
+* Convert remaining `KafkaConsumer` tests to `pytest` (jeffwidman / PR #1886)
+* Bump integration tests to 0.10.2.2 and 0.11.0.3 (jeffwidman / #1890)
+* Cleanup handling of `KAFKA_VERSION` env var in tests (jeffwidman / PR #1887)
+* Minor test cleanup (jeffwidman / PR #1885)
+* Use `socket.SOCK_STREAM` in test assertions (iv-m / PR #1879)
+* Sanity test for `consumer.topics()` and `consumer.partitions_for_topic()` (Baisang / PR #1829)
+* Cleanup seconds conversion in client poll timeout calculation (jeffwidman / PR #1825)
+* Remove unused imports (jeffwidman / PR #1808)
+* Cleanup python nits in RangePartitionAssignor (jeffwidman / PR #1805)
+* Update links to kafka consumer config docs (jeffwidman)
+* Fix minor documentation typos (carsonip / PR #1865)
+* Remove unused/weird comment line (jeffwidman / PR #1813)
+* Update docs for `api_version_auto_timeout_ms` (jeffwidman / PR #1812)
+
+
 1.4.6 (Apr 2, 2019)
 ###################
 

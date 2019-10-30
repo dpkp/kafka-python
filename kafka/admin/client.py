@@ -11,14 +11,16 @@ from kafka.client_async import KafkaClient, selectors
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
-    UnrecognizedBrokerVersion)
+    UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
-    ListGroupsRequest, DescribeGroupsRequest)
+    ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest)
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
+    ACLResourcePatternType
 from kafka.version import __version__
 
 
@@ -91,7 +93,8 @@ class KafkaAdminClient(object):
             partition leadership changes to proactively discover any new
             brokers or partitions. Default: 300000
         security_protocol (str): Protocol used to communicate with brokers.
-            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+            Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL.
+            Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
@@ -133,6 +136,8 @@ class KafkaAdminClient(object):
             Required if sasl_mechanism is PLAIN.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
+        sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
+            sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
 
@@ -168,6 +173,7 @@ class KafkaAdminClient(object):
         'sasl_plain_username': None,
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
 
         # metrics configs
@@ -226,14 +232,20 @@ class KafkaAdminClient(object):
         :param operation: A list of protocol operation versions from kafka.protocol.
         :return: The max matching version number between client and broker.
         """
-        version = min(len(operation) - 1,
-                      self._client.get_api_versions()[operation[0].API_KEY][1])
-        if version < self._client.get_api_versions()[operation[0].API_KEY][0]:
+        broker_api_versions = self._client.get_api_versions()
+        api_key = operation[0].API_KEY
+        if broker_api_versions is None or api_key not in broker_api_versions:
+            raise IncompatibleBrokerVersion(
+                "Kafka broker does not support the '{}' Kafka protocol."
+                .format(operation[0].__name__))
+        min_version, max_version = broker_api_versions[api_key]
+        version = min(len(operation) - 1, max_version)
+        if version < min_version:
             # max library version is less than min broker version. Currently,
             # no Kafka versions specify a min msg version. Maybe in the future?
             raise IncompatibleBrokerVersion(
                 "No version of the '{}' Kafka protocol is supported by both the client and broker."
-                .format(operation.__name__))
+                .format(operation[0].__name__))
         return version
 
     def _validate_timeout(self, timeout_ms):
@@ -249,7 +261,11 @@ class KafkaAdminClient(object):
         version = self._matching_api_version(MetadataRequest)
         if 1 <= version <= 6:
             request = MetadataRequest[version]()
-            response = self._send_request_to_node(self._client.least_loaded_node(), request)
+            future = self._send_request_to_node(self._client.least_loaded_node(), request)
+
+            self._wait_for_futures([future])
+
+            response = future.value
             controller_id = response.controller_id
             # verify the controller is new enough to support our requests
             controller_version = self._client.check_version(controller_id)
@@ -263,7 +279,49 @@ class KafkaAdminClient(object):
                 "Kafka Admin interface cannot determine the controller using MetadataRequest_v{}."
                 .format(version))
 
-    def _find_group_coordinator_id(self, group_id):
+    def _find_coordinator_id_send_request(self, group_id):
+        """Send a FindCoordinatorRequest to a broker.
+
+        :param group_id: The consumer group ID. This is typically the group
+            name as a string.
+        :return: A message future
+        """
+        # TODO add support for dynamically picking version of
+        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
+        # When I experimented with this, the coordinator value returned in
+        # GroupCoordinatorResponse_v1 didn't match the value returned by
+        # GroupCoordinatorResponse_v0 and I couldn't figure out why.
+        version = 0
+        # version = self._matching_api_version(GroupCoordinatorRequest)
+        if version <= 0:
+            request = GroupCoordinatorRequest[version](group_id)
+        else:
+            raise NotImplementedError(
+                "Support for GroupCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                .format(version))
+        return self._send_request_to_node(self._client.least_loaded_node(), request)
+
+    def _find_coordinator_id_process_response(self, response):
+        """Process a FindCoordinatorResponse.
+
+        :param response: a FindCoordinatorResponse.
+        :return: The node_id of the broker that is the coordinator.
+        """
+        if response.API_VERSION <= 0:
+            error_type = Errors.for_code(response.error_code)
+            if error_type is not Errors.NoError:
+                # Note: When error_type.retriable, Java will retry... see
+                # KafkaAdminClient's handleFindCoordinatorError method
+                raise error_type(
+                    "FindCoordinatorRequest failed with response '{}'."
+                    .format(response))
+        else:
+            raise NotImplementedError(
+                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                .format(response.API_VERSION))
+        return response.coordinator_id
+
+    def _find_coordinator_id(self, group_id):
         """Find the broker node_id of the coordinator of the given group.
 
         Sends a FindCoordinatorRequest message to the cluster. Will block until
@@ -275,52 +333,26 @@ class KafkaAdminClient(object):
         :return: The node_id of the broker that is the coordinator.
         """
         # Note: Java may change how this is implemented in KAFKA-6791.
-        #
-        # TODO add support for dynamically picking version of
-        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
-        # When I experimented with this, GroupCoordinatorResponse_v1 didn't
-        # match GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        gc_request = GroupCoordinatorRequest[0](group_id)
-        gc_response = self._send_request_to_node(self._client.least_loaded_node(), gc_request)
-        # use the extra error checking in add_group_coordinator() rather than
-        # immediately returning the group coordinator.
-        success = self._client.cluster.add_group_coordinator(group_id, gc_response)
-        if not success:
-            error_type = Errors.for_code(gc_response.error_code)
-            assert error_type is not Errors.NoError
-            # Note: When error_type.retriable, Java will retry... see
-            # KafkaAdminClient's handleFindCoordinatorError method
-            raise error_type(
-                "Could not identify group coordinator for group_id '{}' from response '{}'."
-                .format(group_id, gc_response))
-        group_coordinator = self._client.cluster.coordinator_for_group(group_id)
-        # will be None if the coordinator was never populated, which should never happen here
-        assert group_coordinator is not None
-        # will be -1 if add_group_coordinator() failed... but by this point the
-        # error should have been raised.
-        assert group_coordinator != -1
-        return group_coordinator
+        future = self._find_coordinator_id_send_request(group_id)
+        self._wait_for_futures([future])
+        response = future.value
+        return self._find_coordinator_id_process_response(response)
 
     def _send_request_to_node(self, node_id, request):
         """Send a Kafka protocol message to a specific broker.
 
-        Will block until the message result is received.
+        Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
-        :return: The Kafka protocol response for the message.
+        :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
         while not self._client.ready(node_id):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll()
-        future = self._client.send(node_id, request)
-        self._client.poll(future=future)
-        if future.succeeded():
-            return future.value
-        else:
-            raise future.exception  # pylint: disable-msg=raising-bad-type
+        return self._client.send(node_id, request)
 
     def _send_request_to_controller(self, request):
         """Send a Kafka protocol message to the cluster controller.
@@ -333,7 +365,11 @@ class KafkaAdminClient(object):
         tries = 2  # in case our cached self._controller_id is outdated
         while tries:
             tries -= 1
-            response = self._send_request_to_node(self._controller_id, request)
+            future = self._send_request_to_node(self._controller_id, request)
+
+            self._wait_for_futures([future])
+
+            response = future.value
             # In Java, the error fieldname is inconsistent:
             #  - CreateTopicsResponse / CreatePartitionsResponse uses topic_errors
             #  - DeleteTopicsResponse uses topic_error_codes
@@ -341,7 +377,7 @@ class KafkaAdminClient(object):
             # one of these attributes and that they always unpack into
             # (topic, error_code) tuples.
             topic_error_tuples = (response.topic_errors if hasattr(response, 'topic_errors')
-                else response.topic_error_codes)
+                    else response.topic_error_codes)
             # Also small py2/py3 compatibility -- py3 can ignore extra values
             # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
             # So for now we have to map across the list and explicitly drop any
@@ -442,14 +478,269 @@ class KafkaAdminClient(object):
     # describe cluster functionality is in ClusterMetadata
     # Note: if implemented here, send the request to the least_loaded_node()
 
-    # describe_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
+    @staticmethod
+    def _convert_describe_acls_response_to_acls(describe_response):
+        version = describe_response.API_VERSION
 
-    # create_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
+        error = Errors.for_code(describe_response.error_code)
+        acl_list = []
+        for resources in describe_response.resources:
+            if version == 0:
+                resource_type, resource_name, acls = resources
+                resource_pattern_type = ACLResourcePatternType.LITERAL.value
+            elif version <= 1:
+                resource_type, resource_name, resource_pattern_type, acls = resources
+            else:
+                raise NotImplementedError(
+                    "Support for DescribeAcls Response v{} has not yet been added to KafkaAdmin."
+                        .format(version)
+                )
+            for acl in acls:
+                principal, host, operation, permission_type = acl
+                conv_acl = ACL(
+                    principal=principal,
+                    host=host,
+                    operation=ACLOperation(operation),
+                    permission_type=ACLPermissionType(permission_type),
+                    resource_pattern=ResourcePattern(
+                        ResourceType(resource_type),
+                        resource_name,
+                        ACLResourcePatternType(resource_pattern_type)
+                    )
+                )
+                acl_list.append(conv_acl)
 
-    # delete_acls protocol not yet implemented
-    # Note: send the request to the least_loaded_node()
+        return (acl_list, error,)
+
+    def describe_acls(self, acl_filter):
+        """Describe a set of ACLs
+
+        Used to return a set of ACLs matching the supplied ACLFilter.
+        The cluster must be configured with an authorizer for this to work, or
+        you will get a SecurityDisabledError
+
+        :param acl_filter: an ACLFilter object
+        :return: tuple of a list of matching ACL objects and a KafkaError (NoError if successful)
+        """
+
+        version = self._matching_api_version(DescribeAclsRequest)
+        if version == 0:
+            request = DescribeAclsRequest[version](
+                resource_type=acl_filter.resource_pattern.resource_type,
+                resource_name=acl_filter.resource_pattern.resource_name,
+                principal=acl_filter.principal,
+                host=acl_filter.host,
+                operation=acl_filter.operation,
+                permission_type=acl_filter.permission_type
+            )
+        elif version <= 1:
+            request = DescribeAclsRequest[version](
+                resource_type=acl_filter.resource_pattern.resource_type,
+                resource_name=acl_filter.resource_pattern.resource_name,
+                resource_pattern_type_filter=acl_filter.resource_pattern.pattern_type,
+                principal=acl_filter.principal,
+                host=acl_filter.host,
+                operation=acl_filter.operation,
+                permission_type=acl_filter.permission_type
+
+            )
+        else:
+            raise NotImplementedError(
+                "Support for DescribeAcls v{} has not yet been added to KafkaAdmin."
+                    .format(version)
+            )
+
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
+
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            # optionally we could retry if error_type.retriable
+            raise error_type(
+                "Request '{}' failed with response '{}'."
+                    .format(request, response))
+
+        return self._convert_describe_acls_response_to_acls(response)
+
+    @staticmethod
+    def _convert_create_acls_resource_request_v0(acl):
+
+        return (
+            acl.resource_pattern.resource_type,
+            acl.resource_pattern.resource_name,
+            acl.principal,
+            acl.host,
+            acl.operation,
+            acl.permission_type
+        )
+
+    @staticmethod
+    def _convert_create_acls_resource_request_v1(acl):
+
+        return (
+            acl.resource_pattern.resource_type,
+            acl.resource_pattern.resource_name,
+            acl.resource_pattern.pattern_type,
+            acl.principal,
+            acl.host,
+            acl.operation,
+            acl.permission_type
+        )
+
+    @staticmethod
+    def _convert_create_acls_response_to_acls(acls, create_response):
+        version = create_response.API_VERSION
+
+        creations_error = []
+        creations_success = []
+        for i, creations in enumerate(create_response.creation_responses):
+            if version <= 1:
+                error_code, error_message = creations
+                acl = acls[i]
+                error = Errors.for_code(error_code)
+            else:
+                raise NotImplementedError(
+                    "Support for DescribeAcls Response v{} has not yet been added to KafkaAdmin."
+                        .format(version)
+                )
+
+            if error is Errors.NoError:
+                creations_success.append(acl)
+            else:
+                creations_error.append((acl, error,))
+
+        return {"succeeded": creations_success, "failed": creations_error}
+
+    def create_acls(self, acls):
+        """Create a list of ACLs
+
+        This endpoint only accepts a list of concrete ACL objects, no ACLFilters.
+        Throws TopicAlreadyExistsError if topic is already present.
+
+        :param acls: a list of ACL objects
+        :return: dict of successes and failures
+        """
+
+        for acl in acls:
+            if not isinstance(acl, ACL):
+                raise IllegalArgumentError("acls must contain ACL objects")
+
+        version = self._matching_api_version(CreateAclsRequest)
+        if version == 0:
+            request = CreateAclsRequest[version](
+                creations=[self._convert_create_acls_resource_request_v0(acl) for acl in acls]
+            )
+        elif version <= 1:
+            request = CreateAclsRequest[version](
+                creations=[self._convert_create_acls_resource_request_v1(acl) for acl in acls]
+            )
+        else:
+            raise NotImplementedError(
+                "Support for CreateAcls v{} has not yet been added to KafkaAdmin."
+                    .format(version)
+            )
+
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
+
+
+        return self._convert_create_acls_response_to_acls(acls, response)
+
+    @staticmethod
+    def _convert_delete_acls_resource_request_v0(acl):
+        return (
+            acl.resource_pattern.resource_type,
+            acl.resource_pattern.resource_name,
+            acl.principal,
+            acl.host,
+            acl.operation,
+            acl.permission_type
+        )
+
+    @staticmethod
+    def _convert_delete_acls_resource_request_v1(acl):
+        return (
+            acl.resource_pattern.resource_type,
+            acl.resource_pattern.resource_name,
+            acl.resource_pattern.pattern_type,
+            acl.principal,
+            acl.host,
+            acl.operation,
+            acl.permission_type
+        )
+
+    @staticmethod
+    def _convert_delete_acls_response_to_matching_acls(acl_filters, delete_response):
+        version = delete_response.API_VERSION
+        filter_result_list = []
+        for i, filter_responses in enumerate(delete_response.filter_responses):
+            filter_error_code, filter_error_message, matching_acls = filter_responses
+            filter_error = Errors.for_code(filter_error_code)
+            acl_result_list = []
+            for acl in matching_acls:
+                if version == 0:
+                    error_code, error_message, resource_type, resource_name, principal, host, operation, permission_type = acl
+                    resource_pattern_type = ACLResourcePatternType.LITERAL.value
+                elif version == 1:
+                    error_code, error_message, resource_type, resource_name, resource_pattern_type, principal, host, operation, permission_type = acl
+                else:
+                    raise NotImplementedError(
+                        "Support for DescribeAcls Response v{} has not yet been added to KafkaAdmin."
+                            .format(version)
+                    )
+                acl_error = Errors.for_code(error_code)
+                conv_acl = ACL(
+                    principal=principal,
+                    host=host,
+                    operation=ACLOperation(operation),
+                    permission_type=ACLPermissionType(permission_type),
+                    resource_pattern=ResourcePattern(
+                        ResourceType(resource_type),
+                        resource_name,
+                        ACLResourcePatternType(resource_pattern_type)
+                    )
+                )
+                acl_result_list.append((conv_acl, acl_error,))
+            filter_result_list.append((acl_filters[i], acl_result_list, filter_error,))
+        return filter_result_list
+
+    def delete_acls(self, acl_filters):
+        """Delete a set of ACLs
+
+        Deletes all ACLs matching the list of input ACLFilter
+
+        :param acl_filters: a list of ACLFilter
+        :return: a list of 3-tuples corresponding to the list of input filters.
+                 The tuples hold (the input ACLFilter, list of affected ACLs, KafkaError instance)
+        """
+
+        for acl in acl_filters:
+            if not isinstance(acl, ACLFilter):
+                raise IllegalArgumentError("acl_filters must contain ACLFilter type objects")
+
+        version = self._matching_api_version(DeleteAclsRequest)
+
+        if version == 0:
+            request = DeleteAclsRequest[version](
+                filters=[self._convert_delete_acls_resource_request_v0(acl) for acl in acl_filters]
+            )
+        elif version <= 1:
+            request = DeleteAclsRequest[version](
+                filters=[self._convert_delete_acls_resource_request_v1(acl) for acl in acl_filters]
+            )
+        else:
+            raise NotImplementedError(
+                "Support for DeleteAcls v{} has not yet been added to KafkaAdmin."
+                    .format(version)
+            )
+
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+        self._wait_for_futures([future])
+        response = future.value
+
+        return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 
     @staticmethod
     def _convert_describe_config_resource_request(config_resource):
@@ -490,7 +781,11 @@ class KafkaAdminClient(object):
             raise NotImplementedError(
                 "Support for DescribeConfigs v{} has not yet been added to KafkaAdminClient."
                 .format(version))
-        return self._send_request_to_node(self._client.least_loaded_node(), request)
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+
+        self._wait_for_futures([future])
+        response = future.value
+        return response
 
     @staticmethod
     def _convert_alter_config_resource_request(config_resource):
@@ -529,7 +824,11 @@ class KafkaAdminClient(object):
         # // a single request that may be sent to any broker.
         #
         # So this is currently broken as it always sends to the least_loaded_node()
-        return self._send_request_to_node(self._client.least_loaded_node(), request)
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+
+        self._wait_for_futures([future])
+        response = future.value
+        return response
 
     # alter replica logs dir protocol not yet implemented
     # Note: have to lookup the broker with the replica assignment and send the request to that broker
@@ -586,6 +885,54 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
+    def _describe_consumer_groups_send_request(self, group_id, group_coordinator_id):
+        """Send a DescribeGroupsRequest to the group's coordinator.
+
+        :param group_id: The group name as a string
+        :param group_coordinator_id: The node_id of the groups' coordinator
+            broker.
+        :return: A message future.
+        """
+        version = self._matching_api_version(DescribeGroupsRequest)
+        if version <= 1:
+            # Note: KAFKA-6788 A potential optimization is to group the
+            # request per coordinator and send one request with a list of
+            # all consumer groups. Java still hasn't implemented this
+            # because the error checking is hard to get right when some
+            # groups error and others don't.
+            request = DescribeGroupsRequest[version](groups=(group_id,))
+        else:
+            raise NotImplementedError(
+                "Support for DescribeGroupsRequest_v{} has not yet been added to KafkaAdminClient."
+                .format(version))
+        return self._send_request_to_node(group_coordinator_id, request)
+
+    def _describe_consumer_groups_process_response(self, response):
+        """Process a DescribeGroupsResponse into a group description."""
+        if response.API_VERSION <= 1:
+            assert len(response.groups) == 1
+            # TODO need to implement converting the response tuple into
+            # a more accessible interface like a namedtuple and then stop
+            # hardcoding tuple indices here. Several Java examples,
+            # including KafkaAdminClient.java
+            group_description = response.groups[0]
+            error_code = group_description[0]
+            error_type = Errors.for_code(error_code)
+            # Java has the note: KAFKA-6789, we can retry based on the error code
+            if error_type is not Errors.NoError:
+                raise error_type(
+                    "DescribeGroupsResponse failed with response '{}'."
+                    .format(response))
+            # TODO Java checks the group protocol type, and if consumer
+            # (ConsumerProtocol.PROTOCOL_TYPE) or empty string, it decodes
+            # the members' partition assignments... that hasn't yet been
+            # implemented here so just return the raw struct results
+        else:
+            raise NotImplementedError(
+                "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
+                .format(response.API_VERSION))
+        return group_description
+
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None):
         """Describe a set of consumer groups.
 
@@ -605,43 +952,52 @@ class KafkaAdminClient(object):
             partition assignments.
         """
         group_descriptions = []
-        version = self._matching_api_version(DescribeGroupsRequest)
+        futures = []
         for group_id in group_ids:
             if group_coordinator_id is not None:
                 this_groups_coordinator_id = group_coordinator_id
             else:
-                this_groups_coordinator_id = self._find_group_coordinator_id(group_id)
-            if version <= 1:
-                # Note: KAFKA-6788 A potential optimization is to group the
-                # request per coordinator and send one request with a list of
-                # all consumer groups. Java still hasn't implemented this
-                # because the error checking is hard to get right when some
-                # groups error and others don't.
-                request = DescribeGroupsRequest[version](groups=(group_id,))
-                response = self._send_request_to_node(this_groups_coordinator_id, request)
-                assert len(response.groups) == 1
-                # TODO need to implement converting the response tuple into
-                # a more accessible interface like a namedtuple and then stop
-                # hardcoding tuple indices here. Several Java examples,
-                # including KafkaAdminClient.java
-                group_description = response.groups[0]
-                error_code = group_description[0]
-                error_type = Errors.for_code(error_code)
-                # Java has the note: KAFKA-6789, we can retry based on the error code
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-                # TODO Java checks the group protocol type, and if consumer
-                # (ConsumerProtocol.PROTOCOL_TYPE) or empty string, it decodes
-                # the members' partition assignments... that hasn't yet been
-                # implemented here so just return the raw struct results
-                group_descriptions.append(group_description)
-            else:
-                raise NotImplementedError(
-                    "Support for DescribeGroups v{} has not yet been added to KafkaAdminClient."
-                    .format(version))
+                this_groups_coordinator_id = self._find_coordinator_id(group_id)
+            f = self._describe_consumer_groups_send_request(group_id, this_groups_coordinator_id)
+            futures.append(f)
+
+        self._wait_for_futures(futures)
+
+        for future in futures:
+            response = future.value
+            group_description = self._describe_consumer_groups_process_response(response)
+            group_descriptions.append(group_description)
+
         return group_descriptions
+
+    def _list_consumer_groups_send_request(self, broker_id):
+        """Send a ListGroupsRequest to a broker.
+
+        :param broker_id: The broker's node_id.
+        :return: A message future
+        """
+        version = self._matching_api_version(ListGroupsRequest)
+        if version <= 2:
+            request = ListGroupsRequest[version]()
+        else:
+            raise NotImplementedError(
+                "Support for ListGroupsRequest_v{} has not yet been added to KafkaAdminClient."
+                .format(version))
+        return self._send_request_to_node(broker_id, request)
+
+    def _list_consumer_groups_process_response(self, response):
+        """Process a ListGroupsResponse into a list of groups."""
+        if response.API_VERSION <= 2:
+            error_type = Errors.for_code(response.error_code)
+            if error_type is not Errors.NoError:
+                raise error_type(
+                    "ListGroupsRequest failed with response '{}'."
+                    .format(response))
+        else:
+            raise NotImplementedError(
+                "Support for ListGroupsResponse_v{} has not yet been added to KafkaAdminClient."
+                .format(response.API_VERSION))
+        return response.groups
 
     def list_consumer_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
@@ -675,26 +1031,83 @@ class KafkaAdminClient(object):
         consumer_groups = set()
         if broker_ids is None:
             broker_ids = [broker.nodeId for broker in self._client.cluster.brokers()]
-        version = self._matching_api_version(ListGroupsRequest)
-        if version <= 2:
-            request = ListGroupsRequest[version]()
-            for broker_id in broker_ids:
-                response = self._send_request_to_node(broker_id, request)
-                error_type = Errors.for_code(response.error_code)
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-                consumer_groups.update(response.groups)
+        futures = [self._list_consumer_groups_send_request(b) for b in broker_ids]
+        self._wait_for_futures(futures)
+        for f in futures:
+            response = f.value
+            consumer_groups.update(self._list_consumer_groups_process_response(response))
+        return list(consumer_groups)
+
+    def _list_consumer_group_offsets_send_request(self, group_id,
+                group_coordinator_id, partitions=None):
+        """Send an OffsetFetchRequest to a broker.
+
+        :param group_id: The consumer group id name for which to fetch offsets.
+        :param group_coordinator_id: The node_id of the group's coordinator
+            broker.
+        :return: A message future
+        """
+        version = self._matching_api_version(OffsetFetchRequest)
+        if version <= 3:
+            if partitions is None:
+                if version <= 1:
+                    raise ValueError(
+                        """OffsetFetchRequest_v{} requires specifying the
+                        partitions for which to fetch offsets. Omitting the
+                        partitions is only supported on brokers >= 0.10.2.
+                        For details, see KIP-88.""".format(version))
+                topics_partitions = None
+            else:
+                # transform from [TopicPartition("t1", 1), TopicPartition("t1", 2)] to [("t1", [1, 2])]
+                topics_partitions_dict = defaultdict(set)
+                for topic, partition in partitions:
+                    topics_partitions_dict[topic].add(partition)
+                topics_partitions = list(six.iteritems(topics_partitions_dict))
+            request = OffsetFetchRequest[version](group_id, topics_partitions)
         else:
             raise NotImplementedError(
-                "Support for ListGroups v{} has not yet been added to KafkaAdminClient."
+                "Support for OffsetFetchRequest_v{} has not yet been added to KafkaAdminClient."
                 .format(version))
-        return list(consumer_groups)
+        return self._send_request_to_node(group_coordinator_id, request)
+
+    def _list_consumer_group_offsets_process_response(self, response):
+        """Process an OffsetFetchResponse.
+
+        :param response: an OffsetFetchResponse.
+        :return: A dictionary composed of TopicPartition keys and
+            OffsetAndMetada values.
+        """
+        if response.API_VERSION <= 3:
+
+            # OffsetFetchResponse_v1 lacks a top-level error_code
+            if response.API_VERSION > 1:
+                error_type = Errors.for_code(response.error_code)
+                if error_type is not Errors.NoError:
+                    # optionally we could retry if error_type.retriable
+                    raise error_type(
+                        "OffsetFetchResponse failed with response '{}'."
+                        .format(response))
+
+            # transform response into a dictionary with TopicPartition keys and
+            # OffsetAndMetada values--this is what the Java AdminClient returns
+            offsets = {}
+            for topic, partitions in response.topics:
+                for partition, offset, metadata, error_code in partitions:
+                    error_type = Errors.for_code(error_code)
+                    if error_type is not Errors.NoError:
+                        raise error_type(
+                            "Unable to fetch consumer group offsets for topic {}, partition {}"
+                            .format(topic, partition))
+                    offsets[TopicPartition(topic, partition)] = OffsetAndMetadata(offset, metadata)
+        else:
+            raise NotImplementedError(
+                "Support for OffsetFetchResponse_v{} has not yet been added to KafkaAdminClient."
+                .format(response.API_VERSION))
+        return offsets
 
     def list_consumer_group_offsets(self, group_id, group_coordinator_id=None,
                                     partitions=None):
-        """Fetch Consumer Group Offsets.
+        """Fetch Consumer Offsets for a single consumer group.
 
         Note:
         This does not verify that the group_id or partitions actually exist
@@ -718,49 +1131,21 @@ class KafkaAdminClient(object):
             TopicPartition. A `-1` can only happen for partitions that are
             explicitly specified.
         """
-        group_offsets_listing = {}
         if group_coordinator_id is None:
-            group_coordinator_id = self._find_group_coordinator_id(group_id)
-        version = self._matching_api_version(OffsetFetchRequest)
-        if version <= 3:
-            if partitions is None:
-                if version <= 1:
-                    raise ValueError(
-                        """OffsetFetchRequest_v{} requires specifying the
-                        partitions for which to fetch offsets. Omitting the
-                        partitions is only supported on brokers >= 0.10.2.
-                        For details, see KIP-88.""".format(version))
-                topics_partitions = None
-            else:
-                # transform from [TopicPartition("t1", 1), TopicPartition("t1", 2)] to [("t1", [1, 2])]
-                topics_partitions_dict = defaultdict(set)
-                for topic, partition in partitions:
-                    topics_partitions_dict[topic].add(partition)
-                topics_partitions = list(six.iteritems(topics_partitions_dict))
-            request = OffsetFetchRequest[version](group_id, topics_partitions)
-            response = self._send_request_to_node(group_coordinator_id, request)
-            if version > 1:  # OffsetFetchResponse_v1 lacks a top-level error_code
-                error_type = Errors.for_code(response.error_code)
-                if error_type is not Errors.NoError:
-                    # optionally we could retry if error_type.retriable
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-            # transform response into a dictionary with TopicPartition keys and
-            # OffsetAndMetada values--this is what the Java AdminClient returns
-            for topic, partitions in response.topics:
-                for partition, offset, metadata, error_code in partitions:
-                    error_type = Errors.for_code(error_code)
-                    if error_type is not Errors.NoError:
-                        raise error_type(
-                            "Unable to fetch offsets for group_id {}, topic {}, partition {}"
-                            .format(group_id, topic, partition))
-                    group_offsets_listing[TopicPartition(topic, partition)] = OffsetAndMetadata(offset, metadata)
-        else:
-            raise NotImplementedError(
-                "Support for OffsetFetch v{} has not yet been added to KafkaAdminClient."
-                .format(version))
-        return group_offsets_listing
+            group_coordinator_id = self._find_coordinator_id(group_id)
+        future = self._list_consumer_group_offsets_send_request(
+                                    group_id, group_coordinator_id, partitions)
+        self._wait_for_futures([future])
+        response = future.value
+        return self._list_consumer_group_offsets_process_response(response)
 
     # delete groups protocol not yet implemented
     # Note: send the request to the group's coordinator.
+
+    def _wait_for_futures(self, futures):
+        while not all(future.succeeded() for future in futures):
+            for future in futures:
+                self._client.poll(future=future)
+
+                if future.failed():
+                    raise future.exception  # pylint: disable-msg=raising-bad-type

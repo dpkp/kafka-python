@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
-import time
 
 import mock
 import pytest
@@ -86,7 +85,7 @@ def test_connection_delay(conn):
         conn.last_attempt = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
-        assert conn.connection_delay() == 0
+        assert conn.connection_delay() == float('inf')
         conn.state = ConnectionStates.CONNECTED
         assert conn.connection_delay() == float('inf')
 
@@ -275,7 +274,7 @@ def test_lookup_on_connect():
     ]
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi1
         assert conn._sock_addr == sockaddr1
         conn.close()
@@ -289,7 +288,7 @@ def test_lookup_on_connect():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
@@ -304,7 +303,7 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         last_attempt = conn.last_attempt
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
         assert conn.last_attempt > last_attempt
 
@@ -317,7 +316,7 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()

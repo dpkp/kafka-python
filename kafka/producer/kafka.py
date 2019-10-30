@@ -255,7 +255,7 @@ class KafkaProducer(object):
             various APIs. Example: (0, 10, 2). Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version set to 'auto'
+            api version. Only applies if api_version set to None.
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
@@ -412,6 +412,10 @@ class KafkaProducer(object):
         atexit.register(self._cleanup)
         log.debug("Kafka producer started")
 
+    def bootstrap_connected(self):
+        """Return True if the bootstrap is connected."""
+        return self._sender.bootstrap_connected()
+
     def _cleanup_factory(self):
         """Build a cleanup clojure that doesn't increase our ref count"""
         _self = weakref.proxy(self)
@@ -464,7 +468,6 @@ class KafkaProducer(object):
             assert timeout >= 0
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
-        #first_exception = AtomicReference() # this will keep track of the first encountered exception
         invoked_from_callback = bool(threading.current_thread() is self._sender)
         if timeout > 0:
             if invoked_from_callback:

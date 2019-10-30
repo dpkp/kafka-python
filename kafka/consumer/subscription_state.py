@@ -148,7 +148,7 @@ class SubscriptionState(object):
             topics (list of str): topics for subscription
 
         Raises:
-            IllegalStateErrror: if assign_from_user has been used already
+            IllegalStateError: if assign_from_user has been used already
             TypeError: if a topic is None or a non-str
             ValueError: if a topic is an empty string or
                         - a topic name is '.' or '..' or

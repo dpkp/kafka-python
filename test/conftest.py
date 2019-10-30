@@ -1,14 +1,11 @@
 from __future__ import absolute_import
 
+import uuid
+
 import pytest
 
-from test.fixtures import KafkaFixture, ZookeeperFixture, random_string, version as kafka_version
-
-
-@pytest.fixture(scope="module")
-def version():
-    """Return the Kafka version set in the OS environment"""
-    return kafka_version()
+from test.testutil import env_kafka_version, random_string
+from test.fixtures import KafkaFixture, ZookeeperFixture
 
 @pytest.fixture(scope="module")
 def zookeeper():
@@ -17,15 +14,17 @@ def zookeeper():
     yield zk_instance
     zk_instance.close()
 
+
 @pytest.fixture(scope="module")
 def kafka_broker(kafka_broker_factory):
     """Return a Kafka broker fixture"""
     return kafka_broker_factory()[0]
 
+
 @pytest.fixture(scope="module")
-def kafka_broker_factory(version, zookeeper):
+def kafka_broker_factory(zookeeper):
     """Return a Kafka broker fixture factory"""
-    assert version, 'KAFKA_VERSION must be specified to run integration tests'
+    assert env_kafka_version(), 'KAFKA_VERSION must be specified to run integration tests'
 
     _brokers = []
     def factory(**broker_params):
@@ -42,6 +41,7 @@ def kafka_broker_factory(version, zookeeper):
     for broker in _brokers:
         broker.close()
 
+
 @pytest.fixture
 def simple_client(kafka_broker, request, topic):
     """Return a SimpleClient fixture"""
@@ -50,6 +50,7 @@ def simple_client(kafka_broker, request, topic):
     yield client
     client.close()
 
+
 @pytest.fixture
 def kafka_client(kafka_broker, request):
     """Return a KafkaClient fixture"""
@@ -57,10 +58,12 @@ def kafka_client(kafka_broker, request):
     yield client
     client.close()
 
+
 @pytest.fixture
 def kafka_consumer(kafka_consumer_factory):
     """Return a KafkaConsumer fixture"""
     return kafka_consumer_factory()
+
 
 @pytest.fixture
 def kafka_consumer_factory(kafka_broker, topic, request):
@@ -79,10 +82,12 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     if _consumer[0]:
         _consumer[0].close()
 
+
 @pytest.fixture
 def kafka_producer(kafka_producer_factory):
     """Return a KafkaProducer fixture"""
     yield kafka_producer_factory()
+
 
 @pytest.fixture
 def kafka_producer_factory(kafka_broker, request):
@@ -100,12 +105,14 @@ def kafka_producer_factory(kafka_broker, request):
     if _producer[0]:
         _producer[0].close()
 
+
 @pytest.fixture
 def topic(kafka_broker, request):
     """Return a topic fixture"""
     topic_name = '%s_%s' % (request.node.name, random_string(10))
     kafka_broker.create_topics([topic_name])
     return topic_name
+
 
 @pytest.fixture
 def conn(mocker):
@@ -132,3 +139,27 @@ def conn(mocker):
     conn.connected = lambda: conn.state is ConnectionStates.CONNECTED
     conn.disconnected = lambda: conn.state is ConnectionStates.DISCONNECTED
     return conn
+
+
+@pytest.fixture()
+def send_messages(topic, kafka_producer, request):
+    """A factory that returns a send_messages function with a pre-populated
+    topic topic / producer."""
+
+    def _send_messages(number_range, partition=0, topic=topic, producer=kafka_producer, request=request):
+        """
+            messages is typically `range(0,100)`
+            partition is an int
+        """
+        messages_and_futures = []  # [(message, produce_future),]
+        for i in number_range:
+            # request.node.name provides the test name (including parametrized values)
+            encoded_msg = '{}-{}-{}'.format(i, request.node.name, uuid.uuid4()).encode('utf-8')
+            future = kafka_producer.send(topic, value=encoded_msg, partition=partition)
+            messages_and_futures.append((encoded_msg, future))
+        kafka_producer.flush()
+        for (msg, f) in messages_and_futures:
+            assert f.succeeded()
+        return [msg for (msg, f) in messages_and_futures]
+
+    return _send_messages

@@ -14,5 +14,5 @@ sphinx-rtd-theme==0.2.4
 mock==2.0.0
 decorator==4.3.0
 tox-pip-extensions==1.2.1
-crc32c==1.4
-py==1.6.0
+crc32c==1.7
+py==1.8.0
