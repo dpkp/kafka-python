@@ -9,7 +9,7 @@ from kafka.structs import (
     ProduceRequestPayload)
 
 from test.fixtures import ZookeeperFixture, KafkaFixture
-from test.testutil import KafkaIntegrationTestCase, env_kafka_version
+from test.testutil import KafkaIntegrationTestCase, env_kafka_version, kafka_versions
 
 
 class TestKafkaClientIntegration(KafkaIntegrationTestCase):

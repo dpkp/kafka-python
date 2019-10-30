@@ -8,6 +8,8 @@ import socket
 import subprocess
 import time
 import uuid
+import random
+import string
 
 import py
 from kafka.vendor.six.moves import urllib, range
@@ -17,11 +19,29 @@ from kafka import errors, KafkaConsumer, KafkaProducer, SimpleClient
 from kafka.client_async import KafkaClient
 from kafka.protocol.admin import CreateTopicsRequest
 from kafka.protocol.metadata import MetadataRequest
-from test.testutil import env_kafka_version, random_string
 from test.service import ExternalService, SpawnedService
+
+def random_string(length):
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
 log = logging.getLogger(__name__)
 
+def version_str_to_list(version_str):
+    return tuple(map(int, version_str.split('.'))) # e.g., (0, 8, 1, 1)
+
+def version():
+    if 'KAFKA_VERSION' not in os.environ:
+        return ()
+    return version_str_to_list(os.environ['KAFKA_VERSION'])
+
+def env_kafka_version():
+    """Return the Kafka version set in the OS environment as a tuple.
+
+     Example: '0.8.1.1' --> (0, 8, 1, 1)
+    """
+    if 'KAFKA_VERSION' not in os.environ:
+        return ()
+    return tuple(map(int, os.environ['KAFKA_VERSION'].split('.')))
 
 def get_open_port():
     sock = socket.socket()
