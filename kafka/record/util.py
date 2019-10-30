@@ -2,6 +2,12 @@ import binascii
 
 from kafka.record._crc32c import crc as crc32c_py
 try:
+    """ Environment variable CRC32C_SW_MODE needs to be declared to auto 
+    in order to use the software implementation of crc32c in case of
+    non-intel architectures, which otherwise would fail as ImportError.
+    """
+    import os
+    os.environ['CRC32C_SW_MODE'] = 'auto'
     from crc32c import crc32 as crc32c_c
 except ImportError:
     crc32c_c = None
