@@ -29,6 +29,12 @@ class ApiVersionResponse_v1(Response):
     )
 
 
+class ApiVersionResponse_v2(Response):
+    API_KEY = 18
+    API_VERSION = 2
+    SCHEMA = ApiVersionResponse_v1.SCHEMA
+
+
 class ApiVersionRequest_v0(Request):
     API_KEY = 18
     API_VERSION = 0
@@ -43,8 +49,19 @@ class ApiVersionRequest_v1(Request):
     SCHEMA = ApiVersionRequest_v0.SCHEMA
 
 
-ApiVersionRequest = [ApiVersionRequest_v0, ApiVersionRequest_v1]
-ApiVersionResponse = [ApiVersionResponse_v0, ApiVersionResponse_v1]
+class ApiVersionRequest_v2(Request):
+    API_KEY = 18
+    API_VERSION = 2
+    RESPONSE_TYPE = ApiVersionResponse_v1
+    SCHEMA = ApiVersionRequest_v0.SCHEMA
+
+
+ApiVersionRequest = [
+    ApiVersionRequest_v0, ApiVersionRequest_v1, ApiVersionRequest_v2,
+]
+ApiVersionResponse = [
+    ApiVersionResponse_v0, ApiVersionResponse_v1, ApiVersionResponse_v2,
+]
 
 
 class CreateTopicsResponse_v0(Response):
