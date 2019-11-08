@@ -319,6 +319,33 @@ class DescribeGroupsResponse_v1(Response):
     )
 
 
+class DescribeGroupsResponse_v2(Response):
+    API_KEY = 15
+    API_VERSION = 2
+    SCHEMA = DescribeGroupsResponse_v1.SCHEMA
+
+
+class DescribeGroupsResponse_v3(Response):
+    API_KEY = 15
+    API_VERSION = 3
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('groups', Array(
+            ('error_code', Int16),
+            ('group', String('utf-8')),
+            ('state', String('utf-8')),
+            ('protocol_type', String('utf-8')),
+            ('protocol', String('utf-8')),
+            ('members', Array(
+                ('member_id', String('utf-8')),
+                ('client_id', String('utf-8')),
+                ('client_host', String('utf-8')),
+                ('member_metadata', Bytes),
+                ('member_assignment', Bytes)))),
+            ('authorized_operations', Int32))
+    )
+
+
 class DescribeGroupsRequest_v0(Request):
     API_KEY = 15
     API_VERSION = 0
@@ -335,8 +362,31 @@ class DescribeGroupsRequest_v1(Request):
     SCHEMA = DescribeGroupsRequest_v0.SCHEMA
 
 
-DescribeGroupsRequest = [DescribeGroupsRequest_v0, DescribeGroupsRequest_v1]
-DescribeGroupsResponse = [DescribeGroupsResponse_v0, DescribeGroupsResponse_v1]
+class DescribeGroupsRequest_v2(Request):
+    API_KEY = 15
+    API_VERSION = 2
+    RESPONSE_TYPE = DescribeGroupsResponse_v2
+    SCHEMA = DescribeGroupsRequest_v0.SCHEMA
+
+
+class DescribeGroupsRequest_v3(Request):
+    API_KEY = 15
+    API_VERSION = 3
+    RESPONSE_TYPE = DescribeGroupsResponse_v2
+    SCHEMA = Schema(
+        ('groups', Array(String('utf-8'))),
+        ('include_authorized_operations', Boolean)
+    )
+
+
+DescribeGroupsRequest = [
+    DescribeGroupsRequest_v0, DescribeGroupsRequest_v1,
+    DescribeGroupsRequest_v2, DescribeGroupsRequest_v3,
+]
+DescribeGroupsResponse = [
+    DescribeGroupsResponse_v0, DescribeGroupsResponse_v1,
+    DescribeGroupsResponse_v2, DescribeGroupsResponse_v3,
+]
 
 
 class SaslHandShakeResponse_v0(Response):
