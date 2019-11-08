@@ -852,7 +852,7 @@ class KafkaAdminClient(object):
         :return: Appropriate version of AlterConfigsResponse class.
         """
         version = self._matching_api_version(AlterConfigsRequest)
-        if version == 0:
+        if version <= 1:
             request = AlterConfigsRequest[version](
                 resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
             )

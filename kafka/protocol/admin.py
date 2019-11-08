@@ -637,6 +637,13 @@ class AlterConfigsResponse_v0(Response):
             ('resource_name', String('utf-8'))))
     )
 
+
+class AlterConfigsResponse_v1(Response):
+    API_KEY = 33
+    API_VERSION = 1
+    SCHEMA = AlterConfigsResponse_v0.SCHEMA
+
+
 class AlterConfigsRequest_v0(Request):
     API_KEY = 33
     API_VERSION = 0
@@ -651,8 +658,14 @@ class AlterConfigsRequest_v0(Request):
         ('validate_only', Boolean)
     )
 
-AlterConfigsRequest = [AlterConfigsRequest_v0]
-AlterConfigsResponse = [AlterConfigsResponse_v0]
+class AlterConfigsRequest_v1(Request):
+    API_KEY = 33
+    API_VERSION = 1
+    RESPONSE_TYPE = AlterConfigsResponse_v1
+    SCHEMA = AlterConfigsRequest_v0.SCHEMA
+
+AlterConfigsRequest = [AlterConfigsRequest_v0, AlterConfigsRequest_v1]
+AlterConfigsResponse = [AlterConfigsResponse_v0, AlterConfigsRequest_v1]
 
 
 class DescribeConfigsResponse_v0(Response):
