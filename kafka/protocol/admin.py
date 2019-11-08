@@ -244,6 +244,11 @@ class ListGroupsResponse_v1(Response):
             ('protocol_type', String('utf-8'))))
     )
 
+class ListGroupsResponse_v2(Response):
+    API_KEY = 16
+    API_VERSION = 2
+    SCHEMA = ListGroupsResponse_v1.SCHEMA
+
 
 class ListGroupsRequest_v0(Request):
     API_KEY = 16
@@ -258,9 +263,21 @@ class ListGroupsRequest_v1(Request):
     RESPONSE_TYPE = ListGroupsResponse_v1
     SCHEMA = ListGroupsRequest_v0.SCHEMA
 
+class ListGroupsRequest_v2(Request):
+    API_KEY = 16
+    API_VERSION = 1
+    RESPONSE_TYPE = ListGroupsResponse_v2
+    SCHEMA = ListGroupsRequest_v0.SCHEMA
 
-ListGroupsRequest = [ListGroupsRequest_v0, ListGroupsRequest_v1]
-ListGroupsResponse = [ListGroupsResponse_v0, ListGroupsResponse_v1]
+
+ListGroupsRequest = [
+    ListGroupsRequest_v0, ListGroupsRequest_v1,
+    ListGroupsRequest_v2,
+]
+ListGroupsResponse = [
+    ListGroupsResponse_v0, ListGroupsResponse_v1,
+    ListGroupsResponse_v2,
+]
 
 
 class DescribeGroupsResponse_v0(Response):
