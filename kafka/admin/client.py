@@ -458,7 +458,7 @@ class KafkaAdminClient(object):
         """
         version = self._matching_api_version(DeleteTopicsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version <= 1:
+        if version <= 3:
             request = DeleteTopicsRequest[version](
                 topics=topics,
                 timeout=timeout_ms
