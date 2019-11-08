@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Schema, String
+from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String
 
 
 class ApiVersionResponse_v0(Response):
@@ -712,14 +712,24 @@ class DescribeConfigsRequest_v2(Request):
 DescribeConfigsRequest = [DescribeConfigsRequest_v0, DescribeConfigsRequest_v1]
 DescribeConfigsResponse = [DescribeConfigsResponse_v0, DescribeConfigsResponse_v1]
 
-
-class SaslAuthenticateResponse_v0(Request):
+class SaslAuthenticateResponse_v0(Response):
     API_KEY = 36
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
         ('error_message', String('utf-8')),
         ('sasl_auth_bytes', Bytes)
+    )
+
+
+class SaslAuthenticateResponse_v1(Response):
+    API_KEY = 36
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('sasl_auth_bytes', Bytes),
+        ('session_lifetime_ms', Int64)
     )
 
 
@@ -732,8 +742,19 @@ class SaslAuthenticateRequest_v0(Request):
     )
 
 
-SaslAuthenticateRequest = [SaslAuthenticateRequest_v0]
-SaslAuthenticateResponse = [SaslAuthenticateResponse_v0]
+class SaslAuthenticateRequest_v1(Request):
+    API_KEY = 36
+    API_VERSION = 1
+    RESPONSE_TYPE = SaslAuthenticateResponse_v1
+    SCHEMA = SaslAuthenticateRequest_v0.SCHEMA
+
+
+SaslAuthenticateRequest = [
+    SaslAuthenticateRequest_v0, SaslAuthenticateRequest_v1,
+]
+SaslAuthenticateResponse = [
+    SaslAuthenticateResponse_v0, SaslAuthenticateResponse_v1,
+]
 
 
 class CreatePartitionsResponse_v0(Response):
