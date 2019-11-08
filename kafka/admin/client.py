@@ -900,7 +900,7 @@ class KafkaAdminClient(object):
         """
         version = self._matching_api_version(CreatePartitionsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version == 0:
+        if version <= 1:
             request = CreatePartitionsRequest[version](
                 topic_partitions=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
                 timeout=timeout_ms,
