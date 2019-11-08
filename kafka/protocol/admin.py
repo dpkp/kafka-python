@@ -708,6 +708,28 @@ class DescribeConfigsResponse_v1(Response):
                     ('config_source', Int8)))))))
     )
 
+class DescribeConfigsResponse_v2(Response):
+    API_KEY = 32
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('resources', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_entries', Array(
+                ('config_names', String('utf-8')),
+                ('config_value', String('utf-8')),
+                ('read_only', Boolean),
+                ('config_source', Int8),
+                ('is_sensitive', Boolean),
+                ('config_synonyms', Array(
+                    ('config_name', String('utf-8')),
+                    ('config_value', String('utf-8')),
+                    ('config_source', Int8)))))))
+    )
+
 class DescribeConfigsRequest_v0(Request):
     API_KEY = 32
     API_VERSION = 0
@@ -739,8 +761,15 @@ class DescribeConfigsRequest_v2(Request):
     SCHEMA = DescribeConfigsRequest_v1.SCHEMA
 
 
-DescribeConfigsRequest = [DescribeConfigsRequest_v0, DescribeConfigsRequest_v1]
-DescribeConfigsResponse = [DescribeConfigsResponse_v0, DescribeConfigsResponse_v1]
+DescribeConfigsRequest = [
+    DescribeConfigsRequest_v0, DescribeConfigsRequest_v1,
+    DescribeConfigsRequest_v2,
+]
+DescribeConfigsResponse = [
+    DescribeConfigsResponse_v0, DescribeConfigsResponse_v1,
+    DescribeConfigsResponse_v2,
+]
+
 
 class SaslAuthenticateResponse_v0(Response):
     API_KEY = 36
