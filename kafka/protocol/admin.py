@@ -169,6 +169,18 @@ class DeleteTopicsResponse_v1(Response):
     )
 
 
+class DeleteTopicsResponse_v2(Response):
+    API_KEY = 20
+    API_VERSION = 2
+    SCHEMA = DeleteTopicsResponse_v1.SCHEMA
+
+
+class DeleteTopicsResponse_v3(Response):
+    API_KEY = 20
+    API_VERSION = 3
+    SCHEMA = DeleteTopicsResponse_v1.SCHEMA
+
+
 class DeleteTopicsRequest_v0(Request):
     API_KEY = 20
     API_VERSION = 0
@@ -186,8 +198,28 @@ class DeleteTopicsRequest_v1(Request):
     SCHEMA = DeleteTopicsRequest_v0.SCHEMA
 
 
-DeleteTopicsRequest = [DeleteTopicsRequest_v0, DeleteTopicsRequest_v1]
-DeleteTopicsResponse = [DeleteTopicsResponse_v0, DeleteTopicsResponse_v1]
+class DeleteTopicsRequest_v2(Request):
+    API_KEY = 20
+    API_VERSION = 2
+    RESPONSE_TYPE = DeleteTopicsResponse_v2
+    SCHEMA = DeleteTopicsRequest_v0.SCHEMA
+
+
+class DeleteTopicsRequest_v3(Request):
+    API_KEY = 20
+    API_VERSION = 3
+    RESPONSE_TYPE = DeleteTopicsResponse_v3
+    SCHEMA = DeleteTopicsRequest_v0.SCHEMA
+
+
+DeleteTopicsRequest = [
+    DeleteTopicsRequest_v0, DeleteTopicsRequest_v1,
+    DeleteTopicsRequest_v2, DeleteTopicsRequest_v3,
+]
+DeleteTopicsResponse = [
+    DeleteTopicsResponse_v0, DeleteTopicsResponse_v1,
+    DeleteTopicsResponse_v2, DeleteTopicsResponse_v3,
+]
 
 
 class ListGroupsResponse_v0(Response):
