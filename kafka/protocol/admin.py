@@ -769,6 +769,12 @@ class CreatePartitionsResponse_v0(Response):
     )
 
 
+class CreatePartitionsResponse_v1(Response):
+    API_KEY = 37
+    API_VERSION = 1
+    SCHEMA = CreatePartitionsResponse_v0.SCHEMA
+
+
 class CreatePartitionsRequest_v0(Request):
     API_KEY = 37
     API_VERSION = 0
@@ -784,5 +790,15 @@ class CreatePartitionsRequest_v0(Request):
     )
 
 
-CreatePartitionsRequest = [CreatePartitionsRequest_v0]
-CreatePartitionsResponse = [CreatePartitionsResponse_v0]
+class CreatePartitionsRequest_v1(Request):
+    API_KEY = 37
+    API_VERSION = 1
+    SCHEMA = CreatePartitionsRequest_v0.SCHEMA
+
+
+CreatePartitionsRequest = [
+    CreatePartitionsRequest_v0, CreatePartitionsRequest_v1,
+]
+CreatePartitionsResponse = [
+    CreatePartitionsResponse_v0, CreatePartitionsResponse_v1,
+]
