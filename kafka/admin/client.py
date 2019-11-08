@@ -434,7 +434,7 @@ class KafkaAdminClient(object):
                 create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
                 timeout=timeout_ms
             )
-        elif version <= 2:
+        elif version <= 3:
             request = CreateTopicsRequest[version](
                 create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
                 timeout=timeout_ms,

@@ -79,6 +79,11 @@ class CreateTopicsResponse_v2(Response):
             ('error_message', String('utf-8'))))
     )
 
+class CreateTopicsResponse_v3(Response):
+    API_KEY = 19
+    API_VERSION = 3
+    SCHEMA = CreateTopicsResponse_v2.SCHEMA
+
 
 class CreateTopicsRequest_v0(Request):
     API_KEY = 19
@@ -126,11 +131,20 @@ class CreateTopicsRequest_v2(Request):
     SCHEMA = CreateTopicsRequest_v1.SCHEMA
 
 
+class CreateTopicsRequest_v3(Request):
+    API_KEY = 19
+    API_VERSION = 3
+    RESSPONSE_TYPE = CreateTopicsResponse_v3
+    SCHEMA = CreateTopicsRequest_v1.SCHEMA
+
+
 CreateTopicsRequest = [
-    CreateTopicsRequest_v0, CreateTopicsRequest_v1, CreateTopicsRequest_v2
+    CreateTopicsRequest_v0, CreateTopicsRequest_v1,
+    CreateTopicsRequest_v2, CreateTopicsRequest_v3,
 ]
 CreateTopicsResponse = [
-    CreateTopicsResponse_v0, CreateTopicsResponse_v1, CreateTopicsResponse_v2
+    CreateTopicsResponse_v0, CreateTopicsResponse_v1,
+    CreateTopicsResponse_v2, CreateTopicsResponse_v3,
 ]
 
 
