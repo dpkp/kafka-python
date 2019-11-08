@@ -802,7 +802,7 @@ class KafkaAdminClient(object):
                     DescribeConfigsRequest[version](resources=topic_resources)
                 ))
 
-        elif version == 1:
+        elif version <= 2:
             if len(broker_resources) > 0:
                 for broker_resource in broker_resources:
                     try:
