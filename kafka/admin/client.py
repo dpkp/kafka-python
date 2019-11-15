@@ -203,6 +203,7 @@ class KafkaAdminClient(object):
         self._client = KafkaClient(metrics=self._metrics,
                                    metric_group_prefix='admin',
                                    **self.config)
+        self._client.check_version()
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
@@ -233,7 +234,6 @@ class KafkaAdminClient(object):
         :param operation: A list of protocol operation versions from kafka.protocol.
         :return: The max matching version number between client and broker.
         """
-        self._client.check_version()
         broker_api_versions = self._client.get_api_versions()
         api_key = operation[0].API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
