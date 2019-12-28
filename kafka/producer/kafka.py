@@ -483,14 +483,10 @@ class KafkaProducer(object):
                     self._sender.join(timeout)
 
         if self._sender is not None and self._sender.is_alive():
-
             log.info("Proceeding to force close the producer since pending"
                      " requests could not be completed within timeout %s.",
                      timeout)
             self._sender.force_close()
-            # Only join the sender thread when not calling from callback.
-            if not invoked_from_callback:
-                self._sender.join()
 
         self._metrics.close()
         try:
