@@ -144,11 +144,11 @@ class KafkaClient(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER.
-        sasl_plain_username (str): username for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
-        sasl_plain_password (str): password for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+        sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -768,10 +768,7 @@ class KafkaClient(object):
                 inflight = curr_inflight
                 found = node_id
 
-        if found is not None:
-            return found
-
-        return None
+        return found
 
     def set_topics(self, topics):
         """Set specific topics to track for metadata.
