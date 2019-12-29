@@ -489,13 +489,16 @@ class BaseCoordinator(object):
         return future
 
     def _failed_request(self, node_id, request, future, error):
-        log.error('Error sending %s to node %s [%s]',
-                  request.__class__.__name__, node_id, error)
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
+            log.error('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
             self.coordinator_dead(error)
+        else:
+            log.debug('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
