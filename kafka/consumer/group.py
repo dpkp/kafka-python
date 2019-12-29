@@ -1174,6 +1174,8 @@ class KafkaConsumer(six.Iterator):
         return self
 
     def __next__(self):
+        if self._closed:
+            raise StopIteration('KafkaConsumer closed')
         # Now that the heartbeat thread runs in the background
         # there should be no reason to maintain a separate iterator
         # but we'll keep it available for a few releases just in case
