@@ -285,6 +285,10 @@ class ClusterMetadata(object):
                         _new_broker_partitions[leader].add(
                             TopicPartition(topic, partition))
 
+            # Specific topic errors can be ignored if this is a full metadata fetch
+            elif self.need_all_topic_metadata:
+                continue
+
             elif error_type is Errors.LeaderNotAvailableError:
                 log.warning("Topic %s is not available during auto-create"
                             " initialization", topic)
