@@ -318,8 +318,10 @@ class KafkaFixture(Fixture):
         if not self.sasl_enabled:
             return ''
 
-        sasl_config = "sasl.enabled.mechanisms={mechanism}\n"
-        sasl_config += "sasl.mechanism.inter.broker.protocol={mechanism}\n"
+        sasl_config = (
+            'sasl.enabled.mechanisms={mechanism}\n'
+            'sasl.mechanism.inter.broker.protocol={mechanism}\n'
+        )
         return sasl_config.format(mechanism=self.sasl_mechanism)
 
     def _jaas_config(self):
@@ -328,12 +330,12 @@ class KafkaFixture(Fixture):
 
         elif self.sasl_mechanism == 'PLAIN':
             jaas_config = (
-                "org.apache.kafka.common.security.plain.PlainLoginModule required\n"
+                'org.apache.kafka.common.security.plain.PlainLoginModule required\n'
                 '  username="{user}" password="{password}" user_{user}="{password}";\n'
             )
         elif self.sasl_mechanism in ("SCRAM-SHA-256", "SCRAM-SHA-512"):
             jaas_config = (
-                "org.apache.kafka.common.security.scram.ScramLoginModule required\n"
+                'org.apache.kafka.common.security.scram.ScramLoginModule required\n'
                 '  username="{user}" password="{password}";\n'
             )
         else:
