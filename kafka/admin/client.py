@@ -204,6 +204,7 @@ class KafkaAdminClient(object):
         self._client = KafkaClient(metrics=self._metrics,
                                    metric_group_prefix='admin',
                                    **self.config)
+        self._client.check_version()
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
