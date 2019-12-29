@@ -1000,7 +1000,7 @@ class KafkaAdminClient(object):
             useful for avoiding extra network round trips if you already know
             the group coordinator. This is only useful when all the group_ids
             have the same coordinator, otherwise it will error. Default: None.
-        :param include_authorized_operatoins: Whether or not to include
+        :param include_authorized_operations: Whether or not to include
             information about the operations a group is allowed to perform.
             Only supported on API version >= v3. Default: False.
         :return: A list of group descriptions. For now the group descriptions
