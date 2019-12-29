@@ -142,6 +142,14 @@ To enable snappy compression/decompression install python-snappy (also requires 
 See <https://kafka-python.readthedocs.io/en/master/install.html#optional-snappy-install>
 for more information.
 
+Optimized CRC32 Validation
+**************************
+
+Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+python implementation for compatibility. To improve performance for high-throughput
+applications, kafka-python will use `crc32c` for optimized native code if installed.
+See https://pypi.org/project/crc32c/
+
 Protocol
 ********
 
