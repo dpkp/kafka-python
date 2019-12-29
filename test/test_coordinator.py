@@ -20,7 +20,7 @@ from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
-from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
 
@@ -211,7 +211,7 @@ def test_refresh_committed_offsets_if_needed(mocker, coordinator):
     assert coordinator._subscription.needs_fetch_committed_offsets is True
     coordinator.refresh_committed_offsets_if_needed()
     assignment = coordinator._subscription.assignment
-    assert assignment[TopicPartition('foobar', 0)].committed == 123
+    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, b'')
     assert TopicPartition('foobar', 1) not in assignment
     assert coordinator._subscription.needs_fetch_committed_offsets is False
 

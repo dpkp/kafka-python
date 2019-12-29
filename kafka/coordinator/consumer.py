@@ -387,7 +387,7 @@ class ConsumerCoordinator(BaseCoordinator):
             for partition, offset in six.iteritems(offsets):
                 # verify assignment is still active
                 if self._subscription.is_assigned(partition):
-                    self._subscription.assignment[partition].committed = offset.offset
+                    self._subscription.assignment[partition].committed = offset
             self._subscription.needs_fetch_committed_offsets = False
 
     def fetch_committed_offsets(self, partitions):
@@ -641,7 +641,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.debug("Group %s committed offset %s for partition %s",
                               self.group_id, offset, tp)
                     if self._subscription.is_assigned(tp):
-                        self._subscription.assignment[tp].committed = offset.offset
+                        self._subscription.assignment[tp].committed = offset
                 elif error_type is Errors.GroupAuthorizationFailedError:
                     log.error("Not authorized to commit offsets for group %s",
                               self.group_id)
@@ -704,7 +704,7 @@ class ConsumerCoordinator(BaseCoordinator):
             partitions (list of TopicPartition): the partitions to fetch
 
         Returns:
-            Future: resolves to dict of offsets: {TopicPartition: int}
+            Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
