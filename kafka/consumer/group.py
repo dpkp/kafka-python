@@ -638,6 +638,7 @@ class KafkaConsumer(six.Iterator):
             max_records = self.config['max_poll_records']
         assert isinstance(max_records, int), 'max_records must be an integer'
         assert max_records > 0, 'max_records must be positive'
+        assert not self._closed, 'KafkaConsumer is closed'
 
         # Poll for new data until the timeout expires
         start = time.time()
@@ -1173,6 +1174,8 @@ class KafkaConsumer(six.Iterator):
         return self
 
     def __next__(self):
+        if self._closed:
+            raise StopIteration('KafkaConsumer closed')
         # Now that the heartbeat thread runs in the background
         # there should be no reason to maintain a separate iterator
         # but we'll keep it available for a few releases just in case
