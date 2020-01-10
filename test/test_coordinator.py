@@ -55,7 +55,7 @@ def test_autocommit_enable_api_version(client, api_version):
 
 
 def test_protocol_type(coordinator):
-    assert coordinator.protocol_type() is 'consumer'
+    assert coordinator.protocol_type() == 'consumer'
 
 
 def test_group_protocols(coordinator):
