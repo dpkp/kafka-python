@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import threading, logging, time
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -53,9 +54,9 @@ def main():
     time.sleep(10)
     producer_stop.set()
     consumer_stop.set()
-    print 'Messages sent: %d' % threads[0].sent
-    print 'Messages recvd: %d' % threads[1].valid
-    print 'Messages invalid: %d' % threads[1].invalid
+    print('Messages sent: %d' % threads[0].sent)
+    print('Messages recvd: %d' % threads[1].valid)
+    print('Messages invalid: %d' % threads[1].invalid)
 
 if __name__ == "__main__":
     logging.basicConfig(
