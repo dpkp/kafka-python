@@ -70,6 +70,8 @@ import kafka.codec as codecs
 
 class DefaultRecordBase(object):
 
+    __slots__ = ()
+
     HEADER_STRUCT = struct.Struct(
         ">q"  # BaseOffset => Int64
         "i"  # Length => Int32
@@ -115,6 +117,9 @@ class DefaultRecordBase(object):
 
 
 class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
+
+    __slots__ = ("_buffer", "_header_data", "_pos", "_num_records",
+                 "_next_record_index", "_decompressed")
 
     def __init__(self, buffer):
         self._buffer = bytearray(buffer)
@@ -357,6 +362,11 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
     # excluding key, value and headers:
     # 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
     MAX_RECORD_OVERHEAD = 21
+
+    __slots__ = ("_magic", "_compression_type", "_batch_size", "_is_transactional",
+                 "_producer_id", "_producer_epoch", "_base_sequence",
+                 "_first_timestamp", "_max_timestamp", "_last_offset", "_num_records",
+                 "_buffer")
 
     def __init__(
             self, magic, compression_type, is_transactional,
