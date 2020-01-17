@@ -5,7 +5,7 @@ import itertools
 import os
 import random
 
-import perf
+import pyperf
 
 from kafka.record.memory_records import MemoryRecordsBuilder
 
@@ -52,7 +52,7 @@ def func(loops, magic):
     results = []
 
     # Main benchmark code.
-    t0 = perf.perf_counter()
+    t0 = pyperf.perf_counter()
     for _ in range(loops):
         batch = MemoryRecordsBuilder(
             magic, batch_size=DEFAULT_BATCH_SIZE, compression_type=0)
@@ -64,14 +64,14 @@ def func(loops, magic):
         batch.close()
         results.append(batch.buffer())
 
-    res = perf.perf_counter() - t0
+    res = pyperf.perf_counter() - t0
 
     finalize(results)
 
     return res
 
 
-runner = perf.Runner()
+runner = pyperf.Runner()
 runner.bench_time_func('batch_append_v0', func, 0)
 runner.bench_time_func('batch_append_v1', func, 1)
 runner.bench_time_func('batch_append_v2', func, 2)
