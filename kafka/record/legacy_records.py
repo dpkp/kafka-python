@@ -57,6 +57,8 @@ from kafka.errors import CorruptRecordException, UnsupportedCodecError
 
 class LegacyRecordBase(object):
 
+    __slots__ = ()
+
     HEADER_STRUCT_V0 = struct.Struct(
         ">q"  # BaseOffset => Int64
         "i"  # Length => Int32
@@ -126,6 +128,9 @@ class LegacyRecordBase(object):
 
 
 class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
+
+    __slots__ = ("_buffer", "_magic", "_offset", "_crc", "_timestamp",
+                 "_attributes", "_decompressed")
 
     def __init__(self, buffer, magic):
         self._buffer = memoryview(buffer)
@@ -335,6 +340,8 @@ class LegacyRecord(ABCRecord):
 
 
 class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
+
+    __slots__ = ("_magic", "_compression_type", "_batch_size", "_buffer")
 
     def __init__(self, magic, compression_type, batch_size):
         self._magic = magic
