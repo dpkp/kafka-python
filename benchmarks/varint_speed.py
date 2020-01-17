@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import perf
+import pyperf
 from kafka.vendor import six
 
 
@@ -398,7 +398,7 @@ _assert_valid_dec(decode_varint_3)
 # import dis
 # dis.dis(decode_varint_3)
 
-runner = perf.Runner()
+runner = pyperf.Runner()
 # Encode algorithms returning a bytes result
 for bench_func in [
         encode_varint_1,
