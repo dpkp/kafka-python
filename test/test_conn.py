@@ -244,6 +244,18 @@ def test_collect_hosts__invalid_hosts():
     assert set(results) == set()
 
 
+def test_collect_hosts__empty_hosts_string():
+    hosts = ',,,,'
+    results = collect_hosts(hosts)
+    assert set(results) == set()
+
+
+def test_collect_hosts__empty_hosts_iterable():
+    hosts = ['', '', '']
+    results = collect_hosts(hosts)
+    assert set(results) == set()
+
+
 def test_collect_hosts__ipv6():
     hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
     results = collect_hosts(hosts)
