@@ -1481,9 +1481,13 @@ def collect_hosts(hosts, randomize=True):
         hosts = hosts.strip().split(',')
 
     result = []
+    if not hosts:
+        return result
+        
     afi = socket.AF_INET
     for host_port in hosts:
-
+        if not host_port:
+            continue
         host, port, afi = get_ip_port_afi(host_port)
 
         if port < 0:

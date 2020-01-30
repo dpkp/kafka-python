@@ -230,6 +230,20 @@ def test_collect_hosts__from_iterable():
     ])
 
 
+def test_collect_hosts__invalid_iterable():
+    hosts = ['127.0.0.1:1234', None]
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('127.0.0.1', 1234, socket.AF_INET)
+    ])
+
+
+def test_collect_hosts__invalid_hosts():
+    hosts = None
+    results = collect_hosts(hosts)
+    assert set(results) == set()
+
+
 def test_collect_hosts__ipv6():
     hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
     results = collect_hosts(hosts)
