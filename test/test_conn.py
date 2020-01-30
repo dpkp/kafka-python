@@ -221,6 +221,15 @@ def test_collect_hosts__happy_path():
     ])
 
 
+def test_collect_hosts__from_iterable():
+    hosts = ['127.0.0.1:1234', '127.0.0.1']
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('127.0.0.1', 1234, socket.AF_INET),
+        ('127.0.0.1', 9092, socket.AF_INET),
+    ])
+
+
 def test_collect_hosts__ipv6():
     hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
     results = collect_hosts(hosts)
