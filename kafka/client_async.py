@@ -201,7 +201,11 @@ class KafkaClient(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
-
+        if not self.config['bootstrap_servers']:
+            new_config = self.DEFAULT_CONFIG['bootstrap_servers']
+            log.warning('bootstrap servers config reset to default "%s", "%s" was set',
+                        new_config, self.config['bootstrap_servers'])
+            self.config['bootstrap_servers'] = new_config
         self.cluster = ClusterMetadata(**self.config)
         self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
