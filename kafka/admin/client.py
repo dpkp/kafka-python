@@ -493,12 +493,12 @@ class KafkaAdminClient(object):
             )
 
         if use_controller:
-            future = self._send_request_to_controller(request)
-        else:
-            future = self._send_request_to_node(
-                self._client.least_loaded_node(),
-                request
-            )
+            return self._send_request_to_controller(request)
+
+        future = self._send_request_to_node(
+            self._client.least_loaded_node(),
+            request
+        )
         self._wait_for_futures([future])
         return future.value
 
