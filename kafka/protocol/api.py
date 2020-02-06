@@ -48,7 +48,7 @@ class Request(Struct):
         return True
 
     def to_object(self):
-        return _to_object(self.SCHEMA, self.fields)
+        return _to_object(self.SCHEMA, self)
 
 
 class Response(Struct):
@@ -70,14 +70,14 @@ class Response(Struct):
         pass
 
     def to_object(self):
-        return _to_object(self.SCHEMA, self.fields)
+        return _to_object(self.SCHEMA, self)
 
 
 def _to_object(schema, data):
     obj = {}
     for idx, (name, _type) in enumerate(zip(schema.names, schema.fields)):
-        if isinstance(data, dict):
-            val = data[name]
+        if isinstance(data, Struct):
+            val = data.get_item(name)
         else:
             val = data[idx]
 

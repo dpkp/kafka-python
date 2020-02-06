@@ -12,17 +12,14 @@ class Struct(AbstractType):
     SCHEMA = Schema()
 
     def __init__(self, *args, **kwargs):
-        self.fields = {}
         if len(args) == len(self.SCHEMA.fields):
             for i, name in enumerate(self.SCHEMA.names):
                 self.__dict__[name] = args[i]
-                self.fields[name] = args[i]
         elif len(args) > 0:
             raise ValueError('Args must be empty or mirror schema')
         else:
             for name in self.SCHEMA.names:
                 self.__dict__[name] = kwargs.pop(name, None)
-                self.fields[name] = self.__dict__[name]
             if kwargs:
                 raise ValueError('Keyword(s) not in schema %s: %s'
                                  % (list(self.SCHEMA.names),
@@ -32,6 +29,7 @@ class Struct(AbstractType):
         # Without WeakMethod() this creates circular ref, which
         # causes instances to "leak" to garbage
         self.encode = WeakMethod(self._encode_self)
+
 
     @classmethod
     def encode(cls, item):  # pylint: disable=E0202
@@ -50,6 +48,11 @@ class Struct(AbstractType):
         if isinstance(data, bytes):
             data = BytesIO(data)
         return cls(*[field.decode(data) for field in cls.SCHEMA.fields])
+
+    def get_item(self, name):
+        if name not in self.SCHEMA.names:
+            raise KeyError("%s is not in the schema" % name)
+        return self.__dict__[name]
 
     def __repr__(self):
         key_vals = []
