@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division
 
-import collections
 import copy
 import errno
 import io
@@ -16,7 +15,6 @@ except ImportError:
 
 import socket
 import struct
-import sys
 import threading
 import time
 
@@ -31,6 +29,7 @@ from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.types import Int32, Int8
+from kafka.scram import ScramClient
 from kafka.version import __version__
 
 
@@ -111,13 +110,14 @@ class BrokerConnection(object):
             wait before attempting to reconnect to a given host.
             Default: 50.
         reconnect_backoff_max_ms (int): The maximum amount of time in
-            milliseconds to wait when reconnecting to a broker that has
+            milliseconds to backoff/wait when reconnecting to a broker that has
             repeatedly failed to connect. If provided, the backoff per host
             will increase exponentially for each consecutive connection
-            failure, up to this maximum. To avoid connection storms, a
-            randomization factor of 0.2 will be applied to the backoff
-            resulting in a random range between 20% below and 20% above
-            the computed value. Default: 1000.
+            failure, up to this maximum. Once the maximum is reached,
+            reconnection attempts will continue periodically with this fixed
+            rate. To avoid connection storms, a randomization factor of 0.2
+            will be applied to the backoff resulting in a random range between
+            20% below and 20% above the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -177,11 +177,11 @@ class BrokerConnection(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER.
-        sasl_plain_username (str): username for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
-        sasl_plain_password (str): password for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+        sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -224,7 +224,7 @@ class BrokerConnection(object):
         'sasl_oauth_token_provider': None
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
-    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER')
+    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -259,9 +259,13 @@ class BrokerConnection(object):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
             assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
                 'sasl_mechanism must be in ' + ', '.join(self.SASL_MECHANISMS))
-            if self.config['sasl_mechanism'] == 'PLAIN':
-                assert self.config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
-                assert self.config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
+            if self.config['sasl_mechanism'] in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
+                assert self.config['sasl_plain_username'] is not None, (
+                    'sasl_plain_username required for PLAIN or SCRAM sasl'
+                )
+                assert self.config['sasl_plain_password'] is not None, (
+                    'sasl_plain_password required for PLAIN or SCRAM sasl'
+                )
             if self.config['sasl_mechanism'] == 'GSSAPI':
                 assert gssapi is not None, 'GSSAPI lib not available'
                 assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
@@ -552,6 +556,8 @@ class BrokerConnection(object):
             return self._try_authenticate_gssapi(future)
         elif self.config['sasl_mechanism'] == 'OAUTHBEARER':
             return self._try_authenticate_oauth(future)
+        elif self.config['sasl_mechanism'].startswith("SCRAM-SHA-"):
+            return self._try_authenticate_scram(future)
         else:
             return future.failure(
                 Errors.UnsupportedSaslMechanismError(
@@ -650,6 +656,53 @@ class BrokerConnection(object):
             return future.failure(error)
 
         log.info('%s: Authenticated as %s via PLAIN', self, self.config['sasl_plain_username'])
+        return future.success(True)
+
+    def _try_authenticate_scram(self, future):
+        if self.config['security_protocol'] == 'SASL_PLAINTEXT':
+            log.warning('%s: Exchanging credentials in the clear', self)
+
+        scram_client = ScramClient(
+            self.config['sasl_plain_username'], self.config['sasl_plain_password'], self.config['sasl_mechanism']
+        )
+
+        err = None
+        close = False
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                try:
+                    client_first = scram_client.first_message().encode('utf-8')
+                    size = Int32.encode(len(client_first))
+                    self._send_bytes_blocking(size + client_first)
+
+                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
+                    server_first = self._recv_bytes_blocking(data_len).decode('utf-8')
+                    scram_client.process_server_first_message(server_first)
+
+                    client_final = scram_client.final_message().encode('utf-8')
+                    size = Int32.encode(len(client_final))
+                    self._send_bytes_blocking(size + client_final)
+
+                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
+                    server_final = self._recv_bytes_blocking(data_len).decode('utf-8')
+                    scram_client.process_server_final_message(server_final)
+
+                except (ConnectionError, TimeoutError) as e:
+                    log.exception("%s: Error receiving reply from server", self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
+
+        log.info(
+            '%s: Authenticated as %s via %s', self, self.config['sasl_plain_username'], self.config['sasl_mechanism']
+        )
         return future.success(True)
 
     def _try_authenticate_gssapi(self, future):
@@ -1150,6 +1203,10 @@ class BrokerConnection(object):
             stashed[key] = self.config[key]
             self.config[key] = override_config[key]
 
+        def reset_override_configs():
+            for key in stashed:
+                self.config[key] = stashed[key]
+
         # kafka kills the connection when it doesn't recognize an API request
         # so we can send a test request and then follow immediately with a
         # vanilla MetadataRequest. If the server did not recognize the first
@@ -1169,6 +1226,7 @@ class BrokerConnection(object):
 
         for version, request in test_cases:
             if not self.connect_blocking(timeout_at - time.time()):
+                reset_override_configs()
                 raise Errors.NodeNotReadyError()
             f = self.send(request)
             # HACK: sleeping to wait for socket to send bytes
@@ -1225,10 +1283,10 @@ class BrokerConnection(object):
             log.info("Broker is not v%s -- it did not recognize %s",
                      version, request.__class__.__name__)
         else:
+            reset_override_configs()
             raise Errors.UnrecognizedBrokerVersion()
 
-        for key in stashed:
-            self.config[key] = stashed[key]
+        reset_override_configs()
         return version
 
     def __str__(self):

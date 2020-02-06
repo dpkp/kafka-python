@@ -98,7 +98,7 @@ class BaseCoordinator(object):
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
@@ -489,13 +489,16 @@ class BaseCoordinator(object):
         return future
 
     def _failed_request(self, node_id, request, future, error):
-        log.error('Error sending %s to node %s [%s]',
-                  request.__class__.__name__, node_id, error)
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
+            log.error('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
             self.coordinator_dead(error)
+        else:
+            log.debug('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):

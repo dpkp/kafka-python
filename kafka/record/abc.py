@@ -4,6 +4,7 @@ import abc
 
 class ABCRecord(object):
     __metaclass__ = abc.ABCMeta
+    __slots__ = ()
 
     @abc.abstractproperty
     def offset(self):
@@ -45,6 +46,7 @@ class ABCRecord(object):
 
 class ABCRecordBatchBuilder(object):
     __metaclass__ = abc.ABCMeta
+    __slots__ = ()
 
     @abc.abstractmethod
     def append(self, offset, timestamp, key, value, headers=None):
@@ -87,6 +89,7 @@ class ABCRecordBatch(object):
         compressed) message.
     """
     __metaclass__ = abc.ABCMeta
+    __slots__ = ()
 
     @abc.abstractmethod
     def __iter__(self):
@@ -97,6 +100,7 @@ class ABCRecordBatch(object):
 
 class ABCRecords(object):
     __metaclass__ = abc.ABCMeta
+    __slots__ = ()
 
     @abc.abstractmethod
     def __init__(self, buffer):

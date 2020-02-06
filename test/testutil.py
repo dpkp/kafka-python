@@ -2,8 +2,13 @@ from __future__ import absolute_import
 
 import os
 import random
+import re
 import string
 import time
+
+
+def special_to_underscore(string, _matcher=re.compile(r'[^a-zA-Z0-9_]+')):
+    return _matcher.sub('_', string)
 
 
 def random_string(length):

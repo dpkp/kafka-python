@@ -374,7 +374,7 @@ class SubscriptionState(object):
 
 class TopicPartitionState(object):
     def __init__(self):
-        self.committed = None # last committed position
+        self.committed = None # last committed OffsetAndMetadata
         self.has_valid_position = False # whether we have valid position
         self.paused = False # whether this partition has been paused by the user
         self.awaiting_reset = False # whether we are awaiting reset

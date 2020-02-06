@@ -69,13 +69,14 @@ class KafkaClient(object):
             wait before attempting to reconnect to a given host.
             Default: 50.
         reconnect_backoff_max_ms (int): The maximum amount of time in
-            milliseconds to wait when reconnecting to a broker that has
+            milliseconds to backoff/wait when reconnecting to a broker that has
             repeatedly failed to connect. If provided, the backoff per host
             will increase exponentially for each consecutive connection
-            failure, up to this maximum. To avoid connection storms, a
-            randomization factor of 0.2 will be applied to the backoff
-            resulting in a random range between 20% below and 20% above
-            the computed value. Default: 1000.
+            failure, up to this maximum. Once the maximum is reached,
+            reconnection attempts will continue periodically with this fixed
+            rate. To avoid connection storms, a randomization factor of 0.2
+            will be applied to the backoff resulting in a random range between
+            20% below and 20% above the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         connections_max_idle_ms: Close idle connections after the number of
@@ -143,11 +144,11 @@ class KafkaClient(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER.
-        sasl_plain_username (str): username for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
-        sasl_plain_password (str): password for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+        sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -767,10 +768,7 @@ class KafkaClient(object):
                 inflight = curr_inflight
                 found = node_id
 
-        if found is not None:
-            return found
-
-        return None
+        return found
 
     def set_topics(self, topics):
         """Set specific topics to track for metadata.

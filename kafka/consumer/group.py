@@ -91,13 +91,14 @@ class KafkaConsumer(six.Iterator):
             wait before attempting to reconnect to a given host.
             Default: 50.
         reconnect_backoff_max_ms (int): The maximum amount of time in
-            milliseconds to wait when reconnecting to a broker that has
+            milliseconds to backoff/wait when reconnecting to a broker that has
             repeatedly failed to connect. If provided, the backoff per host
             will increase exponentially for each consecutive connection
-            failure, up to this maximum. To avoid connection storms, a
-            randomization factor of 0.2 will be applied to the backoff
-            resulting in a random range between 20% below and 20% above
-            the computed value. Default: 1000.
+            failure, up to this maximum. Once the maximum is reached,
+            reconnection attempts will continue periodically with this fixed
+            rate. To avoid connection storms, a randomization factor of 0.2
+            will be applied to the backoff resulting in a random range between
+            20% below and 20% above the computed value. Default: 1000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -231,11 +232,11 @@ class KafkaConsumer(six.Iterator):
             subscribing to it. Requires 0.10+ Default: True
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER.
-        sasl_plain_username (str): Username for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
-        sasl_plain_password (str): Password for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+        sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -524,7 +525,7 @@ class KafkaConsumer(six.Iterator):
             offsets = self._subscription.all_consumed_offsets()
         self._coordinator.commit_offsets_sync(offsets)
 
-    def committed(self, partition):
+    def committed(self, partition, metadata=False):
         """Get the last committed offset for the given partition.
 
         This offset will be used as the position for the consumer
@@ -536,9 +537,11 @@ class KafkaConsumer(six.Iterator):
 
         Arguments:
             partition (TopicPartition): The partition to check.
+            metadata (bool, optional): If True, return OffsetAndMetadata struct
+                instead of offset int. Default: False.
 
         Returns:
-            The last committed offset, or None if there was no prior commit.
+            The last committed offset (int or OffsetAndMetadata), or None if there was no prior commit.
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
         assert self.config['group_id'] is not None, 'Requires group_id'
@@ -552,10 +555,15 @@ class KafkaConsumer(six.Iterator):
         else:
             commit_map = self._coordinator.fetch_committed_offsets([partition])
             if partition in commit_map:
-                committed = commit_map[partition].offset
+                committed = commit_map[partition]
             else:
                 committed = None
-        return committed
+
+        if committed is not None:
+            if metadata:
+                return committed
+            else:
+                return committed.offset
 
     def _fetch_all_topic_metadata(self):
         """A blocking call that fetches topic metadata for all topics in the
@@ -637,6 +645,7 @@ class KafkaConsumer(six.Iterator):
             max_records = self.config['max_poll_records']
         assert isinstance(max_records, int), 'max_records must be an integer'
         assert max_records > 0, 'max_records must be positive'
+        assert not self._closed, 'KafkaConsumer is closed'
 
         # Poll for new data until the timeout expires
         start = time.time()
@@ -1172,6 +1181,8 @@ class KafkaConsumer(six.Iterator):
         return self
 
     def __next__(self):
+        if self._closed:
+            raise StopIteration('KafkaConsumer closed')
         # Now that the heartbeat thread runs in the background
         # there should be no reason to maintain a separate iterator
         # but we'll keep it available for a few releases just in case

@@ -14,7 +14,7 @@ env:
     - KAFKA_VERSION=0.10.2.2
     - KAFKA_VERSION=0.11.0.3
     - KAFKA_VERSION=1.1.1
-    - KAFKA_VERSION=2.3.0
+    - KAFKA_VERSION=2.4.0
 
 addons:
   apt:
@@ -25,7 +25,7 @@ addons:
 cache:
   directories:
     - $HOME/.cache/pip
-    - servers/
+    - servers/dist
 
 before_install:
     - source travis_java_install.sh

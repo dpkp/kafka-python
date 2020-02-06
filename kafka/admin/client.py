@@ -61,13 +61,14 @@ class KafkaAdminClient(object):
             wait before attempting to reconnect to a given host.
             Default: 50.
         reconnect_backoff_max_ms (int): The maximum amount of time in
-            milliseconds to wait when reconnecting to a broker that has
+            milliseconds to backoff/wait when reconnecting to a broker that has
             repeatedly failed to connect. If provided, the backoff per host
             will increase exponentially for each consecutive connection
-            failure, up to this maximum. To avoid connection storms, a
-            randomization factor of 0.2 will be applied to the backoff
-            resulting in a random range between 20% below and 20% above
-            the computed value. Default: 1000.
+            failure, up to this maximum. Once the maximum is reached,
+            reconnection attempts will continue periodically with this fixed
+            rate. To avoid connection storms, a randomization factor of 0.2
+            will be applied to the backoff resulting in a random range between
+            20% below and 20% above the computed value. Default: 1000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         connections_max_idle_ms: Close idle connections after the number of
@@ -130,11 +131,11 @@ class KafkaAdminClient(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER.
-        sasl_plain_username (str): username for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
-        sasl_plain_password (str): password for sasl PLAIN authentication.
-            Required if sasl_mechanism is PLAIN.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+        sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
+            Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -203,6 +204,7 @@ class KafkaAdminClient(object):
         self._client = KafkaClient(metrics=self._metrics,
                                    metric_group_prefix='admin',
                                    **self.config)
+        self._client.check_version()
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
@@ -434,7 +436,7 @@ class KafkaAdminClient(object):
                 create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
                 timeout=timeout_ms
             )
-        elif version <= 2:
+        elif version <= 3:
             request = CreateTopicsRequest[version](
                 create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
                 timeout=timeout_ms,
@@ -458,7 +460,7 @@ class KafkaAdminClient(object):
         """
         version = self._matching_api_version(DeleteTopicsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version <= 1:
+        if version <= 3:
             request = DeleteTopicsRequest[version](
                 topics=topics,
                 timeout=timeout_ms
@@ -802,7 +804,7 @@ class KafkaAdminClient(object):
                     DescribeConfigsRequest[version](resources=topic_resources)
                 ))
 
-        elif version == 1:
+        elif version <= 2:
             if len(broker_resources) > 0:
                 for broker_resource in broker_resources:
                     try:
@@ -852,7 +854,7 @@ class KafkaAdminClient(object):
         :return: Appropriate version of AlterConfigsResponse class.
         """
         version = self._matching_api_version(AlterConfigsRequest)
-        if version == 0:
+        if version <= 1:
             request = AlterConfigsRequest[version](
                 resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
             )
@@ -900,7 +902,7 @@ class KafkaAdminClient(object):
         """
         version = self._matching_api_version(CreatePartitionsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version == 0:
+        if version <= 1:
             request = CreatePartitionsRequest[version](
                 topic_partitions=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
                 timeout=timeout_ms,
@@ -927,7 +929,7 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
-    def _describe_consumer_groups_send_request(self, group_id, group_coordinator_id):
+    def _describe_consumer_groups_send_request(self, group_id, group_coordinator_id, include_authorized_operations=False):
         """Send a DescribeGroupsRequest to the group's coordinator.
 
         :param group_id: The group name as a string
@@ -936,13 +938,24 @@ class KafkaAdminClient(object):
         :return: A message future.
         """
         version = self._matching_api_version(DescribeGroupsRequest)
-        if version <= 1:
+        if version <= 2:
+            if include_authorized_operations:
+                raise IncompatibleBrokerVersion(
+                    "include_authorized_operations requests "
+                    "DescribeGroupsRequest >= v3, which is not "
+                    "supported by Kafka {}".format(version)
+                )
             # Note: KAFKA-6788 A potential optimization is to group the
             # request per coordinator and send one request with a list of
             # all consumer groups. Java still hasn't implemented this
             # because the error checking is hard to get right when some
             # groups error and others don't.
             request = DescribeGroupsRequest[version](groups=(group_id,))
+        elif version <= 3:
+            request = DescribeGroupsRequest[version](
+                groups=(group_id,),
+                include_authorized_operations=include_authorized_operations
+            )
         else:
             raise NotImplementedError(
                 "Support for DescribeGroupsRequest_v{} has not yet been added to KafkaAdminClient."
@@ -951,7 +964,7 @@ class KafkaAdminClient(object):
 
     def _describe_consumer_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
-        if response.API_VERSION <= 1:
+        if response.API_VERSION <= 3:
             assert len(response.groups) == 1
             # TODO need to implement converting the response tuple into
             # a more accessible interface like a namedtuple and then stop
@@ -975,7 +988,7 @@ class KafkaAdminClient(object):
                 .format(response.API_VERSION))
         return group_description
 
-    def describe_consumer_groups(self, group_ids, group_coordinator_id=None):
+    def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
 
         Any errors are immediately raised.
@@ -988,6 +1001,9 @@ class KafkaAdminClient(object):
             useful for avoiding extra network round trips if you already know
             the group coordinator. This is only useful when all the group_ids
             have the same coordinator, otherwise it will error. Default: None.
+        :param include_authorized_operations: Whether or not to include
+            information about the operations a group is allowed to perform.
+            Only supported on API version >= v3. Default: False.
         :return: A list of group descriptions. For now the group descriptions
             are the raw results from the DescribeGroupsResponse. Long-term, we
             plan to change this to return namedtuples as well as decoding the
@@ -1000,7 +1016,10 @@ class KafkaAdminClient(object):
                 this_groups_coordinator_id = group_coordinator_id
             else:
                 this_groups_coordinator_id = self._find_coordinator_id(group_id)
-            f = self._describe_consumer_groups_send_request(group_id, this_groups_coordinator_id)
+            f = self._describe_consumer_groups_send_request(
+                group_id,
+                this_groups_coordinator_id,
+                include_authorized_operations)
             futures.append(f)
 
         self._wait_for_futures(futures)

@@ -21,7 +21,7 @@ from kafka.errors import (
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
 )
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
-from kafka.structs import TopicPartition
+from kafka.structs import OffsetAndMetadata, TopicPartition
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ def test_update_fetch_positions(fetcher, topic, mocker):
     fetcher._reset_offset.reset_mock()
     fetcher._subscriptions.need_offset_reset(partition)
     fetcher._subscriptions.assignment[partition].awaiting_reset = False
-    fetcher._subscriptions.assignment[partition].committed = 123
+    fetcher._subscriptions.assignment[partition].committed = OffsetAndMetadata(123, b'')
     mocker.patch.object(fetcher._subscriptions, 'seek')
     fetcher.update_fetch_positions([partition])
     assert fetcher._reset_offset.call_count == 0

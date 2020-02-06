@@ -96,6 +96,9 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     assert len(configs[0].resources[0][4]) > 1
 
 
+@pytest.mark.xfail(condition=True,
+                   reason="https://github.com/dpkp/kafka-python/issues/1929",
+                   raises=AssertionError)
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
 def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for topic

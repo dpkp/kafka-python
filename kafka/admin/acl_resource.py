@@ -112,6 +112,24 @@ class ACLFilter(object):
             resource=self.resource_pattern
         )
 
+    def __eq__(self, other):
+        return all((
+            self.principal == other.principal,
+            self.host == other.host,
+            self.operation == other.operation,
+            self.permission_type == other.permission_type,
+            self.resource_pattern == other.resource_pattern
+        ))
+
+    def __hash__(self):
+        return hash((
+            self.principal,
+            self.host,
+            self.operation,
+            self.permission_type,
+            self.resource_pattern,
+        ))
+
 
 class ACL(ACLFilter):
     """Represents a concrete ACL for a specific ResourcePattern
@@ -180,6 +198,20 @@ class ResourcePatternFilter(object):
             self.resource_name,
             self.pattern_type.name
         )
+
+    def __eq__(self, other):
+        return all((
+            self.resource_type == other.resource_type,
+            self.resource_name == other.resource_name,
+            self.pattern_type == other.pattern_type,
+        ))
+
+    def __hash__(self):
+        return hash((
+            self.resource_type,
+            self.resource_name,
+            self.pattern_type
+        ))
 
 
 class ResourcePattern(ResourcePatternFilter):
