@@ -9,6 +9,19 @@ import pytest
 
 @pytest.mark.parametrize('superclass', (Request, Response))
 class TestObjectConversion:
+    def test_get_item(self, superclass):
+        class TestClass(superclass):
+            API_KEY = 0
+            API_VERSION = 0
+            RESPONSE_TYPE = None  # To satisfy the Request ABC
+            SCHEMA = Schema(
+                ('myobject', Int16))
+
+        tc = TestClass(myobject=0)
+        assert tc.get_item('myobject') == 0
+        with pytest.raises(KeyError):
+            tc.get_item('does-not-exist')
+        
     def test_with_empty_schema(self, superclass):
         class TestClass(superclass):
             API_KEY = 0
