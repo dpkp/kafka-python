@@ -9,6 +9,7 @@ except ImportError:
 
 import socket
 import time
+import logging
 
 import pytest
 
@@ -47,6 +48,36 @@ def test_bootstrap(mocker, conn):
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
                                          BrokerMetadata(1, 'bar', 34, None)])
+
+
+def test_bootstrap_servers_reset_to_default_on_None_set(mocker, conn, caplog):
+    cli = KafkaClient(api_version=(0, 9), bootstrap_servers=None)
+    mocker.patch.object(cli, '_selector')
+    future = cli.cluster.request_update()
+    cli.poll(future=future)
+    assert ('kafka.client', logging.WARNING, 'bootstrap servers config reset to default "localhost", "None" was set') in caplog.record_tuples
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
+
+
+def test_bootstrap_servers_reset_to_default_on_falsy_value_set(mocker, conn, caplog):
+    cli = KafkaClient(api_version=(0, 9), bootstrap_servers='')
+    mocker.patch.object(cli, '_selector')
+    future = cli.cluster.request_update()
+    cli.poll(future=future)
+    assert ('kafka.client', logging.WARNING, 'bootstrap servers config reset to default "localhost", "" was set') in caplog.record_tuples
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
+
+
+def test_bootstrap_servers_reset_to_default_on_falsy_list_set(mocker, conn, caplog):
+    cli = KafkaClient(api_version=(0, 9), bootstrap_servers=[])
+    mocker.patch.object(cli, '_selector')
+    future = cli.cluster.request_update()
+    cli.poll(future=future)
+    assert ('kafka.client', logging.WARNING, 'bootstrap servers config reset to default "localhost", "[]" was set') in caplog.record_tuples
+    args, kwargs = conn.call_args
+    assert args == ('localhost', 9092, socket.AF_UNSPEC)
 
 
 def test_can_connect(cli, conn):
