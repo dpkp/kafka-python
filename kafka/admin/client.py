@@ -373,14 +373,19 @@ class KafkaAdminClient(object):
             self._wait_for_futures([future])
 
             response = future.value
-            # In Java, the error fieldname is inconsistent:
+            # In Java, the error field name is inconsistent:
             #  - CreateTopicsResponse / CreatePartitionsResponse uses topic_errors
             #  - DeleteTopicsResponse uses topic_error_codes
-            # So this is a little brittle in that it assumes all responses have
-            # one of these attributes and that they always unpack into
-            # (topic, error_code) tuples.
-            topic_error_tuples = (response.topic_errors if hasattr(response, 'topic_errors')
-                    else response.topic_error_codes)
+            #  - MetadataResponse uses topics[].error_code
+            topic_error_tuples = []
+            if hasattr(response, 'topic_errors'):
+                topic_error_tuples.extend(response.topic_errors)
+            elif hasattr(response, 'topic_error_codes'):
+                topic_error_tuples.extend(response.topic_error_codes)
+            elif hasattr(response, 'topics'):
+                for topic in response.topics:
+                    if hasattr(topic, 'topic') and hasattr(topic, 'error_code'):
+                        topic_error_tuples.append((topic.topic, topic.error_code))
             # Also small py2/py3 compatibility -- py3 can ignore extra values
             # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
             # So for now we have to map across the list and explicitly drop any
