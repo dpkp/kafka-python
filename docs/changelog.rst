@@ -2,6 +2,58 @@ Changelog
 =========
 
 
+2.0.0 (Feb 10, 2020)
+####################
+
+This release includes breaking changes for any application code that has not
+migrated from older Simple-style classes to newer Kafka-style classes.
+
+Deprecation
+-----------
+* Remove deprecated SimpleClient, Producer, Consumer, Unittest (jeffwidman / PR #1196)
+
+Admin Client
+------------
+* Use the controller for topic metadata requests (TylerLubeck / PR #1995)
+* Implement list_topics, describe_topics, and describe_cluster (TylerLubeck / PR #1993)
+* Implement __eq__ and __hash__ for ACL objects (TylerLubeck / PR #1955)
+* Fixes KafkaAdminClient returning `IncompatibleBrokerVersion` when passing an `api_version` (ian28223 / PR #1953)
+* Admin protocol updates (TylerLubeck / PR #1948)
+* Fix describe config for multi-broker clusters (jlandersen  / PR #1869)
+
+Miscellaneous Bugfixes / Improvements
+-------------------------------------
+* Enable SCRAM-SHA-256 and SCRAM-SHA-512 for sasl (swenzel / PR #1918)
+* Fix slots usage and use more slots (carsonip / PR #1987)
+* Optionally return OffsetAndMetadata from consumer.committed(tp) (dpkp / PR #1979)
+* Reset conn configs on exception in conn.check_version() (dpkp / PR #1977)
+* Do not block on sender thread join after timeout in producer.close() (dpkp / PR #1974)
+* Implement methods to convert a Struct object to a pythonic object (TylerLubeck / PR #1951)
+
+Test Infrastructure / Documentation / Maintenance
+-------------------------------------------------
+* Update 2.4.0 resource files for sasl integration (dpkp)
+* Add kafka 2.4.0 to CI testing (vvuibert / PR #1972)
+* convert test_admin_integration to pytest (ulrikjohansson / PR #1923)
+* xfail test_describe_configs_topic_resource_returns_configs (dpkp / Issue #1929)
+* Add crc32c to README and docs (dpkp)
+* Improve docs for reconnect_backoff_max_ms (dpkp / PR #1976)
+* Fix simple typo: managementment -> management (timgates42 / PR #1966)
+* Fix typos (carsonip / PR #1938)
+* Fix doc import paths (jeffwidman / PR #1933)
+* Update docstring to match conn.py's (dabcoder / PR #1921)
+* Do not log topic-specific errors in full metadata fetch (dpkp / PR #1980)
+* Raise AssertionError if consumer closed in poll() (dpkp / PR #1978)
+* Log retriable coordinator NodeNotReady, TooManyInFlightRequests as debug not error (dpkp / PR #1975)
+* Remove unused import (jeffwidman)
+* Remove some dead code (jeffwidman)
+* Fix a benchmark to Use print() function in both Python 2 and Python 3 (cclauss / PR #1983)
+* Fix a test to use ==/!= to compare str, bytes, and int literals (cclauss / PR #1984)
+* Fix benchmarks to use pyperf (carsonip / PR #1986)
+* Remove unused/empty .gitsubmodules file (jeffwidman / PR #1928)
+* Remove deprecated `ConnectionError` (jeffwidman / PR #1816)
+
+
 1.4.7 (Sep 30, 2019)
 ####################
 
