@@ -376,16 +376,11 @@ class KafkaAdminClient(object):
             # In Java, the error field name is inconsistent:
             #  - CreateTopicsResponse / CreatePartitionsResponse uses topic_errors
             #  - DeleteTopicsResponse uses topic_error_codes
-            #  - MetadataResponse uses topics[].error_code
-            topic_error_tuples = []
-            if hasattr(response, 'topic_errors'):
-                topic_error_tuples.extend(response.topic_errors)
-            elif hasattr(response, 'topic_error_codes'):
-                topic_error_tuples.extend(response.topic_error_codes)
-            elif hasattr(response, 'topics'):
-                for topic in response.topics:
-                    if hasattr(topic, 'topic') and hasattr(topic, 'error_code'):
-                        topic_error_tuples.append((topic.topic, topic.error_code))
+            # So this is a little brittle in that it assumes all responses have
+            # one of these attributes and that they always unpack into
+            # (topic, error_code) tuples.
+            topic_error_tuples = (response.topic_errors if hasattr(response, 'topic_errors')
+                    else response.topic_error_codes)
             # Also small py2/py3 compatibility -- py3 can ignore extra values
             # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
             # So for now we have to map across the list and explicitly drop any
@@ -478,7 +473,7 @@ class KafkaAdminClient(object):
         return response
 
 
-    def _get_cluster_metadata(self, topics=None, auto_topic_creation=False, use_controller=False):
+    def _get_cluster_metadata(self, topics=None, auto_topic_creation=False):
         """
         topics == None means "get all topics"
         """
@@ -497,9 +492,6 @@ class KafkaAdminClient(object):
                 allow_auto_topic_creation=auto_topic_creation
             )
 
-        if use_controller:
-            return self._send_request_to_controller(request)
-
         future = self._send_request_to_node(
             self._client.least_loaded_node(),
             request
@@ -513,7 +505,7 @@ class KafkaAdminClient(object):
         return [t['topic'] for t in obj['topics']]
 
     def describe_topics(self, topics=None):
-        metadata = self._get_cluster_metadata(topics=topics, use_controller=True)
+        metadata = self._get_cluster_metadata(topics=topics)
         obj = metadata.to_object()
         return obj['topics']
 
