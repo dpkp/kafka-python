@@ -1,6 +1,7 @@
 *.egg-info
 *.pyc
 .tox
+.envy
 build
 dist
 MANIFEST

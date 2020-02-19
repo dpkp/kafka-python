@@ -159,3 +159,9 @@ testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
 (0.8.0 to 2.4+).
+
+Contributing
+************
+To get up and running quickly, you can use the [ENVy](http://envy-project.github.io/) environment
+manager to get your environment set up quickly. Simply run `envy up` and you should be ready to go
+with development.

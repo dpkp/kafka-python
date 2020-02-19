@@ -1,0 +1,30 @@
+environment:
+  base:
+    image: python:3.7.3
+  system-packages:
+    - recipe: python-dev
+    - recipe: libsnappy-dev
+  setup-steps:
+    - name: python-deps
+      label: "Installing python dependencies"
+      type: script
+      as_user: false
+      run:
+        - "pip install -r requirements-dev.txt"
+        - "pip install -Ue ."
+      triggers:
+        files:
+          - requirements-dev.txt
+actions:
+  - name: test37
+    script: 'make test37'
+    help: 'Lint and run tests with Python 3.7'
+  - name: test27
+    script: 'make test27'
+    help: 'Lint and run tests with Python 2.7'
+  - name: gen-docs
+    script: 'make doc'
+    help: 'Run Sphinx to generate documentation'
+  - name: check-readme
+    script: 'make check-readme'
+    help: 'Check for syntax errors in README'
