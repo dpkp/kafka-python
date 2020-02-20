@@ -2,6 +2,15 @@ Changelog
 =========
 
 
+2.0.1 (Feb 19, 2020)
+####################
+
+Admin Client
+------------
+* KAFKA-8962: Use least_loaded_node() for AdminClient.describe_topics() (jeffwidman / PR #2000)
+* Fix AdminClient topic error parsing in MetadataResponse (jtribble / PR #1997)
+
+
 2.0.0 (Feb 10, 2020)
 ####################
 
