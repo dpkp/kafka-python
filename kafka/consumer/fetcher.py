@@ -474,7 +474,9 @@ class Fetcher(six.Iterator):
                         self.config['value_deserializer'],
                         tp.topic, record.value)
                     headers = record.headers
-                    header_size = sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1
+                    header_size = sum(
+                        len(h_key.encode("utf-8")) + len(h_val if h_val is not None else 0) for h_key, h_val in
+                        headers) if headers else -1
                     yield ConsumerRecord(
                         tp.topic, tp.partition, record.offset, record.timestamp,
                         record.timestamp_type, key, value, headers, record.checksum,
