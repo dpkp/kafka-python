@@ -15,3 +15,4 @@ pytest-mock==1.10.0
 sphinx-rtd-theme==0.2.4
 crc32c==1.7
 py==1.8.0
+zstandard==0.13.0
