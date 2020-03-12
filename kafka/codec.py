@@ -17,6 +17,11 @@ except ImportError:
     snappy = None
 
 try:
+    import zstandard as zstd
+except ImportError:
+    zstd = None
+
+try:
     import lz4.frame as lz4
 
     def _lz4_compress(payload, **kwargs):
@@ -56,6 +61,10 @@ def has_gzip():
 
 def has_snappy():
     return snappy is not None
+
+
+def has_zstd():
+    return zstd is not None
 
 
 def has_lz4():
@@ -299,3 +308,15 @@ def lz4_decode_old_kafka(payload):
         payload[header_size:]
     ])
     return lz4_decode(munged_payload)
+
+
+def zstd_encode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    return zstd.ZstdCompressor().compress(payload)
+
+
+def zstd_decode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    return zstd.ZstdDecompressor().decompress(payload)

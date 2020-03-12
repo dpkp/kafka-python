@@ -61,7 +61,6 @@ class ProduceResponse_v4(Response):
     API_VERSION = 4
     SCHEMA = ProduceResponse_v3.SCHEMA
 
-
 class ProduceResponse_v5(Response):
     API_KEY = 0
     API_VERSION = 5
@@ -76,6 +75,25 @@ class ProduceResponse_v5(Response):
                 ('log_start_offset', Int64))))),
         ('throttle_time_ms', Int32)
     )
+
+
+class ProduceResponse_v6(Response):
+    """
+    Same as V5
+    """
+    API_KEY = 0
+    API_VERSION = 6
+    SCHEMA = ProduceResponse_v5.SCHEMA
+
+
+class ProduceResponse_v7(Response):
+    """
+    Same as V6
+    """
+    API_KEY = 0
+    API_VERSION = 7
+    SCHEMA = ProduceResponse_v6.SCHEMA
+
 
 
 class ProduceRequest(Request):
@@ -147,11 +165,31 @@ class ProduceRequest_v5(ProduceRequest):
     SCHEMA = ProduceRequest_v4.SCHEMA
 
 
+class ProduceRequest_v6(ProduceRequest):
+    """
+    Same as V5
+    """
+    API_VERSION = 6
+    RESPONSE_TYPE = ProduceResponse_v6
+    SCHEMA = ProduceRequest_v5.SCHEMA
+
+
+class ProduceRequest_v7(ProduceRequest):
+    """
+    Same as V6
+    """
+    API_VERSION = 7
+    RESPONSE_TYPE = ProduceResponse_v7
+    SCHEMA = ProduceRequest_v6.SCHEMA
+
+
 ProduceRequest = [
     ProduceRequest_v0, ProduceRequest_v1, ProduceRequest_v2,
-    ProduceRequest_v3, ProduceRequest_v4, ProduceRequest_v5
+    ProduceRequest_v3, ProduceRequest_v4, ProduceRequest_v5,
+    ProduceRequest_v6, ProduceRequest_v7,
 ]
 ProduceResponse = [
     ProduceResponse_v0, ProduceResponse_v1, ProduceResponse_v2,
-    ProduceResponse_v3, ProduceResponse_v4, ProduceResponse_v5
+    ProduceResponse_v3, ProduceResponse_v4, ProduceResponse_v5,
+    ProduceRequest_v6, ProduceRequest_v7,
 ]

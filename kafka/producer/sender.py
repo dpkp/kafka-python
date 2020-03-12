@@ -198,8 +198,10 @@ class Sender(threading.Thread):
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
-                    else:
+                    elif 3 <= response.API_VERSION <= 4:
                         partition, error_code, offset, ts = partition_info
+                    elif 5 <= response.API_VERSION <= 7:
+                        partition, error_code, offset, ts, log_start_offset = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
@@ -213,7 +215,7 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, None, -1, None)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -221,6 +223,7 @@ class Sender(threading.Thread):
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
+            log_start_offset (int): The start offset of the log at the time this produce response was created
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -240,7 +243,7 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, timestamp_ms, error)
+            batch.done(base_offset, timestamp_ms, error, log_start_offset)
             self._accumulator.deallocate(batch)
             if error is not None:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
@@ -293,7 +296,9 @@ class Sender(threading.Thread):
             produce_records_by_partition[topic][partition] = buf
 
         kwargs = {}
-        if self.config['api_version'] >= (0, 11):
+        if self.config['api_version'] >= (2, 1):
+            version = 7
+        elif self.config['api_version'] >= (0, 11):
             version = 3
             kwargs = dict(transactional_id=None)
         elif self.config['api_version'] >= (0, 10):
