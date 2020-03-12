@@ -1,7 +1,7 @@
 # Some simple testing tasks (sorry, UNIX only).
 
 FLAGS=
-KAFKA_VERSION=0.11.0.2
+KAFKA_VERSION=2.4.0
 SCALA_VERSION=2.12
 
 setup:
