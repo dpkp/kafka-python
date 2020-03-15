@@ -79,7 +79,7 @@ class ProduceResponse_v5(Response):
 
 class ProduceResponse_v6(Response):
     """
-    Same as V5
+    The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
     """
     API_KEY = 0
     API_VERSION = 6
@@ -88,7 +88,7 @@ class ProduceResponse_v6(Response):
 
 class ProduceResponse_v7(Response):
     """
-    Same as V6
+    V7 bumped up to indicate ZStandard capability. (see KIP-110)
     """
     API_KEY = 0
     API_VERSION = 7
@@ -97,7 +97,8 @@ class ProduceResponse_v7(Response):
 
 class ProduceResponse_v8(Response):
     """
-    Add support for error messages
+    V8 bumped up to add two new fields record_errors offset list and error_message
+    (See KIP-467)
     """
     API_KEY = 0
     API_VERSION = 8
@@ -191,7 +192,7 @@ class ProduceRequest_v5(ProduceRequest):
 
 class ProduceRequest_v6(ProduceRequest):
     """
-    Same as V5
+    The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
     """
     API_VERSION = 6
     RESPONSE_TYPE = ProduceResponse_v6
@@ -200,7 +201,7 @@ class ProduceRequest_v6(ProduceRequest):
 
 class ProduceRequest_v7(ProduceRequest):
     """
-    Same as V6
+    V7 bumped up to indicate ZStandard capability. (see KIP-110)
     """
     API_VERSION = 7
     RESPONSE_TYPE = ProduceResponse_v7
@@ -209,7 +210,8 @@ class ProduceRequest_v7(ProduceRequest):
 
 class ProduceRequest_v8(ProduceRequest):
     """
-    Same as V7
+    V8 bumped up to add two new fields record_errors offset list and error_message to PartitionResponse
+    (See KIP-467)
     """
     API_VERSION = 8
     RESPONSE_TYPE = ProduceResponse_v8
