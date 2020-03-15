@@ -62,8 +62,8 @@ from kafka.record.util import (
 )
 from kafka.errors import CorruptRecordException, UnsupportedCodecError
 from kafka.codec import (
-    gzip_encode, snappy_encode, lz4_encode,
-    gzip_decode, snappy_decode, lz4_decode
+    gzip_encode, snappy_encode, lz4_encode, zstd_encode,
+    gzip_decode, snappy_decode, lz4_decode, zstd_decode
 )
 import kafka.codec as codecs
 
@@ -97,6 +97,7 @@ class DefaultRecordBase(object):
     CODEC_GZIP = 0x01
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
+    CODEC_ZSTD = 0x04
     TIMESTAMP_TYPE_MASK = 0x08
     TRANSACTIONAL_MASK = 0x10
     CONTROL_MASK = 0x20
@@ -111,6 +112,8 @@ class DefaultRecordBase(object):
             checker, name = codecs.has_snappy, "snappy"
         elif compression_type == self.CODEC_LZ4:
             checker, name = codecs.has_lz4, "lz4"
+        elif compression_type == self.CODEC_ZSTD:
+            checker, name = codecs.has_zstd, "zstd"
         if not checker():
             raise UnsupportedCodecError(
                 "Libraries for {} compression codec not found".format(name))
@@ -185,6 +188,8 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
                     uncompressed = snappy_decode(data.tobytes())
                 if compression_type == self.CODEC_LZ4:
                     uncompressed = lz4_decode(data.tobytes())
+                if compression_type == self.CODEC_ZSTD:
+                    uncompressed = zstd_decode(data)
                 self._buffer = bytearray(uncompressed)
                 self._pos = 0
         self._decompressed = True
@@ -517,6 +522,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 compressed = snappy_encode(data)
             elif self._compression_type == self.CODEC_LZ4:
                 compressed = lz4_encode(data)
+            elif self._compression_type == self.CODEC_ZSTD:
+                compressed = zstd_encode(data)
             compressed_size = len(compressed)
             if len(data) <= compressed_size:
                 # We did not get any benefit from compression, lets send
