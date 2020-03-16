@@ -25,7 +25,6 @@ def test_buffer_pool():
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_end_to_end(kafka_broker, compression):
-
     if compression == 'lz4':
         # LZ4 requires 0.8.2
         if env_kafka_version() < (0, 8, 2):
@@ -36,13 +35,12 @@ def test_end_to_end(kafka_broker, compression):
 
     if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
         return
-    env_version = env_kafka_version()
-    api_version = env_version if env_version >= (2, 1, 0) else None
+
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
                              max_block_ms=30000,
-                             api_version=api_version,
+                             api_version=env_kafka_version(),
                              compression_type=compression,
                              value_serializer=str.encode)
     consumer = KafkaConsumer(bootstrap_servers=connect_str,
@@ -91,11 +89,9 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
         return
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
-    env_version = env_kafka_version()
-    api_version = env_version if env_version >= (2, 1, 0) else None
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
-                             api_version=api_version,
+                             api_version=env_kafka_version(),
                              max_block_ms=30000,
                              compression_type=compression)
     magic = producer._max_usable_produce_magic()
