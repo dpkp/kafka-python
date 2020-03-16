@@ -61,6 +61,7 @@ class ProduceResponse_v4(Response):
     API_VERSION = 4
     SCHEMA = ProduceResponse_v3.SCHEMA
 
+
 class ProduceResponse_v5(Response):
     API_KEY = 0
     API_VERSION = 5
@@ -148,6 +149,7 @@ class ProduceRequest_v1(ProduceRequest):
     API_VERSION = 1
     RESPONSE_TYPE = ProduceResponse_v1
     SCHEMA = ProduceRequest_v0.SCHEMA
+
 
 class ProduceRequest_v2(ProduceRequest):
     API_VERSION = 2
