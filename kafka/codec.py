@@ -10,6 +10,7 @@ from kafka.vendor.six.moves import range
 
 _XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
+ZSTD_MAX_OUTPUT_SIZE = 1024 ** 3
 
 try:
     import snappy
@@ -319,4 +320,7 @@ def zstd_encode(payload):
 def zstd_decode(payload):
     if not zstd:
         raise NotImplementedError("Zstd codec is not available")
-    return zstd.ZstdDecompressor().decompress(payload)
+    try:
+        return zstd.ZstdDecompressor().decompress(payload)
+    except zstd.ZstdError:
+        return zstd.ZstdDecompressor().decompress(payload, max_output_size=ZSTD_MAX_OUTPUT_SIZE)
