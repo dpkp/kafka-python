@@ -195,7 +195,7 @@ class Sender(threading.Thread):
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
-                    error_message = None
+                    global_error = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
@@ -204,11 +204,11 @@ class Sender(threading.Thread):
                     elif 5 <= response.API_VERSION <= 7:
                         partition, error_code, offset, ts, log_start_offset = partition_info
                     else:
-                        partition, error_code, offset, ts, log_start_offset, _, error_message = partition_info
+                        partition, error_code, offset, ts, log_start_offset, _, global_error = partition_info
                     tp = TopicPartition(topic, partition)
-                    error = error_message or Errors.for_code(error_code)
+                    error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, ts)
+                    self._complete_batch(batch, error, offset, ts, global_error)
 
             if response.API_VERSION > 0:
                 self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
@@ -218,7 +218,7 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, None, -1, None)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None, global_error=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -238,7 +238,7 @@ class Sender(threading.Thread):
                         " retrying (%d attempts left). Error: %s",
                         batch.topic_partition,
                         self.config['retries'] - batch.attempts - 1,
-                        error)
+                        global_error or error)
             self._accumulator.reenqueue(batch)
             self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
         else:
@@ -246,7 +246,7 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, timestamp_ms, error, log_start_offset)
+            batch.done(base_offset, timestamp_ms, error, log_start_offset, global_error)
             self._accumulator.deallocate(batch)
             if error is not None:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
