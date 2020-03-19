@@ -68,11 +68,11 @@ class ProducerBatch(object):
                                       sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
         return future
 
-    def done(self, base_offset=None, timestamp_ms=None, exception=None, log_start_offset=None):
+    def done(self, base_offset=None, timestamp_ms=None, exception=None, log_start_offset=None, global_error=None):
         level = logging.DEBUG if exception is None else logging.WARNING
         log.log(level, "Produced messages to topic-partition %s with base offset"
                   " %s log start offset %s and error %s.", self.topic_partition, base_offset,
-                  log_start_offset, exception)  # trace
+                  log_start_offset, global_error)  # trace
         if self.produce_future.is_done:
             log.warning('Batch is already closed -- ignoring batch.done()')
             return
