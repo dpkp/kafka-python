@@ -196,6 +196,7 @@ class Sender(threading.Thread):
             for topic, partitions in response.topics:
                 for partition_info in partitions:
                     global_error = None
+                    log_start_offset = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
@@ -208,7 +209,7 @@ class Sender(threading.Thread):
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, ts, global_error)
+                    self._complete_batch(batch, error, offset, ts, log_start_offset, global_error)
 
             if response.API_VERSION > 0:
                 self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
@@ -227,6 +228,7 @@ class Sender(threading.Thread):
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
             log_start_offset (int): The start offset of the log at the time this produce response was created
+            global_error (Exception): The summarising error message
         """
         # Standardize no-error to None
         if error is Errors.NoError:
