@@ -228,7 +228,7 @@ class Sender(threading.Thread):
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
             log_start_offset (int): The start offset of the log at the time this produce response was created
-            global_error (Exception): The summarising error message
+            global_error (str): The summarising error message
         """
         # Standardize no-error to None
         if error is Errors.NoError:
