@@ -122,7 +122,8 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports multiple compression types. To produce or
+kafka-python supports multiple compression types:
+
  - gzip : supported natively
  - lz4 : requires `python-lz4 <https://pypi.org/project/lz4/>`_ installed
  - snappy : requires the `python-snappy <https://pypi.org/project/python-snappy/>`_  package (which requires the snappy C library)
