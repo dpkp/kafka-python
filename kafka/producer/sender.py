@@ -205,6 +205,7 @@ class Sender(threading.Thread):
                     elif 5 <= response.API_VERSION <= 7:
                         partition, error_code, offset, ts, log_start_offset = partition_info
                     else:
+                        # the ignored parameter is record_error of type list[(batch_index: int, error_message: str)]
                         partition, error_code, offset, ts, log_start_offset, _, global_error = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
