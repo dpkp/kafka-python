@@ -20,6 +20,11 @@ OffsetAndMetadata = namedtuple("OffsetAndMetadata",
 OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
     ["offset", "timestamp"])
 
+MemberInformation = namedtuple("MemberInformation",
+    ["member_id", "client_id", "client_host", "member_metadata", "member_assignment"])
+
+GroupInformation = namedtuple("GroupInformation",
+    ["error_code", "group", "state", "protocol_type", "protocol", "members", "authorized_operations"])
 
 # Define retry policy for async producer
 # Limit value: int >= 0, 0 means no retries

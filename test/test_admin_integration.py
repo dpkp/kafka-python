@@ -2,7 +2,7 @@ import pytest
 
 from test.testutil import env_kafka_version
 
-from kafka.errors import NoError
+from kafka.errors import (NoError, GroupCoordinatorNotAvailableError)
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 
@@ -138,3 +138,20 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 
     with pytest.raises(ValueError):
         configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
+def test_describe_consumer_group_does_not_exist(kafka_admin_client):
+    """Tests that the describe consumer group call fails if the group coordinator is not available
+    """
+    with pytest.raises(GroupCoordinatorNotAvailableError):
+        group_description = kafka_admin_client.describe_consumer_groups(['test'])
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
+def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_factory, topic):
+    """Tests that the describe consumer group call returns valid consumer group information
+    """
+    consumer = kafka_consumer_factory(group_id='testgrp', auto_offset_reset='earliest')
+    consumer.poll(timeout_ms=20)
+    output = kafka_admin_client.describe_consumer_groups(['testgrp'])
+    assert output[0].group == 'testgrp'
+    assert output[0].members[0].member_metadata.subscription[0] == topic
