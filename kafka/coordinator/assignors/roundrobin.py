@@ -92,5 +92,5 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         return ConsumerProtocolMemberMetadata(cls.version, list(topics), b'')
 
     @classmethod
-    def on_assignment(cls, assignment):
+    def on_assignment(cls, assignment, generation):
         pass

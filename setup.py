@@ -7,6 +7,7 @@ from setuptools import setup, Command, find_packages
 # since we can't import something we haven't built yet :)
 exec(open('kafka/version.py').read())
 
+
 class Tox(Command):
 
     user_options = []
@@ -58,5 +59,8 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Software Development :: Libraries :: Python Modules",
+    ],
+    install_requires=[
+        "sortedcontainers==2.1.0"
     ]
 )
