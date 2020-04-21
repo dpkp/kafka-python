@@ -477,6 +477,13 @@ class DescribeAclsResponse_v1(Response):
                 ('permission_type', Int8)))))
     )
 
+
+class DescribeAclsResponse_v2(Response):
+    API_KEY = 29
+    API_VERSION = 2
+    SCHEMA = DescribeAclsResponse_v1.SCHEMA
+
+
 class DescribeAclsRequest_v0(Request):
     API_KEY = 29
     API_VERSION = 0
@@ -489,6 +496,7 @@ class DescribeAclsRequest_v0(Request):
         ('operation', Int8),
         ('permission_type', Int8)
     )
+
 
 class DescribeAclsRequest_v1(Request):
     API_KEY = 29
@@ -504,8 +512,19 @@ class DescribeAclsRequest_v1(Request):
         ('permission_type', Int8)
     )
 
-DescribeAclsRequest = [DescribeAclsRequest_v0, DescribeAclsRequest_v1]
-DescribeAclsResponse = [DescribeAclsResponse_v0, DescribeAclsResponse_v1]
+
+class DescribeAclsRequest_v2(Request):
+    """
+    Enable flexible version
+    """
+    API_KEY = 29
+    API_VERSION = 2
+    RESPONSE_TYPE = DescribeAclsResponse_v2
+    SCHEMA = DescribeAclsRequest_v1.SCHEMA
+
+
+DescribeAclsRequest = [DescribeAclsRequest_v0, DescribeAclsRequest_v1, DescribeAclsRequest_v2]
+DescribeAclsResponse = [DescribeAclsResponse_v0, DescribeAclsResponse_v1, DescribeAclsResponse_v2]
 
 class CreateAclsResponse_v0(Response):
     API_KEY = 30
@@ -862,3 +881,4 @@ CreatePartitionsRequest = [
 CreatePartitionsResponse = [
     CreatePartitionsResponse_v0, CreatePartitionsResponse_v1,
 ]
+
