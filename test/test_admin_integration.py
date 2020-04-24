@@ -142,12 +142,14 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
     with pytest.raises(ValueError):
         configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
+
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
 def test_describe_consumer_group_does_not_exist(kafka_admin_client):
     """Tests that the describe consumer group call fails if the group coordinator is not available
     """
     with pytest.raises(GroupCoordinatorNotAvailableError):
         group_description = kafka_admin_client.describe_consumer_groups(['test'])
+
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
 def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_factory, topic):
@@ -236,3 +238,62 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
             stop[c].set()
             threads[c].join()
             threads[c] = None
+
+
+@pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
+def test_delete_consumergroups_inactive_group(kafka_admin_client, kafka_consumer_factory, send_messages):
+    send_messages(range(0, 100), partition=0)
+    send_messages(range(0, 100), partition=1)
+    consumer1 = kafka_consumer_factory(group_id="group1")
+    next(consumer1)
+    consumer1.close()
+
+    consumer2 = kafka_consumer_factory(group_id="group2")
+    next(consumer2)
+    consumer2.close()
+
+    consumer3 = kafka_consumer_factory(group_id="group3")
+    next(consumer3)
+    consumer3.close()
+
+    consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    assert "group1" in consumergroups
+    assert "group2" in consumergroups
+    assert "group3" in consumergroups
+
+    kafka_admin_client.delete_consumer_groups(["group1", "group2"])
+
+    consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    assert "group1" not in consumergroups
+    assert "group2" not in consumergroups
+    assert "group3" in consumergroups
+
+
+@pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
+def test_delete_consumergroups_active_group(kafka_admin_client, kafka_consumer_factory, send_messages):
+        send_messages(range(0, 100), partition=0)
+        send_messages(range(0, 100), partition=1)
+        consumer1 = kafka_consumer_factory(group_id="group1")
+        next(consumer1)
+        consumer1.close()
+
+        consumer2 = kafka_consumer_factory(group_id="group2")
+        next(consumer2)
+
+        consumer3 = kafka_consumer_factory(group_id="group3")
+        next(consumer3)
+        consumer3.close()
+
+        consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+        assert "group1" in consumergroups
+        assert "group2" in consumergroups
+        assert "group3" in consumergroups
+
+        # TODO use more specific exception
+        with pytest.raises(Exception):
+            kafka_admin_client.delete_consumer_groups(["group1", "group2"])
+
+        consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+        assert "group1" not in consumergroups
+        assert "group2" in consumergroups
+        assert "group3" in consumergroups
