@@ -2,7 +2,7 @@ import pytest
 
 from test.testutil import env_kafka_version
 
-from kafka.errors import NoError
+from kafka.errors import NoError, NonEmptyGroupError, GroupIdNotFoundError
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 
@@ -141,9 +141,8 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
-def test_delete_consumergroups_inactive_group(kafka_admin_client, kafka_consumer_factory, send_messages):
+def test_delete_consumergroups(kafka_admin_client, kafka_consumer_factory, send_messages):
     send_messages(range(0, 100), partition=0)
-    send_messages(range(0, 100), partition=1)
     consumer1 = kafka_consumer_factory(group_id="group1")
     next(consumer1)
     consumer1.close()
@@ -161,7 +160,13 @@ def test_delete_consumergroups_inactive_group(kafka_admin_client, kafka_consumer
     assert "group2" in consumergroups
     assert "group3" in consumergroups
 
-    kafka_admin_client.delete_consumer_groups(["group1", "group2"])
+    delete_results = {
+        group_id: error
+        for group_id, error in kafka_admin_client.delete_consumer_groups(["group1", "group2"])
+    }
+    assert delete_results["group1"] == NoError
+    assert delete_results["group2"] == NoError
+    assert "group3" not in delete_results
 
     consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
     assert "group1" not in consumergroups
@@ -170,9 +175,8 @@ def test_delete_consumergroups_inactive_group(kafka_admin_client, kafka_consumer
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
-def test_delete_consumergroups_active_group(kafka_admin_client, kafka_consumer_factory, send_messages):
+def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_factory, send_messages):
         send_messages(range(0, 100), partition=0)
-        send_messages(range(0, 100), partition=1)
         consumer1 = kafka_consumer_factory(group_id="group1")
         next(consumer1)
         consumer1.close()
@@ -180,20 +184,21 @@ def test_delete_consumergroups_active_group(kafka_admin_client, kafka_consumer_f
         consumer2 = kafka_consumer_factory(group_id="group2")
         next(consumer2)
 
-        consumer3 = kafka_consumer_factory(group_id="group3")
-        next(consumer3)
-        consumer3.close()
-
         consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
         assert "group1" in consumergroups
         assert "group2" in consumergroups
-        assert "group3" in consumergroups
+        assert "group3" not in consumergroups
 
-        # TODO use more specific exception
-        with pytest.raises(Exception):
-            kafka_admin_client.delete_consumer_groups(["group1", "group2"])
+        delete_results = {
+            group_id: error
+            for group_id, error in kafka_admin_client.delete_consumer_groups(["group1", "group2", "group3"])
+        }
+
+        assert delete_results["group1"] == NoError
+        assert delete_results["group2"] == NonEmptyGroupError
+        assert delete_results["group3"] == GroupIdNotFoundError
 
         consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
         assert "group1" not in consumergroups
         assert "group2" in consumergroups
-        assert "group3" in consumergroups
+        assert "group3" not in consumergroups
