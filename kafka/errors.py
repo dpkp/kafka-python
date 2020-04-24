@@ -449,6 +449,18 @@ class SecurityDisabledError(BrokerResponseError):
     description = 'Security features are disabled.'
 
 
+class NonEmptyGroupError(BrokerResponseError):
+    errno = 68
+    message = 'NON_EMPTY_GROUP'
+    description = 'The group is not empty.'
+
+
+class GroupIdNotFoundError(BrokerResponseError):
+    errno = 69
+    message = 'GROUP_ID_NOT_FOUND'
+    description = 'The group id does not exist.'
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 
