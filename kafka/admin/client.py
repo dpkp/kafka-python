@@ -6,9 +6,11 @@ import logging
 import socket
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
+from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
+    ACLResourcePatternType
 from kafka.client_async import KafkaClient, selectors
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
@@ -17,13 +19,11 @@ from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest)
-from kafka.protocol.types import Array
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
-from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
-    ACLResourcePatternType
+from kafka.vendor import six
 from kafka.version import __version__
 
 
@@ -1003,39 +1003,39 @@ class KafkaAdminClient(object):
         if response.API_VERSION <= 3:
             assert len(response.groups) == 1
             for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
-                if type(response_field) == Array:
+                if isinstance(response_field, Array):
                     described_groups = response.__dict__[response_name]
                     described_groups_field_schema = response_field.array_of
-                    for described_group  in described_groups:
-                        described_group_information_list = []
-                        is_consumer_protocol_type = False
-                        for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
-                            if group_information_name == 'protocol_type':
-                                protocol_type = described_group_information
-                                is_consumer_protocol_type = (protocol_type == ConsumerProtocol.PROTOCOL_TYPE or not protocol_type)
-                            if type(group_information_field) == Array:
-                                member_information_list = []
-                                member_schema = group_information_field.array_of
-                                for members in described_group_information:
-                                    member_information = []
-                                    for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
-                                        if member_name == 'member_metadata' and is_consumer_protocol_type:
+                    described_group = response.__dict__[response_name][0]
+                    described_group_information_list = []
+                    protocol_type_is_consumer = False
+                    for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
+                        if group_information_name == 'protocol_type':
+                            protocol_type = described_group_information
+                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol.PROTOCOL_TYPE or not protocol_type)
+                        if type(group_information_field) == Array:
+                            member_information_list = []
+                            member_schema = group_information_field.array_of
+                            for members in described_group_information:
+                                member_information = []
+                                for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
+                                    if protocol_type_is_consumer:
+                                        if member_name == 'member_metadata' and member:
                                             member_information.append(ConsumerProtocolMemberMetadata.decode(member))
-                                        elif member_name == 'member_assignment' and is_consumer_protocol_type:
+                                        elif member_name == 'member_assignment' and member:
                                             member_information.append(ConsumerProtocolMemberAssignment.decode(member))
                                         else:
                                             member_information.append(member)
-                                    else:
-                                        member_info_tuple = MemberInformation._make(member_information)
-                                        member_information_list.append(member_info_tuple)
-                                else:
-                                    described_group_information_list.append(member_information_list)
-                            else:
-                                described_group_information_list.append(described_group_information)
+                                member_info_tuple = MemberInformation._make(member_information)
+                                member_information_list.append(member_info_tuple)
+                            described_group_information_list.append(member_information_list)
                         else:
-                            if response.API_VERSION <=2:
-                                described_group_information_list.append([])
-                            group_description = GroupInformation._make(described_group_information_list)
+                            described_group_information_list.append(described_group_information)
+                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field. This will cause the namedtuple to fail
+                    # Therefore, appending a placeholder of None in it.
+                    if response.API_VERSION <=2:
+                        described_group_information_list.append(None)
+                    group_description = GroupInformation._make(described_group_information_list)
             error_code = group_description.error_code
             error_type = Errors.for_code(error_code)
             # Java has the note: KAFKA-6789, we can retry based on the error code
