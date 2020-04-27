@@ -570,7 +570,7 @@ class KafkaAdminClient(object):
                 operation=acl_filter.operation,
                 permission_type=acl_filter.permission_type
             )
-        elif version <= 1:
+        elif version <= 2:
             request = DescribeAclsRequest[version](
                 resource_type=acl_filter.resource_pattern.resource_type,
                 resource_name=acl_filter.resource_pattern.resource_name,
@@ -763,7 +763,7 @@ class KafkaAdminClient(object):
             request = DeleteAclsRequest[version](
                 filters=[self._convert_delete_acls_resource_request_v0(acl) for acl in acl_filters]
             )
-        elif version <= 1:
+        elif version <= 2:
             request = DeleteAclsRequest[version](
                 filters=[self._convert_delete_acls_resource_request_v1(acl) for acl in acl_filters]
             )
