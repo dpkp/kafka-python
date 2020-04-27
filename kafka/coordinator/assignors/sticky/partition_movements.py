@@ -78,9 +78,9 @@ class PartitionMovements:
             movement_pairs = set(movements.keys())
             if self._has_cycles(movement_pairs):
                 log.error(
-                    f"Stickiness is violated for topic {topic}\n"
-                    f"Partition movements for this topic occurred among the following consumer pairs:\n"
-                    f"{movement_pairs}"
+                    "Stickiness is violated for topic {}\n"
+                    "Partition movements for this topic occurred among the following consumer pairs:\n"
+                    "{}".format(topic, movement_pairs)
                 )
                 return False
         return True
@@ -111,7 +111,7 @@ class PartitionMovements:
                 path, cycles
             ):
                 cycles.add(tuple(path))
-                log.error(f"A cycle of length {len(path) - 1} was found: {path}")
+                log.error("A cycle of length {} was found: {}".format(len(path) - 1, path))
 
         # for now we want to make sure there is no partition movements of the same topic between a pair of consumers.
         # the odds of finding a cycle among more than two consumers seem to be very low (according to various randomized
