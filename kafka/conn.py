@@ -24,7 +24,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest
+from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest_v2
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.offset import OffsetRequest
 from kafka.protocol.produce import ProduceRequest
@@ -1169,7 +1169,7 @@ class BrokerConnection(object):
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker version>, <needed struct>)
-            ((2, 5, 0), DescribeAclsRequest[2]),
+            ((2, 5, 0), DescribeAclsRequest_v2),
             ((2, 4, 0), ProduceRequest[8]),
             ((2, 3, 0), FetchRequest[11]),
             ((2, 2, 0), OffsetRequest[5]),
@@ -1180,10 +1180,6 @@ class BrokerConnection(object):
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),
-            # taken from https://github.com/edenhill/librdkafka/blob/master/src/rdkafka_feature.c#L234
-            ((0, 9, 0), ProduceRequest[1]),
-            ((0, 8, 2), OffsetFetchRequest[1]),
-            ((0, 8, 1), OffsetFetchRequest[0]),
         ]
 
         # Get the best match of test cases
