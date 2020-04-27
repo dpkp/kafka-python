@@ -1303,7 +1303,7 @@ class KafkaAdminClient(object):
             Explicitly specifying this can be useful to prevent
             that extra network round trips if you already know the group
             coordinator. Default: None.
-        :return dictionary: A list of tuples (group_id, KafkaError)
+        :return: A list of tuples (group_id, KafkaError)
         """
         if group_coordinator_id is not None:
             futures = [self._delete_consumer_groups_send_request(group_ids, group_coordinator_id)]
