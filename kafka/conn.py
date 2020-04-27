@@ -1180,10 +1180,6 @@ class BrokerConnection(object):
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),
-            # taken from https://github.com/edenhill/librdkafka/blob/master/src/rdkafka_feature.c#L234
-            ((0, 9, 0), ProduceRequest[1]),
-            ((0, 8, 2), OffsetFetchRequest[1]),
-            ((0, 8, 1), OffsetFetchRequest[0]),
         ]
 
         # Get the best match of test cases
