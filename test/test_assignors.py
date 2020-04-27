@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from collections import defaultdict
 from random import randint, sample
-from typing import Set, Dict, List
 
 import pytest
 
@@ -785,7 +784,7 @@ def test_assignment_with_conflicting_previous_generations(mocker, execution_numb
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
 
-def make_member_metadata(subscriptions: Dict[str, Set[str]]):
+def make_member_metadata(subscriptions):
     member_metadata = {}
     for member, topics in subscriptions.items():
         member_metadata[member] = build_metadata(topics, [])
@@ -808,7 +807,7 @@ def assert_assignment(result_assignment, expected_assignment):
         assert result_assignment[member].encode() == expected_assignment[member].encode()
 
 
-def verify_validity_and_balance(subscriptions: Dict[str, Set[str]], assignment):
+def verify_validity_and_balance(subscriptions, assignment):
     """
     Verifies that the given assignment is valid with respect to the given subscriptions
     Validity requirements:
@@ -873,7 +872,7 @@ def verify_validity_and_balance(subscriptions: Dict[str, Set[str]], assignment):
                     )
 
 
-def group_partitions_by_topic(partitions: List[TopicPartition]) -> Dict[str, Set[int]]:
+def group_partitions_by_topic(partitions):
     result = defaultdict(set)
     for p in partitions:
         result[p.topic].add(p.partition)
