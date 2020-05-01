@@ -1013,7 +1013,7 @@ class KafkaAdminClient(object):
                         if group_information_name == 'protocol_type':
                             protocol_type = described_group_information
                             protocol_type_is_consumer = (protocol_type == ConsumerProtocol.PROTOCOL_TYPE or not protocol_type)
-                        if type(group_information_field) == Array:
+                        if isinstance(group_information_field, Array):
                             member_information_list = []
                             member_schema = group_information_field.array_of
                             for members in described_group_information:
