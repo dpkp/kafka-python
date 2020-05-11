@@ -3,7 +3,6 @@ from __future__ import absolute_import, division
 import abc
 import copy
 import logging
-import sys
 import threading
 import time
 import weakref
