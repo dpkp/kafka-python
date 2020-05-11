@@ -2,7 +2,6 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
-import functools
 import logging
 import random
 import socket
