@@ -204,11 +204,16 @@ class KafkaAdminClient(object):
         self._client = KafkaClient(metrics=self._metrics,
                                    metric_group_prefix='admin',
                                    **self.config)
-        self._client.check_version()
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
             self.config['api_version'] = self._client.config['api_version']
+            if self.config['api_version_auto_timeout_ms'] is None:
+                self._client.check_version()
+            else:
+                # check_version timeout is is seconds
+                self._client.check_version(
+                    self.config['api_version_auto_timeout_ms'] / 1000)
 
         self._closed = False
         self._refresh_controller_id()
