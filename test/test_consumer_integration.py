@@ -6,12 +6,21 @@ import pytest
 from kafka.vendor.six.moves import range
 
 import kafka.codec
-from kafka.errors import (
-     KafkaTimeoutError, UnsupportedCodecError, UnsupportedVersionError
-)
+from kafka.errors import UnsupportedCodecError, UnsupportedVersionError
 from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
+
+
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
+def test_kafka_version_infer(kafka_consumer_factory):
+    consumer = kafka_consumer_factory()
+    actual_ver_major_minor = env_kafka_version()[:2]
+    client = consumer._client
+    conn = list(client._conns.values())[0]
+    inferred_ver_major_minor = conn.check_version()[:2]
+    assert actual_ver_major_minor == inferred_ver_major_minor, \
+        "Was expecting inferred broker version to be %s but was %s" % (actual_ver_major_minor, inferred_ver_major_minor)
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")

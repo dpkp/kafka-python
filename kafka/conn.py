@@ -24,9 +24,12 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import SaslHandShakeRequest
+from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest_v2
 from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.offset import OffsetRequest
+from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.types import Int32, Int8
 from kafka.scram import ScramClient
@@ -1166,6 +1169,13 @@ class BrokerConnection(object):
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker version>, <needed struct>)
+            ((2, 5, 0), DescribeAclsRequest_v2),
+            ((2, 4, 0), ProduceRequest[8]),
+            ((2, 3, 0), FetchRequest[11]),
+            ((2, 2, 0), OffsetRequest[5]),
+            ((2, 1, 0), FetchRequest[10]),
+            ((2, 0, 0), FetchRequest[8]),
+            ((1, 1, 0), FetchRequest[7]),
             ((1, 0, 0), MetadataRequest[5]),
             ((0, 11, 0), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
