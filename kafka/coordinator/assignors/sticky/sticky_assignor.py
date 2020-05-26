@@ -643,7 +643,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             )
 
         member_partitions = []
-        for topic, partitions in decoded_user_data.previous_assignment:
+        for topic, partitions in decoded_user_data.previous_assignment:     # pylint: disable=no-member
             member_partitions.extend([TopicPartition(topic, partition) for partition in partitions])
         return StickyAssignorMemberMetadataV1(
             # pylint: disable=no-member
@@ -658,7 +658,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
         else:
             log.debug("Member assignment is available, generating the metadata: generation {}".format(cls.generation))
             partitions_by_topic = defaultdict(list)
-            for topic_partition in cls.member_assignment:
+            for topic_partition in cls.member_assignment:   # pylint: disable=not-an-iterable
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
             data = StickyAssignorUserDataV1(six.iteritems(partitions_by_topic), cls.generation)
             user_data = data.encode()
