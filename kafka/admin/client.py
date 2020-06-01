@@ -21,7 +21,7 @@ from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest, DescribeLogDirsRequest
+    DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest)
 )
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
@@ -1114,6 +1114,62 @@ class KafkaAdminClient(object):
                 "Support for CreatePartitions v{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_controller(request)
+
+    def delete_records(self, records_to_delete, timeout_ms=None):
+        """Delete records whose offset is smaller than the given offset of the corresponding partition.
+
+        :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
+            given partitions.
+
+        :return: List of DeleteRecordsResponse
+        """
+        timeout_ms = self._validate_timeout(timeout_ms)
+        version = self._matching_api_version(MetadataRequest)
+
+        topics = set()
+
+        for topic2partition in records_to_delete:
+            topics.add(topic2partition.topic)
+
+        request = MetadataRequest[version](
+            topics=list(topics),
+            allow_auto_topic_creation=False
+        )
+
+        future = self._send_request_to_node(self._client.least_loaded_node(), request)
+
+        self._wait_for_futures([future])
+        response = future.value
+
+        version = self._matching_api_version(DeleteRecordsRequest)
+
+        PARTITIONS_INFO = 3
+        NAME = 1
+        PARTITION_INDEX = 1
+        LEADER = 2
+
+        partition2leader = dict()
+
+        for topic in response.topics:
+            for partition in topic[PARTITIONS_INFO]:
+                t2p = TopicPartition(topic=topic[NAME], partition=partition[PARTITION_INDEX])
+                partition2leader[t2p] = partition[LEADER]
+
+        responses = []
+
+        for topic2partition in records_to_delete:
+            request = DeleteRecordsRequest[version](
+                topics=[(topic2partition.topic, [(topic2partition.partition, records_to_delete[topic2partition])])],
+                timeout_ms=timeout_ms
+            )
+            # Sending separate request for each partition leader
+            future = self._send_request_to_node(partition2leader[topic2partition], request)
+            self._wait_for_futures([future])
+
+            response = future.value
+            responses.append(response)
+
+        return responses
 
     # delete records protocol not yet implemented
     # Note: send the request to the partition leaders
