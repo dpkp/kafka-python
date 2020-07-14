@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import threading, logging, time
+import threading, time
 
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
@@ -79,8 +79,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # logging.basicConfig(
-        # format='%(asctime)s.%(msecs)s:%(name)s:%(thread)d:%(levelname)s:%(process)d:%(message)s',
-        # level=logging.INFO
-        # )
     main()
