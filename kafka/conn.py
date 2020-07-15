@@ -507,7 +507,8 @@ class BrokerConnection(object):
         # old ssl in python2.6 will swallow all SSLErrors here...
         except (SSLWantReadError, SSLWantWriteError):
             pass
-        except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError, OSError):
+        except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError, ssl.SSLError, OSError) as e:
+            log.exception(e)
             log.warning('SSL connection closed by server during handshake.')
             self.close(Errors.KafkaConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
