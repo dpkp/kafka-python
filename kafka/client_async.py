@@ -634,6 +634,9 @@ class KafkaClient(object):
             self._sensors.select_time.record((end_select - start_select) * 1000000000)
 
         for key, events in ready:
+            if key.fileobj.fileno() < 0:
+                self._selector.unregister(key.fileobj)
+
             if key.fileobj is self._wake_r:
                 self._clear_wake_fd()
                 continue
