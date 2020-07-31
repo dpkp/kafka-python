@@ -293,7 +293,7 @@ class Fetcher(six.Iterator):
                 # Issue #1780
                 # Recheck partition existence after after a successful metadata refresh
                 if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
-                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existance")
+                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existence")
                     unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
                     if self._client.cluster.leader_for_partition(unknown_partition) is None:
                         log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
