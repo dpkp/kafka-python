@@ -450,6 +450,9 @@ class KafkaProducer(object):
     def close(self, timeout=None):
         """Close this producer.
 
+        If a non-zero timeout is passed, this will also attempt to flush the buffer before
+        closing.
+
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
         """
