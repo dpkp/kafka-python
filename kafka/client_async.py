@@ -869,7 +869,7 @@ class KafkaClient(object):
         """
         return self._api_versions
 
-    def check_version(self, node_id=None, timeout=2, strict=False):
+    def check_version(self, node_id=None, timeout=None, strict=False):
         """Attempt to guess the version of a Kafka broker.
 
         Note: It is possible that this method blocks longer than the
@@ -885,6 +885,9 @@ class KafkaClient(object):
             UnrecognizedBrokerVersion: please file bug if seen!
             AssertionError (if strict=True): please file bug if seen!
         """
+        if timeout is None:
+            timeout = self.config['api_version_auto_timeout_ms'] / 1000
+
         self._lock.acquire()
         end = time.time() + timeout
         while time.time() < end:
