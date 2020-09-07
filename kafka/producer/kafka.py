@@ -449,6 +449,14 @@ class KafkaProducer(object):
         self._cleanup = None
 
     def __del__(self):
+        # Disable logger during destruction to avoid touching dangling references
+        class NullLogger(object):
+            def __getattr__(self, name):
+                return lambda *args: None
+
+        global log
+        log = NullLogger()
+
         self.close()
 
     def close(self, timeout=None):
