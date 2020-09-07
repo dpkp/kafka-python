@@ -22,6 +22,7 @@ addons:
   apt:
     packages:
       - libsnappy-dev
+      - libzstd-dev
       - openjdk-8-jdk
 
 cache:
