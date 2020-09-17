@@ -339,7 +339,6 @@ class KafkaAdminClient(object):
             name as a string.
         :return: The node_id of the broker that is the coordinator.
         """
-        # Note: Java may change how this is implemented in KAFKA-6791.
         future = self._find_coordinator_id_send_request(group_id)
         self._wait_for_futures([future])
         response = future.value
@@ -357,7 +356,6 @@ class KafkaAdminClient(object):
         :return: A list of tuples (group_id, node_id) where node_id is the id
             of the broker that is the coordinator for the corresponding group.
         """
-        # Note: Java may change how this is implemented in KAFKA-6791.
         futures = {
             group_id: self._find_coordinator_id_send_request(group_id)
             for group_id in group_ids
