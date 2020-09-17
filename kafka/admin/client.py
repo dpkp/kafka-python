@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 import copy
 import logging
 import socket
@@ -708,7 +708,6 @@ class KafkaAdminClient(object):
         self._wait_for_futures([future])
         response = future.value
 
-
         return self._convert_create_acls_response_to_acls(acls, response)
 
     @staticmethod
@@ -1028,7 +1027,6 @@ class KafkaAdminClient(object):
             assert len(response.groups) == 1
             for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
                 if isinstance(response_field, Array):
-                    described_groups = response.__dict__[response_name]
                     described_groups_field_schema = response_field.array_of
                     described_group = response.__dict__[response_name][0]
                     described_group_information_list = []
@@ -1055,7 +1053,8 @@ class KafkaAdminClient(object):
                             described_group_information_list.append(member_information_list)
                         else:
                             described_group_information_list.append(described_group_information)
-                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field. This will cause the namedtuple to fail
+                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
+                    # This will cause the namedtuple to fail.
                     # Therefore, appending a placeholder of None in it.
                     if response.API_VERSION <=2:
                         described_group_information_list.append(None)
