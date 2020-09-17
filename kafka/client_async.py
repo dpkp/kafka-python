@@ -200,9 +200,13 @@ class KafkaClient(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        # these properties need to be set on top of the initialization pipeline
+        # because they are used when __del__ method is called
         self._closed = False
         self._wake_r, self._wake_w = socket.socketpair()
         self._selector = self.config['selector']()
+
         self.cluster = ClusterMetadata(**self.config)
         self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
