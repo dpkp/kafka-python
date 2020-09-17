@@ -242,63 +242,73 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
 def test_delete_consumergroups(kafka_admin_client, kafka_consumer_factory, send_messages):
+    random_group_id = 'test-group-' + random_string(6)
+    group1 = random_group_id + "_1"
+    group2 = random_group_id + "_2"
+    group3 = random_group_id + "_3"
+
     send_messages(range(0, 100), partition=0)
-    consumer1 = kafka_consumer_factory(group_id="test1-group1")
+    consumer1 = kafka_consumer_factory(group_id=group1)
     next(consumer1)
     consumer1.close()
 
-    consumer2 = kafka_consumer_factory(group_id="test1-group2")
+    consumer2 = kafka_consumer_factory(group_id=group2)
     next(consumer2)
     consumer2.close()
 
-    consumer3 = kafka_consumer_factory(group_id="test1-group3")
+    consumer3 = kafka_consumer_factory(group_id=group3)
     next(consumer3)
     consumer3.close()
 
     consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
-    assert "test1-group1" in consumergroups
-    assert "test1-group2" in consumergroups
-    assert "test1-group3" in consumergroups
+    assert group1 in consumergroups
+    assert group2 in consumergroups
+    assert group3 in consumergroups
 
     delete_results = {
         group_id: error
-        for group_id, error in kafka_admin_client.delete_consumer_groups(["test1-group1", "test1-group2"])
+        for group_id, error in kafka_admin_client.delete_consumer_groups([group1, group2])
     }
-    assert delete_results["test1-group1"] == NoError
-    assert delete_results["test1-group2"] == NoError
-    assert "test1-group3" not in delete_results
+    assert delete_results[group1] == NoError
+    assert delete_results[group2] == NoError
+    assert group3 not in delete_results
 
     consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
-    assert "test1-group1" not in consumergroups
-    assert "test1-group2" not in consumergroups
-    assert "test1-group3" in consumergroups
+    assert group1 not in consumergroups
+    assert group2 not in consumergroups
+    assert group3 in consumergroups
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
 def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_factory, send_messages):
+    random_group_id = 'test-group-' + random_string(6)
+    group1 = random_group_id + "_1"
+    group2 = random_group_id + "_2"
+    group3 = random_group_id + "_3"
+
     send_messages(range(0, 100), partition=0)
-    consumer1 = kafka_consumer_factory(group_id="test2-group1")
+    consumer1 = kafka_consumer_factory(group_id=group1)
     next(consumer1)
     consumer1.close()
 
-    consumer2 = kafka_consumer_factory(group_id="test2-group2")
+    consumer2 = kafka_consumer_factory(group_id=group2)
     next(consumer2)
 
     consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
-    assert "test2-group1" in consumergroups
-    assert "test2-group2" in consumergroups
-    assert "test2-group3" not in consumergroups
+    assert group1 in consumergroups
+    assert group2 in consumergroups
+    assert group3 not in consumergroups
 
     delete_results = {
         group_id: error
-        for group_id, error in kafka_admin_client.delete_consumer_groups(["test2-group1", "test2-group2", "test2-group3"])
+        for group_id, error in kafka_admin_client.delete_consumer_groups([group1, group2, group3])
     }
 
-    assert delete_results["test2-group1"] == NoError
-    assert delete_results["test2-group2"] == NonEmptyGroupError
-    assert delete_results["test2-group3"] == GroupIdNotFoundError
+    assert delete_results[group1] == NoError
+    assert delete_results[group2] == NonEmptyGroupError
+    assert delete_results[group3] == GroupIdNotFoundError
 
     consumergroups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
-    assert "test2-group1" not in consumergroups
-    assert "test2-group2" in consumergroups
-    assert "test2-group3" not in consumergroups
+    assert group1 not in consumergroups
+    assert group2 in consumergroups
+    assert group3 not in consumergroups
