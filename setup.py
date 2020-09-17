@@ -39,6 +39,7 @@ setup(
         "crc32c": ["crc32c"],
         "lz4": ["lz4"],
         "snappy": ["python-snappy"],
+        "zstandard": ["python-zstandard"],
     },
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),
