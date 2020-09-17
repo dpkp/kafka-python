@@ -13,5 +13,5 @@ pylint==2.5.3
 pytest-pylint==0.17.0
 pytest-mock==1.10.0
 sphinx-rtd-theme==0.2.4
-crc32c==1.7
+crc32c==2.1
 py==1.8.0
