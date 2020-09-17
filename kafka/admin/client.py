@@ -6,6 +6,7 @@ import logging
 import socket
 
 from . import ConfigResourceType
+from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType
@@ -23,7 +24,6 @@ from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
-from kafka.vendor import six
 from kafka.version import __version__
 
 
