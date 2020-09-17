@@ -35,6 +35,7 @@ setup(
     version=__version__,
 
     tests_require=test_require,
+    extras_require={"crc32c": ["crc32c"]},
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),
     author="Dana Powers",
@@ -56,6 +57,7 @@ setup(
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ]

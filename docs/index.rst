@@ -122,11 +122,12 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
-To enable snappy, install python-snappy (also requires snappy library).
-See `Installation <install.html#optional-snappy-install>`_ for more information.
+kafka-python supports multiple compression types:
 
+ - gzip : supported natively
+ - lz4 : requires `python-lz4 <https://pypi.org/project/lz4/>`_ installed
+ - snappy : requires the `python-snappy <https://pypi.org/project/python-snappy/>`_  package (which requires the snappy C library)
+ - zstd : requires the `python-zstandard <https://github.com/indygreg/python-zstandard>`_ package installed
 
 Protocol
 ********
