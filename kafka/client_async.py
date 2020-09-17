@@ -210,7 +210,6 @@ class KafkaClient(object):
         self.cluster = ClusterMetadata(**self.config)
         self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
-
         self._conns = Dict()  # object to support weakrefs
         self._api_versions = None
         self._connecting = set()
@@ -218,7 +217,6 @@ class KafkaClient(object):
         self._refresh_on_disconnects = True
         self._last_bootstrap = 0
         self._bootstrap_fails = 0
-
         self._wake_r.setblocking(False)
         self._wake_w.settimeout(self.config['wakeup_timeout_ms'] / 1000.0)
         self._wake_lock = threading.Lock()
@@ -232,7 +230,6 @@ class KafkaClient(object):
 
         self._selector.register(self._wake_r, selectors.EVENT_READ)
         self._idle_expiry_manager = IdleConnectionManager(self.config['connections_max_idle_ms'])
-
         self._sensors = None
         if self.config['metrics']:
             self._sensors = KafkaClientMetrics(self.config['metrics'],
