@@ -6,12 +6,12 @@ import functools
 import logging
 import time
 
-from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.vendor import six
 
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
 import kafka.errors as Errors
 from kafka.future import Future
