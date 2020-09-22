@@ -665,13 +665,21 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
         return ConsumerProtocolMemberMetadata(cls.version, list(topics), user_data)
 
     @classmethod
-    def on_assignment(cls, assignment, generation):
+    def on_assignment(cls, assignment):
         """Callback that runs on each assignment. Updates assignor's state.
 
         Arguments:
           assignment: MemberAssignment
-          generation: generation id (if present)
         """
-        log.debug("On assignment: assignment={}, generation={}".format(assignment, generation))
+        log.debug("On assignment: assignment={}".format(assignment))
         cls.member_assignment = assignment.partitions()
+
+    @classmethod
+    def on_generation_assignment(cls, generation):
+        """Callback that runs on each assignment. Updates assignor's generation id.
+
+        Arguments:
+          generation: generation id
+        """
+        log.debug("On generation assignment: generation={}".format(generation))
         cls.generation = generation
