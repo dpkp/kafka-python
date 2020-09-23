@@ -2,11 +2,10 @@ import logging
 from collections import defaultdict, namedtuple
 from copy import deepcopy
 
-from sortedcontainers import SortedSet, SortedDict, SortedList
-
 from kafka.cluster import ClusterMetadata
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.assignors.sticky.partition_movements import PartitionMovements
+from kafka.coordinator.assignors.sticky.sorted_set import SortedSet
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
 from kafka.coordinator.protocol import Schema
 from kafka.protocol.struct import Struct
@@ -82,7 +81,7 @@ class StickyAssignmentExecutor:
         # a mapping of all consumers to all potential topic partitions that can be assigned to them
         self.consumer_to_all_potential_partitions = {}
         # an ascending sorted set of consumers based on how many topic partitions are already assigned to them
-        self.sorted_current_subscriptions = set()
+        self.sorted_current_subscriptions = SortedSet()
         # an ascending sorted list of topic partitions based on how many consumers can potentially use them
         self.sorted_partitions = []
         # all partitions that need to be assigned
@@ -154,9 +153,10 @@ class StickyAssignmentExecutor:
             self._add_consumer_to_current_subscriptions_and_maintain_order(consumer)
 
     def get_final_assignment(self, member_id):
-        assignment = defaultdict(lambda: SortedList())
+        assignment = defaultdict(list)
         for topic_partition in self.current_assignment[member_id]:
-            assignment[topic_partition.topic].add(topic_partition.partition)
+            assignment[topic_partition.topic].append(topic_partition.partition)
+        assignment = {k: sorted(v) for k, v in six.iteritems(assignment)}
         return six.viewitems(assignment)
 
     def _initialize(self, cluster):
@@ -188,7 +188,7 @@ class StickyAssignmentExecutor:
         # higher generations overwrite lower generations in case of a conflict
         # note that a conflict could exists only if user data is for different generations
 
-        # for each partition we create a sorted map of its consumers by generation
+        # for each partition we create a map of its consumers by generation
         sorted_partition_consumers_by_generation = {}
         for consumer, member_metadata in six.iteritems(members):
             for partitions in member_metadata.partitions:
@@ -204,14 +204,13 @@ class StickyAssignmentExecutor:
                     else:
                         consumers[member_metadata.generation] = consumer
                 else:
-                    sorted_consumers = SortedDict()
-                    sorted_consumers[member_metadata.generation] = consumer
+                    sorted_consumers = {member_metadata.generation: consumer}
                     sorted_partition_consumers_by_generation[partitions] = sorted_consumers
 
         # previous_assignment holds the prior ConsumerGenerationPair (before current) of each partition
         # current and previous consumers are the last two consumers of each partition in the above sorted map
         for partitions, consumers in six.iteritems(sorted_partition_consumers_by_generation):
-            generations = list(reversed(consumers.keys()))
+            generations = sorted(consumers.keys(), reverse=True)
             self.current_assignment[consumers[generations[0]]].append(partitions)
             # now update previous assignment if any
             if len(generations) > 1:
@@ -236,13 +235,10 @@ class StickyAssignmentExecutor:
         return has_identical_list_elements(list(six.itervalues(self.consumer_to_all_potential_partitions)))
 
     def _populate_sorted_partitions(self):
-        # an ascending sorted set of topic partitions based on how many consumers can potentially use them
-        sorted_all_partitions = SortedSet(
-            iterable=[
-                (tp, tuple(consumers)) for tp, consumers in six.iteritems(self.partition_to_all_potential_consumers)
-            ],
-            key=partitions_comparator_key,
-        )
+        # set of topic partitions with their respective potential consumers
+        all_partitions = set((tp, tuple(consumers))
+                             for tp, consumers in six.iteritems(self.partition_to_all_potential_consumers))
+        partitions_sorted_by_num_of_potential_consumers = sorted(all_partitions, key=partitions_comparator_key)
 
         self.sorted_partitions = []
         if not self.is_fresh_assignment and self._are_subscriptions_identical():
@@ -266,7 +262,7 @@ class StickyAssignmentExecutor:
             # how many valid partitions are currently assigned to them
             while sorted_consumers:
                 # take the consumer with the most partitions
-                consumer, _ = sorted_consumers.pop()
+                consumer, _ = sorted_consumers.pop_last()
                 # currently assigned partitions to this consumer
                 remaining_partitions = assignments[consumer]
                 # from partitions that had a different consumer before,
@@ -284,13 +280,13 @@ class StickyAssignmentExecutor:
                     self.sorted_partitions.append(remaining_partitions.pop())
                     sorted_consumers.add((consumer, tuple(assignments[consumer])))
 
-            while sorted_all_partitions:
-                partition = sorted_all_partitions.pop(0)[0]
+            while partitions_sorted_by_num_of_potential_consumers:
+                partition = partitions_sorted_by_num_of_potential_consumers.pop(0)[0]
                 if partition not in self.sorted_partitions:
                     self.sorted_partitions.append(partition)
         else:
-            while sorted_all_partitions:
-                self.sorted_partitions.append(sorted_all_partitions.pop(0)[0])
+            while partitions_sorted_by_num_of_potential_consumers:
+                self.sorted_partitions.append(partitions_sorted_by_num_of_potential_consumers.pop(0)[0])
 
     def _populate_partitions_to_reassign(self):
         self.unassigned_partitions = deepcopy(self.sorted_partitions)
@@ -334,10 +330,10 @@ class StickyAssignmentExecutor:
         )
 
     def _get_consumer_with_least_subscriptions(self):
-        return self.sorted_current_subscriptions[0][0]
+        return self.sorted_current_subscriptions.first()[0]
 
     def _get_consumer_with_most_subscriptions(self):
-        return self.sorted_current_subscriptions[-1][0]
+        return self.sorted_current_subscriptions.last()[0]
 
     def _remove_consumer_from_current_subscriptions_and_maintain_order(self, consumer):
         self.sorted_current_subscriptions.remove((consumer, tuple(self.current_assignment[consumer])))
