@@ -151,8 +151,8 @@ class KafkaAdminClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
+        socks5_proxy (str): Socks5 proxy url. Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
-
     """
     DEFAULT_CONFIG = {
         # client configs
@@ -188,6 +188,7 @@ class KafkaAdminClient(object):
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
 
         # metrics configs
         'metric_reporters': [],

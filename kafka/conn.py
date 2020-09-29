@@ -36,6 +36,7 @@ from kafka.protocol.sasl_authenticate import SaslAuthenticateRequest
 from kafka.protocol.sasl_handshake import SaslHandshakeRequest
 from kafka.protocol.types import Int32
 from kafka.sasl import get_sasl_mechanism
+from kafka.socks5_wrapper import Socks5Wrapper
 from kafka.version import __version__
 
 
@@ -185,6 +186,7 @@ class BrokerConnection(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
+        socks5_proxy (str): Socks5 proxy url. Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -220,7 +222,8 @@ class BrokerConnection(object):
         'sasl_kerberos_name': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
     VERSION_CHECKS = (
@@ -241,6 +244,7 @@ class BrokerConnection(object):
         self._check_version_idx = None
         self._api_versions_idx = 2
         self._throttle_time = None
+        self._socks5_proxy = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -362,7 +366,11 @@ class BrokerConnection(object):
                 assert self._sock is None
                 self._sock_afi, self._sock_addr = next_lookup
                 try:
-                    self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
+                    if self.config["socks5_proxy"] is not None:
+                        self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
+                        self._sock = self._socks5_proxy.socket(self._sock_afi, socket.SOCK_STREAM)
+                    else:
+                        self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
                 except (socket.error, OSError) as e:
                     self.close(e)
                     return self.state
@@ -382,7 +390,10 @@ class BrokerConnection(object):
             # to check connection status
             ret = None
             try:
-                ret = self._sock.connect_ex(self._sock_addr)
+                if self._socks5_proxy:
+                    ret = self._socks5_proxy.connect_ex(self._sock_addr)
+                else:
+                    ret = self._sock.connect_ex(self._sock_addr)
             except socket.error as err:
                 ret = err.errno
 

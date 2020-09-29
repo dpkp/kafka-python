@@ -173,6 +173,7 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
+        socks5_proxy (str): Socks5 proxy URL. Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -213,7 +214,8 @@ class KafkaClient(object):
         'sasl_kerberos_name': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
     }
 
     def __init__(self, **configs):

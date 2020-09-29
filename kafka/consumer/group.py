@@ -260,6 +260,7 @@ class KafkaConsumer(six.Iterator):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
+        socks5_proxy (str): Socks5 proxy URL. Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
@@ -325,6 +326,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
         'kafka_client': KafkaClient,
     }
