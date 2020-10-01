@@ -14,7 +14,7 @@ Kafka Python client
 
 Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
-sprinkling of pythonic interfaces (e.g., consumer iterators).
+sprinkling of pythonic interfaces (Example : consumer iterators).
 
 kafka-python is best used with newer brokers (0.9+), but is backwards-compatible with
 older versions (to 0.8.0). Some features will only be enabled on newer brokers.
