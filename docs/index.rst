@@ -33,6 +33,7 @@ documentation, please see readthedocs and/or python's inline help.
 
 >>> pip install kafka-python
 
+
 KafkaConsumer
 *************
 
@@ -122,12 +123,26 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports multiple compression types:
+kafka-python supports the following compression formats:
 
- - gzip : supported natively
- - lz4 : requires `python-lz4 <https://pypi.org/project/lz4/>`_ installed
- - snappy : requires the `python-snappy <https://pypi.org/project/python-snappy/>`_  package (which requires the snappy C library)
- - zstd : requires the `python-zstandard <https://github.com/indygreg/python-zstandard>`_ package installed
+ - gzip
+ - LZ4
+ - Snappy
+ - Zstandard (zstd)
+
+gzip is supported natively, the others require installing additional libraries.
+See `Install <install.html>`_ for more information.
+
+
+Optimized CRC32 Validation
+**************************
+
+Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+python implementation for compatibility. To improve performance for high-throughput
+applications, kafka-python will use `crc32c` for optimized native code if installed.
+See `Install <install.html>`_ for installation instructions and
+https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
+
 
 Protocol
 ********
