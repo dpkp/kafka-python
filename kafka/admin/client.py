@@ -10,7 +10,7 @@ from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType
-from kafka.client_async import KafkaClient, selectors
+from kafka.client_async import selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
@@ -26,6 +26,7 @@ from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
+from kafka.util import get_client_factory
 from kafka.version import __version__
 
 
@@ -146,6 +147,7 @@ class KafkaAdminClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        client_factory (callable): Custom class / callable for creating KafkaClient instances
 
     """
     DEFAULT_CONFIG = {
@@ -186,6 +188,7 @@ class KafkaAdminClient(object):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'client_factory': None,
     }
 
     def __init__(self, **configs):
@@ -205,9 +208,11 @@ class KafkaAdminClient(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        self._client = KafkaClient(metrics=self._metrics,
-                                   metric_group_prefix='admin',
-                                   **self.config)
+        self._client = get_client_factory(self.config)(
+            metrics=self._metrics,
+            metric_group_prefix='admin',
+            **self.config
+        )
         self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
 
         # Get auto-discovered version from client if necessary

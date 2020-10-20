@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import binascii
+import kafka
 import weakref
 
 from kafka.vendor import six
@@ -64,3 +65,12 @@ class Dict(dict):
     See: https://docs.python.org/2/library/weakref.html
     """
     pass
+
+
+def get_client_factory(config):
+    if config.get('client_factory') is not None:
+        client_factory = config['client_factory']
+        assert callable(client_factory), "'client_factory' should be a callable or None, is {}".format(type(client_factory))
+    else:
+        client_factory = kafka.client_async.KafkaClient
+    return client_factory

@@ -11,7 +11,7 @@ import weakref
 from kafka.vendor import six
 
 import kafka.errors as Errors
-from kafka.client_async import KafkaClient, selectors
+from kafka.client_async import selectors
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd
 from kafka.metrics import MetricConfig, Metrics
 from kafka.partitioner.default import DefaultPartitioner
@@ -22,6 +22,7 @@ from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
 from kafka.structs import TopicPartition
+from kafka.util import get_client_factory
 
 
 log = logging.getLogger(__name__)
@@ -280,6 +281,7 @@ class KafkaProducer(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        client_factory (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -332,7 +334,8 @@ class KafkaProducer(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'client_factory': None,
     }
 
     _COMPRESSORS = {
@@ -378,9 +381,10 @@ class KafkaProducer(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
-                             wakeup_timeout_ms=self.config['max_block_ms'],
-                             **self.config)
+        client = get_client_factory(self.config)(
+            metrics=self._metrics, metric_group_prefix='producer',
+            wakeup_timeout_ms=self.config['max_block_ms'],
+            **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
