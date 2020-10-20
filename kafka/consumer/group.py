@@ -244,6 +244,7 @@ class KafkaConsumer(six.Iterator):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -306,6 +307,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
+        'kafka_client': KafkaClient,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -353,7 +355,7 @@ class KafkaConsumer(six.Iterator):
             log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
                         str(self.config['api_version']), str_version)
 
-        self._client = KafkaClient(metrics=self._metrics, **self.config)
+        self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
