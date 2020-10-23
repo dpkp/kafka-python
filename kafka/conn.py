@@ -363,6 +363,7 @@ class BrokerConnection(object):
             next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
                 self.close(Errors.KafkaConnectionError('DNS failure'))
+                self.config['state_change_callback'](self.node_id, self._sock, self)
                 return self.state
             else:
                 log.debug('%s: creating new socket', self)
