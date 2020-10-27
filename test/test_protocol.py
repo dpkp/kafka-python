@@ -9,7 +9,7 @@ from kafka.protocol.commit import GroupCoordinatorRequest
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.message import Message, MessageSet, PartialMessage
 from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.types import Int16, Int32, Int64, String
+from kafka.protocol.types import Int16, Int32, Int64, String, UnsignedVarInt32, CompactString, CompactArray, CompactBytes
 
 
 def test_create_message():
@@ -282,3 +282,55 @@ def test_struct_unrecognized_kwargs():
 def test_struct_missing_kwargs():
     fr = FetchRequest[0](max_wait_time=100)
     assert fr.min_bytes is None
+
+
+def test_unsigned_varint_serde():
+    pairs = {
+        0: [0],
+        -1: [0xff, 0xff, 0xff, 0xff, 0x0f],
+        1: [1],
+        63: [0x3f],
+        -64: [0xc0, 0xff, 0xff, 0xff, 0x0f],
+        64: [0x40],
+        8191: [0xff, 0x3f],
+        -8192: [0x80, 0xc0, 0xff, 0xff, 0x0f],
+        8192: [0x80, 0x40],
+        -8193: [0xff, 0xbf, 0xff, 0xff, 0x0f],
+        1048575: [0xff, 0xff, 0x3f],
+
+    }
+    for value, expected_encoded in pairs.items():
+        value &= 0xffffffff
+        encoded = UnsignedVarInt32.encode(value)
+        assert encoded == b''.join(struct.pack('>B', x) for x in expected_encoded)
+        assert value == UnsignedVarInt32.decode(io.BytesIO(encoded))
+
+
+def test_compact_data_structs():
+    cs = CompactString()
+    encoded = cs.encode(None)
+    assert encoded == struct.pack('B', 0)
+    decoded = cs.decode(io.BytesIO(encoded))
+    assert decoded is None
+    assert b'\x01' == cs.encode('')
+    assert '' == cs.decode(io.BytesIO(b'\x01'))
+    encoded = cs.encode("foobarbaz")
+    assert cs.decode(io.BytesIO(encoded)) == "foobarbaz"
+
+    arr = CompactArray(CompactString())
+    assert arr.encode(None) == b'\x00'
+    assert arr.decode(io.BytesIO(b'\x00')) is None
+    enc = arr.encode([])
+    assert enc == b'\x01'
+    assert [] == arr.decode(io.BytesIO(enc))
+    encoded = arr.encode(["foo", "bar", "baz", "quux"])
+    assert arr.decode(io.BytesIO(encoded)) == ["foo", "bar", "baz", "quux"]
+
+    enc = CompactBytes.encode(None)
+    assert enc == b'\x00'
+    assert CompactBytes.decode(io.BytesIO(b'\x00')) is None
+    enc = CompactBytes.encode(b'')
+    assert enc == b'\x01'
+    assert CompactBytes.decode(io.BytesIO(b'\x01')) is b''
+    enc = CompactBytes.encode(b'foo')
+    assert CompactBytes.decode(io.BytesIO(enc)) == b'foo'

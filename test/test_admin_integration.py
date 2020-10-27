@@ -5,9 +5,11 @@ from test.testutil import env_kafka_version, random_string
 from threading import Event, Thread
 from time import time, sleep
 
+from kafka import TopicPartition
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 from kafka.errors import (NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, GroupIdNotFoundError)
+from kafka.protocol.admin import ListPartitionReassignmentsResponse_v0
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
@@ -312,3 +314,10 @@ def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_fa
     assert group1 not in consumergroups
     assert group2 in consumergroups
     assert group3 not in consumergroups
+
+
+@pytest.mark.skipif(env_kafka_version() < (2, 6), reason="ListPartitionReassignments requires broker >=2.6")
+def test_list_partition_reassignments(kafka_admin_client):
+    topic_partitions = [TopicPartition("foo", 0), TopicPartition("bar", 1)]
+    response = kafka_admin_client.list_partition_reassignments(topic_partitions, 10000)
+    assert isinstance(response, ListPartitionReassignmentsResponse_v0)

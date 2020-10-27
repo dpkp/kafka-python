@@ -1,6 +1,9 @@
 from __future__ import absolute_import
 
 import binascii
+import json
+import os
+import re
 import weakref
 
 from kafka.vendor import six
@@ -64,3 +67,31 @@ class Dict(dict):
     See: https://docs.python.org/2/library/weakref.html
     """
     pass
+
+
+def parse_flexible_versions(root_dir):
+    """Reads all the json files in a given folder and outputs a dictionary
+    mapping api keys to minimum flexible version. To be used on the resources/common/message
+    folder in the kafka java repository"""
+    valid_version_re = re.compile(r"(\d+)\+?")
+    all_files = os.listdir(root_dir)
+    ret = {}
+    for f in all_files:
+        full_path = os.path.join(root_dir, f)
+        if not os.path.isfile(full_path):
+            continue
+        if not full_path.endswith(".json"):
+            continue
+        with open(full_path) as data_file:
+            data = data_file.read()
+        data = re.sub(r'\\\n', '', data)
+        data = re.sub(r'//.*\n', '\n', data)
+        data = json.loads(data)
+        if "apiKey" not in data or "flexibleVersions" not in data:
+            continue
+        api_key = data["apiKey"]
+        flexible_versions = data["flexibleVersions"]
+        matches = valid_version_re.findall(flexible_versions)
+        if matches:
+            ret[int(api_key)] = int(matches[0])
+    return ret
