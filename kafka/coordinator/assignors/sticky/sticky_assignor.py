@@ -656,7 +656,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             partitions_by_topic = defaultdict(list)
             for topic_partition in cls.member_assignment:   # pylint: disable=not-an-iterable
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
-            data = StickyAssignorUserDataV1(six.iteritems(partitions_by_topic), cls.generation)
+            data = StickyAssignorUserDataV1(six.viewitems(partitions_by_topic), cls.generation)
             user_data = data.encode()
         return ConsumerProtocolMemberMetadata(cls.version, list(topics), user_data)
 
