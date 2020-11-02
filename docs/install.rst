@@ -31,6 +31,14 @@ To enable LZ4 compression/decompression, install python-lz4:
 >>> pip install lz4
 
 
+Optional crc32c install
+********************
+
+To enable optimized CRC32 checksum validation, install crc32c:
+
+>>> pip install crc32c
+
+
 Optional Snappy install
 ***********************
 

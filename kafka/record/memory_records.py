@@ -37,6 +37,8 @@ class MemoryRecords(ABCRecords):
     # Minimum space requirements for Record V0
     MIN_SLICE = LOG_OVERHEAD + LegacyRecordBatch.RECORD_OVERHEAD_V0
 
+    __slots__ = ("_buffer", "_pos", "_next_slice", "_remaining_bytes")
+
     def __init__(self, bytes_data):
         self._buffer = bytes_data
         self._pos = 0
@@ -110,9 +112,12 @@ class MemoryRecords(ABCRecords):
 
 class MemoryRecordsBuilder(object):
 
+    __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
+                 "_bytes_written")
+
     def __init__(self, magic, compression_type, batch_size):
         assert magic in [0, 1, 2], "Not supported magic"
-        assert compression_type in [0, 1, 2, 3], "Not valid compression type"
+        assert compression_type in [0, 1, 2, 3, 4], "Not valid compression type"
         if magic >= 2:
             self._builder = DefaultRecordBatchBuilder(
                 magic=magic, compression_type=compression_type,

@@ -1,7 +1,7 @@
 kafka-python
 ############
 
-.. image:: https://img.shields.io/badge/kafka-1.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-2.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -122,11 +122,12 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
-To enable snappy, install python-snappy (also requires snappy library).
-See `Installation <install.html#optional-snappy-install>`_ for more information.
+kafka-python supports multiple compression types:
 
+ - gzip : supported natively
+ - lz4 : requires `python-lz4 <https://pypi.org/project/lz4/>`_ installed
+ - snappy : requires the `python-snappy <https://pypi.org/project/python-snappy/>`_  package (which requires the snappy C library)
+ - zstd : requires the `python-zstandard <https://github.com/indygreg/python-zstandard>`_ package installed
 
 Protocol
 ********
@@ -136,14 +137,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 1.1+).
-
-
-Low-level
-*********
-
-Legacy support is maintained for low-level consumer and producer classes,
-SimpleConsumer and SimpleProducer.
+attempts to identify which version it is running (0.8.0 to 2.4+).
 
 
 .. toctree::
@@ -152,7 +146,6 @@ SimpleConsumer and SimpleProducer.
 
    Usage Overview <usage>
    API </apidoc/modules>
-   Simple Clients [deprecated] <simple>
    install
    tests
    compatibility

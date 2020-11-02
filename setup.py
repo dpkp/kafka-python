@@ -7,6 +7,7 @@ from setuptools import setup, Command, find_packages
 # since we can't import something we haven't built yet :)
 exec(open('kafka/version.py').read())
 
+
 class Tox(Command):
 
     user_options = []
@@ -24,8 +25,6 @@ class Tox(Command):
 
 
 test_require = ['tox', 'mock']
-if sys.version_info < (2, 7):
-    test_require.append('unittest2')
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,6 +36,7 @@ setup(
     version=__version__,
 
     tests_require=test_require,
+    extras_require={"crc32c": ["crc32c"]},
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),
     author="Dana Powers",
@@ -57,6 +57,8 @@ setup(
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ]

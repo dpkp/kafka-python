@@ -105,8 +105,9 @@ class Sender(threading.Thread):
         # remove any nodes we aren't ready to send to
         not_ready_timeout = float('inf')
         for node in list(ready_nodes):
-            if not self._client.ready(node):
+            if not self._client.is_ready(node):
                 log.debug('Node %s not ready; delaying produce of accumulated batch', node)
+                self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
                 not_ready_timeout = min(not_ready_timeout,
                                         self._client.connection_delay(node))
@@ -144,7 +145,7 @@ class Sender(threading.Thread):
         for node_id, request in six.iteritems(requests):
             batches = batches_by_node[node_id]
             log.debug('Sending Produce Request: %r', request)
-            (self._client.send(node_id, request)
+            (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
                      self._handle_produce_response, node_id, time.time(), batches)
                  .add_errback(
@@ -156,7 +157,7 @@ class Sender(threading.Thread):
         # difference between now and its linger expiry time; otherwise the
         # select time will be the time difference between now and the
         # metadata expiry time
-        self._client.poll(poll_timeout_ms)
+        self._client.poll(timeout_ms=poll_timeout_ms)
 
     def initiate_close(self):
         """Start closing the sender (won't complete until all data is sent)."""
@@ -194,15 +195,22 @@ class Sender(threading.Thread):
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
+                    global_error = None
+                    log_start_offset = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
-                    else:
+                    elif 2 <= response.API_VERSION <= 4:
                         partition, error_code, offset, ts = partition_info
+                    elif 5 <= response.API_VERSION <= 7:
+                        partition, error_code, offset, ts, log_start_offset = partition_info
+                    else:
+                        # the ignored parameter is record_error of type list[(batch_index: int, error_message: str)]
+                        partition, error_code, offset, ts, log_start_offset, _, global_error = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, ts)
+                    self._complete_batch(batch, error, offset, ts, log_start_offset, global_error)
 
             if response.API_VERSION > 0:
                 self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
@@ -212,7 +220,7 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, None, -1, None)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None, global_error=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -220,6 +228,8 @@ class Sender(threading.Thread):
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
+            log_start_offset (int): The start offset of the log at the time this produce response was created
+            global_error (str): The summarising error message
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -231,7 +241,7 @@ class Sender(threading.Thread):
                         " retrying (%d attempts left). Error: %s",
                         batch.topic_partition,
                         self.config['retries'] - batch.attempts - 1,
-                        error)
+                        global_error or error)
             self._accumulator.reenqueue(batch)
             self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
         else:
@@ -239,7 +249,7 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, timestamp_ms, error)
+            batch.done(base_offset, timestamp_ms, error, log_start_offset, global_error)
             self._accumulator.deallocate(batch)
             if error is not None:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
@@ -292,7 +302,15 @@ class Sender(threading.Thread):
             produce_records_by_partition[topic][partition] = buf
 
         kwargs = {}
-        if self.config['api_version'] >= (0, 11):
+        if self.config['api_version'] >= (2, 1):
+            version = 7
+        elif self.config['api_version'] >= (2, 0):
+            version = 6
+        elif self.config['api_version'] >= (1, 1):
+            version = 5
+        elif self.config['api_version'] >= (1, 0):
+            version = 4
+        elif self.config['api_version'] >= (0, 11):
             version = 3
             kwargs = dict(transactional_id=None)
         elif self.config['api_version'] >= (0, 10):
@@ -313,6 +331,9 @@ class Sender(threading.Thread):
     def wakeup(self):
         """Wake up the selector associated with this send thread."""
         self._client.wakeup()
+
+    def bootstrap_connected(self):
+        return self._client.bootstrap_connected()
 
 
 class SenderMetrics(object):

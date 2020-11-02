@@ -148,7 +148,7 @@ class SubscriptionState(object):
             topics (list of str): topics for subscription
 
         Raises:
-            IllegalStateErrror: if assign_from_user has been used already
+            IllegalStateError: if assign_from_user has been used already
             TypeError: if a topic is None or a non-str
             ValueError: if a topic is an empty string or
                         - a topic name is '.' or '..' or
@@ -374,7 +374,7 @@ class SubscriptionState(object):
 
 class TopicPartitionState(object):
     def __init__(self):
-        self.committed = None # last committed position
+        self.committed = None # last committed OffsetAndMetadata
         self.has_valid_position = False # whether we have valid position
         self.paused = False # whether this partition has been paused by the user
         self.awaiting_reset = False # whether we are awaiting reset
@@ -382,6 +382,9 @@ class TopicPartitionState(object):
         self._position = None # offset exposed to the user
         self.highwater = None
         self.drop_pending_message_set = False
+        # The last message offset hint available from a message batch with
+        # magic=2 which includes deleted compacted messages
+        self.last_offset_from_message_batch = None
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -396,6 +399,7 @@ class TopicPartitionState(object):
         self.awaiting_reset = True
         self.reset_strategy = strategy
         self._position = None
+        self.last_offset_from_message_batch = None
         self.has_valid_position = False
 
     def seek(self, offset):
@@ -404,6 +408,7 @@ class TopicPartitionState(object):
         self.reset_strategy = None
         self.has_valid_position = True
         self.drop_pending_message_set = True
+        self.last_offset_from_message_batch = None
 
     def pause(self):
         self.paused = True

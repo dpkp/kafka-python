@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Schema, String
+from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String
 
 
 class ApiVersionResponse_v0(Response):
@@ -29,6 +29,12 @@ class ApiVersionResponse_v1(Response):
     )
 
 
+class ApiVersionResponse_v2(Response):
+    API_KEY = 18
+    API_VERSION = 2
+    SCHEMA = ApiVersionResponse_v1.SCHEMA
+
+
 class ApiVersionRequest_v0(Request):
     API_KEY = 18
     API_VERSION = 0
@@ -43,8 +49,19 @@ class ApiVersionRequest_v1(Request):
     SCHEMA = ApiVersionRequest_v0.SCHEMA
 
 
-ApiVersionRequest = [ApiVersionRequest_v0, ApiVersionRequest_v1]
-ApiVersionResponse = [ApiVersionResponse_v0, ApiVersionResponse_v1]
+class ApiVersionRequest_v2(Request):
+    API_KEY = 18
+    API_VERSION = 2
+    RESPONSE_TYPE = ApiVersionResponse_v1
+    SCHEMA = ApiVersionRequest_v0.SCHEMA
+
+
+ApiVersionRequest = [
+    ApiVersionRequest_v0, ApiVersionRequest_v1, ApiVersionRequest_v2,
+]
+ApiVersionResponse = [
+    ApiVersionResponse_v0, ApiVersionResponse_v1, ApiVersionResponse_v2,
+]
 
 
 class CreateTopicsResponse_v0(Response):
@@ -78,6 +95,11 @@ class CreateTopicsResponse_v2(Response):
             ('error_code', Int16),
             ('error_message', String('utf-8'))))
     )
+
+class CreateTopicsResponse_v3(Response):
+    API_KEY = 19
+    API_VERSION = 3
+    SCHEMA = CreateTopicsResponse_v2.SCHEMA
 
 
 class CreateTopicsRequest_v0(Request):
@@ -126,11 +148,20 @@ class CreateTopicsRequest_v2(Request):
     SCHEMA = CreateTopicsRequest_v1.SCHEMA
 
 
+class CreateTopicsRequest_v3(Request):
+    API_KEY = 19
+    API_VERSION = 3
+    RESPONSE_TYPE = CreateTopicsResponse_v3
+    SCHEMA = CreateTopicsRequest_v1.SCHEMA
+
+
 CreateTopicsRequest = [
-    CreateTopicsRequest_v0, CreateTopicsRequest_v1, CreateTopicsRequest_v2
+    CreateTopicsRequest_v0, CreateTopicsRequest_v1,
+    CreateTopicsRequest_v2, CreateTopicsRequest_v3,
 ]
 CreateTopicsResponse = [
-    CreateTopicsResponse_v0, CreateTopicsResponse_v1, CreateTopicsResponse_v2
+    CreateTopicsResponse_v0, CreateTopicsResponse_v1,
+    CreateTopicsResponse_v2, CreateTopicsResponse_v3,
 ]
 
 
@@ -155,6 +186,18 @@ class DeleteTopicsResponse_v1(Response):
     )
 
 
+class DeleteTopicsResponse_v2(Response):
+    API_KEY = 20
+    API_VERSION = 2
+    SCHEMA = DeleteTopicsResponse_v1.SCHEMA
+
+
+class DeleteTopicsResponse_v3(Response):
+    API_KEY = 20
+    API_VERSION = 3
+    SCHEMA = DeleteTopicsResponse_v1.SCHEMA
+
+
 class DeleteTopicsRequest_v0(Request):
     API_KEY = 20
     API_VERSION = 0
@@ -172,8 +215,28 @@ class DeleteTopicsRequest_v1(Request):
     SCHEMA = DeleteTopicsRequest_v0.SCHEMA
 
 
-DeleteTopicsRequest = [DeleteTopicsRequest_v0, DeleteTopicsRequest_v1]
-DeleteTopicsResponse = [DeleteTopicsResponse_v0, DeleteTopicsResponse_v1]
+class DeleteTopicsRequest_v2(Request):
+    API_KEY = 20
+    API_VERSION = 2
+    RESPONSE_TYPE = DeleteTopicsResponse_v2
+    SCHEMA = DeleteTopicsRequest_v0.SCHEMA
+
+
+class DeleteTopicsRequest_v3(Request):
+    API_KEY = 20
+    API_VERSION = 3
+    RESPONSE_TYPE = DeleteTopicsResponse_v3
+    SCHEMA = DeleteTopicsRequest_v0.SCHEMA
+
+
+DeleteTopicsRequest = [
+    DeleteTopicsRequest_v0, DeleteTopicsRequest_v1,
+    DeleteTopicsRequest_v2, DeleteTopicsRequest_v3,
+]
+DeleteTopicsResponse = [
+    DeleteTopicsResponse_v0, DeleteTopicsResponse_v1,
+    DeleteTopicsResponse_v2, DeleteTopicsResponse_v3,
+]
 
 
 class ListGroupsResponse_v0(Response):
@@ -198,6 +261,11 @@ class ListGroupsResponse_v1(Response):
             ('protocol_type', String('utf-8'))))
     )
 
+class ListGroupsResponse_v2(Response):
+    API_KEY = 16
+    API_VERSION = 2
+    SCHEMA = ListGroupsResponse_v1.SCHEMA
+
 
 class ListGroupsRequest_v0(Request):
     API_KEY = 16
@@ -212,9 +280,21 @@ class ListGroupsRequest_v1(Request):
     RESPONSE_TYPE = ListGroupsResponse_v1
     SCHEMA = ListGroupsRequest_v0.SCHEMA
 
+class ListGroupsRequest_v2(Request):
+    API_KEY = 16
+    API_VERSION = 1
+    RESPONSE_TYPE = ListGroupsResponse_v2
+    SCHEMA = ListGroupsRequest_v0.SCHEMA
 
-ListGroupsRequest = [ListGroupsRequest_v0, ListGroupsRequest_v1]
-ListGroupsResponse = [ListGroupsResponse_v0, ListGroupsResponse_v1]
+
+ListGroupsRequest = [
+    ListGroupsRequest_v0, ListGroupsRequest_v1,
+    ListGroupsRequest_v2,
+]
+ListGroupsResponse = [
+    ListGroupsResponse_v0, ListGroupsResponse_v1,
+    ListGroupsResponse_v2,
+]
 
 
 class DescribeGroupsResponse_v0(Response):
@@ -256,6 +336,33 @@ class DescribeGroupsResponse_v1(Response):
     )
 
 
+class DescribeGroupsResponse_v2(Response):
+    API_KEY = 15
+    API_VERSION = 2
+    SCHEMA = DescribeGroupsResponse_v1.SCHEMA
+
+
+class DescribeGroupsResponse_v3(Response):
+    API_KEY = 15
+    API_VERSION = 3
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('groups', Array(
+            ('error_code', Int16),
+            ('group', String('utf-8')),
+            ('state', String('utf-8')),
+            ('protocol_type', String('utf-8')),
+            ('protocol', String('utf-8')),
+            ('members', Array(
+                ('member_id', String('utf-8')),
+                ('client_id', String('utf-8')),
+                ('client_host', String('utf-8')),
+                ('member_metadata', Bytes),
+                ('member_assignment', Bytes)))),
+            ('authorized_operations', Int32))
+    )
+
+
 class DescribeGroupsRequest_v0(Request):
     API_KEY = 15
     API_VERSION = 0
@@ -272,8 +379,31 @@ class DescribeGroupsRequest_v1(Request):
     SCHEMA = DescribeGroupsRequest_v0.SCHEMA
 
 
-DescribeGroupsRequest = [DescribeGroupsRequest_v0, DescribeGroupsRequest_v1]
-DescribeGroupsResponse = [DescribeGroupsResponse_v0, DescribeGroupsResponse_v1]
+class DescribeGroupsRequest_v2(Request):
+    API_KEY = 15
+    API_VERSION = 2
+    RESPONSE_TYPE = DescribeGroupsResponse_v2
+    SCHEMA = DescribeGroupsRequest_v0.SCHEMA
+
+
+class DescribeGroupsRequest_v3(Request):
+    API_KEY = 15
+    API_VERSION = 3
+    RESPONSE_TYPE = DescribeGroupsResponse_v2
+    SCHEMA = Schema(
+        ('groups', Array(String('utf-8'))),
+        ('include_authorized_operations', Boolean)
+    )
+
+
+DescribeGroupsRequest = [
+    DescribeGroupsRequest_v0, DescribeGroupsRequest_v1,
+    DescribeGroupsRequest_v2, DescribeGroupsRequest_v3,
+]
+DescribeGroupsResponse = [
+    DescribeGroupsResponse_v0, DescribeGroupsResponse_v1,
+    DescribeGroupsResponse_v2, DescribeGroupsResponse_v3,
+]
 
 
 class SaslHandShakeResponse_v0(Response):
@@ -347,6 +477,13 @@ class DescribeAclsResponse_v1(Response):
                 ('permission_type', Int8)))))
     )
 
+
+class DescribeAclsResponse_v2(Response):
+    API_KEY = 29
+    API_VERSION = 2
+    SCHEMA = DescribeAclsResponse_v1.SCHEMA
+
+
 class DescribeAclsRequest_v0(Request):
     API_KEY = 29
     API_VERSION = 0
@@ -359,6 +496,7 @@ class DescribeAclsRequest_v0(Request):
         ('operation', Int8),
         ('permission_type', Int8)
     )
+
 
 class DescribeAclsRequest_v1(Request):
     API_KEY = 29
@@ -373,6 +511,17 @@ class DescribeAclsRequest_v1(Request):
         ('operation', Int8),
         ('permission_type', Int8)
     )
+
+
+class DescribeAclsRequest_v2(Request):
+    """
+    Enable flexible version
+    """
+    API_KEY = 29
+    API_VERSION = 2
+    RESPONSE_TYPE = DescribeAclsResponse_v2
+    SCHEMA = DescribeAclsRequest_v1.SCHEMA
+
 
 DescribeAclsRequest = [DescribeAclsRequest_v0, DescribeAclsRequest_v1]
 DescribeAclsResponse = [DescribeAclsResponse_v0, DescribeAclsResponse_v1]
@@ -507,6 +656,13 @@ class AlterConfigsResponse_v0(Response):
             ('resource_name', String('utf-8'))))
     )
 
+
+class AlterConfigsResponse_v1(Response):
+    API_KEY = 33
+    API_VERSION = 1
+    SCHEMA = AlterConfigsResponse_v0.SCHEMA
+
+
 class AlterConfigsRequest_v0(Request):
     API_KEY = 33
     API_VERSION = 0
@@ -521,8 +677,14 @@ class AlterConfigsRequest_v0(Request):
         ('validate_only', Boolean)
     )
 
-AlterConfigsRequest = [AlterConfigsRequest_v0]
-AlterConfigsResponse = [AlterConfigsResponse_v0]
+class AlterConfigsRequest_v1(Request):
+    API_KEY = 33
+    API_VERSION = 1
+    RESPONSE_TYPE = AlterConfigsResponse_v1
+    SCHEMA = AlterConfigsRequest_v0.SCHEMA
+
+AlterConfigsRequest = [AlterConfigsRequest_v0, AlterConfigsRequest_v1]
+AlterConfigsResponse = [AlterConfigsResponse_v0, AlterConfigsRequest_v1]
 
 
 class DescribeConfigsResponse_v0(Response):
@@ -565,6 +727,28 @@ class DescribeConfigsResponse_v1(Response):
                     ('config_source', Int8)))))))
     )
 
+class DescribeConfigsResponse_v2(Response):
+    API_KEY = 32
+    API_VERSION = 2
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('resources', Array(
+            ('error_code', Int16),
+            ('error_message', String('utf-8')),
+            ('resource_type', Int8),
+            ('resource_name', String('utf-8')),
+            ('config_entries', Array(
+                ('config_names', String('utf-8')),
+                ('config_value', String('utf-8')),
+                ('read_only', Boolean),
+                ('config_source', Int8),
+                ('is_sensitive', Boolean),
+                ('config_synonyms', Array(
+                    ('config_name', String('utf-8')),
+                    ('config_value', String('utf-8')),
+                    ('config_source', Int8)))))))
+    )
+
 class DescribeConfigsRequest_v0(Request):
     API_KEY = 32
     API_VERSION = 0
@@ -588,16 +772,42 @@ class DescribeConfigsRequest_v1(Request):
         ('include_synonyms', Boolean)
     )
 
-DescribeConfigsRequest = [DescribeConfigsRequest_v0, DescribeConfigsRequest_v1]
-DescribeConfigsResponse = [DescribeConfigsResponse_v0, DescribeConfigsResponse_v1]
 
-class SaslAuthenticateResponse_v0(Request):
+class DescribeConfigsRequest_v2(Request):
+    API_KEY = 32
+    API_VERSION = 2
+    RESPONSE_TYPE = DescribeConfigsResponse_v2
+    SCHEMA = DescribeConfigsRequest_v1.SCHEMA
+
+
+DescribeConfigsRequest = [
+    DescribeConfigsRequest_v0, DescribeConfigsRequest_v1,
+    DescribeConfigsRequest_v2,
+]
+DescribeConfigsResponse = [
+    DescribeConfigsResponse_v0, DescribeConfigsResponse_v1,
+    DescribeConfigsResponse_v2,
+]
+
+
+class SaslAuthenticateResponse_v0(Response):
     API_KEY = 36
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
         ('error_message', String('utf-8')),
         ('sasl_auth_bytes', Bytes)
+    )
+
+
+class SaslAuthenticateResponse_v1(Response):
+    API_KEY = 36
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('sasl_auth_bytes', Bytes),
+        ('session_lifetime_ms', Int64)
     )
 
 
@@ -610,8 +820,19 @@ class SaslAuthenticateRequest_v0(Request):
     )
 
 
-SaslAuthenticateRequest = [SaslAuthenticateRequest_v0]
-SaslAuthenticateResponse = [SaslAuthenticateResponse_v0]
+class SaslAuthenticateRequest_v1(Request):
+    API_KEY = 36
+    API_VERSION = 1
+    RESPONSE_TYPE = SaslAuthenticateResponse_v1
+    SCHEMA = SaslAuthenticateRequest_v0.SCHEMA
+
+
+SaslAuthenticateRequest = [
+    SaslAuthenticateRequest_v0, SaslAuthenticateRequest_v1,
+]
+SaslAuthenticateResponse = [
+    SaslAuthenticateResponse_v0, SaslAuthenticateResponse_v1,
+]
 
 
 class CreatePartitionsResponse_v0(Response):
@@ -624,6 +845,12 @@ class CreatePartitionsResponse_v0(Response):
             ('error_code', Int16),
             ('error_message', String('utf-8'))))
     )
+
+
+class CreatePartitionsResponse_v1(Response):
+    API_KEY = 37
+    API_VERSION = 1
+    SCHEMA = CreatePartitionsResponse_v0.SCHEMA
 
 
 class CreatePartitionsRequest_v0(Request):
@@ -641,5 +868,58 @@ class CreatePartitionsRequest_v0(Request):
     )
 
 
-CreatePartitionsRequest = [CreatePartitionsRequest_v0]
-CreatePartitionsResponse = [CreatePartitionsResponse_v0]
+class CreatePartitionsRequest_v1(Request):
+    API_KEY = 37
+    API_VERSION = 1
+    SCHEMA = CreatePartitionsRequest_v0.SCHEMA
+    RESPONSE_TYPE = CreatePartitionsResponse_v1
+
+
+CreatePartitionsRequest = [
+    CreatePartitionsRequest_v0, CreatePartitionsRequest_v1,
+]
+CreatePartitionsResponse = [
+    CreatePartitionsResponse_v0, CreatePartitionsResponse_v1,
+]
+
+
+class DeleteGroupsResponse_v0(Response):
+    API_KEY = 42
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ("throttle_time_ms", Int32),
+        ("results", Array(
+            ("group_id", String("utf-8")),
+            ("error_code", Int16)))
+    )
+
+
+class DeleteGroupsResponse_v1(Response):
+    API_KEY = 42
+    API_VERSION = 1
+    SCHEMA = DeleteGroupsResponse_v0.SCHEMA
+
+
+class DeleteGroupsRequest_v0(Request):
+    API_KEY = 42
+    API_VERSION = 0
+    RESPONSE_TYPE = DeleteGroupsResponse_v0
+    SCHEMA = Schema(
+        ("groups_names", Array(String("utf-8")))
+    )
+
+
+class DeleteGroupsRequest_v1(Request):
+    API_KEY = 42
+    API_VERSION = 1
+    RESPONSE_TYPE = DeleteGroupsResponse_v1
+    SCHEMA = DeleteGroupsRequest_v0.SCHEMA
+
+
+DeleteGroupsRequest = [
+    DeleteGroupsRequest_v0, DeleteGroupsRequest_v1
+]
+
+DeleteGroupsResponse = [
+    DeleteGroupsResponse_v0, DeleteGroupsResponse_v1
+]

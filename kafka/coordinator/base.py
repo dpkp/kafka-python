@@ -3,7 +3,6 @@ from __future__ import absolute_import, division
 import abc
 import copy
 import logging
-import sys
 import threading
 import time
 import weakref
@@ -98,7 +97,7 @@ class BaseCoordinator(object):
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
@@ -252,7 +251,7 @@ class BaseCoordinator(object):
                 if self.config['api_version'] < (0, 8, 2):
                     self.coordinator_id = self._client.least_loaded_node()
                     if self.coordinator_id is not None:
-                        self._client.ready(self.coordinator_id)
+                        self._client.maybe_connect(self.coordinator_id)
                     continue
 
                 future = self.lookup_coordinator()
@@ -273,7 +272,7 @@ class BaseCoordinator(object):
         self._find_coordinator_future = None
 
     def lookup_coordinator(self):
-        with self._client._lock, self._lock:
+        with self._lock:
             if self._find_coordinator_future is not None:
                 return self._find_coordinator_future
 
@@ -321,10 +320,14 @@ class BaseCoordinator(object):
                 self.heartbeat.poll()
 
     def time_to_next_heartbeat(self):
+        """Returns seconds (float) remaining before next heartbeat should be sent
+
+        Note: Returns infinite if group is not joined
+        """
         with self._lock:
             # if we have not joined the group, we don't need to send heartbeats
             if self.state is MemberState.UNJOINED:
-                return sys.maxsize
+                return float('inf')
             return self.heartbeat.time_to_next_heartbeat()
 
     def _handle_join_success(self, member_assignment_bytes):
@@ -485,13 +488,16 @@ class BaseCoordinator(object):
         return future
 
     def _failed_request(self, node_id, request, future, error):
-        log.error('Error sending %s to node %s [%s]',
-                  request.__class__.__name__, node_id, error)
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
+            log.error('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
             self.coordinator_dead(error)
+        else:
+            log.debug('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
@@ -500,7 +506,7 @@ class BaseCoordinator(object):
             log.debug("Received successful JoinGroup response for group %s: %s",
                       self.group_id, response)
             self.sensors.join_latency.record((time.time() - send_time) * 1000)
-            with self._client._lock, self._lock:
+            with self._lock:
                 if self.state is not MemberState.REBALANCING:
                     # if the consumer was woken up before a rebalance completes,
                     # we may have already left the group. In this case, we do
@@ -675,18 +681,18 @@ class BaseCoordinator(object):
 
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
-            with self._client._lock, self._lock:
-                ok = self._client.cluster.add_group_coordinator(self.group_id, response)
-                if not ok:
+            with self._lock:
+                coordinator_id = self._client.cluster.add_group_coordinator(self.group_id, response)
+                if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
                     future.failure(Errors.IllegalStateError())
                     return
 
-                self.coordinator_id = response.coordinator_id
+                self.coordinator_id = coordinator_id
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
-                self._client.ready(self.coordinator_id)
+                self._client.maybe_connect(self.coordinator_id)
                 self.heartbeat.reset_timeouts()
             future.success(self.coordinator_id)
 
@@ -752,9 +758,8 @@ class BaseCoordinator(object):
     def close(self):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        with self._client._lock, self._lock:
-            self._close_heartbeat_thread()
-            self.maybe_leave_group()
+        self._close_heartbeat_thread()
+        self.maybe_leave_group()
 
     def maybe_leave_group(self):
         """Leave the current group and reset local generation/memberId."""
@@ -918,6 +923,10 @@ class HeartbeatThread(threading.Thread):
         self.closed = True
         with self.coordinator._lock:
             self.coordinator._lock.notify()
+        if self.is_alive():
+            self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
+        if self.is_alive():
+            log.warning("Heartbeat thread did not fully terminate during close")
 
     def run(self):
         try:
@@ -937,6 +946,15 @@ class HeartbeatThread(threading.Thread):
             log.debug('Heartbeat thread closed')
 
     def _run_once(self):
+        with self.coordinator._client._lock, self.coordinator._lock:
+            if self.enabled and self.coordinator.state is MemberState.STABLE:
+                # TODO: When consumer.wakeup() is implemented, we need to
+                # disable here to prevent propagating an exception to this
+                # heartbeat thread
+                # must get client._lock, or maybe deadlock at heartbeat 
+                # failure callbak in consumer poll
+                self.coordinator._client.poll(timeout_ms=0)
+
         with self.coordinator._lock:
             if not self.enabled:
                 log.debug('Heartbeat disabled. Waiting')
@@ -952,46 +970,35 @@ class HeartbeatThread(threading.Thread):
                 self.disable()
                 return
 
-        # TODO: When consumer.wakeup() is implemented, we need to
-        # disable here to prevent propagating an exception to this
-        # heartbeat thread
-        #
-        # Release coordinator lock during client poll to avoid deadlocks
-        # if/when connection errback needs coordinator lock
-        self.coordinator._client.poll(timeout_ms=0)
-
-        if self.coordinator.coordinator_unknown():
-            future = self.coordinator.lookup_coordinator()
-            if not future.is_done or future.failed():
-                # the immediate future check ensures that we backoff
-                # properly in the case that no brokers are available
-                # to connect to (and the future is automatically failed).
-                with self.coordinator._lock:
+            if self.coordinator.coordinator_unknown():
+                future = self.coordinator.lookup_coordinator()
+                if not future.is_done or future.failed():
+                    # the immediate future check ensures that we backoff
+                    # properly in the case that no brokers are available
+                    # to connect to (and the future is automatically failed).
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
-        elif self.coordinator.heartbeat.session_timeout_expired():
-            # the session timeout has expired without seeing a
-            # successful heartbeat, so we should probably make sure
-            # the coordinator is still healthy.
-            log.warning('Heartbeat session expired, marking coordinator dead')
-            self.coordinator.coordinator_dead('Heartbeat session expired')
+            elif self.coordinator.heartbeat.session_timeout_expired():
+                # the session timeout has expired without seeing a
+                # successful heartbeat, so we should probably make sure
+                # the coordinator is still healthy.
+                log.warning('Heartbeat session expired, marking coordinator dead')
+                self.coordinator.coordinator_dead('Heartbeat session expired')
 
-        elif self.coordinator.heartbeat.poll_timeout_expired():
-            # the poll timeout has expired, which means that the
-            # foreground thread has stalled in between calls to
-            # poll(), so we explicitly leave the group.
-            log.warning('Heartbeat poll expired, leaving group')
-            self.coordinator.maybe_leave_group()
+            elif self.coordinator.heartbeat.poll_timeout_expired():
+                # the poll timeout has expired, which means that the
+                # foreground thread has stalled in between calls to
+                # poll(), so we explicitly leave the group.
+                log.warning('Heartbeat poll expired, leaving group')
+                self.coordinator.maybe_leave_group()
 
-        elif not self.coordinator.heartbeat.should_heartbeat():
-            # poll again after waiting for the retry backoff in case
-            # the heartbeat failed or the coordinator disconnected
-            log.log(0, 'Not ready to heartbeat, waiting')
-            with self.coordinator._lock:
+            elif not self.coordinator.heartbeat.should_heartbeat():
+                # poll again after waiting for the retry backoff in case
+                # the heartbeat failed or the coordinator disconnected
+                log.log(0, 'Not ready to heartbeat, waiting')
                 self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
-        else:
-            with self.coordinator._client._lock, self.coordinator._lock:
+            else:
                 self.coordinator.heartbeat.sent_heartbeat()
                 future = self.coordinator._send_heartbeat_request()
                 future.add_callback(self._handle_heartbeat_success)

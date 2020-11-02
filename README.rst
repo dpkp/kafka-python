@@ -1,8 +1,8 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-1.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/compatibility.html
+.. image:: https://img.shields.io/badge/kafka-2.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
@@ -142,6 +142,14 @@ To enable snappy compression/decompression install python-snappy (also requires 
 See <https://kafka-python.readthedocs.io/en/master/install.html#optional-snappy-install>
 for more information.
 
+Optimized CRC32 Validation
+**************************
+
+Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+python implementation for compatibility. To improve performance for high-throughput
+applications, kafka-python will use `crc32c` for optimized native code if installed.
+See https://pypi.org/project/crc32c/
+
 Protocol
 ********
 
@@ -150,11 +158,4 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 1.1+).
-
-Low-level
-*********
-
-Legacy support is maintained for low-level consumer and producer classes,
-SimpleConsumer and SimpleProducer. See
-<https://kafka-python.readthedocs.io/en/master/simple.html?highlight=SimpleProducer> for API details.
+(0.8.0 to 2.4+).

@@ -9,6 +9,7 @@ from kafka.consumer.subscription_state import (
     SubscriptionState, ConsumerRebalanceListener)
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
@@ -20,7 +21,7 @@ from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
-from kafka.structs import TopicPartition, OffsetAndMetadata
+from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
 
@@ -55,7 +56,7 @@ def test_autocommit_enable_api_version(client, api_version):
 
 
 def test_protocol_type(coordinator):
-    assert coordinator.protocol_type() is 'consumer'
+    assert coordinator.protocol_type() == 'consumer'
 
 
 def test_group_protocols(coordinator):
@@ -77,6 +78,10 @@ def test_group_protocols(coordinator):
             RoundRobinPartitionAssignor.version,
             ['foobar'],
             b'')),
+        ('sticky', ConsumerProtocolMemberMetadata(
+            StickyPartitionAssignor.version,
+            ['foobar'],
+            b'')),
     ]
 
 
@@ -95,7 +100,7 @@ def test_pattern_subscription(coordinator, api_version):
         [(0, 'fizz', []),
          (0, 'foo1', [(0, 0, 0, [], [])]),
          (0, 'foo2', [(0, 0, 1, [], [])])]))
-    assert coordinator._subscription.subscription == set(['foo1', 'foo2'])
+    assert coordinator._subscription.subscription == {'foo1', 'foo2'}
 
     # 0.9 consumers should trigger dynamic partition assignment
     if api_version >= (0, 9):
@@ -103,14 +108,14 @@ def test_pattern_subscription(coordinator, api_version):
 
     # earlier consumers get all partitions assigned locally
     else:
-        assert set(coordinator._subscription.assignment.keys()) == set([
-            TopicPartition('foo1', 0),
-            TopicPartition('foo2', 0)])
+        assert set(coordinator._subscription.assignment.keys()) == {TopicPartition('foo1', 0),
+                                                                    TopicPartition('foo2', 0)}
 
 
 def test_lookup_assignor(coordinator):
     assert coordinator._lookup_assignor('roundrobin') is RoundRobinPartitionAssignor
     assert coordinator._lookup_assignor('range') is RangePartitionAssignor
+    assert coordinator._lookup_assignor('sticky') is StickyPartitionAssignor
     assert coordinator._lookup_assignor('foobar') is None
 
 
@@ -121,10 +126,25 @@ def test_join_complete(mocker, coordinator):
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
+    coordinator._on_join_complete(0, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment)
+
+
+def test_join_complete_with_sticky_assignor(mocker, coordinator):
+    coordinator._subscription.subscribe(topics=['foobar'])
+    assignor = StickyPartitionAssignor()
+    coordinator.config['assignors'] = (assignor,)
+    mocker.spy(assignor, 'on_assignment')
+    mocker.spy(assignor, 'on_generation_assignment')
+    assert assignor.on_assignment.call_count == 0
+    assert assignor.on_generation_assignment.call_count == 0
+    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    coordinator._on_join_complete(0, 'member-foo', 'sticky', assignment.encode())
+    assert assignor.on_assignment.call_count == 1
+    assert assignor.on_generation_assignment.call_count == 1
+    assignor.on_assignment.assert_called_with(assignment)
+    assignor.on_generation_assignment.assert_called_with(0)
 
 
 def test_subscription_listener(mocker, coordinator):
@@ -141,9 +161,7 @@ def test_subscription_listener(mocker, coordinator):
     coordinator._on_join_complete(
         0, 'member-foo', 'roundrobin', assignment.encode())
     assert listener.on_partitions_assigned.call_count == 1
-    listener.on_partitions_assigned.assert_called_with(set([
-        TopicPartition('foobar', 0),
-        TopicPartition('foobar', 1)]))
+    listener.on_partitions_assigned.assert_called_with({TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
 
 
 def test_subscription_listener_failure(mocker, coordinator):
@@ -211,7 +229,7 @@ def test_refresh_committed_offsets_if_needed(mocker, coordinator):
     assert coordinator._subscription.needs_fetch_committed_offsets is True
     coordinator.refresh_committed_offsets_if_needed()
     assignment = coordinator._subscription.assignment
-    assert assignment[TopicPartition('foobar', 0)].committed == 123
+    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, b'')
     assert TopicPartition('foobar', 1) not in assignment
     assert coordinator._subscription.needs_fetch_committed_offsets is False
 

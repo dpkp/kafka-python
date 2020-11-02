@@ -30,6 +30,7 @@ class Struct(AbstractType):
         # causes instances to "leak" to garbage
         self.encode = WeakMethod(self._encode_self)
 
+
     @classmethod
     def encode(cls, item):  # pylint: disable=E0202
         bits = []
@@ -48,6 +49,11 @@ class Struct(AbstractType):
             data = BytesIO(data)
         return cls(*[field.decode(data) for field in cls.SCHEMA.fields])
 
+    def get_item(self, name):
+        if name not in self.SCHEMA.names:
+            raise KeyError("%s is not in the schema" % name)
+        return self.__dict__[name]
+
     def __repr__(self):
         key_vals = []
         for name, field in zip(self.SCHEMA.names, self.SCHEMA.fields):
@@ -64,11 +70,3 @@ class Struct(AbstractType):
             if self.__dict__[attr] != other.__dict__[attr]:
                 return False
         return True
-
-"""
-class MetaStruct(type):
-    def __new__(cls, clsname, bases, dct):
-        nt = namedtuple(clsname, [name for (name, _) in dct['SCHEMA']])
-        bases = tuple([Struct, nt] + list(bases))
-        return super(MetaStruct, cls).__new__(cls, clsname, bases, dct)
-"""

@@ -268,6 +268,7 @@ class NotEnoughReplicasError(BrokerResponseError):
     description = ('Returned from a produce request when the number of in-sync'
                    ' replicas is lower than the configured minimum and'
                    ' requiredAcks is -1.')
+    retriable = True
 
 
 class NotEnoughReplicasAfterAppendError(BrokerResponseError):
@@ -276,6 +277,7 @@ class NotEnoughReplicasAfterAppendError(BrokerResponseError):
     description = ('Returned from a produce request when the message was'
                    ' written to the log, but with fewer in-sync replicas than'
                    ' required.')
+    retriable = True
 
 
 class InvalidRequiredAcksError(BrokerResponseError):
@@ -441,6 +443,24 @@ class PolicyViolationError(BrokerResponseError):
     description = 'Request parameters do not satisfy the configured policy.'
 
 
+class SecurityDisabledError(BrokerResponseError):
+    errno = 54
+    message = 'SECURITY_DISABLED'
+    description = 'Security features are disabled.'
+
+
+class NonEmptyGroupError(BrokerResponseError):
+    errno = 68
+    message = 'NON_EMPTY_GROUP'
+    description = 'The group is not empty.'
+
+
+class GroupIdNotFoundError(BrokerResponseError):
+    errno = 69
+    message = 'GROUP_ID_NOT_FOUND'
+    description = 'The group id does not exist.'
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 
@@ -458,26 +478,6 @@ class FailedPayloadsError(KafkaError):
 class KafkaConnectionError(KafkaError):
     retriable = True
     invalid_metadata = True
-
-
-class ConnectionError(KafkaConnectionError):
-    """Deprecated"""
-
-
-class BufferUnderflowError(KafkaError):
-    pass
-
-
-class ChecksumError(KafkaError):
-    pass
-
-
-class ConsumerFetchSizeTooSmall(KafkaError):
-    pass
-
-
-class ConsumerNoMoreData(KafkaError):
-    pass
 
 
 class ProtocolError(KafkaError):

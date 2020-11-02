@@ -62,13 +62,15 @@ from kafka.record.util import (
 )
 from kafka.errors import CorruptRecordException, UnsupportedCodecError
 from kafka.codec import (
-    gzip_encode, snappy_encode, lz4_encode,
-    gzip_decode, snappy_decode, lz4_decode
+    gzip_encode, snappy_encode, lz4_encode, zstd_encode,
+    gzip_decode, snappy_decode, lz4_decode, zstd_decode
 )
 import kafka.codec as codecs
 
 
 class DefaultRecordBase(object):
+
+    __slots__ = ()
 
     HEADER_STRUCT = struct.Struct(
         ">q"  # BaseOffset => Int64
@@ -95,6 +97,7 @@ class DefaultRecordBase(object):
     CODEC_GZIP = 0x01
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
+    CODEC_ZSTD = 0x04
     TIMESTAMP_TYPE_MASK = 0x08
     TRANSACTIONAL_MASK = 0x10
     CONTROL_MASK = 0x20
@@ -109,12 +112,17 @@ class DefaultRecordBase(object):
             checker, name = codecs.has_snappy, "snappy"
         elif compression_type == self.CODEC_LZ4:
             checker, name = codecs.has_lz4, "lz4"
+        elif compression_type == self.CODEC_ZSTD:
+            checker, name = codecs.has_zstd, "zstd"
         if not checker():
             raise UnsupportedCodecError(
                 "Libraries for {} compression codec not found".format(name))
 
 
 class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
+
+    __slots__ = ("_buffer", "_header_data", "_pos", "_num_records",
+                 "_next_record_index", "_decompressed")
 
     def __init__(self, buffer):
         self._buffer = bytearray(buffer)
@@ -139,6 +147,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     @property
     def attributes(self):
         return self._header_data[5]
+
+    @property
+    def last_offset_delta(self):
+        return self._header_data[6]
 
     @property
     def compression_type(self):
@@ -176,6 +188,8 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
                     uncompressed = snappy_decode(data.tobytes())
                 if compression_type == self.CODEC_LZ4:
                     uncompressed = lz4_decode(data.tobytes())
+                if compression_type == self.CODEC_ZSTD:
+                    uncompressed = zstd_decode(data.tobytes())
                 self._buffer = bytearray(uncompressed)
                 self._pos = 0
         self._decompressed = True
@@ -354,6 +368,11 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
     # 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
     MAX_RECORD_OVERHEAD = 21
 
+    __slots__ = ("_magic", "_compression_type", "_batch_size", "_is_transactional",
+                 "_producer_id", "_producer_epoch", "_base_sequence",
+                 "_first_timestamp", "_max_timestamp", "_last_offset", "_num_records",
+                 "_buffer")
+
     def __init__(
             self, magic, compression_type, is_transactional,
             producer_id, producer_epoch, base_sequence, batch_size):
@@ -503,6 +522,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 compressed = snappy_encode(data)
             elif self._compression_type == self.CODEC_LZ4:
                 compressed = lz4_encode(data)
+            elif self._compression_type == self.CODEC_ZSTD:
+                compressed = zstd_encode(data)
             compressed_size = len(compressed)
             if len(data) <= compressed_size:
                 # We did not get any benefit from compression, lets send

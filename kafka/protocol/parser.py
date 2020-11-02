@@ -18,6 +18,12 @@ class KafkaProtocol(object):
 
     Use an instance of KafkaProtocol to manage bytes send/recv'd
     from a network socket to a broker.
+
+    Arguments:
+        client_id (str): identifier string to be included in each request
+        api_version (tuple): Optional tuple to specify api_version to use.
+            Currently only used to check for 0.8.2 protocol quirks, but
+            may be used for more in the future.
     """
     def __init__(self, client_id=None, api_version=None):
         if client_id is None:
@@ -141,10 +147,10 @@ class KafkaProtocol(object):
         (correlation_id, request) = self.in_flight_requests.popleft()
 
         # 0.8.2 quirk
-        if (self._api_version == (0, 8, 2) and
-            request.RESPONSE_TYPE is GroupCoordinatorResponse[0] and
+        if (recv_correlation_id == 0 and
             correlation_id != 0 and
-            recv_correlation_id == 0):
+            request.RESPONSE_TYPE is GroupCoordinatorResponse[0] and
+            (self._api_version == (0, 8, 2) or self._api_version is None)):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
                         ' Correlation ID does not match request. This'
                         ' should go away once at least one topic has been'

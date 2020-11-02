@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
+import functools
 import logging
 import time
 
@@ -10,6 +11,7 @@ from kafka.vendor import six
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
 import kafka.errors as Errors
 from kafka.future import Future
@@ -30,7 +32,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
-        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor),
+        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor),
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
@@ -68,7 +70,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 adjusted even lower to control the expected time for normal
                 rebalances. Default: 3000
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group managementment facilities. Default: 30000
+                using Kafka's group management facilities. Default: 30000
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
             exclude_internal_topics (bool): Whether records from internal topics
@@ -224,11 +226,17 @@ class ConsumerCoordinator(BaseCoordinator):
         self._subscription.needs_fetch_committed_offsets = True
 
         # update partition assignment
-        self._subscription.assign_from_subscribed(assignment.partitions())
+        try:
+            self._subscription.assign_from_subscribed(assignment.partitions())
+        except ValueError as e:
+            log.warning("%s. Probably due to a deleted topic. Requesting Re-join" % e)
+            self.request_rejoin()
 
         # give the assignor a chance to update internal state
         # based on the received assignment
         assignor.on_assignment(assignment)
+        if assignor.name == 'sticky':
+            assignor.on_generation_assignment(generation)
 
         # reschedule the auto commit starting from now
         self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
@@ -255,7 +263,7 @@ class ConsumerCoordinator(BaseCoordinator):
         ensures that the consumer has joined the group. This also handles
         periodic offset commits if they are enabled.
         """
-        if self.group_id is None or self.config['api_version'] < (0, 8, 2):
+        if self.group_id is None:
             return
 
         self._invoke_completed_offset_commit_callbacks()
@@ -382,7 +390,7 @@ class ConsumerCoordinator(BaseCoordinator):
             for partition, offset in six.iteritems(offsets):
                 # verify assignment is still active
                 if self._subscription.is_assigned(partition):
-                    self._subscription.assignment[partition].committed = offset.offset
+                    self._subscription.assignment[partition].committed = offset
             self._subscription.needs_fetch_committed_offsets = False
 
     def fetch_committed_offsets(self, partitions):
@@ -457,7 +465,7 @@ class ConsumerCoordinator(BaseCoordinator):
             # same order that they were added. Note also that BaseCoordinator
             # prevents multiple concurrent coordinator lookup requests.
             future = self.lookup_coordinator()
-            future.add_callback(self._do_commit_offsets_async, offsets, callback)
+            future.add_callback(lambda r: functools.partial(self._do_commit_offsets_async, offsets, callback)())
             if callback:
                 future.add_errback(lambda e: self.completed_offset_commits.appendleft((callback, offsets, e)))
 
@@ -636,7 +644,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.debug("Group %s committed offset %s for partition %s",
                               self.group_id, offset, tp)
                     if self._subscription.is_assigned(tp):
-                        self._subscription.assignment[tp].committed = offset.offset
+                        self._subscription.assignment[tp].committed = offset
                 elif error_type is Errors.GroupAuthorizationFailedError:
                     log.error("Not authorized to commit offsets for group %s",
                               self.group_id)
@@ -699,7 +707,7 @@ class ConsumerCoordinator(BaseCoordinator):
             partitions (list of TopicPartition): the partitions to fetch
 
         Returns:
-            Future: resolves to dict of offsets: {TopicPartition: int}
+            Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))

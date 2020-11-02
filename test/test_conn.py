@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
-import time
 
 import mock
 import pytest
@@ -17,6 +16,13 @@ import kafka.errors as Errors
 
 
 @pytest.fixture
+def dns_lookup(mocker):
+    return mocker.patch('kafka.conn.dns_lookup',
+                        return_value=[(socket.AF_INET,
+                                       None, None, None,
+                                       ('localhost', 9092))])
+
+@pytest.fixture
 def _socket(mocker):
     socket = mocker.MagicMock()
     socket.connect_ex.return_value = 0
@@ -25,7 +31,7 @@ def _socket(mocker):
 
 
 @pytest.fixture
-def conn(_socket):
+def conn(_socket, dns_lookup):
     conn = BrokerConnection('localhost', 9092, socket.AF_INET)
     return conn
 
@@ -67,18 +73,21 @@ def test_connect_timeout(_socket, conn):
 
 
 def test_blacked_out(conn):
-    assert conn.blacked_out() is False
-    conn.last_attempt = time.time()
-    assert conn.blacked_out() is True
+    with mock.patch("time.time", return_value=1000):
+        conn.last_attempt = 0
+        assert conn.blacked_out() is False
+        conn.last_attempt = 1000
+        assert conn.blacked_out() is True
 
 
 def test_connection_delay(conn):
-    conn.last_attempt = time.time()
-    assert round(conn.connection_delay()) == round(conn.config['reconnect_backoff_ms'])
-    conn.state = ConnectionStates.CONNECTING
-    assert conn.connection_delay() == 0
-    conn.state = ConnectionStates.CONNECTED
-    assert conn.connection_delay() == float('inf')
+    with mock.patch("time.time", return_value=1000):
+        conn.last_attempt = 1000
+        assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
+        conn.state = ConnectionStates.CONNECTING
+        assert conn.connection_delay() == float('inf')
+        conn.state = ConnectionStates.CONNECTED
+        assert conn.connection_delay() == float('inf')
 
 
 def test_connected(conn):
@@ -112,8 +121,8 @@ def test_send_connecting(conn):
 def test_send_max_ifr(conn):
     conn.state = ConnectionStates.CONNECTED
     max_ifrs = conn.config['max_in_flight_requests_per_connection']
-    for _ in range(max_ifrs):
-        conn.in_flight_requests.append('foo')
+    for i in range(max_ifrs):
+        conn.in_flight_requests[i] = 'foo'
     f = conn.send('foobar')
     assert f.failed() is True
     assert isinstance(f.exception, Errors.TooManyInFlightRequests)
@@ -170,9 +179,9 @@ def test_send_error(_socket, conn):
 def test_can_send_more(conn):
     assert conn.can_send_more() is True
     max_ifrs = conn.config['max_in_flight_requests_per_connection']
-    for _ in range(max_ifrs):
+    for i in range(max_ifrs):
         assert conn.can_send_more() is True
-        conn.in_flight_requests.append('foo')
+        conn.in_flight_requests[i] = 'foo'
     assert conn.can_send_more() is False
 
 
@@ -265,7 +274,7 @@ def test_lookup_on_connect():
     ]
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi1
         assert conn._sock_addr == sockaddr1
         conn.close()
@@ -279,7 +288,7 @@ def test_lookup_on_connect():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
@@ -294,7 +303,7 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
         last_attempt = conn.last_attempt
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
         assert conn.last_attempt > last_attempt
 
@@ -307,7 +316,27 @@ def test_relookup_on_failure():
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
         conn.last_attempt = 0
         conn.connect()
-        m.assert_called_once_with(hostname, port, 0, 1)
+        m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
+
+
+def test_requests_timed_out(conn):
+    with mock.patch("time.time", return_value=0):
+        # No in-flight requests, not timed out
+        assert not conn.requests_timed_out()
+
+        # Single request, timestamp = now (0)
+        conn.in_flight_requests[0] = ('foo', 0)
+        assert not conn.requests_timed_out()
+
+        # Add another request w/ timestamp > request_timeout ago
+        request_timeout = conn.config['request_timeout_ms']
+        expired_timestamp = 0 - request_timeout - 1
+        conn.in_flight_requests[1] = ('bar', expired_timestamp)
+        assert conn.requests_timed_out()
+
+        # Drop the expired request and we should be good to go again
+        conn.in_flight_requests.pop(1)
+        assert not conn.requests_timed_out()
