@@ -137,7 +137,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 2.4+).
+attempts to identify which version it is running (0.8.0 to 2.6+).
 
 
 .. toctree::
