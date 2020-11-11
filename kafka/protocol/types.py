@@ -77,6 +77,19 @@ class Int64(AbstractType):
         return _unpack(cls._unpack, data.read(8))
 
 
+class Float64(AbstractType):
+    _pack = struct.Struct('>d').pack
+    _unpack = struct.Struct('>d').unpack
+
+    @classmethod
+    def encode(cls, value):
+        return _pack(cls._pack, value)
+
+    @classmethod
+    def decode(cls, data):
+        return _unpack(cls._unpack, data.read(8))
+
+
 class String(AbstractType):
     def __init__(self, encoding='utf-8'):
         self.encoding = encoding

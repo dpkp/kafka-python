@@ -43,4 +43,5 @@ API_KEYS = {
     40: 'ExpireDelegationToken',
     41: 'DescribeDelegationToken',
     42: 'DeleteGroups',
+    48: 'DescribeClientQuotas',
 }
