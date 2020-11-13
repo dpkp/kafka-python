@@ -182,7 +182,7 @@ class Array(AbstractType):
         if items is None:
             return Int32.encode(-1)
         return b''.join(
-            [Int32.encode(len(items))] +
+            [Int32.encode(len(list(items)))] +
             [self.array_of.encode(item) for item in items]
         )
 
