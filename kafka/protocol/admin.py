@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String
+from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64
 
 
 class ApiVersionResponse_v0(Response):
@@ -922,4 +922,44 @@ DeleteGroupsRequest = [
 
 DeleteGroupsResponse = [
     DeleteGroupsResponse_v0, DeleteGroupsResponse_v1
+]
+
+
+class DescribeClientQuotasResponse_v0(Request):
+    API_KEY = 48
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('error_message', String('utf-8')),
+        ('entries', Array(
+            ('entity', Array(
+                ('entity_type', String('utf-8')),
+                ('entity_name', String('utf-8')))),
+            ('values', Array(
+                ('name', String('utf-8')),
+                ('value', Float64))))),
+    )
+
+
+class DescribeClientQuotasRequest_v0(Request):
+    API_KEY = 48
+    API_VERSION = 0
+    RESPONSE_TYPE = DescribeClientQuotasResponse_v0
+    SCHEMA = Schema(
+        ('components', Array(
+            ('entity_type', String('utf-8')),
+            ('match_type', Int8),
+            ('match', String('utf-8')),
+        )),
+        ('strict', Boolean)
+    )
+
+
+DescribeClientQuotasRequest = [
+    DescribeClientQuotasRequest_v0,
+]
+
+DescribeClientQuotasResponse = [
+    DescribeClientQuotasResponse_v0,
 ]
