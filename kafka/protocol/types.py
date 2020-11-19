@@ -194,9 +194,10 @@ class Array(AbstractType):
     def encode(self, items):
         if items is None:
             return Int32.encode(-1)
+        encoded_items = [self.array_of.encode(item) for item in items]
         return b''.join(
-            [Int32.encode(len(items))] +
-            [self.array_of.encode(item) for item in items]
+            [Int32.encode(len(encoded_items))] +
+            encoded_items
         )
 
     def decode(self, data):
