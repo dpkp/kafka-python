@@ -1,7 +1,7 @@
 kafka-python
 ############
 
-.. image:: https://img.shields.io/badge/kafka-2.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-2.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -32,6 +32,7 @@ Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
 
 >>> pip install kafka-python
+
 
 KafkaConsumer
 *************
@@ -122,12 +123,26 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports multiple compression types:
+kafka-python supports the following compression formats:
 
- - gzip : supported natively
- - lz4 : requires `python-lz4 <https://pypi.org/project/lz4/>`_ installed
- - snappy : requires the `python-snappy <https://pypi.org/project/python-snappy/>`_  package (which requires the snappy C library)
- - zstd : requires the `python-zstandard <https://github.com/indygreg/python-zstandard>`_ package installed
+ - gzip
+ - LZ4
+ - Snappy
+ - Zstandard (zstd)
+
+gzip is supported natively, the others require installing additional libraries.
+See `Install <install.html>`_ for more information.
+
+
+Optimized CRC32 Validation
+**************************
+
+Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+python implementation for compatibility. To improve performance for high-throughput
+applications, kafka-python will use `crc32c` for optimized native code if installed.
+See `Install <install.html>`_ for installation instructions and
+https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
+
 
 Protocol
 ********
@@ -137,7 +152,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 2.4+).
+attempts to identify which version it is running (0.8.0 to 2.6+).
 
 
 .. toctree::

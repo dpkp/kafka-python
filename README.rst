@@ -1,7 +1,7 @@
 Kafka Python client
 ------------------------
 
-.. image:: https://img.shields.io/badge/kafka-2.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-2.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
@@ -33,6 +33,7 @@ Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
 
 >>> pip install kafka-python
+
 
 KafkaConsumer
 *************
@@ -77,6 +78,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 
 >>> # Get consumer metrics
 >>> metrics = consumer.metrics()
+
 
 KafkaProducer
 *************
@@ -124,6 +126,7 @@ for more details.
 >>> # Get producer performance metrics
 >>> metrics = producer.metrics()
 
+
 Thread safety
 *************
 
@@ -133,14 +136,20 @@ KafkaConsumer which cannot.
 While it is possible to use the KafkaConsumer in a thread-local manner,
 multiprocessing is recommended.
 
+
 Compression
 ***********
 
-kafka-python supports gzip compression/decompression natively. To produce or consume lz4
-compressed messages, you should install python-lz4 (pip install lz4).
-To enable snappy compression/decompression install python-snappy (also requires snappy library).
-See <https://kafka-python.readthedocs.io/en/master/install.html#optional-snappy-install>
-for more information.
+kafka-python supports the following compression formats:
+
+- gzip
+- LZ4
+- Snappy
+- Zstandard (zstd)
+
+gzip is supported natively, the others require installing additional libraries.
+See <https://kafka-python.readthedocs.io/en/master/install.html> for more information.
+
 
 Optimized CRC32 Validation
 **************************
@@ -148,7 +157,9 @@ Optimized CRC32 Validation
 Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
 python implementation for compatibility. To improve performance for high-throughput
 applications, kafka-python will use `crc32c` for optimized native code if installed.
-See https://pypi.org/project/crc32c/
+See <https://kafka-python.readthedocs.io/en/master/install.html> for installation instructions.
+See https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
+
 
 Protocol
 ********
@@ -158,4 +169,4 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
 probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 2.4+).
+(0.8.0 to 2.6+).

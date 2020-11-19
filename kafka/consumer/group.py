@@ -651,7 +651,7 @@ class KafkaConsumer(six.Iterator):
         # Poll for new data until the timeout expires
         start = time.time()
         remaining = timeout_ms
-        while True:
+        while not self._closed:
             records = self._poll_once(remaining, max_records, update_offsets=update_offsets)
             if records:
                 return records
@@ -660,7 +660,9 @@ class KafkaConsumer(six.Iterator):
             remaining = timeout_ms - elapsed_ms
 
             if remaining <= 0:
-                return {}
+                break
+
+        return {}
 
     def _poll_once(self, timeout_ms, max_records, update_offsets=True):
         """Do one round of polling. In addition to checking for new data, this does

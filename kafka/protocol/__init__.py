@@ -45,4 +45,5 @@ API_KEYS = {
     42: 'DeleteGroups',
     45: 'AlterPartitionReassignments',
     46: 'ListPartitionReassignments',
+    48: 'DescribeClientQuotas',
 }

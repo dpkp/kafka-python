@@ -648,15 +648,19 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
 
     @classmethod
     def metadata(cls, topics):
-        if cls.member_assignment is None:
+        return cls._metadata(topics, cls.member_assignment, cls.generation)
+
+    @classmethod
+    def _metadata(cls, topics, member_assignment_partitions, generation=-1):
+        if member_assignment_partitions is None:
             log.debug("No member assignment available")
             user_data = b''
         else:
             log.debug("Member assignment is available, generating the metadata: generation {}".format(cls.generation))
             partitions_by_topic = defaultdict(list)
-            for topic_partition in cls.member_assignment:   # pylint: disable=not-an-iterable
+            for topic_partition in member_assignment_partitions:
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
-            data = StickyAssignorUserDataV1(six.iteritems(partitions_by_topic), cls.generation)
+            data = StickyAssignorUserDataV1(six.viewitems(partitions_by_topic), generation)
             user_data = data.encode()
         return ConsumerProtocolMemberMetadata(cls.version, list(topics), user_data)
 
