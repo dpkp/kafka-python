@@ -373,8 +373,8 @@ def test_fetched_records(fetcher, topic, mocker):
         1,
     ),
 ])
-def test__handle_fetch_response(fetcher, fetch_request, fetch_response, num_partitions):
-    fetcher._handle_fetch_response(fetch_request, time.time(), fetch_response)
+def test__handle_fetch_success(fetcher, fetch_request, fetch_response, num_partitions):
+    fetcher._handle_fetch_success(fetch_request, time.time(), fetch_response)
     assert len(fetcher._completed_fetches) == num_partitions
 
 

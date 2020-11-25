@@ -124,8 +124,8 @@ class Fetcher(six.Iterator):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request, wakeup=False)
-                future.add_callback(self._handle_fetch_response, request, time.time())
-                future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
+                future.add_callback(self._handle_fetch_success, request, time.time())
+                future.add_errback(self._handle_fetch_error, node_id)
                 futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
@@ -747,7 +747,7 @@ class Fetcher(six.Iterator):
                         partition_data)
         return requests
 
-    def _handle_fetch_response(self, request, send_time, response):
+    def _handle_fetch_success(self, request, send_time, response):
         """The callback for fetch completion"""
         fetch_offsets = {}
         for topic, partitions in request.topics:
@@ -777,6 +777,15 @@ class Fetcher(six.Iterator):
         if response.API_VERSION >= 1:
             self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+
+    def _handle_fetch_error(self, node_id, err):
+        """The callback for fetch error"""
+        msg = 'Fetch to node %s failed: %s' % (node_id, err)
+
+        if isinstance(err, Errors.Cancelled):
+            log.info(msg)
+        else:
+            log.error(msg)
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
