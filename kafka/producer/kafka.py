@@ -280,6 +280,7 @@ class KafkaProducer(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -332,7 +333,8 @@ class KafkaProducer(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'kafka_client': KafkaClient,
     }
 
     _COMPRESSORS = {
@@ -378,9 +380,10 @@ class KafkaProducer(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
-                             wakeup_timeout_ms=self.config['max_block_ms'],
-                             **self.config)
+        client = self.config['kafka_client'](
+            metrics=self._metrics, metric_group_prefix='producer',
+            wakeup_timeout_ms=self.config['max_block_ms'],
+            **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:

@@ -146,6 +146,7 @@ class KafkaAdminClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     """
     DEFAULT_CONFIG = {
@@ -186,6 +187,7 @@ class KafkaAdminClient(object):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'kafka_client': KafkaClient,
     }
 
     def __init__(self, **configs):
@@ -205,9 +207,11 @@ class KafkaAdminClient(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        self._client = KafkaClient(metrics=self._metrics,
-                                   metric_group_prefix='admin',
-                                   **self.config)
+        self._client = self.config['kafka_client'](
+            metrics=self._metrics,
+            metric_group_prefix='admin',
+            **self.config
+        )
         self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
 
         # Get auto-discovered version from client if necessary
