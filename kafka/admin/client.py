@@ -1209,7 +1209,7 @@ class KafkaAdminClient(object):
 
         :param response: an OffsetFetchResponse.
         :return: A dictionary composed of TopicPartition keys and
-            OffsetAndMetada values.
+            OffsetAndMetadata values.
         """
         if response.API_VERSION <= 3:
 
@@ -1223,7 +1223,7 @@ class KafkaAdminClient(object):
                         .format(response))
 
             # transform response into a dictionary with TopicPartition keys and
-            # OffsetAndMetada values--this is what the Java AdminClient returns
+            # OffsetAndMetadata values--this is what the Java AdminClient returns
             offsets = {}
             for topic, partitions in response.topics:
                 for partition, offset, metadata, error_code in partitions:
