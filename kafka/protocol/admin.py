@@ -1031,3 +1031,68 @@ class ListPartitionReassignmentsRequest_v0(Request):
 ListPartitionReassignmentsRequest = [ListPartitionReassignmentsRequest_v0]
 
 ListPartitionReassignmentsResponse = [ListPartitionReassignmentsResponse_v0]
+
+
+class ElectLeadersResponse_v0(Response):
+    API_KEY = 43
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('replication_election_results', Array(
+            ('topic', String('utf-8')),
+            ('partition_result', Array(
+                ('partition_id', Int32),
+                ('error_code', Int16),
+                ('error_message', String('utf-8'))
+            ))
+        ))
+    )
+
+class ElectLeadersRequest_v0(Request):
+    API_KEY = 43
+    API_VERSION = 1
+    RESPONSE_TYPE = ElectLeadersResponse_v0
+    SCHEMA = Schema(
+        ('election_type', Int8),
+        ('topic_partitions', Array(
+            ('topic', String('utf-8')),
+            ('partition_ids', Array(Int32))
+        )),
+        ('timeout', Int32),
+    )
+
+
+class ElectLeadersResponse_v1(Response):
+    API_KEY = 43
+    API_VERSION = 1
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('error_code', Int16),
+        ('replication_election_results', Array(
+            ('topic', String('utf-8')),
+            ('partition_result', Array(
+                ('partition_id', Int32),
+                ('error_code', Int16),
+                ('error_message', String('utf-8'))
+            ))
+        ))
+    )
+
+class ElectLeadersRequest_v1(Request):
+    API_KEY = 43
+    API_VERSION = 1
+    RESPONSE_TYPE = ElectLeadersResponse_v1
+    SCHEMA = Schema(
+        ('election_type', Int8),
+        ('topic_partitions', Array(
+            ('topic', String('utf-8')),
+            ('partition_ids', Array(Int32))
+        )),
+        ('timeout', Int32),
+    )
+
+
+ElectLeadersRequest = [ElectLeadersRequest_v0, ElectLeadersRequest_v1]
+
+ElectLeadersResponse = [ElectLeadersResponse_v0, ElectLeadersResponse_v1]
