@@ -461,6 +461,12 @@ class GroupIdNotFoundError(BrokerResponseError):
     description = 'The group id does not exist.'
 
 
+class ElectionNotNeeded(BrokerResponseError):
+    errno = 84
+    message = 'ELECTION_NOT_NEEDED'
+    description = 'Leader election not needed for topic partition.'
+
+
 class KafkaUnavailableError(KafkaError):
     pass
 
