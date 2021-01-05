@@ -71,13 +71,8 @@ def test_can_connect(cli, conn):
 
 
 def test_maybe_connect(cli, conn):
-    try:
-        # Node not in metadata, raises AssertionError
-        cli._maybe_connect(2)
-    except AssertionError:
-        pass
-    else:
-        assert False, 'Exception not raised'
+    # Node not in metadata should be ignored
+    cli._maybe_connect(2)
 
     # New node_id creates a conn object
     assert 0 not in cli._conns

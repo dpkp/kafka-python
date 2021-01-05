@@ -368,18 +368,26 @@ class KafkaClient(object):
             conn = self._conns.get(node_id)
 
             if conn is None:
-                broker = self.cluster.broker_metadata(node_id)
-                assert broker, 'Broker id %s not in current metadata' % (node_id,)
+                broker_metadata = self.cluster.broker_metadata(node_id)
 
-                log.debug("Initiating connection to node %s at %s:%s",
-                          node_id, broker.host, broker.port)
-                host, port, afi = get_ip_port_afi(broker.host)
-                cb = WeakMethod(self._conn_state_change)
-                conn = BrokerConnection(host, broker.port, afi,
-                                        state_change_callback=cb,
-                                        node_id=node_id,
-                                        **self.config)
-                self._conns[node_id] = conn
+                # The broker may have been removed from the cluster after the
+                # call to `maybe_connect`. At this point there is no way to
+                # recover, so just ignore the connection
+                if broker_metadata is None:
+                    log.debug("Node %s is not available anymore, discarding connection", node_id)
+                    if node_id in self._connecting:
+                        self._connecting.remove(node_id)
+                    return False
+                else:
+                    log.debug("Initiating connection to node %s at %s:%s",
+                              node_id, broker_metadata.host, broker_metadata.port)
+                    host, port, afi = get_ip_port_afi(broker_metadata.host)
+                    cb = WeakMethod(self._conn_state_change)
+                    conn = BrokerConnection(host, broker_metadata.port, afi,
+                                            state_change_callback=cb,
+                                            node_id=node_id,
+                                            **self.config)
+                    self._conns[node_id] = conn
 
             # Check if existing connection should be recreated because host/port changed
             elif self._should_recycle_connection(conn):
