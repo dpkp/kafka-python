@@ -409,9 +409,22 @@ class KafkaAdminClient(object):
         tries = 2  # in case our cached self._controller_id is outdated
         while tries:
             tries -= 1
-            future = self._send_request_to_node(self._controller_id, request)
+            future = self._client.send(self._controller_id, request)
 
             self._wait_for_futures([future])
+
+            if future.exception is not None:
+                log.error(
+                    "Sending request to controller_id %s failed with %s",
+                    self._controller_id,
+                    future.exception,
+                )
+                is_outdated_controler = (
+                    self._client.cluster.broker_metadata(self._controller_id) is None
+                )
+                if is_outdated_controler:
+                    self._refresh_controller_id()
+                continue
 
             response = future.value
             # In Java, the error field name is inconsistent:
