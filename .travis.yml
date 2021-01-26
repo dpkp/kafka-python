@@ -18,6 +18,7 @@ env:
     - KAFKA_VERSION=2.4.0
     - KAFKA_VERSION=2.5.0
     - KAFKA_VERSION=2.6.0
+    - KAFKA_VERSION=2.7.0
 
 addons:
   apt:

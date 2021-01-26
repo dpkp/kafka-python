@@ -1,12 +1,12 @@
 Compatibility
 -------------
 
-.. image:: https://img.shields.io/badge/kafka-2.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-2.7%2C%202.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
 
-kafka-python is compatible with (and tested against) broker versions 2.6
+kafka-python is compatible with (and tested against) broker versions 2.7
 through 0.8.0 . kafka-python is not compatible with the 0.8.2-beta release.
 
 Because the kafka server protocol is backwards compatible, kafka-python is
