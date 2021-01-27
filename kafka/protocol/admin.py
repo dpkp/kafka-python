@@ -956,12 +956,24 @@ class DescribeClientQuotasRequest_v0(Request):
     )
 
 
+class DescribeClientQuotasResponse_v1(Request):
+    API_KEY = 48
+    API_VERSION = 1
+    SCHEMA = DescribeClientQuotasResponse_v0.SCHEMA
+
+
+class DescribeClientQuotasRequest_v1(Request):
+    API_KEY = 48
+    API_VERSION = 1
+    RESPONSE_TYPE = DescribeClientQuotasResponse_v0
+    SCHEMA = DescribeClientQuotasRequest_v0.SCHEMA
+
 DescribeClientQuotasRequest = [
-    DescribeClientQuotasRequest_v0,
+    DescribeClientQuotasRequest_v0, DescribeClientQuotasRequest_v1
 ]
 
 DescribeClientQuotasResponse = [
-    DescribeClientQuotasResponse_v0,
+    DescribeClientQuotasResponse_v0, DescribeClientQuotasResponse_v1
 ]
 
 
