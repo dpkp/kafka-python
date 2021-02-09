@@ -96,7 +96,7 @@ class String(AbstractType):
 
     def encode(self, value):
         if value is None:
-            return Int16.encode(-1)
+            raise ValueError("value cannot be None")
         value = str(value).encode(self.encoding)
         return Int16.encode(len(value)) + value
 
@@ -114,7 +114,7 @@ class Bytes(AbstractType):
     @classmethod
     def encode(cls, value):
         if value is None:
-            return Int32.encode(-1)
+            raise ValueError("value cannot be None")
         else:
             return Int32.encode(len(value)) + value
 
