@@ -233,7 +233,7 @@ class KafkaProducer(object):
             should verify that the certificate matches the brokers hostname.
             default: true.
         ssl_cafile (str): optional filename of ca file to use in certificate
-            veriication. default: none.
+            verification. default: none.
         ssl_certfile (str): optional filename of file in pem format containing
             the client certificate, as well as any ca certificates needed to
             establish the certificate's authenticity. default: none.
