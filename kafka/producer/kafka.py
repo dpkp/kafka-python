@@ -469,6 +469,8 @@ class KafkaProducer(object):
             timeout (float, optional): timeout in seconds to wait for completion.
         """
 
+        # If there are any pending messages, send them now
+        self.flush(timeout)
         # drop our atexit handler now to avoid leaks
         self._unregister_cleanup()
 
