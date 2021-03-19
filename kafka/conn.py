@@ -84,6 +84,11 @@ except ImportError:
     GSSError = None
 
 
+try:
+    import kerberos_sspi as kerberos
+except ImportError:
+    kerberos = None
+
 AFI_NAMES = {
     socket.AF_UNSPEC: "unspecified",
     socket.AF_INET: "IPv4",
@@ -180,7 +185,8 @@ class BrokerConnection(object):
         metric_group_prefix (str): Prefix for metric names. Default: ''
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
-            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
+            PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512, KERBEROS_V5
+            (Windows Only, via win32's SSPI).
         sasl_plain_username (str): username for sasl PLAIN and SCRAM authentication.
             Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
@@ -227,7 +233,7 @@ class BrokerConnection(object):
         'sasl_oauth_token_provider': None
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
-    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
+    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512", "KERBEROS_V5")
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -272,6 +278,8 @@ class BrokerConnection(object):
             if self.config['sasl_mechanism'] == 'GSSAPI':
                 assert gssapi is not None, 'GSSAPI lib not available'
                 assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
+            if self.config['sasl_mechanism'] == 'KERBEROS_V5':
+                assert kerberos is not None, 'KERBEROS_V5 / kerberos-sspi lib not available'
             if self.config['sasl_mechanism'] == 'OAUTHBEARER':
                 token_provider = self.config['sasl_oauth_token_provider']
                 assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
@@ -522,11 +530,13 @@ class BrokerConnection(object):
 
         if self._sasl_auth_future is None:
             # Build a SaslHandShakeRequest message
-            request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
+            sasl_mechanism = self.config['sasl_mechanism'] if self.config['sasl_mechanism'] != "KERBEROS_V5" else "GSSAPI"
+            log.debug(f'Using {sasl_mechanism} sasl_mechanism')
+            request = SaslHandShakeRequest[0](sasl_mechanism)
             future = Future()
             sasl_response = self._send(request)
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)
-            sasl_response.add_errback(lambda f, e: f.failure(e), future)
+            sasl_response.add_errback(self._handle_err, future)
             self._sasl_auth_future = future
 
         for r, f in self.recv():
@@ -541,14 +551,21 @@ class BrokerConnection(object):
                 raise ex  # pylint: disable-msg=raising-bad-type
         return self._sasl_auth_future.succeeded()
 
+    def _handle_err(self, f, e):
+        print(f, e)
+        f.failure(e)
+
+
+
+
     def _handle_sasl_handshake_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             error = error_type(self)
             self.close(error=error)
             return future.failure(error_type(self))
-
-        if self.config['sasl_mechanism'] not in response.enabled_mechanisms:
+        sasl_mechanism = self.config['sasl_mechanism'] if self.config['sasl_mechanism'] != "KERBEROS_V5" else "GSSAPI"
+        if sasl_mechanism not in response.enabled_mechanisms:
             return future.failure(
                 Errors.UnsupportedSaslMechanismError(
                     'Kafka broker does not support %s sasl mechanism. Enabled mechanisms are: %s'
@@ -557,6 +574,8 @@ class BrokerConnection(object):
             return self._try_authenticate_plain(future)
         elif self.config['sasl_mechanism'] == 'GSSAPI':
             return self._try_authenticate_gssapi(future)
+        elif self.config['sasl_mechanism'] == 'KERBEROS_V5':
+            return self._try_authenticate_kerberos_v5(future)
         elif self.config['sasl_mechanism'] == 'OAUTHBEARER':
             return self._try_authenticate_oauth(future)
         elif self.config['sasl_mechanism'].startswith("SCRAM-SHA-"):
@@ -780,6 +799,111 @@ class BrokerConnection(object):
 
         log.info('%s: Authenticated as %s via GSSAPI', self, gssapi_name)
         return future.success(True)
+
+    def _try_authenticate_kerberos_v5(self, future):
+        target_host = self.config['sasl_kerberos_domain_name'] or self.host
+        service_principal_name = self.config['sasl_kerberos_service_name'] + '@' + target_host
+
+        err = None
+        close = False
+
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                try:
+
+                    # Establish security context and negotiate protection level
+                    # For reference RFC 2222, section 7.2.1
+                    flags = kerberos.GSS_C_CONF_FLAG|kerberos.GSS_C_INTEG_FLAG|kerberos.GSS_C_MUTUAL_FLAG|kerberos.GSS_C_SEQUENCE_FLAG
+                    res, client_ctx = kerberos.authGSSClientInit(service_principal_name, gssflags=flags)
+                    assert res == kerberos.AUTH_GSS_COMPLETE
+
+                    res = kerberos.AUTH_GSS_CONTINUE
+                    received_token = b""
+                    # Exchange tokens until authentication either succeeds or fails
+                    krb_round = 0
+                    while res == kerberos.AUTH_GSS_CONTINUE:
+                        krb_round += 1
+                        log.debug(f"Round {krb_round}")
+                        res = kerberos.authGSSClientStep(client_ctx, kerberos.encodestring(received_token))
+                        if res == -1:
+                            raise RuntimeError("Client Step Error", res)
+
+                        output_token = client_ctx["response"]  # get the binary data, not a base64 encoded version
+
+                        # pass output token to kafka, or send empty response if the security
+                        # context is complete (output token is None in that case)
+                        if res != kerberos.AUTH_GSS_CONTINUE:
+                            self._send_bytes_blocking(Int32.encode(0))
+                        else:
+                            msg = output_token
+                            size = Int32.encode(len(msg))
+                            self._send_bytes_blocking(size + msg)
+
+                        # The server will send a token back. Processing of this token either
+                        # establishes a security context, or it needs further token exchange.
+                        # The gssapi will be able to identify the needed next step.
+                        # The connection is closed on failure.
+                        header = self._recv_bytes_blocking(4)
+                        (token_size,) = struct.unpack('>i', header)
+                        received_token = self._recv_bytes_blocking(token_size)
+
+                    # Process the security layer negotiation token, sent by the server
+                    # once the security context is established.
+
+                    # unwraps message containing supported protection levels and msg size
+                    kerberos.authGSSClientUnwrap(client_ctx, kerberos.encodestring(received_token))
+                    msg = client_ctx["response"]
+
+                    # Kafka currently doesn't support integrity or confidentiality security layers, so we
+                    # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
+                    # by the server
+                    msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
+                    msg += service_principal_name.encode("utf-8")
+                    # add authorization identity to the response, GSS-wrap and send it
+
+
+
+                    # import sspicon, win32security
+                    # pkg_size_info = client_ctx["csa"].ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_SIZES)
+                    # trailersize=pkg_size_info['SecurityTrailer']
+                    #
+                    # encbuf=win32security.PySecBufferDescType()
+                    # encbuf.append(win32security.PySecBufferType(len(msg), sspicon.SECBUFFER_DATA))
+                    # encbuf.append(win32security.PySecBufferType(trailersize, sspicon.SECBUFFER_TOKEN))
+                    # encbuf[0].Buffer=msg
+                    # client_ctx["csa"].ctxt.EncryptMessage(0,encbuf,client_ctx["csa"]._get_next_seq_num())
+                    #
+                    # msg = encbuf[0].Buffer #+ encbuf[1].Buffer
+                    # # return encbuf[0].Buffer, encbuf[1].Buffer
+
+
+
+                    kerberos.authGSSClientWrap(client_ctx, kerberos.encodestring(msg), service_principal_name)
+                    msg = client_ctx["response"]
+
+                    size = Int32.encode(len(msg))
+                    self._send_bytes_blocking(size + msg)
+
+                except (ConnectionError, TimeoutError) as e:
+                    log.exception("%s: Error receiving reply from server",  self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+                except Exception as e:
+                    # raise
+                    err = e
+                    close = True
+
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
+
+        log.info('%s: Authenticated as %s via GSSAPI', self, service_principal_name)
+        return future.success(True)
+
 
     def _try_authenticate_oauth(self, future):
         data = b''
