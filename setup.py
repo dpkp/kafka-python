@@ -41,6 +41,8 @@ setup(
         "lz4": ["lz4"],
         "snappy": ["python-snappy"],
         "zstd": ["python-zstandard"],
+        "gssapi": ["gssapi"],
+        "gssapi_sspi": ["kerberos-sspi"],
     },
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),
