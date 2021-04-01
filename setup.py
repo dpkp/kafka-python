@@ -42,7 +42,7 @@ setup(
         "snappy": ["python-snappy"],
         "zstd": ["python-zstandard"],
         "gssapi": ["gssapi"],
-        "gssapi_sspi": ["kerberos-sspi"],
+        "gssapi_sspi": ["pywin32"],
     },
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),

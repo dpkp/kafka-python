@@ -84,9 +84,12 @@ except ImportError:
 
 
 try:
-    import kerberos_sspi
+    import sspi
+    import pywintypes
+    import sspicon
+    import win32security
 except ImportError:
-    kerberos_sspi = None
+    sspi = None
 
 AFI_NAMES = {
     socket.AF_UNSPEC: "unspecified",
@@ -274,7 +277,7 @@ class BrokerConnection(object):
                     'sasl_plain_password required for PLAIN or SCRAM sasl'
                 )
             if self.config['sasl_mechanism'] == 'GSSAPI':
-                if gssapi is None and kerberos_sspi is None:
+                if gssapi is None and sspi is None:
                     raise AssertionError('No GSSAPI lib available')
                 assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
             if self.config['sasl_mechanism'] == 'OAUTHBEARER':
@@ -717,7 +720,7 @@ class BrokerConnection(object):
         if gssapi is not None:
             return self._try_authenticate_gssapi_gss_implementation(future)
 
-        if kerberos_sspi is not None:
+        if sspi is not None:
             return self._try_authenticate_gssapi_sspi_implementation(future)
 
     def _try_authenticate_gssapi_gss_implementation(self, future):
@@ -799,78 +802,93 @@ class BrokerConnection(object):
         return future.success(True)
 
     def _try_authenticate_gssapi_sspi_implementation(self, future):
+        global log_sspi
+        log_sspi = logging.getLogger("kafka.client.sspi")
         kerberos_host_name = self.config['sasl_kerberos_domain_name'] or self.host
-        service_principal_name = self.config['sasl_kerberos_service_name'] + '@' + kerberos_host_name
+        service_principal_name = self.config['sasl_kerberos_service_name'] + '/' + kerberos_host_name
+        scheme = "Kerberos"  # Do not try with Negotiate that comes with a different protocol than SASL
+        # https://docs.microsoft.com/en-us/windows/win32/secauthn/context-requirements
+        flags = (
+                sspicon.ISC_REQ_MUTUAL_AUTH |      # mutual authentication
+                sspicon.ISC_REQ_INTEGRITY |        # check for integrity
+                sspicon.ISC_REQ_SEQUENCE_DETECT |  # enable out-of-order messages
+                sspicon.ISC_REQ_CONFIDENTIALITY    # request confidentiality
+        )
 
         err = None
         close = False
-
         with self._lock:
             if not self._can_send_recv():
                 err = Errors.NodeNotReadyError(str(self))
                 close = False
             else:
+                # Establish security context and negotiate protection level
+                # For reference see RFC 4752, section 3
                 try:
+                    log_sspi.debug("Create client security context")
+                    # instantiate sspi context
+                    client_ctx = sspi.ClientAuth(
+                        scheme,
+                        targetspn=service_principal_name,
+                        scflags=flags,
+                    )
+                    # Print some SSPI implementation
+                    log_sspi.info("Using %s SSPI Security Package (%s)", client_ctx.pkg_info["Name"], client_ctx.pkg_info["Comment"])
 
-                    # Establish security context and negotiate protection level
-                    # For reference RFC 2222, section 7.2.1
-                    flags = \
-                        kerberos_sspi.GSS_C_CONF_FLAG | \
-                        kerberos_sspi.GSS_C_INTEG_FLAG | \
-                        kerberos_sspi.GSS_C_MUTUAL_FLAG | \
-                        kerberos_sspi.GSS_C_SEQUENCE_FLAG
-
-                    # Create a security context.
-                    res, client_ctx = kerberos_sspi.authGSSClientInit(service_principal_name, gssflags=flags)
-                    assert res == kerberos_sspi.AUTH_GSS_COMPLETE
-
-                    res = kerberos_sspi.AUTH_GSS_CONTINUE
-                    received_token = b""
                     # Exchange tokens until authentication either succeeds or fails
-                    krb_round = 0
-                    while res == kerberos_sspi.AUTH_GSS_CONTINUE:
-                        krb_round += 1
-                        log.debug(f"Round {krb_round}")
-                        res = kerberos_sspi.authGSSClientStep(client_ctx, kerberos_sspi.encodestring(received_token))
-                        if res == -1:
-                            raise RuntimeError("Client Step Error", res)
-
-                        output_token = client_ctx["response"]  # get the binary data, not a base64 encoded version
+                    log_sspi.debug("Begining rounds...")
+                    received_token = None  # no token to pass when initiating the first round
+                    while not client_ctx.authenticated:
+                        # calculate an output token from kafka token (or None on first iteration)
+                        # https://docs.microsoft.com/en-us/windows/win32/api/sspi/nf-sspi-initializesecuritycontexta
+                        # https://docs.microsoft.com/en-us/windows/win32/secauthn/initializesecuritycontext--kerberos
+                        # authorize method will wrap for us our token in sspi structures
+                        log_sspi.debug("Exchange a token")
+                        error, auth = client_ctx.authorize(received_token)
+                        if len(auth) > 0 and len(auth[0].Buffer):
+                            log_sspi.debug("Got token from context")
+                            # this buffer must be sent to the server whatever the result is
+                            output_token = auth[0].Buffer
+                        else:
+                            log_sspi.debug("Got no token, exchange finished")
+                            # seems to be the end of the loop
+                            output_token = None
 
                         # pass output token to kafka, or send empty response if the security
                         # context is complete (output token is None in that case)
-                        if res != kerberos_sspi.AUTH_GSS_CONTINUE:
+                        if output_token is None:
+                            log_sspi.debug("Sending end of exchange to server")
                             self._send_bytes_blocking(Int32.encode(0))
                         else:
+                            log_sspi.debug("Sending token from local context to server")
                             msg = output_token
                             size = Int32.encode(len(msg))
                             self._send_bytes_blocking(size + msg)
 
                         # The server will send a token back. Processing of this token either
                         # establishes a security context, or it needs further token exchange.
-                        # The remote gssapi will be able to identify the needed next step.
+                        # The gssapi will be able to identify the needed next step.
                         # The connection is closed on failure.
                         header = self._recv_bytes_blocking(4)
                         (token_size,) = struct.unpack('>i', header)
                         received_token = self._recv_bytes_blocking(token_size)
+                        log_sspi.debug("Received token from server (size %s)", token_size)
 
+                    sspi_amend_ctx_metadata(client_ctx)
                     # Process the security layer negotiation token, sent by the server
                     # once the security context is established.
 
                     # unwraps message containing supported protection levels and msg size
-                    kerberos_sspi.authGSSClientUnwrap(client_ctx, kerberos_sspi.encodestring(received_token))
-                    msg = client_ctx["response"]
+                    msg = sspi_gss_unwrap_step(client_ctx, received_token)
 
                     # Kafka currently doesn't support integrity or confidentiality security layers, so we
                     # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
                     # by the server
                     msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
-                    msg += service_principal_name.encode("utf-8")
+
                     # add authorization identity to the response, GSS-wrap and send it
-
-                    kerberos_sspi.authGSSClientWrap(client_ctx, kerberos_sspi.encodestring(msg), service_principal_name)
-                    msg = client_ctx["response"]
-
+                    msg = msg + service_principal_name.encode("utf-8")
+                    msg = sspi_gss_wrap_step(client_ctx, msg)
                     size = Int32.encode(len(msg))
                     self._send_bytes_blocking(size + msg)
 
@@ -887,13 +905,13 @@ class BrokerConnection(object):
                 self.close(error=err)
             return future.failure(err)
 
+        # noinspection PyUnresolvedReferences
         log.info(
-            '%s: Authenticated as %s to %s via Windows SSPI',
+            '%s: Authenticated as %s to %s via SSPI/GSSAPI \\o/',
             self,
-            kerberos_sspi.authGSSClientUserName(client_ctx),
-            kerberos_sspi.authGSSServerTargetName(client_ctx),  # incomplete API...
+            client_ctx.initiator_name,
+            client_ctx.service_name
         )
-
         return future.success(True)
 
 
@@ -1648,3 +1666,58 @@ def dns_lookup(host, port, afi=socket.AF_UNSPEC):
                     ' correct and resolvable?',
                     host, port, ex)
         return []
+
+
+# noinspection PyUnresolvedReferences
+def sspi_gss_unwrap_step(sec_ctx, token):
+    """
+        GSSAPI's unwrap with SSPI.
+    """
+    buffer = win32security.PySecBufferDescType()
+    # Stream is a token coming from the other side
+    buffer.append(win32security.PySecBufferType(len(token), sspicon.SECBUFFER_STREAM))
+    buffer[0].Buffer = token
+    # Will receive the clear, or just unwrapped text if no encryption was used.
+    # Will be resized.
+    buffer.append(win32security.PySecBufferType(0, sspicon.SECBUFFER_DATA))
+
+    pfQOP = sec_ctx.ctxt.DecryptMessage(buffer, sec_ctx._get_next_seq_num())
+    if pfQOP == sspicon.SECQOP_WRAP_NO_ENCRYPT:
+        log.debug("Received token was not encrypted")
+    r = buffer[1].Buffer
+    return r
+
+
+def sspi_gss_wrap_step(sec_ctx, msg, encrypt=False):
+    """
+        GSSAPI's wrap with SSPI.
+    """
+
+    size_info = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_SIZES)
+    trailer_size = size_info['SecurityTrailer']
+    block_size = size_info['BlockSize']
+
+    buffer = win32security.PySecBufferDescType()
+
+    buffer.append(win32security.PySecBufferType(len(msg), sspicon.SECBUFFER_DATA))
+    buffer[0].Buffer = msg
+
+    # Will receive the token that forms the beginning of the msg
+    buffer.append(win32security.PySecBufferType(trailer_size, sspicon.SECBUFFER_TOKEN))
+
+    buffer.append(win32security.PySecBufferType(block_size, sspicon.SECBUFFER_PADDING))
+
+    fQOP = 0 if encrypt else sspicon.SECQOP_WRAP_NO_ENCRYPT
+    sec_ctx.ctxt.EncryptMessage(fQOP, buffer, sec_ctx._get_next_seq_num())
+    # Sec token, then data, then padding
+    r = buffer[1].Buffer + buffer[0].Buffer + buffer[2].Buffer
+    return r
+
+
+def sspi_amend_ctx_metadata(sec_ctx):
+    """Adds initiator and service names in the security context for ease of use"""
+    if not sec_ctx.authenticated:
+        raise ValueError("Sec context is not completly authenticated")
+
+    names = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_NATIVE_NAMES)
+    sec_ctx.initiator_name, sec_ctx.service_name = names
