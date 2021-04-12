@@ -1677,6 +1677,7 @@ def dns_lookup(host, port, afi=socket.AF_UNSPEC):
 def sspi_gss_unwrap_step(sec_ctx, token):
     """
         GSSAPI's unwrap with SSPI.
+        https://docs.microsoft.com/en-us/windows/win32/secauthn/sspi-kerberos-interoperability-with-gssapi
     """
     buffer = win32security.PySecBufferDescType()
     # This buffer contains a stream, which is a token coming from the other side
@@ -1697,6 +1698,7 @@ def sspi_gss_unwrap_step(sec_ctx, token):
 def sspi_gss_wrap_step(sec_ctx, msg, encrypt=False):
     """
         GSSAPI's wrap with SSPI.
+        https://docs.microsoft.com/en-us/windows/win32/secauthn/sspi-kerberos-interoperability-with-gssapi
     """
 
     size_info = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_SIZES)
