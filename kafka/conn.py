@@ -803,16 +803,16 @@ class BrokerConnection(object):
 
     def _try_authenticate_gssapi_sspi_implementation(self, future):
         global log_sspi
-        log_sspi = logging.getLogger("kafka.client.sspi")
+        log_sspi = logging.getLogger("kafka.conn.sspi")
         kerberos_host_name = self.config['sasl_kerberos_domain_name'] or self.host
         service_principal_name = self.config['sasl_kerberos_service_name'] + '/' + kerberos_host_name
-        scheme = "Kerberos"  # Do not try with Negotiate that comes with a different protocol than SASL
+        scheme = "Kerberos"  # Do not try with Negotiate for SASL authentication. Tokens are different.
         # https://docs.microsoft.com/en-us/windows/win32/secauthn/context-requirements
         flags = (
-                sspicon.ISC_REQ_MUTUAL_AUTH |      # mutual authentication
-                sspicon.ISC_REQ_INTEGRITY |        # check for integrity
-                sspicon.ISC_REQ_SEQUENCE_DETECT |  # enable out-of-order messages
-                sspicon.ISC_REQ_CONFIDENTIALITY    # request confidentiality
+            sspicon.ISC_REQ_MUTUAL_AUTH |      # mutual authentication
+            sspicon.ISC_REQ_INTEGRITY |        # check for integrity
+            sspicon.ISC_REQ_SEQUENCE_DETECT |  # enable out-of-order messages
+            sspicon.ISC_REQ_CONFIDENTIALITY    # request confidentiality
         )
 
         err = None
@@ -836,7 +836,7 @@ class BrokerConnection(object):
                     log_sspi.info("Using %s SSPI Security Package (%s)", client_ctx.pkg_info["Name"], client_ctx.pkg_info["Comment"])
 
                     # Exchange tokens until authentication either succeeds or fails
-                    log_sspi.debug("Begining rounds...")
+                    log_sspi.debug("Beginning rounds...")
                     received_token = None  # no token to pass when initiating the first round
                     while not client_ctx.authenticated:
                         # calculate an output token from kafka token (or None on first iteration)
@@ -874,9 +874,14 @@ class BrokerConnection(object):
                         received_token = self._recv_bytes_blocking(token_size)
                         log_sspi.debug("Received token from server (size %s)", token_size)
 
+                    # Add some extra attributes to the context
                     sspi_amend_ctx_metadata(client_ctx)
+
                     # Process the security layer negotiation token, sent by the server
                     # once the security context is established.
+
+                    # The following part is required by SASL, but not by classic Kerberos.
+                    # See RFC 4752
 
                     # unwraps message containing supported protection levels and msg size
                     msg = sspi_gss_unwrap_step(client_ctx, received_token)
@@ -1674,16 +1679,17 @@ def sspi_gss_unwrap_step(sec_ctx, token):
         GSSAPI's unwrap with SSPI.
     """
     buffer = win32security.PySecBufferDescType()
-    # Stream is a token coming from the other side
+    # This buffer contains a stream, which is a token coming from the other side
     buffer.append(win32security.PySecBufferType(len(token), sspicon.SECBUFFER_STREAM))
     buffer[0].Buffer = token
-    # Will receive the clear, or just unwrapped text if no encryption was used.
+
+    # This buffer will receive the clear, or just unwrapped text if no encryption was used.
     # Will be resized.
     buffer.append(win32security.PySecBufferType(0, sspicon.SECBUFFER_DATA))
 
     pfQOP = sec_ctx.ctxt.DecryptMessage(buffer, sec_ctx._get_next_seq_num())
     if pfQOP == sspicon.SECQOP_WRAP_NO_ENCRYPT:
-        log.debug("Received token was not encrypted")
+        log_sspi.debug("Received token was not encrypted")
     r = buffer[1].Buffer
     return r
 
@@ -1699,12 +1705,14 @@ def sspi_gss_wrap_step(sec_ctx, msg, encrypt=False):
 
     buffer = win32security.PySecBufferDescType()
 
+    # This buffer will contain unencrypted data to wrap, and maybe encrypt.
     buffer.append(win32security.PySecBufferType(len(msg), sspicon.SECBUFFER_DATA))
     buffer[0].Buffer = msg
 
     # Will receive the token that forms the beginning of the msg
     buffer.append(win32security.PySecBufferType(trailer_size, sspicon.SECBUFFER_TOKEN))
 
+    # The trailer is needed in case of block encryption
     buffer.append(win32security.PySecBufferType(block_size, sspicon.SECBUFFER_PADDING))
 
     fQOP = 0 if encrypt else sspicon.SECQOP_WRAP_NO_ENCRYPT
@@ -1717,7 +1725,7 @@ def sspi_gss_wrap_step(sec_ctx, msg, encrypt=False):
 def sspi_amend_ctx_metadata(sec_ctx):
     """Adds initiator and service names in the security context for ease of use"""
     if not sec_ctx.authenticated:
-        raise ValueError("Sec context is not completly authenticated")
+        raise ValueError("Sec context is not completely authenticated")
 
     names = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_NATIVE_NAMES)
     sec_ctx.initiator_name, sec_ctx.service_name = names
