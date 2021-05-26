@@ -110,6 +110,8 @@ class KafkaClient(object):
         ssl_check_hostname (bool): Flag to configure whether SSL handshake
             should verify that the certificate matches the broker's hostname.
             Default: True.
+        ssl_cadata (str): optional ca filecontent to use in certificate
+            verification. default: None.
         ssl_cafile (str): Optional filename of CA file to use in certificate
             verification. Default: None.
         ssl_certfile (str): Optional filename of file in PEM format containing
@@ -176,6 +178,7 @@ class KafkaClient(object):
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
+        'ssl_cadata': None,
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,

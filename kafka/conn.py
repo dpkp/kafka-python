@@ -144,6 +144,8 @@ class BrokerConnection(object):
         ssl_check_hostname (bool): flag to configure whether ssl handshake
             should verify that the certificate matches the brokers hostname.
             default: True.
+        ssl_cadata (str): optional ca filecontent to use in certificate
+            verification. default: None.
         ssl_cafile (str): optional filename of ca file to use in certificate
             verification. default: None.
         ssl_certfile (str): optional filename of file in pem format containing
@@ -208,6 +210,7 @@ class BrokerConnection(object):
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
+        'ssl_cadata': None,
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
@@ -468,9 +471,12 @@ class BrokerConnection(object):
             self._ssl_context.verify_mode = ssl.CERT_OPTIONAL
             if self.config['ssl_check_hostname']:
                 self._ssl_context.check_hostname = True
-            if self.config['ssl_cafile']:
-                log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
-                self._ssl_context.load_verify_locations(self.config['ssl_cafile'])
+            if self.config['ssl_cafile'] or self.config['ssl_cadata']:
+                if self.config['ssl_cafile']:
+                    log.info('%s: Loading SSL CA from %s', self, self.config['ssl_cafile'])
+                else:
+                    log.info('%s: Loading SSL CA from cadata', self)
+                self._ssl_context.load_verify_locations(self.config['ssl_cafile'], cadata=self.config['ssl_cadata'])
                 self._ssl_context.verify_mode = ssl.CERT_REQUIRED
             else:
                 log.info('%s: Loading system default SSL CAs from %s', self, ssl.get_default_verify_paths())

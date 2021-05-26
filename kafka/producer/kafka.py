@@ -232,6 +232,8 @@ class KafkaProducer(object):
         ssl_check_hostname (bool): flag to configure whether ssl handshake
             should verify that the certificate matches the brokers hostname.
             default: true.
+        ssl_cadata (str): optional ca filecontent to use in certificate
+            verification. default: None.
         ssl_cafile (str): optional filename of ca file to use in certificate
             verification. default: none.
         ssl_certfile (str): optional filename of file in pem format containing
@@ -316,6 +318,7 @@ class KafkaProducer(object):
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,
+        'ssl_cadata': None,
         'ssl_cafile': None,
         'ssl_certfile': None,
         'ssl_keyfile': None,
