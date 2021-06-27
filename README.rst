@@ -1,4 +1,3 @@
-dodododododo
 Kafka Python client
 ------------------------
 
