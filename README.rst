@@ -12,7 +12,7 @@ Kafka Python client
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
     :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
 
-Python client for the Apache Kafka distributed stream processing system.
+A Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
