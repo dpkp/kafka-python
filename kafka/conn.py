@@ -874,9 +874,6 @@ class BrokerConnection(object):
                         received_token = self._recv_bytes_blocking(token_size)
                         log_sspi.debug("Received token from server (size %s)", token_size)
 
-                    # Add some extra attributes to the context
-                    sspi_amend_ctx_metadata(client_ctx)
-
                     # Process the security layer negotiation token, sent by the server
                     # once the security context is established.
 
@@ -884,7 +881,7 @@ class BrokerConnection(object):
                     # See RFC 4752
 
                     # unwraps message containing supported protection levels and msg size
-                    msg = sspi_gss_unwrap_step(client_ctx, received_token)
+                    msg, was_encrypted = client_ctx.unwrap(received_token)
 
                     # Kafka currently doesn't support integrity or confidentiality security layers, so we
                     # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
@@ -893,7 +890,7 @@ class BrokerConnection(object):
 
                     # add authorization identity to the response, GSS-wrap and send it
                     msg = msg + service_principal_name.encode("utf-8")
-                    msg = sspi_gss_wrap_step(client_ctx, msg)
+                    msg = client_ctx.wrap(msg)
                     size = Int32.encode(len(msg))
                     self._send_bytes_blocking(size + msg)
 
@@ -1671,63 +1668,3 @@ def dns_lookup(host, port, afi=socket.AF_UNSPEC):
                     ' correct and resolvable?',
                     host, port, ex)
         return []
-
-
-# noinspection PyUnresolvedReferences
-def sspi_gss_unwrap_step(sec_ctx, token):
-    """
-        GSSAPI's unwrap with SSPI.
-        https://docs.microsoft.com/en-us/windows/win32/secauthn/sspi-kerberos-interoperability-with-gssapi
-    """
-    buffer = win32security.PySecBufferDescType()
-    # This buffer contains a stream, which is a token coming from the other side
-    buffer.append(win32security.PySecBufferType(len(token), sspicon.SECBUFFER_STREAM))
-    buffer[0].Buffer = token
-
-    # This buffer will receive the clear, or just unwrapped text if no encryption was used.
-    # Will be resized.
-    buffer.append(win32security.PySecBufferType(0, sspicon.SECBUFFER_DATA))
-
-    pfQOP = sec_ctx.ctxt.DecryptMessage(buffer, sec_ctx._get_next_seq_num())
-    if pfQOP == sspicon.SECQOP_WRAP_NO_ENCRYPT:
-        log_sspi.debug("Received token was not encrypted")
-    r = buffer[1].Buffer
-    return r
-
-
-def sspi_gss_wrap_step(sec_ctx, msg, encrypt=False):
-    """
-        GSSAPI's wrap with SSPI.
-        https://docs.microsoft.com/en-us/windows/win32/secauthn/sspi-kerberos-interoperability-with-gssapi
-    """
-
-    size_info = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_SIZES)
-    trailer_size = size_info['SecurityTrailer']
-    block_size = size_info['BlockSize']
-
-    buffer = win32security.PySecBufferDescType()
-
-    # This buffer will contain unencrypted data to wrap, and maybe encrypt.
-    buffer.append(win32security.PySecBufferType(len(msg), sspicon.SECBUFFER_DATA))
-    buffer[0].Buffer = msg
-
-    # Will receive the token that forms the beginning of the msg
-    buffer.append(win32security.PySecBufferType(trailer_size, sspicon.SECBUFFER_TOKEN))
-
-    # The trailer is needed in case of block encryption
-    buffer.append(win32security.PySecBufferType(block_size, sspicon.SECBUFFER_PADDING))
-
-    fQOP = 0 if encrypt else sspicon.SECQOP_WRAP_NO_ENCRYPT
-    sec_ctx.ctxt.EncryptMessage(fQOP, buffer, sec_ctx._get_next_seq_num())
-    # Sec token, then data, then padding
-    r = buffer[1].Buffer + buffer[0].Buffer + buffer[2].Buffer
-    return r
-
-
-def sspi_amend_ctx_metadata(sec_ctx):
-    """Adds initiator and service names in the security context for ease of use"""
-    if not sec_ctx.authenticated:
-        raise ValueError("Sec context is not completely authenticated")
-
-    names = sec_ctx.ctxt.QueryContextAttributes(sspicon.SECPKG_ATTR_NATIVE_NAMES)
-    sec_ctx.initiator_name, sec_ctx.service_name = names
