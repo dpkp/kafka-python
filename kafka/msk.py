@@ -3,7 +3,8 @@ import hashlib
 import hmac
 import json
 import string
-import urllib.parse
+
+from kafka.vendor.six.moves import urllib
 
 
 class AwsMskIamClient:
