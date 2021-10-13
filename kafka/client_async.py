@@ -154,6 +154,9 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        sasl_aws_msk_iam_access_key_id (str): aws access key id for msk_iam auth. Default: None
+        sasl_aws_msk_iam_secret_access_key (str): aws secret access key  for msk_iam auth.  Default: None
+        sasl_aws_msk_region (str):  aws region  for msk_iam auth.  Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -192,7 +195,10 @@ class KafkaClient(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'sasl_aws_msk_iam_access_key_id': None,
+        'sasl_aws_msk_iam_secret_access_key': None,
+        'sasl_aws_msk_region': None,
     }
 
     def __init__(self, **configs):

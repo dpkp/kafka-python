@@ -41,6 +41,7 @@ setup(
         "lz4": ["lz4"],
         "snappy": ["python-snappy"],
         "zstd": ["python-zstandard"],
+        "pytest": "pytest",
     },
     cmdclass={"test": Tox},
     packages=find_packages(exclude=['test']),

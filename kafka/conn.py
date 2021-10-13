@@ -1,11 +1,13 @@
 from __future__ import absolute_import, division
 
 import copy
+import datetime
 import errno
 import io
 import logging
+import typing
 from random import shuffle, uniform
-
+from .aws_utils import aws_uri_encode, get_digester
 # selectors in stdlib as of py3.4
 try:
     import selectors  # pylint: disable=import-error
@@ -17,6 +19,7 @@ import socket
 import struct
 import threading
 import time
+import json
 
 from kafka.vendor import six
 
@@ -34,6 +37,7 @@ from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.types import Int32, Int8
 from kafka.scram import ScramClient
 from kafka.version import __version__
+import hmac
 
 
 if six.PY2:
@@ -191,6 +195,9 @@ class BrokerConnection(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        sasl_aws_msk_iam_access_key_id (str): aws access key id for msk_iam auth. Default: None
+        sasl_aws_msk_iam_secret_access_key (str): aws secret access key  for msk_iam auth.  Default: None
+        sasl_aws_msk_region (str):  aws region  for msk_iam auth.  Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -224,10 +231,13 @@ class BrokerConnection(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'sasl_aws_msk_iam_access_key_id': None,
+        'sasl_aws_msk_iam_secret_access_key': None,
+        'sasl_aws_msk_region': None,
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
-    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
+    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512", "AWSMSKIAM")
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -276,6 +286,10 @@ class BrokerConnection(object):
                 token_provider = self.config['sasl_oauth_token_provider']
                 assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
                 assert callable(getattr(token_provider, "token", None)), 'sasl_oauth_token_provider must implement method #token()'
+            if self.config["sasl_mechanism"] == "AWSMSKIAM":
+                assert self._amz_access_key_id, "sasl_aws_msk_iam_access_key_id must be provided"
+                assert self._amz_secret_access_key, "sasl_aws_msk_iam_secret_access_key must be provided"
+                assert self._amz_region, "sasl_aws_msk_region must be provided"
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to
@@ -561,6 +575,8 @@ class BrokerConnection(object):
             return self._try_authenticate_oauth(future)
         elif self.config['sasl_mechanism'].startswith("SCRAM-SHA-"):
             return self._try_authenticate_scram(future)
+        elif self.config['sasl_mechanism'] == 'AWSMSKIAM':
+            return self._try_authenticate_awsmskiam(future)
         else:
             return future.failure(
                 Errors.UnsupportedSaslMechanismError(
@@ -822,6 +838,158 @@ class BrokerConnection(object):
     def _build_oauth_client_request(self):
         token_provider = self.config['sasl_oauth_token_provider']
         return "n,,\x01auth=Bearer {}{}\x01\x01".format(token_provider.token(), self._token_extensions())
+
+    @property
+    def _amz_access_key_id(self) -> typing.Optional[str]:
+        try:
+            access_key_id = self.config['sasl_aws_msk_iam_access_key_id']
+            return access_key_id
+        except KeyError:
+            return None
+
+    @property
+    def _amz_secret_access_key(self) -> typing.Optional[str]:
+        try:
+            secret_key_id = self.config['sasl_aws_msk_iam_secret_access_key']
+            return secret_key_id
+        except KeyError:
+            return None
+
+    @property
+    def _amz_region(self) -> typing.Optional[str]:
+        try:
+            aws_region = self.config['sasl_aws_msk_region']
+            return aws_region
+        except KeyError:
+            return None
+
+    @property
+    def hostname(self) -> str:
+        return self.host.split(":")[0]
+
+    def _pull_mskiam_server_response(self) -> bytes:
+        to_read = 1
+        message_start_token = b'{'
+        message_end_token = b'}'
+        token_stack = []
+        buffer = io.BytesIO()
+        fragment = self._recv_bytes_blocking(to_read)
+        good_response = fragment == message_start_token
+        if not good_response:
+            #Connection errors, including a timeout, will not be caught by this method.
+            raise ValueError(f"AWS-MSK-IAM: server responded with empty message or an invalid message.  NOT AUTHED: {fragment}")
+
+        buffer.write(fragment)
+        token_stack.push(fragment)
+        while token_stack:
+            fragment = self._recv_bytes_blocking(to_read)
+            buffer.write(fragment)
+            if fragment == message_start_token:
+                token_stack.push(fragment)
+            elif fragment == message_end_token:
+                token_stack.pop()
+        return buffer.getvalue()
+
+    def _try_authenticate_awsmskiam(self, future):
+        message = self._authentication_payload(host=self.hostname).encode()
+        with self._lock:
+            if not self._can_send_recv():
+                err = Errors.NodeNotReadyError(str(self))
+                close = False
+            else:
+                try:
+                    self._send_bytes_blocking(message)
+                    response = self._pull_mskiam_server_response().decode()
+                except (ConnectionError, TimeoutError, ValueError) as e:
+                    log.exception("%s: Error receiving reply from server while trying awsmskiam auth", self)
+                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                    close = True
+        if err is not None:
+            if close:
+                self.close(error=err)
+            return future.failure(err)
+
+        log.info(f"AWS-MSK-IAM authentication {response=}")
+        return future.success(True)
+
+    def _authentication_payload(self, host: str) -> str:
+        now = datetime.datetime.now()
+        payload = {
+            'version': '2020_10_22',
+            'host': host,
+            'user-agent': 'kafka-python',
+            'action': 'kafka-cluster:Connect',
+            'x-amz-algorithm': 'AWS4-HMAC-SHA256',
+            'x-amz-credential': self._get_amz_credential(request_time=now),
+            'x-amz-date': now.strftime("%Y%m%dT%H%M%SZ"),
+            'x-amz-signedheaders': 'host',
+            'x-amz-expires': '900',
+            'x-amz-signature': self._get_amz_signature(current_time=now, host=host)
+        }
+        #TODO: This json structure can handle session_tokens.  Add logic to handle it if detected
+        return json.dumps(payload)
+
+    def _get_canonical_request(self, request_time: datetime.datetime, host: str) -> str:
+        return "\n".join([
+            "GET",
+            "",
+            self._get_cannonical_query_string(current_time=request_time),
+            self._get_amz_canonical_headers(host=host),
+            self._get_amz_signed_headers(),
+            self._get_amz_hashed_payload(),
+        ])
+
+    @staticmethod
+    def _get_amz_date_str(arg: datetime.datetime) -> str:
+        date_str = arg.strftime('%Y%m%d')
+        return date_str
+
+    def _get_amz_credential(self, request_time: datetime.datetime) -> str:
+        date_str = self._get_amz_date_str(request_time)
+        access_key_id = self._amz_region
+        aws_region = self.config['sasl_aws_msk_region']
+        return f'{access_key_id}/{date_str}/{aws_region}/kafka-cluster/aws4_request'
+
+    @staticmethod
+    def _get_amz_canonical_headers(host: str) -> str:
+        return f"host:{host}\n"
+
+    @staticmethod
+    def _get_amz_signed_headers() -> str:
+       return "host"
+
+    def _get_cannonical_query_string(self, current_time: datetime.datetime) -> str:
+        query = aws_uri_encode("Action") + "=" + aws_uri_encode("kafka-cluster:Connect") + "&" + \
+                aws_uri_encode("X-Amz-Algorithm") + "=" + aws_uri_encode("AWS4-HMAC-SHA256") + "&" + \
+                aws_uri_encode("X-Amz-Credential") + "=" + aws_uri_encode(self._get_amz_credential(current_time)) + "&" + \
+                aws_uri_encode("X-Amz-Date") + "=" + aws_uri_encode(current_time.strftime("%Y%m%dT%H%M%SZ")) + "&" + \
+                aws_uri_encode("X-Amz-Expires") + "=" + aws_uri_encode("900") + "&" + \
+                aws_uri_encode("X-Amz-SignedHeaders") + "=" + aws_uri_encode("host")
+        return query
+
+    @staticmethod
+    def _get_amz_hashed_payload() -> str:
+        digest = get_digester()
+        digest.update("".encode())
+        return digest.hexdigest().lower()
+
+    def _get_amz_string_to_sign(self, current_time: datetime.datetime, host: str):
+        scope = f'self.config["sasl_aws_msk_region"]/kafka-cluster'
+        canonical_request = self._get_canonical_request(request_time=current_time, host=host)
+        digester = get_digester()
+        digester.update(canonical_request.encode())
+        hexxed = digester.hexdigest().lower()
+        return f"AWS4-HMAC-SHA256\n{self._get_amz_date_str(current_time)}\n{scope}\n{hexxed}"
+
+    def _get_amz_signature(self, current_time: datetime.datetime, host: str) -> str:
+        hmac_digest = "SHA256"
+        date_key = hmac.digest(key=f"AWS4{self._amz_secret_access_key}".encode(), msg=self._get_amz_date_str(current_time).encode(),
+                               digest=hmac_digest)
+        date_region_key = hmac.digest(key=date_key, msg=self._amz_region.encode(), digest=hmac_digest)
+        date_region_service_key = hmac.digest(key=date_region_key, msg='kafka-cluster'.encode(), digest=hmac_digest)
+        signing_key = hmac.digest(key=date_region_service_key, msg='aws4_request'.encode(), digest=hmac_digest)
+        signature = hmac.digest(key=signing_key, msg=self._get_amz_string_to_sign(current_time=current_time, host=host).encode(), digest=hmac_digest)
+        return signature.hex().lower()
 
     def _token_extensions(self):
         """

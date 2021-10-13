@@ -4,8 +4,14 @@ import threading, time
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
 import sys
+from os import environ
 
-BOOTSTRAP_SERVERS = 'localhost:9092'
+BOOTSTRAP_SERVERS = environ.get("BOOTSTRAP_SERVER")
+AWS_ACCESS_KEY_ID = environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = environ.get("AWS_REGION")
+TOPIC_NAME = 'data-team-dev'
+
 
 class Producer(threading.Thread):
     def __init__(self):
@@ -16,11 +22,15 @@ class Producer(threading.Thread):
         self.stop_event.set()
 
     def run(self):
-        producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVERS)
+        producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVERS,
+                                 sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
+                                 sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                 sasl_aws_msk_region=AWS_REGION,
+                                 )
 
         while not self.stop_event.is_set():
-            producer.send('my-topic', b"test")
-            producer.send('my-topic', b"\xc2Hola, mundo!")
+            producer.send(TOPIC_NAME, b"test")
+            producer.send(TOPIC_NAME, b"\xc2Hola, mundo!")
             time.sleep(1)
 
         producer.close()
@@ -37,8 +47,12 @@ class Consumer(threading.Thread):
     def run(self):
         consumer = KafkaConsumer(bootstrap_servers=BOOTSTRAP_SERVERS,
                                  auto_offset_reset='earliest',
-                                 consumer_timeout_ms=1000)
-        consumer.subscribe(['my-topic'])
+                                 consumer_timeout_ms=1000,
+                                 sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
+                                 sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                 sasl_aws_msk_region=AWS_REGION,
+                                 )
+        consumer.subscribe([TOPIC_NAME])
 
         while not self.stop_event.is_set():
             for message in consumer:
@@ -50,11 +64,15 @@ class Consumer(threading.Thread):
 
 
 def main():
-    # Create 'my-topic' Kafka topic
+    # Create 'TOPIC_NAME' topic
     try:
-        admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVERS)
+        admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVERS,
+                                 sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
+                                 sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                 sasl_aws_msk_region=AWS_REGION,
+                                 )
 
-        topic = NewTopic(name='my-topic',
+        topic = NewTopic(name=TOPIC_NAME,
                          num_partitions=1,
                          replication_factor=1)
         admin.create_topics([topic])

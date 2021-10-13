@@ -280,6 +280,9 @@ class KafkaProducer(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        sasl_aws_msk_iam_access_key_id (str): aws access key id for msk_iam auth. Default: None
+        sasl_aws_msk_iam_secret_access_key (str): aws secret access key  for msk_iam auth.  Default: None
+        sasl_aws_msk_region (str):  aws region  for msk_iam auth.  Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
@@ -334,6 +337,9 @@ class KafkaProducer(object):
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'sasl_aws_msk_iam_access_key_id': None,
+        'sasl_aws_msk_iam_secret_access_key': None,
+        'sasl_aws_msk_region': None,
         'kafka_client': KafkaClient,
     }
 
