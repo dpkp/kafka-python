@@ -36,4 +36,4 @@ def aws_uri_encode(arg: str, encode_slash: bool = True) -> str:
 def get_digester():
     return sha256()
 
-Ø
+
