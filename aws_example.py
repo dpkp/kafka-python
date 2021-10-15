@@ -6,7 +6,7 @@ from kafka.admin import NewTopic
 import sys
 from os import environ
 
-BOOTSTRAP_SERVERS = environ.get("BOOTSTRAP_SERVER")
+BOOTSTRAP_SERVERS = environ.get("BOOTSTRAP_SERVERS")
 AWS_ACCESS_KEY_ID = environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = environ.get("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = environ.get("AWS_REGION")
