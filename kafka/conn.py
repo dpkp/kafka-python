@@ -892,6 +892,7 @@ class BrokerConnection(object):
         return buffer.getvalue()
 
     def _try_authenticate_awsmskiam(self, future):
+        print("_try_authenticate_awsmskiam")
         message = self._authentication_payload(host=self.hostname).encode()
         with self._lock:
             if not self._can_send_recv():
