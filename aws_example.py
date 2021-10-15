@@ -26,6 +26,7 @@ class Producer(threading.Thread):
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
+                                 security_protocol="SSL"
                                  )
 
         while not self.stop_event.is_set():
@@ -51,6 +52,7 @@ class Consumer(threading.Thread):
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
+                                 security_protocol="SSL"
                                  )
         consumer.subscribe([TOPIC_NAME])
 
@@ -70,6 +72,7 @@ def main():
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
+                                 security_protocol="SSL"
                                  )
 
         topic = NewTopic(name=TOPIC_NAME,
