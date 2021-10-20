@@ -6,12 +6,16 @@ from kafka.admin import NewTopic
 import sys
 from os import environ
 
-BOOTSTRAP_SERVERS = environ.get("BOOTSTRAP_SERVERS")
-AWS_ACCESS_KEY_ID = environ.get("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = environ.get("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = environ.get("AWS_REGION")
-TOPIC_NAME = 'data-team-dev'
+BOOTSTRAP_SERVERS = environ.get("KAFKA_BROKERS").split(',')
+AWS_ACCESS_KEY_ID = environ.get("KAFKA_AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = environ.get("KAFKA_AWS_SECRET_ACCESS_KEY")
+AWS_REGION = environ.get("KAFKA_AWS_REGION")
 
+TOPIC_NAME = 'data.sandbox'
+GROUP_NAME = 'data.sandbox'
+SASL_MECHANISM = 'AWSMSKIAM'
+SASL_PROTOCOL = 'SSL'
+SASL_PROTOCOL = 'SASL_SSL'
 
 class Producer(threading.Thread):
     def __init__(self):
@@ -26,7 +30,8 @@ class Producer(threading.Thread):
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
-                                 security_protocol="SSL"
+                                 security_protocol=SASL_PROTOCOL,
+                                 sasl_mechanism=SASL_MECHANISM,
                                  )
 
         while not self.stop_event.is_set():
@@ -52,7 +57,9 @@ class Consumer(threading.Thread):
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
-                                 security_protocol="SSL"
+                                 security_protocol=SASL_PROTOCOL,
+                                 group_id=GROUP_NAME,
+                                 sasl_mechanism=SASL_MECHANISM,
                                  )
         consumer.subscribe([TOPIC_NAME])
 
@@ -72,19 +79,20 @@ def main():
                                  sasl_aws_msk_iam_access_key_id=AWS_ACCESS_KEY_ID,
                                  sasl_aws_msk_iam_secret_access_key=AWS_SECRET_ACCESS_KEY,
                                  sasl_aws_msk_region=AWS_REGION,
-                                 security_protocol="SSL"
+                                 security_protocol=SASL_PROTOCOL,
+                                 sasl_mechanism=SASL_MECHANISM,
                                  )
 
         topic = NewTopic(name=TOPIC_NAME,
                          num_partitions=1,
                          replication_factor=1)
-        admin.create_topics([topic])
+        #admin.create_topics([topic])
     except Exception as e:
         print(str(e), file=sys.stderr)
 
     tasks = [
         Producer(),
-        Consumer()
+        #Consumer()
     ]
 
     # Start threads of a publisher/producer and a subscriber/consumer to 'my-topic' Kafka topic

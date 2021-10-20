@@ -46,7 +46,7 @@ if six.PY2:
     BlockingIOError = Exception
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 DEFAULT_KAFKA_PORT = 9092
 
