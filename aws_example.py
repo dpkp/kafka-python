@@ -6,16 +6,19 @@ from kafka.admin import NewTopic
 import sys
 from os import environ
 
-BOOTSTRAP_SERVERS = environ.get("KAFKA_BROKERS").split(',')
-AWS_ACCESS_KEY_ID = environ.get("KAFKA_AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = environ.get("KAFKA_AWS_SECRET_ACCESS_KEY")
+
+BOOTSTRAP_SERVERS = environ.get("KAFKA_BROKERS")
+AWS_ACCESS_KEY_ID = environ.get("KAFKA_AWS_ACCESS_ID")
+AWS_SECRET_ACCESS_KEY = environ.get("KAFKA_AWS_SECRET_ID")
 AWS_REGION = environ.get("KAFKA_AWS_REGION")
+
 
 TOPIC_NAME = 'data.sandbox'
 GROUP_NAME = 'data.sandbox'
 SASL_MECHANISM = 'AWSMSKIAM'
 SASL_PROTOCOL = 'SSL'
 SASL_PROTOCOL = 'SASL_SSL'
+
 
 class Producer(threading.Thread):
     def __init__(self):
