@@ -20,7 +20,7 @@ from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest
+    DeleteGroupsRequest, DescribeLogDirsRequest
 )
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -1345,3 +1345,19 @@ class KafkaAdminClient(object):
 
                 if future.failed():
                     raise future.exception  # pylint: disable-msg=raising-bad-type
+
+    def describe_log_dirs(self):
+        """Send a DescribeLogDirsRequest request to a broker.
+
+        :return: A message future
+        """
+        version = self._matching_api_version(DescribeLogDirsRequest)
+        if version <= 1:
+            request = DescribeLogDirsRequest[version]()
+            future = self._send_request_to_node(self._client.least_loaded_node(), request)
+            self._wait_for_futures([future])
+        else:
+            raise NotImplementedError(
+                "Support for DescribeLogDirsRequest_v{} has not yet been added to KafkaAdminClient."
+                    .format(version))
+        return future.value
