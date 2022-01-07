@@ -538,7 +538,7 @@ class KafkaProducer(object):
             return LegacyRecordBatchBuilder.estimate_size_in_bytes(
                 magic, self.config['compression_type'], key, value)
 
-    def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None):
+    def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None, chain_future=None):
         """Publish a message to a topic.
 
         Arguments:
@@ -563,6 +563,7 @@ class KafkaProducer(object):
                 are tuples of str key and bytes value.
             timestamp_ms (int, optional): epoch milliseconds (from Jan 1 1970 UTC)
                 to use as the message timestamp. Defaults to current time.
+            chain_future (Future, optional): chained success and failure method
 
         Returns:
             FutureRecordMetadata: resolves to RecordMetadata
@@ -603,7 +604,8 @@ class KafkaProducer(object):
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes, headers,
                                               self.config['max_block_ms'],
-                                              estimated_size=message_size)
+                                              estimated_size=message_size,
+                                              chain_future=chain_future)
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
                 log.debug("Waking up the sender since %s is either full or"
