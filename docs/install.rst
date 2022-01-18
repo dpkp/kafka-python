@@ -58,7 +58,7 @@ Optional Snappy install
 Install Development Libraries
 =============================
 
-Download and build Snappy from https://google.github.io/snappy/
+Download and build Snappy from https://github.com/google/snappy
 
 Ubuntu:
 
