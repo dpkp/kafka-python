@@ -20,11 +20,9 @@ class FNV1a32Partitioner(object):
         value, the selection of the partition is random.
 
         The implementation details are selected to make sure the same key
-        is mapped to the same partition in Goka/Sarama. Because of the differences
-        in fundamental operations how two languages (go and python), we had
-        to implement the hash calculation and conversions ourselves. This
-        way, we made sure this partitioner works exactly same as Goka/Sarama.
-        It
+        is mapped to the same partition in Goka/Sarama. It is confirmed
+        that this implementation works the same as the partitioner of
+        github.com/lovoo/goka v1.0.5 with Go version 1.16.
 
         Algorithm details:
         http://www.isthe.com/chongo/tech/comp/fnv/#FNV-param
@@ -73,8 +71,8 @@ def _get_fnv1a_32(key: bytes) -> int:
     https://github.com/znerol/py-fnvhash/blob/master/fnvhash/__init__.py
     """
     # We set the same init_offset and prime for the FNV hasher as
-    # defined in Golang FNV package to have full compatibility. The Go FNV
-    # is the package Sarama uses for its hashing calculations under the hood
+    # defined in Golang FNV package. The Go FNV is the package Sarama
+    # uses for its hashing calculations under the hood.
     # References:
     # https://cs.opensource.google/go/go/+/refs/tags/go1.17.3:src/hash/fnv/fnv.go;l=31
     # https://cs.opensource.google/go/go/+/refs/tags/go1.17.3:src/hash/fnv/fnv.go;l=35

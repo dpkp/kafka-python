@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import pytest
 
 from kafka.partitioner import DefaultPartitioner, murmur2
+from kafka.partitioner.fnv1a_32 import FNV1a32Partitioner, _get_twos_complement_32bit, _get_fnv1a_32
 
 
 def test_default_partitioner():
@@ -36,3 +37,17 @@ def test_murmur2_not_ascii():
     # Verify no regression of murmur2() bug encoding py2 bytes that don't ascii encode
     murmur2(b'\xa4')
     murmur2(b'\x81' * 1000)
+
+
+@pytest.mark.parametrize("key,partitions,available,expected", [
+    (b"123", [0, 1, 2], [0, 1, 2], 2),
+    (b"123", [0, 1], [0, 1], 1),
+    (b"123", [0], [0], 0),
+    (b"f232oo3232", [0, 1, 2, 3], [0, 1, 2, 3], 2),
+    (b"f232oo3232", [0, 1], [0, 1], 0),
+    (b"f232oo3232", [0], [0], 0),
+])
+def test_fnv1a_32_partitioner(key, partitions, available, expected):
+    partitioner = FNV1a32Partitioner()
+    out = partitioner(key, partitions, available)
+    assert out == expected
