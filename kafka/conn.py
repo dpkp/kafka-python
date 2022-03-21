@@ -1224,13 +1224,13 @@ class BrokerConnection(object):
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
         from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
-        from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
+        from kafka.protocol.commit import OffsetFetchRequest, FindCoordinatorRequest
 
         test_cases = [
             # All cases starting from 0.10 will be based on ApiVersionResponse
             ((0, 10), ApiVersionRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
-            ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
+            ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
             ((0, 8, 0), MetadataRequest[0](topics)),
         ]

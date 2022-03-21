@@ -5,7 +5,7 @@ import struct
 import pytest
 
 from kafka.protocol.api import RequestHeader
-from kafka.protocol.commit import GroupCoordinatorRequest
+from kafka.protocol.commit import FindCoordinatorRequest
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.message import Message, MessageSet, PartialMessage
 from kafka.protocol.metadata import MetadataRequest
@@ -168,7 +168,7 @@ def test_encode_message_header():
         b'client3',                        # ClientId
     ])
 
-    req = GroupCoordinatorRequest[0]('foo')
+    req = FindCoordinatorRequest[0]('foo')
     header = RequestHeader(req, correlation_id=4, client_id='client3')
     assert header.encode() == expect
 

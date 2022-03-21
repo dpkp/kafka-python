@@ -14,7 +14,7 @@ from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
+from kafka.protocol.commit import FindCoordinatorRequest, OffsetCommitRequest
 from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
                             LeaveGroupRequest, SyncGroupRequest)
 
@@ -669,7 +669,7 @@ class BaseCoordinator(object):
 
         log.debug("Sending group coordinator request for group %s to broker %s",
                   self.group_id, node_id)
-        request = GroupCoordinatorRequest[0](self.group_id)
+        request = FindCoordinatorRequest[0](self.group_id)
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_group_coordinator_response, future)

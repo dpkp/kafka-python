@@ -22,7 +22,8 @@ from kafka.protocol.admin import (
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest
 )
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
+from kafka.admin.coordinator_type import CoordinatorType
+from kafka.protocol.commit import OffsetFetchRequest, FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
@@ -297,18 +298,14 @@ class KafkaAdminClient(object):
             name as a string.
         :return: A message future
         """
-        # TODO add support for dynamically picking version of
-        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
-        # When I experimented with this, the coordinator value returned in
-        # GroupCoordinatorResponse_v1 didn't match the value returned by
-        # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = 0
-        # version = self._matching_api_version(GroupCoordinatorRequest)
+        version = self._matching_api_version(FindCoordinatorRequest)
         if version <= 0:
-            request = GroupCoordinatorRequest[version](group_id)
+            request = FindCoordinatorRequest[version](group_id)
+        elif version >= 1:
+            request = FindCoordinatorRequest[version](group_id, CoordinatorType.GROUP)
         else:
             raise NotImplementedError(
-                "Support for GroupCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorRequest{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_node(self._client.least_loaded_node(), request)
 
@@ -328,7 +325,7 @@ class KafkaAdminClient(object):
                     .format(response))
         else:
             raise NotImplementedError(
-                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
         return response.coordinator_id
 

@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String
+from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String, CompactBytes
 
 
 class OffsetCommitResponse_v0(Response):
@@ -209,47 +209,46 @@ OffsetFetchResponse = [
 ]
 
 
-class GroupCoordinatorResponse_v0(Response):
+class FindCoordinatorResponse_v0(Response):
     API_KEY = 10
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
         ('coordinator_id', Int32),
-        ('host', String('utf-8')),
+        ('host', CompactBytes),
         ('port', Int32)
     )
 
 
-class GroupCoordinatorResponse_v1(Response):
+class FindCoordinatorResponse_v1(Response):
     API_KEY = 10
-    API_VERSION = 1
+    API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
         ('error_message', String('utf-8')),
         ('coordinator_id', Int32),
-        ('host', String('utf-8')),
+        ('host', CompactBytes),
         ('port', Int32)
     )
 
 
-class GroupCoordinatorRequest_v0(Request):
+class FindCoordinatorRequest_v0(Request):
     API_KEY = 10
     API_VERSION = 0
-    RESPONSE_TYPE = GroupCoordinatorResponse_v0
+    RESPONSE_TYPE = FindCoordinatorResponse_v0
     SCHEMA = Schema(
-        ('consumer_group', String('utf-8'))
+        ('group_id', String('utf-8'))
     )
 
 
-class GroupCoordinatorRequest_v1(Request):
+class FindCoordinatorRequest_v1(Request):
     API_KEY = 10
     API_VERSION = 1
-    RESPONSE_TYPE = GroupCoordinatorResponse_v1
+    RESPONSE_TYPE = FindCoordinatorResponse_v1
     SCHEMA = Schema(
         ('coordinator_key', String('utf-8')),
         ('coordinator_type', Int8)
     )
 
-
-GroupCoordinatorRequest = [GroupCoordinatorRequest_v0, GroupCoordinatorRequest_v1]
-GroupCoordinatorResponse = [GroupCoordinatorResponse_v0, GroupCoordinatorResponse_v1]
+FindCoordinatorRequest = [FindCoordinatorRequest_v0, FindCoordinatorRequest_v1]
+FindCoordinatorResponse = [FindCoordinatorResponse_v0, FindCoordinatorResponse_v1]
