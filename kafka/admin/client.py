@@ -305,7 +305,7 @@ class KafkaAdminClient(object):
             request = FindCoordinatorRequest[version](group_id, CoordinatorType.GROUP)
         else:
             raise NotImplementedError(
-                "Support for FindCoordinatorRequest{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_node(self._client.least_loaded_node(), request)
 
