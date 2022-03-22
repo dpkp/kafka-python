@@ -221,6 +221,7 @@ class KafkaAdminClient(object):
 
         self._closed = False
         self._refresh_controller_id()
+        self._cluster_metadata = self._get_cluster_metadata().to_object()
         log.debug("KafkaAdminClient started.")
 
     def close(self):
@@ -511,20 +512,18 @@ class KafkaAdminClient(object):
         return future.value
 
     def list_topics(self):
-        metadata = self._get_cluster_metadata(topics=None)
-        obj = metadata.to_object()
-        return [t['topic'] for t in obj['topics']]
+        metadata = copy.copy(self._cluster_metadata)
+        topics = metadata.pop('topics')
+        return [m['topic'] for m in topics]
 
     def describe_topics(self, topics=None):
-        metadata = self._get_cluster_metadata(topics=topics)
-        obj = metadata.to_object()
-        return obj['topics']
+        metadata = copy.copy(self._cluster_metadata)
+        return metadata.pop('topics')
 
     def describe_cluster(self):
-        metadata = self._get_cluster_metadata()
-        obj = metadata.to_object()
-        obj.pop('topics')  # We have 'describe_topics' for this
-        return obj
+        metadata = copy.copy(self._cluster_metadata)
+        metadata.pop('topics') # describe_topics is for this
+        return metadata
 
     @staticmethod
     def _convert_describe_acls_response_to_acls(describe_response):
