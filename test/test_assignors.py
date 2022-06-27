@@ -655,7 +655,7 @@ def test_conflicting_previous_assignments(mocker):
     'execution_number,n_topics,n_consumers', [(i, randint(10, 20), randint(20, 40)) for i in range(100)]
 )
 def test_reassignment_with_random_subscriptions_and_changes(mocker, execution_number, n_topics, n_consumers):
-    all_topics = set(['t{}'.format(i) for i in range(1, n_topics + 1)])
+    all_topics = sorted(set(['t{}'.format(i) for i in range(1, n_topics + 1)]))
     partitions = dict([(t, set(range(1, i + 1))) for i, t in enumerate(all_topics)])
     cluster = create_cluster(mocker, topics=all_topics, topic_partitions_lambda=lambda t: partitions[t])
 
