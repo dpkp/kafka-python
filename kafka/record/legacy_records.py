@@ -108,6 +108,7 @@ class LegacyRecordBase(object):
     CODEC_GZIP = 0x01
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
+    CODEC_ZSTD = 0x04
     TIMESTAMP_TYPE_MASK = 0x08
 
     LOG_APPEND_TIME = 1
@@ -122,6 +123,10 @@ class LegacyRecordBase(object):
             checker, name = codecs.has_snappy, "snappy"
         elif compression_type == self.CODEC_LZ4:
             checker, name = codecs.has_lz4, "lz4"
+        elif compression_type == self.CODEC_ZSTD:
+            checker, name = codecs.has_zstd, "zstd"
+        else:
+            checker, name = lambda: False, "Unknown"
         if not checker():
             raise UnsupportedCodecError(
                 "Libraries for {} compression codec not found".format(name))
