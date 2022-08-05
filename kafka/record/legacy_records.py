@@ -49,8 +49,8 @@ from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
 from kafka.record.util import calc_crc32
 
 from kafka.codec import (
-    gzip_encode, snappy_encode, lz4_encode, lz4_encode_old_kafka,
-    gzip_decode, snappy_decode, lz4_decode, lz4_decode_old_kafka, zstd_decode,
+    gzip_encode, snappy_encode, lz4_encode, lz4_encode_old_kafka, zstd_encode,
+    gzip_decode, snappy_decode, lz4_decode, lz4_decode_old_kafka, zstd_decode
 )
 import kafka.codec as codecs
 from kafka.errors import CorruptRecordException, UnsupportedCodecError
