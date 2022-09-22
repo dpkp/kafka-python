@@ -538,7 +538,8 @@ class KafkaProducer(object):
             return LegacyRecordBatchBuilder.estimate_size_in_bytes(
                 magic, self.config['compression_type'], key, value)
 
-    def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None) -> RecordMetadata:
+    def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None):
+        # type: (str, bytes, bytes, list, int, int) -> RecordMetadata
         """Publish a message to a topic.
 
         Arguments:
