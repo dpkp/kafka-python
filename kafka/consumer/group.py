@@ -56,6 +56,8 @@ class KafkaConsumer(six.Iterator):
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
             Default: None
+        group_instance_id (str or None): the unique identifier defined by
+            user to distinguish each client instance
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -245,6 +247,7 @@ class KafkaConsumer(six.Iterator):
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
+        coordinator (callable): Custom class / callable for creating ConsumerCoordinator instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -254,6 +257,7 @@ class KafkaConsumer(six.Iterator):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'group_id': None,
+        'group_instance_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
@@ -308,6 +312,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_oauth_token_provider': None,
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
         'kafka_client': KafkaClient,
+        'coordinator': ConsumerCoordinator,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -383,7 +388,7 @@ class KafkaConsumer(six.Iterator):
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
             self._client, self._subscription, self._metrics, **self.config)
-        self._coordinator = ConsumerCoordinator(
+        self._coordinator = self.config['coordinator'](
             self._client, self._subscription, self._metrics,
             assignors=self.config['partition_assignment_strategy'],
             **self.config)
