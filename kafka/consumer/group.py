@@ -56,8 +56,12 @@ class KafkaConsumer(six.Iterator):
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
             Default: None
-        group_instance_id (str or None): the unique identifier defined by
-            user to distinguish each client instance
+        group_instance_id (str): the unique identifier to distinguish
+            each client instance. If set and leave_group_on_close is
+            False consumer group rebalancing won't be triggered until
+            sessiont_timeout_ms is met. Requires 2.3.0+.
+        leave_group_on_close (bool or None): whether to leave a consumer
+             group or not on consumer shutdown.
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -257,7 +261,8 @@ class KafkaConsumer(six.Iterator):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'group_id': None,
-        'group_instance_id': None,
+        'group_instance_id': '',
+        'leave_group_on_close': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,

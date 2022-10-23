@@ -82,7 +82,8 @@ class BaseCoordinator(object):
 
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
-        'group_instance_id': None,
+        'group_instance_id': '',
+        'leave_group_on_close': None,
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
@@ -97,8 +98,12 @@ class BaseCoordinator(object):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
-            group_instance_id (str or None): the unique identifier defined by
-                user to distinguish each client instance
+            group_instance_id (str): the unique identifier to distinguish
+                each client instance. If set and leave_group_on_close is
+                False consumer group rebalancing won't be triggered until
+                sessiont_timeout_ms is met. Requires 2.3.0+.
+            leave_group_on_close (bool or None): whether to leave a consumer
+                 group or not on consumer shutdown.
             session_timeout_ms (int): The timeout used to detect failures when
                 using Kafka's group management facilities. Default: 30000
             heartbeat_interval_ms (int): The expected time in milliseconds
@@ -123,6 +128,11 @@ class BaseCoordinator(object):
                 raise Errors.KafkaConfigurationError("Broker version %s does not support "
                                                      "different values for max_poll_interval_ms "
                                                      "and session_timeout_ms")
+
+        if self.config['group_instance_id'] and self.config['api_version'] < (2, 3, 0):
+            raise Errors.KafkaConfigurationError(
+                'Broker version %s does not support static membership' % (self.config['api_version'],),
+            )
 
         self._client = client
         self.group_id = self.config['group_id']
@@ -817,7 +827,7 @@ class BaseCoordinator(object):
                 not self.coordinator_unknown()
                 and self.state is not MemberState.UNJOINED
                 and self._generation is not Generation.NO_GENERATION
-                and not self.config['group_instance_id']
+                and self._leave_group_on_close()
             ):
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
@@ -917,6 +927,9 @@ class BaseCoordinator(object):
             error = error_type()
             log.error("Heartbeat failed: Unhandled error: %s", error)
             future.failure(error)
+
+    def _leave_group_on_close(self):
+        return self.config['leave_group_on_close'] is None or self.config['leave_group_on_close']
 
 
 class GroupCoordinatorMetrics(object):

@@ -29,7 +29,8 @@ class ConsumerCoordinator(BaseCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
-        'group_instance_id': None,
+        'group_instance_id': '',
+        'leave_group_on_close': None,
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
@@ -50,8 +51,12 @@ class ConsumerCoordinator(BaseCoordinator):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
-            group_instance_id (str or None): the unique identifier defined by
-                user to distinguish each client instance
+            group_instance_id (str): the unique identifier to distinguish
+                each client instance. If set and leave_group_on_close is
+                False consumer group rebalancing won't be triggered until
+                sessiont_timeout_ms is met. Requires 2.3.0+.
+            leave_group_on_close (bool or None): whether to leave a consumer
+                 group or not on consumer shutdown.
             enable_auto_commit (bool): If true the consumer's offset will be
                 periodically committed in the background. Default: True.
             auto_commit_interval_ms (int): milliseconds between automatic
