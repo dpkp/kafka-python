@@ -57,7 +57,8 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 >>> from kafka import KafkaConsumer
 >>> consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group')
 >>> # or as a static member with a fixed group member name
->>> # consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group', group_instance_id='consumer-1')
+>>> # consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group',
+>>> #                          group_instance_id='consumer-1', leave_group_on_close=False)
 >>> for msg in consumer:
 ...     print (msg)
 

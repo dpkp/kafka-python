@@ -49,10 +49,12 @@ KafkaConsumer
     consumer1 = KafkaConsumer('my-topic',
                               group_id='my-group',
                               group_instance_id='process-1',
+                              leave_group_on_close=False,
                               bootstrap_servers='my.server.com')
     consumer2 = KafkaConsumer('my-topic',
                               group_id='my-group',
                               group_instance_id='process-2',
+                              leave_group_on_close=False,
                               bootstrap_servers='my.server.com')
 
 
