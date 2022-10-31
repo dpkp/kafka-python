@@ -8,6 +8,8 @@ KafkaConsumer
 .. code:: python
 
     from kafka import KafkaConsumer
+    import json
+    import msgpack
 
     # To consume latest messages and auto-commit offsets
     consumer = KafkaConsumer('my-topic',
@@ -57,6 +59,8 @@ KafkaProducer
 
     from kafka import KafkaProducer
     from kafka.errors import KafkaError
+    import msgpack
+    import json
 
     producer = KafkaProducer(bootstrap_servers=['broker1:1234'])
 
