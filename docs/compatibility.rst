@@ -18,4 +18,4 @@ transactional producer/consumer support are not fully implemented. PRs welcome!
 
 kafka-python is tested on python 2.7, 3.4, 3.7, 3.8 and pypy2.7.
 
-Builds and tests via Travis-CI.  See https://travis-ci.org/dpkp/kafka-python
+Builds and tests via GitHub Actions.  See https://github.com/dpkp/kafka-python/actions

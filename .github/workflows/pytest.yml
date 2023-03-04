@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "2.7"
+          - "3.7"
+          - "3.8"
+        kafka-version:
+          - "0.8.2.2"
+          - "0.9.0.1"
+          - "0.10.2.2"
+          - "0.11.0.3"
+          - "1.1.1"
+          - "2.4.0"
+          - "2.5.0"
+          - "2.6.0"
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: "${{ matrix.python-version }}"
+        cache: pip
+
+    - uses: actions/setup-java@v3
+      with:
+        distribution: "temurin"
+        java-version: "8"
+
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get install libsnappy-dev libzstd-dev
+
+    - name: Install Python dependencies
+      run: |
+        pip install tox coveralls
+        pip install .
+
+    - name: Build integration
+      env:
+        KAFKA_VERSION: ${{ matrix.kafka-version }}
+      run: |
+        ./build_integration.sh
+
+    - name: Run tox
+      run: |
+        tox -e py$(echo ${{ matrix.python-version }} | tr -d .)
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@v1

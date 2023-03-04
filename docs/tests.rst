@@ -3,8 +3,6 @@ Tests
 
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
     :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
 
 Test environments are managed via tox. The test suite is run via pytest.
 

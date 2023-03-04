@@ -7,8 +7,6 @@ Kafka Python client
     :target: https://pypi.python.org/pypi/kafka-python
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
     :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
     :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
 
