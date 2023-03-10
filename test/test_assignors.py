@@ -661,7 +661,7 @@ def test_reassignment_with_random_subscriptions_and_changes(mocker, execution_nu
 
     subscriptions = defaultdict(set)
     for i in range(n_consumers):
-        topics_sample = sample(all_topics, randint(1, len(all_topics) - 1))
+        topics_sample = sample(sorted(all_topics), randint(1, len(all_topics) - 1))
         subscriptions['C{}'.format(i)].update(topics_sample)
 
     member_metadata = make_member_metadata(subscriptions)
@@ -671,7 +671,7 @@ def test_reassignment_with_random_subscriptions_and_changes(mocker, execution_nu
 
     subscriptions = defaultdict(set)
     for i in range(n_consumers):
-        topics_sample = sample(all_topics, randint(1, len(all_topics) - 1))
+        topics_sample = sample(sorted(all_topics), randint(1, len(all_topics) - 1))
         subscriptions['C{}'.format(i)].update(topics_sample)
 
     member_metadata = {}
