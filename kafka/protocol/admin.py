@@ -861,6 +861,7 @@ CreatePartitionsResponse = [
     CreatePartitionsResponse_v0, CreatePartitionsResponse_v1,
 ]
 
+
 class DeleteGroupsResponse_v0(Response):
     API_KEY = 42
     API_VERSION = 0
