@@ -1,3 +1,4 @@
+from kafka.structs import TopicPartition
 import pytest
 
 from logging import info
@@ -312,3 +313,27 @@ def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_fa
     assert group1 not in consumergroups
     assert group2 in consumergroups
     assert group3 not in consumergroups
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
+def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_messages, topic):
+    p0 = TopicPartition(topic, 0)
+    p1 = TopicPartition(topic, 1)
+    p2 = TopicPartition(topic, 2)
+
+    for p in (p0, p1, p2):
+        send_messages(range(0, 100), partition=p.partition, topic=p.topic)
+
+    consumer1 = kafka_consumer_factory(group_id=None, topics=())
+    consumer1.assign([p0, p1, p2])
+    for _ in range(300):
+        next(consumer1)
+
+    kafka_admin_client.delete_records({p0: -1, p1: 50})
+
+    consumer2 = kafka_consumer_factory(group_id=None, topics=())
+    consumer2.assign([p0, p1, p2])
+    all_messages = consumer2.poll(max_records=300, timeout_ms=1000)
+    assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure we read everything
+    assert not all_messages.get(p0, [])
+    assert [r.offset for r in all_messages[p1]] == list(range(50, 100))
+    assert [r.offset for r in all_messages[p2]] == list(range(100))

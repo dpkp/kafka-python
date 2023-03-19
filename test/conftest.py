@@ -61,11 +61,11 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     """Return a KafkaConsumer factory fixture"""
     _consumer = [None]
 
-    def factory(**kafka_consumer_params):
+    def factory(topics=(topic,), **kafka_consumer_params):
         params = {} if kafka_consumer_params is None else kafka_consumer_params.copy()
         params.setdefault('client_id', 'consumer_%s' % (request.node.name,))
         params.setdefault('auto_offset_reset', 'earliest')
-        _consumer[0] = next(kafka_broker.get_consumers(cnt=1, topics=[topic], **params))
+        _consumer[0] = next(kafka_broker.get_consumers(cnt=1, topics=list(topics), **params))
         return _consumer[0]
 
     yield factory

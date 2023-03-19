@@ -1017,9 +1017,6 @@ class KafkaAdminClient(object):
 
         return responses
 
-    # delete records protocol not yet implemented
-    # Note: send the request to the partition leaders
-
     # create delegation token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
