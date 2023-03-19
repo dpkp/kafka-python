@@ -8,7 +8,9 @@ from time import time, sleep
 
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
-from kafka.errors import (NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, GroupIdNotFoundError)
+from kafka.errors import (
+        KafkaError, NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, 
+        GroupIdNotFoundError, UnknownTopicOrPartitionError)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
@@ -355,3 +357,19 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     assert [r.offset for r in all_messages[t1p0]] == list(range(40, 100))
     assert [r.offset for r in all_messages[t1p1]] == list(range(100))
     assert [r.offset for r in all_messages[t1p2]] == list(range(30, 100))
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
+def test_delete_records_with_errors(kafka_admin_client, topic):
+    sleep(1)  # sometimes the topic is not created yet...?
+    p0 = TopicPartition(topic, 0)
+    # verify that topic has been created
+    kafka_admin_client.delete_records({p0: 10}, timeout_ms=1000)
+
+    with pytest.raises(UnknownTopicOrPartitionError):
+        kafka_admin_client.delete_records({TopicPartition(topic, 9999): -1})
+    with pytest.raises(UnknownTopicOrPartitionError):
+        kafka_admin_client.delete_records({TopicPartition("doesntexist", 0): -1})
+
+
+
