@@ -15,7 +15,7 @@ from kafka.client_async import KafkaClient, selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
-    IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
+    IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError, UnknownTopicOrPartitionError,
     UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
@@ -1115,20 +1115,24 @@ class KafkaAdminClient(object):
                 .format(version))
         return self._send_request_to_controller(request)
 
-    def delete_records(self, records_to_delete, timeout_ms=None):
-        """Delete records whose offset is smaller than the given offset of the corresponding partition.
+    def _get_leader_for_partitions(self, partitions, timeout_ms=None):
+        """Finds ID of the leader node for every given topic partition.
 
-        :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
-            given partitions.
+        Will raise UnknownTopicOrPartitionError if for some partition no leader can be found.
 
-        :return: List of DeleteRecordsResponse
+        :param partitions: ``[TopicPartition]``: partitions for which to find leaders.
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from 
+            config.
+        
+        :return: Dictionary with ``{leader_id -> {partitions}}``
         """
         timeout_ms = self._validate_timeout(timeout_ms)
         version = self._matching_api_version(MetadataRequest)
 
+        partitions = set(partitions)
         topics = set()
 
-        for topic_partition in records_to_delete:
+        for topic_partition in partitions:
             topics.add(topic_partition.topic)
 
         request = MetadataRequest[version](
@@ -1152,21 +1156,60 @@ class KafkaAdminClient(object):
         # If a single node serves as a partition leader for multiple partitions (and/or 
         # topics), we can send all of those in a single request.
         # For that we store {leader -> {topic1 -> [p0, p1], topic2 -> [p0, p1]}}
-        leader2topic2partitions = defaultdict(lambda: defaultdict(list))
+        leader2partitions = defaultdict(list)
+        valid_partitions = set()
         for topic in response.topics:
             for partition in topic[PARTITIONS_INFO]:
                 t2p = TopicPartition(topic=topic[NAME], partition=partition[PARTITION_INDEX])
-                if t2p in records_to_delete:
-                    leader2topic2partitions[partition[LEADER]][t2p.topic].append(t2p)
+                if t2p in partitions:
+                    leader2partitions[partition[LEADER]].append(t2p)
+                    valid_partitions.add(t2p)
 
+        if len(partitions) != len(valid_partitions):
+            unknown = set(partitions) - valid_partitions
+            raise UnknownTopicOrPartitionError(
+                "The following partitions are not known: %s" % ", "
+                .join(str(x) for x in unknown)
+            )
+
+        return leader2partitions
+
+    def delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
+        """Delete records whose offset is smaller than the given offset of the corresponding partition.
+
+        Note: if partition
+
+        :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
+            given partitions.
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from 
+            config.
+        :param partition_leader_id: ``str``: If specified, all deletion requests will be sent to
+            this node. No check is performed verifying that this is indeed the leader for all
+            listed partitions, use with caution.
+
+        :return: List of DeleteRecordsResponse
+        """
+        timeout_ms = self._validate_timeout(timeout_ms)
         responses = []
+        version = self._matching_api_version(DeleteRecordsRequest)
 
-        for leader, topic2partitions in leader2topic2partitions.items():
+        if partition_leader_id is None:
+            leader2partitions = self._get_leader_for_partitions(
+                set(records_to_delete), timeout_ms
+            )
+        else:
+            leader2partitions = {partition_leader_id: set(records_to_delete)}
+
+        for leader, partitions in leader2partitions.items():
+            topic2partitions = defaultdict(list)
+            for partition in partitions:
+                topic2partitions[partition.topic].append(partition)
+
             request = DeleteRecordsRequest[version](
                 topics=[
                     (topic, [(tp.partition, records_to_delete[tp]) for tp in partitions])
                     for topic, partitions in topic2partitions.items()
-                    ],
+                ],
                 timeout_ms=timeout_ms
             )
             future = self._send_request_to_node(leader, request)
@@ -1174,6 +1217,23 @@ class KafkaAdminClient(object):
 
             response = future.value
             responses.append(response)
+
+        partition2error = {}
+        for response in responses:
+            for topic in getattr(response, 'topics', ()):
+                for partition in getattr(topic, 'partitions', ()):
+                    if getattr(partition, 'error_code', 0) != 0:
+                        tp = TopicPartition(topic, partition['partition_index'])
+                        partition2error[tp] =partition['error_code']
+
+        if partition2error:
+            if len(partition2error) == 1:
+                raise Errors.for_code(partition2error[0])()
+            else:
+                raise Errors.BrokerResponseError(
+                    "The following errors occured when trying to delete records: "
+                    ", ".join("%s: %s" % (partition, error) for partition, error in partition2error.items())
+                )
 
         return responses
 
