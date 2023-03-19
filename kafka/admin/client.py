@@ -1070,7 +1070,7 @@ class KafkaAdminClient(object):
                 for partition in getattr(topic, 'partitions', ()):
                     if getattr(partition, 'error_code', 0) != 0:
                         tp = TopicPartition(topic, partition['partition_index'])
-                        partition2error[tp] =partition['error_code']
+                        partition2error[tp] = partition['error_code']
 
         if partition2error:
             if len(partition2error) == 1:
