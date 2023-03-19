@@ -1128,8 +1128,8 @@ class KafkaAdminClient(object):
 
         topics = set()
 
-        for topic2partition in records_to_delete:
-            topics.add(topic2partition.topic)
+        for topic_partition in records_to_delete:
+            topics.add(topic_partition.topic)
 
         request = MetadataRequest[version](
             topics=list(topics),
@@ -1148,22 +1148,28 @@ class KafkaAdminClient(object):
         PARTITION_INDEX = 1
         LEADER = 2
 
-        partition2leader = dict()
-
+        # We want to make as few requests as possible
+        # If a single node serves as a partition leader for multiple partitions (and/or 
+        # topics), we can send all of those in a single request.
+        # For that we store {leader -> {topic1 -> [p0, p1], topic2 -> [p0, p1]}}
+        leader2topic2partitions = defaultdict(lambda: defaultdict(list))
         for topic in response.topics:
             for partition in topic[PARTITIONS_INFO]:
                 t2p = TopicPartition(topic=topic[NAME], partition=partition[PARTITION_INDEX])
-                partition2leader[t2p] = partition[LEADER]
+                if t2p in records_to_delete:
+                    leader2topic2partitions[partition[LEADER]][t2p.topic].append(t2p)
 
         responses = []
 
-        for topic2partition in records_to_delete:
+        for leader, topic2partitions in leader2topic2partitions.items():
             request = DeleteRecordsRequest[version](
-                topics=[(topic2partition.topic, [(topic2partition.partition, records_to_delete[topic2partition])])],
+                topics=[
+                    (topic, [(tp.partition, records_to_delete[tp]) for tp in partitions])
+                    for topic, partitions in topic2partitions.items()
+                    ],
                 timeout_ms=timeout_ms
             )
-            # Sending separate request for each partition leader
-            future = self._send_request_to_node(partition2leader[topic2partition], request)
+            future = self._send_request_to_node(leader, request)
             self._wait_for_futures([future])
 
             response = future.value

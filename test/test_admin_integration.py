@@ -317,26 +317,44 @@ def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_fa
     assert group2 in consumergroups
     assert group3 not in consumergroups
 
-@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
-def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_messages, topic):
-    p0 = TopicPartition(topic, 0)
-    p1 = TopicPartition(topic, 1)
-    p2 = TopicPartition(topic, 2)
+@pytest.fixture(name="topic2")
+def _topic2(kafka_broker, request):
+    """Same as `topic` fixture, but a different name if you need to topics."""
+    topic_name = '%s_%s' % (request.node.name, random_string(10))
+    kafka_broker.create_topics([topic_name])
+    return topic_name
 
-    for p in (p0, p1, p2):
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
+def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_messages, topic, topic2):
+    t0p0 = TopicPartition(topic, 0)
+    t0p1 = TopicPartition(topic, 1)
+    t0p2 = TopicPartition(topic, 2)
+    t1p0 = TopicPartition(topic2, 0)
+    t1p1 = TopicPartition(topic2, 1)
+    t1p2 = TopicPartition(topic2, 2)
+
+    partitions = (t0p0, t0p1, t0p2, t1p0, t1p1, t1p2)
+
+    for p in partitions:
         send_messages(range(0, 100), partition=p.partition, topic=p.topic)
 
     consumer1 = kafka_consumer_factory(group_id=None, topics=())
-    consumer1.assign([p0, p1, p2])
-    for _ in range(300):
+    consumer1.assign(partitions)
+    for _ in range(600):
         next(consumer1)
 
-    kafka_admin_client.delete_records({p0: -1, p1: 50})
+    kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
 
     consumer2 = kafka_consumer_factory(group_id=None, topics=())
-    consumer2.assign([p0, p1, p2])
-    all_messages = consumer2.poll(max_records=300, timeout_ms=1000)
-    assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure we read everything
-    assert not all_messages.get(p0, [])
-    assert [r.offset for r in all_messages[p1]] == list(range(50, 100))
-    assert [r.offset for r in all_messages[p2]] == list(range(100))
+    consumer2.assign(partitions)
+    all_messages = consumer2.poll(max_records=600, timeout_ms=2000)
+    assert sum(len(x) for x in all_messages.values()) == 600 - 100 - 50 - 40 - 30
+    assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure there are no delayed messages
+
+    assert not all_messages.get(t0p0, [])
+    assert [r.offset for r in all_messages[t0p1]] == list(range(50, 100))
+    assert [r.offset for r in all_messages[t0p2]] == list(range(100))
+
+    assert [r.offset for r in all_messages[t1p0]] == list(range(40, 100))
+    assert [r.offset for r in all_messages[t1p1]] == list(range(100))
+    assert [r.offset for r in all_messages[t1p2]] == list(range(30, 100))
