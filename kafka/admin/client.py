@@ -1023,8 +1023,6 @@ class KafkaAdminClient(object):
     def delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
         """Delete records whose offset is smaller than the given offset of the corresponding partition.
 
-        Note: if partition
-
         :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
             given partitions.
         :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from 
