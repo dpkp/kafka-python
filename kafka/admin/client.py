@@ -973,49 +973,26 @@ class KafkaAdminClient(object):
         :return: Dictionary with ``{leader_id -> {partitions}}``
         """
         timeout_ms = self._validate_timeout(timeout_ms)
-        version = self._matching_api_version(MetadataRequest)
 
         partitions = set(partitions)
-        topics = set()
+        topics = set(tp.topic for tp in partitions)
 
-        for topic_partition in partitions:
-            topics.add(topic_partition.topic)
+        response = self._get_cluster_metadata(topics=topics).to_object()
 
-        request = MetadataRequest[version](
-            topics=list(topics),
-            allow_auto_topic_creation=False
-        )
-
-        future = self._send_request_to_node(self._client.least_loaded_node(), request)
-
-        self._wait_for_futures([future])
-        response = future.value
-
-        version = self._matching_api_version(DeleteRecordsRequest)
-
-        PARTITIONS_INFO = 3
-        NAME = 1
-        PARTITION_INDEX = 1
-        LEADER = 2
-
-        # We want to make as few requests as possible
-        # If a single node serves as a partition leader for multiple partitions (and/or 
-        # topics), we can send all of those in a single request.
-        # For that we store {leader -> {topic1 -> [p0, p1], topic2 -> [p0, p1]}}
         leader2partitions = defaultdict(list)
         valid_partitions = set()
-        for topic in response.topics:
-            for partition in topic[PARTITIONS_INFO]:
-                t2p = TopicPartition(topic=topic[NAME], partition=partition[PARTITION_INDEX])
+        for topic in response.get("topics", ()):
+            for partition in topic.get("partitions", ()):
+                t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
                 if t2p in partitions:
-                    leader2partitions[partition[LEADER]].append(t2p)
+                    leader2partitions[partition["leader"]].append(t2p)
                     valid_partitions.add(t2p)
 
         if len(partitions) != len(valid_partitions):
             unknown = set(partitions) - valid_partitions
             raise UnknownTopicOrPartitionError(
-                "The following partitions are not known: %s" % ", "
-                .join(str(x) for x in unknown)
+                "The following partitions are not known: %s" 
+                % ", ".join(str(x) for x in unknown)
             )
 
         return leader2partitions
@@ -1029,14 +1006,20 @@ class KafkaAdminClient(object):
             config.
         :param partition_leader_id: ``str``: If specified, all deletion requests will be sent to
             this node. No check is performed verifying that this is indeed the leader for all
-            listed partitions, use with caution.
+            listed partitions: use with caution.
 
-        :return: List of DeleteRecordsResponse
+        :return: Dictionary {topicPartition -> metadata}, where metadata is returned by the broker.
+            See DeleteRecordsResponse for possible fields. error_code for all partitions is 
+            guaranteed to be zero, otherwise an exception is raised.
         """
         timeout_ms = self._validate_timeout(timeout_ms)
         responses = []
         version = self._matching_api_version(DeleteRecordsRequest)
 
+        # We want to make as few requests as possible
+        # If a single node serves as a partition leader for multiple partitions (and/or 
+        # topics), we can send all of those in a single request.
+        # For that we store {leader -> {partitions for leader}}, and do 1 request per leader
         if partition_leader_id is None:
             leader2partitions = self._get_leader_for_partitions(
                 set(records_to_delete), timeout_ms
@@ -1059,27 +1042,35 @@ class KafkaAdminClient(object):
             future = self._send_request_to_node(leader, request)
             self._wait_for_futures([future])
 
-            response = future.value
-            responses.append(response)
+            responses.append(future.value.to_object())
 
+        partition2result = {}
         partition2error = {}
         for response in responses:
-            for topic in getattr(response, 'topics', ()):
-                for partition in getattr(topic, 'partitions', ()):
-                    if getattr(partition, 'error_code', 0) != 0:
-                        tp = TopicPartition(topic, partition['partition_index'])
-                        partition2error[tp] = partition['error_code']
+            for topic in response["topics"]:
+                for partition in topic["partitions"]:
+                    tp = TopicPartition(topic["name"], partition["partition_index"])
+                    partition2result[tp] = partition
+                    if partition["error_code"] != 0:
+                        partition2error[tp] = partition["error_code"]
 
         if partition2error:
             if len(partition2error) == 1:
-                raise Errors.for_code(partition2error[0])()
+                key, error = next(iter(partition2error.items()))
+                raise Errors.for_code(error)(
+                    "Error deleting records from topic %s partition %s" % (key.topic, key.partition)
+                )
             else:
                 raise Errors.BrokerResponseError(
-                    "The following errors occured when trying to delete records: "
-                    ", ".join("%s: %s" % (partition, error) for partition, error in partition2error.items())
+                    "The following errors occured when trying to delete records: " +
+                    ", ".join(
+                        "%s(partition=%d): %s" % 
+                        (partition.topic, partition.partition, Errors.for_code(error).__name__) 
+                        for partition, error in partition2error.items()
+                    )
                 )
 
-        return responses
+        return partition2result
 
     # create delegation token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
