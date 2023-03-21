@@ -9,8 +9,8 @@ from time import time, sleep
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 from kafka.errors import (
-        KafkaError, NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, 
-        GroupIdNotFoundError, UnknownTopicOrPartitionError)
+        BrokerResponseError, KafkaError, NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, 
+        GroupIdNotFoundError, OffsetOutOfRangeError, UnknownTopicOrPartitionError)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
@@ -345,7 +345,11 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     for _ in range(600):
         next(consumer1)
 
-    kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
+    result = kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
+    assert result[t0p0] == {"low_watermark": 100, "error_code": 0, "partition_index": t0p0.partition}
+    assert result[t0p1] == {"low_watermark": 50, "error_code": 0, "partition_index": t0p1.partition}
+    assert result[t1p0] == {"low_watermark": 60, "error_code": 0, "partition_index": t1p0.partition}
+    assert result[t1p2] == {"low_watermark": 70, "error_code": 0, "partition_index": t1p2.partition}
 
     consumer2 = kafka_consumer_factory(group_id=None, topics=())
     consumer2.assign(partitions)
@@ -363,16 +367,22 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
-def test_delete_records_with_errors(kafka_admin_client, topic):
+def test_delete_records_with_errors(kafka_admin_client, topic, send_messages):
     sleep(1)  # sometimes the topic is not created yet...?
     p0 = TopicPartition(topic, 0)
+    p1 = TopicPartition(topic, 1)
+    p2 = TopicPartition(topic, 2)
     # verify that topic has been created
-    kafka_admin_client.delete_records({p0: 10}, timeout_ms=1000)
+    send_messages(range(0, 1), partition=p2.partition, topic=p2.topic)
 
     with pytest.raises(UnknownTopicOrPartitionError):
         kafka_admin_client.delete_records({TopicPartition(topic, 9999): -1})
     with pytest.raises(UnknownTopicOrPartitionError):
         kafka_admin_client.delete_records({TopicPartition("doesntexist", 0): -1})
+    with pytest.raises(OffsetOutOfRangeError):
+        kafka_admin_client.delete_records({p0: 1000})
+    with pytest.raises(BrokerResponseError):
+        kafka_admin_client.delete_records({p0: 1000, p1: 1000})
 
 
 
