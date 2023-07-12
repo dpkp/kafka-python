@@ -496,7 +496,7 @@ class BrokerConnection(object):
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
-                server_hostname=self.host,
+                server_hostname=self.host.rstrip("."),
                 do_handshake_on_connect=False)
         except ssl.SSLError as e:
             log.exception('%s: Failed to wrap socket in SSLContext!', self)
