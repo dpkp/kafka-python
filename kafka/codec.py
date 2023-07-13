@@ -6,7 +6,7 @@ import platform
 import struct
 
 from kafka.vendor import six
-from kafka.vendor.six.moves import range
+from kafka.vendor.six import moves
 
 _XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
@@ -160,7 +160,7 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
         chunker = lambda payload, i, size: memoryview(payload)[i:size+i].tobytes()
 
     for chunk in (chunker(payload, i, xerial_blocksize)
-                  for i in range(0, len(payload), xerial_blocksize)):
+                  for i in moves.range(0, len(payload), xerial_blocksize)):
 
         block = snappy.compress(chunk)
         block_size = len(block)

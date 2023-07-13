@@ -10,8 +10,7 @@ import time
 import uuid
 
 import py
-from kafka.vendor.six.moves import urllib, range
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+from kafka.vendor.six import moves
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError
@@ -96,12 +95,12 @@ class Fixture(object):
         try:
             url = url_base + distfile + '.tgz'
             log.info("Attempting to download %s", url)
-            response = urllib.request.urlopen(url)
-        except urllib.error.HTTPError:
+            response = moves.urllib.request.urlopen(url)
+        except moves.urllib.error.HTTPError:
             log.exception("HTTP Error")
             url = url_base + distfile + '.tar.gz'
             log.info("Attempting to download %s", url)
-            response = urllib.request.urlopen(url)
+            response = moves.urllib.request.urlopen(url)
 
         log.info("Saving distribution file to %s", output_file)
         with open(output_file, 'w') as output_file_fd:
@@ -160,7 +159,7 @@ class ZookeeperFixture(Fixture):
     @classmethod
     def instance(cls):
         if "ZOOKEEPER_URI" in os.environ:
-            parse = urlparse(os.environ["ZOOKEEPER_URI"])
+            parse = moves.urllib.parse.urlparse(os.environ["ZOOKEEPER_URI"])
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
@@ -256,7 +255,7 @@ class KafkaFixture(Fixture):
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
         if "KAFKA_URI" in os.environ:
-            parse = urlparse(os.environ["KAFKA_URI"])
+            parse = moves.urllib.parse.urlparse(os.environ["KAFKA_URI"])
             (host, port) = (parse.hostname, parse.port)
             fixture = ExternalService(host, port)
         else:
@@ -530,7 +529,7 @@ class KafkaFixture(Fixture):
         retries = 10
         while True:
             node_id = self._client.least_loaded_node()
-            for connect_retry in range(40):
+            for connect_retry in moves.range(40):
                 self._client.maybe_connect(node_id)
                 if self._client.connected(node_id):
                     break
@@ -646,7 +645,7 @@ class KafkaFixture(Fixture):
     @staticmethod
     def _create_many_clients(cnt, cls, *args, **params):
         client_id = params['client_id']
-        for _ in range(cnt):
+        for _ in moves.range(cnt):
             params['client_id'] = '%s_%s' % (client_id, random_string(4))
             yield cls(*args, **params)
 

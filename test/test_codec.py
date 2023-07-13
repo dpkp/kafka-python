@@ -4,7 +4,7 @@ import platform
 import struct
 
 import pytest
-from kafka.vendor.six.moves import range
+from kafka.vendor.six import moves
 
 from kafka.codec import (
     has_snappy, has_lz4, has_zstd,
@@ -19,7 +19,7 @@ from test.testutil import random_string
 
 
 def test_gzip():
-    for i in range(1000):
+    for i in moves.range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = gzip_decode(gzip_encode(b1))
         assert b1 == b2
@@ -27,7 +27,7 @@ def test_gzip():
 
 @pytest.mark.skipif(not has_snappy(), reason="Snappy not available")
 def test_snappy():
-    for i in range(1000):
+    for i in moves.range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = snappy_decode(snappy_encode(b1))
         assert b1 == b2
@@ -87,7 +87,7 @@ def test_snappy_encode_xerial():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4():
-    for i in range(1000):
+    for i in moves.range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = lz4_decode(lz4_encode(b1))
         assert len(b1) == len(b2)
@@ -97,7 +97,7 @@ def test_lz4():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_old():
-    for i in range(1000):
+    for i in moves.range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = lz4_decode_old_kafka(lz4_encode_old_kafka(b1))
         assert len(b1) == len(b2)
@@ -107,7 +107,7 @@ def test_lz4_old():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_incremental():
-    for i in range(1000):
+    for i in moves.range(1000):
         # lz4 max single block size is 4MB
         # make sure we test with multiple-blocks
         b1 = random_string(100).encode('utf-8') * 50000
@@ -118,7 +118,7 @@ def test_lz4_incremental():
 
 @pytest.mark.skipif(not has_zstd(), reason="Zstd not available")
 def test_zstd():
-    for _ in range(1000):
+    for _ in moves.range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = zstd_decode(zstd_encode(b1))
         assert b1 == b2
