@@ -109,7 +109,7 @@ jobs:
           KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
 
   test-kafka:
-    name: Tests on ${{ env.PYTHON_LATEST }} for Kafka ${{ matrix.kafka-version }}
+    name: Tests for Kafka ${{ matrix.kafka-version }}
     needs:
       - build-sdist
     runs-on: ubuntu-latest
