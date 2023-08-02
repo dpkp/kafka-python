@@ -62,7 +62,7 @@ jobs:
     name: Tests on ${{ matrix.python-version }}
     needs:
       - build-sdist
-      - setup-kafka
+#      - setup-kafka
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
