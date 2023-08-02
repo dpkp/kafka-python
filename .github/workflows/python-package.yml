@@ -143,14 +143,15 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
-      - name: Check Java installation
-        run: source travis_java_install.sh
+#      - name: Check Java installation
+#        run: source travis_java_install.sh
       - name: Pull Kafka releases
         run: ./build_integration.sh
         env:
+          # This is fast enough as long as you pull only one release at a time,
+          # no need to worry about caching
           PLATFORM: ${{ matrix.platform }}
           KAFKA_VERSION: ${{ matrix.kafka-version }}
-        # TODO: Cache releases to expedite testing
       - name: Install dependencies
         run: |
           sudo apt install -y libsnappy-dev libzstd-dev
