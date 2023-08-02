@@ -103,7 +103,7 @@ jobs:
       - name: Check Java installation
         run: source travis_java_install.sh
       - name: Pull Kafka releases
-        run: build_integration.sh
+        run: ./build_integration.sh
         # TODO: Cache releases to expedite testing
       - name: Install dependencies
         run: |
