@@ -52,7 +52,7 @@ jobs:
           retention-days: 15
 
   test-python:
-    name: Tests on ${{ matrix.python-version }} for Kafka ${{ env.KAFKA_LATEST }}
+    name: Tests on ${{ matrix.python-version }}
     needs:
       - build-sdist
     runs-on: ubuntu-latest
