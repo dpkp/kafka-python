@@ -66,15 +66,15 @@ jobs:
           - "3.11"
           - "pypy3.9"
         kafka-version:
-#          - "0.8.2.2"
-#          - "0.9.0.1"
-#          - "0.10.2.2"
-           - "0.11.0.2"
-#          - "0.11.0.3"
-#          - "1.1.1"
-#          - "2.4.0"
-#          - "2.5.0"
-#          - "2.6.0"
+          - "0.8.2.2"
+          - "0.9.0.1"
+          - "0.10.2.2"
+          - "0.11.0.2"
+          - "0.11.0.3"
+          - "1.1.1"
+          - "2.4.0"
+          - "2.5.0"
+          - "2.6.0"
         experimental: [ false ]
 #        include:
 #          - python-version: "~3.12.0-0"
@@ -100,6 +100,9 @@ jobs:
         run: source travis_java_install.sh
       - name: Pull Kafka releases
         run: ./build_integration.sh
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ matrix.kafka-version }}
         # TODO: Cache releases to expedite testing
       - name: Install dependencies
         run: |
