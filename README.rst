@@ -7,10 +7,16 @@ Kafka Python client
     :target: https://pypi.python.org/pypi/kafka-python
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
     :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
+    :target: https://github.com/dpkp/kafka-python/blob/master/license
+.. image:: https://img.shields.io/pypi/dw/kafka-python.svg
+    :target: https://pypistats.org/packages/kafka-python
+.. image:: https://img.shields.io/pypi/v/kafka-python.svg
+    :target: https://pypi.org/project/kafka-python
+.. image:: https://img.shields.io/pypi/implementation/kafka-python
+    :target: https://github.com/dpkp/kafka-python/blob/master/setup.py
+
+
 
 Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
