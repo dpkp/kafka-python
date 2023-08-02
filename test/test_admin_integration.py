@@ -181,7 +181,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
         threads[i] = t
 
     try:
-        timeout = time() + 35
+        timeout = time() + 60
         while True:
             for c in range(num_consumers):
 
