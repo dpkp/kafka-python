@@ -107,6 +107,7 @@ jobs:
             requirements-dev.txt
       - name: Install dependencies
         run: |
+          sudo apt install -y libsnappy-dev
           python -m pip install --upgrade pip
           python -m pip install tox tox-gh-actions
           pip install .
