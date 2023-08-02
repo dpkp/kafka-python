@@ -135,7 +135,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: temurin
-          java-version: 11
+          java-version: 8
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -143,8 +143,6 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
-#      - name: Check Java installation
-#        run: source travis_java_install.sh
       - name: Pull Kafka releases
         run: ./build_integration.sh
         env:
