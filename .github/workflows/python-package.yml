@@ -65,20 +65,16 @@ jobs:
           - "3.10"
           - "3.11"
           - "pypy3.9"
-#        kafka-version:
-#          - "0.8"
-#          - "0.9"
-#          - "0.10"
-#          - "0.11"
-#          - "1.0"
-#          - "1.1"
-#          - "2.0"
-#          - "2.1"
-#          - "2.2"
-#          - "2.3"
-#          - "2.4"
-#          - "2.5"
-#          - "2.6"
+        kafka-version:
+#          - "0.8.2.2"
+#          - "0.9.0.1"
+#          - "0.10.2.2"
+           - "0.11.0.2"
+#          - "0.11.0.3"
+#          - "1.1.1"
+#          - "2.4.0"
+#          - "2.5.0"
+#          - "2.6.0"
         experimental: [ false ]
 #        include:
 #          - python-version: "~3.12.0-0"
@@ -116,6 +112,7 @@ jobs:
         run: tox
         env:
           PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ matrix.kafka-version }}
 
   check:  # This job does nothing and is only used for the branch protection
     name: ✅ Ensure the required checks passing
