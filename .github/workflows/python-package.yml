@@ -16,6 +16,7 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   PYTHON_LATEST: "3.11"
+  KAFKA_LATEST: "2.6.0"
 
   # For re-actors/checkout-python-sdist
   sdist-artifact: python-package-distributions
@@ -50,8 +51,8 @@ jobs:
           path: dist/${{ env.sdist-name }}
           retention-days: 15
 
-  test:
-    name: Tests on ${{ matrix.python-version }}
+  test-python:
+    name: Tests on ${{ matrix.python-version }} for Kafka ${{ env.KAFKA_LATEST }}
     needs:
       - build-sdist
     runs-on: ubuntu-latest
@@ -65,16 +66,6 @@ jobs:
           - "3.10"
           - "3.11"
           - "pypy3.9"
-        kafka-version:
-          - "0.8.2.2"
-          - "0.9.0.1"
-          - "0.10.2.2"
-          - "0.11.0.2"
-          - "0.11.0.3"
-          - "1.1.1"
-          - "2.4.0"
-          - "2.5.0"
-          - "2.6.0"
         experimental: [ false ]
 #        include:
 #          - python-version: "~3.12.0-0"
@@ -93,6 +84,62 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+      - name: Check Java installation
+        run: source travis_java_install.sh
+      - name: Pull Kafka releases
+        run: ./build_integration.sh
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
+        # TODO: Cache releases to expedite testing
+      - name: Install dependencies
+        run: |
+          sudo apt install -y libsnappy-dev libzstd-dev
+          python -m pip install --upgrade pip
+          python -m pip install tox tox-gh-actions
+          pip install .
+          pip install -r requirements-dev.txt
+      - name: Test with tox
+        run: tox
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
+
+  test-kafka:
+    name: Tests on ${{ env.PYTHON_LATEST }} for Kafka ${{ matrix.kafka-version }}
+    needs:
+      - build-sdist
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version:
+          - "0.8.2.2"
+          - "0.9.0.1"
+          - "0.10.2.2"
+          - "0.11.0.2"
+          - "0.11.0.3"
+          - "1.1.1"
+          - "2.4.0"
+          - "2.5.0"
+          - "2.6.0"
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 11
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_LATEST }}
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
@@ -122,7 +169,8 @@ jobs:
     if: always()
     needs:
       - build-sdist
-      - test
+      - test-python
+      - test-kafka
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
