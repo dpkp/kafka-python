@@ -50,19 +50,19 @@ jobs:
           path: dist/${{ env.sdist-name }}
           retention-days: 15
 
-#  setup-kafka:
-#    name: Get latest Kafka releases
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Pull Kafka releases
-#        run: build_integration.sh
-#        # TODO: Cache releases to expedite testing
+  setup-kafka:
+    name: Get latest Kafka releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull Kafka releases
+        run: build_integration.sh
+        # TODO: Cache releases to expedite testing
 
   test-pytest:
     name: Tests on ${{ matrix.python-version }}
     needs:
       - build-sdist
-#      - setup-kafka
+      - setup-kafka
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
@@ -97,6 +97,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Setup java
+        uses: actions/setup-java@v3
+        with:
+          distribution: '<distribution>'
+          java-version: 8
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
