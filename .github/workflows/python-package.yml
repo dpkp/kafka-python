@@ -50,19 +50,10 @@ jobs:
           path: dist/${{ env.sdist-name }}
           retention-days: 15
 
-  setup-kafka:
-    name: Get latest Kafka releases
-    runs-on: ubuntu-latest
-    steps:
-      - name: Pull Kafka releases
-        run: build_integration.sh
-        # TODO: Cache releases to expedite testing
-
-  test-pytest:
+  test:
     name: Tests on ${{ matrix.python-version }}
     needs:
       - build-sdist
-      - setup-kafka
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
@@ -109,9 +100,14 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
+      - name: Check Java installation
+        run: source travis_java_install.sh
+      - name: Pull Kafka releases
+        run: build_integration.sh
+        # TODO: Cache releases to expedite testing
       - name: Install dependencies
         run: |
-          sudo apt install -y libsnappy-dev
+          sudo apt install -y libsnappy-dev libzstd-dev
           python -m pip install --upgrade pip
           python -m pip install tox tox-gh-actions
           pip install .
@@ -126,7 +122,7 @@ jobs:
     if: always()
     needs:
       - build-sdist
-      - test-pytest
+      - test
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
