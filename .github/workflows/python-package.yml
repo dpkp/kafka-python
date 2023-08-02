@@ -91,8 +91,8 @@ jobs:
       - name: Setup java
         uses: actions/setup-java@v3
         with:
-          distribution: oracle
-          java-version: 8
+          distribution: temurin
+          java-version: 11
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
