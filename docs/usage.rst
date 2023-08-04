@@ -112,3 +112,52 @@ KafkaProducer
 
     # configure multiple retries
     producer = KafkaProducer(retries=5)
+    
+    
+ClusterMetadata
+=============
+.. code:: python
+
+    from kafka.cluster import ClusterMetadata
+
+    clusterMetadata = ClusterMetadata(bootstrap_servers=['broker1:1234'])
+
+    # get all brokers metadata
+    print(clusterMetadata.brokers())
+
+    # get specific broker metadata
+    print(clusterMetadata.broker_metadata('bootstrap-0'))
+
+    # get all partitions of a topic
+    print(clusterMetadata.partitions_for_topic("topic"))
+
+    # list topics 
+    print(clusterMetadata.topics())
+
+
+KafkaAdminClient
+=============
+.. code:: python
+    from kafka import KafkaAdminClient
+    from kafka.admin import NewTopic
+    
+    admin = KafkaAdminClient(bootstrap_servers=['broker1:1234'])
+    
+    # create a new topic
+    topics_list = []
+    topics_list.append(NewTopic(name="testtopic", num_partitions=1, replication_factor=1))
+    admin.create_topics(topics_list,timeout_ms=None, validate_only=False)
+
+    # delete a topic
+    admin.delete_topics(['testtopic'])
+
+    # list consumer groups
+    print(admin.list_consumer_groups())
+
+    # get consumer group details
+    print(admin.describe_consumer_groups('cft-plt-qa.connect'))
+
+    # get consumer group offset
+    print(admin.list_consumer_group_offsets('cft-plt-qa.connect'))
+
+    
