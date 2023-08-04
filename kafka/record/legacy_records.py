@@ -263,7 +263,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
 
                 # When magic value is greater than 0, the timestamp
                 # of a compressed message depends on the
-                # typestamp type of the wrapper message:
+                # timestamp type of the wrapper message:
                 if timestamp_type == self.LOG_APPEND_TIME:
                     timestamp = self._timestamp
 
