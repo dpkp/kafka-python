@@ -1,0 +1,179 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  release:
+    types: [created]
+    branches:
+      - 'master'
+  workflow_dispatch:
+
+env:
+  FORCE_COLOR: "1"  # Make tools pretty.
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+  PYTHON_LATEST: "3.11"
+  KAFKA_LATEST: "2.6.0"
+
+  # For re-actors/checkout-python-sdist
+  sdist-artifact: python-package-distributions
+
+jobs:
+
+  build-sdist:
+    name: 📦 Build the source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_LATEST }}
+          cache: pip
+      - run: python -m pip install build
+        name: Install core libraries for build and install
+      - name: Build artifacts
+        run: python -m build
+      - name: Upload built artifacts for testing
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.sdist-artifact }}
+          # NOTE: Exact expected file names are specified here
+          # NOTE: as a safety measure — if anything weird ends
+          # NOTE: up being in this dir or not all dists will be
+          # NOTE: produced, this will fail the workflow.
+          path: dist/${{ env.sdist-name }}
+          retention-days: 15
+
+  test-python:
+    name: Tests on ${{ matrix.python-version }}
+    needs:
+      - build-sdist
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+        experimental: [ false ]
+        include:
+          - python-version: "pypy3.9"
+            experimental: true
+#          - python-version: "~3.12.0-0"
+#            experimental: true
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 11
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+      - name: Check Java installation
+        run: source travis_java_install.sh
+      - name: Pull Kafka releases
+        run: ./build_integration.sh
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
+        # TODO: Cache releases to expedite testing
+      - name: Install dependencies
+        run: |
+          sudo apt install -y libsnappy-dev libzstd-dev
+          python -m pip install --upgrade pip
+          python -m pip install tox tox-gh-actions
+          pip install .
+          pip install -r requirements-dev.txt
+      - name: Test with tox
+        run: tox
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
+
+  test-kafka:
+    name: Tests for Kafka ${{ matrix.kafka-version }}
+    needs:
+      - build-sdist
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka-version:
+          - "0.8.2.2"
+          - "0.9.0.1"
+          - "0.10.2.2"
+          - "0.11.0.2"
+          - "0.11.0.3"
+          - "1.1.1"
+          - "2.4.0"
+          - "2.5.0"
+          - "2.6.0"
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 8
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_LATEST }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+      - name: Pull Kafka releases
+        run: ./build_integration.sh
+        env:
+          # This is fast enough as long as you pull only one release at a time,
+          # no need to worry about caching
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ matrix.kafka-version }}
+      - name: Install dependencies
+        run: |
+          sudo apt install -y libsnappy-dev libzstd-dev
+          python -m pip install --upgrade pip
+          python -m pip install tox tox-gh-actions
+          pip install .
+          pip install -r requirements-dev.txt
+      - name: Test with tox
+        run: tox
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          KAFKA_VERSION: ${{ matrix.kafka-version }}
+
+  check:  # This job does nothing and is only used for the branch protection
+    name: ✅ Ensure the required checks passing
+    if: always()
+    needs:
+      - build-sdist
+      - test-python
+      - test-kafka
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}
