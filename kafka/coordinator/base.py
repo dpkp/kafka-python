@@ -952,7 +952,7 @@ class HeartbeatThread(threading.Thread):
                 # disable here to prevent propagating an exception to this
                 # heartbeat thread
                 # must get client._lock, or maybe deadlock at heartbeat 
-                # failure callbak in consumer poll
+                # failure callback in consumer poll
                 self.coordinator._client.poll(timeout_ms=0)
 
         with self.coordinator._lock:
