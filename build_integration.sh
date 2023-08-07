@@ -20,6 +20,8 @@ pushd servers
         SCALA_VERSION="2.8.0"
       elif [ "$kafka" \> "2.4.0" ]; then
         SCALA_VERSION="2.12"
+      else
+        SCALA_VERSION="2.11"
       fi
       KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
       if [ "$kafka" == "trunk" ]; then
