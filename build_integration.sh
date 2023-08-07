@@ -20,6 +20,11 @@ pushd servers
         if [ ! -d "$kafka" ]; then
           git clone $KAFKA_SRC_GIT $kafka
         fi
+        if [ "$kafka" == "0.8.0" ]; then
+          SCALA_VERSION="2.8.0"
+        else if [ "$kafka" \> "2.4.0" ]; then
+          SCALA_VERSION="2.12"
+          KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
         pushd $kafka
           git pull
           ./gradlew -PscalaVersion=$SCALA_VERSION -Pversion=$kafka releaseTarGz -x signArchives
@@ -33,12 +38,6 @@ pushd servers
         echo "-------------------------------------"
         echo "Checking kafka binaries for ${kafka}"
         echo
-        if [ "$kafka" == "0.8.0" ]; then
-          KAFKA_ARTIFACT="kafka_2.8.0-${kafka}.tar.gz"
-        else if [ "$kafka" \> "2.4.0" ]; then
-          KAFKA_ARTIFACT="kafka_2.12-${kafka}.tgz"
-        else
-          KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
         fi
         fi
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
