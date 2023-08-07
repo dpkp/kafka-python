@@ -24,6 +24,7 @@ pushd servers
           SCALA_VERSION="2.8.0"
         else if [ "$kafka" \> "2.4.0" ]; then
           SCALA_VERSION="2.12"
+        fi
         KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
         pushd $kafka
           git pull
