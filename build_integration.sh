@@ -69,8 +69,8 @@ pushd servers
         fi
       fi
       if [ ! -d "../$kafka/resources" ]; then
-        echo "resources not defined -- copying from ${kafka}/kafka-bin/config"
-        cp -r ../$kafka/kafka-bin/config  ../$kafka/resources
+        echo "resources not defined -- copying from trunk/resources"
+        cp -r ../trunk/resources  ../$kafka/
       fi
     done
   popd
