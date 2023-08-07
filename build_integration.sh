@@ -59,10 +59,13 @@ pushd servers
           mkdir -p ../$kafka/
           tar xzvf ${KAFKA_ARTIFACT} -C ../$kafka/
           rm -rf ../$kafka/kafka-bin
-          mv ../$kafka/${KAFKA_ARTIFACT/%.t*/} ../$kafka/kafka-bin
+          mv ../$kafka/${kafka_artifact/%.t*/} ../$kafka/kafka-bin
           if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
             echo "Extraction Failed ($kafka/kafka-bin/bin/kafka-run-class.sh does not exist)!"
             exit 1
+          fi
+          if [ ! -d "../$kafka/resources" ]; then
+            cp ../$kafka/kafka-bin/config  ../$kafka/resources
           fi
         else
           echo "$kafka is already installed in servers/$kafka/ -- skipping"
