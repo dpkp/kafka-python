@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.2 0.11.0.3 1.0.2 1.1.1 2.0.1 2.1.1 2.2.1 2.3.0 2.4.0 2.5.0"}
+: ${ALL_RELEASES:="0.8.2.2 0.9.0.1 0.10.1.1 0.10.2.2 0.11.0.3 1.0.2 1.1.1 2.0.1 2.1.1 2.2.1 2.3.0 2.4.0 2.5.0, 3.4.0 3.5.0"}
 : ${SCALA_VERSION:=2.11}
 : ${DIST_BASE_URL:=https://archive.apache.org/dist/kafka/}
 : ${KAFKA_SRC_GIT:=https://github.com/apache/kafka.git}
@@ -16,16 +16,16 @@ pushd servers
   mkdir -p dist
   pushd dist
     for kafka in $KAFKA_VERSION; do
+      if [ "$kafka" == "0.8.0" ]; then
+        SCALA_VERSION="2.8.0"
+      elif [ "$kafka" \> "2.4.0" ]; then
+        SCALA_VERSION="2.12"
+      fi
+      KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
       if [ "$kafka" == "trunk" ]; then
         if [ ! -d "$kafka" ]; then
           git clone $KAFKA_SRC_GIT $kafka
         fi
-        if [ "$kafka" == "0.8.0" ]; then
-          SCALA_VERSION="2.8.0"
-        else if [ "$kafka" \> "2.4.0" ]; then
-          SCALA_VERSION="2.12"
-        fi
-        KAFKA_ARTIFACT="kafka_${SCALA_VERSION}-${kafka}.tgz"
         pushd $kafka
           git pull
           ./gradlew -PscalaVersion=$SCALA_VERSION -Pversion=$kafka releaseTarGz -x signArchives
@@ -39,8 +39,6 @@ pushd servers
         echo "-------------------------------------"
         echo "Checking kafka binaries for ${kafka}"
         echo
-        fi
-        fi
         if [ ! -f "../$kafka/kafka-bin/bin/kafka-run-class.sh" ]; then
           if [ -f "${KAFKA_ARTIFACT}" ]; then
             echo "Using cached artifact: ${KAFKA_ARTIFACT}"
@@ -55,7 +53,8 @@ pushd servers
             fi
           fi
           echo
-          echo "Extracting kafka ${kafka} binaries"
+          echo "Extracting kafka ${kafka} binaries from ${KAFKA_ARTIFACT} into $(pwd)/${kafka}"
+          mkdir -p ../$kafka/
           tar xzvf ${KAFKA_ARTIFACT} -C ../$kafka/
           rm -rf ../$kafka/kafka-bin
           mv ../$kafka/${KAFKA_ARTIFACT/%.t*/} ../$kafka/kafka-bin
