@@ -127,6 +127,8 @@ jobs:
           - "2.4.0"
           - "2.5.0"
           - "2.6.0"
+          - "3.4.0"
+          - "3.5.0"
     steps:
       - name: Checkout the source code
         uses: actions/checkout@v3
