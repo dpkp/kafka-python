@@ -194,6 +194,9 @@ class KafkaProducer(object):
             brokers or partitions. Default: 300000
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
+        connection_timeout_ms (int): Connection timeout in milliseconds.
+            Default: None, which defaults it to the same value as 
+            request_timeout_ms.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
@@ -304,6 +307,7 @@ class KafkaProducer(object):
         'max_request_size': 1048576,
         'metadata_max_age_ms': 300000,
         'retry_backoff_ms': 100,
+        'connection_timeout_ms': None,
         'request_timeout_ms': 30000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,

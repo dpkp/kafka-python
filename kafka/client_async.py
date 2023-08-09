@@ -76,6 +76,9 @@ class KafkaClient(object):
             rate. To avoid connection storms, a randomization factor of 0.2
             will be applied to the backoff resulting in a random range between
             20% below and 20% above the computed value. Default: 1000.
+        connection_timeout_ms (int): Connection timeout in milliseconds.
+            Default: None, which defaults it to the same value as 
+            request_timeout_ms.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         connections_max_idle_ms: Close idle connections after the number of
@@ -160,6 +163,7 @@ class KafkaClient(object):
         'bootstrap_servers': 'localhost',
         'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
+        'connection_timeout_ms': None,
         'request_timeout_ms': 30000,
         'wakeup_timeout_ms': 3000,
         'connections_max_idle_ms': 9 * 60 * 1000,
