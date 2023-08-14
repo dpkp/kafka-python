@@ -308,7 +308,7 @@ class BrokerConnection(object):
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
         self._sasl_auth_future = None
-        self.last_attempt = 0
+        self.last_activity = 0
         self._gai = []
         self._sensors = None
         if self.config['metrics']:
@@ -385,7 +385,7 @@ class BrokerConnection(object):
             self.config['state_change_callback'](self.node_id, self._sock, self)
             log.info('%s: connecting to %s:%d [%s %s]', self, self.host,
                      self.port, self._sock_addr, AFI_NAMES[self._sock_afi])
-            self.last_attempt = time.time()
+            self.last_activity = time.time()
 
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
@@ -418,7 +418,7 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self.node_id, self._sock, self)
-                self.last_attempt = time.time()
+                self.last_activity = time.time()
 
             # Connection failed
             # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
@@ -444,7 +444,7 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                 self.config['state_change_callback'](self.node_id, self._sock, self)
-                self.last_attempt = time.time()
+                self.last_activity = time.time()
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
@@ -455,13 +455,13 @@ class BrokerConnection(object):
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self.node_id, self._sock, self)
-                    self.last_attempt = time.time()
+                    self.last_activity = time.time()
 
         if self.state not in (ConnectionStates.CONNECTED,
                               ConnectionStates.DISCONNECTED):
             # Connection timed out
             request_timeout = self.config['connection_timeout_ms'] / 1000.0
-            if time.time() > request_timeout + self.last_attempt:
+            if time.time() > request_timeout + self.last_activity:
                 log.error('Connection attempt to %s timed out', self)
                 self.close(Errors.KafkaConnectionError('timeout'))
                 return self.state
@@ -854,7 +854,7 @@ class BrokerConnection(object):
         re-establish a connection yet
         """
         if self.state is ConnectionStates.DISCONNECTED:
-            if time.time() < self.last_attempt + self._reconnect_backoff:
+            if time.time() < self.last_activity + self._reconnect_backoff:
                 return True
         return False
 
@@ -865,7 +865,7 @@ class BrokerConnection(object):
         the reconnect backoff time. When connecting or connected, returns a very
         large number to handle slow/stalled connections.
         """
-        time_waited = time.time() - (self.last_attempt or 0)
+        time_waited = time.time() - (self.last_activity or 0)
         if self.state is ConnectionStates.DISCONNECTED:
             return max(self._reconnect_backoff - time_waited, 0) * 1000
         else:

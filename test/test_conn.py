@@ -61,28 +61,28 @@ def test_connect_timeout(_socket, conn):
     # Initial connect returns EINPROGRESS
     # immediate inline connect returns EALREADY
     # second explicit connect returns EALREADY
-    # third explicit connect returns EALREADY and times out via last_attempt
+    # third explicit connect returns EALREADY and times out via last_activity
     _socket.connect_ex.side_effect = [EINPROGRESS, EALREADY, EALREADY, EALREADY]
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
-    conn.last_attempt = 0
+    conn.last_activity = 0
     conn.connect()
     assert conn.state is ConnectionStates.DISCONNECTED
 
 
 def test_blacked_out(conn):
     with mock.patch("time.time", return_value=1000):
-        conn.last_attempt = 0
+        conn.last_activity = 0
         assert conn.blacked_out() is False
-        conn.last_attempt = 1000
+        conn.last_activity = 1000
         assert conn.blacked_out() is True
 
 
 def test_connection_delay(conn):
     with mock.patch("time.time", return_value=1000):
-        conn.last_attempt = 1000
+        conn.last_activity = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
         assert conn.connection_delay() == float('inf')
@@ -286,7 +286,7 @@ def test_lookup_on_connect():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
-        conn.last_attempt = 0
+        conn.last_activity = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
@@ -301,11 +301,11 @@ def test_relookup_on_failure():
     assert conn.host == hostname
     mock_return1 = []
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
-        last_attempt = conn.last_attempt
+        last_activity = conn.last_activity
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
-        assert conn.last_attempt > last_attempt
+        assert conn.last_activity > last_activity
 
     afi2 = socket.AF_INET
     sockaddr2 = ('127.0.0.2', 9092)
@@ -314,7 +314,7 @@ def test_relookup_on_failure():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
-        conn.last_attempt = 0
+        conn.last_activity = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
