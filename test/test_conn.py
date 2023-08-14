@@ -305,7 +305,6 @@ def test_relookup_on_failure():
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
-        assert conn.last_activity > last_activity
 
     afi2 = socket.AF_INET
     sockaddr2 = ('127.0.0.2', 9092)
@@ -320,6 +319,7 @@ def test_relookup_on_failure():
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
+        assert conn.last_activity > last_activity
 
 
 def test_requests_timed_out(conn):
