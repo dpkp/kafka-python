@@ -6,6 +6,7 @@ import socket
 
 import mock
 import pytest
+import time
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
 from kafka.protocol.api import RequestHeader
@@ -70,6 +71,68 @@ def test_connect_timeout(_socket, conn):
     conn.last_activity = 0
     conn.connect()
     assert conn.state is ConnectionStates.DISCONNECTED
+
+def test_connect_timeout_slowconn(_socket, conn, mocker):
+    # Same as test_connect_timeout, 
+    # but we make the connection run longer than the timeout in order to test that
+    # BrokerConnection resets the timer whenever things happen during the connection
+    # See https://github.com/dpkp/kafka-python/issues/2386
+    _socket.connect_ex.side_effect = [EINPROGRESS, EISCONN]
+
+    # 0.8 = we guarantee that when testing with three intervals of this we are past the timeout
+    time_between_connect = (conn.config['connection_timeout_ms']/1000) * 0.8
+    start = time.time()
+
+    # Use plaintext auth for simplicity
+    last_activity = conn.last_activity
+    conn.config['security_protocol'] = 'SASL_PLAINTEXT'
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTING
+    # Ensure the last_activity counter was updated
+    assert conn.last_activity > last_activity
+    last_activity = conn.last_activity
+
+    # Simulate time being passed
+    # This shouldn't be enough time to time out the connection
+    conn._try_authenticate = mocker.Mock(side_effect=[False, False, True])
+    with mock.patch("time.time", return_value=start+time_between_connect):
+        # This should trigger authentication
+        # Note that an authentication attempt isn't actually made until now.
+        # We simulate that authentication does not succeed at this point
+        # This is technically incorrect, but it lets us see what happens
+        # to the state machine when the state doesn't change for two function calls
+        conn.connect()
+        assert conn.last_activity > last_activity
+        last_activity = conn.last_activity
+
+        assert conn.state is ConnectionStates.AUTHENTICATING
+
+
+    # This time around we should be way past timeout. 
+    # Now we care about connect() not terminating the attempt,
+    # because connection state was progressed in the meantime.
+    with mock.patch("time.time", return_value=start+time_between_connect*2):
+        # Simulate this one not succeeding as well. This is so we can ensure things don't time out
+        conn.connect()
+
+        # No state change = no activity change
+        assert conn.last_activity == last_activity
+
+        # If last_activity was not reset when the state transitioned to AUTHENTICATING,
+        # the connection state would be timed out now.
+        assert conn.state is ConnectionStates.AUTHENTICATING
+
+
+    # This time around, the connection should succeed.
+    with mock.patch("time.time", return_value=start+time_between_connect*3):
+        # This should finalize the connection
+        conn.connect()
+
+        assert conn.last_activity > last_activity
+        last_activity = conn.last_activity
+
+        assert conn.state is ConnectionStates.CONNECTED
+
 
 
 def test_blacked_out(conn):
