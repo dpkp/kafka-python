@@ -15,7 +15,8 @@ The following code adapted from trollius.selectors.
 from __future__ import absolute_import
 
 from abc import ABCMeta, abstractmethod
-from collections import namedtuple, Mapping
+from collections import namedtuple
+from collections.abc import Mapping
 from errno import EINTR
 import math
 import select
