@@ -1,5 +1,6 @@
 # pylint: skip-file
 from __future__ import absolute_import
+import logging
 
 import pytest
 
@@ -12,6 +13,7 @@ from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher, NoOffsetForPartitionError
 )
 from kafka.consumer.subscription_state import SubscriptionState
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.fetch import FetchRequest, FetchResponse
@@ -376,6 +378,22 @@ def test_fetched_records(fetcher, topic, mocker):
 def test__handle_fetch_response(fetcher, fetch_request, fetch_response, num_partitions):
     fetcher._handle_fetch_response(fetch_request, time.time(), fetch_response)
     assert len(fetcher._completed_fetches) == num_partitions
+
+
+@pytest.mark.parametrize(("exception", "log_level"), [
+(
+    Errors.Cancelled(),
+    logging.INFO
+),
+(
+    Errors.KafkaError(),
+    logging.ERROR
+)
+])
+def test__handle_fetch_error(fetcher, caplog, exception, log_level):
+    fetcher._handle_fetch_error(3, exception)
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == logging.getLevelName(log_level)
 
 
 def test__unpack_message_set(fetcher):
