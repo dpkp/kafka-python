@@ -16,7 +16,10 @@ from __future__ import absolute_import
 
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
-from collections.abc import Mapping
+try:
+    from collections.abc import Mapping
+except ImportError:
+    from collections import Mapping
 from errno import EINTR
 import math
 import select
