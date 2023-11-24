@@ -69,6 +69,7 @@ def test_connect_timeout(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
     conn.last_activity = 0
+    conn.last_attempt = 0
     conn.connect()
     assert conn.state is ConnectionStates.DISCONNECTED
 
@@ -85,11 +86,15 @@ def test_connect_timeout_slowconn(_socket, conn, mocker):
 
     # Use plaintext auth for simplicity
     last_activity = conn.last_activity
+    last_attempt = conn.last_attempt
     conn.config['security_protocol'] = 'SASL_PLAINTEXT'
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
     # Ensure the last_activity counter was updated
+    # Last_attempt should also be updated
     assert conn.last_activity > last_activity
+    assert conn.last_attempt > last_attempt
+    last_attempt = conn.last_attempt
     last_activity = conn.last_activity
 
     # Simulate time being passed
@@ -103,6 +108,8 @@ def test_connect_timeout_slowconn(_socket, conn, mocker):
         # to the state machine when the state doesn't change for two function calls
         conn.connect()
         assert conn.last_activity > last_activity
+        # Last attempt is kept as a legacy variable, should not update
+        assert conn.last_attempt == last_attempt
         last_activity = conn.last_activity
 
         assert conn.state is ConnectionStates.AUTHENTICATING
@@ -117,6 +124,7 @@ def test_connect_timeout_slowconn(_socket, conn, mocker):
 
         # No state change = no activity change
         assert conn.last_activity == last_activity
+        assert conn.last_attempt == last_attempt
 
         # If last_activity was not reset when the state transitioned to AUTHENTICATING,
         # the connection state would be timed out now.
@@ -129,6 +137,7 @@ def test_connect_timeout_slowconn(_socket, conn, mocker):
         conn.connect()
 
         assert conn.last_activity > last_activity
+        assert conn.last_attempt == last_attempt
         last_activity = conn.last_activity
 
         assert conn.state is ConnectionStates.CONNECTED

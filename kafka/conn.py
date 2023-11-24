@@ -309,6 +309,9 @@ class BrokerConnection(object):
             self._ssl_context = self.config['ssl_context']
         self._sasl_auth_future = None
         self.last_activity = 0
+        # This value is not used for internal state, but it is left to allow backwards-compatability
+        # The variable last_activity is now used instead, but is updated more often may therefore break compatability with some hacks.
+        self.last_attempt= 0
         self._gai = []
         self._sensors = None
         if self.config['metrics']:
@@ -366,6 +369,7 @@ class BrokerConnection(object):
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
+            self.last_attempt = time.time()
             next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
                 self.close(Errors.KafkaConnectionError('DNS failure'))
