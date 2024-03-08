@@ -187,7 +187,7 @@ def _detect_xerial_stream(payload):
         The version is the version of this format as written by xerial,
         in the wild this is currently 1 as such we only support v1.
 
-        Compat is there to claim the miniumum supported version that
+        Compat is there to claim the minimum supported version that
         can read a xerial block stream, presently in the wild this is
         1.
     """
