@@ -6,6 +6,7 @@ python:
     - 2.7
     - 3.4
     - 3.7
+    - 3.8
     - pypy2.7-6.0
 
 env:
@@ -16,11 +17,13 @@ env:
     - KAFKA_VERSION=1.1.1
     - KAFKA_VERSION=2.4.0
     - KAFKA_VERSION=2.5.0
+    - KAFKA_VERSION=2.6.0
 
 addons:
   apt:
     packages:
       - libsnappy-dev
+      - libzstd-dev
       - openjdk-8-jdk
 
 cache:

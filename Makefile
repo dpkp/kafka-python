@@ -20,20 +20,20 @@ test37: build-integration
 test27: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
 
-# Test using py.test directly if you want to use local python. Useful for other
+# Test using pytest directly if you want to use local python. Useful for other
 # platforms that require manual installation for C libraries, ie. Windows.
 test-local: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) py.test \
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) pytest \
 		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF $(FLAGS) kafka test
 
 cov-local: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) py.test \
+	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) pytest \
 		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
 		--cov-config=.covrc --cov-report html $(FLAGS) kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on
-# PyPi homepage (https://pypi.python.org/pypi/kafka-python)
+# PyPi homepage (https://pypi.python.org/pypi/kafka-python-ng)
 check-readme:
 	python setup.py check -rms
 

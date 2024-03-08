@@ -1,16 +1,16 @@
-kafka-python
+kafka-python-ng
 ############
 
-.. image:: https://img.shields.io/badge/kafka-2.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/compatibility.html
+.. image:: https://img.shields.io/badge/kafka-2.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
-    :target: https://pypi.python.org/pypi/kafka-python
-.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
+    :target: https://pypi.python.org/pypi/kafka-python-ng
+.. image:: https://coveralls.io/repos/wbarnha/kafka-python-ng/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/wbarnha/kafka-python-ng?branch=master
+.. image:: https://travis-ci.org/wbarnha/kafka-python-ng.svg?branch=master
+    :target: https://travis-ci.org/wbarnha/kafka-python-ng
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
+    :target: https://github.com/wbarnha/kafka-python-ng/blob/master/LICENSE
 
 Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
@@ -31,7 +31,8 @@ failures.  See `Compatibility <compatibility.html>`_ for more details.
 Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
 
->>> pip install kafka-python
+>>> pip install kafka-python-ng
+
 
 KafkaConsumer
 *************
@@ -122,10 +123,25 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports gzip compression/decompression natively. To produce or
-consume lz4 compressed messages, you should install python-lz4 (pip install lz4).
-To enable snappy, install python-snappy (also requires snappy library).
-See `Installation <install.html#optional-snappy-install>`_ for more information.
+kafka-python supports the following compression formats:
+
+ - gzip
+ - LZ4
+ - Snappy
+ - Zstandard (zstd)
+
+gzip is supported natively, the others require installing additional libraries.
+See `Install <install.html>`_ for more information.
+
+
+Optimized CRC32 Validation
+**************************
+
+Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+python implementation for compatibility. To improve performance for high-throughput
+applications, kafka-python will use `crc32c` for optimized native code if installed.
+See `Install <install.html>`_ for installation instructions and
+https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
 
 
 Protocol
@@ -136,7 +152,7 @@ for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
 method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 2.4+).
+attempts to identify which version it is running (0.8.0 to 2.6+).
 
 
 .. toctree::

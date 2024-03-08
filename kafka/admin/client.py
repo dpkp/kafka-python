@@ -8,7 +8,10 @@ import socket
 from . import ConfigResourceType
 from kafka.vendor import six
 
+from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
+    ACLResourcePatternType
 from kafka.client_async import KafkaClient, selectors
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
@@ -16,13 +19,13 @@ from kafka.errors import (
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
-    ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest, \
-    DeleteRecordsRequest)
+    ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
+    DeleteGroupsRequest
+)
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
-from kafka.structs import TopicPartition, OffsetAndMetadata
-from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
-    ACLResourcePatternType
+from kafka.protocol.types import Array
+from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
 from kafka.version import __version__
 
 
@@ -143,6 +146,7 @@ class KafkaAdminClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     """
     DEFAULT_CONFIG = {
@@ -183,6 +187,7 @@ class KafkaAdminClient(object):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'kafka_client': KafkaClient,
     }
 
     def __init__(self, **configs):
@@ -202,10 +207,12 @@ class KafkaAdminClient(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        self._client = KafkaClient(metrics=self._metrics,
-                                   metric_group_prefix='admin',
-                                   **self.config)
-        self._client.check_version()
+        self._client = self.config['kafka_client'](
+            metrics=self._metrics,
+            metric_group_prefix='admin',
+            **self.config
+        )
+        self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
@@ -272,7 +279,7 @@ class KafkaAdminClient(object):
             response = future.value
             controller_id = response.controller_id
             # verify the controller is new enough to support our requests
-            controller_version = self._client.check_version(controller_id)
+            controller_version = self._client.check_version(controller_id, timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
             if controller_version < (0, 10, 0):
                 raise IncompatibleBrokerVersion(
                     "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
@@ -325,30 +332,37 @@ class KafkaAdminClient(object):
                 .format(response.API_VERSION))
         return response.coordinator_id
 
-    def _find_coordinator_id(self, group_id):
-        """Find the broker node_id of the coordinator of the given group.
+    def _find_coordinator_ids(self, group_ids):
+        """Find the broker node_ids of the coordinators of the given groups.
 
-        Sends a FindCoordinatorRequest message to the cluster. Will block until
-        the FindCoordinatorResponse is received. Any errors are immediately
-        raised.
+        Sends a FindCoordinatorRequest message to the cluster for each group_id.
+        Will block until the FindCoordinatorResponse is received for all groups.
+        Any errors are immediately raised.
 
-        :param group_id: The consumer group ID. This is typically the group
+        :param group_ids: A list of consumer group IDs. This is typically the group
             name as a string.
-        :return: The node_id of the broker that is the coordinator.
+        :return: A dict of {group_id: node_id} where node_id is the id of the
+            broker that is the coordinator for the corresponding group.
         """
-        # Note: Java may change how this is implemented in KAFKA-6791.
-        future = self._find_coordinator_id_send_request(group_id)
-        self._wait_for_futures([future])
-        response = future.value
-        return self._find_coordinator_id_process_response(response)
+        groups_futures = {
+            group_id: self._find_coordinator_id_send_request(group_id)
+            for group_id in group_ids
+        }
+        self._wait_for_futures(groups_futures.values())
+        groups_coordinators = {
+            group_id: self._find_coordinator_id_process_response(future.value)
+            for group_id, future in groups_futures.items()
+        }
+        return groups_coordinators
 
-    def _send_request_to_node(self, node_id, request):
+    def _send_request_to_node(self, node_id, request, wakeup=True):
         """Send a Kafka protocol message to a specific broker.
 
         Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
+        :param wakeup: Optional flag to disable thread-wakeup.
         :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
@@ -356,7 +370,7 @@ class KafkaAdminClient(object):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll()
-        return self._client.send(node_id, request)
+        return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
         """Send a Kafka protocol message to the cluster controller.
@@ -682,7 +696,6 @@ class KafkaAdminClient(object):
         future = self._send_request_to_node(self._client.least_loaded_node(), request)
         self._wait_for_futures([future])
         response = future.value
-
 
         return self._convert_create_acls_response_to_acls(acls, response)
 
@@ -1057,22 +1070,47 @@ class KafkaAdminClient(object):
         """Process a DescribeGroupsResponse into a group description."""
         if response.API_VERSION <= 3:
             assert len(response.groups) == 1
-            # TODO need to implement converting the response tuple into
-            # a more accessible interface like a namedtuple and then stop
-            # hardcoding tuple indices here. Several Java examples,
-            # including KafkaAdminClient.java
-            group_description = response.groups[0]
-            error_code = group_description[0]
+            for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
+                if isinstance(response_field, Array):
+                    described_groups_field_schema = response_field.array_of
+                    described_group = response.__dict__[response_name][0]
+                    described_group_information_list = []
+                    protocol_type_is_consumer = False
+                    for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
+                        if group_information_name == 'protocol_type':
+                            protocol_type = described_group_information
+                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol.PROTOCOL_TYPE or not protocol_type)
+                        if isinstance(group_information_field, Array):
+                            member_information_list = []
+                            member_schema = group_information_field.array_of
+                            for members in described_group_information:
+                                member_information = []
+                                for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
+                                    if protocol_type_is_consumer:
+                                        if member_name == 'member_metadata' and member:
+                                            member_information.append(ConsumerProtocolMemberMetadata.decode(member))
+                                        elif member_name == 'member_assignment' and member:
+                                            member_information.append(ConsumerProtocolMemberAssignment.decode(member))
+                                        else:
+                                            member_information.append(member)
+                                member_info_tuple = MemberInformation._make(member_information)
+                                member_information_list.append(member_info_tuple)
+                            described_group_information_list.append(member_information_list)
+                        else:
+                            described_group_information_list.append(described_group_information)
+                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
+                    # This will cause the namedtuple to fail.
+                    # Therefore, appending a placeholder of None in it.
+                    if response.API_VERSION <=2:
+                        described_group_information_list.append(None)
+                    group_description = GroupInformation._make(described_group_information_list)
+            error_code = group_description.error_code
             error_type = Errors.for_code(error_code)
             # Java has the note: KAFKA-6789, we can retry based on the error code
             if error_type is not Errors.NoError:
                 raise error_type(
                     "DescribeGroupsResponse failed with response '{}'."
                     .format(response))
-            # TODO Java checks the group protocol type, and if consumer
-            # (ConsumerProtocol.PROTOCOL_TYPE) or empty string, it decodes
-            # the members' partition assignments... that hasn't yet been
-            # implemented here so just return the raw struct results
         else:
             raise NotImplementedError(
                 "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
@@ -1101,18 +1139,19 @@ class KafkaAdminClient(object):
             partition assignments.
         """
         group_descriptions = []
-        futures = []
-        for group_id in group_ids:
-            if group_coordinator_id is not None:
-                this_groups_coordinator_id = group_coordinator_id
-            else:
-                this_groups_coordinator_id = self._find_coordinator_id(group_id)
-            f = self._describe_consumer_groups_send_request(
-                group_id,
-                this_groups_coordinator_id,
-                include_authorized_operations)
-            futures.append(f)
 
+        if group_coordinator_id is not None:
+            groups_coordinators = {group_id: group_coordinator_id for group_id in group_ids}
+        else:
+            groups_coordinators = self._find_coordinator_ids(group_ids)
+
+        futures = [
+            self._describe_consumer_groups_send_request(
+                group_id,
+                coordinator_id,
+                include_authorized_operations)
+            for group_id, coordinator_id in groups_coordinators.items()
+        ]
         self._wait_for_futures(futures)
 
         for future in futures:
@@ -1227,7 +1266,7 @@ class KafkaAdminClient(object):
 
         :param response: an OffsetFetchResponse.
         :return: A dictionary composed of TopicPartition keys and
-            OffsetAndMetada values.
+            OffsetAndMetadata values.
         """
         if response.API_VERSION <= 3:
 
@@ -1241,7 +1280,7 @@ class KafkaAdminClient(object):
                         .format(response))
 
             # transform response into a dictionary with TopicPartition keys and
-            # OffsetAndMetada values--this is what the Java AdminClient returns
+            # OffsetAndMetadata values--this is what the Java AdminClient returns
             offsets = {}
             for topic, partitions in response.topics:
                 for partition, offset, metadata, error_code in partitions:
@@ -1284,15 +1323,76 @@ class KafkaAdminClient(object):
             explicitly specified.
         """
         if group_coordinator_id is None:
-            group_coordinator_id = self._find_coordinator_id(group_id)
+            group_coordinator_id = self._find_coordinator_ids([group_id])[group_id]
         future = self._list_consumer_group_offsets_send_request(
                                     group_id, group_coordinator_id, partitions)
         self._wait_for_futures([future])
         response = future.value
         return self._list_consumer_group_offsets_process_response(response)
 
-    # delete groups protocol not yet implemented
-    # Note: send the request to the group's coordinator.
+    def delete_consumer_groups(self, group_ids, group_coordinator_id=None):
+        """Delete Consumer Group Offsets for given consumer groups.
+
+        Note:
+        This does not verify that the group ids actually exist and
+        group_coordinator_id is the correct coordinator for all these groups.
+
+        The result needs checking for potential errors.
+
+        :param group_ids: The consumer group ids of the groups which are to be deleted.
+        :param group_coordinator_id: The node_id of the broker which is the coordinator for
+            all the groups. Use only if all groups are coordinated by the same broker.
+            If set to None, will query the cluster to find the coordinator for every single group.
+            Explicitly specifying this can be useful to prevent
+            that extra network round trips if you already know the group
+            coordinator. Default: None.
+        :return: A list of tuples (group_id, KafkaError)
+        """
+        if group_coordinator_id is not None:
+            futures = [self._delete_consumer_groups_send_request(group_ids, group_coordinator_id)]
+        else:
+            coordinators_groups = defaultdict(list)
+            for group_id, coordinator_id in self._find_coordinator_ids(group_ids).items():
+                coordinators_groups[coordinator_id].append(group_id)
+            futures = [
+                self._delete_consumer_groups_send_request(group_ids, coordinator_id)
+                for coordinator_id, group_ids in coordinators_groups.items()
+            ]
+
+        self._wait_for_futures(futures)
+
+        results = []
+        for f in futures:
+            results.extend(self._convert_delete_groups_response(f.value))
+        return results
+
+    def _convert_delete_groups_response(self, response):
+        if response.API_VERSION <= 1:
+            results = []
+            for group_id, error_code in response.results:
+                results.append((group_id, Errors.for_code(error_code)))
+            return results
+        else:
+            raise NotImplementedError(
+                "Support for DeleteGroupsResponse_v{} has not yet been added to KafkaAdminClient."
+                    .format(response.API_VERSION))
+
+    def _delete_consumer_groups_send_request(self, group_ids, group_coordinator_id):
+        """Send a DeleteGroups request to a broker.
+
+        :param group_ids: The consumer group ids of the groups which are to be deleted.
+        :param group_coordinator_id: The node_id of the broker which is the coordinator for
+            all the groups.
+        :return: A message future
+        """
+        version = self._matching_api_version(DeleteGroupsRequest)
+        if version <= 1:
+            request = DeleteGroupsRequest[version](group_ids)
+        else:
+            raise NotImplementedError(
+                "Support for DeleteGroupsRequest_v{} has not yet been added to KafkaAdminClient."
+                    .format(version))
+        return self._send_request_to_node(group_coordinator_id, request)
 
     def _wait_for_futures(self, futures):
         while not all(future.succeeded() for future in futures):
