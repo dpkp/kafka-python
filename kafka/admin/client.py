@@ -355,13 +355,14 @@ class KafkaAdminClient(object):
         }
         return groups_coordinators
 
-    def _send_request_to_node(self, node_id, request):
+    def _send_request_to_node(self, node_id, request, wakeup=True):
         """Send a Kafka protocol message to a specific broker.
 
         Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
+        :param wakeup: Optional flag to disable thread-wakeup.
         :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
@@ -369,7 +370,7 @@ class KafkaAdminClient(object):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll()
-        return self._client.send(node_id, request)
+        return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
         """Send a Kafka protocol message to the cluster controller.
