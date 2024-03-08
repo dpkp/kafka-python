@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import pytest
 
+
 from kafka.partitioner import DefaultPartitioner, murmur2
 from kafka.partitioner.fnv1a_32 import FNV1a32Partitioner, _get_twos_complement_32bit, _get_fnv1a_32
 
