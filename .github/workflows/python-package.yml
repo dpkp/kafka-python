@@ -66,10 +66,9 @@ jobs:
           - "3.10"
           - "3.11"
           - "3.12"
+          - "pypy3.9"
         experimental: [ false ]
         include:
-          - python-version: "pypy3.9"
-            experimental: true
           - python-version: "~3.13.0-0"
             experimental: true
     steps:
@@ -115,11 +114,11 @@ jobs:
     needs:
       - build-sdist
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         kafka-version:
-          - "0.8.2.2"
           - "0.9.0.1"
           - "0.10.2.2"
           - "0.11.0.2"
@@ -128,6 +127,11 @@ jobs:
           - "2.4.0"
           - "2.5.0"
           - "2.6.0"
+        experimental: [false]
+        include:
+          - kafka-version: '0.8.2.2'
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout the source code
         uses: actions/checkout@v4
