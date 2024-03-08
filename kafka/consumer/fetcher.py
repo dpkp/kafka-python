@@ -125,7 +125,7 @@ class Fetcher(six.Iterator):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request, wakeup=False)
                 future.add_callback(self._handle_fetch_response, request, time.time())
-                future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
+                future.add_errback(self._handle_fetch_error, node_id)
                 futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
@@ -777,6 +777,14 @@ class Fetcher(six.Iterator):
         if response.API_VERSION >= 1:
             self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+
+    def _handle_fetch_error(self, node_id, exception):
+        log.log(
+            logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR,
+            'Fetch to node %s failed: %s', 
+            node_id, 
+            exception
+        )
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
