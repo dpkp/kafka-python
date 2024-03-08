@@ -5,15 +5,15 @@ Kafka Python client
     :target: https://kafka-python-ng.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python-ng.svg
     :target: https://pypi.python.org/pypi/kafka-python-ng
-.. image:: https://coveralls.io/repos/wbarnha/kafka-python-ng-ng/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/wbarnha/kafka-python-ng-ng?branch=master
+.. image:: https://coveralls.io/repos/wbarnha/kafka-python-ng/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/wbarnha/kafka-python-ng?branch=master
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/wbarnha/kafka-python-ng-ng/blob/master/LICENSE
+    :target: https://github.com/wbarnha/kafka-python-ng/blob/master/LICENSE
 .. image:: https://img.shields.io/pypi/dw/kafka-python-ng.svg
-    :target: https://pypistats.org/packages/kafka-python
+    :target: https://pypistats.org/packages/kafka-python-ng
 .. image:: https://img.shields.io/pypi/v/kafka-python.svg
-    :target: https://pypi.org/project/kafka-python
-.. image:: https://img.shields.io/pypi/implementation/kafka-python
+    :target: https://pypi.org/project/kafka-python-ng
+.. image:: https://img.shields.io/pypi/implementation/kafka-python-ng
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/setup.py
 
 
