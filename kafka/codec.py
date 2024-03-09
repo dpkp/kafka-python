@@ -10,11 +10,17 @@ from kafka.vendor.six.moves import range
 
 _XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
+ZSTD_MAX_OUTPUT_SIZE = 1024 * 1024
 
 try:
     import snappy
 except ImportError:
     snappy = None
+
+try:
+    import zstandard as zstd
+except ImportError:
+    zstd = None
 
 try:
     import lz4.frame as lz4
@@ -56,6 +62,10 @@ def has_gzip():
 
 def has_snappy():
     return snappy is not None
+
+
+def has_zstd():
+    return zstd is not None
 
 
 def has_lz4():
@@ -177,7 +187,7 @@ def _detect_xerial_stream(payload):
         The version is the version of this format as written by xerial,
         in the wild this is currently 1 as such we only support v1.
 
-        Compat is there to claim the miniumum supported version that
+        Compat is there to claim the minimum supported version that
         can read a xerial block stream, presently in the wild this is
         1.
     """
@@ -299,3 +309,18 @@ def lz4_decode_old_kafka(payload):
         payload[header_size:]
     ])
     return lz4_decode(munged_payload)
+
+
+def zstd_encode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    return zstd.ZstdCompressor().compress(payload)
+
+
+def zstd_decode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    try:
+        return zstd.ZstdDecompressor().decompress(payload)
+    except zstd.ZstdError:
+        return zstd.ZstdDecompressor().decompress(payload, max_output_size=ZSTD_MAX_OUTPUT_SIZE)

@@ -293,7 +293,7 @@ class Fetcher(six.Iterator):
                 # Issue #1780
                 # Recheck partition existence after after a successful metadata refresh
                 if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
-                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existance")
+                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existence")
                     unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
                     if self._client.cluster.leader_for_partition(unknown_partition) is None:
                         log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
@@ -474,7 +474,9 @@ class Fetcher(six.Iterator):
                         self.config['value_deserializer'],
                         tp.topic, record.value)
                     headers = record.headers
-                    header_size = sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1
+                    header_size = sum(
+                        len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
+                        headers) if headers else -1
                     yield ConsumerRecord(
                         tp.topic, tp.partition, record.offset, record.timestamp,
                         record.timestamp_type, key, value, headers, record.checksum,
@@ -815,8 +817,9 @@ class Fetcher(six.Iterator):
                               position)
                     unpacked = list(self._unpack_message_set(tp, records))
                     parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
-                    last_offset = unpacked[-1].offset
-                    self._sensors.records_fetch_lag.record(highwater - last_offset)
+                    if unpacked:
+                        last_offset = unpacked[-1].offset
+                        self._sensors.records_fetch_lag.record(highwater - last_offset)
                     num_bytes = records.valid_bytes()
                     records_count = len(unpacked)
                 elif records.size_in_bytes() > 0:

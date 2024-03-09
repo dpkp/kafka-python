@@ -167,7 +167,8 @@ class KafkaConsumer(six.Iterator):
             message iteration before raising StopIteration (i.e., ending the
             iterator). Default block forever [float('inf')].
         security_protocol (str): Protocol used to communicate with brokers.
-            Valid values are: PLAINTEXT, SSL. Default: PLAINTEXT.
+            Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL.
+            Default: PLAINTEXT.
         ssl_context (ssl.SSLContext): Pre-configured SSLContext for wrapping
             socket connections. If provided, all other ssl_* configurations
             will be ignored. Default: None.
@@ -243,6 +244,7 @@ class KafkaConsumer(six.Iterator):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -305,6 +307,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
+        'kafka_client': KafkaClient,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -352,7 +355,7 @@ class KafkaConsumer(six.Iterator):
             log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
                         str(self.config['api_version']), str_version)
 
-        self._client = KafkaClient(metrics=self._metrics, **self.config)
+        self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
@@ -650,7 +653,7 @@ class KafkaConsumer(six.Iterator):
         # Poll for new data until the timeout expires
         start = time.time()
         remaining = timeout_ms
-        while True:
+        while not self._closed:
             records = self._poll_once(remaining, max_records, update_offsets=update_offsets)
             if records:
                 return records
@@ -659,7 +662,9 @@ class KafkaConsumer(six.Iterator):
             remaining = timeout_ms - elapsed_ms
 
             if remaining <= 0:
-                return {}
+                break
+
+        return {}
 
     def _poll_once(self, timeout_ms, max_records, update_offsets=True):
         """Do one round of polling. In addition to checking for new data, this does

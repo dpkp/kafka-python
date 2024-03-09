@@ -1,3 +1,51 @@
+# 2.0.2 (Sep 29, 2020)
+
+Consumer
+* KIP-54: Implement sticky partition assignment strategy (aynroot / PR #2057)
+* Fix consumer deadlock when heartbeat thread request timeout (huangcuiyang / PR #2064)
+
+Compatibility
+* Python 3.8 support (Photonios / PR #2088)
+
+Cleanups
+* Bump dev requirements (jeffwidman / PR #2129)
+* Fix crc32c deprecation warning (crc32c==2.1) (jeffwidman / PR #2128)
+* Lint cleanup (jeffwidman / PR #2126)
+* Fix initialization order in KafkaClient (pecalleja / PR #2119)
+* Allow installing crc32c via extras (mishas / PR #2069)
+* Remove unused imports (jameslamb / PR #2046)
+
+Admin Client
+* Merge _find_coordinator_id methods (jeffwidman / PR #2127)
+* Feature: delete consumergroups (swenzel / PR #2040)
+* Allow configurable timeouts in admin client check version (sunnyakaxd / PR #2107)
+* Enhancement for Kafka Admin Client's "Describe Consumer Group" (Apurva007 / PR #2035)
+
+Protocol
+* Add support for zstd compression (gabriel-tincu / PR #2021)
+* Add protocol support for brokers 1.1.0 - 2.5.0 (gabriel-tincu / PR #2038)
+* Add ProduceRequest/ProduceResponse v6/v7/v8 (gabriel-tincu / PR #2020)
+* Fix parsing NULL header values (kvfi / PR #2024)
+
+Tests
+* Add 2.5.0 to automated CI tests (gabriel-tincu / PR #2038)
+* Add 2.1.1 to build_integration (gabriel-tincu / PR #2019)
+
+Documentation / Logging / Errors
+* Disable logging during producer object gc (gioele / PR #2043)
+* Update example.py; use threading instead of multiprocessing (Mostafa-Elmenbawy / PR #2081)
+* Fix typo in exception message (haracejacob / PR #2096)
+* Add kafka.structs docstrings (Mostafa-Elmenbawy / PR #2080)
+* Fix broken compatibility page link (anuragrana / PR #2045)
+* Rename README to README.md (qhzxc0015 / PR #2055)
+* Fix docs by adding SASL mention (jeffwidman / #1990)
+
+# 2.0.1 (Feb 19, 2020)
+
+Admin Client
+* KAFKA-8962: Use least_loaded_node() for AdminClient.describe_topics() (jeffwidman / PR #2000)
+* Fix AdminClient topic error parsing in MetadataResponse (jtribble / PR #1997)
+
 # 2.0.0 (Feb 10, 2020)
 
 This release includes breaking changes for any application code that has not
@@ -365,7 +413,7 @@ Some of the major changes include:
 * SASL authentication is working (we think)
 * Removed several circular references to improve gc on close()
 
-Thanks to all contributors -- the state of the kafka-python community is strong!
+Thanks to all contributors -- the state of the kafka-python-ng community is strong!
 
 Detailed changelog are listed below:
 

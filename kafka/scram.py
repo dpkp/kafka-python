@@ -71,7 +71,6 @@ class ScramClient:
         )
 
     def final_message(self):
-        client_final_no_proof = 'c=biws,r=' + self.nonce
         return 'c=biws,r={},p={}'.format(self.nonce, base64.b64encode(self.client_proof).decode('utf-8'))
 
     def process_server_final_message(self, server_final_message):
