@@ -1,1 +1,9 @@
-__version__ = '2.0.3-dev'
+import sys
+
+if sys.version_info < (3, 8):
+    from importlib_metadata import version
+else:
+    from importlib.metadata import version
+
+
+__version__ = version("kafka-python-ng")
