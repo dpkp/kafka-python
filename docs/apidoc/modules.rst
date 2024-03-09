@@ -1,4 +1,4 @@
-kafka-python API
+kafka-python-ng API
 ****************
 
 .. toctree::
