@@ -68,9 +68,6 @@ jobs:
           - "3.12"
           - "pypy3.9"
         experimental: [ false ]
-        include:
-          - python-version: "~3.13.0-0"
-            experimental: true
     steps:
       - name: Checkout the source code
         uses: actions/checkout@v4
