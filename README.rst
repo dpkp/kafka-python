@@ -2,27 +2,27 @@ Kafka Python client
 ------------------------
 
 .. image:: https://img.shields.io/badge/kafka-2.6%2C%202.5%2C%202.4%2C%202.3%2C%202.2%2C%202.1%2C%202.0%2C%201.1%2C%201.0%2C%200.11%2C%200.10%2C%200.9%2C%200.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
-.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
-    :target: https://pypi.python.org/pypi/kafka-python
-.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
+    :target: https://kafka-python-ng.readthedocs.io/en/master/compatibility.html
+.. image:: https://img.shields.io/pypi/pyversions/kafka-python-ng.svg
+    :target: https://pypi.python.org/pypi/kafka-python-ng
+.. image:: https://coveralls.io/repos/wbarnha/kafka-python-ng/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/wbarnha/kafka-python-ng?branch=master
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
-.. image:: https://img.shields.io/pypi/dw/kafka-python.svg
-    :target: https://pypistats.org/packages/kafka-python
+    :target: https://github.com/wbarnha/kafka-python-ng/blob/master/LICENSE
+.. image:: https://img.shields.io/pypi/dw/kafka-python-ng.svg
+    :target: https://pypistats.org/packages/kafka-python-ng
 .. image:: https://img.shields.io/pypi/v/kafka-python.svg
-    :target: https://pypi.org/project/kafka-python
-.. image:: https://img.shields.io/pypi/implementation/kafka-python
-    :target: https://github.com/dpkp/kafka-python/blob/master/setup.py
+    :target: https://pypi.org/project/kafka-python-ng
+.. image:: https://img.shields.io/pypi/implementation/kafka-python-ng
+    :target: https://github.com/wbarnha/kafka-python-ng/blob/master/setup.py
 
 
 
 Python client for the Apache Kafka distributed stream processing system.
-kafka-python is designed to function much like the official java client, with a
+kafka-python-ng is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with newer brokers (0.9+), but is backwards-compatible with
+kafka-python-ng is best used with newer brokers (0.9+), but is backwards-compatible with
 older versions (to 0.8.0). Some features will only be enabled on newer brokers.
 For example, fully coordinated consumer groups -- i.e., dynamic partition
 assignment to multiple consumers in the same group -- requires use of 0.9+ kafka
@@ -32,15 +32,19 @@ check code (perhaps using zookeeper or consul). For older brokers, you can
 achieve something similar by manually assigning different partitions to each
 consumer instance with config management tools like chef, ansible, etc. This
 approach will work fine, though it does not support rebalancing on failures.
+
 See https://kafka-python.readthedocs.io/en/master/compatibility.html
+
 for more details.
 
 Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
 
+
 .. code-block:: bash 
 
-    $ pip install kafka-python
+    $  pip install kafka-python-ng
+
 
 
 KafkaConsumer
@@ -50,7 +54,9 @@ KafkaConsumer is a high-level message consumer, intended to operate as similarly
 as possible to the official java client. Full support for coordinated
 consumer groups requires use of kafka brokers that support the Group APIs: kafka v0.9+.
 
+
 See https://kafka-python.readthedocs.io/en/master/apidoc/KafkaConsumer.html
+
 for API and configuration details.
 
 The consumer iterator returns ConsumerRecords, which are simple namedtuples
@@ -105,7 +111,9 @@ KafkaProducer
 
 KafkaProducer is a high-level, asynchronous message producer. The class is
 intended to operate as similarly as possible to the official java client.
+
 See https://kafka-python.readthedocs.io/en/master/apidoc/KafkaProducer.html
+
 for more details.
 
 .. code-block:: python
@@ -178,7 +186,7 @@ multiprocessing is recommended.
 Compression
 ***********
 
-kafka-python supports the following compression formats:
+kafka-python-ng supports the following compression formats:
 
 - gzip
 - LZ4
@@ -186,23 +194,26 @@ kafka-python supports the following compression formats:
 - Zstandard (zstd)
 
 gzip is supported natively, the others require installing additional libraries.
+
 See https://kafka-python.readthedocs.io/en/master/install.html for more information.
+
 
 
 Optimized CRC32 Validation
 **************************
 
-Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
+Kafka uses CRC32 checksums to validate messages. kafka-python-ng includes a pure
 python implementation for compatibility. To improve performance for high-throughput
 applications, kafka-python will use `crc32c` for optimized native code if installed.
 See https://kafka-python.readthedocs.io/en/master/install.html for installation instructions.
+
 See https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
 
 
 Protocol
 ********
 
-A secondary goal of kafka-python is to provide an easy-to-use protocol layer
+A secondary goal of kafka-python-ng is to provide an easy-to-use protocol layer
 for interacting with kafka brokers via the python repl. This is useful for
 testing, probing, and general experimentation. The protocol support is
 leveraged to enable a KafkaClient.check_version() method that
