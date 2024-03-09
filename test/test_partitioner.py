@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import pytest
 
+
 from kafka.partitioner import DefaultPartitioner, murmur2
 
 
