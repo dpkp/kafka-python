@@ -280,6 +280,7 @@ class KafkaProducer(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        socks5_proxy (str): Socks5 proxy URL. Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
@@ -334,6 +335,7 @@ class KafkaProducer(object):
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
         'kafka_client': KafkaClient,
     }
 

@@ -154,6 +154,7 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        socks5_proxy (str): Socks5 proxy URL. Default: None
     """
 
     DEFAULT_CONFIG = {
@@ -192,7 +193,8 @@ class KafkaClient(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
     }
 
     def __init__(self, **configs):
@@ -637,6 +639,9 @@ class KafkaClient(object):
             self._sensors.select_time.record((end_select - start_select) * 1000000000)
 
         for key, events in ready:
+            if key.fileobj.fileno() < 0:
+                self._selector.unregister(key.fileobj)
+
             if key.fileobj is self._wake_r:
                 self._clear_wake_fd()
                 continue
