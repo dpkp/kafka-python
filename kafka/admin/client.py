@@ -356,13 +356,14 @@ class KafkaAdminClient(object):
         }
         return groups_coordinators
 
-    def _send_request_to_node(self, node_id, request):
+    def _send_request_to_node(self, node_id, request, wakeup=True):
         """Send a Kafka protocol message to a specific broker.
 
         Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
+        :param wakeup: Optional flag to disable thread-wakeup.
         :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
@@ -370,7 +371,7 @@ class KafkaAdminClient(object):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll()
-        return self._client.send(node_id, request)
+        return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
         """Send a Kafka protocol message to the cluster controller.
@@ -1238,7 +1239,7 @@ class KafkaAdminClient(object):
 
         :param response: an OffsetFetchResponse.
         :return: A dictionary composed of TopicPartition keys and
-            OffsetAndMetada values.
+            OffsetAndMetadata values.
         """
         if response.API_VERSION <= 3:
 
@@ -1252,7 +1253,7 @@ class KafkaAdminClient(object):
                         .format(response))
 
             # transform response into a dictionary with TopicPartition keys and
-            # OffsetAndMetada values--this is what the Java AdminClient returns
+            # OffsetAndMetadata values--this is what the Java AdminClient returns
             offsets = {}
             for topic, partitions in response.topics:
                 for partition, offset, metadata, error_code in partitions:
