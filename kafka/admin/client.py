@@ -147,6 +147,7 @@ class KafkaAdminClient(object):
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
         socks5_proxy (str): Socks5 proxy url. Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     """
     DEFAULT_CONFIG = {
@@ -188,6 +189,7 @@ class KafkaAdminClient(object):
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
+        'kafka_client': KafkaClient,
     }
 
     def __init__(self, **configs):
@@ -207,9 +209,11 @@ class KafkaAdminClient(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        self._client = KafkaClient(metrics=self._metrics,
-                                   metric_group_prefix='admin',
-                                   **self.config)
+        self._client = self.config['kafka_client'](
+            metrics=self._metrics,
+            metric_group_prefix='admin',
+            **self.config
+        )
         self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
 
         # Get auto-discovered version from client if necessary
@@ -353,13 +357,14 @@ class KafkaAdminClient(object):
         }
         return groups_coordinators
 
-    def _send_request_to_node(self, node_id, request):
+    def _send_request_to_node(self, node_id, request, wakeup=True):
         """Send a Kafka protocol message to a specific broker.
 
         Returns a future that may be polled for status and results.
 
         :param node_id: The broker id to which to send the message.
         :param request: The message to send.
+        :param wakeup: Optional flag to disable thread-wakeup.
         :return: A future object that may be polled for status and results.
         :exception: The exception if the message could not be sent.
         """
@@ -367,7 +372,7 @@ class KafkaAdminClient(object):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll()
-        return self._client.send(node_id, request)
+        return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
         """Send a Kafka protocol message to the cluster controller.
@@ -1207,7 +1212,7 @@ class KafkaAdminClient(object):
 
         :param response: an OffsetFetchResponse.
         :return: A dictionary composed of TopicPartition keys and
-            OffsetAndMetada values.
+            OffsetAndMetadata values.
         """
         if response.API_VERSION <= 3:
 
@@ -1221,7 +1226,7 @@ class KafkaAdminClient(object):
                         .format(response))
 
             # transform response into a dictionary with TopicPartition keys and
-            # OffsetAndMetada values--this is what the Java AdminClient returns
+            # OffsetAndMetadata values--this is what the Java AdminClient returns
             offsets = {}
             for topic, partitions in response.topics:
                 for partition, offset, metadata, error_code in partitions:

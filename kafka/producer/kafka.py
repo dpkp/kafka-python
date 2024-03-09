@@ -233,7 +233,7 @@ class KafkaProducer(object):
             should verify that the certificate matches the brokers hostname.
             default: true.
         ssl_cafile (str): optional filename of ca file to use in certificate
-            veriication. default: none.
+            verification. default: none.
         ssl_certfile (str): optional filename of file in pem format containing
             the client certificate, as well as any ca certificates needed to
             establish the certificate's authenticity. default: none.
@@ -281,10 +281,11 @@ class KafkaProducer(object):
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
         socks5_proxy (str): Socks5 proxy URL. Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
-        https://kafka.apache.org/0100/configuration.html#producerconfigs
+        https://kafka.apache.org/0100/documentation/#producerconfigs
     """
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
@@ -335,6 +336,7 @@ class KafkaProducer(object):
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'socks5_proxy': None,
+        'kafka_client': KafkaClient,
     }
 
     _COMPRESSORS = {
@@ -380,9 +382,10 @@ class KafkaProducer(object):
         reporters = [reporter() for reporter in self.config['metric_reporters']]
         self._metrics = Metrics(metric_config, reporters)
 
-        client = KafkaClient(metrics=self._metrics, metric_group_prefix='producer',
-                             wakeup_timeout_ms=self.config['max_block_ms'],
-                             **self.config)
+        client = self.config['kafka_client'](
+            metrics=self._metrics, metric_group_prefix='producer',
+            wakeup_timeout_ms=self.config['max_block_ms'],
+            **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
