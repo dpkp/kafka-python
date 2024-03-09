@@ -15,12 +15,14 @@ from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerP
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError, UnknownTopicOrPartitionError,
-    UnrecognizedBrokerVersion, IllegalArgumentError)
+    UnrecognizedBrokerVersion, IllegalArgumentError
+)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest, DeleteRecordsRequest)
+    DeleteGroupsRequest, DeleteRecordsRequest
+)
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
