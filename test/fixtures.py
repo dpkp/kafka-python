@@ -346,10 +346,9 @@ class KafkaFixture(Fixture):
         self.out("Adding SCRAM credentials for user {} to zookeeper.".format(self.broker_user))
         args = self.kafka_run_class_args(
             "kafka.admin.ConfigCommand",
-            "--zookeeper",
-            "%s:%d/%s" % (self.zookeeper.host,
-                       self.zookeeper.port,
-                       self.zk_chroot),
+            "--bootstrap-server",
+            "%s:%d" % (self.zookeeper.host,
+                       self.zookeeper.port),
             "--alter",
             "--entity-type", "users",
             "--entity-name", self.broker_user,
@@ -586,9 +585,8 @@ class KafkaFixture(Fixture):
 
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
         args = self.kafka_run_class_args('kafka.admin.TopicCommand',
-                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                                      self.zookeeper.port,
-                                                                      self.zk_chroot),
+                                         '--bootstrap-server', '%s:%d' % (self.zookeeper.host,
+                                                                          self.zookeeper.port),
                                          '--create',
                                          '--topic', topic_name,
                                          '--partitions', self.partitions \
@@ -610,9 +608,8 @@ class KafkaFixture(Fixture):
 
     def get_topic_names(self):
         args = self.kafka_run_class_args('kafka.admin.TopicCommand',
-                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                                      self.zookeeper.port,
-                                                                      self.zk_chroot),
+                                         '--bootstrap-server', '%s:%d' % (self.zookeeper.host,
+                                                                          self.zookeeper.port),
                                          '--list'
                                          )
         env = self.kafka_run_class_env()
