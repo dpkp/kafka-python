@@ -239,6 +239,38 @@ DeleteTopicsResponse = [
 ]
 
 
+class DeleteRecordsResponse_v0(Response):
+    API_KEY = 21
+    API_VERSION = 0
+    SCHEMA = Schema(
+        ('topics', Array(
+            ('name', String('utf-8')),
+            ('partitions', Array(
+                ('partition_index', Int32),
+                ('low_watermark', Int64),
+                ('error_code', Int16))))),
+        ('throttle_time_ms', Int32)
+    )
+
+
+class DeleteRecordsRequest_v0(Request):
+    API_KEY = 21
+    API_VERSION = 0
+    RESPONSE_TYPE = DeleteRecordsResponse_v0
+    SCHEMA = Schema(
+        ('topics', Array(
+            ('name', String('utf-8')),
+            ('partitions', Array(
+                ('partition_index', Int32),
+                ('offset', Int64))))),
+        ('timeout_ms', Int32)
+    )
+
+
+DeleteRecordsResponse = [DeleteRecordsResponse_v0]
+DeleteRecordsRequest = [DeleteRecordsRequest_v0]
+
+
 class ListGroupsResponse_v0(Response):
     API_KEY = 16
     API_VERSION = 0
