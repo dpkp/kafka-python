@@ -1,7 +1,7 @@
 Changelog
 =========
 
-2.0.3 (under development)
+2.1.0
 ####################
 
 Consumer
