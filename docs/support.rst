@@ -1,7 +1,7 @@
 Support
 -------
 
-For support, see github issues at https://github.com/dpkp/kafka-python
+For support, see github issues at https://github.com/wbarnha/kafka-python-ng
 
 Limited IRC chat at #kafka-python on freenode (general chat is #apache-kafka).
 
