@@ -78,7 +78,7 @@ except ImportError:
 try:
     import gssapi
     from gssapi.raw.misc import GSSError
-except ImportError:
+except (ImportError, OSError):
     #no gssapi available, will disable gssapi mechanism
     gssapi = None
     GSSError = None
@@ -496,7 +496,7 @@ class BrokerConnection(object):
         try:
             self._sock = self._ssl_context.wrap_socket(
                 self._sock,
-                server_hostname=self.host,
+                server_hostname=self.host.rstrip("."),
                 do_handshake_on_connect=False)
         except ssl.SSLError as e:
             log.exception('%s: Failed to wrap socket in SSLContext!', self)
@@ -510,7 +510,7 @@ class BrokerConnection(object):
         # old ssl in python2.6 will swallow all SSLErrors here...
         except (SSLWantReadError, SSLWantWriteError):
             pass
-        except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError):
+        except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError, ssl.SSLError, OSError) as e:
             log.warning('SSL connection closed by server during handshake.')
             self.close(Errors.KafkaConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user

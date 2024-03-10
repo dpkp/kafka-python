@@ -85,7 +85,7 @@ class ABCRecordBatchBuilder(object):
 
 
 class ABCRecordBatch(object):
-    """ For v2 incapsulates a RecordBatch, for v0/v1 a single (maybe
+    """ For v2 encapsulates a RecordBatch, for v0/v1 a single (maybe
         compressed) message.
     """
     __metaclass__ = abc.ABCMeta
