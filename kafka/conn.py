@@ -78,7 +78,7 @@ except ImportError:
 try:
     import gssapi
     from gssapi.raw.misc import GSSError
-except ImportError:
+except (ImportError, OSError):
     #no gssapi available, will disable gssapi mechanism
     gssapi = None
     GSSError = None
