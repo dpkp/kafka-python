@@ -68,9 +68,6 @@ jobs:
           - "3.12"
           - "pypy3.9"
         experimental: [ false ]
-        include:
-          - python-version: "~3.13.0-0"
-            experimental: true
     steps:
       - name: Checkout the source code
         uses: actions/checkout@v4
@@ -110,7 +107,7 @@ jobs:
           KAFKA_VERSION: ${{ env.KAFKA_LATEST }}
 
   test-kafka:
-    name: Tests for Kafka ${{ matrix.kafka-version }}
+    name: Tests for Kafka ${{ matrix.kafka-version }} (Python ${{ matrix.python-version }})
     needs:
       - build-sdist
     runs-on: ubuntu-latest
@@ -127,10 +124,17 @@ jobs:
           - "2.4.0"
           - "2.5.0"
           - "2.6.0"
+        python-version: ['3.12']
         experimental: [false]
         include:
           - kafka-version: '0.8.2.2'
             experimental: true
+            python-version: "3.12"
+          - kafka-version: '0.8.2.2'
+            experimental: false
+            python-version: "3.10"
+    env:
+      PYTHON_LATEST: ${{ matrix.python-version }}
     continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout the source code
@@ -145,7 +149,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_LATEST }}
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
