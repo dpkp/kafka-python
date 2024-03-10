@@ -719,7 +719,7 @@ class DescribeConfigsResponse_v1(Response):
                 ('config_names', String('utf-8')),
                 ('config_value', String('utf-8')),
                 ('read_only', Boolean),
-                ('is_default', Boolean),
+                ('config_source', Int8),
                 ('is_sensitive', Boolean),
                 ('config_synonyms', Array(
                     ('config_name', String('utf-8')),
@@ -925,7 +925,7 @@ DeleteGroupsResponse = [
 ]
 
 
-class DescribeClientQuotasResponse_v0(Request):
+class DescribeClientQuotasResponse_v0(Response):
     API_KEY = 48
     API_VERSION = 0
     SCHEMA = Schema(
