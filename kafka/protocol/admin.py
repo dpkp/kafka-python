@@ -925,7 +925,7 @@ DeleteGroupsResponse = [
 ]
 
 
-class DescribeClientQuotasResponse_v0(Request):
+class DescribeClientQuotasResponse_v0(Response):
     API_KEY = 48
     API_VERSION = 0
     SCHEMA = Schema(
