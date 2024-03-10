@@ -154,6 +154,8 @@ class KafkaClient(object):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        raise_upon_socket_err_during_wakeup (bool): If set to True, raise an exception
+            upon socket error during wakeup(). Default: False
     """
 
     DEFAULT_CONFIG = {
@@ -192,7 +194,8 @@ class KafkaClient(object):
         'sasl_plain_password': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
-        'sasl_oauth_token_provider': None
+        'sasl_oauth_token_provider': None,
+        'raise_upon_socket_err_during_wakeup': False
     }
 
     def __init__(self, **configs):
@@ -242,6 +245,8 @@ class KafkaClient(object):
         if self.config['api_version'] is None:
             check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
             self.config['api_version'] = self.check_version(timeout=check_timeout)
+
+        self._raise_upon_socket_err_during_wakeup = self.config['raise_upon_socket_err_during_wakeup']
 
     def _can_bootstrap(self):
         effective_failures = self._bootstrap_fails // self._num_bootstrap_hosts
@@ -936,8 +941,10 @@ class KafkaClient(object):
             except socket.timeout:
                 log.warning('Timeout to send to wakeup socket!')
                 raise Errors.KafkaTimeoutError()
-            except socket.error:
+            except socket.error as e:
                 log.warning('Unable to send to wakeup socket!')
+                if self._raise_upon_socket_err_during_wakeup:
+                    raise e
 
     def _clear_wake_fd(self):
         # reading from wake socket should only happen in a single thread
