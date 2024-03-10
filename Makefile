@@ -33,7 +33,7 @@ cov-local: build-integration
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on
-# PyPi homepage (https://pypi.python.org/pypi/kafka-python)
+# PyPi homepage (https://pypi.python.org/pypi/kafka-python-ng)
 check-readme:
 	python setup.py check -rms
 
