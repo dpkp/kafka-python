@@ -7,6 +7,7 @@ import threading
 import time
 
 import kafka.errors as Errors
+from kafka.future import Future
 from kafka.producer.buffer import SimpleBufferPool
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.record.memory_records import MemoryRecordsBuilder
@@ -198,7 +199,7 @@ class RecordAccumulator(object):
         self._drain_index = 0
 
     def append(self, tp, timestamp_ms, key, value, headers, max_time_to_block_ms,
-               estimated_size=0):
+               estimated_size=0, chain_future=None):
         """Add a record to the accumulator, return the append result.
 
         The append result will contain the future metadata, and flag for
@@ -213,12 +214,14 @@ class RecordAccumulator(object):
             headers (List[Tuple[str, bytes]]): The header fields for the record
             max_time_to_block_ms (int): The maximum time in milliseconds to
                 block for buffer memory to be available
-
+            chain_future (Future): chain future
         Returns:
             tuple: (future, batch_is_full, new_batch_created)
         """
         assert isinstance(tp, TopicPartition), 'not TopicPartition'
         assert not self._closed, 'RecordAccumulator is closed'
+        if chain_future is not None:
+            assert isinstance(chain_future, Future), 'not Future'
         # We keep track of the number of appending thread to make sure we do
         # not miss batches in abortIncompleteBatches().
         self._appends_in_progress.increment()
@@ -235,6 +238,8 @@ class RecordAccumulator(object):
                     last = dq[-1]
                     future = last.try_append(timestamp_ms, key, value, headers)
                     if future is not None:
+                        if chain_future:
+                            future.chain(chain_future)
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
@@ -253,6 +258,8 @@ class RecordAccumulator(object):
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
                         self._free.deallocate(buf)
+                        if chain_future:
+                            future.chain(chain_future)
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
@@ -269,6 +276,8 @@ class RecordAccumulator(object):
 
                 dq.append(batch)
                 self._incomplete.add(batch)
+                if chain_future:
+                    future.chain(chain_future)
                 batch_is_full = len(dq) > 1 or batch.records.is_full()
                 return future, batch_is_full, True
         finally:
