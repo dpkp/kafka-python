@@ -916,7 +916,7 @@ class BrokerConnection(object):
         with self._lock:
             if self.state is ConnectionStates.DISCONNECTED:
                 return
-            log.info('%s: Closing connection. %s', self, error or '')
+            log.log(logging.ERROR if error else logging.INFO, '%s: Closing connection. %s', self, error or '')
             self._update_reconnect_backoff()
             self._sasl_auth_future = None
             self._protocol = KafkaProtocol(
