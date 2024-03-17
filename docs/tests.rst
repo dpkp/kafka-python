@@ -1,17 +1,17 @@
 Tests
 =====
 
-.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
+.. image:: https://coveralls.io/repos/wbarnha/kafka-python-ng/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/wbarnha/kafka-python-ng?branch=master
+.. image:: https://travis-ci.org/wbarnha/kafka-python-ng.svg?branch=master
+    :target: https://travis-ci.org/wbarnha/kafka-python-ng
 
 Test environments are managed via tox. The test suite is run via pytest.
 
 Linting is run via pylint, but is generally skipped on pypy due to pylint
 compatibility / performance issues.
 
-For test coverage details, see https://coveralls.io/github/dpkp/kafka-python
+For test coverage details, see https://coveralls.io/github/wbarnha/kafka-python-ng
 
 The test suite includes unit tests that mock network interfaces, as well as
 integration tests that setup and teardown kafka broker (and zookeeper)
