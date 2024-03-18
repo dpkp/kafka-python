@@ -18,7 +18,6 @@
 #
 # So we can iterate over batches just by knowing offsets of Length. Magic is
 # used to construct the correct class for Batch itself.
-from __future__ import division
 
 import struct
 
@@ -110,14 +109,14 @@ class MemoryRecords(ABCRecords):
             return DefaultRecordBatch(next_slice)
 
 
-class MemoryRecordsBuilder(object):
+class MemoryRecordsBuilder:
 
     __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
                  "_bytes_written")
 
     def __init__(self, magic, compression_type, batch_size):
         assert magic in [0, 1, 2], "Not supported magic"
-        assert compression_type in [0, 1, 2, 3], "Not valid compression type"
+        assert compression_type in [0, 1, 2, 3, 4], "Not valid compression type"
         if magic >= 2:
             self._builder = DefaultRecordBatchBuilder(
                 magic=magic, compression_type=compression_type,

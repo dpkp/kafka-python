@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import abc
 import logging
 import re
@@ -13,7 +11,7 @@ from kafka.structs import OffsetAndMetadata
 log = logging.getLogger(__name__)
 
 
-class SubscriptionState(object):
+class SubscriptionState:
     """
     A class for tracking the topics, partitions, and offsets for the consumer.
     A partition is "assigned" either directly with assign_from_user() (manual
@@ -130,16 +128,16 @@ class SubscriptionState(object):
         # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
         if topic is None:
             raise TypeError('All topics must not be None')
-        if not isinstance(topic, six.string_types):
+        if not isinstance(topic, str):
             raise TypeError('All topics must be strings')
         if len(topic) == 0:
             raise ValueError('All topics must be non-empty strings')
         if topic == '.' or topic == '..':
             raise ValueError('Topic name cannot be "." or ".."')
         if len(topic) > self._MAX_NAME_LENGTH:
-            raise ValueError('Topic name is illegal, it can\'t be longer than {0} characters, topic: "{1}"'.format(self._MAX_NAME_LENGTH, topic))
+            raise ValueError(f'Topic name is illegal, it can\'t be longer than {self._MAX_NAME_LENGTH} characters, topic: "{topic}"')
         if not self._TOPIC_LEGAL_CHARS.match(topic):
-            raise ValueError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
+            raise ValueError(f'Topic name "{topic}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"')
 
     def change_subscription(self, topics):
         """Change the topic subscription.
@@ -157,7 +155,7 @@ class SubscriptionState(object):
         if self._user_assignment:
             raise IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
-        if isinstance(topics, six.string_types):
+        if isinstance(topics, str):
             topics = [topics]
 
         if self.subscription == set(topics):
@@ -247,7 +245,7 @@ class SubscriptionState(object):
 
         for tp in assignments:
             if tp.topic not in self.subscription:
-                raise ValueError("Assigned partition %s for non-subscribed topic." % (tp,))
+                raise ValueError(f"Assigned partition {tp} for non-subscribed topic.")
 
         # after rebalancing, we always reinitialize the assignment state
         self.assignment.clear()
@@ -299,13 +297,13 @@ class SubscriptionState(object):
 
     def paused_partitions(self):
         """Return current set of paused TopicPartitions."""
-        return set(partition for partition in self.assignment
-                   if self.is_paused(partition))
+        return {partition for partition in self.assignment
+                   if self.is_paused(partition)}
 
     def fetchable_partitions(self):
         """Return set of TopicPartitions that should be Fetched."""
         fetchable = set()
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if state.is_fetchable():
                 fetchable.add(partition)
         return fetchable
@@ -317,7 +315,7 @@ class SubscriptionState(object):
     def all_consumed_offsets(self):
         """Returns consumed offsets as {TopicPartition: OffsetAndMetadata}"""
         all_consumed = {}
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if state.has_valid_position:
                 all_consumed[partition] = OffsetAndMetadata(state.position, '')
         return all_consumed
@@ -348,7 +346,7 @@ class SubscriptionState(object):
 
     def missing_fetch_positions(self):
         missing = set()
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if not state.has_valid_position:
                 missing.add(partition)
         return missing
@@ -372,7 +370,7 @@ class SubscriptionState(object):
         self.assignment[partition] = TopicPartitionState()
 
 
-class TopicPartitionState(object):
+class TopicPartitionState:
     def __init__(self):
         self.committed = None # last committed OffsetAndMetadata
         self.has_valid_position = False # whether we have valid position
@@ -420,7 +418,7 @@ class TopicPartitionState(object):
         return not self.paused and self.has_valid_position
 
 
-class ConsumerRebalanceListener(object):
+class ConsumerRebalanceListener:
     """
     A callback interface that the user can implement to trigger custom actions
     when the set of partitions assigned to the consumer changes.

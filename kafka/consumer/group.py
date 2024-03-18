@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import copy
 import logging
 import socket
@@ -23,7 +21,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaConsumer(six.Iterator):
+class KafkaConsumer:
     """Consume records from a Kafka cluster.
 
     The consumer will transparently handle the failure of servers in the Kafka
@@ -244,6 +242,7 @@ class KafkaConsumer(six.Iterator):
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
             instance. (See kafka.oauth.abstract). Default: None
+        kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -306,6 +305,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
+        'kafka_client': KafkaClient,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -313,7 +313,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
+            raise KafkaConfigurationError(f"Unrecognized configs: {extra_configs}")
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
@@ -353,7 +353,7 @@ class KafkaConsumer(six.Iterator):
             log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
                         str(self.config['api_version']), str_version)
 
-        self._client = KafkaClient(metrics=self._metrics, **self.config)
+        self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
         # Get auto-discovered version from client if necessary
         if self.config['api_version'] is None:
@@ -651,7 +651,7 @@ class KafkaConsumer(six.Iterator):
         # Poll for new data until the timeout expires
         start = time.time()
         remaining = timeout_ms
-        while True:
+        while not self._closed:
             records = self._poll_once(remaining, max_records, update_offsets=update_offsets)
             if records:
                 return records
@@ -660,7 +660,9 @@ class KafkaConsumer(six.Iterator):
             remaining = timeout_ms - elapsed_ms
 
             if remaining <= 0:
-                return {}
+                break
+
+        return {}
 
     def _poll_once(self, timeout_ms, max_records, update_offsets=True):
         """Do one round of polling. In addition to checking for new data, this does
@@ -964,7 +966,7 @@ class KafkaConsumer(six.Iterator):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -1009,7 +1011,7 @@ class KafkaConsumer(six.Iterator):
             raise UnsupportedVersionError(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
-        for tp, ts in six.iteritems(timestamps):
+        for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
@@ -1114,7 +1116,7 @@ class KafkaConsumer(six.Iterator):
     def _message_generator_v2(self):
         timeout_ms = 1000 * (self._consumer_timeout - time.time())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
-        for tp, records in six.iteritems(record_map):
+        for tp, records in record_map.items():
             # Generators are stateful, and it is possible that the tp / records
             # here may become stale during iteration -- i.e., we seek to a
             # different offset, pause consumption, or lose assignment.

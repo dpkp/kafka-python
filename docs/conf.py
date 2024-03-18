@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# kafka-python documentation build configuration file, created by
+# kafka-python-ng documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 12:21:50 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -47,7 +47,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'kafka-python'
+project = u'kafka-python-ng'
 copyright = u'2016 -- Dana Powers, David Arthur, and Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -201,7 +201,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'kafka-python.tex', u'kafka-python Documentation',
+  ('index', 'kafka-python-ng.tex', u'kafka-python-ng Documentation',
    u'Dana Powers', 'manual'),
 ]
 
@@ -231,7 +231,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'kafka-python', u'kafka-python Documentation',
+    ('index', 'kafka-python-ng', u'kafka-python-ng Documentation',
      [u'Dana Powers'], 1)
 ]
 
@@ -245,7 +245,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'kafka-python', u'kafka-python Documentation',
+  ('index', 'kafka-python-ng', u'kafka-python-ng Documentation',
    u'Dana Powers', 'kafka-python', 'One line description of project.',
    'Miscellaneous'),
 ]

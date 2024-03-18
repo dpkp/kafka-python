@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import collections
 import copy
 import functools
@@ -11,6 +9,7 @@ from kafka.vendor import six
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
 import kafka.errors as Errors
 from kafka.future import Future
@@ -31,7 +30,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
-        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor),
+        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor),
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
@@ -77,7 +76,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 True the only way to receive records from an internal topic is
                 subscribing to it. Requires 0.10+. Default: True
         """
-        super(ConsumerCoordinator, self).__init__(client, metrics, **configs)
+        super().__init__(client, metrics, **configs)
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -128,7 +127,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def __del__(self):
         if hasattr(self, '_cluster') and self._cluster:
             self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
-        super(ConsumerCoordinator, self).__del__()
+        super().__del__()
 
     def protocol_type(self):
         return ConsumerProtocol.PROTOCOL_TYPE
@@ -217,7 +216,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignment_snapshot = None
 
         assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
+        assert assignor, f'Coordinator selected invalid assignment protocol: {protocol}'
 
         assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
 
@@ -234,6 +233,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # give the assignor a chance to update internal state
         # based on the received assignment
         assignor.on_assignment(assignment)
+        if assignor.name == 'sticky':
+            assignor.on_generation_assignment(generation)
 
         # reschedule the auto commit starting from now
         self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
@@ -302,7 +303,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
-        assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
+        assert assignor, f'Invalid assignment protocol: {assignment_strategy}'
         member_metadata = {}
         all_subscribed_topics = set()
         for member_id, metadata_bytes in members:
@@ -333,7 +334,7 @@ class ConsumerCoordinator(BaseCoordinator):
         log.debug("Finished assignment for group %s: %s", self.group_id, assignments)
 
         group_assignment = {}
-        for member_id, assignment in six.iteritems(assignments):
+        for member_id, assignment in assignments.items():
             group_assignment[member_id] = assignment
         return group_assignment
 
@@ -378,13 +379,13 @@ class ConsumerCoordinator(BaseCoordinator):
             and self._joined_subscription != self._subscription.subscription):
             return True
 
-        return super(ConsumerCoordinator, self).need_rejoin()
+        return super().need_rejoin()
 
     def refresh_committed_offsets_if_needed(self):
         """Fetch committed offsets for assigned partitions."""
         if self._subscription.needs_fetch_committed_offsets:
             offsets = self.fetch_committed_offsets(self._subscription.assigned_partitions())
-            for partition, offset in six.iteritems(offsets):
+            for partition, offset in offsets.items():
                 # verify assignment is still active
                 if self._subscription.is_assigned(partition):
                     self._subscription.assignment[partition].committed = offset
@@ -430,7 +431,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if autocommit:
                 self._maybe_auto_commit_offsets_sync()
         finally:
-            super(ConsumerCoordinator, self).close()
+            super().close()
 
     def _invoke_completed_offset_commit_callbacks(self):
         while self.completed_offset_commits:
@@ -565,7 +566,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
-        for tp, offset in six.iteritems(offsets):
+        for tp, offset in offsets.items():
             offset_data[tp.topic][tp.partition] = offset
 
         if self._subscription.partitions_auto_assigned():
@@ -590,8 +591,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         partition,
                         offset.offset,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif self.config['api_version'] >= (0, 8, 2):
             request = OffsetCommitRequest[1](
@@ -602,8 +603,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         offset.offset,
                         -1,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif self.config['api_version'] >= (0, 8, 1):
             request = OffsetCommitRequest[0](
@@ -613,8 +614,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         partition,
                         offset.offset,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
 
         log.debug("Sending offset-commit request with %s for group %s to %s",
@@ -806,10 +807,10 @@ class ConsumerCoordinator(BaseCoordinator):
                                           self._commit_offsets_async_on_complete)
 
 
-class ConsumerCoordinatorMetrics(object):
+class ConsumerCoordinatorMetrics:
     def __init__(self, metrics, metric_group_prefix, subscription):
         self.metrics = metrics
-        self.metric_group_name = '%s-coordinator-metrics' % (metric_group_prefix,)
+        self.metric_group_name = f'{metric_group_prefix}-coordinator-metrics'
 
         self.commit_latency = metrics.sensor('commit-latency')
         self.commit_latency.add(metrics.metric_name(

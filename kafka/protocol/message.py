@@ -1,10 +1,8 @@
-from __future__ import absolute_import
-
 import io
 import time
 
-from kafka.codec import (has_gzip, has_snappy, has_lz4,
-                     gzip_decode, snappy_decode,
+from kafka.codec import (has_gzip, has_snappy, has_lz4, has_zstd,
+                     gzip_decode, snappy_decode, zstd_decode,
                      lz4_decode, lz4_decode_old_kafka)
 from kafka.protocol.frame import KafkaBytes
 from kafka.protocol.struct import Struct
@@ -35,6 +33,7 @@ class Message(Struct):
     CODEC_GZIP = 0x01
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
+    CODEC_ZSTD = 0x04
     TIMESTAMP_TYPE_MASK = 0x08
     HEADER_SIZE = 22  # crc(4), magic(1), attributes(1), timestamp(8), key+value size(4*2)
 
@@ -77,7 +76,7 @@ class Message(Struct):
         elif version == 0:
             fields = (self.crc, self.magic, self.attributes, self.key, self.value)
         else:
-            raise ValueError('Unrecognized message version: %s' % (version,))
+            raise ValueError(f'Unrecognized message version: {version}')
         message = Message.SCHEMAS[version].encode(fields)
         if not recalc_crc:
             return message
@@ -93,7 +92,7 @@ class Message(Struct):
             data = io.BytesIO(data)
         # Partial decode required to determine message version
         base_fields = cls.SCHEMAS[0].fields[0:3]
-        crc, magic, attributes = [field.decode(data) for field in base_fields]
+        crc, magic, attributes = (field.decode(data) for field in base_fields)
         remaining = cls.SCHEMAS[magic].fields[3:]
         fields = [field.decode(data) for field in remaining]
         if magic == 1:
@@ -119,7 +118,7 @@ class Message(Struct):
 
     def decompress(self):
         codec = self.attributes & self.CODEC_MASK
-        assert codec in (self.CODEC_GZIP, self.CODEC_SNAPPY, self.CODEC_LZ4)
+        assert codec in (self.CODEC_GZIP, self.CODEC_SNAPPY, self.CODEC_LZ4, self.CODEC_ZSTD)
         if codec == self.CODEC_GZIP:
             assert has_gzip(), 'Gzip decompression unsupported'
             raw_bytes = gzip_decode(self.value)
@@ -132,6 +131,9 @@ class Message(Struct):
                 raw_bytes = lz4_decode_old_kafka(self.value)
             else:
                 raw_bytes = lz4_decode(self.value)
+        elif codec == self.CODEC_ZSTD:
+            assert has_zstd(), "ZSTD decompression unsupported"
+            raw_bytes = zstd_decode(self.value)
         else:
             raise Exception('This should be impossible')
 
@@ -143,7 +145,7 @@ class Message(Struct):
 
 class PartialMessage(bytes):
     def __repr__(self):
-        return 'PartialMessage(%s)' % (self,)
+        return f'PartialMessage({self})'
 
 
 class MessageSet(AbstractType):

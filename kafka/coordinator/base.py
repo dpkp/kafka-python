@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import abc
 import copy
 import logging
@@ -21,13 +19,13 @@ from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
 log = logging.getLogger('kafka.coordinator')
 
 
-class MemberState(object):
+class MemberState:
     UNJOINED = '<unjoined>'  # the client is not part of a group
     REBALANCING = '<rebalancing>'  # the client has begun rebalancing
     STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
 
-class Generation(object):
+class Generation:
     def __init__(self, generation_id, member_id, protocol):
         self.generation_id = generation_id
         self.member_id = member_id
@@ -43,7 +41,7 @@ class UnjoinedGroupException(Errors.KafkaError):
     retriable = True
 
 
-class BaseCoordinator(object):
+class BaseCoordinator:
     """
     BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group
@@ -242,7 +240,7 @@ class BaseCoordinator(object):
         """Block until the coordinator for this group is known
         (and we have an active connection -- java client uses unsent queue).
         """
-        with self._lock:
+        with self._client._lock, self._lock:
             while self.coordinator_unknown():
 
                 # Prior to 0.8.2 there was no group coordinator
@@ -345,7 +343,7 @@ class BaseCoordinator(object):
 
     def ensure_active_group(self):
         """Ensure that the group is active (i.e. joined and synced)"""
-        with self._lock:
+        with self._client._lock, self._lock:
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
 
@@ -597,7 +595,7 @@ class BaseCoordinator(object):
             self._generation.member_id,
             [(member_id,
               assignment if isinstance(assignment, bytes) else assignment.encode())
-             for member_id, assignment in six.iteritems(group_assignment)])
+             for member_id, assignment in group_assignment.items()])
 
         log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
@@ -763,7 +761,7 @@ class BaseCoordinator(object):
 
     def maybe_leave_group(self):
         """Leave the current group and reset local generation/memberId."""
-        with self._lock:
+        with self._client._lock, self._lock:
             if (not self.coordinator_unknown()
                 and self.state is not MemberState.UNJOINED
                 and self._generation is not Generation.NO_GENERATION):
@@ -850,7 +848,7 @@ class BaseCoordinator(object):
             future.failure(error)
 
 
-class GroupCoordinatorMetrics(object):
+class GroupCoordinatorMetrics:
     def __init__(self, heartbeat, metrics, prefix, tags=None):
         self.heartbeat = heartbeat
         self.metrics = metrics
@@ -903,7 +901,7 @@ class GroupCoordinatorMetrics(object):
 
 class HeartbeatThread(threading.Thread):
     def __init__(self, coordinator):
-        super(HeartbeatThread, self).__init__()
+        super().__init__()
         self.name = coordinator.group_id + '-heartbeat'
         self.coordinator = coordinator
         self.enabled = False
@@ -946,6 +944,15 @@ class HeartbeatThread(threading.Thread):
             log.debug('Heartbeat thread closed')
 
     def _run_once(self):
+        with self.coordinator._client._lock, self.coordinator._lock:
+            if self.enabled and self.coordinator.state is MemberState.STABLE:
+                # TODO: When consumer.wakeup() is implemented, we need to
+                # disable here to prevent propagating an exception to this
+                # heartbeat thread
+                # must get client._lock, or maybe deadlock at heartbeat 
+                # failure callback in consumer poll
+                self.coordinator._client.poll(timeout_ms=0)
+
         with self.coordinator._lock:
             if not self.enabled:
                 log.debug('Heartbeat disabled. Waiting')
@@ -960,11 +967,6 @@ class HeartbeatThread(threading.Thread):
                 log.debug('Group state is not stable, disabling heartbeats')
                 self.disable()
                 return
-
-            # TODO: When consumer.wakeup() is implemented, we need to
-            # disable here to prevent propagating an exception to this
-            # heartbeat thread
-            self.coordinator._client.poll(timeout_ms=0)
 
             if self.coordinator.coordinator_unknown():
                 future = self.coordinator.lookup_coordinator()

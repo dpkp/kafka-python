@@ -39,7 +39,7 @@ except NameError:
     # In Python 3 unicode no longer exists (it's just str)
     unicode = str
 
-class _RouteClassAttributeToGetattr(object):
+class _RouteClassAttributeToGetattr:
     """Route attribute access on a class to __getattr__.
 
     This is a descriptor, used to define attributes that act differently when
@@ -103,7 +103,7 @@ class _EnumDict(dict):
 
     """
     def __init__(self):
-        super(_EnumDict, self).__init__()
+        super().__init__()
         self._member_names = []
 
     def __setitem__(self, key, value):
@@ -139,7 +139,7 @@ class _EnumDict(dict):
                 # enum overwriting a descriptor?
                 raise TypeError('Key already defined as: %r' % self[key])
             self._member_names.append(key)
-        super(_EnumDict, self).__setitem__(key, value)
+        super().__setitem__(key, value)
 
 
 # Dummy value for Enum as EnumMeta explicity checks for it, but of course until
@@ -170,7 +170,7 @@ class EnumMeta(type):
                                                         first_enum)
         # save enum items into separate mapping so they don't get baked into
         # the new class
-        members = dict((k, classdict[k]) for k in classdict._member_names)
+        members = {k: classdict[k] for k in classdict._member_names}
         for name in classdict._member_names:
             del classdict[name]
 
@@ -192,16 +192,16 @@ class EnumMeta(type):
                 _order_ += aliases
 
         # check for illegal enum names (any others?)
-        invalid_names = set(members) & set(['mro'])
+        invalid_names = set(members) & {'mro'}
         if invalid_names:
-            raise ValueError('Invalid enum member name(s): %s' % (
-                ', '.join(invalid_names), ))
+            raise ValueError('Invalid enum member name(s): {}'.format(
+                ', '.join(invalid_names)))
 
         # save attributes from super classes so we know if we can take
         # the shortcut of storing members in the class dict
-        base_attributes = set([a for b in bases for a in b.__dict__])
+        base_attributes = {a for b in bases for a in b.__dict__}
         # create our new Enum type
-        enum_class = super(EnumMeta, metacls).__new__(metacls, cls, bases, classdict)
+        enum_class = super().__new__(metacls, cls, bases, classdict)
         enum_class._member_names_ = []               # names in random order
         if OrderedDict is not None:
             enum_class._member_map_ = OrderedDict()
@@ -361,7 +361,7 @@ class EnumMeta(type):
         if attr in cls._member_map_:
             raise AttributeError(
                     "%s: cannot delete Enum member." % cls.__name__)
-        super(EnumMeta, cls).__delattr__(attr)
+        super().__delattr__(attr)
 
     def __dir__(self):
         return (['__class__', '__doc__', '__members__', '__module__'] +
@@ -421,7 +421,7 @@ class EnumMeta(type):
         member_map = cls.__dict__.get('_member_map_', {})
         if name in member_map:
             raise AttributeError('Cannot reassign members.')
-        super(EnumMeta, cls).__setattr__(name, value)
+        super().__setattr__(name, value)
 
     def _create_(cls, class_name, names=None, module=None, type=None, start=1):
         """Convenience method to create a new Enum class.
@@ -663,18 +663,18 @@ def __new__(cls, value):
         for member in cls._member_map_.values():
             if member.value == value:
                 return member
-    raise ValueError("%s is not a valid %s" % (value, cls.__name__))
+    raise ValueError(f"{value} is not a valid {cls.__name__}")
 temp_enum_dict['__new__'] = __new__
 del __new__
 
 def __repr__(self):
-    return "<%s.%s: %r>" % (
+    return "<{}.{}: {!r}>".format(
             self.__class__.__name__, self._name_, self._value_)
 temp_enum_dict['__repr__'] = __repr__
 del __repr__
 
 def __str__(self):
-    return "%s.%s" % (self.__class__.__name__, self._name_)
+    return f"{self.__class__.__name__}.{self._name_}"
 temp_enum_dict['__str__'] = __str__
 del __str__
 
@@ -719,29 +719,29 @@ if pyver < 2.6:
                 return 0
             return -1
         return NotImplemented
-        raise TypeError("unorderable types: %s() and %s()" % (self.__class__.__name__, other.__class__.__name__))
+        raise TypeError(f"unorderable types: {self.__class__.__name__}() and {other.__class__.__name__}()")
     temp_enum_dict['__cmp__'] = __cmp__
     del __cmp__
 
 else:
 
     def __le__(self, other):
-        raise TypeError("unorderable types: %s() <= %s()" % (self.__class__.__name__, other.__class__.__name__))
+        raise TypeError(f"unorderable types: {self.__class__.__name__}() <= {other.__class__.__name__}()")
     temp_enum_dict['__le__'] = __le__
     del __le__
 
     def __lt__(self, other):
-        raise TypeError("unorderable types: %s() < %s()" % (self.__class__.__name__, other.__class__.__name__))
+        raise TypeError(f"unorderable types: {self.__class__.__name__}() < {other.__class__.__name__}()")
     temp_enum_dict['__lt__'] = __lt__
     del __lt__
 
     def __ge__(self, other):
-        raise TypeError("unorderable types: %s() >= %s()" % (self.__class__.__name__, other.__class__.__name__))
+        raise TypeError(f"unorderable types: {self.__class__.__name__}() >= {other.__class__.__name__}()")
     temp_enum_dict['__ge__'] = __ge__
     del __ge__
 
     def __gt__(self, other):
-        raise TypeError("unorderable types: %s() > %s()" % (self.__class__.__name__, other.__class__.__name__))
+        raise TypeError(f"unorderable types: {self.__class__.__name__}() > {other.__class__.__name__}()")
     temp_enum_dict['__gt__'] = __gt__
     del __gt__
 
@@ -804,7 +804,7 @@ def _convert(cls, name, module, filter, source=None):
         source = vars(source)
     else:
         source = module_globals
-    members = dict((name, value) for name, value in source.items() if filter(name))
+    members = {name: value for name, value in source.items() if filter(name)}
     cls = cls(name, members, module=module)
     cls.__reduce_ex__ = _reduce_ex_by_name
     module_globals.update(cls.__members__)
@@ -833,7 +833,7 @@ def unique(enumeration):
             duplicates.append((name, member.name))
     if duplicates:
         duplicate_names = ', '.join(
-                ["%s -> %s" % (alias, name) for (alias, name) in duplicates]
+                [f"{alias} -> {name}" for (alias, name) in duplicates]
                 )
         raise ValueError('duplicate names found in %r: %s' %
                 (enumeration, duplicate_names)
