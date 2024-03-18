@@ -55,7 +55,7 @@ import kafka.codec as codecs
 from kafka.errors import CorruptRecordException, UnsupportedCodecError
 
 
-class LegacyRecordBase(object):
+class LegacyRecordBase:
 
     __slots__ = ()
 
@@ -124,7 +124,7 @@ class LegacyRecordBase(object):
             checker, name = codecs.has_lz4, "lz4"
         if not checker():
             raise UnsupportedCodecError(
-                "Libraries for {} compression codec not found".format(name))
+                f"Libraries for {name} compression codec not found")
 
 
 class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
@@ -367,11 +367,11 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         if not (key is None or
                 isinstance(key, (bytes, bytearray, memoryview))):
             raise TypeError(
-                "Not supported type for key: {}".format(type(key)))
+                f"Not supported type for key: {type(key)}")
         if not (value is None or
                 isinstance(value, (bytes, bytearray, memoryview))):
             raise TypeError(
-                "Not supported type for value: {}".format(type(value)))
+                f"Not supported type for value: {type(value)}")
 
         # Check if we have room for another message
         pos = len(self._buffer)
@@ -514,7 +514,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         return cls.LOG_OVERHEAD + cls.record_size(magic, key, value)
 
 
-class LegacyRecordMetadata(object):
+class LegacyRecordMetadata:
 
     __slots__ = ("_crc", "_size", "_timestamp", "_offset")
 

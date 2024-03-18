@@ -1,28 +1,23 @@
-from __future__ import absolute_import
-
 import binascii
 import weakref
 
 from kafka.vendor import six
 
 
-if six.PY3:
-    MAX_INT = 2 ** 31
-    TO_SIGNED = 2 ** 32
+MAX_INT = 2 ** 31
+TO_SIGNED = 2 ** 32
 
-    def crc32(data):
-        crc = binascii.crc32(data)
-        # py2 and py3 behave a little differently
-        # CRC is encoded as a signed int in kafka protocol
-        # so we'll convert the py3 unsigned result to signed
-        if crc >= MAX_INT:
-            crc -= TO_SIGNED
-        return crc
-else:
-    from binascii import crc32
+def crc32(data):
+    crc = binascii.crc32(data)
+    # py2 and py3 behave a little differently
+    # CRC is encoded as a signed int in kafka protocol
+    # so we'll convert the py3 unsigned result to signed
+    if crc >= MAX_INT:
+        crc -= TO_SIGNED
+    return crc
 
 
-class WeakMethod(object):
+class WeakMethod:
     """
     Callable that weakly references a method and the object it is bound to. It
     is based on https://stackoverflow.com/a/24287465.

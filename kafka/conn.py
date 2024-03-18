@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import copy
 import errno
 import logging
@@ -35,11 +33,6 @@ from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.parser import KafkaProtocol
 from kafka.version import __version__
 
-
-if six.PY2:
-    ConnectionError = socket.error
-    TimeoutError = socket.error
-    BlockingIOError = Exception
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +90,7 @@ AFI_NAMES = {
 }
 
 
-class ConnectionStates(object):
+class ConnectionStates:
     DISCONNECTING = '<disconnecting>'
     DISCONNECTED = '<disconnected>'
     CONNECTING = '<connecting>'
@@ -106,7 +99,7 @@ class ConnectionStates(object):
     AUTHENTICATING = '<authenticating>'
 
 
-class BrokerConnection(object):
+class BrokerConnection:
     """Initialize a Kafka broker connection
 
     Keyword Arguments:
@@ -384,7 +377,7 @@ class BrokerConnection(object):
             ret = None
             try:
                 ret = self._sock.connect_ex(self._sock_addr)
-            except socket.error as err:
+            except OSError as err:
                 ret = err.errno
 
             # Connection succeeded
@@ -416,7 +409,7 @@ class BrokerConnection(object):
                 log.error('Connect attempt to %s returned error %s.'
                           ' Disconnecting.', self, ret)
                 errstr = errno.errorcode.get(ret, 'UNKNOWN')
-                self.close(Errors.KafkaConnectionError('{} {}'.format(ret, errstr)))
+                self.close(Errors.KafkaConnectionError(f'{ret} {errstr}'))
                 return self.state
 
             # Needs retry
@@ -576,8 +569,7 @@ class BrokerConnection(object):
                     break
                 raise
             except BlockingIOError:
-                if six.PY3:
-                    break
+                break
                 raise
         return total_sent
 
@@ -772,7 +764,7 @@ class BrokerConnection(object):
 
         except (ConnectionError, TimeoutError) as e:
             log.exception("Error sending request data to %s", self)
-            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
+            error = Errors.KafkaConnectionError("{}: {}".format(self, e))
             self.close(error=error)
             return False
 
@@ -805,7 +797,7 @@ class BrokerConnection(object):
 
         except (ConnectionError, TimeoutError, Exception) as e:
             log.exception("Error sending request data to %s", self)
-            error = Errors.KafkaConnectionError("%s: %s" % (self, e))
+            error = Errors.KafkaConnectionError("{}: {}".format(self, e))
             self.close(error=error)
             return False
 
@@ -878,8 +870,7 @@ class BrokerConnection(object):
                     err = Errors.KafkaConnectionError(e)
                     break
                 except BlockingIOError:
-                    if six.PY3:
-                        break
+                    break
                     # For PY2 this is a catchall and should be re-raised
                     raise
 
@@ -914,10 +905,10 @@ class BrokerConnection(object):
     def _handle_api_version_response(self, response):
         error_type = Errors.for_code(response.error_code)
         assert error_type is Errors.NoError, "API version check failed"
-        self._api_versions = dict([
-            (api_key, (min_version, max_version))
+        self._api_versions = {
+            api_key: (min_version, max_version)
             for api_key, min_version, max_version in response.api_versions
-        ])
+        }
         return self._api_versions
 
     def get_api_versions(self):
@@ -1055,9 +1046,6 @@ class BrokerConnection(object):
                 elif (isinstance(f.exception, Errors.CorrelationIdError) and
                       version == (0, 10)):
                     pass
-                elif six.PY2:
-                    assert isinstance(f.exception.args[0], socket.error)
-                    assert f.exception.args[0].errno in (32, 54, 104)
                 else:
                     assert isinstance(f.exception.args[0], ConnectionError)
             log.info("Broker is not v%s -- it did not recognize %s",
@@ -1075,7 +1063,7 @@ class BrokerConnection(object):
             AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
-class BrokerConnectionMetrics(object):
+class BrokerConnectionMetrics:
     def __init__(self, metrics, metric_group_prefix, node_id):
         self.metrics = metrics
 
@@ -1130,7 +1118,7 @@ class BrokerConnectionMetrics(object):
 
         # if one sensor of the metrics has been registered for the connection,
         # then all other sensors should have been registered; and vice versa
-        node_str = 'node-{0}'.format(node_id)
+        node_str = f'node-{node_id}'
         node_sensor = metrics.get_sensor(node_str + '.bytes-sent')
         if not node_sensor:
             metric_group_name = metric_group_prefix + '-node-metrics.' + node_str
@@ -1197,7 +1185,7 @@ def _address_family(address):
         try:
             socket.inet_pton(af, address)
             return af
-        except (ValueError, AttributeError, socket.error):
+        except (ValueError, AttributeError, OSError):
             continue
     return socket.AF_UNSPEC
 
@@ -1241,7 +1229,7 @@ def get_ip_port_afi(host_and_port_str):
                 log.warning('socket.inet_pton not available on this platform.'
                             ' consider `pip install win_inet_pton`')
                 pass
-            except (ValueError, socket.error):
+            except (ValueError, OSError):
                 # it's a host:port pair
                 pass
             host, port = host_and_port_str.rsplit(':', 1)
@@ -1257,7 +1245,7 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
-    if isinstance(hosts, six.string_types):
+    if isinstance(hosts, str):
         hosts = hosts.strip().split(',')
 
     result = []

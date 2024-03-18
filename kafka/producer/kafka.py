@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import atexit
 import copy
 import logging
@@ -28,7 +26,7 @@ log = logging.getLogger(__name__)
 PRODUCER_CLIENT_ID_SEQUENCE = AtomicInteger()
 
 
-class KafkaProducer(object):
+class KafkaProducer:
     """A Kafka client that publishes records to the Kafka cluster.
 
     The producer is thread safe and sharing a single producer instance across
@@ -353,7 +351,7 @@ class KafkaProducer(object):
                 self.config[key] = configs.pop(key)
 
         # Only check for extra config keys in top-level class
-        assert not configs, 'Unrecognized configs: %s' % (configs,)
+        assert not configs, f'Unrecognized configs: {configs}'
 
         if self.config['client_id'] is None:
             self.config['client_id'] = 'kafka-python-producer-%s' % \
@@ -398,10 +396,10 @@ class KafkaProducer(object):
         # Check compression_type for library support
         ct = self.config['compression_type']
         if ct not in self._COMPRESSORS:
-            raise ValueError("Not supported codec: {}".format(ct))
+            raise ValueError(f"Not supported codec: {ct}")
         else:
             checker, compression_attrs = self._COMPRESSORS[ct]
-            assert checker(), "Libraries for {} compression codec not found".format(ct)
+            assert checker(), f"Libraries for {ct} compression codec not found"
             self.config['compression_attrs'] = compression_attrs
 
         message_version = self._max_usable_produce_magic()
@@ -453,7 +451,7 @@ class KafkaProducer(object):
 
     def __del__(self):
         # Disable logger during destruction to avoid touching dangling references
-        class NullLogger(object):
+        class NullLogger:
             def __getattr__(self, name):
                 return lambda *args: None
 
@@ -703,7 +701,7 @@ class KafkaProducer(object):
             elapsed = time.time() - begin
             if not metadata_event.is_set():
                 raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %.1f secs." % (max_wait,))
+                    f"Failed to update metadata after {max_wait:.1f} secs.")
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(topic)
             else:
@@ -743,7 +741,7 @@ class KafkaProducer(object):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:

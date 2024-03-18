@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import collections
 import copy
 import logging
@@ -45,7 +43,7 @@ class RecordTooLargeError(Errors.KafkaError):
     pass
 
 
-class Fetcher(six.Iterator):
+class Fetcher:
     DEFAULT_CONFIG = {
         'key_deserializer': None,
         'value_deserializer': None,
@@ -120,7 +118,7 @@ class Fetcher(six.Iterator):
             List of Futures: each future resolves to a FetchResponse
         """
         futures = []
-        for node_id, request in six.iteritems(self._create_fetch_requests()):
+        for node_id, request in self._create_fetch_requests().items():
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request, wakeup=False)
@@ -209,7 +207,7 @@ class Fetcher(six.Iterator):
             partitions, OffsetResetStrategy.LATEST, timeout_ms)
 
     def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
-        timestamps = dict([(tp, timestamp) for tp in partitions])
+        timestamps = {tp: timestamp for tp in partitions}
         offsets = self._retrieve_offsets(timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp][0]
@@ -244,7 +242,7 @@ class Fetcher(six.Iterator):
             if self._subscriptions.is_assigned(partition):
                 self._subscriptions.seek(partition, offset)
         else:
-            log.debug("Could not find offset for partition %s since it is probably deleted" % (partition,))
+            log.debug(f"Could not find offset for partition {partition} since it is probably deleted")
 
     def _retrieve_offsets(self, timestamps, timeout_ms=float("inf")):
         """Fetch offset for each partition passed in ``timestamps`` map.
@@ -296,7 +294,7 @@ class Fetcher(six.Iterator):
                     log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existence")
                     unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
                     if self._client.cluster.leader_for_partition(unknown_partition) is None:
-                        log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
+                        log.debug(f"Removed partition {unknown_partition} from offsets retrieval")
                         timestamps.pop(unknown_partition)
             else:
                 time.sleep(self.config['retry_backoff_ms'] / 1000.0)
@@ -305,7 +303,7 @@ class Fetcher(six.Iterator):
             remaining_ms = timeout_ms - elapsed_ms
 
         raise Errors.KafkaTimeoutError(
-            "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
+            f"Failed to get offsets by timestamps in {timeout_ms} ms")
 
     def fetched_records(self, max_records=None, update_offsets=True):
         """Returns previously fetched records and updates consumed offsets.
@@ -522,7 +520,7 @@ class Fetcher(six.Iterator):
             Future: resolves to a mapping of retrieved offsets
         """
         timestamps_by_node = collections.defaultdict(dict)
-        for partition, timestamp in six.iteritems(timestamps):
+        for partition, timestamp in timestamps.items():
             node_id = self._client.cluster.leader_for_partition(partition)
             if node_id is None:
                 self._client.add_topic(partition.topic)
@@ -554,7 +552,7 @@ class Fetcher(six.Iterator):
             if not list_offsets_future.is_done:
                 list_offsets_future.failure(err)
 
-        for node_id, timestamps in six.iteritems(timestamps_by_node):
+        for node_id, timestamps in timestamps_by_node.items():
             _f = self._send_offset_request(node_id, timestamps)
             _f.add_callback(on_success)
             _f.add_errback(on_fail)
@@ -562,7 +560,7 @@ class Fetcher(six.Iterator):
 
     def _send_offset_request(self, node_id, timestamps):
         by_topic = collections.defaultdict(list)
-        for tp, timestamp in six.iteritems(timestamps):
+        for tp, timestamp in timestamps.items():
             if self.config['api_version'] >= (0, 10, 1):
                 data = (tp.partition, timestamp)
             else:
@@ -570,9 +568,9 @@ class Fetcher(six.Iterator):
             by_topic[tp.topic].append(data)
 
         if self.config['api_version'] >= (0, 10, 1):
-            request = OffsetRequest[1](-1, list(six.iteritems(by_topic)))
+            request = OffsetRequest[1](-1, list(by_topic.items()))
         else:
-            request = OffsetRequest[0](-1, list(six.iteritems(by_topic)))
+            request = OffsetRequest[0](-1, list(by_topic.items()))
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -713,7 +711,7 @@ class Fetcher(six.Iterator):
         else:
             version = 0
         requests = {}
-        for node_id, partition_data in six.iteritems(fetchable):
+        for node_id, partition_data in fetchable.items():
             if version < 3:
                 requests[node_id] = FetchRequest[version](
                     -1,  # replica_id
@@ -755,9 +753,9 @@ class Fetcher(six.Iterator):
                 partition, offset = partition_data[:2]
                 fetch_offsets[TopicPartition(topic, partition)] = offset
 
-        partitions = set([TopicPartition(topic, partition_data[0])
+        partitions = {TopicPartition(topic, partition_data[0])
                           for topic, partitions in response.topics
-                          for partition_data in partitions])
+                          for partition_data in partitions}
         metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
 
         # randomized ordering should improve balance for short-lived consumers
@@ -866,7 +864,7 @@ class Fetcher(six.Iterator):
 
         return parsed_records
 
-    class PartitionRecords(object):
+    class PartitionRecords:
         def __init__(self, fetch_offset, tp, messages):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
@@ -910,7 +908,7 @@ class Fetcher(six.Iterator):
             return res
 
 
-class FetchResponseMetricAggregator(object):
+class FetchResponseMetricAggregator:
     """
     Since we parse the message data for each partition from each fetch
     response lazily, fetch-level metrics need to be aggregated as the messages
@@ -939,10 +937,10 @@ class FetchResponseMetricAggregator(object):
             self.sensors.records_fetched.record(self.total_records)
 
 
-class FetchManagerMetrics(object):
+class FetchManagerMetrics:
     def __init__(self, metrics, prefix):
         self.metrics = metrics
-        self.group_name = '%s-fetch-manager-metrics' % (prefix,)
+        self.group_name = f'{prefix}-fetch-manager-metrics'
 
         self.bytes_fetched = metrics.sensor('bytes-fetched')
         self.bytes_fetched.add(metrics.metric_name('fetch-size-avg', self.group_name,
@@ -986,15 +984,15 @@ class FetchManagerMetrics(object):
             bytes_fetched = self.metrics.sensor(name)
             bytes_fetched.add(self.metrics.metric_name('fetch-size-avg',
                     self.group_name,
-                    'The average number of bytes fetched per request for topic %s' % (topic,),
+                    f'The average number of bytes fetched per request for topic {topic}',
                     metric_tags), Avg())
             bytes_fetched.add(self.metrics.metric_name('fetch-size-max',
                     self.group_name,
-                    'The maximum number of bytes fetched per request for topic %s' % (topic,),
+                    f'The maximum number of bytes fetched per request for topic {topic}',
                     metric_tags), Max())
             bytes_fetched.add(self.metrics.metric_name('bytes-consumed-rate',
                     self.group_name,
-                    'The average number of bytes consumed per second for topic %s' % (topic,),
+                    f'The average number of bytes consumed per second for topic {topic}',
                     metric_tags), Rate())
         bytes_fetched.record(num_bytes)
 
@@ -1007,10 +1005,10 @@ class FetchManagerMetrics(object):
             records_fetched = self.metrics.sensor(name)
             records_fetched.add(self.metrics.metric_name('records-per-request-avg',
                     self.group_name,
-                    'The average number of records in each request for topic %s' % (topic,),
+                    f'The average number of records in each request for topic {topic}',
                     metric_tags), Avg())
             records_fetched.add(self.metrics.metric_name('records-consumed-rate',
                     self.group_name,
-                    'The average number of records consumed per second for topic %s' % (topic,),
+                    f'The average number of records consumed per second for topic {topic}',
                     metric_tags), Rate())
         records_fetched.record(num_records)

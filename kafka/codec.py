@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import gzip
 import io
 import platform
@@ -149,10 +147,6 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
         # buffer... likely a python-snappy bug, so just use a slice copy
         chunker = lambda payload, i, size: payload[i:size+i]
 
-    elif six.PY2:
-        # Sliced buffer avoids additional copies
-        # pylint: disable-msg=undefined-variable
-        chunker = lambda payload, i, size: buffer(payload, i, size)
     else:
         # snappy.compress does not like raw memoryviews, so we have to convert
         # tobytes, which is a copy... oh well. it's the thought that counts.

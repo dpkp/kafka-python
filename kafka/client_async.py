@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import collections
 import copy
 import logging
@@ -32,14 +30,10 @@ from kafka.util import Dict, WeakMethod
 from kafka.vendor import socketpair
 from kafka.version import __version__
 
-if six.PY2:
-    ConnectionError = None
-
-
 log = logging.getLogger('kafka.client')
 
 
-class KafkaClient(object):
+class KafkaClient:
     """
     A network client for asynchronous request/response network I/O.
 
@@ -374,7 +368,7 @@ class KafkaClient(object):
 
             if conn is None:
                 broker = self.cluster.broker_metadata(node_id)
-                assert broker, 'Broker id %s not in current metadata' % (node_id,)
+                assert broker, 'Broker id {} not in current metadata'.format(node_id)
 
                 log.debug("Initiating connection to node %s at %s:%s",
                           node_id, broker.host, broker.port)
@@ -686,7 +680,7 @@ class KafkaClient(object):
                     unexpected_data = key.fileobj.recv(1)
                     if unexpected_data:  # anything other than a 0-byte read means protocol issues
                         log.warning('Protocol out of sync on %r, closing', conn)
-                except socket.error:
+                except OSError:
                     pass
                 conn.close(Errors.KafkaConnectionError('Socket EVENT_READ without in-flight-requests'))
                 continue
@@ -701,7 +695,7 @@ class KafkaClient(object):
                 if conn not in processed and conn.connected() and conn._sock.pending():
                     self._pending_completion.extend(conn.recv())
 
-        for conn in six.itervalues(self._conns):
+        for conn in self._conns.values():
             if conn.requests_timed_out():
                 log.warning('%s timed out after %s ms. Closing connection.',
                             conn, conn.config['request_timeout_ms'])
@@ -941,7 +935,7 @@ class KafkaClient(object):
             except socket.timeout:
                 log.warning('Timeout to send to wakeup socket!')
                 raise Errors.KafkaTimeoutError()
-            except socket.error as e:
+            except OSError as e:
                 log.warning('Unable to send to wakeup socket!')
                 if self._raise_upon_socket_err_during_wakeup:
                     raise e
@@ -951,7 +945,7 @@ class KafkaClient(object):
         while True:
             try:
                 self._wake_r.recv(1024)
-            except socket.error:
+            except OSError:
                 break
 
     def _maybe_close_oldest_connection(self):
@@ -981,7 +975,7 @@ except ImportError:
     OrderedDict = dict
 
 
-class IdleConnectionManager(object):
+class IdleConnectionManager:
     def __init__(self, connections_max_idle_ms):
         if connections_max_idle_ms > 0:
             self.connections_max_idle = connections_max_idle_ms / 1000
@@ -1043,7 +1037,7 @@ class IdleConnectionManager(object):
             return None
 
 
-class KafkaClientMetrics(object):
+class KafkaClientMetrics:
     def __init__(self, metrics, metric_group_prefix, conns):
         self.metrics = metrics
         self.metric_group_name = metric_group_prefix + '-metrics'

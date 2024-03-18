@@ -1,11 +1,9 @@
-from __future__ import absolute_import
-
 import random
 
 from kafka.vendor import six
 
 
-class DefaultPartitioner(object):
+class DefaultPartitioner:
     """Default partitioner.
 
     Hashes key to partition using murmur2 hashing (from java client)

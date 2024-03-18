@@ -76,7 +76,7 @@ class AwsMskIamClient:
         self.version = '2020_10_22'
 
         self.service = 'kafka-cluster'
-        self.action = '{}:Connect'.format(self.service)
+        self.action = f'{self.service}:Connect'
 
         now = datetime.datetime.utcnow()
         self.datestamp = now.strftime('%Y%m%d')

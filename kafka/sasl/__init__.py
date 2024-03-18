@@ -49,6 +49,6 @@ def register_mechanism(key, module):
         .format(key)
     )
     if key in MECHANISMS:
-        log.warning('Overriding existing SASL mechanism {}'.format(key))
+        log.warning(f'Overriding existing SASL mechanism {key}')
 
     MECHANISMS[key] = module

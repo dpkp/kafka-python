@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import copy
 
 
-class MetricName(object):
+class MetricName:
     """
     This class encapsulates a metric's name, logical group and its
     related attributes (tags).
@@ -102,5 +100,5 @@ class MetricName(object):
         return not self.__eq__(other)
 
     def __str__(self):
-        return 'MetricName(name=%s, group=%s, description=%s, tags=%s)' % (
+        return 'MetricName(name={}, group={}, description={}, tags={})'.format(
             self.name, self.group, self.description, self.tags)
