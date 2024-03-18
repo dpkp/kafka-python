@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import collections
 import copy
 import logging
@@ -35,7 +33,7 @@ class Sender(threading.Thread):
     }
 
     def __init__(self, client, metadata, accumulator, metrics, **configs):
-        super(Sender, self).__init__()
+        super().__init__()
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -118,7 +116,7 @@ class Sender(threading.Thread):
 
         if self.config['guarantee_message_order']:
             # Mute all the partitions drained
-            for batch_list in six.itervalues(batches_by_node):
+            for batch_list in batches_by_node.values():
                 for batch in batch_list:
                     self._accumulator.muted.add(batch.topic_partition)
 
@@ -142,7 +140,7 @@ class Sender(threading.Thread):
             log.debug("Created %d produce requests: %s", len(requests), requests) # trace
             poll_timeout_ms = 0
 
-        for node_id, request in six.iteritems(requests):
+        for node_id, request in requests.items():
             batches = batches_by_node[node_id]
             log.debug('Sending Produce Request: %r', request)
             (self._client.send(node_id, request, wakeup=False)
@@ -190,8 +188,8 @@ class Sender(threading.Thread):
         # if we have a response, parse it
         log.debug('Parsing produce response: %r', response)
         if response:
-            batches_by_partition = dict([(batch.topic_partition, batch)
-                                         for batch in batches])
+            batches_by_partition = {batch.topic_partition: batch
+                                         for batch in batches}
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
@@ -281,7 +279,7 @@ class Sender(threading.Thread):
             dict: {node_id: ProduceRequest} (version depends on api_version)
         """
         requests = {}
-        for node_id, batches in six.iteritems(collated):
+        for node_id, batches in collated.items():
             requests[node_id] = self._produce_request(
                 node_id, self.config['acks'],
                 self.config['request_timeout_ms'], batches)
@@ -324,7 +322,7 @@ class Sender(threading.Thread):
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
                     for topic, partition_info
-                    in six.iteritems(produce_records_by_partition)],
+                    in produce_records_by_partition.items()],
             **kwargs
         )
 
@@ -336,7 +334,7 @@ class Sender(threading.Thread):
         return self._client.bootstrap_connected()
 
 
-class SenderMetrics(object):
+class SenderMetrics:
 
     def __init__(self, metrics, client, metadata):
         self.metrics = metrics
@@ -434,7 +432,7 @@ class SenderMetrics(object):
     def maybe_register_topic_metrics(self, topic):
 
         def sensor_name(name):
-            return 'topic.{0}.{1}'.format(topic, name)
+            return f'topic.{topic}.{name}'
 
         # if one sensor of the metrics has been registered for the topic,
         # then all other sensors should have been registered; and vice versa

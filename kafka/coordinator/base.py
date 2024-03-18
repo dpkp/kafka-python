@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import abc
 import copy
 import logging
@@ -21,13 +19,13 @@ from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
 log = logging.getLogger('kafka.coordinator')
 
 
-class MemberState(object):
+class MemberState:
     UNJOINED = '<unjoined>'  # the client is not part of a group
     REBALANCING = '<rebalancing>'  # the client has begun rebalancing
     STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
 
-class Generation(object):
+class Generation:
     def __init__(self, generation_id, member_id, protocol):
         self.generation_id = generation_id
         self.member_id = member_id
@@ -43,7 +41,7 @@ class UnjoinedGroupException(Errors.KafkaError):
     retriable = True
 
 
-class BaseCoordinator(object):
+class BaseCoordinator:
     """
     BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group
@@ -597,7 +595,7 @@ class BaseCoordinator(object):
             self._generation.member_id,
             [(member_id,
               assignment if isinstance(assignment, bytes) else assignment.encode())
-             for member_id, assignment in six.iteritems(group_assignment)])
+             for member_id, assignment in group_assignment.items()])
 
         log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
@@ -850,7 +848,7 @@ class BaseCoordinator(object):
             future.failure(error)
 
 
-class GroupCoordinatorMetrics(object):
+class GroupCoordinatorMetrics:
     def __init__(self, heartbeat, metrics, prefix, tags=None):
         self.heartbeat = heartbeat
         self.metrics = metrics
@@ -903,7 +901,7 @@ class GroupCoordinatorMetrics(object):
 
 class HeartbeatThread(threading.Thread):
     def __init__(self, coordinator):
-        super(HeartbeatThread, self).__init__()
+        super().__init__()
         self.name = coordinator.group_id + '-heartbeat'
         self.coordinator = coordinator
         self.enabled = False

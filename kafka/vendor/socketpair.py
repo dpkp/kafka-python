@@ -1,6 +1,5 @@
 # pylint: skip-file
 # vendored from https://github.com/mhils/backports.socketpair
-from __future__ import absolute_import
 
 import sys
 import socket
@@ -35,17 +34,10 @@ if not hasattr(socket, "socketpair"):
             csock = socket.socket(family, type, proto)
             try:
                 csock.setblocking(False)
-                if sys.version_info >= (3, 0):
-                    try:
-                        csock.connect((addr, port))
-                    except (BlockingIOError, InterruptedError):
-                        pass
-                else:
-                    try:
-                        csock.connect((addr, port))
-                    except socket.error as e:
-                        if e.errno != errno.WSAEWOULDBLOCK:
-                            raise
+                try:
+                    csock.connect((addr, port))
+                except (BlockingIOError, InterruptedError):
+                    pass
                 csock.setblocking(True)
                 ssock, _ = lsock.accept()
             except Exception:

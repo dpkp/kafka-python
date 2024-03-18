@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 # enum in stdlib as of py3.4
 try:
     from enum import IntEnum  # pylint: disable=import-error
@@ -15,7 +13,7 @@ class ConfigResourceType(IntEnum):
     TOPIC = 2
 
 
-class ConfigResource(object):
+class ConfigResource:
     """A class for specifying config resources.
     Arguments:
         resource_type (ConfigResourceType): the type of kafka resource

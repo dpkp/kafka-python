@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import copy
 import logging
 import socket
@@ -23,7 +21,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaConsumer(six.Iterator):
+class KafkaConsumer:
     """Consume records from a Kafka cluster.
 
     The consumer will transparently handle the failure of servers in the Kafka
@@ -315,7 +313,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
+            raise KafkaConfigurationError(f"Unrecognized configs: {extra_configs}")
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
@@ -968,7 +966,7 @@ class KafkaConsumer(six.Iterator):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -1013,7 +1011,7 @@ class KafkaConsumer(six.Iterator):
             raise UnsupportedVersionError(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
-        for tp, ts in six.iteritems(timestamps):
+        for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
@@ -1118,7 +1116,7 @@ class KafkaConsumer(six.Iterator):
     def _message_generator_v2(self):
         timeout_ms = 1000 * (self._consumer_timeout - time.time())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
-        for tp, records in six.iteritems(record_map):
+        for tp, records in record_map.items():
             # Generators are stateful, and it is possible that the tp / records
             # here may become stale during iteration -- i.e., we seek to a
             # different offset, pause consumption, or lose assignment.

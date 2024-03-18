@@ -1,12 +1,10 @@
-from __future__ import absolute_import
-
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String
 
 UNKNOWN_OFFSET = -1
 
 
-class OffsetResetStrategy(object):
+class OffsetResetStrategy:
     LATEST = -1
     EARLIEST = -2
     NONE = 0
