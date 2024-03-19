@@ -1,10 +1,6 @@
-from __future__ import absolute_import
-
 import collections
 import itertools
 import logging
-
-from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
@@ -51,7 +47,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     @classmethod
     def assign(cls, cluster, member_metadata):
         all_topics = set()
-        for metadata in six.itervalues(member_metadata):
+        for metadata in member_metadata.values():
             all_topics.update(metadata.subscription)
 
         all_topic_partitions = []
