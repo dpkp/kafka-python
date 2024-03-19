@@ -632,7 +632,7 @@ class BaseCoordinator:
 
         group_assignment = [
             (member_id, assignment if isinstance(assignment, bytes) else assignment.encode())
-            for member_id, assignment in iteritems(group_assignment)
+            for member_id, assignment in group_assignment.items()
         ]
 
         if self.config['api_version'] >= (2, 3, 0) and self.config['group_instance_id']:
