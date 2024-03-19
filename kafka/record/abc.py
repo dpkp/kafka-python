@@ -1,8 +1,7 @@
-from __future__ import absolute_import
 import abc
 
 
-class ABCRecord(object):
+class ABCRecord:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
@@ -44,7 +43,7 @@ class ABCRecord(object):
         """
 
 
-class ABCRecordBatchBuilder(object):
+class ABCRecordBatchBuilder:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
@@ -84,7 +83,7 @@ class ABCRecordBatchBuilder(object):
         """
 
 
-class ABCRecordBatch(object):
+class ABCRecordBatch:
     """ For v2 encapsulates a RecordBatch, for v0/v1 a single (maybe
         compressed) message.
     """
@@ -98,7 +97,7 @@ class ABCRecordBatch(object):
         """
 
 
-class ABCRecords(object):
+class ABCRecords:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 

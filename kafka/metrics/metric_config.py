@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import sys
 
 
-class MetricConfig(object):
+class MetricConfig:
     """Configuration values for metrics"""
     def __init__(self, quota=None, samples=2, event_window=sys.maxsize,
                  time_window_ms=30 * 1000, tags=None):

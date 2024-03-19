@@ -5,7 +5,6 @@ import threading
 import time
 
 import pytest
-from kafka.vendor import six
 
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
@@ -62,7 +61,7 @@ def test_group(kafka_broker, topic):
                                      group_id=group_id,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
-            for tp, records in six.itervalues(consumers[i].poll(100)):
+            for tp, records in consumers[i].poll(100).values():
                 messages[i][tp].extend(records)
         consumers[i].close()
         consumers[i] = None
@@ -93,8 +92,8 @@ def test_group(kafka_broker, topic):
                 logging.info('All consumers have assignment... checking for stable group')
                 # Verify all consumers are in the same generation
                 # then log state and break while loop
-                generations = set([consumer._coordinator._generation.generation_id
-                                   for consumer in list(consumers.values())])
+                generations = {consumer._coordinator._generation.generation_id
+                                   for consumer in list(consumers.values())}
 
                 # New generation assignment is not complete until
                 # coordinator.rejoining = False
@@ -120,9 +119,9 @@ def test_group(kafka_broker, topic):
             assert set.isdisjoint(consumers[c].assignment(), group_assignment)
             group_assignment.update(consumers[c].assignment())
 
-        assert group_assignment == set([
+        assert group_assignment == {
             TopicPartition(topic, partition)
-            for partition in range(num_partitions)])
+            for partition in range(num_partitions)}
         logging.info('Assignment looks good!')
 
     finally:
@@ -143,7 +142,7 @@ def test_paused(kafka_broker, topic):
     assert set() == consumer.paused()
 
     consumer.pause(topics[0])
-    assert set([topics[0]]) == consumer.paused()
+    assert {topics[0]} == consumer.paused()
 
     consumer.resume(topics[0])
     assert set() == consumer.paused()

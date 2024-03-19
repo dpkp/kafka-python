@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import inspect
 import sys
 
@@ -12,8 +10,8 @@ class KafkaError(RuntimeError):
     def __str__(self):
         if not self.args:
             return self.__class__.__name__
-        return '{0}: {1}'.format(self.__class__.__name__,
-                               super(KafkaError, self).__str__())
+        return '{}: {}'.format(self.__class__.__name__,
+                               super().__str__())
 
 
 class IllegalStateError(KafkaError):
@@ -68,7 +66,7 @@ class IncompatibleBrokerVersion(KafkaError):
 
 class CommitFailedError(KafkaError):
     def __init__(self, *args, **kwargs):
-        super(CommitFailedError, self).__init__(
+        super().__init__(
             """Commit cannot be completed since the group has already
             rebalanced and assigned the partitions to another member.
             This means that the time between subsequent calls to poll()
@@ -96,9 +94,9 @@ class BrokerResponseError(KafkaError):
 
     def __str__(self):
         """Add errno to standard KafkaError str"""
-        return '[Error {0}] {1}'.format(
+        return '[Error {}] {}'.format(
             self.errno,
-            super(BrokerResponseError, self).__str__())
+            super().__str__())
 
 
 class NoError(BrokerResponseError):
@@ -471,7 +469,7 @@ class KafkaTimeoutError(KafkaError):
 
 class FailedPayloadsError(KafkaError):
     def __init__(self, payload, *args):
-        super(FailedPayloadsError, self).__init__(*args)
+        super().__init__(*args)
         self.payload = payload
 
 
@@ -498,7 +496,7 @@ class QuotaViolationError(KafkaError):
 
 class AsyncProducerQueueFull(KafkaError):
     def __init__(self, failed_msgs, *args):
-        super(AsyncProducerQueueFull, self).__init__(*args)
+        super().__init__(*args)
         self.failed_msgs = failed_msgs
 
 
@@ -508,7 +506,7 @@ def _iter_broker_errors():
             yield obj
 
 
-kafka_errors = dict([(x.errno, x) for x in _iter_broker_errors()])
+kafka_errors = {x.errno: x for x in _iter_broker_errors()}
 
 
 def for_code(error_code):

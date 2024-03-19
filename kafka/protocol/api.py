@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import abc
 
 from kafka.protocol.struct import Struct
@@ -15,7 +13,7 @@ class RequestHeader(Struct):
     )
 
     def __init__(self, request, correlation_id=0, client_id='kafka-python'):
-        super(RequestHeader, self).__init__(
+        super().__init__(
             request.API_KEY, request.API_VERSION, correlation_id, client_id
         )
 
@@ -31,7 +29,7 @@ class RequestHeaderV2(Struct):
     )
 
     def __init__(self, request, correlation_id=0, client_id='kafka-python', tags=None):
-        super(RequestHeaderV2, self).__init__(
+        super().__init__(
             request.API_KEY, request.API_VERSION, correlation_id, client_id, tags or {}
         )
 
