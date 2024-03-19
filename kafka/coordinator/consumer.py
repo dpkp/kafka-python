@@ -4,8 +4,6 @@ import functools
 import logging
 import time
 
-from kafka.vendor import six
-
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor

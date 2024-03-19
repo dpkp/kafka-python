@@ -2,8 +2,6 @@ import logging
 from collections import defaultdict, namedtuple
 from copy import deepcopy
 
-from kafka.vendor import six
-
 log = logging.getLogger(__name__)
 
 
@@ -74,7 +72,7 @@ class PartitionMovements:
         return next(iter(self.partition_movements_by_topic[partition.topic][reverse_pair]))
 
     def are_sticky(self):
-        for topic, movements in six.iteritems(self.partition_movements_by_topic):
+        for topic, movements in self.partition_movements_by_topic.items():
             movement_pairs = set(movements.keys())
             if self._has_cycles(movement_pairs):
                 log.error(

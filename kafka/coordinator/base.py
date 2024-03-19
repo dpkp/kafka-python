@@ -5,8 +5,6 @@ import threading
 import time
 import weakref
 
-from kafka.vendor import six
-
 from kafka.coordinator.heartbeat import Heartbeat
 from kafka import errors as Errors
 from kafka.future import Future

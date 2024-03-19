@@ -1,20 +1,12 @@
 import copy
 import errno
 import logging
+import selectors
 from random import shuffle, uniform
-
-# selectors in stdlib as of py3.4
-try:
-    import selectors  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor import selectors34 as selectors
 
 import socket
 import threading
 import time
-
-from kafka.vendor import six
 
 from kafka import sasl
 import kafka.errors as Errors
@@ -565,8 +557,6 @@ class BrokerConnection:
             except (SSLWantReadError, SSLWantWriteError):
                 break
             except (ConnectionError, TimeoutError) as e:
-                if six.PY2 and e.errno == errno.EWOULDBLOCK:
-                    break
                 raise
             except BlockingIOError:
                 break
@@ -863,8 +853,6 @@ class BrokerConnection:
                 except (SSLWantReadError, SSLWantWriteError):
                     break
                 except (ConnectionError, TimeoutError) as e:
-                    if six.PY2 and e.errno == errno.EWOULDBLOCK:
-                        break
                     log.exception('%s: Error receiving network data'
                                   ' closing socket', self)
                     err = Errors.KafkaConnectionError(e)

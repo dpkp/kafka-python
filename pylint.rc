@@ -1,6 +1,5 @@
 [TYPECHECK]
 ignored-classes=SyncManager,_socketobject
-ignored-modules=kafka.vendor.six.moves
 generated-members=py.*
 
 [MESSAGES CONTROL]

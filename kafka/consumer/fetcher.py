@@ -5,8 +5,6 @@ import random
 import sys
 import time
 
-from kafka.vendor import six
-
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate

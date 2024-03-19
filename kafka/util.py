@@ -1,8 +1,6 @@
 import binascii
 import weakref
 
-from kafka.vendor import six
-
 
 MAX_INT = 2 ** 31
 TO_SIGNED = 2 ** 32

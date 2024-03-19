@@ -4,7 +4,6 @@ import logging
 import socket
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType

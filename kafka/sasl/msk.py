@@ -5,9 +5,8 @@ import json
 import string
 import struct
 import logging
+import urllib
 
-
-from kafka.vendor.six.moves import urllib
 from kafka.protocol.types import Int32
 import kafka.errors as Errors
 

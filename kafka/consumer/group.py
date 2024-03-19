@@ -5,8 +5,6 @@ import time
 
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
 
-from kafka.vendor import six
-
 from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState

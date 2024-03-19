@@ -6,8 +6,6 @@ import threading
 import time
 import weakref
 
-from kafka.vendor import six
-
 import kafka.errors as Errors
 from kafka.client_async import KafkaClient, selectors
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd

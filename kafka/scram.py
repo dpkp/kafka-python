@@ -3,8 +3,6 @@ import hashlib
 import hmac
 import uuid
 
-from kafka.vendor import six
-
 
 def xor_bytes(left, right):
     return bytes(lb ^ rb for lb, rb in zip(left, right))

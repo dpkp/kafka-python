@@ -1,11 +1,6 @@
-from kafka.errors import IllegalArgumentError
+from enum import IntEnum
 
-# enum in stdlib as of py3.4
-try:
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
+from kafka.errors import IllegalArgumentError
 
 
 class ResourceType(IntEnum):
