@@ -632,7 +632,7 @@ class BaseCoordinator:
 
         group_assignment = [
             (member_id, assignment if isinstance(assignment, bytes) else assignment.encode())
-            for member_id, assignment in iteritems(group_assignment)
+            for member_id, assignment in group_assignment.items()
         ]
 
         if self.config['api_version'] >= (2, 3, 0) and self.config['group_instance_id']:
@@ -646,13 +646,12 @@ class BaseCoordinator:
             )
         else:
             version = 0 if self.config['api_version'] < (0, 11, 0) else 1
-            request = SyncGroupRequest[version](
+            args = (
                 self.group_id,
                 self._generation.generation_id,
                 self._generation.member_id,
-                [(member_id,
-                  assignment if isinstance(assignment, bytes) else assignment.encode())
-                 for member_id, assignment in group_assignment.items()])
+                group_assignment,
+            )
 
         request = SyncGroupRequest[version](*args)
         log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
