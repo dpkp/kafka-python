@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields
 
@@ -719,7 +717,7 @@ class DescribeConfigsResponse_v1(Response):
                 ('config_names', String('utf-8')),
                 ('config_value', String('utf-8')),
                 ('read_only', Boolean),
-                ('is_default', Boolean),
+                ('config_source', Int8),
                 ('is_sensitive', Boolean),
                 ('config_synonyms', Array(
                     ('config_name', String('utf-8')),
@@ -787,6 +785,48 @@ DescribeConfigsRequest = [
 DescribeConfigsResponse = [
     DescribeConfigsResponse_v0, DescribeConfigsResponse_v1,
     DescribeConfigsResponse_v2,
+]
+
+
+class DescribeLogDirsResponse_v0(Response):
+    API_KEY = 35
+    API_VERSION = 0
+    FLEXIBLE_VERSION = True
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('log_dirs', Array(
+            ('error_code', Int16),
+            ('log_dir', String('utf-8')),
+            ('topics', Array(
+                ('name', String('utf-8')),
+                ('partitions', Array(
+                    ('partition_index', Int32),
+                    ('partition_size', Int64),
+                    ('offset_lag', Int64),
+                    ('is_future_key', Boolean)
+                ))
+            ))
+        ))
+    )
+
+
+class DescribeLogDirsRequest_v0(Request):
+    API_KEY = 35
+    API_VERSION = 0
+    RESPONSE_TYPE = DescribeLogDirsResponse_v0
+    SCHEMA = Schema(
+                     ('topics', Array(
+                         ('topic', String('utf-8')),
+                         ('partitions', Int32)
+                         ))
+                 )
+
+
+DescribeLogDirsResponse = [
+    DescribeLogDirsResponse_v0,
+]
+DescribeLogDirsRequest = [
+    DescribeLogDirsRequest_v0,
 ]
 
 
@@ -925,7 +965,7 @@ DeleteGroupsResponse = [
 ]
 
 
-class DescribeClientQuotasResponse_v0(Request):
+class DescribeClientQuotasResponse_v0(Response):
     API_KEY = 48
     API_VERSION = 0
     SCHEMA = Schema(
