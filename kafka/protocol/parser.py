@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import collections
 import logging
 
@@ -12,7 +10,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaProtocol(object):
+class KafkaProtocol:
     """Manage the kafka network protocol
 
     Use an instance of KafkaProtocol to manage bytes send/recv'd
