@@ -1,18 +1,16 @@
-from __future__ import absolute_import
-
 import collections
 import logging
 
 import kafka.errors as Errors
-from kafka.protocol.commit import GroupCoordinatorResponse
+from kafka.protocol.commit import FindCoordinatorResponse
 from kafka.protocol.frame import KafkaBytes
-from kafka.protocol.types import Int32, TaggedFields
+from kafka.protocol.types import Int32
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
 
 
-class KafkaProtocol(object):
+class KafkaProtocol:
     """Manage the kafka network protocol
 
     Use an instance of KafkaProtocol to manage bytes send/recv'd
@@ -142,9 +140,9 @@ class KafkaProtocol(object):
         # 0.8.2 quirk
         if (recv_correlation_id == 0 and
             correlation_id != 0 and
-            request.RESPONSE_TYPE is GroupCoordinatorResponse[0] and
+            request.RESPONSE_TYPE is FindCoordinatorResponse[0] and
             (self._api_version == (0, 8, 2) or self._api_version is None)):
-            log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
+            log.warning('Kafka 0.8.2 quirk -- FindCoordinatorResponse'
                         ' Correlation ID does not match request. This'
                         ' should go away once at least one topic has been'
                         ' initialized on the broker.')

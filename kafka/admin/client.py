@@ -1,12 +1,9 @@
-from __future__ import absolute_import
-
 from collections import defaultdict
 import copy
 import logging
 import socket
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType
@@ -20,9 +17,10 @@ from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest
+    DeleteGroupsRequest, DescribeLogDirsRequest
 )
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
+from kafka.admin.coordinator_type import CoordinatorType
+from kafka.protocol.commit import OffsetFetchRequest, FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
@@ -32,7 +30,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaAdminClient(object):
+class KafkaAdminClient:
     """A class for administering the Kafka cluster.
 
     Warning:
@@ -194,7 +192,7 @@ class KafkaAdminClient(object):
         log.debug("Starting KafkaAdminClient with configuration: %s", configs)
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: {}".format(extra_configs))
+            raise KafkaConfigurationError(f"Unrecognized configs: {extra_configs}")
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
@@ -220,6 +218,7 @@ class KafkaAdminClient(object):
 
         self._closed = False
         self._refresh_controller_id()
+        self._cluster_metadata = self._get_cluster_metadata().to_object()
         log.debug("KafkaAdminClient started.")
 
     def close(self):
@@ -297,18 +296,14 @@ class KafkaAdminClient(object):
             name as a string.
         :return: A message future
         """
-        # TODO add support for dynamically picking version of
-        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
-        # When I experimented with this, the coordinator value returned in
-        # GroupCoordinatorResponse_v1 didn't match the value returned by
-        # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = 0
-        # version = self._matching_api_version(GroupCoordinatorRequest)
+        version = self._matching_api_version(FindCoordinatorRequest)
         if version <= 0:
-            request = GroupCoordinatorRequest[version](group_id)
+            request = FindCoordinatorRequest[version](group_id)
+        elif version >= 1:
+            request = FindCoordinatorRequest[version](group_id, CoordinatorType.GROUP)
         else:
             raise NotImplementedError(
-                "Support for GroupCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_node(self._client.least_loaded_node(), request)
 
@@ -328,7 +323,7 @@ class KafkaAdminClient(object):
                     .format(response))
         else:
             raise NotImplementedError(
-                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
         return response.coordinator_id
 
@@ -515,20 +510,18 @@ class KafkaAdminClient(object):
         return future.value
 
     def list_topics(self):
-        metadata = self._get_cluster_metadata(topics=None)
-        obj = metadata.to_object()
-        return [t['topic'] for t in obj['topics']]
+        metadata = copy.copy(self._cluster_metadata)
+        topics = metadata.pop('topics')
+        return [m['topic'] for m in topics]
 
     def describe_topics(self, topics=None):
-        metadata = self._get_cluster_metadata(topics=topics)
-        obj = metadata.to_object()
-        return obj['topics']
+        metadata = copy.copy(self._cluster_metadata)
+        return metadata.pop('topics')
 
     def describe_cluster(self):
-        metadata = self._get_cluster_metadata()
-        obj = metadata.to_object()
-        obj.pop('topics')  # We have 'describe_topics' for this
-        return obj
+        metadata = copy.copy(self._cluster_metadata)
+        metadata.pop('topics') # describe_topics is for this
+        return metadata
 
     @staticmethod
     def _convert_describe_acls_response_to_acls(describe_response):
@@ -874,7 +867,7 @@ class KafkaAdminClient(object):
                 ))
         else:
             raise NotImplementedError(
-                "Support for DescribeConfigs v{} has not yet been added to KafkaAdminClient.".format(version))
+                f"Support for DescribeConfigs v{version} has not yet been added to KafkaAdminClient.")
 
         self._wait_for_futures(futures)
         return [f.value for f in futures]
@@ -1197,7 +1190,7 @@ class KafkaAdminClient(object):
                 topics_partitions_dict = defaultdict(set)
                 for topic, partition in partitions:
                     topics_partitions_dict[topic].add(partition)
-                topics_partitions = list(six.iteritems(topics_partitions_dict))
+                topics_partitions = list(topics_partitions_dict.items())
             request = OffsetFetchRequest[version](group_id, topics_partitions)
         else:
             raise NotImplementedError(
@@ -1345,3 +1338,19 @@ class KafkaAdminClient(object):
 
                 if future.failed():
                     raise future.exception  # pylint: disable-msg=raising-bad-type
+
+    def describe_log_dirs(self):
+        """Send a DescribeLogDirsRequest request to a broker.
+
+        :return: A message future
+        """
+        version = self._matching_api_version(DescribeLogDirsRequest)
+        if version <= 1:
+            request = DescribeLogDirsRequest[version]()
+            future = self._send_request_to_node(self._client.least_loaded_node(), request)
+            self._wait_for_futures([future])
+        else:
+            raise NotImplementedError(
+                "Support for DescribeLogDirsRequest_v{} has not yet been added to KafkaAdminClient."
+                    .format(version))
+        return future.value

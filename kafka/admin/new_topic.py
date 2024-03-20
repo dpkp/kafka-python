@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 from kafka.errors import IllegalArgumentError
 
 
-class NewTopic(object):
+class NewTopic:
     """ A class for new topic creation
     Arguments:
         name (string): name of the topic

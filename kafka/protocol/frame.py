@@ -1,6 +1,6 @@
 class KafkaBytes(bytearray):
     def __init__(self, size):
-        super(KafkaBytes, self).__init__(size)
+        super().__init__(size)
         self._idx = 0
 
     def read(self, nbytes=None):

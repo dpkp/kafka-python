@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
 
-class AbstractStat(object):
+class AbstractStat:
     """
     An AbstractStat is a quantity such as average, max, etc that is computed
     off the stream of updates to a sensor

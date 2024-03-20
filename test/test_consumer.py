@@ -24,3 +24,8 @@ class TestKafkaConsumer:
         assert sub == set(['foo'])
         sub.add('fizz')
         assert consumer.subscription() == set(['foo'])
+
+    def test_version_for_static_membership(self):
+        KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(2, 3, 0), group_instance_id='test')
+        with pytest.raises(KafkaConfigurationError):
+            KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(2, 2, 0), group_instance_id='test')
