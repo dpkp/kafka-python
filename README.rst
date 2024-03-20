@@ -72,7 +72,6 @@ that expose basic message attributes: topic, partition, offset, key, and value:
     #                          group_instance_id='consumer-1', leave_group_on_close=False)
     for msg in consumer:
         print (msg)
-        print (msg)
 
 .. code-block:: python
 
