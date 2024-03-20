@@ -1,9 +1,5 @@
-from __future__ import absolute_import
-
 import collections
 import logging
-
-from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
@@ -34,14 +30,14 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
     @classmethod
     def assign(cls, cluster, member_metadata):
         consumers_per_topic = collections.defaultdict(list)
-        for member, metadata in six.iteritems(member_metadata):
+        for member, metadata in member_metadata.items():
             for topic in metadata.subscription:
                 consumers_per_topic[topic].append(member)
 
         # construct {member_id: {topic: [partition, ...]}}
         assignment = collections.defaultdict(dict)
 
-        for topic, consumers_for_topic in six.iteritems(consumers_per_topic):
+        for topic, consumers_for_topic in consumers_per_topic.items():
             partitions = cluster.partitions_for_topic(topic)
             if partitions is None:
                 log.warning('No partition metadata for topic %s', topic)
