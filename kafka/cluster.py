@@ -1,12 +1,8 @@
-from __future__ import absolute_import
-
 import collections
 import copy
 import logging
 import threading
 import time
-
-from kafka.vendor import six
 
 from kafka import errors as Errors
 from kafka.conn import collect_hosts
@@ -16,7 +12,7 @@ from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
 log = logging.getLogger(__name__)
 
 
-class ClusterMetadata(object):
+class ClusterMetadata:
     """
     A class to manage kafka cluster metadata.
 
@@ -128,9 +124,9 @@ class ClusterMetadata(object):
         """
         if topic not in self._partitions:
             return None
-        return set([partition for partition, metadata
-                              in six.iteritems(self._partitions[topic])
-                              if metadata.leader != -1])
+        return {partition for partition, metadata
+                              in self._partitions[topic].items()
+                              if metadata.leader != -1}
 
     def leader_for_partition(self, partition):
         """Return node_id of leader, -1 unavailable, None if unknown."""
@@ -361,7 +357,7 @@ class ClusterMetadata(object):
 
         # Use a coordinator-specific node id so that group requests
         # get a dedicated connection
-        node_id = 'coordinator-{}'.format(response.coordinator_id)
+        node_id = f'coordinator-{response.coordinator_id}'
         coordinator = BrokerMetadata(
             node_id,
             response.host,

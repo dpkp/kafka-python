@@ -29,7 +29,7 @@ test-local: build-integration
 cov-local: build-integration
 	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) pytest \
 		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
-		--cov-config=.covrc --cov-report html $(FLAGS) kafka test
+		--cov-report html $(FLAGS) kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on

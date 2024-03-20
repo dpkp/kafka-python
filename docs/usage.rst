@@ -47,6 +47,18 @@ KafkaConsumer
                               group_id='my-group',
                               bootstrap_servers='my.server.com')
 
+    # Use multiple static consumers w/ 2.3.0 kafka brokers
+    consumer1 = KafkaConsumer('my-topic',
+                              group_id='my-group',
+                              group_instance_id='process-1',
+                              leave_group_on_close=False,
+                              bootstrap_servers='my.server.com')
+    consumer2 = KafkaConsumer('my-topic',
+                              group_id='my-group',
+                              group_instance_id='process-2',
+                              leave_group_on_close=False,
+                              bootstrap_servers='my.server.com')
+
 
 There are many configuration options for the consumer class. See
 :class:`~kafka.KafkaConsumer` API documentation for more details.
