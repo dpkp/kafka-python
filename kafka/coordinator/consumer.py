@@ -25,6 +25,8 @@ class ConsumerCoordinator(BaseCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
+        'group_instance_id': '',
+        'leave_group_on_close': None,
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
@@ -45,6 +47,12 @@ class ConsumerCoordinator(BaseCoordinator):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
+            group_instance_id (str): the unique identifier to distinguish
+                each client instance. If set and leave_group_on_close is
+                False consumer group rebalancing won't be triggered until
+                sessiont_timeout_ms is met. Requires 2.3.0+.
+            leave_group_on_close (bool or None): whether to leave a consumer
+                 group or not on consumer shutdown.
             enable_auto_commit (bool): If true the consumer's offset will be
                 periodically committed in the background. Default: True.
             auto_commit_interval_ms (int): milliseconds between automatic
@@ -304,10 +312,15 @@ class ConsumerCoordinator(BaseCoordinator):
         assert assignor, f'Invalid assignment protocol: {assignment_strategy}'
         member_metadata = {}
         all_subscribed_topics = set()
-        for member_id, metadata_bytes in members:
+
+        for member in members:
+            if len(member) == 3:
+                member_id, group_instance_id, metadata_bytes = member
+            else:
+                member_id, metadata_bytes = member
             metadata = ConsumerProtocol.METADATA.decode(metadata_bytes)
             member_metadata[member_id] = metadata
-            all_subscribed_topics.update(metadata.subscription) # pylint: disable-msg=no-member
+            all_subscribed_topics.update(metadata.subscription)  # pylint: disable-msg=no-member
 
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes

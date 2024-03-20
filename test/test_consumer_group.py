@@ -180,3 +180,23 @@ def test_heartbeat_thread(kafka_broker, topic):
     consumer.poll(timeout_ms=100)
     assert consumer._coordinator.heartbeat.last_poll > last_poll
     consumer.close()
+
+
+@pytest.mark.skipif(env_kafka_version() < (2, 3, 0), reason="Requires KAFKA_VERSION >= 2.3.0")
+@pytest.mark.parametrize('leave, result', [
+    (False, True),
+    (True, False),
+])
+def test_kafka_consumer_rebalance_for_static_members(kafka_consumer_factory, leave, result):
+    GROUP_ID = random_string(10)
+
+    consumer1 = kafka_consumer_factory(group_id=GROUP_ID, group_instance_id=GROUP_ID, leave_group_on_close=leave)
+    consumer1.poll()
+    generation1 = consumer1._coordinator.generation().generation_id
+    consumer1.close()
+
+    consumer2 = kafka_consumer_factory(group_id=GROUP_ID, group_instance_id=GROUP_ID, leave_group_on_close=leave)
+    consumer2.poll()
+    generation2 = consumer2._coordinator.generation().generation_id
+    consumer2.close()
+    assert (generation1 == generation2) is result
