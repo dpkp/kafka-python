@@ -119,7 +119,7 @@ def kafka_admin_client_factory(kafka_broker):
 @pytest.fixture
 def topic(kafka_broker, request):
     """Return a topic fixture"""
-    topic_name = '%s_%s' % (request.node.name, random_string(10))
+    topic_name = f'{request.node.originalname}_{random_string(10)}'
     kafka_broker.create_topics([topic_name])
     return topic_name
 

@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 import pytest
-from mock import patch
+from unittest.mock import patch
 import kafka.codec
 from kafka.record.default_records import (
     DefaultRecordBatch, DefaultRecordBatchBuilder
@@ -197,7 +195,7 @@ def test_unavailable_codec(magic, compression_type, name, checker_name):
             magic=2, compression_type=compression_type, is_transactional=0,
             producer_id=-1, producer_epoch=-1, base_sequence=-1,
             batch_size=1024)
-        error_msg = "Libraries for {} compression codec not found".format(name)
+        error_msg = f"Libraries for {name} compression codec not found"
         with pytest.raises(UnsupportedCodecError, match=error_msg):
             builder.append(0, timestamp=None, key=None, value=b"M", headers=[])
             builder.build()

@@ -1,6 +1,5 @@
-from __future__ import unicode_literals
 import pytest
-from mock import patch
+from unittest.mock import patch
 from kafka.record.legacy_records import (
     LegacyRecordBatch, LegacyRecordBatchBuilder
 )
@@ -186,7 +185,7 @@ def test_unavailable_codec(magic, compression_type, name, checker_name):
         # Check that builder raises error
         builder = LegacyRecordBatchBuilder(
             magic=magic, compression_type=compression_type, batch_size=1024)
-        error_msg = "Libraries for {} compression codec not found".format(name)
+        error_msg = f"Libraries for {name} compression codec not found"
         with pytest.raises(UnsupportedCodecError, match=error_msg):
             builder.append(0, timestamp=None, key=None, value=b"M")
             builder.build()

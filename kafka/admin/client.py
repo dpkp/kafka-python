@@ -1,12 +1,9 @@
-from __future__ import absolute_import
-
 from collections import defaultdict
 import copy
 import logging
 import socket
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType
@@ -21,7 +18,7 @@ from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest, DeleteRecordsRequest
+    DeleteGroupsRequest, DescribeLogDirsRequest, DeleteRecordsRequest
 )
 from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -33,7 +30,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaAdminClient(object):
+class KafkaAdminClient:
     """A class for administering the Kafka cluster.
 
     Warning:
@@ -195,7 +192,7 @@ class KafkaAdminClient(object):
         log.debug("Starting KafkaAdminClient with configuration: %s", configs)
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: {}".format(extra_configs))
+            raise KafkaConfigurationError(f"Unrecognized configs: {extra_configs}")
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
@@ -875,7 +872,7 @@ class KafkaAdminClient(object):
                 ))
         else:
             raise NotImplementedError(
-                "Support for DescribeConfigs v{} has not yet been added to KafkaAdminClient.".format(version))
+                f"Support for DescribeConfigs v{version} has not yet been added to KafkaAdminClient.")
 
         self._wait_for_futures(futures)
         return [f.value for f in futures]
@@ -1306,7 +1303,7 @@ class KafkaAdminClient(object):
                 topics_partitions_dict = defaultdict(set)
                 for topic, partition in partitions:
                     topics_partitions_dict[topic].add(partition)
-                topics_partitions = list(six.iteritems(topics_partitions_dict))
+                topics_partitions = list(topics_partitions_dict.items())
             request = OffsetFetchRequest[version](group_id, topics_partitions)
         else:
             raise NotImplementedError(
@@ -1454,3 +1451,19 @@ class KafkaAdminClient(object):
 
                 if future.failed():
                     raise future.exception  # pylint: disable-msg=raising-bad-type
+
+    def describe_log_dirs(self):
+        """Send a DescribeLogDirsRequest request to a broker.
+
+        :return: A message future
+        """
+        version = self._matching_api_version(DescribeLogDirsRequest)
+        if version <= 1:
+            request = DescribeLogDirsRequest[version]()
+            future = self._send_request_to_node(self._client.least_loaded_node(), request)
+            self._wait_for_futures([future])
+        else:
+            raise NotImplementedError(
+                "Support for DescribeLogDirsRequest_v{} has not yet been added to KafkaAdminClient."
+                    .format(version))
+        return future.value

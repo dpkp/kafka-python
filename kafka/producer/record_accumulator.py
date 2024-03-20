@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import collections
 import copy
 import logging
@@ -16,7 +14,7 @@ from kafka.structs import TopicPartition
 log = logging.getLogger(__name__)
 
 
-class AtomicInteger(object):
+class AtomicInteger:
     def __init__(self, val=0):
         self._lock = threading.Lock()
         self._val = val
@@ -35,7 +33,7 @@ class AtomicInteger(object):
         return self._val
 
 
-class ProducerBatch(object):
+class ProducerBatch:
     def __init__(self, tp, records, buffer):
         self.max_record_size = 0
         now = time.time()
@@ -110,7 +108,7 @@ class ProducerBatch(object):
         if error:
             self.records.close()
             self.done(-1, None, Errors.KafkaTimeoutError(
-                "Batch for %s containing %s record(s) expired: %s" % (
+                "Batch for {} containing {} record(s) expired: {}".format(
                 self.topic_partition, self.records.next_offset(), error)))
             return True
         return False
@@ -129,7 +127,7 @@ class ProducerBatch(object):
             self.topic_partition, self.records.next_offset())
 
 
-class RecordAccumulator(object):
+class RecordAccumulator:
     """
     This class maintains a dequeue per TopicPartition that accumulates messages
     into MessageSets to be sent to the server.
@@ -570,7 +568,7 @@ class RecordAccumulator(object):
         self._closed = True
 
 
-class IncompleteProducerBatches(object):
+class IncompleteProducerBatches:
     """A threadsafe helper class to hold ProducerBatches that haven't been ack'd yet"""
 
     def __init__(self):
