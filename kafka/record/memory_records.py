@@ -18,7 +18,6 @@
 #
 # So we can iterate over batches just by knowing offsets of Length. Magic is
 # used to construct the correct class for Batch itself.
-from __future__ import division
 
 import struct
 
@@ -110,7 +109,7 @@ class MemoryRecords(ABCRecords):
             return DefaultRecordBatch(next_slice)
 
 
-class MemoryRecordsBuilder(object):
+class MemoryRecordsBuilder:
 
     __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
                  "_bytes_written")
