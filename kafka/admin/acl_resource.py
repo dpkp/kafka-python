@@ -1,12 +1,6 @@
-from __future__ import absolute_import
-from kafka.errors import IllegalArgumentError
+from enum import IntEnum
 
-# enum in stdlib as of py3.4
-try:
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
+from kafka.errors import IllegalArgumentError
 
 
 class ResourceType(IntEnum):
@@ -69,7 +63,7 @@ class ACLResourcePatternType(IntEnum):
     PREFIXED = 4
 
 
-class ACLFilter(object):
+class ACLFilter:
     """Represents a filter to use with describing and deleting ACLs
 
     The difference between this class and the ACL class is mainly that
@@ -161,7 +155,7 @@ class ACL(ACLFilter):
             permission_type,
             resource_pattern
     ):
-        super(ACL, self).__init__(principal, host, operation, permission_type, resource_pattern)
+        super().__init__(principal, host, operation, permission_type, resource_pattern)
         self.validate()
 
     def validate(self):
@@ -173,7 +167,7 @@ class ACL(ACLFilter):
             raise IllegalArgumentError("resource_pattern must be a ResourcePattern object")
 
 
-class ResourcePatternFilter(object):
+class ResourcePatternFilter:
     def __init__(
             self,
             resource_type,
@@ -232,7 +226,7 @@ class ResourcePattern(ResourcePatternFilter):
             resource_name,
             pattern_type=ACLResourcePatternType.LITERAL
     ):
-        super(ResourcePattern, self).__init__(resource_type, resource_name, pattern_type)
+        super().__init__(resource_type, resource_name, pattern_type)
         self.validate()
 
     def validate(self):
@@ -240,5 +234,5 @@ class ResourcePattern(ResourcePatternFilter):
             raise IllegalArgumentError("resource_type cannot be ANY")
         if self.pattern_type in [ACLResourcePatternType.ANY, ACLResourcePatternType.MATCH]:
             raise IllegalArgumentError(
-                "pattern_type cannot be {} on a concrete ResourcePattern".format(self.pattern_type.name)
+                f"pattern_type cannot be {self.pattern_type.name} on a concrete ResourcePattern"
             )

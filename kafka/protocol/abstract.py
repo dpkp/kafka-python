@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
 
-class AbstractType(object):
+class AbstractType:
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
