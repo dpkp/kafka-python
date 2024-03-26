@@ -115,6 +115,8 @@ class DefaultRecordBase:
             checker, name = codecs.has_lz4, "lz4"
         elif compression_type == self.CODEC_ZSTD:
             checker, name = codecs.has_zstd, "zstd"
+        else:
+            checker, name = lambda: False, "Unknown"
         if not checker():
             raise UnsupportedCodecError(
                 f"Libraries for {name} compression codec not found")
@@ -525,6 +527,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 compressed = lz4_encode(data)
             elif self._compression_type == self.CODEC_ZSTD:
                 compressed = zstd_encode(data)
+            else:
+                compressed = ''  # unknown
             compressed_size = len(compressed)
             if len(data) <= compressed_size:
                 # We did not get any benefit from compression, lets send
