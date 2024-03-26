@@ -41,7 +41,6 @@
 # The CRC covers the data from the Magic byte to the end of the message.
 
 
-from multiprocessing.sharedctypes import Value
 import struct
 import time
 
