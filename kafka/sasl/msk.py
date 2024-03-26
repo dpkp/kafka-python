@@ -11,6 +11,7 @@ from kafka.protocol.types import Int32
 import kafka.errors as Errors
 
 from botocore.session import Session as BotoSession  # importing it in advance is not an option apparently...
+from typing import Optional
 
 
 def try_authenticate(self, future):
@@ -56,7 +57,7 @@ def try_authenticate(self, future):
 class AwsMskIamClient:
     UNRESERVED_CHARS = string.ascii_letters + string.digits + '-._~'
 
-    def __init__(self, host, access_key, secret_key, region, token=None):
+    def __init__(self, host: str, access_key: str, secret_key: str, region: str, token: Optional[str]=None) -> None:
         """
         Arguments:
             host (str): The hostname of the broker.
@@ -88,15 +89,15 @@ class AwsMskIamClient:
         self.token = token
 
     @property
-    def _credential(self):
+    def _credential(self) -> str:
         return '{0.access_key}/{0._scope}'.format(self)
 
     @property
-    def _scope(self):
+    def _scope(self) -> str:
         return '{0.datestamp}/{0.region}/{0.service}/aws4_request'.format(self)
 
     @property
-    def _signed_headers(self):
+    def _signed_headers(self) -> str:
         """
         Returns (str):
             An alphabetically sorted, semicolon-delimited list of lowercase
@@ -105,7 +106,7 @@ class AwsMskIamClient:
         return ';'.join(sorted(k.lower() for k, _ in self.headers))
 
     @property
-    def _canonical_headers(self):
+    def _canonical_headers(self) -> str:
         """
         Returns (str):
             A newline-delited list of header names and values.
@@ -114,7 +115,7 @@ class AwsMskIamClient:
         return '\n'.join(map(':'.join, self.headers)) + '\n'
 
     @property
-    def _canonical_request(self):
+    def _canonical_request(self) -> str:
         """
         Returns (str):
             An AWS Signature Version 4 canonical request in the format:
@@ -137,7 +138,7 @@ class AwsMskIamClient:
         ))
 
     @property
-    def _canonical_querystring(self):
+    def _canonical_querystring(self) -> str:
         """
         Returns (str):
             A '&'-separated list of URI-encoded key/value pairs.
@@ -155,7 +156,7 @@ class AwsMskIamClient:
         return '&'.join(self._uriencode(k) + '=' + self._uriencode(v) for k, v in params)
 
     @property
-    def _signing_key(self):
+    def _signing_key(self) -> bytes:
         """
         Returns (bytes):
             An AWS Signature V4 signing key generated from the secret_key, date,
@@ -168,7 +169,7 @@ class AwsMskIamClient:
         return key
 
     @property
-    def _signing_str(self):
+    def _signing_str(self) -> str:
         """
         Returns (str):
             A string used to sign the AWS Signature V4 payload in the format:
@@ -180,7 +181,7 @@ class AwsMskIamClient:
         canonical_request_hash = self.hashfunc(self._canonical_request.encode('utf-8')).hexdigest()
         return '\n'.join((self.algorithm, self.timestamp, self._scope, canonical_request_hash))
 
-    def _uriencode(self, msg):
+    def _uriencode(self, msg: str) -> str:
         """
         Arguments:
             msg (str): A string to URI-encode.
@@ -191,7 +192,7 @@ class AwsMskIamClient:
         """
         return urllib.parse.quote(msg, safe=self.UNRESERVED_CHARS)
 
-    def _hmac(self, key, msg):
+    def _hmac(self, key: bytes, msg: str) -> bytes:
         """
         Arguments:
             key (bytes): A key to use for the HMAC digest.
@@ -201,7 +202,7 @@ class AwsMskIamClient:
         """
         return hmac.new(key, msg.encode('utf-8'), digestmod=self.hashfunc).digest()
 
-    def first_message(self):
+    def first_message(self) -> bytes:
         """
         Returns (bytes):
             An encoded JSON authentication payload that can be sent to the

@@ -66,6 +66,7 @@ from kafka.codec import (
     gzip_decode, snappy_decode, lz4_decode, zstd_decode
 )
 import kafka.codec as codecs
+from typing import Any, Callable, List, Optional, Tuple, Type, Union
 
 
 class DefaultRecordBase:
@@ -105,7 +106,7 @@ class DefaultRecordBase:
     LOG_APPEND_TIME = 1
     CREATE_TIME = 0
 
-    def _assert_has_codec(self, compression_type):
+    def _assert_has_codec(self, compression_type: int) -> None:
         if compression_type == self.CODEC_GZIP:
             checker, name = codecs.has_gzip, "gzip"
         elif compression_type == self.CODEC_SNAPPY:
@@ -124,7 +125,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     __slots__ = ("_buffer", "_header_data", "_pos", "_num_records",
                  "_next_record_index", "_decompressed")
 
-    def __init__(self, buffer):
+    def __init__(self, buffer: Union[memoryview, bytes]) -> None:
         self._buffer = bytearray(buffer)
         self._header_data = self.HEADER_STRUCT.unpack_from(self._buffer)
         self._pos = self.HEADER_STRUCT.size
@@ -133,11 +134,11 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         self._decompressed = False
 
     @property
-    def base_offset(self):
+    def base_offset(self) -> int:
         return self._header_data[0]
 
     @property
-    def magic(self):
+    def magic(self) -> int:
         return self._header_data[3]
 
     @property
@@ -145,7 +146,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[4]
 
     @property
-    def attributes(self):
+    def attributes(self) -> int:
         return self._header_data[5]
 
     @property
@@ -153,15 +154,15 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[6]
 
     @property
-    def compression_type(self):
+    def compression_type(self) -> int:
         return self.attributes & self.CODEC_MASK
 
     @property
-    def timestamp_type(self):
+    def timestamp_type(self) -> int:
         return int(bool(self.attributes & self.TIMESTAMP_TYPE_MASK))
 
     @property
-    def is_transactional(self):
+    def is_transactional(self) -> bool:
         return bool(self.attributes & self.TRANSACTIONAL_MASK)
 
     @property
@@ -169,14 +170,14 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return bool(self.attributes & self.CONTROL_MASK)
 
     @property
-    def first_timestamp(self):
+    def first_timestamp(self) -> int:
         return self._header_data[7]
 
     @property
     def max_timestamp(self):
         return self._header_data[8]
 
-    def _maybe_uncompress(self):
+    def _maybe_uncompress(self) -> None:
         if not self._decompressed:
             compression_type = self.compression_type
             if compression_type != self.CODEC_NONE:
@@ -196,7 +197,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
     def _read_msg(
             self,
-            decode_varint=decode_varint):
+            decode_varint: Callable=decode_varint) -> "DefaultRecord":
         # Record =>
         #   Length => Varint
         #   Attributes => Int8
@@ -272,11 +273,11 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return DefaultRecord(
             offset, timestamp, self.timestamp_type, key, value, headers)
 
-    def __iter__(self):
+    def __iter__(self) -> "DefaultRecordBatch":
         self._maybe_uncompress()
         return self
 
-    def __next__(self):
+    def __next__(self) -> "DefaultRecord":
         if self._next_record_index >= self._num_records:
             if self._pos != len(self._buffer):
                 raise CorruptRecordException(
@@ -309,7 +310,7 @@ class DefaultRecord(ABCRecord):
     __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
                  "_headers")
 
-    def __init__(self, offset, timestamp, timestamp_type, key, value, headers):
+    def __init__(self, offset: int, timestamp: int, timestamp_type: int, key: Optional[bytes], value: bytes, headers: List[Union[Tuple[str, bytes], Any]]) -> None:
         self._offset = offset
         self._timestamp = timestamp
         self._timestamp_type = timestamp_type
@@ -318,39 +319,39 @@ class DefaultRecord(ABCRecord):
         self._headers = headers
 
     @property
-    def offset(self):
+    def offset(self) -> int:
         return self._offset
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> int:
         """ Epoch milliseconds
         """
         return self._timestamp
 
     @property
-    def timestamp_type(self):
+    def timestamp_type(self) -> int:
         """ CREATE_TIME(0) or APPEND_TIME(1)
         """
         return self._timestamp_type
 
     @property
-    def key(self):
+    def key(self) -> Optional[bytes]:
         """ Bytes key or None
         """
         return self._key
 
     @property
-    def value(self):
+    def value(self) -> bytes:
         """ Bytes value or None
         """
         return self._value
 
     @property
-    def headers(self):
+    def headers(self) -> List[Union[Tuple[str, bytes], Any]]:
         return self._headers
 
     @property
-    def checksum(self):
+    def checksum(self) -> None:
         return None
 
     def __repr__(self):
@@ -374,8 +375,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                  "_buffer")
 
     def __init__(
-            self, magic, compression_type, is_transactional,
-            producer_id, producer_epoch, base_sequence, batch_size):
+            self, magic: int, compression_type: int, is_transactional: Union[int, bool],
+            producer_id: int, producer_epoch: int, base_sequence: int, batch_size: int) -> None:
         assert magic >= 2
         self._magic = magic
         self._compression_type = compression_type & self.CODEC_MASK
@@ -393,7 +394,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
         self._buffer = bytearray(self.HEADER_STRUCT.size)
 
-    def _get_attributes(self, include_compression_type=True):
+    def _get_attributes(self, include_compression_type: bool=True) -> int:
         attrs = 0
         if include_compression_type:
             attrs |= self._compression_type
@@ -403,13 +404,13 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
         # Control batches are only created by Broker
         return attrs
 
-    def append(self, offset, timestamp, key, value, headers,
+    def append(self, offset: Union[int, str], timestamp: Optional[Union[int, str]], key: Optional[Union[str, bytes]], value: Optional[Union[str, bytes]], headers: List[Union[Tuple[str, bytes], Any, Tuple[str, None]]],
                # Cache for LOAD_FAST opcodes
-               encode_varint=encode_varint, size_of_varint=size_of_varint,
-               get_type=type, type_int=int, time_time=time.time,
-               byte_like=(bytes, bytearray, memoryview),
-               bytearray_type=bytearray, len_func=len, zero_len_varint=1
-               ):
+               encode_varint: Callable=encode_varint, size_of_varint: Callable=size_of_varint,
+               get_type: Type[type]=type, type_int: Type[int]=int, time_time: Callable=time.time,
+               byte_like: Tuple[Type[bytes], Type[bytearray], Type[memoryview]]=(bytes, bytearray, memoryview),
+               bytearray_type: Type[bytearray]=bytearray, len_func: Callable=len, zero_len_varint: int=1
+               ) -> Optional['DefaultRecordMetadata']:
         """ Write message to messageset buffer with MsgVersion 2
         """
         # Check types
@@ -490,7 +491,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
         return DefaultRecordMetadata(offset, required_size, timestamp)
 
-    def write_header(self, use_compression_type=True):
+    def write_header(self, use_compression_type: bool=True) -> None:
         batch_len = len(self._buffer)
         self.HEADER_STRUCT.pack_into(
             self._buffer, 0,
@@ -511,7 +512,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
         crc = calc_crc32c(self._buffer[self.ATTRIBUTES_OFFSET:])
         struct.pack_into(">I", self._buffer, self.CRC_OFFSET, crc)
 
-    def _maybe_compress(self):
+    def _maybe_compress(self) -> bool:
         if self._compression_type != self.CODEC_NONE:
             self._assert_has_codec(self._compression_type)
             header_size = self.HEADER_STRUCT.size
@@ -537,17 +538,17 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 return True
         return False
 
-    def build(self):
+    def build(self) -> bytearray:
         send_compressed = self._maybe_compress()
         self.write_header(send_compressed)
         return self._buffer
 
-    def size(self):
+    def size(self) -> int:
         """ Return current size of data written to buffer
         """
         return len(self._buffer)
 
-    def size_in_bytes(self, offset, timestamp, key, value, headers):
+    def size_in_bytes(self, offset: int, timestamp: int, key: bytes, value: bytes, headers: List[Union[Tuple[str, bytes], Tuple[str, None]]]) -> int:
         if self._first_timestamp is not None:
             timestamp_delta = timestamp - self._first_timestamp
         else:
@@ -561,7 +562,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
         return size_of_body + size_of_varint(size_of_body)
 
     @classmethod
-    def size_of(cls, key, value, headers):
+    def size_of(cls, key: bytes, value: bytes, headers: List[Union[Tuple[str, bytes], Tuple[str, None]]]) -> int:
         size = 0
         # Key size
         if key is None:
@@ -589,7 +590,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
         return size
 
     @classmethod
-    def estimate_size_in_bytes(cls, key, value, headers):
+    def estimate_size_in_bytes(cls, key: bytes, value: bytes, headers: List[Tuple[str, bytes]]) -> int:
         """ Get the upper bound estimate on the size of record
         """
         return (
@@ -602,28 +603,28 @@ class DefaultRecordMetadata:
 
     __slots__ = ("_size", "_timestamp", "_offset")
 
-    def __init__(self, offset, size, timestamp):
+    def __init__(self, offset: int, size: int, timestamp: int) -> None:
         self._offset = offset
         self._size = size
         self._timestamp = timestamp
 
     @property
-    def offset(self):
+    def offset(self) -> int:
         return self._offset
 
     @property
-    def crc(self):
+    def crc(self) -> None:
         return None
 
     @property
-    def size(self):
+    def size(self) -> int:
         return self._size
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> int:
         return self._timestamp
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             "DefaultRecordMetadata(offset={!r}, size={!r}, timestamp={!r})"
             .format(self._offset, self._size, self._timestamp)

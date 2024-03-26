@@ -2,7 +2,6 @@ import logging
 from collections import defaultdict, namedtuple
 from copy import deepcopy
 
-from kafka.cluster import ClusterMetadata
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.assignors.sticky.partition_movements import PartitionMovements
 from kafka.coordinator.assignors.sticky.sorted_set import SortedSet

@@ -1,5 +1,6 @@
 import inspect
 import sys
+from typing import Any
 
 
 class KafkaError(RuntimeError):
@@ -7,7 +8,7 @@ class KafkaError(RuntimeError):
     # whether metadata should be refreshed on error
     invalid_metadata = False
 
-    def __str__(self):
+    def __str__(self) -> str:
         if not self.args:
             return self.__class__.__name__
         return '{}: {}'.format(self.__class__.__name__,
@@ -65,7 +66,7 @@ class IncompatibleBrokerVersion(KafkaError):
 
 
 class CommitFailedError(KafkaError):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(
             """Commit cannot be completed since the group has already
             rebalanced and assigned the partitions to another member.
@@ -92,7 +93,7 @@ class BrokerResponseError(KafkaError):
     message = None
     description = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Add errno to standard KafkaError str"""
         return '[Error {}] {}'.format(
             self.errno,
@@ -509,7 +510,7 @@ def _iter_broker_errors():
 kafka_errors = {x.errno: x for x in _iter_broker_errors()}
 
 
-def for_code(error_code):
+def for_code(error_code: int) -> Any:
     return kafka_errors.get(error_code, UnknownError)
 
 
