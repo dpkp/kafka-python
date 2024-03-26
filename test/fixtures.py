@@ -7,11 +7,11 @@ import os.path
 import socket
 import subprocess
 import time
+import urllib
 import uuid
+from urllib.parse import urlparse
 
 import py
-from kafka.vendor.six.moves import urllib, range
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError

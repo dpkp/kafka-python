@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
 
-class AbstractMeasurable(object):
+class AbstractMeasurable:
     """A measurable quantity that can be registered as a metric"""
     @abc.abstractmethod
     def measure(self, config, now):

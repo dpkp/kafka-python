@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import abc
 
 # This statement is compatible with both Python 2.7 & 3+
