@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import collections
 import io
 import threading
@@ -10,7 +8,7 @@ from kafka.metrics.stats import Rate
 import kafka.errors as Errors
 
 
-class SimpleBufferPool(object):
+class SimpleBufferPool:
     """A simple pool of BytesIO objects with a weak memory ceiling."""
     def __init__(self, memory, poolable_size, metrics=None, metric_group_prefix='producer-metrics'):
         """Create a new buffer pool.

@@ -44,6 +44,7 @@
 import struct
 import time
 
+
 from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
 from kafka.record.util import calc_crc32
 
@@ -53,9 +54,10 @@ from kafka.codec import (
 )
 import kafka.codec as codecs
 from kafka.errors import CorruptRecordException, UnsupportedCodecError
+from typing import Any, Iterator, List, Optional, Tuple, Union
 
 
-class LegacyRecordBase(object):
+class LegacyRecordBase:
 
     __slots__ = ()
 
@@ -116,7 +118,7 @@ class LegacyRecordBase(object):
 
     NO_TIMESTAMP = -1
 
-    def _assert_has_codec(self, compression_type):
+    def _assert_has_codec(self, compression_type: int) -> None:
         if compression_type == self.CODEC_GZIP:
             checker, name = codecs.has_gzip, "gzip"
         elif compression_type == self.CODEC_SNAPPY:
@@ -129,7 +131,7 @@ class LegacyRecordBase(object):
             checker, name = lambda: False, "Unknown"
         if not checker():
             raise UnsupportedCodecError(
-                "Libraries for {} compression codec not found".format(name))
+                f"Libraries for {name} compression codec not found")
 
 
 class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
@@ -137,7 +139,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
     __slots__ = ("_buffer", "_magic", "_offset", "_crc", "_timestamp",
                  "_attributes", "_decompressed")
 
-    def __init__(self, buffer, magic):
+    def __init__(self, buffer: Union[memoryview, bytes], magic: int) -> None:
         self._buffer = memoryview(buffer)
         self._magic = magic
 
@@ -152,7 +154,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
         self._decompressed = False
 
     @property
-    def timestamp_type(self):
+    def timestamp_type(self) -> Optional[int]:
         """0 for CreateTime; 1 for LogAppendTime; None if unsupported.
 
         Value is determined by broker; produced messages should always set to 0
@@ -166,14 +168,14 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             return 0
 
     @property
-    def compression_type(self):
+    def compression_type(self) -> int:
         return self._attributes & self.CODEC_MASK
 
     def validate_crc(self):
         crc = calc_crc32(self._buffer[self.MAGIC_OFFSET:])
         return self._crc == crc
 
-    def _decompress(self, key_offset):
+    def _decompress(self, key_offset: int) -> bytes:
         # Copy of `_read_key_value`, but uses memoryview
         pos = key_offset
         key_size = struct.unpack_from(">i", self._buffer, pos)[0]
@@ -204,7 +206,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             raise ValueError("Unknown Compression Type - %s" % compression_type)
         return uncompressed
 
-    def _read_header(self, pos):
+    def _read_header(self, pos: int) -> Union[Tuple[int, int, int, int, int, None], Tuple[int, int, int, int, int, int]]:
         if self._magic == 0:
             offset, length, crc, magic_read, attrs = \
                 self.HEADER_STRUCT_V0.unpack_from(self._buffer, pos)
@@ -214,7 +216,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                 self.HEADER_STRUCT_V1.unpack_from(self._buffer, pos)
         return offset, length, crc, magic_read, attrs, timestamp
 
-    def _read_all_headers(self):
+    def _read_all_headers(self) -> List[Union[Tuple[Tuple[int, int, int, int, int, int], int], Tuple[Tuple[int, int, int, int, int, None], int]]]:
         pos = 0
         msgs = []
         buffer_len = len(self._buffer)
@@ -224,7 +226,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             pos += self.LOG_OVERHEAD + header[1]  # length
         return msgs
 
-    def _read_key_value(self, pos):
+    def _read_key_value(self, pos: int) -> Union[Tuple[None, bytes], Tuple[bytes, bytes]]:
         key_size = struct.unpack_from(">i", self._buffer, pos)[0]
         pos += self.KEY_LENGTH
         if key_size == -1:
@@ -241,7 +243,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             value = self._buffer[pos:pos + value_size].tobytes()
         return key, value
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[LegacyRecordBase]:
         if self._magic == 1:
             key_offset = self.KEY_OFFSET_V1
         else:
@@ -295,7 +297,7 @@ class LegacyRecord(ABCRecord):
     __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
                  "_crc")
 
-    def __init__(self, offset, timestamp, timestamp_type, key, value, crc):
+    def __init__(self, offset: int, timestamp: Optional[int], timestamp_type: Optional[int], key: Optional[bytes], value: bytes, crc: int) -> None:
         self._offset = offset
         self._timestamp = timestamp
         self._timestamp_type = timestamp_type
@@ -304,39 +306,39 @@ class LegacyRecord(ABCRecord):
         self._crc = crc
 
     @property
-    def offset(self):
+    def offset(self) -> int:
         return self._offset
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> Optional[int]:
         """ Epoch milliseconds
         """
         return self._timestamp
 
     @property
-    def timestamp_type(self):
+    def timestamp_type(self) -> Optional[int]:
         """ CREATE_TIME(0) or APPEND_TIME(1)
         """
         return self._timestamp_type
 
     @property
-    def key(self):
+    def key(self) -> Optional[bytes]:
         """ Bytes key or None
         """
         return self._key
 
     @property
-    def value(self):
+    def value(self) -> bytes:
         """ Bytes value or None
         """
         return self._value
 
     @property
-    def headers(self):
+    def headers(self) -> List[Any]:
         return []
 
     @property
-    def checksum(self):
+    def checksum(self) -> int:
         return self._crc
 
     def __repr__(self):
@@ -352,13 +354,13 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
 
     __slots__ = ("_magic", "_compression_type", "_batch_size", "_buffer")
 
-    def __init__(self, magic, compression_type, batch_size):
+    def __init__(self, magic: int, compression_type: int, batch_size: int) -> None:
         self._magic = magic
         self._compression_type = compression_type
         self._batch_size = batch_size
         self._buffer = bytearray()
 
-    def append(self, offset, timestamp, key, value, headers=None):
+    def append(self, offset: Union[int, str], timestamp: Optional[Union[int, str]], key: Optional[Union[bytes, str]], value: Optional[Union[str, bytes]], headers: None=None) -> Optional['LegacyRecordMetadata']:
         """ Append message to batch.
         """
         assert not headers, "Headers not supported in v0/v1"
@@ -376,11 +378,11 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         if not (key is None or
                 isinstance(key, (bytes, bytearray, memoryview))):
             raise TypeError(
-                "Not supported type for key: {}".format(type(key)))
+                f"Not supported type for key: {type(key)}")
         if not (value is None or
                 isinstance(value, (bytes, bytearray, memoryview))):
             raise TypeError(
-                "Not supported type for value: {}".format(type(value)))
+                f"Not supported type for value: {type(value)}")
 
         # Check if we have room for another message
         pos = len(self._buffer)
@@ -397,8 +399,8 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
 
         return LegacyRecordMetadata(offset, crc, size, timestamp)
 
-    def _encode_msg(self, start_pos, offset, timestamp, key, value,
-                    attributes=0):
+    def _encode_msg(self, start_pos: int, offset: int, timestamp: int, key: Optional[bytes], value: Optional[bytes],
+                    attributes: int=0) -> int:
         """ Encode msg data into the `msg_buffer`, which should be allocated
             to at least the size of this message.
         """
@@ -446,7 +448,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         struct.pack_into(">I", buf, start_pos + self.CRC_OFFSET, crc)
         return crc
 
-    def _maybe_compress(self):
+    def _maybe_compress(self) -> bool:
         if self._compression_type:
             self._assert_has_codec(self._compression_type)
             data = bytes(self._buffer)
@@ -473,19 +475,19 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
             return True
         return False
 
-    def build(self):
+    def build(self) -> bytearray:
         """Compress batch to be ready for send"""
         self._maybe_compress()
         return self._buffer
 
-    def size(self):
+    def size(self) -> int:
         """ Return current size of data written to buffer
         """
         return len(self._buffer)
 
     # Size calculations. Just copied Java's implementation
 
-    def size_in_bytes(self, offset, timestamp, key, value, headers=None):
+    def size_in_bytes(self, offset: int, timestamp: int, key: Optional[bytes], value: Optional[bytes], headers: None=None) -> int:
         """ Actual size of message to add
         """
         assert not headers, "Headers not supported in v0/v1"
@@ -493,7 +495,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         return self.LOG_OVERHEAD + self.record_size(magic, key, value)
 
     @classmethod
-    def record_size(cls, magic, key, value):
+    def record_size(cls, magic: int, key: Optional[bytes], value: Optional[bytes]) -> int:
         message_size = cls.record_overhead(magic)
         if key is not None:
             message_size += len(key)
@@ -502,7 +504,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         return message_size
 
     @classmethod
-    def record_overhead(cls, magic):
+    def record_overhead(cls, magic: int) -> int:
         assert magic in [0, 1], "Not supported magic"
         if magic == 0:
             return cls.RECORD_OVERHEAD_V0
@@ -510,7 +512,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
             return cls.RECORD_OVERHEAD_V1
 
     @classmethod
-    def estimate_size_in_bytes(cls, magic, compression_type, key, value):
+    def estimate_size_in_bytes(cls, magic: int, compression_type: int, key: bytes, value: bytes) -> int:
         """ Upper bound estimate of record size.
         """
         assert magic in [0, 1], "Not supported magic"
@@ -523,33 +525,33 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         return cls.LOG_OVERHEAD + cls.record_size(magic, key, value)
 
 
-class LegacyRecordMetadata(object):
+class LegacyRecordMetadata:
 
     __slots__ = ("_crc", "_size", "_timestamp", "_offset")
 
-    def __init__(self, offset, crc, size, timestamp):
+    def __init__(self, offset: int, crc: int, size: int, timestamp: int) -> None:
         self._offset = offset
         self._crc = crc
         self._size = size
         self._timestamp = timestamp
 
     @property
-    def offset(self):
+    def offset(self) -> int:
         return self._offset
 
     @property
-    def crc(self):
+    def crc(self) -> int:
         return self._crc
 
     @property
-    def size(self):
+    def size(self) -> int:
         return self._size
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> int:
         return self._timestamp
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             "LegacyRecordMetadata(offset={!r}, crc={!r}, size={!r},"
             " timestamp={!r})".format(

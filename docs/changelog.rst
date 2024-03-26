@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2.2.0
+####################
+
+Consumer
+--------
+* KIP-345: Implement static membership support
+
 
 2.0.2 (Sep 29, 2020)
 ####################
