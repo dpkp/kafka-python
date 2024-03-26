@@ -2,9 +2,9 @@
 from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
+from unittest import mock
 import socket
 
-import mock
 import pytest
 import time
 

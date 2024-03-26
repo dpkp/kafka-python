@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import pyperf
-from kafka.vendor import six
 
 
 test_data = [
@@ -67,6 +65,10 @@ BENCH_VALUES_DEC = [
 BENCH_VALUES_DEC = list(map(bytearray, BENCH_VALUES_DEC))
 
 
+def int2byte(i):
+    return bytes((i),)
+
+
 def _assert_valid_enc(enc_func):
     for encoded, decoded in test_data:
         assert enc_func(decoded) == encoded, decoded
@@ -116,7 +118,7 @@ def encode_varint_1(num):
 _assert_valid_enc(encode_varint_1)
 
 
-def encode_varint_2(value, int2byte=six.int2byte):
+def encode_varint_2(value, int2byte=int2byte):
     value = (value << 1) ^ (value >> 63)
 
     bits = value & 0x7f
@@ -151,7 +153,7 @@ for encoded, decoded in test_data:
     assert res == encoded
 
 
-def encode_varint_4(value, int2byte=six.int2byte):
+def encode_varint_4(value, int2byte=int2byte):
     value = (value << 1) ^ (value >> 63)
 
     if value <= 0x7f:  # 1 byte
@@ -301,22 +303,13 @@ def size_of_varint_2(value):
 _assert_valid_size(size_of_varint_2)
 
 
-if six.PY3:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
+def _read_byte(memview, pos):
+    """ Read a byte from memoryview as an integer
 
             Raises:
                 IndexError: if position is out of bounds
         """
-        return memview[pos]
-else:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
-
-            Raises:
-                IndexError: if position is out of bounds
-        """
-        return ord(memview[pos])
+    return memview[pos]
 
 
 def decode_varint_1(buffer, pos=0):
