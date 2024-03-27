@@ -1,8 +1,6 @@
 import logging
 
-from kafka.sasl import gssapi, oauthbearer, plain, scram, msk
-
-log = logging.getLogger(__name__)
+from kafka.sasl import gssapi, oauthbearer, plain, scram
 
 MECHANISMS = {
     'GSSAPI': gssapi,
@@ -10,8 +8,15 @@ MECHANISMS = {
     'PLAIN': plain,
     'SCRAM-SHA-256': scram,
     'SCRAM-SHA-512': scram,
-    'AWS_MSK_IAM': msk,
 }
+
+try:
+    from kafka.sasl import msk
+    MECHANISMS['AWS_MSK_IAM'] = msk
+except ImportError:
+    pass
+
+log = logging.getLogger(__name__)
 
 
 def register_mechanism(key, module):
