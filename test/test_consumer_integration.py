@@ -1,9 +1,8 @@
 import logging
 import time
+from unittest.mock import patch
 
-from mock import patch
 import pytest
-from kafka.vendor.six.moves import range
 
 import kafka.codec
 from kafka.errors import UnsupportedCodecError, UnsupportedVersionError

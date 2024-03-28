@@ -4,8 +4,6 @@ import logging
 import threading
 import time
 
-from kafka.vendor import six
-
 from kafka import errors as Errors
 from kafka.conn import collect_hosts
 from kafka.future import Future

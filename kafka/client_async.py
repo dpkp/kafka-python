@@ -2,19 +2,11 @@ import collections
 import copy
 import logging
 import random
+import selectors
 import socket
 import threading
 import time
 import weakref
-
-# selectors in stdlib as of py3.4
-try:
-    import selectors  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor import selectors34 as selectors
-
-from kafka.vendor import six
 
 from kafka.cluster import ClusterMetadata
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
@@ -25,9 +17,6 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.metadata import MetadataRequest
 from kafka.util import Dict, WeakMethod
-# Although this looks unused, it actually monkey-patches socket.socketpair()
-# and should be left in as long as we're using socket.socketpair() in this file
-from kafka.vendor import socketpair
 from kafka.version import __version__
 
 log = logging.getLogger('kafka.client')

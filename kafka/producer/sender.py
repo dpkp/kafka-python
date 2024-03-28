@@ -4,8 +4,6 @@ import logging
 import threading
 import time
 
-from kafka.vendor import six
-
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate

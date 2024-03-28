@@ -1,11 +1,6 @@
 import datetime
 import json
-
-
-try:
-    from unittest import mock
-except ImportError:
-    import mock
+from unittest import mock
 
 from kafka.sasl.msk import AwsMskIamClient
 

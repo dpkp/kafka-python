@@ -2,8 +2,6 @@ import abc
 import logging
 import re
 
-from kafka.vendor import six
-
 from kafka.errors import IllegalStateError
 from kafka.protocol.offset import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata
