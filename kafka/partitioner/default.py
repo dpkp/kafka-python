@@ -1,11 +1,7 @@
-from __future__ import absolute_import
-
 import random
 
-from kafka.vendor import six
 
-
-class DefaultPartitioner(object):
+class DefaultPartitioner:
     """Default partitioner.
 
     Hashes key to partition using murmur2 hashing (from java client)
@@ -43,11 +39,6 @@ def murmur2(data):
 
     Returns: MurmurHash2 of data
     """
-    # Python2 bytes is really a str, causing the bitwise operations below to fail
-    # so convert to bytearray.
-    if six.PY2:
-        data = bytearray(bytes(data))
-
     length = len(data)
     seed = 0x9747b28c
     # 'm' and 'r' are mixing constants generated offline.

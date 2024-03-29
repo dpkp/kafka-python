@@ -1,19 +1,11 @@
-from __future__ import absolute_import
-
 import base64
 import hashlib
 import hmac
 import uuid
 
-from kafka.vendor import six
 
-
-if six.PY2:
-    def xor_bytes(left, right):
-        return bytearray(ord(lb) ^ ord(rb) for lb, rb in zip(left, right))
-else:
-    def xor_bytes(left, right):
-        return bytes(lb ^ rb for lb, rb in zip(left, right))
+def xor_bytes(left, right):
+    return bytes(lb ^ rb for lb, rb in zip(left, right))
 
 
 class ScramClient:
@@ -38,7 +30,7 @@ class ScramClient:
         self.server_signature = None
 
     def first_message(self):
-        client_first_bare = 'n={},r={}'.format(self.user, self.nonce)
+        client_first_bare = f'n={self.user},r={self.nonce}'
         self.auth_message += client_first_bare
         return 'n,,' + client_first_bare
 

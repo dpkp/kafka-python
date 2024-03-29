@@ -1,13 +1,9 @@
-from __future__ import absolute_import, division
-
 import copy
 import logging
 import socket
 import time
 
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
-
-from kafka.vendor import six
 
 from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher
@@ -23,7 +19,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaConsumer(six.Iterator):
+class KafkaConsumer:
     """Consume records from a Kafka cluster.
 
     The consumer will transparently handle the failure of servers in the Kafka
@@ -56,6 +52,12 @@ class KafkaConsumer(six.Iterator):
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
             Default: None
+        group_instance_id (str): the unique identifier to distinguish
+            each client instance. If set and leave_group_on_close is
+            False consumer group rebalancing won't be triggered until
+            sessiont_timeout_ms is met. Requires 2.3.0+.
+        leave_group_on_close (bool or None): whether to leave a consumer
+             group or not on consumer shutdown.
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -246,6 +248,7 @@ class KafkaConsumer(six.Iterator):
             instance. (See kafka.oauth.abstract). Default: None
         socks5_proxy (str): Socks5 proxy URL. Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
+        coordinator (callable): Custom class / callable for creating ConsumerCoordinator instances
 
     Note:
         Configuration parameters are described in more detail at
@@ -255,6 +258,8 @@ class KafkaConsumer(six.Iterator):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'group_id': None,
+        'group_instance_id': '',
+        'leave_group_on_close': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
@@ -310,6 +315,7 @@ class KafkaConsumer(six.Iterator):
         'legacy_iterator': False, # enable to revert to < 1.4.7 iterator
         'socks5_proxy': None,
         'kafka_client': KafkaClient,
+        'coordinator': ConsumerCoordinator,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
@@ -317,7 +323,7 @@ class KafkaConsumer(six.Iterator):
         # Only check for extra config keys in top-level class
         extra_configs = set(configs).difference(self.DEFAULT_CONFIG)
         if extra_configs:
-            raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
+            raise KafkaConfigurationError(f"Unrecognized configs: {extra_configs}")
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         self.config.update(configs)
@@ -385,7 +391,7 @@ class KafkaConsumer(six.Iterator):
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
             self._client, self._subscription, self._metrics, **self.config)
-        self._coordinator = ConsumerCoordinator(
+        self._coordinator = self.config['coordinator'](
             self._client, self._subscription, self._metrics,
             assignors=self.config['partition_assignment_strategy'],
             **self.config)
@@ -970,7 +976,7 @@ class KafkaConsumer(six.Iterator):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -1015,7 +1021,7 @@ class KafkaConsumer(six.Iterator):
             raise UnsupportedVersionError(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
-        for tp, ts in six.iteritems(timestamps):
+        for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
@@ -1120,7 +1126,7 @@ class KafkaConsumer(six.Iterator):
     def _message_generator_v2(self):
         timeout_ms = 1000 * (self._consumer_timeout - time.time())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
-        for tp, records in six.iteritems(record_map):
+        for tp, records in record_map.items():
             # Generators are stateful, and it is possible that the tp / records
             # here may become stale during iteration -- i.e., we seek to a
             # different offset, pause consumption, or lose assignment.
