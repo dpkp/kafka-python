@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import collections
 import threading
 
@@ -9,17 +7,17 @@ from kafka.future import Future
 
 class FutureProduceResult(Future):
     def __init__(self, topic_partition):
-        super(FutureProduceResult, self).__init__()
+        super().__init__()
         self.topic_partition = topic_partition
         self._latch = threading.Event()
 
     def success(self, value):
-        ret = super(FutureProduceResult, self).success(value)
+        ret = super().success(value)
         self._latch.set()
         return ret
 
     def failure(self, error):
-        ret = super(FutureProduceResult, self).failure(error)
+        ret = super().failure(error)
         self._latch.set()
         return ret
 
@@ -30,7 +28,7 @@ class FutureProduceResult(Future):
 
 class FutureRecordMetadata(Future):
     def __init__(self, produce_future, relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
-        super(FutureRecordMetadata, self).__init__()
+        super().__init__()
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
         self.args = (relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)
@@ -59,7 +57,7 @@ class FutureRecordMetadata(Future):
     def get(self, timeout=None):
         if not self.is_done and not self._produce_future.wait(timeout):
             raise Errors.KafkaTimeoutError(
-                "Timeout after waiting for %s secs." % (timeout,))
+                f"Timeout after waiting for {timeout} secs.")
         assert self.is_done
         if self.failed():
             raise self.exception # pylint: disable-msg=raising-bad-type

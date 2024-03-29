@@ -1,9 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
 
-class Serializer(object):
+class Serializer:
     __meta__ = abc.ABCMeta
 
     def __init__(self, **config):
@@ -17,7 +15,7 @@ class Serializer(object):
         pass
 
 
-class Deserializer(object):
+class Deserializer:
     __meta__ = abc.ABCMeta
 
     def __init__(self, **config):
