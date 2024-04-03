@@ -112,6 +112,9 @@ class BrokerConnection:
             rate. To avoid connection storms, a randomization factor of 0.2
             will be applied to the backoff resulting in a random range between
             20% below and 20% above the computed value. Default: 1000.
+        connection_timeout_ms (int): Connection timeout in milliseconds.
+            Default: None, which defaults it to the same value as 
+            request_timeout_ms.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -188,6 +191,7 @@ class BrokerConnection:
         'client_id': 'kafka-python-' + __version__,
         'node_id': 0,
         'request_timeout_ms': 30000,
+        'connection_timeout_ms': None,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 1000,
         'max_in_flight_requests_per_connection': 5,
@@ -231,6 +235,9 @@ class BrokerConnection:
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+        
+        if self.config['connection_timeout_ms'] is None:
+            self.config['connection_timeout_ms'] = self.config['request_timeout_ms']
 
         self.node_id = self.config.pop('node_id')
 
@@ -284,7 +291,10 @@ class BrokerConnection:
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
         self._sasl_auth_future = None
-        self.last_attempt = 0
+        self.last_activity = 0
+        # This value is not used for internal state, but it is left to allow backwards-compatability
+        # The variable last_activity is now used instead, but is updated more often may therefore break compatability with some hacks.
+        self.last_attempt= 0
         self._gai = []
         self._sensors = None
         if self.config['metrics']:
@@ -362,6 +372,7 @@ class BrokerConnection:
             self.config['state_change_callback'](self.node_id, self._sock, self)
             log.info('%s: connecting to %s:%d [%s %s]', self, self.host,
                      self.port, self._sock_addr, AFI_NAMES[self._sock_afi])
+            self.last_activity = time.time()
 
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
@@ -394,6 +405,7 @@ class BrokerConnection:
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self.node_id, self._sock, self)
+                self.last_activity = time.time()
 
             # Connection failed
             # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
@@ -419,6 +431,7 @@ class BrokerConnection:
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                 self.config['state_change_callback'](self.node_id, self._sock, self)
+                self.last_activity = time.time()
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
@@ -429,12 +442,13 @@ class BrokerConnection:
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self.node_id, self._sock, self)
+                    self.last_activity = time.time()
 
         if self.state not in (ConnectionStates.CONNECTED,
                               ConnectionStates.DISCONNECTED):
             # Connection timed out
-            request_timeout = self.config['request_timeout_ms'] / 1000.0
-            if time.time() > request_timeout + self.last_attempt:
+            request_timeout = self.config['connection_timeout_ms'] / 1000.0
+            if time.time() > request_timeout + self.last_activity:
                 log.error('Connection attempt to %s timed out', self)
                 self.close(Errors.KafkaConnectionError('timeout'))
                 return self.state
@@ -595,7 +609,7 @@ class BrokerConnection:
         re-establish a connection yet
         """
         if self.state is ConnectionStates.DISCONNECTED:
-            if time.time() < self.last_attempt + self._reconnect_backoff:
+            if time.time() < self.last_activity + self._reconnect_backoff:
                 return True
         return False
 
@@ -606,7 +620,7 @@ class BrokerConnection:
         the reconnect backoff time. When connecting or connected, returns a very
         large number to handle slow/stalled connections.
         """
-        time_waited = time.time() - (self.last_attempt or 0)
+        time_waited = time.time() - (self.last_activity or 0)
         if self.state is ConnectionStates.DISCONNECTED:
             return max(self._reconnect_backoff - time_waited, 0) * 1000
         else:
