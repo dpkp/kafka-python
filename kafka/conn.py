@@ -68,13 +68,6 @@ except (ImportError, OSError):
     gssapi = None
     GSSError = None
 
-# needed for AWS_MSK_IAM authentication:
-try:
-    from botocore.session import Session as BotoSession
-except ImportError:
-    # no botocore available, will disable AWS_MSK_IAM mechanism
-    BotoSession = None
-
 AFI_NAMES = {
     socket.AF_UNSPEC: "unspecified",
     socket.AF_INET: "IPv4",
@@ -113,7 +106,7 @@ class BrokerConnection:
             will be applied to the backoff resulting in a random range between
             20% below and 20% above the computed value. Default: 1000.
         connection_timeout_ms (int): Connection timeout in milliseconds.
-            Default: None, which defaults it to the same value as 
+            Default: None, which defaults it to the same value as
             request_timeout_ms.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
@@ -235,7 +228,7 @@ class BrokerConnection:
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
-        
+
         if self.config['connection_timeout_ms'] is None:
             self.config['connection_timeout_ms'] = self.config['request_timeout_ms']
 
@@ -253,19 +246,15 @@ class BrokerConnection:
         assert self.config['security_protocol'] in self.SECURITY_PROTOCOLS, (
             'security_protocol must be in ' + ', '.join(self.SECURITY_PROTOCOLS))
 
-
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
             assert ssl_available, "Python wasn't built with SSL support"
 
-        if self.config['sasl_mechanism'] == 'AWS_MSK_IAM':
-            assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
-            assert self.config['security_protocol'] == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
-        
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
             assert self.config['sasl_mechanism'] in sasl.MECHANISMS, (
                 'sasl_mechanism must be one of {}'.format(', '.join(sasl.MECHANISMS.keys()))
             )
             sasl.MECHANISMS[self.config['sasl_mechanism']].validate_config(self)
+
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to

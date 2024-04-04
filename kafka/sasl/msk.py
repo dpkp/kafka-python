@@ -10,9 +10,19 @@ import urllib
 from kafka.protocol.types import Int32
 import kafka.errors as Errors
 
-from botocore.session import Session as BotoSession  # importing it in advance is not an option apparently...
+# needed for AWS_MSK_IAM authentication:
+try:
+    from botocore.session import Session as BotoSession
+except ImportError:
+    # no botocore available, will disable AWS_MSK_IAM mechanism
+    BotoSession = None
+
 from typing import Optional
 
+
+def validate_config(conn):
+    assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
+    assert conn.config.get('security_protocol') == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
 
 def try_authenticate(self, future):
 
@@ -25,7 +35,7 @@ def try_authenticate(self, future):
         region=session.get_config_variable('region'),
         token=credentials.token,
     )
-    
+
     msg = client.first_message()
     size = Int32.encode(len(msg))
 
