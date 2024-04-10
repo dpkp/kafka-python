@@ -378,10 +378,10 @@ class BrokerConnection:
 
                 if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
                     log.debug('%s: initiating SSL handshake', self)
-                    self.state = ConnectionStates.HANDSHAKE
-                    self.config['state_change_callback'](self.node_id, self._sock, self)
                     # _wrap_ssl can alter the connection state -- disconnects on failure
                     self._wrap_ssl()
+                    self.state = ConnectionStates.HANDSHAKE
+                    self.config['state_change_callback'](self.node_id, self._sock, self)
 
                 elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
                     log.debug('%s: initiating SASL authentication', self)

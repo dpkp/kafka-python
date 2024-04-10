@@ -266,7 +266,14 @@ class KafkaClient:
                 try:
                     self._selector.register(sock, selectors.EVENT_WRITE, conn)
                 except KeyError:
-                    self._selector.modify(sock, selectors.EVENT_WRITE, conn)
+                    # SSL detaches the original socket, and transfers the
+                    # underlying file descriptor to a new SSLSocket. We should
+                    # explicitly unregister the original socket.
+                    if conn.state == ConnectionStates.HANDSHAKE:
+                        self._selector.unregister(sock)
+                        self._selector.register(sock, selectors.EVENT_WRITE, conn)
+                    else:
+                        self._selector.modify(sock, selectors.EVENT_WRITE, conn)
 
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
