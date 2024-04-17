@@ -1,3 +1,53 @@
+# Unreleased
+
+TODO / Uncategorized Changes
+* 364397c [FIX] suitablt for the high vresion python. (#2394)
+* 38e8d04 Update conn.py to catch OSError in case of failed import (#2407)
+* 4861bee Uses assert_called_with instead of called_with (#2375)
+* d894e9a build: update vendored six from 1.11.0 to 1.16.0 (#2398)
+* a33fcf4 Update setup.py to install zstandard instead of python-zstandard (#2387)
+* d920108 use isinstance in builtin crc32 (#2329)
+* 7ac6c6e Allow disabling thread wakeup in send_request_to_node (#2335)
+* 9feeb79 Core Protocol: Add support for flexible versions (#2151)
+* c48817e Support configuration of custom kafka client for Admin/Consumer/Producer (#2144)
+* 53dc740 Hotfix: TypeError: object of type 'dict_itemiterator' has no len() (#2167)
+* c605e0c Add the optional compression libs to extras_require (#2123)
+* 6c87155 KafkaConsumer: Exit poll if consumer is closed (#2152)
+* 12325c0 Only try to update sensors fetch lag if the unpacked list contains elements (#2158)
+* b090b21 Cover sticky assignor's metadata method with tests (#2161)
+* 83b7b27 Use six.viewitems instead of six.iteritems to avoid encoding problems (#2154)
+* f984984 Update fixtures.py to use "127.0.0.1" for local ports (#2384)
+
+
+CI/CD
+* b68f61d Bump actions/setup-java from 3 to 4 (#2417)
+* e9dfaf9 Bump actions/setup-python from 4 to 5 (#2418)
+* 43822d0 Bump github/codeql-action from 2 to 3 (#2419)
+* 0864817 Update python-package.yml to publish to PyPi for every release (#2381)
+* a1d268a Update PYTHON_LATEST in python-package.yml to 3.12
+* 0362b87 Update python-package.yml to expect 3.12 tests to pass and extend experimental tests (#2406)
+* 779a23c Bump actions/checkout from 3 to 4 (#2392)
+* f8a7e9b Transition CI/CD to GitHub Workflows (#2378)
+
+Compatibility
+* 7e87a01 Add py312 to tox.ini (#2382)
+* 57d8338 Enable testing for Python 3.12 (#2379)
+* 0dbf746 Update setup.py to indicate 3.12 support
+* 8b8a48b Add Kafka 2.6.0 to tests and protocol compatibility matrix (#2162)
+* eb070d6 Add kafka-2.5 to compatibility
+
+Documentation
+* a6d0579 Update README.rst
+* b7a9be6 Update usage.rst (#2308)
+* 46473ba docs: Fix a few typos (#2319)
+* 94901bb Update usage.rst (#2334)
+* 4d59805 Fix the link to the compatibility page (#2295)
+* f0a57a6 Fix producerconfigs documentation link (#2226)
+* f19e423 Fix typo: veriication -> verification (#2207)
+* 6521c1d fix typo in documentation (#2178)
+* b0c5930 Cleanup install instructions for optional libs (#2139)
+
+
 # 2.0.2 (Sep 29, 2020)
 
 Consumer
