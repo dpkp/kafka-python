@@ -11,7 +11,7 @@ Kafka Python client
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/LICENSE
 .. image:: https://img.shields.io/pypi/dw/kafka-python-ng.svg
     :target: https://pypistats.org/packages/kafka-python-ng
-.. image:: https://img.shields.io/pypi/v/kafka-python.svg
+.. image:: https://img.shields.io/pypi/v/kafka-python-ng.svg
     :target: https://pypi.org/project/kafka-python-ng
 .. image:: https://img.shields.io/pypi/implementation/kafka-python-ng
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/setup.py
