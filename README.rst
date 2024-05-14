@@ -17,6 +17,7 @@ Kafka Python client
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/setup.py
 
 
+**DUE TO ISSUES WITH RELEASES, IT IS SUGGESTED TO USE https://github.com/wbarnha/kafka-python-ng FOR THE TIME BEING**
 
 Python client for the Apache Kafka distributed stream processing system.
 kafka-python-ng is designed to function much like the official java client, with a
