@@ -1,3 +1,8 @@
+# 2.0.3 (under development)
+
+Consumer
+* KIP-345: Implement static membership support
+
 # 2.0.2 (Sep 29, 2020)
 
 Consumer
@@ -413,7 +418,7 @@ Some of the major changes include:
 * SASL authentication is working (we think)
 * Removed several circular references to improve gc on close()
 
-Thanks to all contributors -- the state of the kafka-python community is strong!
+Thanks to all contributors -- the state of the kafka-python-ng community is strong!
 
 Detailed changelog are listed below:
 

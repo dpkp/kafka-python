@@ -2,10 +2,11 @@
 from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
+from unittest import mock
 import socket
 
-import mock
 import pytest
+import time
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
 from kafka.protocol.api import RequestHeader
@@ -61,28 +62,99 @@ def test_connect_timeout(_socket, conn):
     # Initial connect returns EINPROGRESS
     # immediate inline connect returns EALREADY
     # second explicit connect returns EALREADY
-    # third explicit connect returns EALREADY and times out via last_attempt
+    # third explicit connect returns EALREADY and times out via last_activity
     _socket.connect_ex.side_effect = [EINPROGRESS, EALREADY, EALREADY, EALREADY]
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTING
+    conn.last_activity = 0
     conn.last_attempt = 0
     conn.connect()
     assert conn.state is ConnectionStates.DISCONNECTED
 
+def test_connect_timeout_slowconn(_socket, conn, mocker):
+    # Same as test_connect_timeout, 
+    # but we make the connection run longer than the timeout in order to test that
+    # BrokerConnection resets the timer whenever things happen during the connection
+    # See https://github.com/dpkp/kafka-python/issues/2386
+    _socket.connect_ex.side_effect = [EINPROGRESS, EISCONN]
+
+    # 0.8 = we guarantee that when testing with three intervals of this we are past the timeout
+    time_between_connect = (conn.config['connection_timeout_ms']/1000) * 0.8
+    start = time.time()
+
+    # Use plaintext auth for simplicity
+    last_activity = conn.last_activity
+    last_attempt = conn.last_attempt
+    conn.config['security_protocol'] = 'SASL_PLAINTEXT'
+    conn.connect()
+    assert conn.state is ConnectionStates.CONNECTING
+    # Ensure the last_activity counter was updated
+    # Last_attempt should also be updated
+    assert conn.last_activity > last_activity
+    assert conn.last_attempt > last_attempt
+    last_attempt = conn.last_attempt
+    last_activity = conn.last_activity
+
+    # Simulate time being passed
+    # This shouldn't be enough time to time out the connection
+    conn._try_authenticate = mocker.Mock(side_effect=[False, False, True])
+    with mock.patch("time.time", return_value=start+time_between_connect):
+        # This should trigger authentication
+        # Note that an authentication attempt isn't actually made until now.
+        # We simulate that authentication does not succeed at this point
+        # This is technically incorrect, but it lets us see what happens
+        # to the state machine when the state doesn't change for two function calls
+        conn.connect()
+        assert conn.last_activity > last_activity
+        # Last attempt is kept as a legacy variable, should not update
+        assert conn.last_attempt == last_attempt
+        last_activity = conn.last_activity
+
+        assert conn.state is ConnectionStates.AUTHENTICATING
+
+
+    # This time around we should be way past timeout. 
+    # Now we care about connect() not terminating the attempt,
+    # because connection state was progressed in the meantime.
+    with mock.patch("time.time", return_value=start+time_between_connect*2):
+        # Simulate this one not succeeding as well. This is so we can ensure things don't time out
+        conn.connect()
+
+        # No state change = no activity change
+        assert conn.last_activity == last_activity
+        assert conn.last_attempt == last_attempt
+
+        # If last_activity was not reset when the state transitioned to AUTHENTICATING,
+        # the connection state would be timed out now.
+        assert conn.state is ConnectionStates.AUTHENTICATING
+
+
+    # This time around, the connection should succeed.
+    with mock.patch("time.time", return_value=start+time_between_connect*3):
+        # This should finalize the connection
+        conn.connect()
+
+        assert conn.last_activity > last_activity
+        assert conn.last_attempt == last_attempt
+        last_activity = conn.last_activity
+
+        assert conn.state is ConnectionStates.CONNECTED
+
+
 
 def test_blacked_out(conn):
     with mock.patch("time.time", return_value=1000):
-        conn.last_attempt = 0
+        conn.last_activity = 0
         assert conn.blacked_out() is False
-        conn.last_attempt = 1000
+        conn.last_activity = 1000
         assert conn.blacked_out() is True
 
 
 def test_connection_delay(conn):
     with mock.patch("time.time", return_value=1000):
-        conn.last_attempt = 1000
+        conn.last_activity = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
         assert conn.connection_delay() == float('inf')
@@ -286,7 +358,7 @@ def test_lookup_on_connect():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
-        conn.last_attempt = 0
+        conn.last_activity = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
@@ -301,11 +373,10 @@ def test_relookup_on_failure():
     assert conn.host == hostname
     mock_return1 = []
     with mock.patch("socket.getaddrinfo", return_value=mock_return1) as m:
-        last_attempt = conn.last_attempt
+        last_activity = conn.last_activity
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn.disconnected()
-        assert conn.last_attempt > last_attempt
 
     afi2 = socket.AF_INET
     sockaddr2 = ('127.0.0.2', 9092)
@@ -314,12 +385,13 @@ def test_relookup_on_failure():
     ]
 
     with mock.patch("socket.getaddrinfo", return_value=mock_return2) as m:
-        conn.last_attempt = 0
+        conn.last_activity = 0
         conn.connect()
         m.assert_called_once_with(hostname, port, 0, socket.SOCK_STREAM)
         assert conn._sock_afi == afi2
         assert conn._sock_addr == sockaddr2
         conn.close()
+        assert conn.last_activity > last_activity
 
 
 def test_requests_timed_out(conn):

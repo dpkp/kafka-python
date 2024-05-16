@@ -7,11 +7,11 @@ import os.path
 import socket
 import subprocess
 import time
+import urllib
 import uuid
+from urllib.parse import urlparse
 
 import py
-from kafka.vendor.six.moves import urllib, range
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError
@@ -38,7 +38,7 @@ def gen_ssl_resources(directory):
 
     # Step 1
     keytool -keystore kafka.server.keystore.jks -alias localhost -validity 1 \
-      -genkey -storepass foobar -keypass foobar \
+      -genkey -keyalg RSA -storepass foobar -keypass foobar \
       -dname "CN=localhost, OU=kafka-python, O=kafka-python, L=SF, ST=CA, C=US" \
       -ext SAN=dns:localhost
 
@@ -289,7 +289,7 @@ class KafkaFixture(Fixture):
             self.sasl_mechanism = sasl_mechanism.upper()
         else:
             self.sasl_mechanism = None
-        self.ssl_dir = self.test_resource('ssl')
+        self.ssl_dir = None
 
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
@@ -410,6 +410,8 @@ class KafkaFixture(Fixture):
         jaas_conf = self.tmp_dir.join("kafka_server_jaas.conf")
         properties_template = self.test_resource("kafka.properties")
         jaas_conf_template = self.test_resource("kafka_server_jaas.conf")
+        self.ssl_dir = self.tmp_dir
+        gen_ssl_resources(self.ssl_dir.strpath) 
 
         args = self.kafka_run_class_args("kafka.Kafka", properties.strpath)
         env = self.kafka_run_class_env()
@@ -641,6 +643,9 @@ class KafkaFixture(Fixture):
             if self.sasl_mechanism in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
                 params.setdefault('sasl_plain_username', self.broker_user)
                 params.setdefault('sasl_plain_password', self.broker_password)
+        if self.transport in ["SASL_SSL", "SSL"]:
+            params.setdefault("ssl_cafile", self.ssl_dir.join('ca-cert').strpath)
+            params.setdefault("security_protocol", self.transport)
         return params
 
     @staticmethod

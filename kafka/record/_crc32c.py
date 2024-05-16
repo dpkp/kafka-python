@@ -97,7 +97,7 @@ CRC_INIT = 0
 _MASK = 0xFFFFFFFF
 
 
-def crc_update(crc, data):
+def crc_update(crc: int, data: bytes) -> int:
     """Update CRC-32C checksum with data.
     Args:
         crc: 32-bit checksum to update as long.
@@ -116,7 +116,7 @@ def crc_update(crc, data):
     return crc ^ _MASK
 
 
-def crc_finalize(crc):
+def crc_finalize(crc: int) -> int:
     """Finalize CRC-32C checksum.
     This function should be called as last step of crc calculation.
     Args:
@@ -127,7 +127,7 @@ def crc_finalize(crc):
     return crc & _MASK
 
 
-def crc(data):
+def crc(data: bytes) -> int:
     """Compute CRC-32C checksum of the data.
     Args:
         data: byte array, string or iterable over bytes.
@@ -139,7 +139,5 @@ def crc(data):
 
 if __name__ == "__main__":
     import sys
-    # TODO remove the pylint disable once pylint fixes
-    # https://github.com/PyCQA/pylint/issues/2571
-    data = sys.stdin.read()  # pylint: disable=assignment-from-no-return
+    data = sys.stdin.buffer.read()  # pylint: disable=assignment-from-no-return
     print(hex(crc(data)))
