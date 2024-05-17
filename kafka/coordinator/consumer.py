@@ -630,7 +630,7 @@ class ConsumerCoordinator(BaseCoordinator):
             )
         else:
             # TODO: We really shouldn't need this here to begin with, but I'd like to get
-            # pylint to stop complaining.
+            #   pylint to stop complaining.
             raise Exception(f"Unsupported Broker API: {self.config['api_version']}")
 
         log.debug("Sending offset-commit request with %s for group %s to %s",
