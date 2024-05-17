@@ -629,7 +629,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 ) for topic, partitions in offset_data.items()]
             )
         else:
-            # We really shouldn't need this here to begin with, but I'd like to get
+            # TODO: We really shouldn't need this here to begin with, but I'd like to get
             # pylint to stop complaining.
             raise Exception(f"Unsupported Broker API: {self.config['api_version']}")
 
