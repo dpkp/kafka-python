@@ -461,6 +461,8 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
                     compressed = lz4_encode_old_kafka(data)
                 else:
                     compressed = lz4_encode(data)
+            else:
+                raise NotImplementedError(f"Compression type {self._compression_type} is not supported")
             size = self.size_in_bytes(
                 0, timestamp=0, key=None, value=compressed)
             # We will try to reuse the same buffer if we have enough space
