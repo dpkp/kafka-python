@@ -628,9 +628,14 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in partitions.items()]
                 ) for topic, partitions in offset_data.items()]
             )
+        else:
+            # TODO: We really shouldn't need this here to begin with, but I'd like to get
+            #   pylint to stop complaining.
+            raise Exception(f"Unsupported Broker API: {self.config['api_version']}")
 
         log.debug("Sending offset-commit request with %s for group %s to %s",
                   offsets, self.group_id, node_id)
+
 
         future = Future()
         _f = self._client.send(node_id, request)

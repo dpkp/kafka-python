@@ -503,6 +503,8 @@ class KafkaAdminClient:
                 topics=topics,
                 allow_auto_topic_creation=auto_topic_creation
             )
+        else:
+            raise IncompatibleBrokerVersion(f"MetadataRequest for {version} is not supported")
 
         future = self._send_request_to_node(
             self._client.least_loaded_node(),
@@ -1010,6 +1012,7 @@ class KafkaAdminClient:
     def _describe_consumer_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
         if response.API_VERSION <= 3:
+            group_description = None
             assert len(response.groups) == 1
             for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
                 if isinstance(response_field, Array):
@@ -1045,6 +1048,8 @@ class KafkaAdminClient:
                     if response.API_VERSION <=2:
                         described_group_information_list.append(None)
                     group_description = GroupInformation._make(described_group_information_list)
+            if group_description is None:
+                raise Errors.BrokerResponseError("No group description received")
             error_code = group_description.error_code
             error_type = Errors.for_code(error_code)
             # Java has the note: KAFKA-6789, we can retry based on the error code
