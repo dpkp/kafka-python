@@ -47,6 +47,11 @@ documentation, please see readthedocs and/or python's inline help.
     $  pip install kafka-python-ng
 
 
+For those who are concerned regarding the security of this package:
+This project uses https://docs.pypi.org/trusted-publishers/ in GitHub 
+Actions to publish artifacts in https://github.com/wbarnha/kafka-python-ng/deployments/pypi.
+This project was forked to keep the project alive for future versions of
+Python and Kafka, since `kafka-python` is unable to publish releases in the meantime.
 
 KafkaConsumer
 *************
