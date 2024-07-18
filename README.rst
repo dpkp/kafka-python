@@ -56,13 +56,15 @@ The consumer iterator returns ConsumerRecords, which are simple namedtuples
 that expose basic message attributes: topic, partition, offset, key, and value:
 
 >>> from kafka import KafkaConsumer
->>> consumer = KafkaConsumer('my_favorite_topic')
+>>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234')
+>>> consumer.subscribe(['my_favourite_topic'])
 >>> for msg in consumer:
 ...     print (msg)
 
 >>> # join a consumer group for dynamic partition assignment and offset commits
 >>> from kafka import KafkaConsumer
->>> consumer = KafkaConsumer('my_favorite_topic', group_id='my_favorite_group')
+>>> consumer = KafkaConsumer(bootstrap_servers='localhost:1234', group_id='my_favorite_group')
+>>> consumer.subscribe(['my_favourite_topic'])
 >>> for msg in consumer:
 ...     print (msg)
 
