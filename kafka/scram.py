@@ -30,7 +30,7 @@ class ScramClient:
         self.server_signature = None
 
     def first_message(self):
-        client_first_bare = f'n={self.user},r={self.nonce}'
+        client_first_bare = f'n={self.user.replace("=","=3D").replace(",","=2C")},r={self.nonce}'
         self.auth_message += client_first_bare
         return 'n,,' + client_first_bare
 
