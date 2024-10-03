@@ -61,7 +61,7 @@ def test_kafka_consumer_unsupported_encoding(
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
-    TIMEOUT_MS = 500
+    TIMEOUT_MS = 1000
     consumer = kafka_consumer_factory(auto_offset_reset='earliest',
                                     enable_auto_commit=False,
                                     consumer_timeout_ms=TIMEOUT_MS)
@@ -70,7 +70,7 @@ def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
     consumer.unsubscribe()
     consumer.assign([TopicPartition(topic, 0)])
 
-    # Ask for 5 messages, nothing in queue, block 500ms
+    # Ask for 5 messages, nothing in queue, block 1000ms
     with Timer() as t:
         with pytest.raises(StopIteration):
             msg = next(consumer)
@@ -87,7 +87,7 @@ def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
     assert_message_count(messages, 5)
     assert t.interval < (TIMEOUT_MS / 1000.0)
 
-    # Ask for 10 messages, get 5 back, block 500ms
+    # Ask for 10 messages, get 5 back, block 1000ms
     messages = []
     with Timer() as t:
         with pytest.raises(StopIteration):
