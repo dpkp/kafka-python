@@ -56,6 +56,15 @@ class KafkaConsumer(six.Iterator):
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
             Default: None
+        group_instance_id (str or None): A unique identifier of the consumer 
+            instance provided by the end user. Only non-empty strings are permitted. 
+            If set, the consumer is treated as a static member, which means that 
+            only one instance with this ID is allowed in the consumer group at 
+            any time. This can be used in combination with a larger session 
+            timeout to avoid group rebalances caused by transient unavailability 
+            (e.g. process restarts). If not set, the consumer will join the 
+            group as a dynamic member, which is the traditional behavior.
+            Default: None
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -254,6 +263,7 @@ class KafkaConsumer(six.Iterator):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'group_id': None,
+        'group_instance_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'fetch_max_wait_ms': 500,
