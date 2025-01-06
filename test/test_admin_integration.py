@@ -220,6 +220,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
                 else:
                     sleep(1)
             assert time() < timeout, "timeout waiting for assignments"
+            sleep(0.25)
 
         info('Group stabilized; verifying assignment')
         output = kafka_admin_client.describe_consumer_groups(group_id_list)

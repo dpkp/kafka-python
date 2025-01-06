@@ -111,6 +111,7 @@ def test_group(kafka_broker, topic):
                     logging.info('Rejoining: %s, generations: %s', rejoining, generations)
                     time.sleep(1)
             assert time.time() < timeout, "timeout waiting for assignments"
+            time.sleep(0.25)
 
         logging.info('Group stabilized; verifying assignment')
         group_assignment = set()

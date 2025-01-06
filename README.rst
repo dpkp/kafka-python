@@ -11,12 +11,13 @@ Kafka Python client
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/LICENSE
 .. image:: https://img.shields.io/pypi/dw/kafka-python-ng.svg
     :target: https://pypistats.org/packages/kafka-python-ng
-.. image:: https://img.shields.io/pypi/v/kafka-python.svg
+.. image:: https://img.shields.io/pypi/v/kafka-python-ng.svg
     :target: https://pypi.org/project/kafka-python-ng
 .. image:: https://img.shields.io/pypi/implementation/kafka-python-ng
     :target: https://github.com/wbarnha/kafka-python-ng/blob/master/setup.py
 
 
+**DUE TO ISSUES WITH RELEASES, IT IS SUGGESTED TO USE https://github.com/wbarnha/kafka-python-ng FOR THE TIME BEING**
 
 Python client for the Apache Kafka distributed stream processing system.
 kafka-python-ng is designed to function much like the official java client, with a
@@ -46,6 +47,11 @@ documentation, please see readthedocs and/or python's inline help.
     $  pip install kafka-python-ng
 
 
+For those who are concerned regarding the security of this package:
+This project uses https://docs.pypi.org/trusted-publishers/ in GitHub 
+Actions to publish artifacts in https://github.com/wbarnha/kafka-python-ng/deployments/pypi.
+This project was forked to keep the project alive for future versions of
+Python and Kafka, since `kafka-python` is unable to publish releases in the meantime.
 
 KafkaConsumer
 *************
