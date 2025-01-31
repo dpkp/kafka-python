@@ -1,50 +1,49 @@
-from __future__ import absolute_import
 import abc
 
 
-class ABCRecord(object):
+class ABCRecord:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def offset(self):
         """ Absolute offset of record
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def timestamp(self):
         """ Epoch milliseconds
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def timestamp_type(self):
         """ CREATE_TIME(0) or APPEND_TIME(1)
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def key(self):
         """ Bytes key or None
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def value(self):
         """ Bytes value or None
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def checksum(self):
         """ Prior to v2 format CRC was contained in every message. This will
             be the checksum for v0 and v1 and None for v2 and above.
         """
 
-    @abc.abstractproperty
+    @abc.abstractmethod
     def headers(self):
         """ If supported by version list of key-value tuples, or empty list if
             not supported by format.
         """
 
 
-class ABCRecordBatchBuilder(object):
+class ABCRecordBatchBuilder:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
@@ -84,7 +83,7 @@ class ABCRecordBatchBuilder(object):
         """
 
 
-class ABCRecordBatch(object):
+class ABCRecordBatch:
     """ For v2 encapsulates a RecordBatch, for v0/v1 a single (maybe
         compressed) message.
     """
@@ -98,7 +97,7 @@ class ABCRecordBatch(object):
         """
 
 
-class ABCRecords(object):
+class ABCRecords:
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
