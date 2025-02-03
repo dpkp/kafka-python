@@ -15,3 +15,5 @@ docs/_build
 integration-test/
 tests-env/
 .pytest_cache/
+settings.json
+.dccache

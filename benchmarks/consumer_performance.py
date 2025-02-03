@@ -10,8 +10,6 @@ import sys
 import threading
 import traceback
 
-from kafka.vendor.six.moves import range
-
 from kafka import KafkaConsumer, KafkaProducer
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
