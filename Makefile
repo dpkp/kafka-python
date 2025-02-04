@@ -74,10 +74,10 @@ servers/dist:
 
 servers/dist/kafka_%.tgz servers/dist/kafka_%.tar.gz:
 	@echo "Downloading $(@F)"
-	wget -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
+	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
 
 servers/dist/jakarta.xml.bind-api-2.3.3.jar:
-	wget -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
+	wget -nv -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
 
 # to allow us to derive the prerequisite artifact name from the target name
 .SECONDEXPANSION:
