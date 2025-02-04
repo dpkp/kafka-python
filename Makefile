@@ -1,35 +1,32 @@
 # Some simple testing tasks (sorry, UNIX only).
 
-FLAGS=
-KAFKA_VERSION=0.11.0.2
-SCALA_VERSION=2.12
+TEST_FLAGS ?=
+export KAFKA_VERSION ?= 0.11.0.2
+KAFKA_ARTIFACT ?= kafka_$(SCALA_VERSION)-$(KAFKA_VERSION).tgz
+DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
+TOX_ENV ?= 312
+
+# Required to support testing old kafka versions on newer java releases
+# The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
+# The values here are taken from the 2.4.0 release.
+export KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true
 
 setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
 
-servers/$(KAFKA_VERSION)/kafka-bin:
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) ./build_integration.sh
-
-build-integration: servers/$(KAFKA_VERSION)/kafka-bin
-
 # Test and produce coverage using tox. This is the same as is run on Travis
-test37: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py37 -- $(FLAGS)
-
-test27: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
+test: build-integration
+	tox -e $(TOX_ENV) -- $(TEST_FLAGS)
 
 # Test using pytest directly if you want to use local python. Useful for other
 # platforms that require manual installation for C libraries, ie. Windows.
 test-local: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) pytest \
-		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF $(FLAGS) kafka test
+	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF $(TEST_FLAGS) kafka test
 
 cov-local: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) pytest \
-		--pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
-		--cov-config=.covrc --cov-report html $(FLAGS) kafka test
+	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
+		--cov-config=.covrc --cov-report html $(TEST_FLAGS) kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on
@@ -56,4 +53,45 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test37 test27 test-local cov-local clean doc
+dist:
+	python setup.py bdist_wheel
+	python setup.py sdist
+
+publish:
+	twine upload dist/kafka-python-${KAFKA_PYTHON_VERSION}.tar.gz dist/kafka_python-${KAFKA_PYTHON_VERSION}-py2.py3-none-any.whl
+
+.PHONY: all test test-local cov-local clean doc dist publish
+
+kafka_artifact_version=$(lastword $(subst -, ,$(1)))
+kafka_scala_0_8_0=2.8.0
+scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),"2.12"))
+kafka_artifact_name=kafka_$(call scala_version,$(1))-$(1).$(if $(filter 0.8.0,$(1)),tar.gz,tgz)
+
+build-integration: servers/$(KAFKA_VERSION)/kafka-bin
+
+servers/dist:
+	mkdir -p servers/dist
+
+servers/dist/kafka_%.tgz servers/dist/kafka_%.tar.gz:
+	@echo "Downloading $(@F)"
+	wget -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
+
+servers/dist/jakarta.xml.bind-api-2.3.3.jar:
+	wget -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
+
+# to allow us to derive the prerequisite artifact name from the target name
+.SECONDEXPANSION:
+
+servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist
+	@echo "Extracting kafka $* binaries from $<"
+	if [ -d "$@" ]; then rm -rf $@.bak; mv $@ $@.bak; fi
+	mkdir $@
+	tar xzvf $< -C $@ --strip-components 1
+
+servers/patch-libs/%: servers/dist/jakarta.xml.bind-api-2.3.3.jar | servers/$$*/kafka-bin
+	cp $< servers/$*/kafka-bin/libs/
+
+servers/download/%: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist ;
+
+# Avoid removing any pattern match targets as intermediates (without this, .tgz artifacts are removed by make after extraction)
+.SECONDARY:
