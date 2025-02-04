@@ -4,7 +4,7 @@ name: Python Package
 
 on:
   push:
-    branches: ["master", "dpkp/*"]
+    branches: ["master"]
   pull_request:
     branches: ["master"]
 
