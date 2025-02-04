@@ -48,7 +48,7 @@ pushd servers
             echo "Downloading kafka ${kafka} tarball"
             TARBALL=${DIST_BASE_URL}${kafka}/${KAFKA_ARTIFACT}
             if command -v wget 2>/dev/null; then
-              wget -N $TARBALL
+              wget -nv -N $TARBALL
             else
               echo "wget not found... using curl"
               curl -f $TARBALL -o ${KAFKA_ARTIFACT}

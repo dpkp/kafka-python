@@ -17,12 +17,12 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    name: Tests on ${{ matrix.python-version }}
+    name: "Test: python ${{ matrix.python }} / kafka ${{ matrix.kafka }}"
     continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
-        kafka-version:
+        kafka:
           - "0.8.2.2"
           - "0.9.0.1"
           - "0.10.2.2"
@@ -31,30 +31,30 @@ jobs:
           - "2.4.0"
           - "2.5.0"
           - "2.6.0"
-        python-version:
+        python:
           - "3.12"
         include:
-          #- python-version: "pypy3.9"
-          #  kafka-version: "2.6.0"
+          #- python: "pypy3.9"
+          #  kafka: "2.6.0"
           #  experimental: true
-          #- python-version: "~3.13.0-0"
-          #  kafka-version: "2.6.0"
+          #- python: "~3.13.0-0"
+          #  kafka: "2.6.0"
           #  experimental: true
-          - python-version: "3.8"
-            kafka-version: "2.6.0"
-          - python-version: "3.9"
-            kafka-version: "2.6.0"
-          - python-version: "3.10"
-            kafka-version: "2.6.0"
-          - python-version: "3.11"
-            kafka-version: "2.6.0"
+          - python: "3.8"
+            kafka: "2.6.0"
+          - python: "3.9"
+            kafka: "2.6.0"
+          - python: "3.10"
+            kafka: "2.6.0"
+          - python: "3.11"
+            kafka: "2.6.0"
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt
@@ -75,9 +75,9 @@ jobs:
         run: ./build_integration.sh
         env:
           PLATFORM: ${{ matrix.platform }}
-          KAFKA_VERSION: ${{ matrix.kafka_version }}
+          KAFKA_VERSION: ${{ matrix.kafka }}
       - name: Test with tox
         run: tox
         env:
           PLATFORM: ${{ matrix.platform }}
-          KAFKA_VERSION: ${{ matrix.kafka_version }}
+          KAFKA_VERSION: ${{ matrix.kafka }}
