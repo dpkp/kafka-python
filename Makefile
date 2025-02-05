@@ -1,10 +1,8 @@
-# Some simple testing tasks (sorry, UNIX only).
+# Some simple testing tasks
 
-TEST_FLAGS ?=
-export KAFKA_VERSION ?= 0.11.0.2
-KAFKA_ARTIFACT ?= kafka_$(SCALA_VERSION)-$(KAFKA_VERSION).tgz
+export KAFKA_VERSION ?= 2.4.0
 DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
-TOX_ENV ?= 312
+TEST_FLAGS ?=
 
 # Required to support testing old kafka versions on newer java releases
 # The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
