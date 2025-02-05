@@ -1,5 +1,7 @@
 # Some simple testing tasks
 
+SHELL = bash
+
 export KAFKA_VERSION ?= 2.4.0
 DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
 TEST_FLAGS ?=
