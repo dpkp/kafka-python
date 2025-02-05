@@ -70,16 +70,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 11
-      - name: Check Java installation
-        run: source travis_java_install.sh
-      - name: Pull Kafka releases
-        run: ./build_integration.sh
-        env:
-          PLATFORM: ${{ matrix.platform }}
-          KAFKA_VERSION: ${{ matrix.kafka }}
+          java-version: 21
+      - name: Pull Kafka release
+        run: make servers/${{ matrix.kafka }}/kafka-bin
       - name: Test with tox
-        run: tox
+        run: make test
         env:
-          PLATFORM: ${{ matrix.platform }}
           KAFKA_VERSION: ${{ matrix.kafka }}
