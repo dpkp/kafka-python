@@ -15,9 +15,11 @@ setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
 
-# Test and produce coverage using tox. This is the same as is run on Travis
+lint:
+	pylint --recursive=y --errors-only kafka test
+
 test: build-integration
-	tox -e $(TOX_ENV) -- $(TEST_FLAGS)
+	pytest --durations=10 kafka test
 
 # Test using pytest directly if you want to use local python. Useful for other
 # platforms that require manual installation for C libraries, ie. Windows.
