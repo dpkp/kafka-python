@@ -63,8 +63,18 @@ publish:
 .PHONY: all test test-local cov-local clean doc dist publish
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
+
+# Mappings for artifacts -> scala version; any unlisted will use default 2.12
 kafka_scala_0_8_0=2.8.0
-scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),"2.12"))
+kafka_scala_0_8_1=2.10
+kafka_scala_0_8_1_1=2.10
+kafka_scala_0_9_0_0=2.11
+kafka_scala_0_9_0_1=2.11
+kafka_scala_0_10_0_0=2.11
+kafka_scala_0_10_0_1=2.11
+kafka_scala_0_10_1_0=2.11
+scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),2.12))
+
 kafka_artifact_name=kafka_$(call scala_version,$(1))-$(1).$(if $(filter 0.8.0,$(1)),tar.gz,tgz)
 
 build-integration: servers/$(KAFKA_VERSION)/kafka-bin
