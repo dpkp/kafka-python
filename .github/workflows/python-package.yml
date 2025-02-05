@@ -73,7 +73,7 @@ jobs:
           java-version: 21
       - name: Pull Kafka release
         run: make servers/${{ matrix.kafka }}/kafka-bin
-      - name: Test with tox
+      - name: Pytest
         run: make test
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
