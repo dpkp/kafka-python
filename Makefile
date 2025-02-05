@@ -68,6 +68,9 @@ kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 kafka_scala_0_8_0=2.8.0
 kafka_scala_0_8_1=2.10
 kafka_scala_0_8_1_1=2.10
+kafka_scala_0_8_2_0=2.11
+kafka_scala_0_8_2_1=2.11
+kafka_scala_0_8_2_2=2.11
 kafka_scala_0_9_0_0=2.11
 kafka_scala_0_9_0_1=2.11
 kafka_scala_0_10_0_0=2.11
@@ -97,6 +100,7 @@ servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dis
 	if [ -d "$@" ]; then rm -rf $@.bak; mv $@ $@.bak; fi
 	mkdir $@
 	tar xzvf $< -C $@ --strip-components 1
+	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
 
 servers/patch-libs/%: servers/dist/jakarta.xml.bind-api-2.3.3.jar | servers/$$*/kafka-bin
 	cp $< servers/$*/kafka-bin/libs/
