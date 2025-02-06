@@ -4,7 +4,6 @@ SHELL = bash
 
 export KAFKA_VERSION ?= 2.4.0
 DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
-TEST_FLAGS ?=
 
 # Required to support testing old kafka versions on newer java releases
 # The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
