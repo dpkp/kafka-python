@@ -183,7 +183,8 @@ class ZookeeperFixture(Fixture):
         return env
 
     def out(self, message):
-        log.info("*** Zookeeper [%s:%s]: %s", self.host, self.port or '(auto)', message)
+        if len(log.handlers) > 0:
+            log.info("*** Zookeeper [%s:%s]: %s", self.host, self.port or '(auto)', message)
 
     def open(self):
         if self.tmp_dir is None:
@@ -381,7 +382,8 @@ class KafkaFixture(Fixture):
         return env
 
     def out(self, message):
-        log.info("*** Kafka [%s:%s]: %s", self.host, self.port or '(auto)', message)
+        if len(log.handlers) > 0:
+            log.info("*** Kafka [%s:%s]: %s", self.host, self.port or '(auto)', message)
 
     def _create_zk_chroot(self):
         self.out("Creating Zookeeper chroot node...")
