@@ -55,13 +55,6 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-dist:
-	python setup.py bdist_wheel
-	python setup.py sdist
-
-publish:
-	twine upload dist/kafka-python-${KAFKA_PYTHON_VERSION}.tar.gz dist/kafka_python-${KAFKA_PYTHON_VERSION}-py2.py3-none-any.whl
-
 .PHONY: all test test-local cov-local clean doc dist publish
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
