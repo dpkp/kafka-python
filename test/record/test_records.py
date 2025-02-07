@@ -198,7 +198,7 @@ def test_memory_records_builder(magic, compression_type):
     # Size should remain the same after closing. No trailing bytes
     builder.close()
     assert builder.compression_rate() > 0
-    expected_size = size_before_close * builder.compression_rate()
+    expected_size = int(size_before_close * builder.compression_rate())
     assert builder.is_full()
     assert builder.size_in_bytes() == expected_size
     buffer = builder.buffer()
