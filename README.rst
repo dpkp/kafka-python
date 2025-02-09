@@ -38,7 +38,7 @@ for more details.
 Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
 
-.. code-block:: bash 
+.. code-block:: bash
 
     $ pip install kafka-python
 
