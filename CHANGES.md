@@ -6,6 +6,7 @@ Improvements
 * Support configuration of custom kafka client for Admin/Consumer/Producer (#2144)
 * Core Protocol: Add support for flexible versions (#2151)
 * (Internal) Allow disabling thread wakeup in _send_request_to_node (#2335)
+* Change loglevel of cancelled errors to info (#2467)
 
 Compatibility
 * Support for python 3.12 (#2379, #2382)
@@ -32,6 +33,7 @@ Fixes
 * Dont raise RuntimeError for dead process in SpawnedService.wait_for() (#2461)
 * Casts the size of a MemoryRecordsBuilder object (#2438)
 * Fix DescribeConfigsResponse_v1 config_source (#2464)
+* Fix base class of DescribeClientQuotasResponse_v0 (#2465)
 
 Testing
 * Transition CI/CD to GitHub Workflows (#2378, #2392, #2381, #2406, #2419, #2418, #2417, #2456)
