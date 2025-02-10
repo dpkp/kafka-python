@@ -1243,7 +1243,7 @@ Consumers
 * Improve FailedPayloadsError handling in KafkaConsumer (dpkp PR 398)
 * KafkaConsumer: avoid raising KeyError in task_done (dpkp PR 389)
 * MultiProcessConsumer -- support configured partitions list (dpkp PR 380)
-* Fix SimpleConsumer leadership change handling (dpkp PR 393) 
+* Fix SimpleConsumer leadership change handling (dpkp PR 393)
 * Fix SimpleConsumer connection error handling (reAsOn2010 PR 392)
 * Improve Consumer handling of 'falsy' partition values (wting PR 342)
 * Fix _offsets call error in KafkaConsumer (hellais PR 376)
@@ -1348,7 +1348,7 @@ Internals
 * Add test timers via nose-timer plugin; list 10 slowest timings by default (dpkp)
 * Move fetching last known offset logic to a stand alone function (zever - PR 177)
 * Improve KafkaConnection and add more tests (dpkp - PR 196)
-* Raise TypeError if necessary when encoding strings (mdaniel - PR 204) 
+* Raise TypeError if necessary when encoding strings (mdaniel - PR 204)
 * Use Travis-CI to publish tagged releases to pypi (tkuhlman / mumrah)
 * Use official binary tarballs for integration tests and parallelize travis tests (dpkp - PR 193)
 * Improve new-topic creation handling (wizzat - PR 174)
@@ -1362,7 +1362,7 @@ Internals
 * Fix connection error timeout and improve tests (wizzat - PR 158)
 * SimpleProducer randomization of initial round robin ordering (alexcb - PR 139)
 * Fix connection timeout in KafkaClient and KafkaConnection (maciejkula - PR 161)
-* Fix seek + commit behavior (wizzat - PR 148) 
+* Fix seek + commit behavior (wizzat - PR 148)
 
 
 0.9.0 (Mar 21, 2014)
