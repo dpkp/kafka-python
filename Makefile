@@ -8,7 +8,7 @@ DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
 # Required to support testing old kafka versions on newer java releases
 # The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
 # The values here are taken from the 2.4.0 release.
-export KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true
+export KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true -Djava.security.manager=allow
 
 setup:
 	pip install -r requirements-dev.txt
