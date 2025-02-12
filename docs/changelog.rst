@@ -13,6 +13,9 @@ Improvements
 * Core Protocol: Add support for flexible versions (#2151)
 * (Internal) Allow disabling thread wakeup in _send_request_to_node (#2335)
 * Change loglevel of cancelled errors to info (#2467)
+* Strip trailing dot off hostname for SSL validation. (#2472)
+* Log connection close(error) at ERROR level (#2473)
+* Support DescribeLogDirs admin api (#2475)
 
 Compatibility
 -------------
@@ -30,6 +33,7 @@ Documentation
 * Cleanup install instructions for optional libs (#2139)
 * Update license_file to license_files (#2462)
 * Update some RST documentation syntax (#2463)
+* Add .readthedocs.yaml; update copyright date (#2474)
 
 Fixes
 -----
@@ -52,6 +56,9 @@ Testing
 * Use assert_called_with in client_async tests (#2375)
 * Cover sticky assignor's metadata method with tests (#2161)
 * Update fixtures.py to check "127.0.0.1" for auto port assignment (#2384)
+* Use -Djava.security.manager=allow for Java 23 sasl tests (#2469)
+* Test with Java 23 (#2470)
+* Update kafka properties template; disable group rebalance delay (#2471)
 
 
 2.0.2 (Sep 29, 2020)
