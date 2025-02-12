@@ -1,3 +1,55 @@
+# 2.0.3 (Feb 12, 2025)
+
+Improvements
+* Add optional compression libs to extras_require (#2123, #2387)
+* KafkaConsumer: Exit poll if consumer is closed (#2152)
+* Support configuration of custom kafka client for Admin/Consumer/Producer (#2144)
+* Core Protocol: Add support for flexible versions (#2151)
+* (Internal) Allow disabling thread wakeup in _send_request_to_node (#2335)
+* Change loglevel of cancelled errors to info (#2467)
+* Strip trailing dot off hostname for SSL validation. (#2472)
+* Log connection close(error) at ERROR level (#2473)
+* Support DescribeLogDirs admin api (#2475)
+
+Compatibility
+* Support for python 3.12 (#2379, #2382)
+* Kafka 2.5 / 2.6 (#2162)
+* Try collections.abc imports in vendored selectors34 (#2394)
+* Catch OSError when checking for gssapi import for windows compatibility (#2407)
+* Update vendored six to 1.16.0 (#2398)
+
+Documentation
+* Update usage.rst (#2308, #2334)
+* Fix typos (#2319, #2207, #2178)
+* Fix links to the compatibility page (#2295, #2226)
+* Cleanup install instructions for optional libs (#2139)
+* Update license_file to license_files (#2462)
+* Update some RST documentation syntax (#2463)
+* Add .readthedocs.yaml; update copyright date (#2474)
+
+Fixes
+* Use isinstance in builtin crc32 (#2329)
+* Use six.viewitems instead of six.iteritems to avoid encoding problems in StickyPartitionAssignor (#2154)
+* Fix array encoding TypeError: object of type 'dict_itemiterator' has no len() (#2167)
+* Only try to update sensors fetch lag if the unpacked list contains elements (#2158)
+* Avoid logging errors during test fixture cleanup (#2458)
+* Release coordinator lock before calling maybe_leave_group (#2460)
+* Dont raise RuntimeError for dead process in SpawnedService.wait_for() (#2461)
+* Cast the size of a MemoryRecordsBuilder object (#2438)
+* Fix DescribeConfigsResponse_v1 config_source (#2464)
+* Fix base class of DescribeClientQuotasResponse_v0 (#2465)
+* Update socketpair w/ CVE-2024-3219 fix (#2468)
+
+Testing
+* Transition CI/CD to GitHub Workflows (#2378, #2392, #2381, #2406, #2419, #2418, #2417, #2456)
+* Refactor Makefile (#2457)
+* Use assert_called_with in client_async tests (#2375)
+* Cover sticky assignor's metadata method with tests (#2161)
+* Update fixtures.py to check "127.0.0.1" for auto port assignment (#2384)
+* Use -Djava.security.manager=allow for Java 23 sasl tests (#2469)
+* Test with Java 23 (#2470)
+* Update kafka properties template; disable group rebalance delay (#2471)
+
 # 2.0.2 (Sep 29, 2020)
 
 Consumer

@@ -28,7 +28,7 @@ KafkaConsumer
     # consume json messages
     KafkaConsumer(value_deserializer=lambda m: json.loads(m.decode('ascii')))
 
-    # consume msgpack 
+    # consume msgpack
     KafkaConsumer(value_deserializer=msgpack.unpackb)
 
     # StopIteration if no message after 1sec
@@ -104,7 +104,7 @@ KafkaProducer
         log.error('I am an errback', exc_info=excp)
         # handle exception
 
-    # produce asynchronously with callbacks 
+    # produce asynchronously with callbacks
     producer.send('my-topic', b'raw_bytes').add_callback(on_send_success).add_errback(on_send_error)
 
     # block until all async messages are sent
@@ -112,8 +112,8 @@ KafkaProducer
 
     # configure multiple retries
     producer = KafkaProducer(retries=5)
-    
-    
+
+
 ClusterMetadata
 =============
 .. code:: python
@@ -131,7 +131,7 @@ ClusterMetadata
     # get all partitions of a topic
     print(clusterMetadata.partitions_for_topic("topic"))
 
-    # list topics 
+    # list topics
     print(clusterMetadata.topics())
 
 
@@ -140,9 +140,9 @@ KafkaAdminClient
 .. code:: python
     from kafka import KafkaAdminClient
     from kafka.admin import NewTopic
-    
+
     admin = KafkaAdminClient(bootstrap_servers=['broker1:1234'])
-    
+
     # create a new topic
     topics_list = []
     topics_list.append(NewTopic(name="testtopic", num_partitions=1, replication_factor=1))
@@ -160,4 +160,4 @@ KafkaAdminClient
     # get consumer group offset
     print(admin.list_consumer_group_offsets('cft-plt-qa.connect'))
 
-    
+
