@@ -34,6 +34,7 @@ Fixes
 * Casts the size of a MemoryRecordsBuilder object (#2438)
 * Fix DescribeConfigsResponse_v1 config_source (#2464)
 * Fix base class of DescribeClientQuotasResponse_v0 (#2465)
+* Update socketpair w/ CVE-2024-3219 fix (#2468)
 
 Testing
 * Transition CI/CD to GitHub Workflows (#2378, #2392, #2381, #2406, #2419, #2418, #2417, #2456)
