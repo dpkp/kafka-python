@@ -53,6 +53,23 @@ if not hasattr(socket, "socketpair"):
                 raise
         finally:
             lsock.close()
+
+        # Authenticating avoids using a connection from something else
+        # able to connect to {host}:{port} instead of us.
+        # We expect only AF_INET and AF_INET6 families.
+        try:
+            if (
+                ssock.getsockname() != csock.getpeername()
+                or csock.getsockname() != ssock.getpeername()
+            ):
+                raise ConnectionError("Unexpected peer connection")
+        except:
+            # getsockname() and getpeername() can fail
+            # if either socket isn't connected.
+            ssock.close()
+            csock.close()
+            raise
+
         return (ssock, csock)
 
     socket.socketpair = socketpair
