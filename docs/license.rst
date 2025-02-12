@@ -6,5 +6,5 @@ License
 
 Apache License, v2.0. See `LICENSE <https://github.com/dpkp/kafka-python/blob/master/LICENSE>`_.
 
-Copyright 2016, Dana Powers, David Arthur, and Contributors
+Copyright 2025, Dana Powers, David Arthur, and Contributors
 (See `AUTHORS <https://github.com/dpkp/kafka-python/blob/master/AUTHORS.md>`_).

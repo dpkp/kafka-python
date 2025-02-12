@@ -4,7 +4,7 @@ __title__ = 'kafka'
 from kafka.version import __version__
 __author__ = 'Dana Powers'
 __license__ = 'Apache License 2.0'
-__copyright__ = 'Copyright 2016 Dana Powers, David Arthur, and Contributors'
+__copyright__ = 'Copyright 2025 Dana Powers, David Arthur, and Contributors'
 
 # Set default logging handler to avoid "No handler found" warnings.
 import logging
