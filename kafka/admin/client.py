@@ -1352,7 +1352,7 @@ class KafkaAdminClient(object):
         :return: A message future
         """
         version = self._matching_api_version(DescribeLogDirsRequest)
-        if version <= 1:
+        if version <= 0:
             request = DescribeLogDirsRequest[version]()
             future = self._send_request_to_node(self._client.least_loaded_node(), request)
             self._wait_for_futures([future])
