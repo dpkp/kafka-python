@@ -2,7 +2,7 @@ Changelog
 =========
 
 
-2.0.3 (Feb 10, 2025)
+2.0.3 (Feb 12, 2025)
 ####################
 
 Improvements
@@ -40,7 +40,7 @@ Fixes
 * Avoid logging errors during test fixture cleanup (#2458)
 * Release coordinator lock before calling maybe_leave_group (#2460)
 * Dont raise RuntimeError for dead process in SpawnedService.wait_for() (#2461)
-* Casts the size of a MemoryRecordsBuilder object (#2438)
+* Cast the size of a MemoryRecordsBuilder object (#2438)
 * Fix DescribeConfigsResponse_v1 config_source (#2464)
 * Fix base class of DescribeClientQuotasResponse_v0 (#2465)
 * Update socketpair w/ CVE-2024-3219 fix (#2468)
@@ -49,7 +49,7 @@ Testing
 -------
 * Transition CI/CD to GitHub Workflows (#2378, #2392, #2381, #2406, #2419, #2418, #2417, #2456)
 * Refactor Makefile (#2457)
-* Uses assert_called_with in client_async tests (#2375)
+* Use assert_called_with in client_async tests (#2375)
 * Cover sticky assignor's metadata method with tests (#2161)
 * Update fixtures.py to check "127.0.0.1" for auto port assignment (#2384)
 
