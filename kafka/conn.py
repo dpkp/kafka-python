@@ -368,7 +368,11 @@ class BrokerConnection(object):
                 log.debug('%s: creating new socket', self)
                 assert self._sock is None
                 self._sock_afi, self._sock_addr = next_lookup
-                self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
+                try:
+                    self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
+                except (socket.error, OSError) as e:
+                    self.close(e)
+                    return self.state
 
             for option in self.config['socket_options']:
                 log.debug('%s: setting socket option %s', self, option)
