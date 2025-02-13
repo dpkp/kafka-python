@@ -15,7 +15,7 @@ from kafka.client_async import KafkaClient, selectors
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd
 from kafka.metrics import MetricConfig, Metrics
 from kafka.partitioner.default import DefaultPartitioner
-from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
+from kafka.producer.future import FutureRecordMetadata, FutureProduceResult, RecordMetadata
 from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
 from kafka.producer.sender import Sender
 from kafka.record.default_records import DefaultRecordBatchBuilder
@@ -539,6 +539,7 @@ class KafkaProducer(object):
                 magic, self.config['compression_type'], key, value)
 
     def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None):
+        # type: (str, bytes, bytes, list, int, int) -> RecordMetadata
         """Publish a message to a topic.
 
         Arguments:
