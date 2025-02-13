@@ -371,7 +371,7 @@ class BrokerConnection(object):
                 try:
                     self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
                 except (socket.error, OSError) as e:
-                    self.close(Errors.KafkaConnectionError("Unable to create socket for AFI {}: {}".format(self._sock_afi, e)))
+                    self.close(e)
                     return self.state
 
             for option in self.config['socket_options']:
