@@ -181,7 +181,7 @@ class Sender(threading.Thread):
             self.wakeup()
 
     def _failed_produce(self, batches, node_id, error):
-        log.debug("Error sending produce request to node %d: %s", node_id, error) # trace
+        log.error("Error sending produce request to node %d: %s", node_id, error) # trace
         for batch in batches:
             self._complete_batch(batch, error, -1, None)
 
