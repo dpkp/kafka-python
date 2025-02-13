@@ -1251,13 +1251,14 @@ class BrokerConnection(object):
             # request was unrecognized
             mr = self.send(MetadataRequest[0](topics))
 
-            selector = self.config['selector']()
-            selector.register(self._sock, selectors.EVENT_READ)
-            while not (f.is_done and mr.is_done):
-                selector.select(1)
-                for response, future in self.recv():
-                    future.success(response)
-            selector.close()
+            if not (f.is_done and mr.is_done) and self._sock is not None:
+                selector = self.config['selector']()
+                selector.register(self._sock, selectors.EVENT_READ)
+                while not (f.is_done and mr.is_done):
+                    selector.select(1)
+                    for response, future in self.recv():
+                        future.success(response)
+                selector.close()
 
             if f.succeeded():
                 if isinstance(request, ApiVersionRequest[0]):
