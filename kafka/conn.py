@@ -854,11 +854,11 @@ class BrokerConnection(object):
     def connection_delay(self):
         """
         Return the number of milliseconds to wait, based on the connection
-        state, before attempting to send data. When disconnected, this respects
-        the reconnect backoff time. When connecting or connected, returns a very
+        state, before attempting to send data. When connecting or disconnected,
+        this respects the reconnect backoff time. When connected, returns a very
         large number to handle slow/stalled connections.
         """
-        if self.state is ConnectionStates.DISCONNECTED:
+        if self.disconnected() or self.connecting():
             if len(self._gai) > 0:
                 return 0
             else:
@@ -889,6 +889,9 @@ class BrokerConnection(object):
         self._failures = 0
         self._reconnect_backoff = self.config['reconnect_backoff_ms'] / 1000.0
 
+    def _reconnect_jitter_pct(self):
+        return uniform(0.8, 1.2)
+
     def _update_reconnect_backoff(self):
         # Do not mark as failure if there are more dns entries available to try
         if len(self._gai) > 0:
@@ -897,7 +900,7 @@ class BrokerConnection(object):
             self._failures += 1
             self._reconnect_backoff = self.config['reconnect_backoff_ms'] * 2 ** (self._failures - 1)
             self._reconnect_backoff = min(self._reconnect_backoff, self.config['reconnect_backoff_max_ms'])
-            self._reconnect_backoff *= uniform(0.8, 1.2)
+            self._reconnect_backoff *= self._reconnect_jitter_pct()
             self._reconnect_backoff /= 1000.0
             log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
 

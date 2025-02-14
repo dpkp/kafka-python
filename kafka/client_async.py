@@ -464,9 +464,8 @@ class KafkaClient(object):
     def connection_delay(self, node_id):
         """
         Return the number of milliseconds to wait, based on the connection
-        state, before attempting to send data. When disconnected, this respects
-        the reconnect backoff time. When connecting, returns 0 to allow
-        non-blocking connect to finish. When connected, returns a very large
+        state, before attempting to send data. When connecting or disconnected,
+        this respects the reconnect backoff time. When connected, returns a very large
         number to handle slow/stalled connections.
 
         Arguments:
