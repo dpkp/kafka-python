@@ -564,9 +564,7 @@ class KafkaClient(object):
         Returns:
             list: responses received (can be empty)
         """
-        if future is not None:
-            timeout_ms = 100
-        elif timeout_ms is None:
+        if timeout_ms is None:
             timeout_ms = self.config['request_timeout_ms']
         elif not isinstance(timeout_ms, (int, float)):
             raise TypeError('Invalid type for timeout: %s' % type(timeout_ms))
