@@ -232,8 +232,6 @@ def test_poll(mocker):
     metadata = mocker.patch.object(KafkaClient, '_maybe_refresh_metadata')
     ifr_request_timeout = mocker.patch.object(KafkaClient, '_next_ifr_request_timeout_ms')
     _poll = mocker.patch.object(KafkaClient, '_poll')
-    ifrs = mocker.patch.object(KafkaClient, 'in_flight_request_count')
-    ifrs.return_value = 1
     cli = KafkaClient(api_version=(0, 9))
 
     # metadata timeout wins
@@ -251,11 +249,6 @@ def test_poll(mocker):
     metadata.return_value = 1000000
     cli.poll()
     _poll.assert_called_with(30.0)
-
-    # If no in-flight-requests, drop timeout to retry_backoff_ms
-    ifrs.return_value = 0
-    cli.poll()
-    _poll.assert_called_with(cli.config['retry_backoff_ms'] / 1000.0)
 
 
 def test__poll():
@@ -312,14 +305,12 @@ def client(mocker):
 
 def test_maybe_refresh_metadata_ttl(mocker, client):
     client.cluster.ttl.return_value = 1234
-    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(1.234)
 
 
 def test_maybe_refresh_metadata_backoff(mocker, client):
-    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
     now = time.time()
     t = mocker.patch('time.time')
     t.return_value = now
@@ -330,7 +321,6 @@ def test_maybe_refresh_metadata_backoff(mocker, client):
 
 def test_maybe_refresh_metadata_in_progress(mocker, client):
     client._metadata_refresh_in_progress = True
-    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(9999.999) # request_timeout_ms
@@ -339,7 +329,6 @@ def test_maybe_refresh_metadata_in_progress(mocker, client):
 def test_maybe_refresh_metadata_update(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
     mocker.patch.object(client, '_can_send_request', return_value=True)
-    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
     send = mocker.patch.object(client, 'send')
 
     client.poll(timeout_ms=12345678)
@@ -354,7 +343,6 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, '_can_connect', return_value=True)
     mocker.patch.object(client, '_maybe_connect', return_value=True)
     mocker.patch.object(client, 'maybe_connect', return_value=True)
-    mocker.patch.object(KafkaClient, 'in_flight_request_count', return_value=1)
 
     now = time.time()
     t = mocker.patch('time.time')
