@@ -848,8 +848,7 @@ class BrokerConnection(object):
         re-establish a connection yet
         """
         if self.state is ConnectionStates.DISCONNECTED:
-            if time.time() < self.last_attempt + self._reconnect_backoff:
-                return True
+            return self.connection_delay() > 0
         return False
 
     def connection_delay(self):
@@ -859,9 +858,12 @@ class BrokerConnection(object):
         the reconnect backoff time. When connecting or connected, returns a very
         large number to handle slow/stalled connections.
         """
-        time_waited = time.time() - (self.last_attempt or 0)
         if self.state is ConnectionStates.DISCONNECTED:
-            return max(self._reconnect_backoff - time_waited, 0) * 1000
+            if len(self._gai) > 0:
+                return 0
+            else:
+                time_waited = time.time() - self.last_attempt
+                return max(self._reconnect_backoff - time_waited, 0) * 1000
         else:
             # When connecting or connected, we should be able to delay
             # indefinitely since other events (connection or data acked) will
