@@ -10,6 +10,8 @@ DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
 # The values here are taken from the 2.4.0 release.
 export KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true -Djava.security.manager=allow
 
+PYTESTS ?= 'test'
+
 setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
@@ -18,12 +20,7 @@ lint:
 	pylint --recursive=y --errors-only kafka test
 
 test: build-integration
-	pytest --durations=10 kafka test
-
-# Test using pytest directly if you want to use local python. Useful for other
-# platforms that require manual installation for C libraries, ie. Windows.
-test-local: build-integration
-	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF $(TEST_FLAGS) kafka test
+	pytest --durations=10 $(PYTESTS)
 
 cov-local: build-integration
 	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
