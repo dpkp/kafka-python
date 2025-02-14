@@ -537,7 +537,8 @@ class KafkaClient(object):
         # we will need to call send_pending_requests()
         # to trigger network I/O
         future = conn.send(request, blocking=False)
-        self._sending.add(conn)
+        if not future.is_done:
+            self._sending.add(conn)
 
         # Wakeup signal is useful in case another thread is
         # blocked waiting for incoming network traffic while holding
@@ -614,6 +615,8 @@ class KafkaClient(object):
     def _register_send_sockets(self):
         while self._sending:
             conn = self._sending.pop()
+            if conn._sock is None:
+                continue
             try:
                 key = self._selector.get_key(conn._sock)
                 events = key.events | selectors.EVENT_WRITE
