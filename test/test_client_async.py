@@ -311,12 +311,14 @@ def test_maybe_refresh_metadata_ttl(mocker, client):
 
 
 def test_maybe_refresh_metadata_backoff(mocker, client):
+    mocker.patch.object(client, 'least_loaded_node', return_value=None)
+    mocker.patch.object(client, 'least_loaded_node_refresh_ms', return_value=4321)
     now = time.time()
     t = mocker.patch('time.time')
     t.return_value = now
 
     client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(2.222) # reconnect backoff
+    client._poll.assert_called_with(4.321)
 
 
 def test_maybe_refresh_metadata_in_progress(mocker, client):
@@ -340,6 +342,7 @@ def test_maybe_refresh_metadata_update(mocker, client):
 
 def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
+    mocker.patch.object(client, '_can_send_request', return_value=False)
     mocker.patch.object(client, '_can_connect', return_value=True)
     mocker.patch.object(client, '_maybe_connect', return_value=True)
     mocker.patch.object(client, 'maybe_connect', return_value=True)
@@ -350,14 +353,14 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
 
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(2.222) # reconnect backoff
+    client._poll.assert_called_with(12345.678)
     client.maybe_connect.assert_called_once_with('foobar', wakeup=False)
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
     client._can_connect.reset_mock()
     client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(2.222) # connection timeout (reconnect timeout)
+    client._poll.assert_called_with(12345.678)
     assert not client._can_connect.called
 
     assert not client._metadata_refresh_in_progress

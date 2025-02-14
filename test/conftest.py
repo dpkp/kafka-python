@@ -137,6 +137,7 @@ def conn(mocker):
         MetadataResponse[0](
             [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
             []))  # topics
+    conn.connection_delay.return_value = 0
     conn.blacked_out.return_value = False
     conn.next_ifr_request_timeout_ms.return_value = float('inf')
     def _set_conn_state(state):
