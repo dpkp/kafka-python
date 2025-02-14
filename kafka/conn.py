@@ -1138,15 +1138,18 @@ class BrokerConnection(object):
         return ()
 
     def requests_timed_out(self):
+        return self.next_ifr_request_timeout_ms() == 0
+
+    def next_ifr_request_timeout_ms(self):
         with self._lock:
             if self.in_flight_requests:
                 get_timestamp = lambda v: v[1]
                 oldest_at = min(map(get_timestamp,
                                     self.in_flight_requests.values()))
-                timeout = self.config['request_timeout_ms'] / 1000.0
-                if time.time() >= oldest_at + timeout:
-                    return True
-            return False
+                next_timeout = oldest_at + self.config['request_timeout_ms'] / 1000.0
+                return max(0, (next_timeout - time.time()) * 1000)
+            else:
+                return float('inf')
 
     def _handle_api_version_response(self, response):
         error_type = Errors.for_code(response.error_code)

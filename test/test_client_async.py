@@ -230,24 +230,27 @@ def test_send(cli, conn):
 
 def test_poll(mocker):
     metadata = mocker.patch.object(KafkaClient, '_maybe_refresh_metadata')
+    ifr_request_timeout = mocker.patch.object(KafkaClient, '_next_ifr_request_timeout_ms')
     _poll = mocker.patch.object(KafkaClient, '_poll')
     ifrs = mocker.patch.object(KafkaClient, 'in_flight_request_count')
     ifrs.return_value = 1
     cli = KafkaClient(api_version=(0, 9))
 
     # metadata timeout wins
+    ifr_request_timeout.return_value = float('inf')
     metadata.return_value = 1000
     cli.poll()
     _poll.assert_called_with(1.0)
 
     # user timeout wins
-    cli.poll(250)
+    cli.poll(timeout_ms=250)
     _poll.assert_called_with(0.25)
 
-    # default is request_timeout_ms
+    # ifr request timeout wins
+    ifr_request_timeout.return_value = 30000
     metadata.return_value = 1000000
     cli.poll()
-    _poll.assert_called_with(cli.config['request_timeout_ms'] / 1000.0)
+    _poll.assert_called_with(30.0)
 
     # If no in-flight-requests, drop timeout to retry_backoff_ms
     ifrs.return_value = 0

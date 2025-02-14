@@ -589,11 +589,13 @@ class KafkaClient(object):
                     timeout = 0
                 else:
                     idle_connection_timeout_ms = self._idle_expiry_manager.next_check_ms()
+                    request_timeout_ms = self._next_ifr_request_timeout_ms()
+                    log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
                     timeout = min(
                         timeout_ms,
                         metadata_timeout_ms,
                         idle_connection_timeout_ms,
-                        self.config['request_timeout_ms'])
+                        request_timeout_ms)
                     # if there are no requests in flight, do not block longer than the retry backoff
                     if self.in_flight_request_count() == 0:
                         timeout = min(timeout, self.config['retry_backoff_ms'])
@@ -802,6 +804,12 @@ class KafkaClient(object):
 
         self._topics.add(topic)
         return self.cluster.request_update()
+
+    def _next_ifr_request_timeout_ms(self):
+        if self._conns:
+            return min([conn.next_ifr_request_timeout_ms() for conn in six.itervalues(self._conns)])
+        else:
+            return float('inf')
 
     # This method should be locked when running multi-threaded
     def _maybe_refresh_metadata(self, wakeup=False):
