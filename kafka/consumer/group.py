@@ -98,7 +98,7 @@ class KafkaConsumer(six.Iterator):
             reconnection attempts will continue periodically with this fixed
             rate. To avoid connection storms, a randomization factor of 0.2
             will be applied to the backoff resulting in a random range between
-            20% below and 20% above the computed value. Default: 1000.
+            20% below and 20% above the computed value. Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
@@ -263,7 +263,7 @@ class KafkaConsumer(six.Iterator):
         'request_timeout_ms': 305000, # chosen to be higher than the default of max_poll_interval_ms
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
-        'reconnect_backoff_max_ms': 1000,
+        'reconnect_backoff_max_ms': 30000,
         'max_in_flight_requests_per_connection': 5,
         'auto_offset_reset': 'latest',
         'enable_auto_commit': True,

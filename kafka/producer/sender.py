@@ -103,14 +103,14 @@ class Sender(threading.Thread):
             self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
-        not_ready_timeout = float('inf')
+        not_ready_timeout_ms = float('inf')
         for node in list(ready_nodes):
             if not self._client.is_ready(node):
-                log.debug('Node %s not ready; delaying produce of accumulated batch', node)
+                node_delay_ms = self._client.connection_delay(node)
+                log.debug('Node %s not ready; delaying produce of accumulated batch (%f ms)', node, node_delay_ms)
                 self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
-                not_ready_timeout = min(not_ready_timeout,
-                                        self._client.connection_delay(node))
+                not_ready_timeout_ms = min(not_ready_timeout_ms, node_delay_ms)
 
         # create produce requests
         batches_by_node = self._accumulator.drain(
@@ -136,7 +136,7 @@ class Sender(threading.Thread):
         # off). Note that this specifically does not include nodes with
         # sendable data that aren't ready to send since they would cause busy
         # looping.
-        poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout)
+        poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout_ms)
         if ready_nodes:
             log.debug("Nodes with data ready to send: %s", ready_nodes) # trace
             log.debug("Created %d produce requests: %s", len(requests), requests) # trace

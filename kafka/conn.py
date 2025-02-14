@@ -120,7 +120,7 @@ class BrokerConnection(object):
             reconnection attempts will continue periodically with this fixed
             rate. To avoid connection storms, a randomization factor of 0.2
             will be applied to the backoff resulting in a random range between
-            20% below and 20% above the computed value. Default: 1000.
+            20% below and 20% above the computed value. Default: 30000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         max_in_flight_requests_per_connection (int): Requests are pipelined
@@ -198,7 +198,7 @@ class BrokerConnection(object):
         'node_id': 0,
         'request_timeout_ms': 30000,
         'reconnect_backoff_ms': 50,
-        'reconnect_backoff_max_ms': 1000,
+        'reconnect_backoff_max_ms': 30000,
         'max_in_flight_requests_per_connection': 5,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
@@ -848,20 +848,22 @@ class BrokerConnection(object):
         re-establish a connection yet
         """
         if self.state is ConnectionStates.DISCONNECTED:
-            if time.time() < self.last_attempt + self._reconnect_backoff:
-                return True
+            return self.connection_delay() > 0
         return False
 
     def connection_delay(self):
         """
         Return the number of milliseconds to wait, based on the connection
-        state, before attempting to send data. When disconnected, this respects
-        the reconnect backoff time. When connecting or connected, returns a very
+        state, before attempting to send data. When connecting or disconnected,
+        this respects the reconnect backoff time. When connected, returns a very
         large number to handle slow/stalled connections.
         """
-        time_waited = time.time() - (self.last_attempt or 0)
-        if self.state is ConnectionStates.DISCONNECTED:
-            return max(self._reconnect_backoff - time_waited, 0) * 1000
+        if self.disconnected() or self.connecting():
+            if len(self._gai) > 0:
+                return 0
+            else:
+                time_waited = time.time() - self.last_attempt
+                return max(self._reconnect_backoff - time_waited, 0) * 1000
         else:
             # When connecting or connected, we should be able to delay
             # indefinitely since other events (connection or data acked) will
@@ -887,6 +889,9 @@ class BrokerConnection(object):
         self._failures = 0
         self._reconnect_backoff = self.config['reconnect_backoff_ms'] / 1000.0
 
+    def _reconnect_jitter_pct(self):
+        return uniform(0.8, 1.2)
+
     def _update_reconnect_backoff(self):
         # Do not mark as failure if there are more dns entries available to try
         if len(self._gai) > 0:
@@ -895,7 +900,7 @@ class BrokerConnection(object):
             self._failures += 1
             self._reconnect_backoff = self.config['reconnect_backoff_ms'] * 2 ** (self._failures - 1)
             self._reconnect_backoff = min(self._reconnect_backoff, self.config['reconnect_backoff_max_ms'])
-            self._reconnect_backoff *= uniform(0.8, 1.2)
+            self._reconnect_backoff *= self._reconnect_jitter_pct()
             self._reconnect_backoff /= 1000.0
             log.debug('%s: reconnect backoff %s after %s failures', self, self._reconnect_backoff, self._failures)
 
@@ -1136,15 +1141,18 @@ class BrokerConnection(object):
         return ()
 
     def requests_timed_out(self):
+        return self.next_ifr_request_timeout_ms() == 0
+
+    def next_ifr_request_timeout_ms(self):
         with self._lock:
             if self.in_flight_requests:
                 get_timestamp = lambda v: v[1]
                 oldest_at = min(map(get_timestamp,
                                     self.in_flight_requests.values()))
-                timeout = self.config['request_timeout_ms'] / 1000.0
-                if time.time() >= oldest_at + timeout:
-                    return True
-            return False
+                next_timeout = oldest_at + self.config['request_timeout_ms'] / 1000.0
+                return max(0, (next_timeout - time.time()) * 1000)
+            else:
+                return float('inf')
 
     def _handle_api_version_response(self, response):
         error_type = Errors.for_code(response.error_code)

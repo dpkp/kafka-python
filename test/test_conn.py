@@ -80,14 +80,34 @@ def test_blacked_out(conn):
         assert conn.blacked_out() is True
 
 
-def test_connection_delay(conn):
+def test_connection_delay(conn, mocker):
+    mocker.patch.object(conn, '_reconnect_jitter_pct', return_value=1.0)
     with mock.patch("time.time", return_value=1000):
         conn.last_attempt = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
-        assert conn.connection_delay() == float('inf')
+        assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTED
         assert conn.connection_delay() == float('inf')
+
+        conn._gai.clear()
+        conn._update_reconnect_backoff()
+        conn.state = ConnectionStates.DISCONNECTED
+        assert conn.connection_delay() == 1.0 * conn.config['reconnect_backoff_ms']
+        conn.state = ConnectionStates.CONNECTING
+        assert conn.connection_delay() == 1.0 * conn.config['reconnect_backoff_ms']
+
+        conn._update_reconnect_backoff()
+        conn.state = ConnectionStates.DISCONNECTED
+        assert conn.connection_delay() == 2.0 * conn.config['reconnect_backoff_ms']
+        conn.state = ConnectionStates.CONNECTING
+        assert conn.connection_delay() == 2.0 * conn.config['reconnect_backoff_ms']
+
+        conn._update_reconnect_backoff()
+        conn.state = ConnectionStates.DISCONNECTED
+        assert conn.connection_delay() == 4.0 * conn.config['reconnect_backoff_ms']
+        conn.state = ConnectionStates.CONNECTING
+        assert conn.connection_delay() == 4.0 * conn.config['reconnect_backoff_ms']
 
 
 def test_connected(conn):
