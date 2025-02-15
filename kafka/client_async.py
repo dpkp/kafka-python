@@ -979,10 +979,13 @@ class KafkaClient(object):
             while True:
                 try:
                     if not self._wake_r.recv(1024):
+                        # Non-blocking socket returns empty on error
+                        log.warning("Error reading wakeup socket. Rebuilding socketpair.")
                         self._close_wakeup_socketpair()
                         self._init_wakeup_socketpair()
                         break
                 except socket.error:
+                    # Non-blocking socket raises when socket is ok but no data available to read
                     break
 
     def _maybe_close_oldest_connection(self):
