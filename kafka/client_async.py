@@ -974,15 +974,16 @@ class KafkaClient(object):
 
     def _clear_wake_fd(self):
         # reading from wake socket should only happen in a single thread
-        self._waking = False
-        while True:
-            try:
-                if not self._wake_r.recv(1024):
-                    self._close_wakeup_socketpair()
-                    self._init_wakeup_socketpair()
+        with self._wake_lock:
+            self._waking = False
+            while True:
+                try:
+                    if not self._wake_r.recv(1024):
+                        self._close_wakeup_socketpair()
+                        self._init_wakeup_socketpair()
+                        break
+                except socket.error:
                     break
-            except socket.error:
-                break
 
     def _maybe_close_oldest_connection(self):
         expired_connection = self._idle_expiry_manager.poll_expired_connection()
