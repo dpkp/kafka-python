@@ -236,7 +236,7 @@ class ClusterMetadata(object):
         """
         # In the common case where we ask for a single topic and get back an
         # error, we should fail the future
-        if len(metadata.topics) == 1 and metadata.topics[0][0] != 0:
+        if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:
             error_code, topic = metadata.topics[0][:2]
             error = Errors.for_code(error_code)(topic)
             return self.failed_update(error)

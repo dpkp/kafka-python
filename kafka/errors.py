@@ -512,15 +512,15 @@ kafka_errors = dict([(x.errno, x) for x in _iter_broker_errors()])
 
 
 def for_code(error_code):
-    return kafka_errors.get(error_code, UnknownError)
-
-
-def check_error(response):
-    if isinstance(response, Exception):
-        raise response
-    if response.error:
-        error_class = kafka_errors.get(response.error, UnknownError)
-        raise error_class(response)
+    if error_code in kafka_errors:
+        return kafka_errors[error_code]
+    else:
+        # The broker error code was not found in our list. This can happen when connecting
+        # to a newer broker (with new error codes), or simply because our error list is
+        # not complete.
+        #
+        # To avoid dropping the error code, create a dynamic error class w/ errno override.
+        return type('UnrecognizedBrokerError', (UnknownError,), {'errno': error_code})
 
 
 RETRY_BACKOFF_ERROR_TYPES = (
