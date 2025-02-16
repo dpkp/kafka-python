@@ -193,8 +193,15 @@ def _detect_xerial_stream(payload):
     """
 
     if len(payload) > 16:
-        header = struct.unpack('!' + _XERIAL_V1_FORMAT, bytes(payload)[:16])
-        return header == _XERIAL_V1_HEADER
+        magic = struct.unpack('!' + _XERIAL_V1_FORMAT[:8], bytes(payload)[:8])
+        version, compat = struct.unpack('!' + _XERIAL_V1_FORMAT[8:], bytes(payload)[8:16])
+        # Until there is more than one way to do xerial blocking, the version + compat
+        # fields can be ignored. Also some producers (i.e., redpanda) are known to
+        # incorrectly encode these as little-endian, and that causes us to fail decoding
+        # when we otherwise would have succeeded.
+        # See https://github.com/dpkp/kafka-python/issues/2414
+        if magic == _XERIAL_V1_HEADER[:8]:
+            return True
     return False
 
 
