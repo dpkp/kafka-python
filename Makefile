@@ -89,7 +89,7 @@ servers/dist/jakarta.xml.bind-api-2.3.3.jar:
 servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist
 	@echo "Extracting kafka $* binaries from $<"
 	if [ -d "$@" ]; then rm -rf $@.bak; mv $@ $@.bak; fi
-	mkdir $@
+	mkdir -p $@
 	tar xzvf $< -C $@ --strip-components 1
 	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
 

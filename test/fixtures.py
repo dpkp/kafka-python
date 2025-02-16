@@ -111,7 +111,10 @@ class Fixture(object):
 
     @classmethod
     def test_resource(cls, filename):
-        return os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
+        path = os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
+        if os.path.isfile(path):
+            return path
+        return os.path.join(cls.project_root, "servers", "resources", "default", filename)
 
     @classmethod
     def kafka_run_class_args(cls, *args):
