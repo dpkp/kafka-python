@@ -615,7 +615,7 @@ class KafkaProducer(object):
             # for API exceptions return them in the future,
             # for other exceptions raise directly
         except Errors.BrokerResponseError as e:
-            log.debug("Exception occurred during message send: %s", e)
+            log.error("Exception occurred during message send: %s", e)
             return FutureRecordMetadata(
                 FutureProduceResult(TopicPartition(topic, partition)),
                 -1, None, None,
