@@ -251,7 +251,7 @@ class KafkaClient(object):
         if self._wake_r is not None:
             try:
                 self._selector.unregister(self._wake_r)
-            except KeyError:
+            except (KeyError, ValueError, TypeError):
                 pass
             self._wake_r.close()
         if self._wake_w is not None:
@@ -432,8 +432,8 @@ class KafkaClient(object):
     def _close(self):
         if not self._closed:
             self._closed = True
-            self._selector.close()
             self._close_wakeup_socketpair()
+            self._selector.close()
 
     def close(self, node_id=None):
         """Close one or all broker connections.
