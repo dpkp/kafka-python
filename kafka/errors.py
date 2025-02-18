@@ -186,7 +186,8 @@ class ReplicaNotAvailableError(BrokerResponseError):
     message = 'REPLICA_NOT_AVAILABLE'
     description = ('If replica is expected on a broker, but is not (this can be'
                    ' safely ignored).')
-
+    retriable = True
+    invalid_metadata = True
 
 class MessageSizeTooLargeError(BrokerResponseError):
     errno = 10
@@ -210,10 +211,11 @@ class OffsetMetadataTooLargeError(BrokerResponseError):
                    ' offset metadata.')
 
 
-# TODO is this deprecated? https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ErrorCodes
-class StaleLeaderEpochCodeError(BrokerResponseError):
+class NetworkExceptionError(BrokerResponseError):
     errno = 13
-    message = 'STALE_LEADER_EPOCH_CODE'
+    message = 'NETWORK_EXCEPTION'
+    retriable = True
+    invalid_metadata = True
 
 
 class GroupLoadInProgressError(BrokerResponseError):
@@ -441,24 +443,596 @@ class PolicyViolationError(BrokerResponseError):
     errno = 44
     message = 'POLICY_VIOLATION'
     description = 'Request parameters do not satisfy the configured policy.'
+    retriable = False
+
+
+class OutOfOrderSequenceNumberError(BrokerResponseError):
+    errno = 45
+    message = 'OUT_OF_ORDER_SEQUENCE_NUMBER'
+    description = 'The broker received an out of order sequence number.'
+    retriable = False
+
+
+class DuplicateSequenceNumberError(BrokerResponseError):
+    errno = 46
+    message = 'DUPLICATE_SEQUENCE_NUMBER'
+    description = 'The broker received a duplicate sequence number.'
+    retriable = False
+
+
+class InvalidProducerEpochError(BrokerResponseError):
+    errno = 47
+    message = 'INVALID_PRODUCER_EPOCH'
+    description = 'Producer attempted to produce with an old epoch.'
+    retriable = False
+
+
+class InvalidTxnStateError(BrokerResponseError):
+    errno = 48
+    message = 'INVALID_TXN_STATE'
+    description = 'The producer attempted a transactional operation in an invalid state.'
+    retriable = False
+
+
+class InvalidProducerIdMappingError(BrokerResponseError):
+    errno = 49
+    message = 'INVALID_PRODUCER_ID_MAPPING'
+    description = 'The producer attempted to use a producer id which is not currently assigned to its transactional id.'
+    retriable = False
+
+
+class InvalidTransactionTimeoutError(BrokerResponseError):
+    errno = 50
+    message = 'INVALID_TRANSACTION_TIMEOUT'
+    description = 'The transaction timeout is larger than the maximum value allowed by the broker (as configured by transaction.max.timeout.ms).'
+    retriable = False
+
+
+class ConcurrentTransactionsError(BrokerResponseError):
+    errno = 51
+    message = 'CONCURRENT_TRANSACTIONS'
+    description = 'The producer attempted to update a transaction while another concurrent operation on the same transaction was ongoing.'
+    retriable = True
+
+
+class TransactionCoordinatorFencedError(BrokerResponseError):
+    errno = 52
+    message = 'TRANSACTION_COORDINATOR_FENCED'
+    description = 'Indicates that the transaction coordinator sending a WriteTxnMarker is no longer the current coordinator for a given producer.'
+    retriable = False
+
+
+class TransactionalIdAuthorizationFailedError(BrokerResponseError):
+    errno = 53
+    message = 'TRANSACTIONAL_ID_AUTHORIZATION_FAILED'
+    description = 'Transactional Id authorization failed.'
+    retriable = False
 
 
 class SecurityDisabledError(BrokerResponseError):
     errno = 54
     message = 'SECURITY_DISABLED'
     description = 'Security features are disabled.'
+    retriable = False
+
+
+class OperationNotAttemptedError(BrokerResponseError):
+    errno = 55
+    message = 'OPERATION_NOT_ATTEMPTED'
+    description = 'The broker did not attempt to execute this operation. This may happen for batched RPCs where some operations in the batch failed, causing the broker to respond without trying the rest.'
+    retriable = False
+
+
+class KafkaStorageError(BrokerResponseError):
+    errno = 56
+    message = 'KAFKA_STORAGE_ERROR'
+    description = 'Disk error when trying to access log file on the disk.'
+    retriable = True
+    invalid_metadata = True
+
+
+class LogDirNotFoundError(BrokerResponseError):
+    errno = 57
+    message = 'LOG_DIR_NOT_FOUND'
+    description = 'The user-specified log directory is not found in the broker config.'
+    retriable = False
+
+
+class SaslAuthenticationFailedError(BrokerResponseError):
+    errno = 58
+    message = 'SASL_AUTHENTICATION_FAILED'
+    description = 'SASL Authentication failed.'
+    retriable = False
+
+
+class UnknownProducerIdError(BrokerResponseError):
+    errno = 59
+    message = 'UNKNOWN_PRODUCER_ID'
+    description = 'This exception is raised by the broker if it could not locate the producer metadata associated with the producerId in question. This could happen if, for instance, the producer\'s records were deleted because their retention time had elapsed. Once the last records of the producerId are removed, the producer\'s metadata is removed from the broker, and future appends by the producer will return this exception.'
+    retriable = False
+
+
+class ReassignmentInProgressError(BrokerResponseError):
+    errno = 60
+    message = 'REASSIGNMENT_IN_PROGRESS'
+    description = 'A partition reassignment is in progress.'
+    retriable = False
+
+
+class DelegationTokenAuthDisabledError(BrokerResponseError):
+    errno = 61
+    message = 'DELEGATION_TOKEN_AUTH_DISABLED'
+    description = 'Delegation Token feature is not enabled.'
+    retriable = False
+
+
+class DelegationTokenNotFoundError(BrokerResponseError):
+    errno = 62
+    message = 'DELEGATION_TOKEN_NOT_FOUND'
+    description = 'Delegation Token is not found on server.'
+    retriable = False
+
+
+class DelegationTokenOwnerMismatchError(BrokerResponseError):
+    errno = 63
+    message = 'DELEGATION_TOKEN_OWNER_MISMATCH'
+    description = 'Specified Principal is not valid Owner/Renewer.'
+    retriable = False
+
+
+class DelegationTokenRequestNotAllowedError(BrokerResponseError):
+    errno = 64
+    message = 'DELEGATION_TOKEN_REQUEST_NOT_ALLOWED'
+    description = 'Delegation Token requests are not allowed on PLAINTEXT/1-way SSL channels and on delegation token authenticated channels.'
+    retriable = False
+
+
+class DelegationTokenAuthorizationFailedError(BrokerResponseError):
+    errno = 65
+    message = 'DELEGATION_TOKEN_AUTHORIZATION_FAILED'
+    description = 'Delegation Token authorization failed.'
+    retriable = False
+
+
+class DelegationTokenExpiredError(BrokerResponseError):
+    errno = 66
+    message = 'DELEGATION_TOKEN_EXPIRED'
+    description = 'Delegation Token is expired.'
+    retriable = False
+
+
+class InvalidPrincipalTypeError(BrokerResponseError):
+    errno = 67
+    message = 'INVALID_PRINCIPAL_TYPE'
+    description = 'Supplied principalType is not supported.'
+    retriable = False
 
 
 class NonEmptyGroupError(BrokerResponseError):
     errno = 68
     message = 'NON_EMPTY_GROUP'
     description = 'The group is not empty.'
+    retriable = False
 
 
 class GroupIdNotFoundError(BrokerResponseError):
     errno = 69
     message = 'GROUP_ID_NOT_FOUND'
     description = 'The group id does not exist.'
+    retriable = False
+
+
+class FetchSessionIdNotFoundError(BrokerResponseError):
+    errno = 70
+    message = 'FETCH_SESSION_ID_NOT_FOUND'
+    description = 'The fetch session ID was not found.'
+    retriable = True
+
+
+class InvalidFetchSessionEpochError(BrokerResponseError):
+    errno = 71
+    message = 'INVALID_FETCH_SESSION_EPOCH'
+    description = 'The fetch session epoch is invalid.'
+    retriable = True
+
+
+class ListenerNotFoundError(BrokerResponseError):
+    errno = 72
+    message = 'LISTENER_NOT_FOUND'
+    description = 'There is no listener on the leader broker that matches the listener on which metadata request was processed.'
+    retriable = True
+    invalid_metadata = True
+
+
+class TopicDeletionDisabledError(BrokerResponseError):
+    errno = 73
+    message = 'TOPIC_DELETION_DISABLED'
+    description = 'Topic deletion is disabled.'
+    retriable = False
+
+
+class FencedLeaderEpochError(BrokerResponseError):
+    errno = 74
+    message = 'FENCED_LEADER_EPOCH'
+    description = 'The leader epoch in the request is older than the epoch on the broker.'
+    retriable = True
+    invalid_metadata = True
+
+
+class UnknownLeaderEpochError(BrokerResponseError):
+    errno = 75
+    message = 'UNKNOWN_LEADER_EPOCH'
+    description = 'The leader epoch in the request is newer than the epoch on the broker.'
+    retriable = True
+
+
+class UnsupportedCompressionTypeError(BrokerResponseError):
+    errno = 76
+    message = 'UNSUPPORTED_COMPRESSION_TYPE'
+    description = 'The requesting client does not support the compression type of given partition.'
+    retriable = False
+
+
+class StaleBrokerEpochError(BrokerResponseError):
+    errno = 77
+    message = 'STALE_BROKER_EPOCH'
+    description = 'Broker epoch has changed.'
+    retriable = False
+
+
+class OffsetNotAvailableError(BrokerResponseError):
+    errno = 78
+    message = 'OFFSET_NOT_AVAILABLE'
+    description = 'The leader high watermark has not caught up from a recent leader election so the offsets cannot be guaranteed to be monotonically increasing.'
+    retriable = True
+
+
+class MemberIdRequiredError(BrokerResponseError):
+    errno = 79
+    message = 'MEMBER_ID_REQUIRED'
+    description = 'The group member needs to have a valid member id before actually entering a consumer group.'
+    retriable = False
+
+
+class PreferredLeaderNotAvailableError(BrokerResponseError):
+    errno = 80
+    message = 'PREFERRED_LEADER_NOT_AVAILABLE'
+    description = 'The preferred leader was not available.'
+    retriable = True
+    invalid_metadata = True
+
+
+class GroupMaxSizeReachedError(BrokerResponseError):
+    errno = 81
+    message = 'GROUP_MAX_SIZE_REACHED'
+    description = 'The consumer group has reached its max size.'
+    retriable = False
+
+
+class FencedInstanceIdError(BrokerResponseError):
+    errno = 82
+    message = 'FENCED_INSTANCE_ID'
+    description = 'The broker rejected this static consumer since another consumer with the same group.instance.id has registered with a different member.id.'
+    retriable = False
+
+
+class EligibleLeadersNotAvailableError(BrokerResponseError):
+    errno = 83
+    message = 'ELIGIBLE_LEADERS_NOT_AVAILABLE'
+    description = 'Eligible topic partition leaders are not available.'
+    retriable = True
+    invalid_metadata = True
+
+
+class ElectionNotNeededError(BrokerResponseError):
+    errno = 84
+    message = 'ELECTION_NOT_NEEDED'
+    description = 'Leader election not needed for topic partition.'
+    retriable = True
+    invalid_metadata = True
+
+
+class NoReassignmentInProgressError(BrokerResponseError):
+    errno = 85
+    message = 'NO_REASSIGNMENT_IN_PROGRESS'
+    description = 'No partition reassignment is in progress.'
+    retriable = False
+
+
+class GroupSubscribedToTopicError(BrokerResponseError):
+    errno = 86
+    message = 'GROUP_SUBSCRIBED_TO_TOPIC'
+    description = 'Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.'
+    retriable = False
+
+
+class InvalidRecordError(BrokerResponseError):
+    errno = 87
+    message = 'INVALID_RECORD'
+    description = 'This record has failed the validation on broker and hence will be rejected.'
+    retriable = False
+
+
+class UnstableOffsetCommitError(BrokerResponseError):
+    errno = 88
+    message = 'UNSTABLE_OFFSET_COMMIT'
+    description = 'There are unstable offsets that need to be cleared.'
+    retriable = True
+
+
+class ThrottlingQuotaExceededError(BrokerResponseError):
+    errno = 89
+    message = 'THROTTLING_QUOTA_EXCEEDED'
+    description = 'The throttling quota has been exceeded.'
+    retriable = True
+
+
+class ProducerFencedError(BrokerResponseError):
+    errno = 90
+    message = 'PRODUCER_FENCED'
+    description = 'There is a newer producer with the same transactionalId which fences the current one.'
+    retriable = False
+
+
+class ResourceNotFoundError(BrokerResponseError):
+    errno = 91
+    message = 'RESOURCE_NOT_FOUND'
+    description = 'A request illegally referred to a resource that does not exist.'
+    retriable = False
+
+
+class DuplicateResourceError(BrokerResponseError):
+    errno = 92
+    message = 'DUPLICATE_RESOURCE'
+    description = 'A request illegally referred to the same resource twice.'
+    retriable = False
+
+
+class UnacceptableCredentialError(BrokerResponseError):
+    errno = 93
+    message = 'UNACCEPTABLE_CREDENTIAL'
+    description = 'Requested credential would not meet criteria for acceptability.'
+    retriable = False
+
+
+class InconsistentVoterSetError(BrokerResponseError):
+    errno = 94
+    message = 'INCONSISTENT_VOTER_SET'
+    description = 'Indicates that the either the sender or recipient of a voter-only request is not one of the expected voters.'
+    retriable = False
+
+
+class InvalidUpdateVersionError(BrokerResponseError):
+    errno = 95
+    message = 'INVALID_UPDATE_VERSION'
+    description = 'The given update version was invalid.'
+    retriable = False
+
+
+class FeatureUpdateFailedError(BrokerResponseError):
+    errno = 96
+    message = 'FEATURE_UPDATE_FAILED'
+    description = 'Unable to update finalized features due to an unexpected server error.'
+    retriable = False
+
+
+class PrincipalDeserializationFailureError(BrokerResponseError):
+    errno = 97
+    message = 'PRINCIPAL_DESERIALIZATION_FAILURE'
+    description = 'Request principal deserialization failed during forwarding. This indicates an internal error on the broker cluster security setup.'
+    retriable = False
+
+
+class SnapshotNotFoundError(BrokerResponseError):
+    errno = 98
+    message = 'SNAPSHOT_NOT_FOUND'
+    description = 'Requested snapshot was not found.'
+    retriable = False
+
+
+class PositionOutOfRangeError(BrokerResponseError):
+    errno = 99
+    message = 'POSITION_OUT_OF_RANGE'
+    description = 'Requested position is not greater than or equal to zero, and less than the size of the snapshot.'
+    retriable = False
+
+
+class UnknownTopicIdError(BrokerResponseError):
+    errno = 100
+    message = 'UNKNOWN_TOPIC_ID'
+    description = 'This server does not host this topic ID.'
+    retriable = True
+    invalid_metadata = True
+
+
+class DuplicateBrokerRegistrationError(BrokerResponseError):
+    errno = 101
+    message = 'DUPLICATE_BROKER_REGISTRATION'
+    description = 'This broker ID is already in use.'
+    retriable = False
+
+
+class BrokerIdNotRegisteredError(BrokerResponseError):
+    errno = 102
+    message = 'BROKER_ID_NOT_REGISTERED'
+    description = 'The given broker ID was not registered.'
+    retriable = False
+
+
+class InconsistentTopicIdError(BrokerResponseError):
+    errno = 103
+    message = 'INCONSISTENT_TOPIC_ID'
+    description = 'The log\'s topic ID did not match the topic ID in the request.'
+    retriable = True
+    invalid_metadata = True
+
+
+class InconsistentClusterIdError(BrokerResponseError):
+    errno = 104
+    message = 'INCONSISTENT_CLUSTER_ID'
+    description = 'The clusterId in the request does not match that found on the server.'
+    retriable = False
+
+
+class TransactionalIdNotFoundError(BrokerResponseError):
+    errno = 105
+    message = 'TRANSACTIONAL_ID_NOT_FOUND'
+    description = 'The transactionalId could not be found.'
+    retriable = False
+
+
+class FetchSessionTopicIdError(BrokerResponseError):
+    errno = 106
+    message = 'FETCH_SESSION_TOPIC_ID_ERROR'
+    description = 'The fetch session encountered inconsistent topic ID usage.'
+    retriable = True
+
+
+class IneligibleReplicaError(BrokerResponseError):
+    errno = 107
+    message = 'INELIGIBLE_REPLICA'
+    description = 'The new ISR contains at least one ineligible replica.'
+    retriable = False
+
+
+class NewLeaderElectedError(BrokerResponseError):
+    errno = 108
+    message = 'NEW_LEADER_ELECTED'
+    description = 'The AlterPartition request successfully updated the partition state but the leader has changed.'
+    retriable = False
+
+
+class OffsetMovedToTieredStorageError(BrokerResponseError):
+    errno = 109
+    message = 'OFFSET_MOVED_TO_TIERED_STORAGE'
+    description = 'The requested offset is moved to tiered storage.'
+    retriable = False
+
+
+class FencedMemberEpochError(BrokerResponseError):
+    errno = 110
+    message = 'FENCED_MEMBER_EPOCH'
+    description = 'The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoin.'
+    retriable = False
+
+
+class UnreleasedInstanceIdError(BrokerResponseError):
+    errno = 111
+    message = 'UNRELEASED_INSTANCE_ID'
+    description = 'The instance ID is still used by another member in the consumer group. That member must leave first.'
+    retriable = False
+
+
+class UnsupportedAssignorError(BrokerResponseError):
+    errno = 112
+    message = 'UNSUPPORTED_ASSIGNOR'
+    description = 'The assignor or its version range is not supported by the consumer group.'
+    retriable = False
+
+
+class StaleMemberEpochError(BrokerResponseError):
+    errno = 113
+    message = 'STALE_MEMBER_EPOCH'
+    description = 'The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.'
+    retriable = False
+
+
+class MismatchedEndpointTypeError(BrokerResponseError):
+    errno = 114
+    message = 'MISMATCHED_ENDPOINT_TYPE'
+    description = 'The request was sent to an endpoint of the wrong type.'
+    retriable = False
+
+
+class UnsupportedEndpointTypeError(BrokerResponseError):
+    errno = 115
+    message = 'UNSUPPORTED_ENDPOINT_TYPE'
+    description = 'This endpoint type is not supported yet.'
+    retriable = False
+
+
+class UnknownControllerIdError(BrokerResponseError):
+    errno = 116
+    message = 'UNKNOWN_CONTROLLER_ID'
+    description = 'This controller ID is not known.'
+    retriable = False
+
+
+class UnknownSubscriptionIdError(BrokerResponseError):
+    errno = 117
+    message = 'UNKNOWN_SUBSCRIPTION_ID'
+    description = 'Client sent a push telemetry request with an invalid or outdated subscription ID.'
+    retriable = False
+
+
+class TelemetryTooLargeError(BrokerResponseError):
+    errno = 118
+    message = 'TELEMETRY_TOO_LARGE'
+    description = 'Client sent a push telemetry request larger than the maximum size the broker will accept.'
+    retriable = False
+
+
+class InvalidRegistrationError(BrokerResponseError):
+    errno = 119
+    message = 'INVALID_REGISTRATION'
+    description = 'The controller has considered the broker registration to be invalid.'
+    retriable = False
+
+
+class TransactionAbortableError(BrokerResponseError):
+    errno = 120
+    message = 'TRANSACTION_ABORTABLE'
+    description = 'The server encountered an error with the transaction. The client can abort the transaction to continue using this transactional ID.'
+    retriable = False
+
+
+class InvalidRecordStateError(BrokerResponseError):
+    errno = 121
+    message = 'INVALID_RECORD_STATE'
+    description = 'The record state is invalid. The acknowledgement of delivery could not be completed.'
+    retriable = False
+
+
+class ShareSessionNotFoundError(BrokerResponseError):
+    errno = 122
+    message = 'SHARE_SESSION_NOT_FOUND'
+    description = 'The share session was not found.'
+    retriable = True
+
+
+class InvalidShareSessionEpochError(BrokerResponseError):
+    errno = 123
+    message = 'INVALID_SHARE_SESSION_EPOCH'
+    description = 'The share session epoch is invalid.'
+    retriable = True
+
+
+class FencedStateEpochError(BrokerResponseError):
+    errno = 124
+    message = 'FENCED_STATE_EPOCH'
+    description = 'The share coordinator rejected the request because the share-group state epoch did not match.'
+    retriable = False
+
+
+class InvalidVoterKeyError(BrokerResponseError):
+    errno = 125
+    message = 'INVALID_VOTER_KEY'
+    description = 'The voter key doesn\'t match the receiving replica\'s key.'
+    retriable = False
+
+
+class DuplicateVoterError(BrokerResponseError):
+    errno = 126
+    message = 'DUPLICATE_VOTER'
+    description = 'The voter is already part of the set of voters.'
+    retriable = False
+
+
+class VoterNotFoundError(BrokerResponseError):
+    errno = 127
+    message = 'VOTER_NOT_FOUND'
+    description = 'The voter is not part of the set of voters.'
+    retriable = False
 
 
 class KafkaUnavailableError(KafkaError):
@@ -521,18 +1095,3 @@ def for_code(error_code):
         #
         # To avoid dropping the error code, create a dynamic error class w/ errno override.
         return type('UnrecognizedBrokerError', (UnknownError,), {'errno': error_code})
-
-
-RETRY_BACKOFF_ERROR_TYPES = (
-    KafkaUnavailableError, LeaderNotAvailableError,
-    KafkaConnectionError, FailedPayloadsError
-)
-
-
-RETRY_REFRESH_ERROR_TYPES = (
-    NotLeaderForPartitionError, UnknownTopicOrPartitionError,
-    LeaderNotAvailableError, KafkaConnectionError
-)
-
-
-RETRY_ERROR_TYPES = RETRY_BACKOFF_ERROR_TYPES + RETRY_REFRESH_ERROR_TYPES
