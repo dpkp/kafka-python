@@ -117,6 +117,12 @@ class Fixture(object):
         return os.path.join(cls.project_root, "servers", "resources", "default", filename)
 
     @classmethod
+    def run_script(cls, script, *args):
+        result = [os.path.join(cls.kafka_root, 'bin', script)]
+        result.extend([str(arg) for arg in args])
+        return result
+
+    @classmethod
     def kafka_run_class_args(cls, *args):
         result = [os.path.join(cls.kafka_root, 'bin', 'kafka-run-class.sh')]
         result.extend([str(arg) for arg in args])
@@ -202,6 +208,7 @@ class ZookeeperFixture(Fixture):
         # Configure Zookeeper child process
         template = self.test_resource("zookeeper.properties")
         properties = self.tmp_dir.join("zookeeper.properties")
+        # Consider replacing w/ run_script('zookeper-server-start.sh', ...)
         args = self.kafka_run_class_args("org.apache.zookeeper.server.quorum.QuorumPeerMain",
                                          properties.strpath)
         env = self.kafka_run_class_env()
@@ -348,18 +355,16 @@ class KafkaFixture(Fixture):
 
     def _add_scram_user(self):
         self.out("Adding SCRAM credentials for user {} to zookeeper.".format(self.broker_user))
-        args = self.kafka_run_class_args(
-            "kafka.admin.ConfigCommand",
-            "--zookeeper",
-            "%s:%d/%s" % (self.zookeeper.host,
-                       self.zookeeper.port,
-                       self.zk_chroot),
-            "--alter",
-            "--entity-type", "users",
-            "--entity-name", self.broker_user,
-            "--add-config",
-            "{}=[password={}]".format(self.sasl_mechanism, self.broker_password),
-        )
+        args = self.run_script('kafka-configs.sh',
+                               '--zookeeper',
+                               '%s:%d/%s' % (self.zookeeper.host,
+                                          self.zookeeper.port,
+                                          self.zk_chroot),
+                               '--alter',
+                               '--entity-type', 'users',
+                               '--entity-name', self.broker_user,
+                               '--add-config',
+                               '{}=[password={}]'.format(self.sasl_mechanism, self.broker_password))
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -390,13 +395,12 @@ class KafkaFixture(Fixture):
 
     def _create_zk_chroot(self):
         self.out("Creating Zookeeper chroot node...")
-        args = self.kafka_run_class_args("org.apache.zookeeper.ZooKeeperMain",
-                                         "-server",
-                                         "%s:%d" % (self.zookeeper.host,
-                                                    self.zookeeper.port),
-                                         "create",
-                                         "/%s" % (self.zk_chroot,),
-                                         "kafka-python")
+        args = self.run_script('zookeeper-shell.sh',
+                               '%s:%d' % (self.zookeeper.host,
+                                          self.zookeeper.port),
+                               'create',
+                               '/%s' % (self.zk_chroot,),
+                               'kafka-python')
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -416,6 +420,7 @@ class KafkaFixture(Fixture):
         properties_template = self.test_resource("kafka.properties")
         jaas_conf_template = self.test_resource("kafka_server_jaas.conf")
 
+        # Consider replacing w/ run_script('kafka-server-start.sh', ...)
         args = self.kafka_run_class_args("kafka.Kafka", properties.strpath)
         env = self.kafka_run_class_env()
         if self.sasl_enabled:
@@ -590,17 +595,17 @@ class KafkaFixture(Fixture):
                 raise errors.for_code(error_code)
 
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
-        args = self.kafka_run_class_args('kafka.admin.TopicCommand',
-                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                                      self.zookeeper.port,
-                                                                      self.zk_chroot),
-                                         '--create',
-                                         '--topic', topic_name,
-                                         '--partitions', self.partitions \
-                                             if num_partitions is None else num_partitions,
-                                         '--replication-factor', self.replicas \
-                                             if replication_factor is None \
-                                             else replication_factor)
+        args = self.run_script('kafka-topics.sh',
+                               '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
+                                                            self.zookeeper.port,
+                                                            self.zk_chroot),
+                               '--create',
+                               '--topic', topic_name,
+                               '--partitions', self.partitions \
+                                   if num_partitions is None else num_partitions,
+                               '--replication-factor', self.replicas \
+                                   if replication_factor is None \
+                                   else replication_factor)
         if env_kafka_version() >= (0, 10):
             args.append('--if-not-exists')
         env = self.kafka_run_class_env()
@@ -614,12 +619,12 @@ class KafkaFixture(Fixture):
                 raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
     def get_topic_names(self):
-        args = self.kafka_run_class_args('kafka.admin.TopicCommand',
+        args = self.run_script('kafka-topics.sh',
                                          '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
                                                                       self.zookeeper.port,
                                                                       self.zk_chroot),
                                          '--list'
-                                         )
+                              )
         env = self.kafka_run_class_env()
         env.pop('KAFKA_LOG4J_OPTS')
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
