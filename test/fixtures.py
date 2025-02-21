@@ -341,13 +341,13 @@ class KafkaFixture(Fixture):
 
         elif self.sasl_mechanism == 'PLAIN':
             jaas_config = (
-                'org.apache.kafka.common.security.plain.PlainLoginModule required\n'
-                '  username="{user}" password="{password}" user_{user}="{password}";\n'
+                'org.apache.kafka.common.security.plain.PlainLoginModule required'
+                ' username="{user}" password="{password}" user_{user}="{password}";\n'
             )
         elif self.sasl_mechanism in ("SCRAM-SHA-256", "SCRAM-SHA-512"):
             jaas_config = (
-                'org.apache.kafka.common.security.scram.ScramLoginModule required\n'
-                '  username="{user}" password="{password}";\n'
+                'org.apache.kafka.common.security.scram.ScramLoginModule required'
+                ' username="{user}" password="{password}";\n'
             )
         else:
             raise ValueError("SASL mechanism {} currently not supported".format(self.sasl_mechanism))
@@ -605,7 +605,8 @@ class KafkaFixture(Fixture):
                                    if num_partitions is None else num_partitions,
                                '--replication-factor', self.replicas \
                                    if replication_factor is None \
-                                   else replication_factor)
+                                   else replication_factor,
+                               *self._cli_connect_args())
         if env_kafka_version() >= (0, 10):
             args.append('--if-not-exists')
         env = self.kafka_run_class_env()
@@ -618,16 +619,23 @@ class KafkaFixture(Fixture):
                 self.out(stderr)
                 raise RuntimeError("Failed to create topic %s" % (topic_name,))
 
+    def _cli_connect_args(self):
+        if env_kafka_version() < (3, 0, 0):
+            return ['--zookeeper', '%s:%s/%s' % (self.zookeeper.host, self.zookeeper.port, self.zk_chroot)]
+        else:
+            args = ['--bootstrap-server', '%s:%s' % (self.host, self.port)]
+            if self.sasl_enabled:
+                command_conf = self.tmp_dir.join("sasl_command.conf")
+                self.render_template(self.test_resource("sasl_command.conf"), command_conf, vars(self))
+                args.append('--command-config')
+                args.append(command_conf.strpath)
+            return args
+
     def get_topic_names(self):
-        args = self.run_script('kafka-topics.sh',
-                                         '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                                      self.zookeeper.port,
-                                                                      self.zk_chroot),
-                                         '--list'
-                              )
+        cmd = self.run_script('kafka-topics.sh', '--list', *self._cli_connect_args())
         env = self.kafka_run_class_env()
         env.pop('KAFKA_LOG4J_OPTS')
-        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
             self.out("Failed to list topics!")
