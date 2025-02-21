@@ -1,3 +1,35 @@
+# 2.0.4 (Feb 21, 2025)
+
+Networking
+* Check for wakeup socket errors on read and close and reinit to reset (#2482)
+* Improve client networking backoff / retry (#2480)
+* Check for socket and unresolved futures before creating selector in conn.check_version (#2477)
+* Handle socket init errors, e.g., when IPv6 is disabled (#2476)
+
+Fixes
+* Avoid self-join in heartbeat thread close (#2488)
+
+Error Handling
+* Always log broker errors in producer.send (#2478)
+* Retain unrecognized broker response error codes with dynamic error class (#2481)
+* Update kafka.errors with latest types (#2485)
+
+Compatibility
+* Do not validate snappy xerial header version and compat fields (for redpanda) (#2483)
+
+Documentation
+* Added missing docstrings in admin/client.py (#2487)
+
+Testing
+* Update kafka broker test matrix; test against 3.9.0 (#2486)
+* Add default resources for new kafka server fixtures (#2484)
+* Drop make test-local; add PYTESTS configuration var
+* Fix pytest runs when KAFKA_VERSION is not set
+
+Project Maintenance
+* Migrate to pyproject.toml / PEP-621
+* Remove old travis files; update compatibility tests link to gha
+
 # 2.0.3 (Feb 12, 2025)
 
 Improvements
