@@ -240,8 +240,11 @@ class KafkaAdminClient(object):
         This resolves to the lesser of either the latest api version this
         library supports, or the max version supported by the broker.
 
-        :param operation: A list of protocol operation versions from kafka.protocol.
-        :return: The max matching version number between client and broker.
+        Arguments:
+            operation: A list of protocol operation versions from kafka.protocol.
+
+        Returns:
+            int: The max matching version number between client and broker.
         """
         broker_api_versions = self._client.get_api_versions()
         api_key = operation[0].API_KEY
@@ -262,8 +265,11 @@ class KafkaAdminClient(object):
     def _validate_timeout(self, timeout_ms):
         """Validate the timeout is set or use the configuration default.
 
-        :param timeout_ms: The timeout provided by api call, in milliseconds.
-        :return: The timeout to use for the operation.
+        Arguments:
+            timeout_ms: The timeout provided by api call, in milliseconds.
+
+        Returns:
+            The timeout to use for the operation.
         """
         return timeout_ms or self.config['request_timeout_ms']
 
@@ -293,9 +299,12 @@ class KafkaAdminClient(object):
     def _find_coordinator_id_send_request(self, group_id):
         """Send a FindCoordinatorRequest to a broker.
 
-        :param group_id: The consumer group ID. This is typically the group
+        Arguments:
+            group_id: The consumer group ID. This is typically the group
             name as a string.
-        :return: A message future
+
+        Returns:
+            A message future
         """
         # TODO add support for dynamically picking version of
         # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
@@ -315,8 +324,11 @@ class KafkaAdminClient(object):
     def _find_coordinator_id_process_response(self, response):
         """Process a FindCoordinatorResponse.
 
-        :param response: a FindCoordinatorResponse.
-        :return: The node_id of the broker that is the coordinator.
+        Arguments:
+            response: a FindCoordinatorResponse.
+
+        Returns:
+            The node_id of the broker that is the coordinator.
         """
         if response.API_VERSION <= 0:
             error_type = Errors.for_code(response.error_code)
@@ -339,9 +351,12 @@ class KafkaAdminClient(object):
         Will block until the FindCoordinatorResponse is received for all groups.
         Any errors are immediately raised.
 
-        :param group_ids: A list of consumer group IDs. This is typically the group
+        Arguments:
+            group_ids: A list of consumer group IDs. This is typically the group
             name as a string.
-        :return: A dict of {group_id: node_id} where node_id is the id of the
+
+        Returns:
+            A dict of {group_id: node_id} where node_id is the id of the
             broker that is the coordinator for the corresponding group.
         """
         groups_futures = {
@@ -358,13 +373,19 @@ class KafkaAdminClient(object):
     def _send_request_to_node(self, node_id, request, wakeup=True):
         """Send a Kafka protocol message to a specific broker.
 
-        Returns a future that may be polled for status and results.
+        Arguments:
+            node_id: The broker id to which to send the message.
+            request: The message to send.
 
-        :param node_id: The broker id to which to send the message.
-        :param request: The message to send.
-        :param wakeup: Optional flag to disable thread-wakeup.
-        :return: A future object that may be polled for status and results.
-        :exception: The exception if the message could not be sent.
+
+        Keyword Arguments:
+            wakeup (bool, optional): Optional flag to disable thread-wakeup.
+
+        Returns:
+            A future object that may be polled for status and results.
+
+        Raises:
+            The exception if the message could not be sent.
         """
         while not self._client.ready(node_id):
             # poll until the connection to broker is ready, otherwise send()
@@ -377,8 +398,11 @@ class KafkaAdminClient(object):
 
         Will block until the message result is received.
 
-        :param request: The message to send.
-        :return: The Kafka protocol response for the message.
+        Arguments:
+            request: The message to send.
+
+        Returns:
+            The Kafka protocol response for the message.
         """
         tries = 2  # in case our cached self._controller_id is outdated
         while tries:
@@ -421,9 +445,12 @@ class KafkaAdminClient(object):
         """
         Build the tuple required by CreateTopicsRequest from a NewTopic object.
 
-        :param new_topic: A NewTopic instance containing name, partition count, replication factor,
+        Arguments:
+            new_topic: A NewTopic instance containing name, partition count, replication factor,
                           replica assignments, and config entries.
-        :return: A tuple in the form:
+
+        Returns:
+            A tuple in the form:
                  (topic_name, num_partitions, replication_factor, [(partition_id, [replicas])...],
                   [(config_key, config_value)...])
         """
@@ -442,12 +469,17 @@ class KafkaAdminClient(object):
     def create_topics(self, new_topics, timeout_ms=None, validate_only=False):
         """Create new topics in the cluster.
 
-        :param new_topics: A list of NewTopic objects.
-        :param timeout_ms: Milliseconds to wait for new topics to be created
-            before the broker returns.
-        :param validate_only: If True, don't actually create new topics.
-            Not supported by all versions. Default: False
-        :return: Appropriate version of CreateTopicResponse class.
+        Arguments:
+            new_topics: A list of NewTopic objects.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Milliseconds to wait for new topics to be created
+                before the broker returns.
+            validate_only (bool, optional): If True, don't actually create new topics.
+                Not supported by all versions. Default: False
+
+        Returns:
+            Appropriate version of CreateTopicResponse class.
         """
         version = self._matching_api_version(CreateTopicsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -477,10 +509,15 @@ class KafkaAdminClient(object):
     def delete_topics(self, topics, timeout_ms=None):
         """Delete topics from the cluster.
 
-        :param topics: A list of topic name strings.
-        :param timeout_ms: Milliseconds to wait for topics to be deleted
-            before the broker returns.
-        :return: Appropriate version of DeleteTopicsResponse class.
+        Arguments:
+            topics ([str]): A list of topic name strings.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Milliseconds to wait for topics to be deleted
+                before the broker returns.
+
+        Returns:
+            Appropriate version of DeleteTopicsResponse class.
         """
         version = self._matching_api_version(DeleteTopicsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -524,22 +561,24 @@ class KafkaAdminClient(object):
         return future.value
 
     def list_topics(self):
-        """
-        Retrieve a list of all topic names in the cluster.
-    
-        :return: A list of topic name strings.
+        """Retrieve a list of all topic names in the cluster.
+
+        Returns:
+            A list of topic name strings.
         """
         metadata = self._get_cluster_metadata(topics=None)
         obj = metadata.to_object()
         return [t['topic'] for t in obj['topics']]
 
     def describe_topics(self, topics=None):
-        """
-        Fetch metadata for the specified topics or all topics if None.
-    
-        :param topics: (Optional) A list of topic names. If None, metadata for all
-                       topics is retrieved.
-        :return: A list of dicts describing each topic (including partition info).
+        """Fetch metadata for the specified topics or all topics if None.
+
+        Keyword Arguments:
+            topics ([str], optional) A list of topic names. If None, metadata for all
+                topics is retrieved.
+
+        Returns:
+            A list of dicts describing each topic (including partition info).
         """
         metadata = self._get_cluster_metadata(topics=topics)
         obj = metadata.to_object()
@@ -549,8 +588,10 @@ class KafkaAdminClient(object):
         """
         Fetch cluster-wide metadata such as the list of brokers, the controller ID,
         and the cluster ID.
-    
-        :return: A dict with cluster-wide metadata, excluding topic details.
+
+
+        Returns:
+            A dict with cluster-wide metadata, excluding topic details.
         """
         metadata = self._get_cluster_metadata()
         obj = metadata.to_object()
@@ -559,11 +600,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_describe_acls_response_to_acls(describe_response):
-        """
-        Convert a DescribeAclsResponse into a list of ACL objects and a KafkaError.
-    
-        :param describe_response: The response object from the DescribeAclsRequest.
-        :return: A tuple of (list_of_acl_objects, error) where error is an instance
+        """Convert a DescribeAclsResponse into a list of ACL objects and a KafkaError.
+
+        Arguments:
+            describe_response: The response object from the DescribeAclsRequest.
+
+        Returns:
+            A tuple of (list_of_acl_objects, error) where error is an instance
                  of KafkaError (NoError if successful).
         """
         version = describe_response.API_VERSION
@@ -605,8 +648,11 @@ class KafkaAdminClient(object):
         The cluster must be configured with an authorizer for this to work, or
         you will get a SecurityDisabledError
 
-        :param acl_filter: an ACLFilter object
-        :return: tuple of a list of matching ACL objects and a KafkaError (NoError if successful)
+        Arguments:
+            acl_filter: an ACLFilter object
+
+        Returns:
+            tuple of a list of matching ACL objects and a KafkaError (NoError if successful)
         """
 
         version = self._matching_api_version(DescribeAclsRequest)
@@ -651,11 +697,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_create_acls_resource_request_v0(acl):
-        """
-        Convert an ACL object into the CreateAclsRequest v0 format.
-    
-        :param acl: An ACL object with resource pattern and permissions.
-        :return: A tuple: (resource_type, resource_name, principal, host, operation, permission_type).
+        """Convert an ACL object into the CreateAclsRequest v0 format.
+
+        Arguments:
+            acl: An ACL object with resource pattern and permissions.
+
+        Returns:
+            A tuple: (resource_type, resource_name, principal, host, operation, permission_type).
         """
 
         return (
@@ -669,11 +717,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_create_acls_resource_request_v1(acl):
-        """
-        Convert an ACL object into the CreateAclsRequest v1 format.
-    
-        :param acl: An ACL object with resource pattern and permissions.
-        :return: A tuple: (resource_type, resource_name, pattern_type, principal, host, operation, permission_type).
+        """Convert an ACL object into the CreateAclsRequest v1 format.
+
+        Arguments:
+            acl: An ACL object with resource pattern and permissions.
+
+        Returns:
+            A tuple: (resource_type, resource_name, pattern_type, principal, host, operation, permission_type).
         """
         return (
             acl.resource_pattern.resource_type,
@@ -687,12 +737,14 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_create_acls_response_to_acls(acls, create_response):
-        """
-        Parse CreateAclsResponse and correlate success/failure with original ACL objects.
-    
-        :param acls: A list of ACL objects that were requested for creation.
-        :param create_response: The broker's CreateAclsResponse object.
-        :return: A dict with:
+        """Parse CreateAclsResponse and correlate success/failure with original ACL objects.
+
+        Arguments:
+            acls: A list of ACL objects that were requested for creation.
+            create_response: The broker's CreateAclsResponse object.
+
+        Returns:
+            A dict with:
                  {
                    'succeeded': [list of ACL objects successfully created],
                    'failed': [(acl_object, KafkaError), ...]
@@ -726,8 +778,11 @@ class KafkaAdminClient(object):
         This endpoint only accepts a list of concrete ACL objects, no ACLFilters.
         Throws TopicAlreadyExistsError if topic is already present.
 
-        :param acls: a list of ACL objects
-        :return: dict of successes and failures
+        Arguments:
+            acls: a list of ACL objects
+
+        Returns:
+            dict of successes and failures
         """
 
         for acl in acls:
@@ -757,11 +812,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_delete_acls_resource_request_v0(acl):
-        """
-        Convert an ACLFilter object into the DeleteAclsRequest v0 format.
-    
-        :param acl: An ACLFilter object identifying the ACLs to be deleted.
-        :return: A tuple: (resource_type, resource_name, principal, host, operation, permission_type).
+        """Convert an ACLFilter object into the DeleteAclsRequest v0 format.
+
+        Arguments:
+            acl: An ACLFilter object identifying the ACLs to be deleted.
+
+        Returns:
+            A tuple: (resource_type, resource_name, principal, host, operation, permission_type).
         """
         return (
             acl.resource_pattern.resource_type,
@@ -774,11 +831,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_delete_acls_resource_request_v1(acl):
-        """
-        Convert an ACLFilter object into the DeleteAclsRequest v1 format.
-    
-        :param acl: An ACLFilter object identifying the ACLs to be deleted.
-        :return: A tuple: (resource_type, resource_name, pattern_type, principal, host, operation, permission_type).
+        """Convert an ACLFilter object into the DeleteAclsRequest v1 format.
+
+        Arguments:
+            acl: An ACLFilter object identifying the ACLs to be deleted.
+
+        Returns:
+            A tuple: (resource_type, resource_name, pattern_type, principal, host, operation, permission_type).
         """
         return (
             acl.resource_pattern.resource_type,
@@ -792,12 +851,14 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_delete_acls_response_to_matching_acls(acl_filters, delete_response):
-        """
-        Parse the DeleteAclsResponse and map the results back to each input ACLFilter.
-    
-        :param acl_filters: A list of ACLFilter objects that were provided in the request.
-        :param delete_response: The response from the DeleteAclsRequest.
-        :return: A list of tuples of the form:
+        """Parse the DeleteAclsResponse and map the results back to each input ACLFilter.
+
+        Arguments:
+            acl_filters: A list of ACLFilter objects that were provided in the request.
+            delete_response: The response from the DeleteAclsRequest.
+
+        Returns:
+            A list of tuples of the form:
                  (acl_filter, [(matching_acl, KafkaError), ...], filter_level_error).
         """
         version = delete_response.API_VERSION
@@ -838,8 +899,11 @@ class KafkaAdminClient(object):
 
         Deletes all ACLs matching the list of input ACLFilter
 
-        :param acl_filters: a list of ACLFilter
-        :return: a list of 3-tuples corresponding to the list of input filters.
+        Arguments:
+            acl_filters: a list of ACLFilter
+
+        Returns:
+            a list of 3-tuples corresponding to the list of input filters.
                  The tuples hold (the input ACLFilter, list of affected ACLs, KafkaError instance)
         """
 
@@ -871,11 +935,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_describe_config_resource_request(config_resource):
-        """
-        Convert a ConfigResource into the format required by DescribeConfigsRequest.
-    
-        :param config_resource: A ConfigResource with resource_type, name, and optional config keys.
-        :return: A tuple: (resource_type, resource_name, [list_of_config_keys] or None).
+        """Convert a ConfigResource into the format required by DescribeConfigsRequest.
+
+        Arguments:
+            config_resource: A ConfigResource with resource_type, name, and optional config keys.
+
+        Returns:
+            A tuple: (resource_type, resource_name, [list_of_config_keys] or None).
         """
         return (
             config_resource.resource_type,
@@ -888,13 +954,18 @@ class KafkaAdminClient(object):
     def describe_configs(self, config_resources, include_synonyms=False):
         """Fetch configuration parameters for one or more Kafka resources.
 
-        :param config_resources: An list of ConfigResource objects.
-            Any keys in ConfigResource.configs dict will be used to filter the
-            result. Setting the configs dict to None will get all values. An
-            empty dict will get zero values (as per Kafka protocol).
-        :param include_synonyms: If True, return synonyms in response. Not
-            supported by all versions. Default: False.
-        :return: Appropriate version of DescribeConfigsResponse class.
+        Arguments:
+            config_resources: An list of ConfigResource objects.
+                Any keys in ConfigResource.configs dict will be used to filter the
+                result. Setting the configs dict to None will get all values. An
+                empty dict will get zero values (as per Kafka protocol).
+
+        Keyword Arguments:
+            include_synonyms (bool, optional): If True, return synonyms in response. Not
+                supported by all versions. Default: False.
+
+        Returns:
+            Appropriate version of DescribeConfigsResponse class.
         """
 
         # Break up requests by type - a broker config request must be sent to the specific broker.
@@ -963,11 +1034,13 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_alter_config_resource_request(config_resource):
-        """
-        Convert a ConfigResource into the format required by AlterConfigsRequest.
-    
-        :param config_resource: A ConfigResource with resource_type, name, and config (key, value) pairs.
-        :return: A tuple: (resource_type, resource_name, [(config_key, config_value), ...]).
+        """Convert a ConfigResource into the format required by AlterConfigsRequest.
+
+        Arguments:
+            config_resource: A ConfigResource with resource_type, name, and config (key, value) pairs.
+
+        Returns:
+            A tuple: (resource_type, resource_name, [(config_key, config_value), ...]).
         """
         return (
             config_resource.resource_type,
@@ -986,8 +1059,11 @@ class KafkaAdminClient(object):
             least-loaded node. See the comment in the source code for details.
             We would happily accept a PR fixing this.
 
-        :param config_resources: A list of ConfigResource objects.
-        :return: Appropriate version of AlterConfigsResponse class.
+        Arguments:
+            config_resources: A list of ConfigResource objects.
+
+        Returns:
+            Appropriate version of AlterConfigsResponse class.
         """
         version = self._matching_api_version(AlterConfigsRequest)
         if version <= 1:
@@ -1018,12 +1094,14 @@ class KafkaAdminClient(object):
 
     @staticmethod
     def _convert_create_partitions_request(topic_name, new_partitions):
-        """
-        Convert a NewPartitions object into the tuple format for CreatePartitionsRequest.
-    
-        :param topic_name: The name of the existing topic.
-        :param new_partitions: A NewPartitions instance with total_count and new_assignments.
-        :return: A tuple: (topic_name, (total_count, [list_of_assignments])).
+        """Convert a NewPartitions object into the tuple format for CreatePartitionsRequest.
+
+        Arguments:
+            topic_name: The name of the existing topic.
+            new_partitions: A NewPartitions instance with total_count and new_assignments.
+
+        Returns:
+            A tuple: (topic_name, (total_count, [list_of_assignments])).
         """
         return (
             topic_name,
@@ -1036,12 +1114,17 @@ class KafkaAdminClient(object):
     def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False):
         """Create additional partitions for an existing topic.
 
-        :param topic_partitions: A map of topic name strings to NewPartition objects.
-        :param timeout_ms: Milliseconds to wait for new partitions to be
-            created before the broker returns.
-        :param validate_only: If True, don't actually create new partitions.
-            Default: False
-        :return: Appropriate version of CreatePartitionsResponse class.
+        Arguments:
+            topic_partitions: A map of topic name strings to NewPartition objects.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Milliseconds to wait for new partitions to be
+                created before the broker returns.
+            validate_only (bool, optional): If True, don't actually create new partitions.
+                Default: False
+
+        Returns:
+            Appropriate version of CreatePartitionsResponse class.
         """
         version = self._matching_api_version(CreatePartitionsRequest)
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -1075,10 +1158,12 @@ class KafkaAdminClient(object):
     def _describe_consumer_groups_send_request(self, group_id, group_coordinator_id, include_authorized_operations=False):
         """Send a DescribeGroupsRequest to the group's coordinator.
 
-        :param group_id: The group name as a string
-        :param group_coordinator_id: The node_id of the groups' coordinator
-            broker.
-        :return: A message future.
+        Arguments:
+            group_id: The group name as a string
+            group_coordinator_id: The node_id of the groups' coordinator broker.
+
+        Returns:
+            A message future.
         """
         version = self._matching_api_version(DescribeGroupsRequest)
         if version <= 2:
@@ -1161,18 +1246,23 @@ class KafkaAdminClient(object):
 
         Any errors are immediately raised.
 
-        :param group_ids: A list of consumer group IDs. These are typically the
-            group names as strings.
-        :param group_coordinator_id: The node_id of the groups' coordinator
-            broker. If set to None, it will query the cluster for each group to
-            find that group's coordinator. Explicitly specifying this can be
-            useful for avoiding extra network round trips if you already know
-            the group coordinator. This is only useful when all the group_ids
-            have the same coordinator, otherwise it will error. Default: None.
-        :param include_authorized_operations: Whether or not to include
-            information about the operations a group is allowed to perform.
-            Only supported on API version >= v3. Default: False.
-        :return: A list of group descriptions. For now the group descriptions
+        Arguments:
+            group_ids: A list of consumer group IDs. These are typically the
+                group names as strings.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the groups' coordinator
+                broker. If set to None, it will query the cluster for each group to
+                find that group's coordinator. Explicitly specifying this can be
+                useful for avoiding extra network round trips if you already know
+                the group coordinator. This is only useful when all the group_ids
+                have the same coordinator, otherwise it will error. Default: None.
+            include_authorized_operations (bool, optional): Whether or not to include
+                information about the operations a group is allowed to perform.
+                Only supported on API version >= v3. Default: False.
+
+        Returns:
+            A list of group descriptions. For now the group descriptions
             are the raw results from the DescribeGroupsResponse. Long-term, we
             plan to change this to return namedtuples as well as decoding the
             partition assignments.
@@ -1203,8 +1293,11 @@ class KafkaAdminClient(object):
     def _list_consumer_groups_send_request(self, broker_id):
         """Send a ListGroupsRequest to a broker.
 
-        :param broker_id: The broker's node_id.
-        :return: A message future
+        Arguments:
+            broker_id (int): The broker's node_id.
+
+        Returns:
+            A message future
         """
         version = self._matching_api_version(ListGroupsRequest)
         if version <= 2:
@@ -1244,15 +1337,20 @@ class KafkaAdminClient(object):
 
         As soon as any error is encountered, it is immediately raised.
 
-        :param broker_ids: A list of broker node_ids to query for consumer
-            groups. If set to None, will query all brokers in the cluster.
-            Explicitly specifying broker(s) can be useful for determining which
-            consumer groups are coordinated by those broker(s). Default: None
-        :return list: List of tuples of Consumer Groups.
-        :exception GroupCoordinatorNotAvailableError: The coordinator is not
-            available, so cannot process requests.
-        :exception GroupLoadInProgressError: The coordinator is loading and
-            hence can't process requests.
+        Keyword Arguments:
+            broker_ids ([int], optional): A list of broker node_ids to query for consumer
+                groups. If set to None, will query all brokers in the cluster.
+                Explicitly specifying broker(s) can be useful for determining which
+                consumer groups are coordinated by those broker(s). Default: None
+
+        Returns:
+            list: List of tuples of Consumer Groups.
+
+        Raises:
+            GroupCoordinatorNotAvailableError: The coordinator is not
+                available, so cannot process requests.
+            GroupLoadInProgressError: The coordinator is loading and
+                hence can't process requests.
         """
         # While we return a list, internally use a set to prevent duplicates
         # because if a group coordinator fails after being queried, and its
@@ -1272,10 +1370,17 @@ class KafkaAdminClient(object):
                 group_coordinator_id, partitions=None):
         """Send an OffsetFetchRequest to a broker.
 
-        :param group_id: The consumer group id name for which to fetch offsets.
-        :param group_coordinator_id: The node_id of the group's coordinator
-            broker.
-        :return: A message future
+        Arguments:
+            group_id (str): The consumer group id name for which to fetch offsets.
+            group_coordinator_id (int): The node_id of the group's coordinator broker.
+
+        Keyword Arguments:
+            partitions: A list of TopicPartitions for which to fetch
+                offsets. On brokers >= 0.10.2, this can be set to None to fetch all
+                known offsets for the consumer group. Default: None.
+
+        Returns:
+            A message future
         """
         version = self._matching_api_version(OffsetFetchRequest)
         if version <= 3:
@@ -1303,8 +1408,11 @@ class KafkaAdminClient(object):
     def _list_consumer_group_offsets_process_response(self, response):
         """Process an OffsetFetchResponse.
 
-        :param response: an OffsetFetchResponse.
-        :return: A dictionary composed of TopicPartition keys and
+        Arguments:
+            response: an OffsetFetchResponse.
+
+        Returns:
+            A dictionary composed of TopicPartition keys and
             OffsetAndMetadata values.
         """
         if response.API_VERSION <= 3:
@@ -1345,16 +1453,21 @@ class KafkaAdminClient(object):
 
         As soon as any error is encountered, it is immediately raised.
 
-        :param group_id: The consumer group id name for which to fetch offsets.
-        :param group_coordinator_id: The node_id of the group's coordinator
-            broker. If set to None, will query the cluster to find the group
-            coordinator. Explicitly specifying this can be useful to prevent
-            that extra network round trip if you already know the group
-            coordinator. Default: None.
-        :param partitions: A list of TopicPartitions for which to fetch
-            offsets. On brokers >= 0.10.2, this can be set to None to fetch all
-            known offsets for the consumer group. Default: None.
-        :return dictionary: A dictionary with TopicPartition keys and
+        Arguments:
+            group_id (str): The consumer group id name for which to fetch offsets.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's coordinator
+                broker. If set to None, will query the cluster to find the group
+                coordinator. Explicitly specifying this can be useful to prevent
+                that extra network round trip if you already know the group
+                coordinator. Default: None.
+            partitions: A list of TopicPartitions for which to fetch
+                offsets. On brokers >= 0.10.2, this can be set to None to fetch all
+                known offsets for the consumer group. Default: None.
+
+        Returns:
+            dictionary: A dictionary with TopicPartition keys and
             OffsetAndMetada values. Partitions that are not specified and for
             which the group_id does not have a recorded offset are omitted. An
             offset value of `-1` indicates the group_id has no offset for that
@@ -1378,14 +1491,19 @@ class KafkaAdminClient(object):
 
         The result needs checking for potential errors.
 
-        :param group_ids: The consumer group ids of the groups which are to be deleted.
-        :param group_coordinator_id: The node_id of the broker which is the coordinator for
-            all the groups. Use only if all groups are coordinated by the same broker.
-            If set to None, will query the cluster to find the coordinator for every single group.
-            Explicitly specifying this can be useful to prevent
-            that extra network round trips if you already know the group
-            coordinator. Default: None.
-        :return: A list of tuples (group_id, KafkaError)
+        Arguments:
+            group_ids ([str]): The consumer group ids of the groups which are to be deleted.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the broker which is
+                the coordinator for all the groups. Use only if all groups are coordinated
+                by the same broker. If set to None, will query the cluster to find the coordinator
+                for every single group. Explicitly specifying this can be useful to prevent
+                that extra network round trips if you already know the group coordinator.
+                Default: None.
+
+        Returns:
+            A list of tuples (group_id, KafkaError)
         """
         if group_coordinator_id is not None:
             futures = [self._delete_consumer_groups_send_request(group_ids, group_coordinator_id)]
@@ -1406,11 +1524,13 @@ class KafkaAdminClient(object):
         return results
 
     def _convert_delete_groups_response(self, response):
-        """
-        Parse the DeleteGroupsResponse, mapping group IDs to their respective errors.
-    
-        :param response: A DeleteGroupsResponse object from the broker.
-        :return: A list of (group_id, KafkaError) for each deleted group.
+        """Parse the DeleteGroupsResponse, mapping group IDs to their respective errors.
+
+        Arguments:
+            response: A DeleteGroupsResponse object from the broker.
+
+        Returns:
+            A list of (group_id, KafkaError) for each deleted group.
         """
         if response.API_VERSION <= 1:
             results = []
@@ -1423,12 +1543,14 @@ class KafkaAdminClient(object):
                     .format(response.API_VERSION))
 
     def _delete_consumer_groups_send_request(self, group_ids, group_coordinator_id):
-        """
-        Send a DeleteGroupsRequest to the specified broker (the group coordinator).
-    
-        :param group_ids: A list of consumer group IDs to be deleted.
-        :param group_coordinator_id: The node_id of the broker coordinating these groups.
-        :return: A future representing the in-flight DeleteGroupsRequest.
+        """Send a DeleteGroupsRequest to the specified broker (the group coordinator).
+
+        Arguments:
+            group_ids ([str]): A list of consumer group IDs to be deleted.
+            group_coordinator_id (int): The node_id of the broker coordinating these groups.
+
+        Returns:
+            A future representing the in-flight DeleteGroupsRequest.
         """
         version = self._matching_api_version(DeleteGroupsRequest)
         if version <= 1:
@@ -1440,11 +1562,13 @@ class KafkaAdminClient(object):
         return self._send_request_to_node(group_coordinator_id, request)
 
     def _wait_for_futures(self, futures):
-        """
-        Block until all futures complete. If any fail, raise the encountered exception.
-    
-        :param futures: A list of Future objects awaiting results.
-        :raises: The first encountered exception if a future fails.
+        """Block until all futures complete. If any fail, raise the encountered exception.
+
+        Arguments:
+            futures: A list of Future objects awaiting results.
+
+        Raises:
+            The first encountered exception if a future fails.
         """
         while not all(future.succeeded() for future in futures):
             for future in futures:
@@ -1456,7 +1580,8 @@ class KafkaAdminClient(object):
     def describe_log_dirs(self):
         """Send a DescribeLogDirsRequest request to a broker.
 
-        :return: A message future
+        Returns:
+            A message future
         """
         version = self._matching_api_version(DescribeLogDirsRequest)
         if version <= 0:
