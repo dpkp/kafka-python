@@ -1181,6 +1181,7 @@ class BrokerConnection(object):
         # in reverse order. As soon as we find one that works, return it
         test_cases = [
             # format (<broker version>, <needed struct>)
+            # Make sure to update consumer_integration test check when adding newer versions.
             ((2, 6, 0), DescribeClientQuotasRequest[0]),
             ((2, 5, 0), DescribeAclsRequest_v2),
             ((2, 4, 0), ProduceRequest[8]),
