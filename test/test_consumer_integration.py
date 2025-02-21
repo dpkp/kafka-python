@@ -276,6 +276,7 @@ def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_pro
     }
 
 
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.skipif(env_kafka_version() >= (0, 10, 1), reason="Requires KAFKA_VERSION < 0.10.1")
 def test_kafka_consumer_offsets_for_time_old(kafka_consumer, topic):
     consumer = kafka_consumer
