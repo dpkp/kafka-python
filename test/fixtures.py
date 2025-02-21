@@ -596,9 +596,6 @@ class KafkaFixture(Fixture):
 
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
         args = self.run_script('kafka-topics.sh',
-                               '--zookeeper', '%s:%s/%s' % (self.zookeeper.host,
-                                                            self.zookeeper.port,
-                                                            self.zk_chroot),
                                '--create',
                                '--topic', topic_name,
                                '--partitions', self.partitions \
