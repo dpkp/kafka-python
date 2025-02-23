@@ -371,7 +371,7 @@ class BaseCoordinator(object):
                 while not self.coordinator_unknown():
                     if not self._client.in_flight_request_count(self.coordinator_id):
                         break
-                    self._client.poll()
+                    self._client.poll(timeout_ms=200)
                 else:
                     continue
 
