@@ -1005,17 +1005,19 @@ class KafkaClient(object):
         self._lock.acquire()
         end = time.time() + timeout
         while time.time() < end:
+            time_remaining = max(end - time.time(), 0)
+            if node_id is not None and self.connection_delay(node_id) > 0:
+                sleep_time = min(time_remaining, self.connection_delay(node_id) / 1000.0)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                continue
             try_node = node_id or self.least_loaded_node()
             if try_node is None:
-                time_remaining = end - time.time()
-                if time_remaining <= 0:
-                    self._lock.release()
-                    raise Errors.NoBrokersAvailable()
-                else:
-                    sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000)
+                sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000.0)
+                if sleep_time > 0:
                     log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
                     time.sleep(sleep_time)
-                    continue
+                continue
             log.debug('Attempting to check version with node %s', try_node)
             if not self._init_connect(try_node):
                 if try_node == node_id:
@@ -1037,7 +1039,10 @@ class KafkaClient(object):
         # Timeout
         else:
             self._lock.release()
-            raise Errors.NoBrokersAvailable()
+            if node_id is not None:
+                raise Errors.NodeNotReadyError(node_id)
+            else:
+                raise Errors.NoBrokersAvailable()
 
     def api_version(self, operation, max_version=None):
         """Find the latest version of the protocol operation supported by both
