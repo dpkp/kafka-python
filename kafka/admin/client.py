@@ -390,7 +390,7 @@ class KafkaAdminClient(object):
         while not self._client.ready(node_id):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
-            self._client.poll()
+            self._client.poll(timeout_ms=200)
         return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
