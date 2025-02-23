@@ -27,13 +27,16 @@ def dns_lookup(mocker):
 def _socket(mocker):
     socket = mocker.MagicMock()
     socket.connect_ex.return_value = 0
+    socket.send.side_effect = lambda d: len(d)
+    socket.recv.side_effect = BlockingIOError("mocked recv")
     mocker.patch('socket.socket', return_value=socket)
     return socket
 
 
 @pytest.fixture
-def conn(_socket, dns_lookup):
+def conn(_socket, dns_lookup, mocker):
     conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    mocker.patch.object(conn, '_try_api_versions_check', return_value=True)
     return conn
 
 
@@ -217,12 +220,13 @@ def test_recv_disconnected(_socket, conn):
     conn.send(req)
 
     # Empty data on recv means the socket is disconnected
+    _socket.recv.side_effect = None
     _socket.recv.return_value = b''
 
     # Attempt to receive should mark connection as disconnected
-    assert conn.connected()
+    assert conn.connected(), 'Not connected: %s' % conn.state
     conn.recv()
-    assert conn.disconnected()
+    assert conn.disconnected(), 'Not disconnected: %s' % conn.state
 
 
 def test_recv(_socket, conn):

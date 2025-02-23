@@ -303,7 +303,7 @@ class KafkaClient(object):
 
     def _conn_state_change(self, node_id, sock, conn):
         with self._lock:
-            if conn.connecting():
+            if conn.state is ConnectionStates.CONNECTING:
                 # SSL connections can enter this state 2x (second during Handshake)
                 if node_id not in self._connecting:
                     self._connecting.add(node_id)
@@ -315,7 +315,13 @@ class KafkaClient(object):
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
 
-            elif conn.connected():
+            elif conn.state in (ConnectionStates.API_VERSIONS, ConnectionStates.AUTHENTICATING):
+                try:
+                    self._selector.register(sock, selectors.EVENT_READ, conn)
+                except KeyError:
+                    self._selector.modify(sock, selectors.EVENT_READ, conn)
+
+            elif conn.state is ConnectionStates.CONNECTED:
                 log.debug("Node %s connected", node_id)
                 if node_id in self._connecting:
                     self._connecting.remove(node_id)
@@ -994,45 +1000,39 @@ class KafkaClient(object):
         Raises:
             NodeNotReadyError (if node_id is provided)
             NoBrokersAvailable (if node_id is None)
-            UnrecognizedBrokerVersion: please file bug if seen!
-            AssertionError (if strict=True): please file bug if seen!
         """
         timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
         self._lock.acquire()
         end = time.time() + timeout
         while time.time() < end:
-
-            # It is possible that least_loaded_node falls back to bootstrap,
-            # which can block for an increasing backoff period
             try_node = node_id or self.least_loaded_node()
             if try_node is None:
-                self._lock.release()
-                raise Errors.NoBrokersAvailable()
+                time_remaining = end - time.time()
+                if time_remaining <= 0:
+                    self._lock.release()
+                    raise Errors.NoBrokersAvailable()
+                else:
+                    sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000)
+                    log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
+                    time.sleep(sleep_time)
+                    continue
+            log.debug('Attempting to check version with node %s', try_node)
             if not self._init_connect(try_node):
                 if try_node == node_id:
                     raise Errors.NodeNotReadyError("Connection failed to %s" % node_id)
                 else:
                     continue
-
             conn = self._conns[try_node]
 
-            # We will intentionally cause socket failures
-            # These should not trigger metadata refresh
-            self._refresh_on_disconnects = False
-            try:
-                remaining = end - time.time()
-                version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
-                if not self._api_versions:
-                    self._api_versions = conn.get_api_versions()
+            while not conn.disconnected() and conn._api_version is None and time.time() < end:
+                timeout_ms = min((end - time.time()) * 1000, 200)
+                self.poll(timeout_ms=timeout_ms)
+
+            if conn._api_version is not None:
                 self._lock.release()
-                return version
-            except Errors.NodeNotReadyError:
-                # Only raise to user if this is a node-specific request
-                if node_id is not None:
-                    self._lock.release()
-                    raise
-            finally:
-                self._refresh_on_disconnects = True
+                if not self._api_versions:
+                    self._api_versions = conn._api_versions
+                return conn._api_version
 
         # Timeout
         else:

@@ -24,8 +24,10 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest, DescribeClientQuotasRequest
-from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest, SaslHandShakeRequest
+from kafka.protocol.api_versions import ApiVersionsRequest
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
+from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
 from kafka.protocol.list_offsets import ListOffsetsRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -92,12 +94,12 @@ AFI_NAMES = {
 
 
 class ConnectionStates(object):
-    DISCONNECTING = '<disconnecting>'
     DISCONNECTED = '<disconnected>'
     CONNECTING = '<connecting>'
     HANDSHAKE = '<handshake>'
     CONNECTED = '<connected>'
     AUTHENTICATING = '<authenticating>'
+    API_VERSIONS = '<checking_api_versions>'
 
 
 class BrokerConnection(object):
@@ -228,6 +230,12 @@ class BrokerConnection(object):
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
+    VERSION_CHECKS = (
+        ((0, 9), ListGroupsRequest[0]()),
+        ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
+        ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
+        ((0, 8, 0), MetadataRequest[0]([])),
+    )
 
     def __init__(self, host, port, afi, **configs):
         self.host = host
@@ -236,6 +244,8 @@ class BrokerConnection(object):
         self._sock_afi = afi
         self._sock_addr = None
         self._api_versions = None
+        self._api_version = None
+        self._check_version_idx = None
         self._throttle_time = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -301,6 +311,7 @@ class BrokerConnection(object):
         self._ssl_context = None
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
+        self._api_versions_future = None
         self._sasl_auth_future = None
         self.last_attempt = 0
         self._gai = []
@@ -404,17 +415,9 @@ class BrokerConnection(object):
                     self.config['state_change_callback'](self.node_id, self._sock, self)
                     # _wrap_ssl can alter the connection state -- disconnects on failure
                     self._wrap_ssl()
-
-                elif self.config['security_protocol'] == 'SASL_PLAINTEXT':
-                    log.debug('%s: initiating SASL authentication', self)
-                    self.state = ConnectionStates.AUTHENTICATING
-                    self.config['state_change_callback'](self.node_id, self._sock, self)
-
                 else:
-                    # security_protocol PLAINTEXT
-                    log.info('%s: Connection complete.', self)
-                    self.state = ConnectionStates.CONNECTED
-                    self._reset_reconnect_backoff()
+                    log.debug('%s: checking broker Api Versions', self)
+                    self.state = ConnectionStates.API_VERSIONS
                     self.config['state_change_callback'](self.node_id, self._sock, self)
 
             # Connection failed
@@ -433,14 +436,22 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
                 log.debug('%s: completed SSL handshake.', self)
-                if self.config['security_protocol'] == 'SASL_SSL':
+                log.debug('%s: checking broker Api Versions', self)
+                self.state = ConnectionStates.API_VERSIONS
+                self.config['state_change_callback'](self.node_id, self._sock, self)
+
+        if self.state is ConnectionStates.API_VERSIONS:
+            if self._try_api_versions_check():
+                if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
                     log.debug('%s: initiating SASL authentication', self)
                     self.state = ConnectionStates.AUTHENTICATING
+                    self.config['state_change_callback'](self.node_id, self._sock, self)
                 else:
+                    # security_protocol PLAINTEXT
                     log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
                     self._reset_reconnect_backoff()
-                self.config['state_change_callback'](self.node_id, self._sock, self)
+                    self.config['state_change_callback'](self.node_id, self._sock, self)
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
@@ -522,6 +533,70 @@ class BrokerConnection(object):
 
         return False
 
+    def _try_api_versions_check(self):
+        if self._api_versions_future is None:
+            if self._check_version_idx is None:
+                # TODO: Implement newer versions
+                # ((3, 9), ApiVersionsRequest[4]()),
+                # ((2, 4), ApiVersionsRequest[3]()),
+                # ((2, 0), ApiVersionsRequest[2]()),
+                # ((0, 11), ApiVersionsRequest[1]()),
+                # ((0, 10), ApiVersionsRequest[0]()),
+                request = ApiVersionsRequest[0]()
+                future = Future()
+                response = self._send(request, blocking=True)
+                response.add_callback(self._handle_api_versions_response, future)
+                response.add_errback(self._handle_api_versions_failure, future)
+                self._api_versions_future = future
+            elif self._check_version_idx < len(self.VERSION_CHECKS):
+                version, request = self.VERSION_CHECKS[self._check_version_idx]
+                future = Future()
+                response = self._send(request, blocking=True)
+                response.add_callback(self._handle_check_version_response, future, version)
+                response.add_errback(self._handle_check_version_failure, future)
+                self._api_versions_future = future
+            else:
+                raise 'Unable to determine broker version.'
+
+        for r, f in self.recv():
+            f.success(r)
+
+        # A connection error during blocking send could trigger close() which will reset the future
+        if self._api_versions_future is None:
+            return False
+        elif self._api_versions_future.failed():
+            ex = self._api_versions_future.exception
+            if not isinstance(ex, Errors.KafkaConnectionError):
+                raise ex
+        return self._api_versions_future.succeeded()
+
+    def _handle_api_versions_response(self, future, response):
+        error_type = Errors.for_code(response.error_code)
+        # if error_type i UNSUPPORTED_VERSION: retry w/ latest version from response
+        assert error_type is Errors.NoError, "API version check failed"
+        self._api_versions = dict([
+            (api_key, (min_version, max_version))
+            for api_key, min_version, max_version in response.api_versions
+        ])
+        self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
+        future.success(self._api_version)
+
+    def _handle_api_versions_failure(self, future, ex):
+        future.failure(ex)
+        self._check_version_idx = 0
+
+    def _handle_check_version_response(self, future, version, _response):
+        log.info('Broker version identified as %s', '.'.join(map(str, version)))
+        #log.info('Set configuration api_version=%s to skip auto'
+        #         ' check_version requests on startup', version)
+        self._api_versions = BROKER_API_VERSIONS[version]
+        self._api_version = version
+        future.success(version)
+
+    def _handle_check_version_failure(self, future, ex):
+        future.failure(ex)
+        self._check_version_idx += 1
+
     def _try_authenticate(self):
         assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10, 0)
 
@@ -529,7 +604,7 @@ class BrokerConnection(object):
             # Build a SaslHandShakeRequest message
             request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
             future = Future()
-            sasl_response = self._send(request)
+            sasl_response = self._send(request, blocking=True)
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)
             sasl_response.add_errback(lambda f, e: f.failure(e), future)
             self._sasl_auth_future = future
@@ -901,7 +976,15 @@ class BrokerConnection(object):
         different states, such as SSL handshake, authorization, etc)."""
         return self.state in (ConnectionStates.CONNECTING,
                               ConnectionStates.HANDSHAKE,
-                              ConnectionStates.AUTHENTICATING)
+                              ConnectionStates.AUTHENTICATING,
+                              ConnectionStates.API_VERSIONS)
+
+    def initializing(self):
+        """Returns True if socket is connected but full connection is not complete.
+        During this time the connection may send api requests to the broker to
+        check api versions and perform SASL authentication."""
+        return self.state in (ConnectionStates.AUTHENTICATING,
+                              ConnectionStates.API_VERSIONS)
 
     def disconnected(self):
         """Return True iff socket is closed"""
@@ -949,6 +1032,7 @@ class BrokerConnection(object):
                 return
             log.log(logging.ERROR if error else logging.INFO, '%s: Closing connection. %s', self, error or '')
             self._update_reconnect_backoff()
+            self._api_versions_future = None
             self._sasl_auth_future = None
             self._protocol = KafkaProtocol(
                 client_id=self.config['client_id'],
@@ -975,8 +1059,7 @@ class BrokerConnection(object):
 
     def _can_send_recv(self):
         """Return True iff socket is ready for requests / responses"""
-        return self.state in (ConnectionStates.AUTHENTICATING,
-                              ConnectionStates.CONNECTED)
+        return self.connected() or self.initializing()
 
     def send(self, request, blocking=True, request_timeout_ms=None):
         """Queue request for async network send, return Future()
@@ -1218,16 +1301,6 @@ class BrokerConnection(object):
             else:
                 return float('inf')
 
-    def _handle_api_versions_response(self, response):
-        error_type = Errors.for_code(response.error_code)
-        if error_type is not Errors.NoError:
-            return False
-        self._api_versions = dict([
-            (api_key, (min_version, max_version))
-            for api_key, min_version, max_version in response.api_versions
-        ])
-        return self._api_versions
-
     def get_api_versions(self):
         if self._api_versions is not None:
             return self._api_versions
@@ -1242,6 +1315,20 @@ class BrokerConnection(object):
         test_cases = [
             # format (<broker version>, <needed struct>)
             # Make sure to update consumer_integration test check when adding newer versions.
+            # ((3, 9), FetchRequest[17]),
+            # ((3, 8), ProduceRequest[11]),
+            # ((3, 7), FetchRequest[16]),
+            # ((3, 6), AddPartitionsToTxnRequest[4]),
+            # ((3, 5), FetchRequest[15]),
+            # ((3, 4), StopReplicaRequest[3]), # broker-internal api...
+            # ((3, 3), DescribeAclsRequest[3]),
+            # ((3, 2), JoinGroupRequest[9]),
+            # ((3, 1), FetchRequest[13]),
+            # ((3, 0), ListOffsetsRequest[7]),
+            # ((2, 8), ProduceRequest[9]),
+            # ((2, 7), FetchRequest[12]),
+            # ((2, 6), ListGroupsRequest[4]),
+            # ((2, 5), JoinGroupRequest[7]),
             ((2, 6), DescribeClientQuotasRequest[0]),
             ((2, 5), DescribeAclsRequest[2]),
             ((2, 4), ProduceRequest[8]),
@@ -1276,113 +1363,10 @@ class BrokerConnection(object):
         Returns: version tuple, i.e. (3, 9), (2, 4), etc ...
         """
         timeout_at = time.time() + timeout
-        log.info('Probing node %s broker version', self.node_id)
-        # Monkeypatch some connection configurations to avoid timeouts
-        override_config = {
-            'request_timeout_ms': timeout * 1000,
-            'max_in_flight_requests_per_connection': 5
-        }
-        stashed = {}
-        for key in override_config:
-            stashed[key] = self.config[key]
-            self.config[key] = override_config[key]
-
-        def reset_override_configs():
-            for key in stashed:
-                self.config[key] = stashed[key]
-
-        # kafka kills the connection when it doesn't recognize an API request
-        # so we can send a test request and then follow immediately with a
-        # vanilla MetadataRequest. If the server did not recognize the first
-        # request, both will be failed with a ConnectionError that wraps
-        # socket.error (32, 54, or 104)
-        from kafka.protocol.admin import ListGroupsRequest
-        from kafka.protocol.api_versions import ApiVersionsRequest
-        from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-        from kafka.protocol.commit import OffsetFetchRequest
-        from kafka.protocol.find_coordinator import FindCoordinatorRequest
-
-        test_cases = [
-            # All cases starting from 0.10 will be based on ApiVersionsResponse
-            ((0, 11), ApiVersionsRequest[1]()),
-            ((0, 10, 0), ApiVersionsRequest[0]()),
-            ((0, 9), ListGroupsRequest[0]()),
-            ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
-            ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
-            ((0, 8, 0), MetadataRequest[0](topics)),
-        ]
-
-        for version, request in test_cases:
-            if not self.connect_blocking(timeout_at - time.time()):
-                reset_override_configs()
-                raise Errors.NodeNotReadyError()
-            f = self.send(request)
-            # HACK: sleeping to wait for socket to send bytes
-            time.sleep(0.1)
-            # when broker receives an unrecognized request API
-            # it abruptly closes our socket.
-            # so we attempt to send a second request immediately
-            # that we believe it will definitely recognize (metadata)
-            # the attempt to write to a disconnected socket should
-            # immediately fail and allow us to infer that the prior
-            # request was unrecognized
-            mr = self.send(MetadataRequest[0](topics))
-
-            if not (f.is_done and mr.is_done) and self._sock is not None:
-                selector = self.config['selector']()
-                selector.register(self._sock, selectors.EVENT_READ)
-                while not (f.is_done and mr.is_done):
-                    selector.select(1)
-                    for response, future in self.recv():
-                        future.success(response)
-                selector.close()
-
-            if f.succeeded():
-                if version >= (0, 10, 0):
-                    # Starting from 0.10 kafka broker we determine version
-                    # by looking at ApiVersionsResponse
-                    api_versions = self._handle_api_versions_response(f.value)
-                    if not api_versions:
-                        continue
-                    version = self._infer_broker_version_from_api_versions(api_versions)
-                else:
-                    if version not in BROKER_API_VERSIONS:
-                        raise Errors.UnrecognizedBrokerVersion(version)
-                    self._api_versions = BROKER_API_VERSIONS[version]
-                log.info('Broker version identified as %s', '.'.join(map(str, version)))
-                log.info('Set configuration api_version=%s to skip auto'
-                         ' check_version requests on startup', version)
-                break
-
-            # Only enable strict checking to verify that we understand failure
-            # modes. For most users, the fact that the request failed should be
-            # enough to rule out a particular broker version.
-            if strict:
-                # If the socket flush hack did not work (which should force the
-                # connection to close and fail all pending requests), then we
-                # get a basic Request Timeout. This is not ideal, but we'll deal
-                if isinstance(f.exception, Errors.RequestTimedOutError):
-                    pass
-
-                # 0.9 brokers do not close the socket on unrecognized api
-                # requests (bug...). In this case we expect to see a correlation
-                # id mismatch
-                elif (isinstance(f.exception, Errors.CorrelationIdError) and
-                      version > (0, 9)):
-                    pass
-                elif six.PY2:
-                    assert isinstance(f.exception.args[0], socket.error)
-                    assert f.exception.args[0].errno in (32, 54, 104)
-                else:
-                    assert isinstance(f.exception.args[0], ConnectionError)
-            log.info("Broker is not v%s -- it did not recognize %s",
-                     version, request.__class__.__name__)
+        if not self.connect_blocking(timeout_at - time.time()):
+            raise Errors.NodeNotReadyError()
         else:
-            reset_override_configs()
-            raise Errors.UnrecognizedBrokerVersion()
-
-        reset_override_configs()
-        return version
+            return self._api_version
 
     def __str__(self):
         return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
