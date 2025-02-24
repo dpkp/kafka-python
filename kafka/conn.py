@@ -580,6 +580,7 @@ class BrokerConnection(object):
         ])
         self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
         future.success(self._api_version)
+        self.connect()
 
     def _handle_api_versions_failure(self, future, ex):
         future.failure(ex)
@@ -592,6 +593,7 @@ class BrokerConnection(object):
         self._api_versions = BROKER_API_VERSIONS[version]
         self._api_version = version
         future.success(version)
+        self.connect()
 
     def _handle_check_version_failure(self, future, ex):
         future.failure(ex)
@@ -629,23 +631,28 @@ class BrokerConnection(object):
             return future.failure(error_type(self))
 
         if self.config['sasl_mechanism'] not in response.enabled_mechanisms:
-            return future.failure(
+            future.failure(
                 Errors.UnsupportedSaslMechanismError(
                     'Kafka broker does not support %s sasl mechanism. Enabled mechanisms are: %s'
                     % (self.config['sasl_mechanism'], response.enabled_mechanisms)))
         elif self.config['sasl_mechanism'] == 'PLAIN':
-            return self._try_authenticate_plain(future)
+            self._try_authenticate_plain(future)
         elif self.config['sasl_mechanism'] == 'GSSAPI':
-            return self._try_authenticate_gssapi(future)
+            self._try_authenticate_gssapi(future)
         elif self.config['sasl_mechanism'] == 'OAUTHBEARER':
-            return self._try_authenticate_oauth(future)
+            self._try_authenticate_oauth(future)
         elif self.config['sasl_mechanism'].startswith("SCRAM-SHA-"):
-            return self._try_authenticate_scram(future)
+            self._try_authenticate_scram(future)
         else:
-            return future.failure(
+            future.failure(
                 Errors.UnsupportedSaslMechanismError(
                     'kafka-python does not support SASL mechanism %s' %
                     self.config['sasl_mechanism']))
+        assert future.is_done, 'SASL future not complete after mechanism processing!'
+        if future.failed():
+            self.close(error=future.exception)
+        else:
+            self.connect()
 
     def _send_bytes(self, data):
         """Send some data via non-blocking IO
