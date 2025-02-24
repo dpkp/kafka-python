@@ -168,7 +168,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
         stop[i] = Event()
         consumers[i] = kafka_consumer_factory(group_id=group_id)
         while not stop[i].is_set():
-            consumers[i].poll(20)
+            consumers[i].poll(timeout_ms=200)
         consumers[i].close()
         consumers[i] = None
         stop[i] = None
@@ -183,6 +183,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
     try:
         timeout = time() + 35
         while True:
+            info('Checking consumers...')
             for c in range(num_consumers):
 
                 # Verify all consumers have been created
@@ -212,9 +213,9 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
 
                 if not rejoining and is_same_generation:
                     break
-                else:
-                    sleep(1)
             assert time() < timeout, "timeout waiting for assignments"
+            info('sleeping...')
+            sleep(1)
 
         info('Group stabilized; verifying assignment')
         output = kafka_admin_client.describe_consumer_groups(group_id_list)
@@ -236,6 +237,8 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
         for c in range(num_consumers):
             info('Stopping consumer %s', c)
             stop[c].set()
+        for c in range(num_consumers):
+            info('Waiting for consumer thread %s', c)
             threads[c].join()
             threads[c] = None
 
