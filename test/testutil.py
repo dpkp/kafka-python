@@ -28,12 +28,12 @@ def env_kafka_version():
 def assert_message_count(messages, num_messages):
     """Check that we received the expected number of messages with no duplicates."""
     # Make sure we got them all
-    assert len(messages) == num_messages
+    assert len(messages) == num_messages, 'Expected %d messages, got %d' % (num_messages, len(messages))
     # Make sure there are no duplicates
     # Note: Currently duplicates are identified only using key/value. Other attributes like topic, partition, headers,
     # timestamp, etc are ignored... this could be changed if necessary, but will be more tolerant of dupes.
     unique_messages = {(m.key, m.value) for m in messages}
-    assert len(unique_messages) == num_messages
+    assert len(unique_messages) == num_messages, 'Expected %d unique messages, got %d' % (num_messages, len(unique_messages))
 
 
 class Timer(object):
