@@ -546,7 +546,7 @@ class KafkaFixture(Fixture):
                     break
                 self._client.poll(timeout_ms=100)
             else:
-                raise RuntimeError('Could not connect to broker with node id %d' % (node_id,))
+                raise RuntimeError('Could not connect to broker with node id %s' % (node_id,))
 
             try:
                 future = self._client.send(node_id, request)
