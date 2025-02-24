@@ -442,16 +442,18 @@ class BrokerConnection(object):
 
         if self.state is ConnectionStates.API_VERSIONS:
             if self._try_api_versions_check():
-                if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
-                    log.debug('%s: initiating SASL authentication', self)
-                    self.state = ConnectionStates.AUTHENTICATING
-                    self.config['state_change_callback'](self.node_id, self._sock, self)
-                else:
-                    # security_protocol PLAINTEXT
-                    log.info('%s: Connection complete.', self)
-                    self.state = ConnectionStates.CONNECTED
-                    self._reset_reconnect_backoff()
-                    self.config['state_change_callback'](self.node_id, self._sock, self)
+                # _try_api_versions_check has side-effects: possibly disconnected on socket errors
+                if self.state is ConnectionStates.API_VERSIONS:
+                    if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
+                        log.debug('%s: initiating SASL authentication', self)
+                        self.state = ConnectionStates.AUTHENTICATING
+                        self.config['state_change_callback'](self.node_id, self._sock, self)
+                    else:
+                        # security_protocol PLAINTEXT
+                        log.info('%s: Connection complete.', self)
+                        self.state = ConnectionStates.CONNECTED
+                        self._reset_reconnect_backoff()
+                        self.config['state_change_callback'](self.node_id, self._sock, self)
 
         if self.state is ConnectionStates.AUTHENTICATING:
             assert self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
