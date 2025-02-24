@@ -338,6 +338,8 @@ class KafkaClient(object):
 
                 if self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails = 0
+                    if self._api_versions is None:
+                        self._api_versions = conn._api_versions
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -976,7 +978,7 @@ class KafkaClient(object):
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
 
-        Note: Only available after first connection to any broker version 0.10.0 or later.
+        Note: Only available after bootstrap; requires broker version 0.10.0 or later.
 
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
         or None if ApiVersion is not supported by the kafka cluster.
@@ -1030,8 +1032,6 @@ class KafkaClient(object):
                     self.poll(timeout_ms=timeout_ms)
 
                 if conn._api_version is not None:
-                    if not self._api_versions:
-                        self._api_versions = conn._api_versions
                     return conn._api_version
 
             # Timeout
