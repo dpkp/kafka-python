@@ -1014,7 +1014,7 @@ class KafkaClient(object):
                     continue
                 try_node = node_id or self.least_loaded_node()
                 if try_node is None:
-                    sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000.0)
+                    sleep_time = min(time_remaining,  self.least_loaded_node_refresh_ms() / 1000.0)
                     if sleep_time > 0:
                         log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
                         time.sleep(sleep_time)
