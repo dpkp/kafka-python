@@ -27,7 +27,7 @@ def test_kafka_version_infer(kafka_consumer_factory):
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer(kafka_consumer_factory, send_messages):
     """Test KafkaConsumer"""
-    consumer = kafka_consumer_factory(auto_offset_reset='earliest')
+    consumer = kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=2000)
     send_messages(range(0, 100), partition=0)
     send_messages(range(0, 100), partition=1)
     cnt = 0
