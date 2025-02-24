@@ -1364,12 +1364,18 @@ class BrokerConnection(object):
         # so if all else fails, choose that
         return (0, 10, 0)
 
-    def check_version(self, timeout=2, strict=False, topics=[]):
+    def check_version(self, timeout=2, **kwargs):
         """Attempt to guess the broker version.
+
+        Keyword Arguments:
+            timeout (numeric, optional): Maximum number of seconds to block attempting
+                to connect and check version. Default 2
 
         Note: This is a blocking call.
 
         Returns: version tuple, i.e. (3, 9), (2, 4), etc ...
+
+        Raises: NodeNotReadyError on timeout
         """
         timeout_at = time.time() + timeout
         if not self.connect_blocking(timeout_at - time.time()):
