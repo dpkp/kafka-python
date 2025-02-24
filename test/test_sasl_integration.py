@@ -1,5 +1,6 @@
 import logging
 import uuid
+import time
 
 import pytest
 
@@ -69,12 +70,17 @@ def test_client(request, sasl_kafka):
 
     client, = sasl_kafka.get_clients(1)
     request = MetadataRequest_v1(None)
-    client.send(0, request)
-    for _ in range(10):
-        result = client.poll(timeout_ms=10000)
-        if len(result) > 0:
-            break
-    else:
+    timeout_at = time.time() + 1
+    while not client.is_ready(0):
+        client.maybe_connect(0)
+        client.poll(timeout_ms=100)
+        if time.time() > timeout_at:
+            raise RuntimeError("Couldn't connect to node 0")
+    future = client.send(0, request)
+    client.poll(future=future, timeout_ms=10000)
+    if not future.is_done:
         raise RuntimeError("Couldn't fetch topic response from Broker.")
-    result = result[0]
+    elif future.failed():
+        raise future.exception
+    result = future.value
     assert topic_name in [t[1] for t in result.topics]
