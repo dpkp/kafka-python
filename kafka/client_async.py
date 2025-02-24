@@ -1027,7 +1027,7 @@ class KafkaClient(object):
                         continue
                 conn = self._conns[try_node]
 
-                while not conn.disconnected() and conn._api_version is None and time.time() < end:
+                while conn.connecting() and time.time() < end:
                     timeout_ms = min((end - time.time()) * 1000, 200)
                     self.poll(timeout_ms=timeout_ms)
 
