@@ -216,6 +216,8 @@ class KafkaClient(object):
         self._connecting = set()
         self._sending = set()
         self._refresh_on_disconnects = True
+
+        # Not currently used, but data is collected internally
         self._last_bootstrap = 0
         self._bootstrap_fails = 0
 
@@ -232,8 +234,6 @@ class KafkaClient(object):
             self._sensors = KafkaClientMetrics(self.config['metrics'],
                                                self.config['metric_group_prefix'],
                                                weakref.proxy(self._conns))
-
-        self._num_bootstrap_hosts = len(collect_hosts(self.config['bootstrap_servers']))
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
@@ -258,20 +258,6 @@ class KafkaClient(object):
             self._wake_w.close()
         self._wake_r = None
         self._wake_w = None
-
-    def _can_bootstrap(self):
-        effective_failures = self._bootstrap_fails // self._num_bootstrap_hosts
-        backoff_factor = 2 ** effective_failures
-        backoff_ms = min(self.config['reconnect_backoff_ms'] * backoff_factor,
-                         self.config['reconnect_backoff_max_ms'])
-
-        backoff_ms *= random.uniform(0.8, 1.2)
-
-        next_at = self._last_bootstrap + backoff_ms / 1000.0
-        now = time.time()
-        if next_at > now:
-            return False
-        return True
 
     def _can_connect(self, node_id):
         if node_id not in self._conns:
