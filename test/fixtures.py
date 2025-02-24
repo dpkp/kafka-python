@@ -686,3 +686,37 @@ class KafkaFixture(Fixture):
         params = self._enrich_client_params(params, client_id='producer')
         for client in self._create_many_clients(cnt, KafkaProducer, **params):
             yield client
+
+
+def get_api_versions():
+    import logging
+    logging.basicConfig(level=logging.ERROR)
+
+    from test.fixtures import ZookeeperFixture, KafkaFixture
+    zk = ZookeeperFixture.instance()
+    k = KafkaFixture.instance(0, zk)
+
+    from kafka import KafkaClient
+    client = KafkaClient(bootstrap_servers='localhost:{}'.format(k.port))
+    client.check_version()
+
+    from pprint import pprint
+
+    pprint(client.get_api_versions())
+
+    client.close()
+    k.close()
+    zk.close()
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) < 2:
+        print("Commands: get_api_versions")
+        exit(0)
+    cmd = sys.argv[1]
+    if cmd == 'get_api_versions':
+        get_api_versions()
+    else:
+        print("Unknown cmd: %s", cmd)
+        exit(1)
