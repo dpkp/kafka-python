@@ -1,9 +1,10 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 from collections import defaultdict
 import copy
 import logging
 import socket
+import time
 
 from . import ConfigResourceType
 from kafka.vendor import six
@@ -273,24 +274,33 @@ class KafkaAdminClient(object):
         """
         return timeout_ms or self.config['request_timeout_ms']
 
-    def _refresh_controller_id(self):
+    def _refresh_controller_id(self, timeout_ms=30000):
         """Determine the Kafka cluster controller."""
         version = self._matching_api_version(MetadataRequest)
         if 1 <= version <= 6:
-            request = MetadataRequest[version]()
-            future = self._send_request_to_node(self._client.least_loaded_node(), request)
+            timeout_at = time.time() + timeout_ms / 1000
+            while time.time() < timeout_at:
+                request = MetadataRequest[version]()
+                future = self._send_request_to_node(self._client.least_loaded_node(), request)
 
-            self._wait_for_futures([future])
+                self._wait_for_futures([future])
 
-            response = future.value
-            controller_id = response.controller_id
-            # verify the controller is new enough to support our requests
-            controller_version = self._client.check_version(controller_id, timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
-            if controller_version < (0, 10, 0):
-                raise IncompatibleBrokerVersion(
-                    "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
-                    .format(controller_version))
-            self._controller_id = controller_id
+                response = future.value
+                controller_id = response.controller_id
+                if controller_id == -1:
+                    log.warning("Controller ID not available, got -1")
+                    time.sleep(1)
+                    continue
+                # verify the controller is new enough to support our requests
+                controller_version = self._client.check_version(controller_id, timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
+                if controller_version < (0, 10, 0):
+                    raise IncompatibleBrokerVersion(
+                        "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
+                        .format(controller_version))
+                self._controller_id = controller_id
+                return
+            else:
+                raise Errors.NodeNotAvailableError('controller')
         else:
             raise UnrecognizedBrokerVersion(
                 "Kafka Admin interface cannot determine the controller using MetadataRequest_v{}."
