@@ -404,10 +404,15 @@ class KafkaClient(object):
 
         return False
 
-    def _maybe_connect(self, node_id):
+    def _init_connect(self, node_id):
         """Idempotent non-blocking connection attempt to the given node id."""
         with self._lock:
             conn = self._conns.get(node_id)
+
+            # Check if existing connection should be recreated because host/port changed
+            if conn is not None and self._should_recycle_connection(conn):
+                self._conns.pop(node_id)
+                conn = None
 
             if conn is None:
                 broker = self.cluster.broker_metadata(node_id)
@@ -423,15 +428,8 @@ class KafkaClient(object):
                                         **self.config)
                 self._conns[node_id] = conn
 
-            # Check if existing connection should be recreated because host/port changed
-            elif self._should_recycle_connection(conn):
-                self._conns.pop(node_id)
-                return False
-
-            elif conn.connected():
-                return True
-
-            conn.connect()
+            if conn.disconnected():
+                conn.connect()
             return conn.connected()
 
     def ready(self, node_id, metadata_priority=True):
@@ -627,7 +625,7 @@ class KafkaClient(object):
 
                 # Attempt to complete pending connections
                 for node_id in list(self._connecting):
-                    self._maybe_connect(node_id)
+                    self._init_connect(node_id)
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
@@ -976,7 +974,7 @@ class KafkaClient(object):
                     time.sleep(sleep_time)
                 continue
             log.debug('Attempting to check version with node %s', try_node)
-            self._maybe_connect(try_node)
+            self._init_connect(try_node)
             conn = self._conns[try_node]
 
             while not conn.disconnected() and conn._api_version is None and time.time() < end:
