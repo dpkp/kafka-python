@@ -1002,47 +1002,45 @@ class KafkaClient(object):
             NoBrokersAvailable (if node_id is None)
         """
         timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
-        self._lock.acquire()
-        end = time.time() + timeout
-        while time.time() < end:
-            time_remaining = max(end - time.time(), 0)
-            if node_id is not None and self.connection_delay(node_id) > 0:
-                sleep_time = min(time_remaining, self.connection_delay(node_id) / 1000.0)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                continue
-            try_node = node_id or self.least_loaded_node()
-            if try_node is None:
-                sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000.0)
-                if sleep_time > 0:
-                    log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
-                    time.sleep(sleep_time)
-                continue
-            log.debug('Attempting to check version with node %s', try_node)
-            if not self._init_connect(try_node):
-                if try_node == node_id:
-                    raise Errors.NodeNotReadyError("Connection failed to %s" % node_id)
-                else:
+        with self._lock:
+            end = time.time() + timeout
+            while time.time() < end:
+                time_remaining = max(end - time.time(), 0)
+                if node_id is not None and self.connection_delay(node_id) > 0:
+                    sleep_time = min(time_remaining, self.connection_delay(node_id) / 1000.0)
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
                     continue
-            conn = self._conns[try_node]
+                try_node = node_id or self.least_loaded_node()
+                if try_node is None:
+                    sleep_time = min(time_remaining,  least_loaded_node_refresh_ms / 1000.0)
+                    if sleep_time > 0:
+                        log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
+                        time.sleep(sleep_time)
+                    continue
+                log.debug('Attempting to check version with node %s', try_node)
+                if not self._init_connect(try_node):
+                    if try_node == node_id:
+                        raise Errors.NodeNotReadyError("Connection failed to %s" % node_id)
+                    else:
+                        continue
+                conn = self._conns[try_node]
 
-            while not conn.disconnected() and conn._api_version is None and time.time() < end:
-                timeout_ms = min((end - time.time()) * 1000, 200)
-                self.poll(timeout_ms=timeout_ms)
+                while not conn.disconnected() and conn._api_version is None and time.time() < end:
+                    timeout_ms = min((end - time.time()) * 1000, 200)
+                    self.poll(timeout_ms=timeout_ms)
 
-            if conn._api_version is not None:
-                self._lock.release()
-                if not self._api_versions:
-                    self._api_versions = conn._api_versions
-                return conn._api_version
+                if conn._api_version is not None:
+                    if not self._api_versions:
+                        self._api_versions = conn._api_versions
+                    return conn._api_version
 
-        # Timeout
-        else:
-            self._lock.release()
-            if node_id is not None:
-                raise Errors.NodeNotReadyError(node_id)
+            # Timeout
             else:
-                raise Errors.NoBrokersAvailable()
+                if node_id is not None:
+                    raise Errors.NodeNotReadyError(node_id)
+                else:
+                    raise Errors.NoBrokersAvailable()
 
     def api_version(self, operation, max_version=None):
         """Find the latest version of the protocol operation supported by both
