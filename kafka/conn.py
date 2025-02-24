@@ -1315,8 +1315,8 @@ class BrokerConnection(object):
         return version
 
     def __str__(self):
-        return "<BrokerConnection node_id=%s host=%s:%d %s [%s %s]>" % (
-            self.node_id, self.host, self.port, self.state,
+        return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
+            self.config['client_id'], self.node_id, self.host, self.port, self.state,
             AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
