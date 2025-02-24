@@ -398,7 +398,7 @@ class KafkaClient(object):
 
         return False
 
-    def _maybe_connect(self, node_id):
+    def _init_connect(self, node_id):
         """Idempotent non-blocking connection attempt to the given node id.
 
         Returns True if connection object exists and is connected / connecting
@@ -427,10 +427,8 @@ class KafkaClient(object):
                                         **self.config)
                 self._conns[node_id] = conn
 
-            elif conn.connected():
-                return True
-
-            conn.connect()
+            if conn.disconnected():
+                conn.connect()
             return not conn.disconnected()
 
     def ready(self, node_id, metadata_priority=True):
@@ -628,7 +626,7 @@ class KafkaClient(object):
                 for node_id in list(self._connecting):
                     # False return means no more connection progress is possible
                     # Connected nodes will update _connecting via state_change callback
-                    if not self._maybe_connect(node_id):
+                    if not self._init_connect(node_id):
                         self._connecting.remove(node_id)
 
                 # If we got a future that is already done, don't block in _poll
@@ -973,7 +971,7 @@ class KafkaClient(object):
             if try_node is None:
                 self._lock.release()
                 raise Errors.NoBrokersAvailable()
-            if not self._maybe_connect(try_node):
+            if not self._init_connect(try_node):
                 if try_node == node_id:
                     raise Errors.NodeNotReadyError("Connection failed to %s" % node_id)
                 else:
