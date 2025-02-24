@@ -906,21 +906,23 @@ class KafkaClient(object):
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
 
-        Note: A call to check_version must previously have succeeded and returned
-        version 0.10.0 or later
+        Note: Only available after first connection to any broker version 0.10.0 or later.
 
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
         or None if ApiVersion is not supported by the kafka cluster.
         """
         return self._api_versions
 
-    def check_version(self, node_id=None, timeout=2, strict=False):
+    def check_version(self, node_id=None, timeout=2, **kwargs):
         """Attempt to guess the version of a Kafka broker.
 
-        Note: It is possible that this method blocks longer than the
-            specified timeout. This can happen if the entire cluster
-            is down and the client enters a bootstrap backoff sleep.
-            This is only possible if node_id is None.
+        Keyword Arguments:
+            node_id (str, optional): Broker node id from cluster metadata. If None, attempts
+                to connect to any available broker until version is identified.
+                Default: None
+            timeout (num, optional): Maximum time in seconds to try to check broker version.
+                If unable to identify version before timeout, raise error (see below).
+                Default: 2
 
         Returns: version tuple, i.e. (3, 9), (2, 0), (0, 10, 2) etc
 
