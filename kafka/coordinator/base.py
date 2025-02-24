@@ -923,14 +923,15 @@ class HeartbeatThread(threading.Thread):
         if self.closed:
             return
         self.closed = True
-        with self.coordinator._lock:
-            self.coordinator._lock.notify()
 
         # Generally this should not happen - close() is triggered
         # by the coordinator. But in some cases GC may close the coordinator
         # from within the heartbeat thread.
         if threading.current_thread() == self:
             return
+
+        with self.coordinator._lock:
+            self.coordinator._lock.notify()
 
         if self.is_alive():
             self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
