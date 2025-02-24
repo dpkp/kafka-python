@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import atexit
 import logging
@@ -583,7 +583,15 @@ class KafkaFixture(Fixture):
             self._create_topic_via_cli(topic_name, num_partitions, replication_factor)
 
     def _create_topic_via_metadata(self, topic_name, timeout_ms=10000):
-        self._send_request(MetadataRequest[0]([topic_name]), timeout_ms)
+        timeout_at = time.time() + timeout_ms / 1000
+        while time.time() < timeout_at:
+            response = self._send_request(MetadataRequest[0]([topic_name]), timeout_ms)
+            if response.topics[0][0] == 0:
+                return
+            log.warning("Unable to create topic via MetadataRequest: err %d", response.topics[0][0])
+            time.sleep(1)
+        else:
+            raise RuntimeError('Unable to create topic via MetadataRequest')
 
     def _create_topic_via_admin_api(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
         request = CreateTopicsRequest[0]([(topic_name, num_partitions,
