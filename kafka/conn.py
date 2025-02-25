@@ -1063,11 +1063,13 @@ class BrokerConnection(object):
         """
         responses = self._recv()
         if not responses and self.requests_timed_out():
+            timed_out = self.timed_out_ifrs()
+            timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
             log.warning('%s timed out after %s ms. Closing connection.',
-                        self, self.config['request_timeout_ms'])
+                        self, timeout_ms)
             self.close(error=Errors.RequestTimedOutError(
                 'Request timed out after %s ms' %
-                self.config['request_timeout_ms']))
+                timeout_ms))
             return ()
 
         # augment responses w/ correlation_id, future, and timestamp
@@ -1144,6 +1146,11 @@ class BrokerConnection(object):
 
     def requests_timed_out(self):
         return self.next_ifr_request_timeout_ms() == 0
+
+    def timed_out_ifrs(self):
+        now = time.time()
+        ifrs = sorted(self.in_flight_requests.values(), reverse=True, key=lambda ifr: ifr[2])
+        return list(filter(lambda ifr: ifr[2] <= now, ifrs))
 
     def next_ifr_request_timeout_ms(self):
         with self._lock:
