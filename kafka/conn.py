@@ -1233,7 +1233,8 @@ class BrokerConnection(object):
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
         from kafka.protocol.admin import ListGroupsRequest
-        from kafka.protocol.api_versions import ApiVersionsRequest, OLD_BROKER_API_VERSIONS
+        from kafka.protocol.api_versions import ApiVersionsRequest
+        from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
         from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
         test_cases = [
@@ -1280,7 +1281,9 @@ class BrokerConnection(object):
                         continue
                     version = self._infer_broker_version_from_api_versions(api_versions)
                 else:
-                    self._api_versions = OLD_BROKER_API_VERSIONS.get(version)
+                    if version not in BROKER_API_VERSIONS:
+                        raise Errors.UnrecognizedBrokerVersion(version)
+                    self._api_versions = BROKER_API_VERSIONS[version]
                 log.info('Broker version identified as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)
