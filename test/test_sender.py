@@ -37,9 +37,9 @@ def sender(client, accumulator, metrics):
 
 
 @pytest.mark.parametrize(("api_version", "produce_version"), [
-    ((0, 10), 2),
+    ((0, 10, 0), 2),
     ((0, 9), 1),
-    ((0, 8), 0)
+    ((0, 8, 0), 0)
 ])
 def test_produce_request(sender, mocker, api_version, produce_version):
     sender.config['api_version'] = api_version
