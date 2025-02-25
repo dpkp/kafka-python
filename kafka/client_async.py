@@ -925,10 +925,7 @@ class KafkaClient(object):
             try:
                 remaining = end - time.time()
                 version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
-                if version >= (0, 10, 0):
-                    # cache the api versions map if it's available (starting
-                    # in 0.10 cluster version)
-                    self._api_versions = conn.get_api_versions()
+                self._api_versions = conn.get_api_versions()
                 self._lock.release()
                 return version
             except Errors.NodeNotReadyError:

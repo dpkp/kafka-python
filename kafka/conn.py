@@ -1154,9 +1154,10 @@ class BrokerConnection(object):
             else:
                 return float('inf')
 
-    def _handle_api_version_response(self, response):
+    def _handle_api_versions_response(self, response):
         error_type = Errors.for_code(response.error_code)
-        assert error_type is Errors.NoError, "API version check failed"
+        if error_type is not Errors.NoError:
+            return False
         self._api_versions = dict([
             (api_key, (min_version, max_version))
             for api_key, min_version, max_version in response.api_versions
@@ -1168,12 +1169,7 @@ class BrokerConnection(object):
             return self._api_versions
 
         version = self.check_version()
-        if version < (0, 10, 0):
-            raise Errors.UnsupportedVersionError(
-                "ApiVersion not supported by cluster version {} < 0.10.0"
-                .format(version))
-        # _api_versions is set as a side effect of check_versions() on a cluster
-        # that supports 0.10.0 or later
+        # _api_versions is set as a side effect of check_versions()
         return self._api_versions
 
     def _infer_broker_version_from_api_versions(self, api_versions):
@@ -1204,7 +1200,7 @@ class BrokerConnection(object):
             if min_version <= struct.API_VERSION <= max_version:
                 return broker_version
 
-        # We know that ApiVersionResponse is only supported in 0.10+
+        # We know that ApiVersionsResponse is only supported in 0.10+
         # so if all else fails, choose that
         return (0, 10, 0)
 
@@ -1236,12 +1232,14 @@ class BrokerConnection(object):
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
+        from kafka.protocol.admin import ListGroupsRequest
+        from kafka.protocol.api_versions import ApiVersionsRequest, OLD_BROKER_API_VERSIONS
         from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
         test_cases = [
-            # All cases starting from 0.10 will be based on ApiVersionResponse
-            ((0, 10), ApiVersionRequest[0]()),
+            # All cases starting from 0.10 will be based on ApiVersionsResponse
+            ((0, 11), ApiVersionsRequest[1]()),
+            ((0, 10), ApiVersionsRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
@@ -1274,11 +1272,15 @@ class BrokerConnection(object):
                 selector.close()
 
             if f.succeeded():
-                if isinstance(request, ApiVersionRequest[0]):
+                if version >= (0, 10):
                     # Starting from 0.10 kafka broker we determine version
-                    # by looking at ApiVersionResponse
-                    api_versions = self._handle_api_version_response(f.value)
+                    # by looking at ApiVersionsResponse
+                    api_versions = self._handle_api_versions_response(f.value)
+                    if not api_versions:
+                        continue
                     version = self._infer_broker_version_from_api_versions(api_versions)
+                else:
+                    self._api_versions = OLD_BROKER_API_VERSIONS.get(version)
                 log.info('Broker version identified as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)

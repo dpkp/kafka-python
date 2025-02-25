@@ -4,66 +4,6 @@ from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields
 
 
-class ApiVersionResponse_v0(Response):
-    API_KEY = 18
-    API_VERSION = 0
-    SCHEMA = Schema(
-        ('error_code', Int16),
-        ('api_versions', Array(
-            ('api_key', Int16),
-            ('min_version', Int16),
-            ('max_version', Int16)))
-    )
-
-
-class ApiVersionResponse_v1(Response):
-    API_KEY = 18
-    API_VERSION = 1
-    SCHEMA = Schema(
-        ('error_code', Int16),
-        ('api_versions', Array(
-            ('api_key', Int16),
-            ('min_version', Int16),
-            ('max_version', Int16))),
-        ('throttle_time_ms', Int32)
-    )
-
-
-class ApiVersionResponse_v2(Response):
-    API_KEY = 18
-    API_VERSION = 2
-    SCHEMA = ApiVersionResponse_v1.SCHEMA
-
-
-class ApiVersionRequest_v0(Request):
-    API_KEY = 18
-    API_VERSION = 0
-    RESPONSE_TYPE = ApiVersionResponse_v0
-    SCHEMA = Schema()
-
-
-class ApiVersionRequest_v1(Request):
-    API_KEY = 18
-    API_VERSION = 1
-    RESPONSE_TYPE = ApiVersionResponse_v1
-    SCHEMA = ApiVersionRequest_v0.SCHEMA
-
-
-class ApiVersionRequest_v2(Request):
-    API_KEY = 18
-    API_VERSION = 2
-    RESPONSE_TYPE = ApiVersionResponse_v1
-    SCHEMA = ApiVersionRequest_v0.SCHEMA
-
-
-ApiVersionRequest = [
-    ApiVersionRequest_v0, ApiVersionRequest_v1, ApiVersionRequest_v2,
-]
-ApiVersionResponse = [
-    ApiVersionResponse_v0, ApiVersionResponse_v1, ApiVersionResponse_v2,
-]
-
-
 class CreateTopicsResponse_v0(Response):
     API_KEY = 19
     API_VERSION = 0
