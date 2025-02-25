@@ -537,7 +537,10 @@ class BrokerConnection(object):
 
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
-            if self._check_version_idx is None:
+            if self.config['api_version'] is not None:
+                self._api_version = self.config['api_version']
+                return True
+            elif self._check_version_idx is None:
                 # TODO: Implement newer versions
                 # ((3, 9), ApiVersionsRequest[4]()),
                 # ((2, 4), ApiVersionsRequest[3]()),
