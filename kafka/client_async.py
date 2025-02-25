@@ -868,9 +868,9 @@ class KafkaClient(object):
             if not topics and self.cluster.is_bootstrap(node_id):
                 topics = list(self.config['bootstrap_topics_filter'])
 
+            api_version = self.api_version(MetadataRequest, max_version=1)
             if self.cluster.need_all_topic_metadata or not topics:
-                topics = [] if self.config['api_version'] < (0, 10, 0) else None
-            api_version = 0 if self.config['api_version'] < (0, 10, 0) else 1
+                topics = MetadataRequest[api_version].ALL_TOPICS
             request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
