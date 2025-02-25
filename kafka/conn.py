@@ -24,7 +24,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest_v2, DescribeClientQuotasRequest
+from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest, DescribeClientQuotasRequest
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.offset import OffsetRequest
 from kafka.protocol.produce import ProduceRequest
@@ -1179,7 +1179,7 @@ class BrokerConnection(object):
             # format (<broker version>, <needed struct>)
             # Make sure to update consumer_integration test check when adding newer versions.
             ((2, 6), DescribeClientQuotasRequest[0]),
-            ((2, 5), DescribeAclsRequest_v2),
+            ((2, 5), DescribeAclsRequest[2]),
             ((2, 4), ProduceRequest[8]),
             ((2, 3), FetchRequest[11]),
             ((2, 2), OffsetRequest[5]),
