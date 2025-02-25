@@ -313,7 +313,7 @@ class Sender(threading.Thread):
         elif self.config['api_version'] >= (0, 11):
             version = 3
             kwargs = dict(transactional_id=None)
-        elif self.config['api_version'] >= (0, 10):
+        elif self.config['api_version'] >= (0, 10, 0):
             version = 2
         elif self.config['api_version'] == (0, 9):
             version = 1

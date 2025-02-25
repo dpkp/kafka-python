@@ -461,7 +461,7 @@ class BaseCoordinator(object):
                 self._generation.member_id,
                 self.protocol_type(),
                 member_metadata)
-        elif (0, 10, 1) <= self.config['api_version'] < (0, 11, 0):
+        elif (0, 10, 1) <= self.config['api_version'] < (0, 11):
             request = JoinGroupRequest[1](
                 self.group_id,
                 self.config['session_timeout_ms'],
@@ -562,7 +562,7 @@ class BaseCoordinator(object):
 
     def _on_join_follower(self):
         # send follower's sync group with an empty assignment
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = 0 if self.config['api_version'] < (0, 11) else 1
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -590,7 +590,7 @@ class BaseCoordinator(object):
         except Exception as e:
             return Future().failure(e)
 
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = 0 if self.config['api_version'] < (0, 11) else 1
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -771,7 +771,7 @@ class BaseCoordinator(object):
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
                 log.info('Leaving consumer group (%s).', self.group_id)
-                version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+                version = 0 if self.config['api_version'] < (0, 11) else 1
                 request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
                 future = self._client.send(self.coordinator_id, request)
                 future.add_callback(self._handle_leave_group_response)
@@ -799,7 +799,7 @@ class BaseCoordinator(object):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = 0 if self.config['api_version'] < (0, 11) else 1
         request = HeartbeatRequest[version](self.group_id,
                                             self._generation.generation_id,
                                             self._generation.member_id)

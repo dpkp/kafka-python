@@ -242,6 +242,11 @@ class KafkaClient(object):
             self.config['api_version'] = self.check_version(timeout=check_timeout)
         elif self.config['api_version'] in BROKER_API_VERSIONS:
             self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+        elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
+            log.warning('Configured api_version %s is ambiguous; using %s',
+                        self.config['api_version'], self.config['api_version'] + (0,))
+            self.config['api_version'] = self.config['api_version'] + (0,)
+            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
         else:
             compatible_version = None
             for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
@@ -864,8 +869,8 @@ class KafkaClient(object):
                 topics = list(self.config['bootstrap_topics_filter'])
 
             if self.cluster.need_all_topic_metadata or not topics:
-                topics = [] if self.config['api_version'] < (0, 10) else None
-            api_version = 0 if self.config['api_version'] < (0, 10) else 1
+                topics = [] if self.config['api_version'] < (0, 10, 0) else None
+            api_version = 0 if self.config['api_version'] < (0, 10, 0) else 1
             request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
@@ -913,7 +918,7 @@ class KafkaClient(object):
             is down and the client enters a bootstrap backoff sleep.
             This is only possible if node_id is None.
 
-        Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
+        Returns: version tuple, i.e. (3, 9), (2, 0), (0, 10, 2) etc
 
         Raises:
             NodeNotReadyError (if node_id is provided)

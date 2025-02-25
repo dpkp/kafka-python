@@ -266,7 +266,7 @@ def test_least_loaded_node():
 def test_set_topics(mocker):
     request_update = mocker.patch.object(ClusterMetadata, 'request_update')
     request_update.side_effect = lambda: Future()
-    cli = KafkaClient(api_version=(0, 10))
+    cli = KafkaClient(api_version=(0, 10, 0))
 
     # replace 'empty' with 'non empty'
     request_update.reset_mock()
