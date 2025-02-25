@@ -1,3 +1,29 @@
+# 2.0.5 (Feb 25, 2025)
+
+Networking
+* Remove unused client bootstrap backoff code
+* 200ms timeout for client.poll in ensure_active_group and admin client
+
+Fixes
+* Admin client: check_version only if needed, use node_id kwarg for controller
+* Check for -1 controller_id in admin client
+* Only acquire coordinator lock in heartbeat thread close if not self thread
+
+Testing
+* Also sleep when waiting for consumers in test_describe_consumer_group_exists
+* Refactor sasl_integration test_client - wait for node ready; use send future
+* Add timeout to test_kafka_consumer
+* Add error str to assert_message_count checks
+* Retry on error in test fixture create_topic_via_metadata
+* Fixup variable interpolation in test fixture error
+
+Documentation
+* Update compatibility docs
+* Include client_id in BrokerConnection __str__ output
+
+Project Maintenance
+* Add make targets `servers/*/api_versions` and `servers/*/messages`
+
 # 2.0.4 (Feb 21, 2025)
 
 Networking
