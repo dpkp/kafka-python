@@ -93,8 +93,8 @@ servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dis
 	tar xzvf $< -C $@ --strip-components 1
 	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
 
-servers/%/api_versions.txt: servers/$$*/kafka-bin
-	KAFKA_VERSION=$* python -m test.fixtures get_api_versions >servers/$*/api_versions.txt
+servers/%/api_versions: servers/$$*/kafka-bin
+	KAFKA_VERSION=$* python -m test.fixtures get_api_versions >$@
 
 servers/%/messages: servers/$$*/kafka-bin
 	cd servers/$*/ && jar xvf kafka-bin/libs/kafka-clients-$*.jar common/message/
