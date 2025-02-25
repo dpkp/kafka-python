@@ -238,8 +238,7 @@ class KafkaClient(object):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
-            check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
-            self.config['api_version'] = self.check_version(timeout=check_timeout)
+            self.config['api_version'] = self.check_version()
         elif self.config['api_version'] in BROKER_API_VERSIONS:
             self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
         elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
@@ -915,7 +914,7 @@ class KafkaClient(object):
         """
         return self._api_versions
 
-    def check_version(self, node_id=None, timeout=2, **kwargs):
+    def check_version(self, node_id=None, timeout=None, **kwargs):
         """Attempt to guess the version of a Kafka broker.
 
         Keyword Arguments:
@@ -924,7 +923,7 @@ class KafkaClient(object):
                 Default: None
             timeout (num, optional): Maximum time in seconds to try to check broker version.
                 If unable to identify version before timeout, raise error (see below).
-                Default: 2
+                Default: api_version_auto_timeout_ms / 1000
 
         Returns: version tuple, i.e. (3, 9), (2, 0), (0, 10, 2) etc
 
@@ -932,6 +931,7 @@ class KafkaClient(object):
             NodeNotReadyError (if node_id is provided)
             NoBrokersAvailable (if node_id is None)
         """
+        timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
         with self._lock:
             end = time.time() + timeout
             while time.time() < end:
