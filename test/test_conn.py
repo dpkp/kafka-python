@@ -90,7 +90,7 @@ def test_connection_delay(conn, mocker):
         conn.state = ConnectionStates.CONNECTED
         assert conn.connection_delay() == float('inf')
 
-        conn._gai.clear()
+        del conn._gai[:]
         conn._update_reconnect_backoff()
         conn.state = ConnectionStates.DISCONNECTED
         assert conn.connection_delay() == 1.0 * conn.config['reconnect_backoff_ms']
