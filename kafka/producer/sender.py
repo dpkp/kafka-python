@@ -301,31 +301,14 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        kwargs = {}
-        if self.config['api_version'] >= (2, 1):
-            version = 7
-        elif self.config['api_version'] >= (2, 0):
-            version = 6
-        elif self.config['api_version'] >= (1, 1):
-            version = 5
-        elif self.config['api_version'] >= (1, 0):
-            version = 4
-        elif self.config['api_version'] >= (0, 11):
-            version = 3
-            kwargs = dict(transactional_id=None)
-        elif self.config['api_version'] >= (0, 10, 0):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+        version = self._client.api_version(ProduceRequest, max_version=7)
+        # TODO: support transactional_id
         return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
                     for topic, partition_info
                     in six.iteritems(produce_records_by_partition)],
-            **kwargs
         )
 
     def wakeup(self):

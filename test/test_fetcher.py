@@ -16,6 +16,7 @@ from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import Metrics
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.offset import OffsetResponse
 from kafka.errors import (
@@ -27,8 +28,8 @@ from kafka.structs import OffsetAndMetadata, TopicPartition
 
 
 @pytest.fixture
-def client(mocker):
-    return mocker.Mock(spec=KafkaClient(bootstrap_servers=(), api_version=(0, 9)))
+def client():
+    return KafkaClient(bootstrap_servers=(), api_version=(0, 9))
 
 
 @pytest.fixture
@@ -81,6 +82,8 @@ def test_send_fetches(fetcher, topic, mocker):
     mocker.patch.object(fetcher, '_create_fetch_requests',
                         return_value=dict(enumerate(fetch_requests)))
 
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+    mocker.patch.object(fetcher._client, 'send')
     ret = fetcher.send_fetches()
     for node, request in enumerate(fetch_requests):
         fetcher._client.send.assert_any_call(node, request, wakeup=False)
@@ -91,14 +94,14 @@ def test_send_fetches(fetcher, topic, mocker):
     ((0, 10, 1), 3),
     ((0, 10, 0), 2),
     ((0, 9), 1),
-    ((0, 8), 0)
+    ((0, 8, 2), 0)
 ])
 def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
-    fetcher._client.in_flight_request_count.return_value = 0
-    fetcher.config['api_version'] = api_version
+    fetcher._client._api_versions = BROKER_API_VERSIONS[api_version]
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
     by_node = fetcher._create_fetch_requests()
     requests = by_node.values()
-    assert all([isinstance(r, FetchRequest[fetch_version]) for r in requests])
+    assert set([r.API_VERSION for r in requests]) == set([fetch_version])
 
 
 def test_update_fetch_positions(fetcher, topic, mocker):
@@ -485,6 +488,7 @@ def test__parse_fetched_data__not_leader(fetcher, topic, mocker):
         tp, 0, 0, [NotLeaderForPartitionError.errno, -1, None],
         mocker.MagicMock()
     )
+    mocker.patch.object(fetcher._client.cluster, 'request_update')
     partition_record = fetcher._parse_fetched_data(completed_fetch)
     assert partition_record is None
     fetcher._client.cluster.request_update.assert_called_with()
@@ -497,6 +501,7 @@ def test__parse_fetched_data__unknown_tp(fetcher, topic, mocker):
         tp, 0, 0, [UnknownTopicOrPartitionError.errno, -1, None],
         mocker.MagicMock()
     )
+    mocker.patch.object(fetcher._client.cluster, 'request_update')
     partition_record = fetcher._parse_fetched_data(completed_fetch)
     assert partition_record is None
     fetcher._client.cluster.request_update.assert_called_with()

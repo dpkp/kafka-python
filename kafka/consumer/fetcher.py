@@ -569,10 +569,8 @@ class Fetcher(six.Iterator):
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        if self.config['api_version'] >= (0, 10, 1):
-            request = OffsetRequest[1](-1, list(six.iteritems(by_topic)))
-        else:
-            request = OffsetRequest[0](-1, list(six.iteritems(by_topic)))
+        version = self._client.api_version(OffsetRequest, max_version=1)
+        request = OffsetRequest[version](-1, list(six.iteritems(by_topic)))
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -702,16 +700,7 @@ class Fetcher(six.Iterator):
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
 
-        if self.config['api_version'] >= (0, 11):
-            version = 4
-        elif self.config['api_version'] >= (0, 10, 1):
-            version = 3
-        elif self.config['api_version'] >= (0, 10, 0):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+        version = self._client.api_version(FetchRequest, max_version=4)
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
             if version < 3:
