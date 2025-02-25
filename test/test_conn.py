@@ -26,13 +26,16 @@ def dns_lookup(mocker):
 def _socket(mocker):
     socket = mocker.MagicMock()
     socket.connect_ex.return_value = 0
+    socket.send.side_effect = lambda d: len(d)
+    socket.recv.side_effect = BlockingIOError("mocked recv")
     mocker.patch('socket.socket', return_value=socket)
     return socket
 
 
 @pytest.fixture
-def conn(_socket, dns_lookup):
+def conn(_socket, dns_lookup, mocker):
     conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    mocker.patch.object(conn, '_try_api_versions_check', return_value=True)
     return conn
 
 
@@ -216,12 +219,13 @@ def test_recv_disconnected(_socket, conn):
     conn.send(req)
 
     # Empty data on recv means the socket is disconnected
+    _socket.recv.side_effect = None
     _socket.recv.return_value = b''
 
     # Attempt to receive should mark connection as disconnected
-    assert conn.connected()
+    assert conn.connected(), 'Not connected: %s' % conn.state
     conn.recv()
-    assert conn.disconnected()
+    assert conn.disconnected(), 'Not disconnected: %s' % conn.state
 
 
 def test_recv(_socket, conn):
@@ -347,14 +351,14 @@ def test_requests_timed_out(conn):
         # No in-flight requests, not timed out
         assert not conn.requests_timed_out()
 
-        # Single request, timestamp = now (0)
-        conn.in_flight_requests[0] = ('foo', 0)
+        # Single request, timeout_at > now (0)
+        conn.in_flight_requests[0] = ('foo', 0, 1)
         assert not conn.requests_timed_out()
 
         # Add another request w/ timestamp > request_timeout ago
         request_timeout = conn.config['request_timeout_ms']
         expired_timestamp = 0 - request_timeout - 1
-        conn.in_flight_requests[1] = ('bar', expired_timestamp)
+        conn.in_flight_requests[1] = ('bar', 0, expired_timestamp)
         assert conn.requests_timed_out()
 
         # Drop the expired request and we should be good to go again
