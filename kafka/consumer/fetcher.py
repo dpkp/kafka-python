@@ -702,11 +702,11 @@ class Fetcher(six.Iterator):
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
 
-        if self.config['api_version'] >= (0, 11, 0):
+        if self.config['api_version'] >= (0, 11):
             version = 4
         elif self.config['api_version'] >= (0, 10, 1):
             version = 3
-        elif self.config['api_version'] >= (0, 10):
+        elif self.config['api_version'] >= (0, 10, 0):
             version = 2
         elif self.config['api_version'] == (0, 9):
             version = 1

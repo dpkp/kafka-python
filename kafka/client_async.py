@@ -25,6 +25,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
 from kafka.util import Dict, WeakMethod
 # Although this looks unused, it actually monkey-patches socket.socketpair()
@@ -239,6 +240,25 @@ class KafkaClient(object):
         if self.config['api_version'] is None:
             check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
             self.config['api_version'] = self.check_version(timeout=check_timeout)
+        elif self.config['api_version'] in BROKER_API_VERSIONS:
+            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+        elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
+            log.warning('Configured api_version %s is ambiguous; using %s',
+                        self.config['api_version'], self.config['api_version'] + (0,))
+            self.config['api_version'] = self.config['api_version'] + (0,)
+            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+        else:
+            compatible_version = None
+            for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
+                if v <= self.config['api_version']:
+                    compatible_version = v
+                    break
+            if compatible_version:
+                log.warning('Configured api_version %s not supported; using %s',
+                            self.config['api_version'], compatible_version)
+                self._api_versions = BROKER_API_VERSIONS[compatible_version]
+            else:
+                raise Errors.UnrecognizedBrokerVersion(self.config['api_version'])
 
     def _init_wakeup_socketpair(self):
         self._wake_r, self._wake_w = socket.socketpair()
@@ -849,8 +869,8 @@ class KafkaClient(object):
                 topics = list(self.config['bootstrap_topics_filter'])
 
             if self.cluster.need_all_topic_metadata or not topics:
-                topics = [] if self.config['api_version'] < (0, 10) else None
-            api_version = 0 if self.config['api_version'] < (0, 10) else 1
+                topics = [] if self.config['api_version'] < (0, 10, 0) else None
+            api_version = 0 if self.config['api_version'] < (0, 10, 0) else 1
             request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
@@ -898,7 +918,7 @@ class KafkaClient(object):
             is down and the client enters a bootstrap backoff sleep.
             This is only possible if node_id is None.
 
-        Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
+        Returns: version tuple, i.e. (3, 9), (2, 0), (0, 10, 2) etc
 
         Raises:
             NodeNotReadyError (if node_id is provided)
@@ -925,9 +945,7 @@ class KafkaClient(object):
             try:
                 remaining = end - time.time()
                 version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
-                if version >= (0, 10, 0):
-                    # cache the api versions map if it's available (starting
-                    # in 0.10 cluster version)
+                if not self._api_versions:
                     self._api_versions = conn.get_api_versions()
                 self._lock.release()
                 return version

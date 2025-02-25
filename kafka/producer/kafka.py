@@ -393,7 +393,7 @@ class KafkaProducer(object):
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
 
         if self.config['compression_type'] == 'zstd':
-            assert self.config['api_version'] >= (2, 1, 0), 'Zstd Requires >= Kafka 2.1.0 Brokers'
+            assert self.config['api_version'] >= (2, 1), 'Zstd Requires >= Kafka 2.1 Brokers'
 
         # Check compression_type for library support
         ct = self.config['compression_type']
@@ -524,7 +524,7 @@ class KafkaProducer(object):
     def _max_usable_produce_magic(self):
         if self.config['api_version'] >= (0, 11):
             return 2
-        elif self.config['api_version'] >= (0, 10):
+        elif self.config['api_version'] >= (0, 10, 0):
             return 1
         else:
             return 0

@@ -165,8 +165,8 @@ class BrokerConnection(object):
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use.
-            Accepted values are: (0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9),
-            (0, 10). Default: (0, 8, 2)
+            Must be None or >= (0, 10, 0) to enable SASL authentication.
+            Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
             api version. Only applies if api_version is None
@@ -214,7 +214,7 @@ class BrokerConnection(object):
         'ssl_crlfile': None,
         'ssl_password': None,
         'ssl_ciphers': None,
-        'api_version': (0, 8, 2),  # default to most restrictive
+        'api_version': None,
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda node_id, sock, conn: True,
         'metrics': None,
@@ -522,7 +522,7 @@ class BrokerConnection(object):
         return False
 
     def _try_authenticate(self):
-        assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10)
+        assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10, 0)
 
         if self._sasl_auth_future is None:
             # Build a SaslHandShakeRequest message
@@ -1154,9 +1154,10 @@ class BrokerConnection(object):
             else:
                 return float('inf')
 
-    def _handle_api_version_response(self, response):
+    def _handle_api_versions_response(self, response):
         error_type = Errors.for_code(response.error_code)
-        assert error_type is Errors.NoError, "API version check failed"
+        if error_type is not Errors.NoError:
+            return False
         self._api_versions = dict([
             (api_key, (min_version, max_version))
             for api_key, min_version, max_version in response.api_versions
@@ -1168,12 +1169,7 @@ class BrokerConnection(object):
             return self._api_versions
 
         version = self.check_version()
-        if version < (0, 10, 0):
-            raise Errors.UnsupportedVersionError(
-                "ApiVersion not supported by cluster version {} < 0.10.0"
-                .format(version))
-        # _api_versions is set as a side effect of check_versions() on a cluster
-        # that supports 0.10.0 or later
+        # _api_versions is set as a side effect of check_versions()
         return self._api_versions
 
     def _infer_broker_version_from_api_versions(self, api_versions):
@@ -1182,16 +1178,16 @@ class BrokerConnection(object):
         test_cases = [
             # format (<broker version>, <needed struct>)
             # Make sure to update consumer_integration test check when adding newer versions.
-            ((2, 6, 0), DescribeClientQuotasRequest[0]),
-            ((2, 5, 0), DescribeAclsRequest_v2),
-            ((2, 4, 0), ProduceRequest[8]),
-            ((2, 3, 0), FetchRequest[11]),
-            ((2, 2, 0), OffsetRequest[5]),
-            ((2, 1, 0), FetchRequest[10]),
-            ((2, 0, 0), FetchRequest[8]),
-            ((1, 1, 0), FetchRequest[7]),
-            ((1, 0, 0), MetadataRequest[5]),
-            ((0, 11, 0), MetadataRequest[4]),
+            ((2, 6), DescribeClientQuotasRequest[0]),
+            ((2, 5), DescribeAclsRequest_v2),
+            ((2, 4), ProduceRequest[8]),
+            ((2, 3), FetchRequest[11]),
+            ((2, 2), OffsetRequest[5]),
+            ((2, 1), FetchRequest[10]),
+            ((2, 0), FetchRequest[8]),
+            ((1, 1), FetchRequest[7]),
+            ((1, 0), MetadataRequest[5]),
+            ((0, 11), MetadataRequest[4]),
             ((0, 10, 2), OffsetFetchRequest[2]),
             ((0, 10, 1), MetadataRequest[2]),
         ]
@@ -1204,7 +1200,7 @@ class BrokerConnection(object):
             if min_version <= struct.API_VERSION <= max_version:
                 return broker_version
 
-        # We know that ApiVersionResponse is only supported in 0.10+
+        # We know that ApiVersionsResponse is only supported in 0.10+
         # so if all else fails, choose that
         return (0, 10, 0)
 
@@ -1213,7 +1209,7 @@ class BrokerConnection(object):
 
         Note: This is a blocking call.
 
-        Returns: version tuple, i.e. (0, 10), (0, 9), (0, 8, 2), ...
+        Returns: version tuple, i.e. (3, 9), (2, 4), etc ...
         """
         timeout_at = time.time() + timeout
         log.info('Probing node %s broker version', self.node_id)
@@ -1236,12 +1232,15 @@ class BrokerConnection(object):
         # vanilla MetadataRequest. If the server did not recognize the first
         # request, both will be failed with a ConnectionError that wraps
         # socket.error (32, 54, or 104)
-        from kafka.protocol.admin import ApiVersionRequest, ListGroupsRequest
+        from kafka.protocol.admin import ListGroupsRequest
+        from kafka.protocol.api_versions import ApiVersionsRequest
+        from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
         from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
 
         test_cases = [
-            # All cases starting from 0.10 will be based on ApiVersionResponse
-            ((0, 10), ApiVersionRequest[0]()),
+            # All cases starting from 0.10 will be based on ApiVersionsResponse
+            ((0, 11), ApiVersionsRequest[1]()),
+            ((0, 10, 0), ApiVersionsRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
             ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
@@ -1274,11 +1273,17 @@ class BrokerConnection(object):
                 selector.close()
 
             if f.succeeded():
-                if isinstance(request, ApiVersionRequest[0]):
+                if version >= (0, 10, 0):
                     # Starting from 0.10 kafka broker we determine version
-                    # by looking at ApiVersionResponse
-                    api_versions = self._handle_api_version_response(f.value)
+                    # by looking at ApiVersionsResponse
+                    api_versions = self._handle_api_versions_response(f.value)
+                    if not api_versions:
+                        continue
                     version = self._infer_broker_version_from_api_versions(api_versions)
+                else:
+                    if version not in BROKER_API_VERSIONS:
+                        raise Errors.UnrecognizedBrokerVersion(version)
+                    self._api_versions = BROKER_API_VERSIONS[version]
                 log.info('Broker version identified as %s', '.'.join(map(str, version)))
                 log.info('Set configuration api_version=%s to skip auto'
                          ' check_version requests on startup', version)
@@ -1298,7 +1303,7 @@ class BrokerConnection(object):
                 # requests (bug...). In this case we expect to see a correlation
                 # id mismatch
                 elif (isinstance(f.exception, Errors.CorrelationIdError) and
-                      version == (0, 10)):
+                      version > (0, 9)):
                     pass
                 elif six.PY2:
                     assert isinstance(f.exception.args[0], socket.error)

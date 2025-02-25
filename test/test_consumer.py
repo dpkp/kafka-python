@@ -18,7 +18,7 @@ class TestKafkaConsumer:
             KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(0, 9), request_timeout_ms=50000, connections_max_idle_ms=40000)
 
     def test_subscription_copy(self):
-        consumer = KafkaConsumer('foo', api_version=(0, 10))
+        consumer = KafkaConsumer('foo', api_version=(0, 10, 0))
         sub = consumer.subscription()
         assert sub is not consumer.subscription()
         assert sub == set(['foo'])
