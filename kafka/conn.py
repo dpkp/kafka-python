@@ -171,7 +171,7 @@ class BrokerConnection(object):
             Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version is None
+            api version. Only applies if api_version is None. Default: 2000.
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
@@ -217,6 +217,7 @@ class BrokerConnection(object):
         'ssl_password': None,
         'ssl_ciphers': None,
         'api_version': None,
+        'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda node_id, sock, conn: True,
         'metrics': None,
@@ -545,14 +546,14 @@ class BrokerConnection(object):
                 # ((0, 10), ApiVersionsRequest[0]()),
                 request = ApiVersionsRequest[0]()
                 future = Future()
-                response = self._send(request, blocking=True)
+                response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_api_versions_response, future)
                 response.add_errback(self._handle_api_versions_failure, future)
                 self._api_versions_future = future
             elif self._check_version_idx < len(self.VERSION_CHECKS):
                 version, request = self.VERSION_CHECKS[self._check_version_idx]
                 future = Future()
-                response = self._send(request, blocking=True)
+                response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_check_version_response, future, version)
                 response.add_errback(self._handle_check_version_failure, future)
                 self._api_versions_future = future
@@ -1041,14 +1042,14 @@ class BrokerConnection(object):
         # drop lock before state change callback and processing futures
         self.config['state_change_callback'](self.node_id, sock, self)
         sock.close()
-        for (_correlation_id, (future, _timestamp)) in ifrs:
+        for (_correlation_id, (future, _timestamp, _timeout)) in ifrs:
             future.failure(error)
 
     def _can_send_recv(self):
         """Return True iff socket is ready for requests / responses"""
         return self.connected() or self.initializing()
 
-    def send(self, request, blocking=True):
+    def send(self, request, blocking=True, request_timeout_ms=None):
         """Queue request for async network send, return Future()"""
         future = Future()
         if self.connecting():
@@ -1057,9 +1058,9 @@ class BrokerConnection(object):
             return future.failure(Errors.KafkaConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
-        return self._send(request, blocking=blocking)
+        return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
 
-    def _send(self, request, blocking=True):
+    def _send(self, request, blocking=True, request_timeout_ms=None):
         future = Future()
         with self._lock:
             if not self._can_send_recv():
@@ -1072,9 +1073,11 @@ class BrokerConnection(object):
 
             log.debug('%s Request %d: %s', self, correlation_id, request)
             if request.expect_response():
-                sent_time = time.time()
                 assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
-                self.in_flight_requests[correlation_id] = (future, sent_time)
+                sent_time = time.time()
+                request_timeout_ms = request_timeout_ms or self.config['request_timeout_ms']
+                timeout_at = sent_time + (request_timeout_ms / 1000)
+                self.in_flight_requests[correlation_id] = (future, sent_time, timeout_at)
             else:
                 future.success(None)
 
@@ -1164,7 +1167,7 @@ class BrokerConnection(object):
         for i, (correlation_id, response) in enumerate(responses):
             try:
                 with self._lock:
-                    (future, timestamp) = self.in_flight_requests.pop(correlation_id)
+                    (future, timestamp, _timeout) = self.in_flight_requests.pop(correlation_id)
             except KeyError:
                 self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
                 return ()
@@ -1238,10 +1241,9 @@ class BrokerConnection(object):
     def next_ifr_request_timeout_ms(self):
         with self._lock:
             if self.in_flight_requests:
-                get_timestamp = lambda v: v[1]
-                oldest_at = min(map(get_timestamp,
-                                    self.in_flight_requests.values()))
-                next_timeout = oldest_at + self.config['request_timeout_ms'] / 1000.0
+                get_timeout = lambda v: v[2]
+                next_timeout = min(map(get_timeout,
+                                   self.in_flight_requests.values()))
                 return max(0, (next_timeout - time.time()) * 1000)
             else:
                 return float('inf')
