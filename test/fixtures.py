@@ -71,6 +71,8 @@ class Fixture(object):
 
     def __init__(self):
         self.child = None
+        if not os.path.isdir(self.kafka_root):
+            raise FileNotFoundError(self.kafka_root)
 
     @classmethod
     def download_official_distribution(cls,
@@ -697,10 +699,7 @@ class KafkaFixture(Fixture):
 
 
 def get_api_versions():
-    import logging
     logging.basicConfig(level=logging.ERROR)
-
-    from test.fixtures import ZookeeperFixture, KafkaFixture
     zk = ZookeeperFixture.instance()
     k = KafkaFixture.instance(0, zk)
 
@@ -717,6 +716,21 @@ def get_api_versions():
     zk.close()
 
 
+def run_brokers():
+    logging.basicConfig(level=logging.ERROR)
+    zk = ZookeeperFixture.instance()
+    k = KafkaFixture.instance(0, zk)
+
+    print("Kafka", k.kafka_version, "running on port:", k.port)
+    try:
+        while True:
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print("Bye!")
+        k.close()
+        zk.close()
+
+
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
@@ -725,6 +739,8 @@ if __name__ == '__main__':
     cmd = sys.argv[1]
     if cmd == 'get_api_versions':
         get_api_versions()
+    elif cmd == 'kafka':
+        run_brokers()
     else:
         print("Unknown cmd: %s", cmd)
         exit(1)
