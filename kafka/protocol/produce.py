@@ -47,6 +47,7 @@ class ProduceResponse_v2(Response):
 
 
 class ProduceResponse_v3(Response):
+    # Adds support for message format v2
     API_KEY = 0
     API_VERSION = 3
     SCHEMA = ProduceResponse_v2.SCHEMA
@@ -158,6 +159,7 @@ class ProduceRequest_v2(ProduceRequest):
 
 
 class ProduceRequest_v3(ProduceRequest):
+    # Adds support for message format v2
     API_VERSION = 3
     RESPONSE_TYPE = ProduceResponse_v3
     SCHEMA = Schema(

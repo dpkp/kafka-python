@@ -46,6 +46,7 @@ class FetchResponse_v3(Response):
 
 
 class FetchResponse_v4(Response):
+    # Adds message format v2
     API_KEY = 1
     API_VERSION = 4
     SCHEMA = Schema(
@@ -211,6 +212,7 @@ class FetchRequest_v3(Request):
 
 class FetchRequest_v4(Request):
     # Adds isolation_level field
+    # Adds message format v2
     API_KEY = 1
     API_VERSION = 4
     RESPONSE_TYPE = FetchResponse_v4
