@@ -60,6 +60,15 @@ record_batch_data_v0 = [
     b'\x00\xff\xff\xff\xff\x00\x00\x00\x03123'
 ]
 
+# Single record control batch (abort)
+control_batch_data_v2 = [
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00R\x00\x00\x00\x00'
+    b'\x02e\x97\xff\xd0\x00\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    b'\x98\x96\x7f\x00\x00\x00\x00\x00\x98\x96'
+    b'\x7f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
+    b'\x00\x00\x00\x01@\x00\x00\x00\x08\x00\x00\x00\x00,opaque-control-message\x00'
+]
+
 
 def test_memory_records_v2():
     data_bytes = b"".join(record_batch_data_v2) + b"\x00" * 4
@@ -230,3 +239,18 @@ def test_memory_records_builder_full(magic, compression_type):
         key=None, timestamp=None, value=b"M")
     assert metadata is None
     assert builder.next_offset() == 1
+
+
+def test_control_record_v2():
+    data_bytes = b"".join(control_batch_data_v2)
+    records = MemoryRecords(data_bytes)
+
+    assert records.has_next() is True
+    batch = records.next_batch()
+    assert batch.is_control_batch is True
+    recs = list(batch)
+    assert len(recs) == 1
+    assert recs[0].version == 0
+    assert recs[0].type == 0
+    assert recs[0].abort is True
+    assert recs[0].commit is False
