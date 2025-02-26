@@ -294,7 +294,7 @@ class KafkaAdminClient(object):
                     time.sleep(1)
                     continue
                 # verify the controller is new enough to support our requests
-                controller_version = self._client.check_version(node_id=controller_id, timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
+                controller_version = self._client.check_version(node_id=controller_id)
                 if controller_version < (0, 10, 0):
                     raise IncompatibleBrokerVersion(
                         "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
