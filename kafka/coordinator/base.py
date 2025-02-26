@@ -453,9 +453,7 @@ class BaseCoordinator(object):
             for protocol, metadata in self.group_protocols()
         ]
         version = self._client.api_version(JoinGroupRequest, max_version=2)
-        if not version:
-            raise Errors.KafkaError('JoinGroupRequest api requires 0.9+ brokers')
-        elif version == 0:
+        if version == 0:
             request = JoinGroupRequest[version](
                 self.group_id,
                 self.config['session_timeout_ms'],
