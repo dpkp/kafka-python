@@ -542,7 +542,7 @@ class KafkaClient(object):
             return False
         return conn.connected() and conn.can_send_more()
 
-    def send(self, node_id, request, wakeup=True):
+    def send(self, node_id, request, wakeup=True, request_timeout_ms=None):
         """Send a request to a specific node. Bytes are placed on an
         internal per-connection send-queue. Actual network I/O will be
         triggered in a subsequent call to .poll()
@@ -550,7 +550,13 @@ class KafkaClient(object):
         Arguments:
             node_id (int): destination node
             request (Struct): request object (not-encoded)
-            wakeup (bool): optional flag to disable thread-wakeup
+
+        Keyword Arguments:
+            wakeup (bool, optional): optional flag to disable thread-wakeup.
+            request_timeout_ms (int, optional): Provide custom timeout in milliseconds.
+                If response is not processed before timeout, client will fail the
+                request and close the connection.
+                Default: None (uses value from client configuration)
 
         Raises:
             AssertionError: if node_id is not in current cluster metadata
@@ -566,7 +572,7 @@ class KafkaClient(object):
         # conn.send will queue the request internally
         # we will need to call send_pending_requests()
         # to trigger network I/O
-        future = conn.send(request, blocking=False)
+        future = conn.send(request, blocking=False, request_timeout_ms=request_timeout_ms)
         if not future.is_done:
             self._sending.add(conn)
 
