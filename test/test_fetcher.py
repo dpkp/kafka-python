@@ -18,7 +18,7 @@ from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
-from kafka.protocol.offset import OffsetResponse
+from kafka.protocol.offset import ListOffsetsResponse
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
@@ -264,7 +264,7 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
 def test__handle_offset_response(fetcher, mocker):
     # Broker returns UnsupportedForMessageFormatError, will omit partition
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]),
         ("topic", [(1, 0, 1000, 9999)])
     ])
@@ -274,7 +274,7 @@ def test__handle_offset_response(fetcher, mocker):
 
     # Broker returns NotLeaderForPartitionError
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 6, -1, -1)]),
     ])
     fetcher._handle_offset_response(fut, res)
@@ -283,7 +283,7 @@ def test__handle_offset_response(fetcher, mocker):
 
     # Broker returns UnknownTopicOrPartitionError
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 3, -1, -1)]),
     ])
     fetcher._handle_offset_response(fut, res)
@@ -293,7 +293,7 @@ def test__handle_offset_response(fetcher, mocker):
     # Broker returns many errors and 1 result
     # Will fail on 1st error and return
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]),
         ("topic", [(1, 6, -1, -1)]),
         ("topic", [(2, 3, -1, -1)]),

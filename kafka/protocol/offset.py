@@ -12,7 +12,7 @@ class OffsetResetStrategy(object):
     NONE = 0
 
 
-class OffsetResponse_v0(Response):
+class ListOffsetsResponse_v0(Response):
     API_KEY = 2
     API_VERSION = 0
     SCHEMA = Schema(
@@ -24,7 +24,7 @@ class OffsetResponse_v0(Response):
                 ('offsets', Array(Int64))))))
     )
 
-class OffsetResponse_v1(Response):
+class ListOffsetsResponse_v1(Response):
     API_KEY = 2
     API_VERSION = 1
     SCHEMA = Schema(
@@ -38,7 +38,7 @@ class OffsetResponse_v1(Response):
     )
 
 
-class OffsetResponse_v2(Response):
+class ListOffsetsResponse_v2(Response):
     API_KEY = 2
     API_VERSION = 2
     SCHEMA = Schema(
@@ -53,16 +53,16 @@ class OffsetResponse_v2(Response):
     )
 
 
-class OffsetResponse_v3(Response):
+class ListOffsetsResponse_v3(Response):
     """
     on quota violation, brokers send out responses before throttling
     """
     API_KEY = 2
     API_VERSION = 3
-    SCHEMA = OffsetResponse_v2.SCHEMA
+    SCHEMA = ListOffsetsResponse_v2.SCHEMA
 
 
-class OffsetResponse_v4(Response):
+class ListOffsetsResponse_v4(Response):
     """
     Add leader_epoch to response
     """
@@ -81,19 +81,19 @@ class OffsetResponse_v4(Response):
     )
 
 
-class OffsetResponse_v5(Response):
+class ListOffsetsResponse_v5(Response):
     """
     adds a new error code, OFFSET_NOT_AVAILABLE
     """
     API_KEY = 2
     API_VERSION = 5
-    SCHEMA = OffsetResponse_v4.SCHEMA
+    SCHEMA = ListOffsetsResponse_v4.SCHEMA
 
 
-class OffsetRequest_v0(Request):
+class ListOffsetsRequest_v0(Request):
     API_KEY = 2
     API_VERSION = 0
-    RESPONSE_TYPE = OffsetResponse_v0
+    RESPONSE_TYPE = ListOffsetsResponse_v0
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -107,10 +107,10 @@ class OffsetRequest_v0(Request):
         'replica_id': -1
     }
 
-class OffsetRequest_v1(Request):
+class ListOffsetsRequest_v1(Request):
     API_KEY = 2
     API_VERSION = 1
-    RESPONSE_TYPE = OffsetResponse_v1
+    RESPONSE_TYPE = ListOffsetsResponse_v1
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -124,10 +124,10 @@ class OffsetRequest_v1(Request):
     }
 
 
-class OffsetRequest_v2(Request):
+class ListOffsetsRequest_v2(Request):
     API_KEY = 2
     API_VERSION = 2
-    RESPONSE_TYPE = OffsetResponse_v2
+    RESPONSE_TYPE = ListOffsetsResponse_v2
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('isolation_level', Int8),  # <- added isolation_level
@@ -142,23 +142,23 @@ class OffsetRequest_v2(Request):
     }
 
 
-class OffsetRequest_v3(Request):
+class ListOffsetsRequest_v3(Request):
     API_KEY = 2
     API_VERSION = 3
-    RESPONSE_TYPE = OffsetResponse_v3
-    SCHEMA = OffsetRequest_v2.SCHEMA
+    RESPONSE_TYPE = ListOffsetsResponse_v3
+    SCHEMA = ListOffsetsRequest_v2.SCHEMA
     DEFAULTS = {
         'replica_id': -1
     }
 
 
-class OffsetRequest_v4(Request):
+class ListOffsetsRequest_v4(Request):
     """
     Add current_leader_epoch to request
     """
     API_KEY = 2
     API_VERSION = 4
-    RESPONSE_TYPE = OffsetResponse_v4
+    RESPONSE_TYPE = ListOffsetsResponse_v4
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('isolation_level', Int8),  # <- added isolation_level
@@ -174,21 +174,21 @@ class OffsetRequest_v4(Request):
     }
 
 
-class OffsetRequest_v5(Request):
+class ListOffsetsRequest_v5(Request):
     API_KEY = 2
     API_VERSION = 5
-    RESPONSE_TYPE = OffsetResponse_v5
-    SCHEMA = OffsetRequest_v4.SCHEMA
+    RESPONSE_TYPE = ListOffsetsResponse_v5
+    SCHEMA = ListOffsetsRequest_v4.SCHEMA
     DEFAULTS = {
         'replica_id': -1
     }
 
 
-OffsetRequest = [
-    OffsetRequest_v0, OffsetRequest_v1, OffsetRequest_v2,
-    OffsetRequest_v3, OffsetRequest_v4, OffsetRequest_v5,
+ListOffsetsRequest = [
+    ListOffsetsRequest_v0, ListOffsetsRequest_v1, ListOffsetsRequest_v2,
+    ListOffsetsRequest_v3, ListOffsetsRequest_v4, ListOffsetsRequest_v5,
 ]
-OffsetResponse = [
-    OffsetResponse_v0, OffsetResponse_v1, OffsetResponse_v2,
-    OffsetResponse_v3, OffsetResponse_v4, OffsetResponse_v5,
+ListOffsetsResponse = [
+    ListOffsetsResponse_v0, ListOffsetsResponse_v1, ListOffsetsResponse_v2,
+    ListOffsetsResponse_v3, ListOffsetsResponse_v4, ListOffsetsResponse_v5,
 ]
