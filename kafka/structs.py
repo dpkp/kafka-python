@@ -42,7 +42,7 @@ Keyword Arguments:
                         this partition metadata.
 """
 PartitionMetadata = namedtuple("PartitionMetadata",
-    ["topic", "partition", "leader", "replicas", "isr", "error"])
+    ["topic", "partition", "leader", "leader_epoch", "replicas", "isr", "offline_replicas", "error"])
 
 
 """The Kafka offset commit API
