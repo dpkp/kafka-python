@@ -357,9 +357,8 @@ class KafkaConsumer(six.Iterator):
 
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
-        # Get auto-discovered version from client if necessary
-        if self.config['api_version'] is None:
-            self.config['api_version'] = self._client.config['api_version']
+        # Get auto-discovered / normalized version from client
+        self.config['api_version'] = self._client.config['api_version']
 
         # Coordinator configurations are different for older brokers
         # max_poll_interval_ms is not supported directly -- it must the be

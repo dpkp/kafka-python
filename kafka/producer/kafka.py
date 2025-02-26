@@ -385,9 +385,8 @@ class KafkaProducer(object):
             wakeup_timeout_ms=self.config['max_block_ms'],
             **self.config)
 
-        # Get auto-discovered version from client if necessary
-        if self.config['api_version'] is None:
-            self.config['api_version'] = client.config['api_version']
+        # Get auto-discovered / normalized version from client
+        self.config['api_version'] = client.config['api_version']
 
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
