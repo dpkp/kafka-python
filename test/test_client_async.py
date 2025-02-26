@@ -43,7 +43,7 @@ def test_bootstrap(mocker, conn):
     kwargs.pop('state_change_callback')
     kwargs.pop('node_id')
     assert kwargs == cli.config
-    conn.send.assert_called_once_with(MetadataRequest[0]([]), blocking=False)
+    conn.send.assert_called_once_with(MetadataRequest[0]([]), blocking=False, request_timeout_ms=None)
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
                                          BrokerMetadata(1, 'bar', 34, None)])
@@ -220,12 +220,12 @@ def test_send(cli, conn):
     request = ProduceRequest[0](0, 0, [])
     assert request.expect_response() is False
     ret = cli.send(0, request)
-    conn.send.assert_called_with(request, blocking=False)
+    conn.send.assert_called_with(request, blocking=False, request_timeout_ms=None)
     assert isinstance(ret, Future)
 
     request = MetadataRequest[0]([])
     cli.send(0, request)
-    conn.send.assert_called_with(request, blocking=False)
+    conn.send.assert_called_with(request, blocking=False, request_timeout_ms=None)
 
 
 def test_poll(mocker):
