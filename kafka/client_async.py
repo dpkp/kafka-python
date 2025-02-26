@@ -249,8 +249,7 @@ class KafkaClient(object):
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
-            check_timeout = self.config['api_version_auto_timeout_ms'] / 1000
-            self.config['api_version'] = self.check_version(timeout=check_timeout)
+            self.config['api_version'] = self.check_version()
         elif self.config['api_version'] in BROKER_API_VERSIONS:
             self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
         elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
@@ -921,13 +920,16 @@ class KafkaClient(object):
         """
         return self._api_versions
 
-    def check_version(self, node_id=None, timeout=2, strict=False):
+    def check_version(self, node_id=None, timeout=None, strict=False):
         """Attempt to guess the version of a Kafka broker.
 
-        Note: It is possible that this method blocks longer than the
-            specified timeout. This can happen if the entire cluster
-            is down and the client enters a bootstrap backoff sleep.
-            This is only possible if node_id is None.
+        Keyword Arguments:
+            node_id (str, optional): Broker node id from cluster metadata. If None, attempts
+                to connect to any available broker until version is identified.
+                Default: None
+            timeout (num, optional): Maximum time in seconds to try to check broker version.
+                If unable to identify version before timeout, raise error (see below).
+                Default: api_version_auto_timeout_ms / 1000
 
         Returns: version tuple, i.e. (3, 9), (2, 0), (0, 10, 2) etc
 
@@ -937,6 +939,7 @@ class KafkaClient(object):
             UnrecognizedBrokerVersion: please file bug if seen!
             AssertionError (if strict=True): please file bug if seen!
         """
+        timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
         self._lock.acquire()
         end = time.time() + timeout
         while time.time() < end:
