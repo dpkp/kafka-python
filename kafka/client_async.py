@@ -303,7 +303,7 @@ class KafkaClient(object):
 
     def _conn_state_change(self, node_id, sock, conn):
         with self._lock:
-            if conn.connecting():
+            if conn.state is ConnectionStates.CONNECTING:
                 # SSL connections can enter this state 2x (second during Handshake)
                 if node_id not in self._connecting:
                     self._connecting.add(node_id)
@@ -315,7 +315,13 @@ class KafkaClient(object):
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
 
-            elif conn.connected():
+            elif conn.state in (ConnectionStates.API_VERSIONS, ConnectionStates.AUTHENTICATING):
+                try:
+                    self._selector.register(sock, selectors.EVENT_READ, conn)
+                except KeyError:
+                    self._selector.modify(sock, selectors.EVENT_READ, conn)
+
+            elif conn.state is ConnectionStates.CONNECTED:
                 log.debug("Node %s connected", node_id)
                 if node_id in self._connecting:
                     self._connecting.remove(node_id)
@@ -332,6 +338,8 @@ class KafkaClient(object):
 
                 if self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails = 0
+                    if self._api_versions is None:
+                        self._api_versions = conn._api_versions
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -398,10 +406,15 @@ class KafkaClient(object):
 
         return False
 
-    def _maybe_connect(self, node_id):
+    def _init_connect(self, node_id):
         """Idempotent non-blocking connection attempt to the given node id."""
         with self._lock:
             conn = self._conns.get(node_id)
+
+            # Check if existing connection should be recreated because host/port changed
+            if conn is not None and self._should_recycle_connection(conn):
+                self._conns.pop(node_id)
+                conn = None
 
             if conn is None:
                 broker = self.cluster.broker_metadata(node_id)
@@ -417,15 +430,8 @@ class KafkaClient(object):
                                         **self.config)
                 self._conns[node_id] = conn
 
-            # Check if existing connection should be recreated because host/port changed
-            elif self._should_recycle_connection(conn):
-                self._conns.pop(node_id)
-                return False
-
-            elif conn.connected():
-                return True
-
-            conn.connect()
+            if conn.disconnected():
+                conn.connect()
             return conn.connected()
 
     def ready(self, node_id, metadata_priority=True):
@@ -621,7 +627,7 @@ class KafkaClient(object):
 
                 # Attempt to complete pending connections
                 for node_id in list(self._connecting):
-                    self._maybe_connect(node_id)
+                    self._init_connect(node_id)
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
@@ -927,15 +933,14 @@ class KafkaClient(object):
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
 
-        Note: A call to check_version must previously have succeeded and returned
-        version 0.10.0 or later
+        Note: Only available after bootstrap; requires broker version 0.10.0 or later.
 
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
         or None if ApiVersion is not supported by the kafka cluster.
         """
         return self._api_versions
 
-    def check_version(self, node_id=None, timeout=None, strict=False):
+    def check_version(self, node_id=None, timeout=None, **kwargs):
         """Attempt to guess the version of a Kafka broker.
 
         Keyword Arguments:
@@ -951,45 +956,41 @@ class KafkaClient(object):
         Raises:
             NodeNotReadyError (if node_id is provided)
             NoBrokersAvailable (if node_id is None)
-            UnrecognizedBrokerVersion: please file bug if seen!
-            AssertionError (if strict=True): please file bug if seen!
         """
         timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
-        self._lock.acquire()
-        end = time.time() + timeout
-        while time.time() < end:
+        with self._lock:
+            end = time.time() + timeout
+            while time.time() < end:
+                time_remaining = max(end - time.time(), 0)
+                if node_id is not None and self.connection_delay(node_id) > 0:
+                    sleep_time = min(time_remaining, self.connection_delay(node_id) / 1000.0)
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
+                    continue
+                try_node = node_id or self.least_loaded_node()
+                if try_node is None:
+                    sleep_time = min(time_remaining,  self.least_loaded_node_refresh_ms() / 1000.0)
+                    if sleep_time > 0:
+                        log.warning('No node available during check_version; sleeping %.2f secs', sleep_time)
+                        time.sleep(sleep_time)
+                    continue
+                log.debug('Attempting to check version with node %s', try_node)
+                self._init_connect(try_node)
+                conn = self._conns[try_node]
 
-            # It is possible that least_loaded_node falls back to bootstrap,
-            # which can block for an increasing backoff period
-            try_node = node_id or self.least_loaded_node()
-            if try_node is None:
-                self._lock.release()
-                raise Errors.NoBrokersAvailable()
-            self._maybe_connect(try_node)
-            conn = self._conns[try_node]
+                while conn.connecting() and time.time() < end:
+                    timeout_ms = min((end - time.time()) * 1000, 200)
+                    self.poll(timeout_ms=timeout_ms)
 
-            # We will intentionally cause socket failures
-            # These should not trigger metadata refresh
-            self._refresh_on_disconnects = False
-            try:
-                remaining = end - time.time()
-                version = conn.check_version(timeout=remaining, strict=strict, topics=list(self.config['bootstrap_topics_filter']))
-                if not self._api_versions:
-                    self._api_versions = conn.get_api_versions()
-                self._lock.release()
-                return version
-            except Errors.NodeNotReadyError:
-                # Only raise to user if this is a node-specific request
+                if conn._api_version is not None:
+                    return conn._api_version
+
+            # Timeout
+            else:
                 if node_id is not None:
-                    self._lock.release()
-                    raise
-            finally:
-                self._refresh_on_disconnects = True
-
-        # Timeout
-        else:
-            self._lock.release()
-            raise Errors.NoBrokersAvailable()
+                    raise Errors.NodeNotReadyError(node_id)
+                else:
+                    raise Errors.NoBrokersAvailable()
 
     def api_version(self, operation, max_version=None):
         """Find the latest version of the protocol operation supported by both
