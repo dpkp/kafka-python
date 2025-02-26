@@ -546,7 +546,7 @@ class KafkaClient(object):
             return False
         return conn.connected() and conn.can_send_more()
 
-    def send(self, node_id, request, wakeup=True):
+    def send(self, node_id, request, wakeup=True, request_timeout_ms=None):
         """Send a request to a specific node. Bytes are placed on an
         internal per-connection send-queue. Actual network I/O will be
         triggered in a subsequent call to .poll()
@@ -554,7 +554,13 @@ class KafkaClient(object):
         Arguments:
             node_id (int): destination node
             request (Struct): request object (not-encoded)
-            wakeup (bool): optional flag to disable thread-wakeup
+
+        Keyword Arguments:
+            wakeup (bool, optional): optional flag to disable thread-wakeup.
+            request_timeout_ms (int, optional): Provide custom timeout in milliseconds.
+                If response is not processed before timeout, client will fail the
+                request and close the connection.
+                Default: None (uses value from client configuration)
 
         Raises:
             AssertionError: if node_id is not in current cluster metadata
@@ -570,7 +576,7 @@ class KafkaClient(object):
         # conn.send will queue the request internally
         # we will need to call send_pending_requests()
         # to trigger network I/O
-        future = conn.send(request, blocking=False)
+        future = conn.send(request, blocking=False, request_timeout_ms=request_timeout_ms)
         if not future.is_done:
             self._sending.add(conn)
 
@@ -729,11 +735,13 @@ class KafkaClient(object):
 
         for conn in six.itervalues(self._conns):
             if conn.requests_timed_out():
+                timed_out = conn.timed_out_ifrs()
+                timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
                 log.warning('%s timed out after %s ms. Closing connection.',
-                            conn, conn.config['request_timeout_ms'])
+                            conn, timeout_ms)
                 conn.close(error=Errors.RequestTimedOutError(
                     'Request timed out after %s ms' %
-                    conn.config['request_timeout_ms']))
+                    timeout_ms))
 
         if self._sensors:
             self._sensors.io_time.record((time.time() - end_select) * 1000000000)
