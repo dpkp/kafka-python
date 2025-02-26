@@ -264,7 +264,7 @@ class FetchRequest_v6(Request):
 
 class FetchRequest_v7(Request):
     """
-    Add incremental fetch requests
+    Add incremental fetch requests (see KIP-227)
     """
     API_KEY = 1
     API_VERSION = 7

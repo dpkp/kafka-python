@@ -451,7 +451,7 @@ class Fetcher(six.Iterator):
 
             self._next_partition_records = None
 
-    def _unpack_message_set(self, tp, records):
+    def _unpack_records(self, tp, records):
         try:
             batch = records.next_batch()
             while batch is not None:
@@ -673,6 +673,7 @@ class Fetcher(six.Iterator):
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
+        version = self._client.api_version(FetchRequest, max_version=6)
         fetchable = collections.defaultdict(lambda: collections.defaultdict(list))
 
         for partition in self._fetchable_partitions():
@@ -697,11 +698,19 @@ class Fetcher(six.Iterator):
                 self._client.cluster.request_update()
 
             elif self._client.in_flight_request_count(node_id) == 0:
-                partition_info = (
-                    partition.partition,
-                    position,
-                    self.config['max_partition_fetch_bytes']
-                )
+                if version < 5:
+                    partition_info = (
+                        partition.partition,
+                        position,
+                        self.config['max_partition_fetch_bytes']
+                    )
+                else:
+                    partition_info = (
+                        partition.partition,
+                        position,
+                        self.config['max_partition_fetch_bytes'],
+                        -1, # log_start_offset is used internally by brokers / replicas only
+                    )
                 fetchable[node_id][partition.topic].append(partition_info)
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position)
@@ -709,40 +718,40 @@ class Fetcher(six.Iterator):
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
 
-        version = self._client.api_version(FetchRequest, max_version=4)
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
-            if version < 3:
+            # As of version == 3 partitions will be returned in order as
+            # they are requested, so to avoid starvation with
+            # `fetch_max_bytes` option we need this shuffle
+            # NOTE: we do have partition_data in random order due to usage
+            #       of unordered structures like dicts, but that does not
+            #       guarantee equal distribution, and starting in Python3.6
+            #       dicts retain insert order.
+            partition_data = list(partition_data.items())
+            random.shuffle(partition_data)
+
+            if version <= 2:
                 requests[node_id] = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
-                    partition_data.items())
+                    partition_data)
+            elif version == 3:
+                requests[node_id] = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    partition_data)
             else:
-                # As of version == 3 partitions will be returned in order as
-                # they are requested, so to avoid starvation with
-                # `fetch_max_bytes` option we need this shuffle
-                # NOTE: we do have partition_data in random order due to usage
-                #       of unordered structures like dicts, but that does not
-                #       guarantee equal distribution, and starting in Python3.6
-                #       dicts retain insert order.
-                partition_data = list(partition_data.items())
-                random.shuffle(partition_data)
-                if version == 3:
-                    requests[node_id] = FetchRequest[version](
-                        -1,  # replica_id
-                        self.config['fetch_max_wait_ms'],
-                        self.config['fetch_min_bytes'],
-                        self.config['fetch_max_bytes'],
-                        partition_data)
-                else:
-                    requests[node_id] = FetchRequest[version](
-                        -1,  # replica_id
-                        self.config['fetch_max_wait_ms'],
-                        self.config['fetch_min_bytes'],
-                        self.config['fetch_max_bytes'],
-                        self._isolation_level,
-                        partition_data)
+                # through v6
+                requests[node_id] = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    self._isolation_level,
+                    partition_data)
         return requests
 
     def _handle_fetch_response(self, request, send_time, response):
@@ -821,7 +830,7 @@ class Fetcher(six.Iterator):
                     log.debug("Adding fetched record for partition %s with"
                               " offset %d to buffered record list", tp,
                               position)
-                    unpacked = list(self._unpack_message_set(tp, records))
+                    unpacked = list(self._unpack_records(tp, records))
                     parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
                     if unpacked:
                         last_offset = unpacked[-1].offset
@@ -845,7 +854,9 @@ class Fetcher(six.Iterator):
                 self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
 
             elif error_type in (Errors.NotLeaderForPartitionError,
-                                Errors.UnknownTopicOrPartitionError):
+                                Errors.UnknownTopicOrPartitionError,
+                                Errors.KafkaStorageError):
+                log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
                 self._client.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:
                 position = self._subscriptions.assignment[tp].position

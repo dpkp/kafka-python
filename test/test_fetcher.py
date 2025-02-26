@@ -399,7 +399,7 @@ def test__handle_fetch_error(fetcher, caplog, exception, log_level):
     assert caplog.records[0].levelname == logging.getLevelName(log_level)
 
 
-def test__unpack_message_set(fetcher):
+def test__unpack_records(fetcher):
     fetcher.config['check_crcs'] = False
     tp = TopicPartition('foo', 0)
     messages = [
@@ -408,7 +408,7 @@ def test__unpack_message_set(fetcher):
         (None, b"c", None),
     ]
     memory_records = MemoryRecords(_build_record_batch(messages))
-    records = list(fetcher._unpack_message_set(tp, memory_records))
+    records = list(fetcher._unpack_records(tp, memory_records))
     assert len(records) == 3
     assert all(map(lambda x: isinstance(x, ConsumerRecord), records))
     assert records[0].value == b'a'
