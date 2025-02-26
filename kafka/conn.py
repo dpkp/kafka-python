@@ -171,7 +171,7 @@ class BrokerConnection(object):
             Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version is None
+            api version. Only applies if api_version is None. Default: 2000.
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
@@ -217,6 +217,7 @@ class BrokerConnection(object):
         'ssl_password': None,
         'ssl_ciphers': None,
         'api_version': None,
+        'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda node_id, sock, conn: True,
         'metrics': None,
@@ -549,14 +550,14 @@ class BrokerConnection(object):
                 # ((0, 10), ApiVersionsRequest[0]()),
                 request = ApiVersionsRequest[0]()
                 future = Future()
-                response = self._send(request, blocking=True)
+                response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_api_versions_response, future)
                 response.add_errback(self._handle_api_versions_failure, future)
                 self._api_versions_future = future
             elif self._check_version_idx < len(self.VERSION_CHECKS):
                 version, request = self.VERSION_CHECKS[self._check_version_idx]
                 future = Future()
-                response = self._send(request, blocking=True)
+                response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_check_version_response, future, version)
                 response.add_errback(self._handle_check_version_failure, future)
                 self._api_versions_future = future
