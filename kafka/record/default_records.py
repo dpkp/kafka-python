@@ -269,8 +269,12 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
                 "payload, but instead read {}".format(length, pos - start_pos))
         self._pos = pos
 
-        return DefaultRecord(
-            offset, timestamp, self.timestamp_type, key, value, headers)
+        if self.is_control_batch:
+            return ControlRecord(
+                offset, timestamp, self.timestamp_type, key, value, headers)
+        else:
+            return DefaultRecord(
+                offset, timestamp, self.timestamp_type, key, value, headers)
 
     def __iter__(self):
         self._maybe_uncompress()
@@ -359,6 +363,45 @@ class DefaultRecord(ABCRecord):
             " key={!r}, value={!r}, headers={!r})".format(
                 self._offset, self._timestamp, self._timestamp_type,
                 self._key, self._value, self._headers)
+        )
+
+
+class ControlRecord(DefaultRecord):
+    __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
+                 "_headers", "_version", "_type")
+
+    KEY_STRUCT = struct.Struct(
+        ">h"  # Current Version => Int16
+        "h"  # Type => Int16 (0 indicates an abort marker, 1 indicates a commit)
+    )
+
+    def __init__(self, offset, timestamp, timestamp_type, key, value, headers):
+        super(ControlRecord, self).__init__(offset, timestamp, timestamp_type, key, value, headers)
+        (self._version, self._type) = self.KEY_STRUCT.unpack(self._key)
+
+    # see https://kafka.apache.org/documentation/#controlbatch
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def abort(self):
+        return self._type == 0
+
+    @property
+    def commit(self):
+        return self._type == 1
+
+    def __repr__(self):
+        return (
+            "ControlRecord(offset={!r}, timestamp={!r}, timestamp_type={!r},"
+            " version={!r}, type={!r} <{!s}>)".format(
+                self._offset, self._timestamp, self._timestamp_type,
+                self._version, self._type, "abort" if self.abort else "commit")
         )
 
 

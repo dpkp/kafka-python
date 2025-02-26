@@ -456,10 +456,20 @@ class Fetcher(six.Iterator):
             batch = records.next_batch()
             while batch is not None:
 
-                # LegacyRecordBatch cannot access either base_offset or last_offset_delta
+                # Try DefaultsRecordBatch / message log format v2
+                # base_offset, last_offset_delta, and control batches
                 try:
                     self._subscriptions.assignment[tp].last_offset_from_message_batch = batch.base_offset + \
                                                                                         batch.last_offset_delta
+                    # Control batches have a single record indicating whether a transaction
+                    # was aborted or committed.
+                    # When isolation_level is READ_COMMITTED (currently unsupported)
+                    # we should also skip all messages from aborted transactions
+                    # For now we only support READ_UNCOMMITTED and so we ignore the
+                    # abort/commit signal.
+                    if batch.is_control_batch:
+                        batch = records.next_batch()
+                        continue
                 except AttributeError:
                     pass
 
@@ -674,7 +684,7 @@ class Fetcher(six.Iterator):
                 if next_offset_from_batch_header > self._subscriptions.assignment[partition].position:
                     log.debug(
                         "Advance position for partition %s from %s to %s (last message batch location plus one)"
-                        " to correct for deleted compacted messages",
+                        " to correct for deleted compacted messages and/or transactional control records",
                         partition, self._subscriptions.assignment[partition].position, next_offset_from_batch_header)
                     self._subscriptions.assignment[partition].position = next_offset_from_batch_header
 
