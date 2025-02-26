@@ -948,7 +948,7 @@ class BrokerConnection(object):
         # drop lock before state change callback and processing futures
         self.config['state_change_callback'](self.node_id, sock, self)
         sock.close()
-        for (_correlation_id, (future, _timestamp)) in ifrs:
+        for (_correlation_id, (future, _timestamp, _timeout)) in ifrs:
             future.failure(error)
 
     def _can_send_recv(self):
@@ -956,7 +956,7 @@ class BrokerConnection(object):
         return self.state in (ConnectionStates.AUTHENTICATING,
                               ConnectionStates.CONNECTED)
 
-    def send(self, request, blocking=True):
+    def send(self, request, blocking=True, request_timeout_ms=None):
         """Queue request for async network send, return Future()"""
         future = Future()
         if self.connecting():
@@ -965,9 +965,9 @@ class BrokerConnection(object):
             return future.failure(Errors.KafkaConnectionError(str(self)))
         elif not self.can_send_more():
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
-        return self._send(request, blocking=blocking)
+        return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
 
-    def _send(self, request, blocking=True):
+    def _send(self, request, blocking=True, request_timeout_ms=None):
         future = Future()
         with self._lock:
             if not self._can_send_recv():
@@ -980,9 +980,11 @@ class BrokerConnection(object):
 
             log.debug('%s Request %d: %s', self, correlation_id, request)
             if request.expect_response():
-                sent_time = time.time()
                 assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
-                self.in_flight_requests[correlation_id] = (future, sent_time)
+                sent_time = time.time()
+                request_timeout_ms = request_timeout_ms or self.config['request_timeout_ms']
+                timeout_at = sent_time + (request_timeout_ms / 1000)
+                self.in_flight_requests[correlation_id] = (future, sent_time, timeout_at)
             else:
                 future.success(None)
 
@@ -1072,7 +1074,7 @@ class BrokerConnection(object):
         for i, (correlation_id, response) in enumerate(responses):
             try:
                 with self._lock:
-                    (future, timestamp) = self.in_flight_requests.pop(correlation_id)
+                    (future, timestamp, _timeout) = self.in_flight_requests.pop(correlation_id)
             except KeyError:
                 self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
                 return ()
@@ -1146,10 +1148,9 @@ class BrokerConnection(object):
     def next_ifr_request_timeout_ms(self):
         with self._lock:
             if self.in_flight_requests:
-                get_timestamp = lambda v: v[1]
-                oldest_at = min(map(get_timestamp,
-                                    self.in_flight_requests.values()))
-                next_timeout = oldest_at + self.config['request_timeout_ms'] / 1000.0
+                get_timeout = lambda v: v[2]
+                next_timeout = min(map(get_timeout,
+                                   self.in_flight_requests.values()))
                 return max(0, (next_timeout - time.time()) * 1000)
             else:
                 return float('inf')

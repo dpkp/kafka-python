@@ -347,14 +347,14 @@ def test_requests_timed_out(conn):
         # No in-flight requests, not timed out
         assert not conn.requests_timed_out()
 
-        # Single request, timestamp = now (0)
-        conn.in_flight_requests[0] = ('foo', 0)
+        # Single request, timeout_at > now (0)
+        conn.in_flight_requests[0] = ('foo', 0, 1)
         assert not conn.requests_timed_out()
 
         # Add another request w/ timestamp > request_timeout ago
         request_timeout = conn.config['request_timeout_ms']
         expired_timestamp = 0 - request_timeout - 1
-        conn.in_flight_requests[1] = ('bar', expired_timestamp)
+        conn.in_flight_requests[1] = ('bar', 0, expired_timestamp)
         assert conn.requests_timed_out()
 
         # Drop the expired request and we should be good to go again
