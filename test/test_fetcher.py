@@ -18,7 +18,7 @@ from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
-from kafka.protocol.offset import ListOffsetsResponse
+from kafka.protocol.list_offsets import ListOffsetsResponse
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError

@@ -26,7 +26,7 @@ from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
 from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest, DescribeClientQuotasRequest
 from kafka.protocol.commit import OffsetFetchRequest
-from kafka.protocol.offset import ListOffsetsRequest
+from kafka.protocol.list_offsets import ListOffsetsRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.fetch import FetchRequest

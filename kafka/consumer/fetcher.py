@@ -13,7 +13,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.fetch import FetchRequest
-from kafka.protocol.offset import (
+from kafka.protocol.list_offsets import (
     ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
 from kafka.record import MemoryRecords
