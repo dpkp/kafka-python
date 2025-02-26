@@ -130,12 +130,23 @@ class KafkaClient(object):
             format. If no cipher can be selected (because compile-time options
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
-        api_version (tuple): Specify which Kafka API version to use. If set
-            to None, KafkaClient will attempt to infer the broker version by
-            probing various APIs. Example: (0, 10, 2). Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to determine the broker version via
+            ApiVersionsRequest API or, for brokers earlier than 0.10, probing
+            various known APIs. Dynamic version checking is performed eagerly
+            during __init__ and can raise NoBrokersAvailableError if no connection
+            was made before timeout (see api_version_auto_timeout_ms below).
+            Different versions enable different functionality.
+
+            Examples:
+                (3, 9) most recent broker release, enable all supported features
+                (0, 10, 0) enables sasl authentication
+                (0, 8, 0) enables basic functionality only
+
+            Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version is None
+            api version. Only applies if api_version set to None.
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
@@ -868,9 +879,9 @@ class KafkaClient(object):
             if not topics and self.cluster.is_bootstrap(node_id):
                 topics = list(self.config['bootstrap_topics_filter'])
 
+            api_version = self.api_version(MetadataRequest, max_version=1)
             if self.cluster.need_all_topic_metadata or not topics:
-                topics = [] if self.config['api_version'] < (0, 10, 0) else None
-            api_version = 0 if self.config['api_version'] < (0, 10, 0) else 1
+                topics = MetadataRequest[api_version].ALL_TOPICS
             request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
@@ -961,6 +972,43 @@ class KafkaClient(object):
         else:
             self._lock.release()
             raise Errors.NoBrokersAvailable()
+
+    def api_version(self, operation, max_version=None):
+        """Find the latest version of the protocol operation supported by both
+        this library and the broker.
+
+        This resolves to the lesser of either the latest api version this
+        library supports, or the max version supported by the broker.
+
+        Arguments:
+            operation: A list of protocol operation versions from kafka.protocol.
+
+        Keyword Arguments:
+            max_version (int, optional): Provide an alternate maximum api version
+                to reflect limitations in user code.
+
+        Returns:
+            int: The highest api version number compatible between client and broker.
+
+        Raises: IncompatibleBrokerVersion if no matching version is found
+        """
+        # Cap max_version at the largest available version in operation list
+        max_version = min(len(operation) - 1, max_version if max_version is not None else float('inf'))
+        broker_api_versions = self._api_versions
+        api_key = operation[0].API_KEY
+        if broker_api_versions is None or api_key not in broker_api_versions:
+            raise IncompatibleBrokerVersion(
+                "Kafka broker does not support the '{}' Kafka protocol."
+                .format(operation[0].__name__))
+        broker_min_version, broker_max_version = broker_api_versions[api_key]
+        version = min(max_version, broker_max_version)
+        if version < broker_min_version:
+            # max library version is less than min broker version. Currently,
+            # no Kafka versions specify a min msg version. Maybe in the future?
+            raise IncompatibleBrokerVersion(
+                "No version of the '{}' Kafka protocol is supported by both the client and broker."
+                .format(operation[0].__name__))
+        return version
 
     def wakeup(self):
         if self._waking or self._wake_w is None:

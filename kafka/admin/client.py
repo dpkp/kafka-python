@@ -215,11 +215,7 @@ class KafkaAdminClient(object):
         )
 
         # Get auto-discovered version from client if necessary
-        if self.config['api_version'] is None:
-            self.config['api_version'] = self._client.config['api_version']
-        else:
-            # need to run check_version for get_api_versions()
-            self._client.check_version(timeout=(self.config['api_version_auto_timeout_ms'] / 1000))
+        self.config['api_version'] = self._client.config['api_version']
 
         self._closed = False
         self._refresh_controller_id()
@@ -236,35 +232,6 @@ class KafkaAdminClient(object):
         self._closed = True
         log.debug("KafkaAdminClient is now closed.")
 
-    def _matching_api_version(self, operation):
-        """Find the latest version of the protocol operation supported by both
-        this library and the broker.
-
-        This resolves to the lesser of either the latest api version this
-        library supports, or the max version supported by the broker.
-
-        Arguments:
-            operation: A list of protocol operation versions from kafka.protocol.
-
-        Returns:
-            int: The max matching version number between client and broker.
-        """
-        broker_api_versions = self._client.get_api_versions()
-        api_key = operation[0].API_KEY
-        if broker_api_versions is None or api_key not in broker_api_versions:
-            raise IncompatibleBrokerVersion(
-                "Kafka broker does not support the '{}' Kafka protocol."
-                .format(operation[0].__name__))
-        min_version, max_version = broker_api_versions[api_key]
-        version = min(len(operation) - 1, max_version)
-        if version < min_version:
-            # max library version is less than min broker version. Currently,
-            # no Kafka versions specify a min msg version. Maybe in the future?
-            raise IncompatibleBrokerVersion(
-                "No version of the '{}' Kafka protocol is supported by both the client and broker."
-                .format(operation[0].__name__))
-        return version
-
     def _validate_timeout(self, timeout_ms):
         """Validate the timeout is set or use the configuration default.
 
@@ -278,7 +245,7 @@ class KafkaAdminClient(object):
 
     def _refresh_controller_id(self, timeout_ms=30000):
         """Determine the Kafka cluster controller."""
-        version = self._matching_api_version(MetadataRequest)
+        version = self._client.api_version(MetadataRequest, max_version=6)
         if 1 <= version <= 6:
             timeout_at = time.time() + timeout_ms / 1000
             while time.time() < timeout_at:
@@ -323,8 +290,7 @@ class KafkaAdminClient(object):
         # When I experimented with this, the coordinator value returned in
         # GroupCoordinatorResponse_v1 didn't match the value returned by
         # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = 0
-        # version = self._matching_api_version(GroupCoordinatorRequest)
+        version = self._client.api_version(GroupCoordinatorRequest, max_version=0)
         if version <= 0:
             request = GroupCoordinatorRequest[version](group_id)
         else:
@@ -493,7 +459,7 @@ class KafkaAdminClient(object):
         Returns:
             Appropriate version of CreateTopicResponse class.
         """
-        version = self._matching_api_version(CreateTopicsRequest)
+        version = self._client.api_version(CreateTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
         if version == 0:
             if validate_only:
@@ -531,7 +497,7 @@ class KafkaAdminClient(object):
         Returns:
             Appropriate version of DeleteTopicsResponse class.
         """
-        version = self._matching_api_version(DeleteTopicsRequest)
+        version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
         if version <= 3:
             request = DeleteTopicsRequest[version](
@@ -550,7 +516,7 @@ class KafkaAdminClient(object):
         """
         topics == None means "get all topics"
         """
-        version = self._matching_api_version(MetadataRequest)
+        version = self._client.api_version(MetadataRequest, max_version=5)
         if version <= 3:
             if auto_topic_creation:
                 raise IncompatibleBrokerVersion(
@@ -667,7 +633,7 @@ class KafkaAdminClient(object):
             tuple of a list of matching ACL objects and a KafkaError (NoError if successful)
         """
 
-        version = self._matching_api_version(DescribeAclsRequest)
+        version = self._client.api_version(DescribeAclsRequest, max_version=1)
         if version == 0:
             request = DescribeAclsRequest[version](
                 resource_type=acl_filter.resource_pattern.resource_type,
@@ -801,7 +767,7 @@ class KafkaAdminClient(object):
             if not isinstance(acl, ACL):
                 raise IllegalArgumentError("acls must contain ACL objects")
 
-        version = self._matching_api_version(CreateAclsRequest)
+        version = self._client.api_version(CreateAclsRequest, max_version=1)
         if version == 0:
             request = CreateAclsRequest[version](
                 creations=[self._convert_create_acls_resource_request_v0(acl) for acl in acls]
@@ -923,7 +889,7 @@ class KafkaAdminClient(object):
             if not isinstance(acl, ACLFilter):
                 raise IllegalArgumentError("acl_filters must contain ACLFilter type objects")
 
-        version = self._matching_api_version(DeleteAclsRequest)
+        version = self._client.api_version(DeleteAclsRequest, max_version=1)
 
         if version == 0:
             request = DeleteAclsRequest[version](
@@ -992,7 +958,7 @@ class KafkaAdminClient(object):
                 topic_resources.append(self._convert_describe_config_resource_request(config_resource))
 
         futures = []
-        version = self._matching_api_version(DescribeConfigsRequest)
+        version = self._client.api_version(DescribeConfigsRequest, max_version=2)
         if version == 0:
             if include_synonyms:
                 raise IncompatibleBrokerVersion(
@@ -1077,7 +1043,7 @@ class KafkaAdminClient(object):
         Returns:
             Appropriate version of AlterConfigsResponse class.
         """
-        version = self._matching_api_version(AlterConfigsRequest)
+        version = self._client.api_version(AlterConfigsRequest, max_version=1)
         if version <= 1:
             request = AlterConfigsRequest[version](
                 resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
@@ -1138,7 +1104,7 @@ class KafkaAdminClient(object):
         Returns:
             Appropriate version of CreatePartitionsResponse class.
         """
-        version = self._matching_api_version(CreatePartitionsRequest)
+        version = self._client.api_version(CreatePartitionsRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
         if version <= 1:
             request = CreatePartitionsRequest[version](
@@ -1177,7 +1143,7 @@ class KafkaAdminClient(object):
         Returns:
             A message future.
         """
-        version = self._matching_api_version(DescribeGroupsRequest)
+        version = self._client.api_version(DescribeGroupsRequest, max_version=3)
         if version <= 2:
             if include_authorized_operations:
                 raise IncompatibleBrokerVersion(
@@ -1311,7 +1277,7 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        version = self._matching_api_version(ListGroupsRequest)
+        version = self._client.api_version(ListGroupsRequest, max_version=2)
         if version <= 2:
             request = ListGroupsRequest[version]()
         else:
@@ -1394,7 +1360,7 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        version = self._matching_api_version(OffsetFetchRequest)
+        version = self._client.api_version(OffsetFetchRequest, max_version=3)
         if version <= 3:
             if partitions is None:
                 if version <= 1:
@@ -1564,7 +1530,7 @@ class KafkaAdminClient(object):
         Returns:
             A future representing the in-flight DeleteGroupsRequest.
         """
-        version = self._matching_api_version(DeleteGroupsRequest)
+        version = self._client.api_version(DeleteGroupsRequest, max_version=1)
         if version <= 1:
             request = DeleteGroupsRequest[version](group_ids)
         else:
@@ -1595,7 +1561,7 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        version = self._matching_api_version(DescribeLogDirsRequest)
+        version = self._client.api_version(DescribeLogDirsRequest, max_version=0)
         if version <= 0:
             request = DescribeLogDirsRequest[version]()
             future = self._send_request_to_node(self._client.least_loaded_node(), request)

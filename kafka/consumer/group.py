@@ -195,10 +195,17 @@ class KafkaConsumer(six.Iterator):
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use. If set to
-            None, the client will attempt to infer the broker version by probing
-            various APIs. Different versions enable different functionality.
+            None, the client will attempt to determine the broker version via
+            ApiVersionsRequest API or, for brokers earlier than 0.10, probing
+            various known APIs. Dynamic version checking is performed eagerly
+            during __init__ and can raise NoBrokersAvailableError if no connection
+            was made before timeout (see api_version_auto_timeout_ms below).
+            Different versions enable different functionality.
 
             Examples:
+                (3, 9) most recent broker release, enable all supported features
+                (0, 11) enables message format v2 (internal)
+                (0, 10, 0) enables sasl authentication and message format v1
                 (0, 9) enables full group coordination features with automatic
                     partition assignment and rebalancing,
                 (0, 8, 2) enables kafka-storage offset commits with manual
@@ -357,9 +364,8 @@ class KafkaConsumer(six.Iterator):
 
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
-        # Get auto-discovered version from client if necessary
-        if self.config['api_version'] is None:
-            self.config['api_version'] = self._client.config['api_version']
+        # Get auto-discovered / normalized version from client
+        self.config['api_version'] = self._client.config['api_version']
 
         # Coordinator configurations are different for older brokers
         # max_poll_interval_ms is not supported directly -- it must the be

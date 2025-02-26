@@ -17,6 +17,7 @@ from kafka.coordinator.protocol import (
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import Metrics
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
@@ -41,8 +42,9 @@ def test_init(client, coordinator):
 
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_autocommit_enable_api_version(client, api_version):
-    coordinator = ConsumerCoordinator(client, SubscriptionState(),
+def test_autocommit_enable_api_version(conn, api_version):
+    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+                                      SubscriptionState(),
                                       Metrics(),
                                       enable_auto_commit=True,
                                       session_timeout_ms=30000,   # session_timeout_ms and max_poll_interval_ms
@@ -86,8 +88,13 @@ def test_group_protocols(coordinator):
 
 
 @pytest.mark.parametrize('api_version', [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_pattern_subscription(coordinator, api_version):
-    coordinator.config['api_version'] = api_version
+def test_pattern_subscription(conn, api_version):
+    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+                                      SubscriptionState(),
+                                      Metrics(),
+                                      api_version=api_version,
+                                      session_timeout_ms=10000,
+                                      max_poll_interval_ms=10000)
     coordinator._subscription.subscribe(pattern='foo')
     assert coordinator._subscription.subscription == set([])
     assert coordinator._metadata_snapshot == coordinator._build_metadata_snapshot(coordinator._subscription, {})
@@ -436,7 +443,7 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, req_type):
     expect_node = 0
-    patched_coord.config['api_version'] = api_version
+    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
 
     patched_coord._send_offset_commit_request(offsets)
     (node, request), _ = patched_coord._client.send.call_args
@@ -532,7 +539,7 @@ def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, req_type):
     # assuming fixture sets coordinator=0, least_loaded_node=1
     expect_node = 0
-    patched_coord.config['api_version'] = api_version
+    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
 
     patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args

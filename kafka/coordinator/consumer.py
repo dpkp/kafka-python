@@ -582,12 +582,13 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.config['api_version'] >= (0, 9) and generation is None:
             return Future().failure(Errors.CommitFailedError())
 
-        if self.config['api_version'] >= (0, 9):
-            request = OffsetCommitRequest[2](
+        version = self._client.api_version(OffsetCommitRequest, max_version=2)
+        if version == 2:
+            request = OffsetCommitRequest[version](
                 self.group_id,
                 generation.generation_id,
                 generation.member_id,
-                OffsetCommitRequest[2].DEFAULT_RETENTION_TIME,
+                OffsetCommitRequest[version].DEFAULT_RETENTION_TIME,
                 [(
                     topic, [(
                         partition,
@@ -596,8 +597,8 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
-        elif self.config['api_version'] >= (0, 8, 2):
-            request = OffsetCommitRequest[1](
+        elif version == 1:
+            request = OffsetCommitRequest[version](
                 self.group_id, -1, '',
                 [(
                     topic, [(
@@ -608,8 +609,8 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
-        elif self.config['api_version'] >= (0, 8, 1):
-            request = OffsetCommitRequest[0](
+        elif version == 0:
+            request = OffsetCommitRequest[version](
                 self.group_id,
                 [(
                     topic, [(
@@ -731,16 +732,11 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp in partitions:
             topic_partitions[tp.topic].add(tp.partition)
 
-        if self.config['api_version'] >= (0, 8, 2):
-            request = OffsetFetchRequest[1](
-                self.group_id,
-                list(topic_partitions.items())
-            )
-        else:
-            request = OffsetFetchRequest[0](
-                self.group_id,
-                list(topic_partitions.items())
-            )
+        version = self._client.api_version(OffsetFetchRequest, max_version=1)
+        request = OffsetFetchRequest[version](
+            self.group_id,
+            list(topic_partitions.items())
+        )
 
         # send the request with a callback
         future = Future()

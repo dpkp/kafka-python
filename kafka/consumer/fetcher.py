@@ -57,7 +57,6 @@ class Fetcher(six.Iterator):
         'check_crcs': True,
         'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
-        'api_version': (0, 8, 0),
         'retry_backoff_ms': 100
     }
 
@@ -561,18 +560,16 @@ class Fetcher(six.Iterator):
         return list_offsets_future
 
     def _send_offset_request(self, node_id, timestamps):
+        version = self._client.api_version(OffsetRequest, max_version=1)
         by_topic = collections.defaultdict(list)
         for tp, timestamp in six.iteritems(timestamps):
-            if self.config['api_version'] >= (0, 10, 1):
+            if version >= 1:
                 data = (tp.partition, timestamp)
             else:
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        if self.config['api_version'] >= (0, 10, 1):
-            request = OffsetRequest[1](-1, list(six.iteritems(by_topic)))
-        else:
-            request = OffsetRequest[0](-1, list(six.iteritems(by_topic)))
+        request = OffsetRequest[version](-1, list(six.iteritems(by_topic)))
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -662,7 +659,7 @@ class Fetcher(six.Iterator):
         FetchRequests skipped if no leader, or node has requests in flight
 
         Returns:
-            dict: {node_id: FetchRequest, ...} (version depends on api_version)
+            dict: {node_id: FetchRequest, ...} (version depends on client api_versions)
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
@@ -702,16 +699,7 @@ class Fetcher(six.Iterator):
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
 
-        if self.config['api_version'] >= (0, 11):
-            version = 4
-        elif self.config['api_version'] >= (0, 10, 1):
-            version = 3
-        elif self.config['api_version'] >= (0, 10, 0):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+        version = self._client.api_version(FetchRequest, max_version=4)
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
             if version < 3:

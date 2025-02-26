@@ -31,7 +31,6 @@ class Sender(threading.Thread):
         'request_timeout_ms': 30000,
         'guarantee_message_order': False,
         'client_id': 'kafka-python-' + __version__,
-        'api_version': (0, 8, 0),
     }
 
     def __init__(self, client, metadata, accumulator, metrics, **configs):
@@ -278,7 +277,7 @@ class Sender(threading.Thread):
             collated: {node_id: [RecordBatch]}
 
         Returns:
-            dict: {node_id: ProduceRequest} (version depends on api_version)
+            dict: {node_id: ProduceRequest} (version depends on client api_versions)
         """
         requests = {}
         for node_id, batches in six.iteritems(collated):
@@ -291,7 +290,7 @@ class Sender(threading.Thread):
         """Create a produce request from the given record batches.
 
         Returns:
-            ProduceRequest (version depends on api_version)
+            ProduceRequest (version depends on client api_versions)
         """
         produce_records_by_partition = collections.defaultdict(dict)
         for batch in batches:
@@ -301,31 +300,14 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        kwargs = {}
-        if self.config['api_version'] >= (2, 1):
-            version = 7
-        elif self.config['api_version'] >= (2, 0):
-            version = 6
-        elif self.config['api_version'] >= (1, 1):
-            version = 5
-        elif self.config['api_version'] >= (1, 0):
-            version = 4
-        elif self.config['api_version'] >= (0, 11):
-            version = 3
-            kwargs = dict(transactional_id=None)
-        elif self.config['api_version'] >= (0, 10, 0):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+        version = self._client.api_version(ProduceRequest, max_version=7)
+        # TODO: support transactional_id
         return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
                     for topic, partition_info
                     in six.iteritems(produce_records_by_partition)],
-            **kwargs
         )
 
     def wakeup(self):
