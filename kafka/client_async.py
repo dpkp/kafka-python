@@ -978,6 +978,8 @@ class KafkaClient(object):
 
         Returns:
             int: The highest api version number compatible between client and broker.
+
+        Raises: IncompatibleBrokerVersion if no matching version is found
         """
         # Cap max_version at the largest available version in operation list
         max_version = min(len(operation) - 1, max_version if max_version is not None else float('inf'))
