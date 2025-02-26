@@ -957,7 +957,19 @@ class BrokerConnection(object):
                               ConnectionStates.CONNECTED)
 
     def send(self, request, blocking=True, request_timeout_ms=None):
-        """Queue request for async network send, return Future()"""
+        """Queue request for async network send, return Future()
+
+        Arguments:
+            request (Request): kafka protocol request object to send.
+
+        Keyword Arguments:
+            blocking (bool, optional): Whether to immediately send via
+                blocking socket I/O. Default: True.
+            request_timeout_ms: Custom timeout in milliseconds for request.
+                Default: None (uses value from connection configuration)
+
+        Returns: future
+        """
         future = Future()
         if self.connecting():
             return future.failure(Errors.NodeNotReadyError(str(self)))
