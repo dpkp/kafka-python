@@ -130,12 +130,23 @@ class KafkaClient(object):
             format. If no cipher can be selected (because compile-time options
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
-        api_version (tuple): Specify which Kafka API version to use. If set
-            to None, KafkaClient will attempt to infer the broker version by
-            probing various APIs. Example: (0, 10, 2). Default: None
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will attempt to determine the broker version via
+            ApiVersionsRequest API or, for brokers earlier than 0.10, probing
+            various known APIs. Dynamic version checking is performed eagerly
+            during __init__ and can raise NoBrokersAvailableError if no connection
+            was made before timeout (see api_version_auto_timeout_ms below).
+            Different versions enable different functionality.
+
+            Examples:
+                (3, 9) most recent broker release, enable all supported features
+                (0, 10, 0) enables sasl authentication
+                (0, 8, 0) enables basic functionality only
+
+            Default: None
         api_version_auto_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version is None
+            api version. Only applies if api_version set to None.
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
