@@ -58,6 +58,7 @@ class ClusterMetadata(object):
         self.unauthorized_topics = set()
         self.internal_topics = set()
         self.controller = None
+        self.cluster_id = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -234,6 +235,9 @@ class ClusterMetadata(object):
 
         Returns: None
         """
+        if metadata.API_VERSION >= 3 and metadata.throttle_time_ms > 0:
+            log.warning("MetadataRequest throttled by broker (%d ms)", metadata.throttle_time_ms)
+
         # In the common case where we ask for a single topic and get back an
         # error, we should fail the future
         if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:
@@ -261,6 +265,11 @@ class ClusterMetadata(object):
         else:
             _new_controller = _new_brokers.get(metadata.controller_id)
 
+        if metadata.API_VERSION < 2:
+            _new_cluster_id = None
+        else:
+            _new_cluster_id = metadata.cluster_id
+
         _new_partitions = {}
         _new_broker_partitions = collections.defaultdict(set)
         _new_unauthorized_topics = set()
@@ -277,10 +286,21 @@ class ClusterMetadata(object):
             error_type = Errors.for_code(error_code)
             if error_type is Errors.NoError:
                 _new_partitions[topic] = {}
-                for p_error, partition, leader, replicas, isr in partitions:
+                for partition_data in partitions:
+                    leader_epoch = -1
+                    offline_replicas = []
+                    if metadata.API_VERSION >= 7:
+                        p_error, partition, leader, leader_epoch, replicas, isr, offline_replicas = partition_data
+                    elif metadata.API_VERSION >= 5:
+                        p_error, partition, leader, replicas, isr, offline_replicas = partition_data
+                    else:
+                        p_error, partition, leader, replicas, isr = partition_data
+
                     _new_partitions[topic][partition] = PartitionMetadata(
-                        topic=topic, partition=partition, leader=leader,
-                        replicas=replicas, isr=isr, error=p_error)
+                        topic=topic, partition=partition,
+                        leader=leader, leader_epoch=leader_epoch,
+                        replicas=replicas, isr=isr, offline_replicas=offline_replicas,
+                        error=p_error)
                     if leader != -1:
                         _new_broker_partitions[leader].add(
                             TopicPartition(topic, partition))
@@ -306,6 +326,7 @@ class ClusterMetadata(object):
         with self._lock:
             self._brokers = _new_brokers
             self.controller = _new_controller
+            self.cluster_id = _new_cluster_id
             self._partitions = _new_partitions
             self._broker_partitions = _new_broker_partitions
             self.unauthorized_topics = _new_unauthorized_topics

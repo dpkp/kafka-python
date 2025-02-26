@@ -102,6 +102,9 @@ class KafkaClient(object):
             which we force a refresh of metadata even if we haven't seen any
             partition leadership changes to proactively discover any new
             brokers or partitions. Default: 300000
+        allow_auto_create_topics (bool): Enable/disable auto topic creation
+            on metadata request. Only available with api_version >= (0, 11).
+            Default: True
         security_protocol (str): Protocol used to communicate with brokers.
             Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL.
             Default: PLAINTEXT.
@@ -184,6 +187,7 @@ class KafkaClient(object):
         'sock_chunk_bytes': 4096,  # undocumented experimental option
         'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'retry_backoff_ms': 100,
+        'allow_auto_create_topics': True,
         'metadata_max_age_ms': 300000,
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
@@ -879,10 +883,13 @@ class KafkaClient(object):
             if not topics and self.cluster.is_bootstrap(node_id):
                 topics = list(self.config['bootstrap_topics_filter'])
 
-            api_version = self.api_version(MetadataRequest, max_version=1)
+            api_version = self.api_version(MetadataRequest, max_version=7)
             if self.cluster.need_all_topic_metadata or not topics:
                 topics = MetadataRequest[api_version].ALL_TOPICS
-            request = MetadataRequest[api_version](topics)
+            if api_version >= 4:
+                request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'])
+            else:
+                request = MetadataRequest[api_version](topics)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)

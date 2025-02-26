@@ -188,6 +188,9 @@ class KafkaProducer(object):
             This setting will limit the number of record batches the producer
             will send in a single request to avoid sending huge requests.
             Default: 1048576.
+        allow_auto_create_topics (bool): Enable/disable auto topic creation
+            on metadata request. Only available with api_version >= (0, 11).
+            Default: True
         metadata_max_age_ms (int): The period of time in milliseconds after
             which we force a refresh of metadata even if we haven't seen any
             partition leadership changes to proactively discover any new
@@ -314,6 +317,7 @@ class KafkaProducer(object):
         'connections_max_idle_ms': 9 * 60 * 1000,
         'max_block_ms': 60000,
         'max_request_size': 1048576,
+        'allow_auto_create_topics': True,
         'metadata_max_age_ms': 300000,
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
