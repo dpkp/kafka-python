@@ -663,9 +663,9 @@ class BaseCoordinator(object):
                   self.group_id, node_id)
         version = self._client.api_version(FindCoordinatorRequest, max_version=2)
         if version == 0:
-            request = FindCoordinatorRequest[0](self.group_id)
+            request = FindCoordinatorRequest[version](self.group_id)
         else:
-            request = FindCoordinatorRequest[0](self.group_id, 0)
+            request = FindCoordinatorRequest[version](self.group_id, 0)
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_group_coordinator_response, future)
