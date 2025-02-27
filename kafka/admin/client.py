@@ -306,18 +306,13 @@ class KafkaAdminClient(object):
         Returns:
             The node_id of the broker that is the coordinator.
         """
-        if response.API_VERSION <= 0:
-            error_type = Errors.for_code(response.error_code)
-            if error_type is not Errors.NoError:
-                # Note: When error_type.retriable, Java will retry... see
-                # KafkaAdminClient's handleFindCoordinatorError method
-                raise error_type(
-                    "FindCoordinatorRequest failed with response '{}'."
-                    .format(response))
-        else:
-            raise NotImplementedError(
-                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
-                .format(response.API_VERSION))
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            # Note: When error_type.retriable, Java will retry... see
+            # KafkaAdminClient's handleFindCoordinatorError method
+            raise error_type(
+                "FindCoordinatorRequest failed with response '{}'."
+                .format(response))
         return response.coordinator_id
 
     def _find_coordinator_ids(self, group_ids):
