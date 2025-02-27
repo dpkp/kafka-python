@@ -23,7 +23,8 @@ from kafka.protocol.admin import (
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DescribeLogDirsRequest
 )
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
+from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
@@ -285,17 +286,14 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        # TODO add support for dynamically picking version of
-        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
-        # When I experimented with this, the coordinator value returned in
-        # GroupCoordinatorResponse_v1 didn't match the value returned by
-        # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = self._client.api_version(GroupCoordinatorRequest, max_version=0)
+        version = self._client.api_version(FindCoordinatorRequest, max_version=2)
         if version <= 0:
-            request = GroupCoordinatorRequest[version](group_id)
+            request = FindCoordinatorRequest[version](group_id)
+        elif version <= 2:
+            request = FindCoordinatorRequest[version](group_id, 0)
         else:
             raise NotImplementedError(
-                "Support for GroupCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_node(self._client.least_loaded_node(), request)
 
@@ -308,18 +306,13 @@ class KafkaAdminClient(object):
         Returns:
             The node_id of the broker that is the coordinator.
         """
-        if response.API_VERSION <= 0:
-            error_type = Errors.for_code(response.error_code)
-            if error_type is not Errors.NoError:
-                # Note: When error_type.retriable, Java will retry... see
-                # KafkaAdminClient's handleFindCoordinatorError method
-                raise error_type(
-                    "FindCoordinatorRequest failed with response '{}'."
-                    .format(response))
-        else:
-            raise NotImplementedError(
-                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
-                .format(response.API_VERSION))
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            # Note: When error_type.retriable, Java will retry... see
+            # KafkaAdminClient's handleFindCoordinatorError method
+            raise error_type(
+                "FindCoordinatorRequest failed with response '{}'."
+                .format(response))
         return response.coordinator_id
 
     def _find_coordinator_ids(self, group_ids):

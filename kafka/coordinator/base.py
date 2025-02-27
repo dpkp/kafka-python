@@ -14,7 +14,8 @@ from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
+from kafka.protocol.commit import OffsetCommitRequest
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
                             LeaveGroupRequest, SyncGroupRequest)
 
@@ -660,7 +661,11 @@ class BaseCoordinator(object):
 
         log.debug("Sending group coordinator request for group %s to broker %s",
                   self.group_id, node_id)
-        request = GroupCoordinatorRequest[0](self.group_id)
+        version = self._client.api_version(FindCoordinatorRequest, max_version=2)
+        if version == 0:
+            request = FindCoordinatorRequest[version](self.group_id)
+        else:
+            request = FindCoordinatorRequest[version](self.group_id, 0)
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_group_coordinator_response, future)
@@ -668,6 +673,9 @@ class BaseCoordinator(object):
         return future
 
     def _handle_group_coordinator_response(self, future, response):
+        if response.API_VERSION >= 1 and response.throttle_time_ms > 0:
+            log.warning("FindCoordinatorRequest throttled by broker (%d ms)", response.throttle_time_ms)
+
         log.debug("Received group coordinator response %s", response)
 
         error_type = Errors.for_code(response.error_code)

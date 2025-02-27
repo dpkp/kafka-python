@@ -1255,14 +1255,15 @@ class BrokerConnection(object):
         from kafka.protocol.admin import ListGroupsRequest
         from kafka.protocol.api_versions import ApiVersionsRequest
         from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-        from kafka.protocol.commit import OffsetFetchRequest, GroupCoordinatorRequest
+        from kafka.protocol.commit import OffsetFetchRequest
+        from kafka.protocol.find_coordinator import FindCoordinatorRequest
 
         test_cases = [
             # All cases starting from 0.10 will be based on ApiVersionsResponse
             ((0, 11), ApiVersionsRequest[1]()),
             ((0, 10, 0), ApiVersionsRequest[0]()),
             ((0, 9), ListGroupsRequest[0]()),
-            ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
+            ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
             ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
             ((0, 8, 0), MetadataRequest[0](topics)),
         ]
