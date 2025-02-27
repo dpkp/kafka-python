@@ -493,7 +493,7 @@ class BaseCoordinator(object):
 
     def _handle_join_group_response(self, future, send_time, response):
         if response.API_VERSION >= 2:
-            self.sensors.throttle_time.record(response.throttle_time)
+            self.sensors.throttle_time.record(response.throttle_time_ms)
             if response.throttle_time_ms > 0:
                 log.warning("JoinGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
 
@@ -619,7 +619,7 @@ class BaseCoordinator(object):
 
     def _handle_sync_group_response(self, future, send_time, response):
         if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time)
+            self.sensors.throttle_time.record(response.throttle_time_ms)
             if response.throttle_time_ms > 0:
                 log.warning("SyncGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
 
@@ -783,7 +783,7 @@ class BaseCoordinator(object):
 
     def _handle_leave_group_response(self, response):
         if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time)
+            self.sensors.throttle_time.record(response.throttle_time_ms)
             if response.throttle_time_ms > 0:
                 log.warning("LeaveGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
 
@@ -819,7 +819,7 @@ class BaseCoordinator(object):
 
     def _handle_heartbeat_response(self, future, send_time, response):
         if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time)
+            self.sensors.throttle_time.record(response.throttle_time_ms)
             if response.throttle_time_ms > 0:
                 log.warning("HeartbeatRequest throttled by broker (%d ms)", response.throttle_time_ms)
 
