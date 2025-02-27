@@ -708,8 +708,8 @@ class Fetcher(six.Iterator):
                     partition_info = (
                         partition.partition,
                         position,
-                        self.config['max_partition_fetch_bytes'],
                         -1, # log_start_offset is used internally by brokers / replicas only
+                        self.config['max_partition_fetch_bytes'],
                     )
                 fetchable[node_id][partition.topic].append(partition_info)
                 log.debug("Adding fetch request for partition %s at offset %d",
