@@ -286,14 +286,11 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        # TODO add support for dynamically picking version of
-        # GroupCoordinatorRequest which was renamed to FindCoordinatorRequest.
-        # When I experimented with this, the coordinator value returned in
-        # GroupCoordinatorResponse_v1 didn't match the value returned by
-        # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = self._client.api_version(FindCoordinatorRequest, max_version=0)
+        version = self._client.api_version(FindCoordinatorRequest, max_version=2)
         if version <= 0:
             request = FindCoordinatorRequest[version](group_id)
+        elif version <= 2:
+            request = FindCoordinatorRequest[version](group_id, 0)
         else:
             raise NotImplementedError(
                 "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
