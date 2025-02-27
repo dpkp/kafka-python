@@ -570,7 +570,7 @@ class Fetcher(six.Iterator):
         return list_offsets_future
 
     def _send_offset_request(self, node_id, timestamps):
-        version = self._client.api_version(ListOffsetsRequest, max_version=1)
+        version = self._client.api_version(ListOffsetsRequest, max_version=3)
         by_topic = collections.defaultdict(list)
         for tp, timestamp in six.iteritems(timestamps):
             if version >= 1:
@@ -579,7 +579,16 @@ class Fetcher(six.Iterator):
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        request = ListOffsetsRequest[version](-1, list(six.iteritems(by_topic)))
+        if version <= 1:
+            request = ListOffsetsRequest[version](
+                    -1,
+                    list(six.iteritems(by_topic)))
+        else:
+            request = ListOffsetsRequest[version](
+                    -1,
+                    self._isolation_level,
+                    list(six.iteritems(by_topic)))
+
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -601,6 +610,8 @@ class Fetcher(six.Iterator):
         Raises:
             AssertionError: if response does not match partition
         """
+        if response.API_VERSION >= 2 and response.throttle_time_ms > 0:
+            log.warning("ListOffsetsRequest throttled by broker (%d ms)", response.throttle_time_ms)
         timestamp_offset_map = {}
         for topic, part_data in response.topics:
             for partition_info in part_data:

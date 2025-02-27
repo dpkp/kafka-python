@@ -261,7 +261,7 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
     assert isinstance(fut.exception, UnknownTopicOrPartitionError)
 
 
-def test__handle_offset_response(fetcher, mocker):
+def test__handle_offset_response_v1(fetcher, mocker):
     # Broker returns UnsupportedForMessageFormatError, will omit partition
     fut = Future()
     res = ListOffsetsResponse[1]([
@@ -302,6 +302,28 @@ def test__handle_offset_response(fetcher, mocker):
     fetcher._handle_offset_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
+
+
+def test__handle_offset_response_v2_v3(fetcher, mocker):
+    # including a throttle_time shouldnt cause issues
+    fut = Future()
+    res = ListOffsetsResponse[2](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999)])
+    ])
+    fetcher._handle_offset_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
+
+    # v3 response is the same format
+    fut = Future()
+    res = ListOffsetsResponse[3](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999)])
+    ])
+    fetcher._handle_offset_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
 
 
 def test_fetched_records(fetcher, topic, mocker):
