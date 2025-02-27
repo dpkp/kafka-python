@@ -26,7 +26,7 @@ from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
 from kafka.protocol.admin import SaslHandShakeRequest, DescribeAclsRequest, DescribeClientQuotasRequest
 from kafka.protocol.commit import OffsetFetchRequest
-from kafka.protocol.offset import OffsetRequest
+from kafka.protocol.list_offsets import ListOffsetsRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.fetch import FetchRequest
@@ -1202,7 +1202,7 @@ class BrokerConnection(object):
             ((2, 5), DescribeAclsRequest[2]),
             ((2, 4), ProduceRequest[8]),
             ((2, 3), FetchRequest[11]),
-            ((2, 2), OffsetRequest[5]),
+            ((2, 2), ListOffsetsRequest[5]),
             ((2, 1), FetchRequest[10]),
             ((2, 0), FetchRequest[8]),
             ((1, 1), FetchRequest[7]),

@@ -18,7 +18,7 @@ from kafka.future import Future
 from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
-from kafka.protocol.offset import OffsetResponse
+from kafka.protocol.list_offsets import ListOffsetsResponse
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
@@ -149,9 +149,9 @@ def test__reset_offset(fetcher, mocker):
     assert fetcher._subscriptions.assignment[tp].position == 1001
 
 
-def test__send_offset_requests(fetcher, mocker):
-    tp = TopicPartition("topic_send_offset", 1)
-    mocked_send = mocker.patch.object(fetcher, "_send_offset_request")
+def test__send_list_offsets_requests(fetcher, mocker):
+    tp = TopicPartition("topic_send_list_offsets", 1)
+    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request")
     send_futures = []
 
     def send_side_effect(*args, **kw):
@@ -168,19 +168,19 @@ def test__send_offset_requests(fetcher, mocker):
         [None, -1], itertools.cycle([0]))
 
     # Leader == None
-    fut = fetcher._send_offset_requests({tp: 0})
+    fut = fetcher._send_list_offsets_requests({tp: 0})
     assert fut.failed()
     assert isinstance(fut.exception, StaleMetadata)
     assert not mocked_send.called
 
     # Leader == -1
-    fut = fetcher._send_offset_requests({tp: 0})
+    fut = fetcher._send_list_offsets_requests({tp: 0})
     assert fut.failed()
     assert isinstance(fut.exception, LeaderNotAvailableError)
     assert not mocked_send.called
 
     # Leader == 0, send failed
-    fut = fetcher._send_offset_requests({tp: 0})
+    fut = fetcher._send_list_offsets_requests({tp: 0})
     assert not fut.is_done
     assert mocked_send.called
     # Check that we bound the futures correctly to chain failure
@@ -189,7 +189,7 @@ def test__send_offset_requests(fetcher, mocker):
     assert isinstance(fut.exception, NotLeaderForPartitionError)
 
     # Leader == 0, send success
-    fut = fetcher._send_offset_requests({tp: 0})
+    fut = fetcher._send_list_offsets_requests({tp: 0})
     assert not fut.is_done
     assert mocked_send.called
     # Check that we bound the futures correctly to chain success
@@ -198,12 +198,12 @@ def test__send_offset_requests(fetcher, mocker):
     assert fut.value == {tp: (10, 10000)}
 
 
-def test__send_offset_requests_multiple_nodes(fetcher, mocker):
-    tp1 = TopicPartition("topic_send_offset", 1)
-    tp2 = TopicPartition("topic_send_offset", 2)
-    tp3 = TopicPartition("topic_send_offset", 3)
-    tp4 = TopicPartition("topic_send_offset", 4)
-    mocked_send = mocker.patch.object(fetcher, "_send_offset_request")
+def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
+    tp1 = TopicPartition("topic_send_list_offsets", 1)
+    tp2 = TopicPartition("topic_send_list_offsets", 2)
+    tp3 = TopicPartition("topic_send_list_offsets", 3)
+    tp4 = TopicPartition("topic_send_list_offsets", 4)
+    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request")
     send_futures = []
 
     def send_side_effect(node_id, timestamps):
@@ -218,7 +218,7 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
 
     # -- All node succeeded case
     tss = OrderedDict([(tp1, 0), (tp2, 0), (tp3, 0), (tp4, 0)])
-    fut = fetcher._send_offset_requests(tss)
+    fut = fetcher._send_list_offsets_requests(tss)
     assert not fut.is_done
     assert mocked_send.call_count == 2
 
@@ -244,7 +244,7 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
 
     # -- First succeeded second not
     del send_futures[:]
-    fut = fetcher._send_offset_requests(tss)
+    fut = fetcher._send_list_offsets_requests(tss)
     assert len(send_futures) == 2
     send_futures[0][2].success({tp1: (11, 1001)})
     send_futures[1][2].failure(UnknownTopicOrPartitionError(tp1))
@@ -253,7 +253,7 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
 
     # -- First fails second succeeded
     del send_futures[:]
-    fut = fetcher._send_offset_requests(tss)
+    fut = fetcher._send_list_offsets_requests(tss)
     assert len(send_futures) == 2
     send_futures[0][2].failure(UnknownTopicOrPartitionError(tp1))
     send_futures[1][2].success({tp1: (11, 1001)})
@@ -261,47 +261,69 @@ def test__send_offset_requests_multiple_nodes(fetcher, mocker):
     assert isinstance(fut.exception, UnknownTopicOrPartitionError)
 
 
-def test__handle_offset_response(fetcher, mocker):
+def test__handle_list_offsets_response_v1(fetcher, mocker):
     # Broker returns UnsupportedForMessageFormatError, will omit partition
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]),
         ("topic", [(1, 0, 1000, 9999)])
     ])
-    fetcher._handle_offset_response(fut, res)
+    fetcher._handle_list_offsets_response(fut, res)
     assert fut.succeeded()
     assert fut.value == {TopicPartition("topic", 1): (9999, 1000)}
 
     # Broker returns NotLeaderForPartitionError
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 6, -1, -1)]),
     ])
-    fetcher._handle_offset_response(fut, res)
+    fetcher._handle_list_offsets_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
 
     # Broker returns UnknownTopicOrPartitionError
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 3, -1, -1)]),
     ])
-    fetcher._handle_offset_response(fut, res)
+    fetcher._handle_list_offsets_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, UnknownTopicOrPartitionError)
 
     # Broker returns many errors and 1 result
     # Will fail on 1st error and return
     fut = Future()
-    res = OffsetResponse[1]([
+    res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]),
         ("topic", [(1, 6, -1, -1)]),
         ("topic", [(2, 3, -1, -1)]),
         ("topic", [(3, 0, 1000, 9999)])
     ])
-    fetcher._handle_offset_response(fut, res)
+    fetcher._handle_list_offsets_response(fut, res)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
+
+
+def test__handle_list_offsets_response_v2_v3(fetcher, mocker):
+    # including a throttle_time shouldnt cause issues
+    fut = Future()
+    res = ListOffsetsResponse[2](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999)])
+    ])
+    fetcher._handle_list_offsets_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
+
+    # v3 response is the same format
+    fut = Future()
+    res = ListOffsetsResponse[3](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999)])
+    ])
+    fetcher._handle_list_offsets_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
 
 
 def test_fetched_records(fetcher, topic, mocker):

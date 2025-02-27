@@ -13,8 +13,8 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.fetch import FetchRequest
-from kafka.protocol.offset import (
-    OffsetRequest, OffsetResetStrategy, UNKNOWN_OFFSET
+from kafka.protocol.list_offsets import (
+    ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
@@ -272,7 +272,7 @@ class Fetcher(six.Iterator):
             if not timestamps:
                 return {}
 
-            future = self._send_offset_requests(timestamps)
+            future = self._send_list_offsets_requests(timestamps)
             self._client.poll(future=future, timeout_ms=remaining_ms)
 
             if future.succeeded():
@@ -519,7 +519,7 @@ class Fetcher(six.Iterator):
             return f.deserialize(topic, bytes_)
         return f(bytes_)
 
-    def _send_offset_requests(self, timestamps):
+    def _send_list_offsets_requests(self, timestamps):
         """Fetch offsets for each partition in timestamps dict. This may send
         request to multiple nodes, based on who is Leader for partition.
 
@@ -564,13 +564,13 @@ class Fetcher(six.Iterator):
                 list_offsets_future.failure(err)
 
         for node_id, timestamps in six.iteritems(timestamps_by_node):
-            _f = self._send_offset_request(node_id, timestamps)
+            _f = self._send_list_offsets_request(node_id, timestamps)
             _f.add_callback(on_success)
             _f.add_errback(on_fail)
         return list_offsets_future
 
-    def _send_offset_request(self, node_id, timestamps):
-        version = self._client.api_version(OffsetRequest, max_version=1)
+    def _send_list_offsets_request(self, node_id, timestamps):
+        version = self._client.api_version(ListOffsetsRequest, max_version=3)
         by_topic = collections.defaultdict(list)
         for tp, timestamp in six.iteritems(timestamps):
             if version >= 1:
@@ -579,7 +579,16 @@ class Fetcher(six.Iterator):
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        request = OffsetRequest[version](-1, list(six.iteritems(by_topic)))
+        if version <= 1:
+            request = ListOffsetsRequest[version](
+                    -1,
+                    list(six.iteritems(by_topic)))
+        else:
+            request = ListOffsetsRequest[version](
+                    -1,
+                    self._isolation_level,
+                    list(six.iteritems(by_topic)))
+
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -587,20 +596,22 @@ class Fetcher(six.Iterator):
         future = Future()
 
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_offset_response, future)
+        _f.add_callback(self._handle_list_offsets_response, future)
         _f.add_errback(lambda e: future.failure(e))
         return future
 
-    def _handle_offset_response(self, future, response):
-        """Callback for the response of the list offset call above.
+    def _handle_list_offsets_response(self, future, response):
+        """Callback for the response of the ListOffsets api call
 
         Arguments:
             future (Future): the future to update based on response
-            response (OffsetResponse): response from the server
+            response (ListOffsetsResponse): response from the server
 
         Raises:
             AssertionError: if response does not match partition
         """
+        if response.API_VERSION >= 2 and response.throttle_time_ms > 0:
+            log.warning("ListOffsetsRequest throttled by broker (%d ms)", response.throttle_time_ms)
         timestamp_offset_map = {}
         for topic, part_data in response.topics:
             for partition_info in part_data:
@@ -610,18 +621,18 @@ class Fetcher(six.Iterator):
                 if error_type is Errors.NoError:
                     if response.API_VERSION == 0:
                         offsets = partition_info[2]
-                        assert len(offsets) <= 1, 'Expected OffsetResponse with one offset'
+                        assert len(offsets) <= 1, 'Expected ListOffsetsResponse with one offset'
                         if not offsets:
                             offset = UNKNOWN_OFFSET
                         else:
                             offset = offsets[0]
-                        log.debug("Handling v0 ListOffsetResponse response for %s. "
+                        log.debug("Handling v0 ListOffsetsResponse response for %s. "
                                   "Fetched offset %s", partition, offset)
                         if offset != UNKNOWN_OFFSET:
                             timestamp_offset_map[partition] = (offset, None)
                     else:
                         timestamp, offset = partition_info[2:]
-                        log.debug("Handling ListOffsetResponse response for %s. "
+                        log.debug("Handling ListOffsetsResponse response for %s. "
                                   "Fetched offset %s, timestamp %s",
                                   partition, offset, timestamp)
                         if offset != UNKNOWN_OFFSET:
@@ -638,7 +649,7 @@ class Fetcher(six.Iterator):
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
-                    log.warning("Received unknown topic or partition error in ListOffset "
+                    log.warning("Received unknown topic or partition error in ListOffsets "
                              "request for partition %s. The topic/partition " +
                              "may not exist or the user may not have Describe access "
                              "to it.", partition)
