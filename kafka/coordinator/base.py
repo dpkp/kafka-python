@@ -452,7 +452,7 @@ class BaseCoordinator(object):
             (protocol, metadata if isinstance(metadata, bytes) else metadata.encode())
             for protocol, metadata in self.group_protocols()
         ]
-        version = self._client.api_version(JoinGroupRequest, max_version=2)
+        version = self._client.api_version(JoinGroupRequest, max_version=3)
         if version == 0:
             request = JoinGroupRequest[version](
                 self.group_id,
@@ -553,7 +553,7 @@ class BaseCoordinator(object):
 
     def _on_join_follower(self):
         # send follower's sync group with an empty assignment
-        version = self._client.api_version(SyncGroupRequest, max_version=1)
+        version = self._client.api_version(SyncGroupRequest, max_version=2)
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -581,7 +581,7 @@ class BaseCoordinator(object):
         except Exception as e:
             return Future().failure(e)
 
-        version = self._client.api_version(SyncGroupRequest, max_version=1)
+        version = self._client.api_version(SyncGroupRequest, max_version=2)
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -762,7 +762,7 @@ class BaseCoordinator(object):
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
                 log.info('Leaving consumer group (%s).', self.group_id)
-                version = self._client.api_version(LeaveGroupRequest, max_version=1)
+                version = self._client.api_version(LeaveGroupRequest, max_version=2)
                 request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
                 future = self._client.send(self.coordinator_id, request)
                 future.add_callback(self._handle_leave_group_response)
@@ -790,7 +790,7 @@ class BaseCoordinator(object):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
-        version = self._client.api_version(HeartbeatRequest, max_version=1)
+        version = self._client.api_version(HeartbeatRequest, max_version=2)
         request = HeartbeatRequest[version](self.group_id,
                                             self._generation.generation_id,
                                             self._generation.member_id)
