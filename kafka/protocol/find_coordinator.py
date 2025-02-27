@@ -28,6 +28,12 @@ class FindCoordinatorResponse_v1(Response):
     )
 
 
+class FindCoordinatorResponse_v2(Response):
+    API_KEY = 10
+    API_VERSION = 2
+    SCHEMA = FindCoordinatorResponse_v1.SCHEMA
+
+
 class FindCoordinatorRequest_v0(Request):
     API_KEY = 10
     API_VERSION = 0
@@ -47,5 +53,12 @@ class FindCoordinatorRequest_v1(Request):
     )
 
 
-FindCoordinatorRequest = [FindCoordinatorRequest_v0, FindCoordinatorRequest_v1]
-FindCoordinatorResponse = [FindCoordinatorResponse_v0, FindCoordinatorResponse_v1]
+class FindCoordinatorRequest_v2(Request):
+    API_KEY = 10
+    API_VERSION = 2
+    RESPONSE_TYPE = FindCoordinatorResponse_v2
+    SCHEMA = FindCoordinatorRequest_v1.SCHEMA
+
+
+FindCoordinatorRequest = [FindCoordinatorRequest_v0, FindCoordinatorRequest_v1, FindCoordinatorRequest_v2]
+FindCoordinatorResponse = [FindCoordinatorResponse_v0, FindCoordinatorResponse_v1, FindCoordinatorResponse_v2]
