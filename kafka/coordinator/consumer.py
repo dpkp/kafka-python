@@ -585,8 +585,35 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.config['api_version'] >= (0, 9) and generation is None:
             return Future().failure(Errors.CommitFailedError())
 
-        version = self._client.api_version(OffsetCommitRequest, max_version=2)
-        if version == 2:
+        version = self._client.api_version(OffsetCommitRequest, max_version=6)
+        if version == 0:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
+        elif version == 1:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                # This api version was only used in v0.8.2, prior to join group apis
+                # so this always ends up as NO_GENERATION
+                generation.generation_id,
+                generation.member_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        -1, # timestamp, unused
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
+        elif version <= 4:
             request = OffsetCommitRequest[version](
                 self.group_id,
                 generation.generation_id,
@@ -600,25 +627,29 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
-        elif version == 1:
+        elif version <= 5:
             request = OffsetCommitRequest[version](
-                self.group_id, -1, '',
+                self.group_id,
+                generation.generation_id,
+                generation.member_id,
                 [(
                     topic, [(
                         partition,
                         offset.offset,
-                        -1,
                         offset.metadata
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
-        elif version == 0:
+        else:
             request = OffsetCommitRequest[version](
                 self.group_id,
+                generation.generation_id,
+                generation.member_id,
                 [(
                     topic, [(
                         partition,
                         offset.offset,
+                        -1, # leader_epoch
                         offset.metadata
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
@@ -634,6 +665,8 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_commit_response(self, offsets, future, send_time, response):
+        if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
+            log.warning()
         # TODO look at adding request_latency_ms to response (like java kafka)
         self.consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
         unauthorized_topics = set()
@@ -735,7 +768,9 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp in partitions:
             topic_partitions[tp.topic].add(tp.partition)
 
-        version = self._client.api_version(OffsetFetchRequest, max_version=1)
+        version = self._client.api_version(OffsetFetchRequest, max_version=5)
+        # Starting in version 2, the request can contain a null topics array to indicate that offsets should be fetched
+        # TODO: support
         request = OffsetFetchRequest[version](
             self.group_id,
             list(topic_partitions.items())
@@ -749,9 +784,23 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_fetch_response(self, future, response):
+        if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
+            log.warning()
+
+        if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
+            error_type = Errors.for_code(response.error_code)
+            # TODO: handle...
+
         offsets = {}
         for topic, partitions in response.topics:
-            for partition, offset, metadata, error_code in partitions:
+            for partition_data in partitions:
+                partition, offset = partition_data[:2]
+                if response.API_VERSION >= 5:
+                    leader_epoch, metadata, error_code = partition_data[2:]
+                else:
+                    metadata, error_code = partition_data[2:]
+                    leader_epoch = -1
+                # TODO: save leader_epoch!
                 tp = TopicPartition(topic, partition)
                 error_type = Errors.for_code(error_code)
                 if error_type is not Errors.NoError:
