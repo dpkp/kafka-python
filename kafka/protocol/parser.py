@@ -4,7 +4,7 @@ import collections
 import logging
 
 import kafka.errors as Errors
-from kafka.protocol.commit import GroupCoordinatorResponse
+from kafka.protocol.find_coordinator import FindCoordinatorResponse
 from kafka.protocol.frame import KafkaBytes
 from kafka.protocol.types import Int32, TaggedFields
 from kafka.version import __version__
@@ -142,7 +142,7 @@ class KafkaProtocol(object):
         # 0.8.2 quirk
         if (recv_correlation_id == 0 and
             correlation_id != 0 and
-            request.RESPONSE_TYPE is GroupCoordinatorResponse[0] and
+            request.RESPONSE_TYPE is FindCoordinatorResponse[0] and
             (self._api_version == (0, 8, 2) or self._api_version is None)):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
                         ' Correlation ID does not match request. This'

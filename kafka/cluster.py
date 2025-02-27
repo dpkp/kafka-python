@@ -21,7 +21,7 @@ class ClusterMetadata(object):
     A class to manage kafka cluster metadata.
 
     This class does not perform any IO. It simply updates internal state
-    given API responses (MetadataResponse, GroupCoordinatorResponse).
+    given API responses (MetadataResponse, FindCoordinatorResponse).
 
     Keyword Arguments:
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
@@ -367,8 +367,8 @@ class ClusterMetadata(object):
         """Update with metadata for a group coordinator
 
         Arguments:
-            group (str): name of group from GroupCoordinatorRequest
-            response (GroupCoordinatorResponse): broker response
+            group (str): name of group from FindCoordinatorRequest
+            response (FindCoordinatorResponse): broker response
 
         Returns:
             string: coordinator node_id if metadata is updated, None on error
@@ -376,7 +376,7 @@ class ClusterMetadata(object):
         log.debug("Updating coordinator for %s: %s", group, response)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
-            log.error("GroupCoordinatorResponse error: %s", error_type)
+            log.error("FindCoordinatorResponse error: %s", error_type)
             self._groups[group] = -1
             return
 

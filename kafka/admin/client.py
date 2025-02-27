@@ -23,7 +23,8 @@ from kafka.protocol.admin import (
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DescribeLogDirsRequest
 )
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
+from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
@@ -290,12 +291,12 @@ class KafkaAdminClient(object):
         # When I experimented with this, the coordinator value returned in
         # GroupCoordinatorResponse_v1 didn't match the value returned by
         # GroupCoordinatorResponse_v0 and I couldn't figure out why.
-        version = self._client.api_version(GroupCoordinatorRequest, max_version=0)
+        version = self._client.api_version(FindCoordinatorRequest, max_version=0)
         if version <= 0:
-            request = GroupCoordinatorRequest[version](group_id)
+            request = FindCoordinatorRequest[version](group_id)
         else:
             raise NotImplementedError(
-                "Support for GroupCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
+                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
                 .format(version))
         return self._send_request_to_node(self._client.least_loaded_node(), request)
 
