@@ -27,7 +27,8 @@ from kafka.oauth.abstract import AbstractTokenProvider
 from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest, SaslHandShakeRequest
 from kafka.protocol.api_versions import ApiVersionsRequest
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetFetchRequest
+from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.list_offsets import ListOffsetsRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -233,7 +234,7 @@ class BrokerConnection(object):
     SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
     VERSION_CHECKS = (
         ((0, 9), ListGroupsRequest[0]()),
-        ((0, 8, 2), GroupCoordinatorRequest[0]('kafka-python-default-group')),
+        ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
         ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
         ((0, 8, 0), MetadataRequest[0]([])),
     )
