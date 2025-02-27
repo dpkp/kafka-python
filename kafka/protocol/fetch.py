@@ -14,7 +14,7 @@ class FetchResponse_v0(Response):
                 ('partition', Int32),
                 ('error_code', Int16),
                 ('highwater_offset', Int64),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -29,7 +29,7 @@ class FetchResponse_v1(Response):
                 ('partition', Int32),
                 ('error_code', Int16),
                 ('highwater_offset', Int64),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -61,7 +61,7 @@ class FetchResponse_v4(Response):
                 ('aborted_transactions', Array(
                     ('producer_id', Int64),
                     ('first_offset', Int64))),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -81,7 +81,7 @@ class FetchResponse_v5(Response):
                 ('aborted_transactions', Array(
                     ('producer_id', Int64),
                     ('first_offset', Int64))),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -116,7 +116,7 @@ class FetchResponse_v7(Response):
                 ('aborted_transactions', Array(
                     ('producer_id', Int64),
                     ('first_offset', Int64))),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -157,7 +157,7 @@ class FetchResponse_v11(Response):
                     ('producer_id', Int64),
                     ('first_offset', Int64))),
                 ('preferred_read_replica', Int32),
-                ('message_set', Bytes)))))
+                ('records', Bytes)))))
     )
 
 

@@ -142,7 +142,7 @@ class ProduceRequest_v0(ProduceRequest):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('messages', Bytes)))))
+                ('records', Bytes)))))
     )
 
 
@@ -170,7 +170,7 @@ class ProduceRequest_v3(ProduceRequest):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('messages', Bytes)))))
+                ('records', Bytes)))))
     )
 
 

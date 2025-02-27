@@ -411,10 +411,10 @@ class Fetcher(six.Iterator):
 
             tp = self._next_partition_records.topic_partition
 
-            # We can ignore any prior signal to drop pending message sets
+            # We can ignore any prior signal to drop pending record batches
             # because we are starting from a fresh one where fetch_offset == position
             # i.e., the user seek()'d to this position
-            self._subscriptions.assignment[tp].drop_pending_message_set = False
+            self._subscriptions.assignment[tp].drop_pending_record_batch = False
 
             for msg in self._next_partition_records.take():
 
@@ -430,12 +430,12 @@ class Fetcher(six.Iterator):
                     break
 
                 # If there is a seek during message iteration,
-                # we should stop unpacking this message set and
+                # we should stop unpacking this record batch and
                 # wait for a new fetch response that aligns with the
                 # new seek position
-                elif self._subscriptions.assignment[tp].drop_pending_message_set:
-                    log.debug("Skipping remainder of message set for partition %s", tp)
-                    self._subscriptions.assignment[tp].drop_pending_message_set = False
+                elif self._subscriptions.assignment[tp].drop_pending_record_batch:
+                    log.debug("Skipping remainder of record batch for partition %s", tp)
+                    self._subscriptions.assignment[tp].drop_pending_record_batch = False
                     self._next_partition_records = None
                     break
 
@@ -459,8 +459,8 @@ class Fetcher(six.Iterator):
                 # Try DefaultsRecordBatch / message log format v2
                 # base_offset, last_offset_delta, and control batches
                 try:
-                    self._subscriptions.assignment[tp].last_offset_from_message_batch = batch.base_offset + \
-                                                                                        batch.last_offset_delta
+                    self._subscriptions.assignment[tp].last_offset_from_record_batch = batch.base_offset + \
+                                                                                       batch.last_offset_delta
                     # Control batches have a single record indicating whether a transaction
                     # was aborted or committed.
                     # When isolation_level is READ_COMMITTED (currently unsupported)
@@ -680,11 +680,11 @@ class Fetcher(six.Iterator):
             node_id = self._client.cluster.leader_for_partition(partition)
 
             # advance position for any deleted compacted messages if required
-            if self._subscriptions.assignment[partition].last_offset_from_message_batch:
-                next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_message_batch + 1
+            if self._subscriptions.assignment[partition].last_offset_from_record_batch:
+                next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_record_batch + 1
                 if next_offset_from_batch_header > self._subscriptions.assignment[partition].position:
                     log.debug(
-                        "Advance position for partition %s from %s to %s (last message batch location plus one)"
+                        "Advance position for partition %s from %s to %s (last record batch location plus one)"
                         " to correct for deleted compacted messages and/or transactional control records",
                         partition, self._subscriptions.assignment[partition].position, next_offset_from_batch_header)
                     self._subscriptions.assignment[partition].position = next_offset_from_batch_header
