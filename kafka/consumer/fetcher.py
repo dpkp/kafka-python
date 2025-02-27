@@ -873,8 +873,10 @@ class Fetcher(six.Iterator):
             elif error_type is Errors.TopicAuthorizationFailedError:
                 log.warning("Not authorized to read from topic %s.", tp.topic)
                 raise Errors.TopicAuthorizationFailedError(set(tp.topic))
-            elif error_type is Errors.UnknownError:
-                log.warning("Unknown error fetching data for topic-partition %s", tp)
+            elif error_type.is_retriable:
+                log.debug("Retriable error fetching partition %s: %s", tp, error_type())
+                if error_type.invalid_metadata:
+                    self._client.cluster.request_update()
             else:
                 raise error_type('Unexpected error while fetching data')
 
