@@ -666,7 +666,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_offset_commit_response(self, offsets, future, send_time, response):
         if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
-            log.warning()
+            log.warning("OffsetCommitRequest throttled by broker (%d ms)", response.throttle_time_ms)
+
         # TODO look at adding request_latency_ms to response (like java kafka)
         self.consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
         unauthorized_topics = set()
@@ -785,11 +786,25 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_offset_fetch_response(self, future, response):
         if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
-            log.warning()
+            log.warning("OffsetFetchRequest throttled by broker (%d ms)", response.throttle_time_ms)
 
         if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
             error_type = Errors.for_code(response.error_code)
-            # TODO: handle...
+            log.debug("Offset fetch failed: %s", error_type.__name__)
+            error = error_type()
+            if error_type is Errors.GroupLoadInProgressError:
+                # Retry
+                future.failure(error)
+            elif error_type is Errors.NotCoordinatorForGroupError:
+                # re-discover the coordinator and retry
+                self.coordinator_dead(error)
+                future.failure(error)
+            elif error_type is Errors.GroupAuthorizationFailedError:
+                future.failure(error)
+            else:
+                log.error("Unknown error fetching offsets for %s: %s", tp, error)
+                future.failure(error)
+            return
 
         offsets = {}
         for topic, partitions in response.topics:
@@ -812,7 +827,7 @@ class ConsumerCoordinator(BaseCoordinator):
                         future.failure(error)
                     elif error_type is Errors.NotCoordinatorForGroupError:
                         # re-discover the coordinator and retry
-                        self.coordinator_dead(error_type())
+                        self.coordinator_dead(error)
                         future.failure(error)
                     elif error_type is Errors.UnknownTopicOrPartitionError:
                         log.warning("OffsetFetchRequest -- unknown topic %s"
