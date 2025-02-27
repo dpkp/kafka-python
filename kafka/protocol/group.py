@@ -5,6 +5,10 @@ from kafka.protocol.struct import Struct
 from kafka.protocol.types import Array, Bytes, Int16, Int32, Schema, String
 
 
+DEFAULT_GENERATION_ID = -1
+UNKNOWN_MEMBER_ID = ''
+
+
 class JoinGroupResponse_v0(Response):
     API_KEY = 11
     API_VERSION = 0
@@ -61,7 +65,6 @@ class JoinGroupRequest_v0(Request):
             ('protocol_name', String('utf-8')),
             ('protocol_metadata', Bytes)))
     )
-    UNKNOWN_MEMBER_ID = ''
 
 
 class JoinGroupRequest_v1(Request):
@@ -78,7 +81,6 @@ class JoinGroupRequest_v1(Request):
             ('protocol_name', String('utf-8')),
             ('protocol_metadata', Bytes)))
     )
-    UNKNOWN_MEMBER_ID = ''
 
 
 class JoinGroupRequest_v2(Request):
@@ -86,7 +88,6 @@ class JoinGroupRequest_v2(Request):
     API_VERSION = 2
     RESPONSE_TYPE = JoinGroupResponse_v2
     SCHEMA = JoinGroupRequest_v1.SCHEMA
-    UNKNOWN_MEMBER_ID = ''
 
 
 class JoinGroupRequest_v3(Request):

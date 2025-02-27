@@ -14,10 +14,8 @@ from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.commit import OffsetCommitRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
-from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
-                            LeaveGroupRequest, SyncGroupRequest)
+from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -34,10 +32,7 @@ class Generation(object):
         self.member_id = member_id
         self.protocol = protocol
 
-Generation.NO_GENERATION = Generation(
-    OffsetCommitRequest[2].DEFAULT_GENERATION_ID,
-    JoinGroupRequest[0].UNKNOWN_MEMBER_ID,
-    None)
+Generation.NO_GENERATION = Generation(DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, None)
 
 
 class UnjoinedGroupException(Errors.KafkaError):

@@ -439,7 +439,11 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
 @pytest.mark.parametrize('api_version,req_type', [
     ((0, 8, 1), OffsetCommitRequest[0]),
     ((0, 8, 2), OffsetCommitRequest[1]),
-    ((0, 9), OffsetCommitRequest[2])])
+    ((0, 9), OffsetCommitRequest[2]),
+    ((0, 11), OffsetCommitRequest[3]),
+    ((2, 0), OffsetCommitRequest[4]),
+    ((2, 1), OffsetCommitRequest[6]),
+])
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, req_type):
     expect_node = 0
@@ -499,13 +503,27 @@ def test_send_offset_commit_request_success(mocker, patched_coord, offsets):
      Errors.InvalidTopicError, False),
     (OffsetCommitResponse[0]([('foobar', [(0, 29), (1, 29)])]),
      Errors.TopicAuthorizationFailedError, False),
+    (OffsetCommitResponse[0]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[1]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[2]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[3](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[4](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[5](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[6](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
 ])
 def test_handle_offset_commit_response(mocker, patched_coord, offsets,
                                        response, error, dead):
     future = Future()
     patched_coord._handle_offset_commit_response(offsets, future, time.time(),
                                                  response)
-    assert isinstance(future.exception, error)
+    assert isinstance(future.exception, error) if error else True
     assert patched_coord.coordinator_id is (None if dead else 0)
 
 
@@ -534,7 +552,12 @@ def test_send_offset_fetch_request_fail(mocker, patched_coord, partitions):
 @pytest.mark.parametrize('api_version,req_type', [
     ((0, 8, 1), OffsetFetchRequest[0]),
     ((0, 8, 2), OffsetFetchRequest[1]),
-    ((0, 9), OffsetFetchRequest[1])])
+    ((0, 9), OffsetFetchRequest[1]),
+    ((0, 10, 2), OffsetFetchRequest[2]),
+    ((0, 11), OffsetFetchRequest[3]),
+    ((2, 0), OffsetFetchRequest[4]),
+    ((2, 1), OffsetFetchRequest[5]),
+])
 def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, req_type):
     # assuming fixture sets coordinator=0, least_loaded_node=1
@@ -582,6 +605,16 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
     (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 29), (1, 234, b'', 29)])]),
      Errors.TopicAuthorizationFailedError, False),
     (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])]),
+     None, False),
+    (OffsetFetchResponse[1]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])]),
+     None, False),
+    (OffsetFetchResponse[2]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[3](0, [('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[4](0, [('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[5](0, [('foobar', [(0, 123, -1, b'', 0), (1, 234, -1, b'', 0)])], 0),
      None, False),
 ])
 def test_handle_offset_fetch_response(patched_coord, offsets,
