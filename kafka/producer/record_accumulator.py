@@ -156,7 +156,7 @@ class RecordAccumulator(object):
             will also impact the compression ratio (more batching means better
             compression). Default: None.
         linger_ms (int): An artificial delay time to add before declaring a
-            messageset (that isn't full) ready for sending. This allows
+            record batch (that isn't full) ready for sending. This allows
             time for more records to arrive. Setting a non-zero linger_ms
             will trade off some latency for potentially better throughput
             due to more batching (and hence fewer, larger requests).
