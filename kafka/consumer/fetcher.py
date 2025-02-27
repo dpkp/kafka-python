@@ -272,7 +272,7 @@ class Fetcher(six.Iterator):
             if not timestamps:
                 return {}
 
-            future = self._send_offset_requests(timestamps)
+            future = self._send_list_offsets_requests(timestamps)
             self._client.poll(future=future, timeout_ms=remaining_ms)
 
             if future.succeeded():
@@ -519,7 +519,7 @@ class Fetcher(six.Iterator):
             return f.deserialize(topic, bytes_)
         return f(bytes_)
 
-    def _send_offset_requests(self, timestamps):
+    def _send_list_offsets_requests(self, timestamps):
         """Fetch offsets for each partition in timestamps dict. This may send
         request to multiple nodes, based on who is Leader for partition.
 
@@ -564,12 +564,12 @@ class Fetcher(six.Iterator):
                 list_offsets_future.failure(err)
 
         for node_id, timestamps in six.iteritems(timestamps_by_node):
-            _f = self._send_offset_request(node_id, timestamps)
+            _f = self._send_list_offsets_request(node_id, timestamps)
             _f.add_callback(on_success)
             _f.add_errback(on_fail)
         return list_offsets_future
 
-    def _send_offset_request(self, node_id, timestamps):
+    def _send_list_offsets_request(self, node_id, timestamps):
         version = self._client.api_version(ListOffsetsRequest, max_version=3)
         by_topic = collections.defaultdict(list)
         for tp, timestamp in six.iteritems(timestamps):
@@ -596,12 +596,12 @@ class Fetcher(six.Iterator):
         future = Future()
 
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_offset_response, future)
+        _f.add_callback(self._handle_list_offsets_response, future)
         _f.add_errback(lambda e: future.failure(e))
         return future
 
-    def _handle_offset_response(self, future, response):
-        """Callback for the response of the list offset call above.
+    def _handle_list_offsets_response(self, future, response):
+        """Callback for the response of the ListOffsets api call
 
         Arguments:
             future (Future): the future to update based on response
