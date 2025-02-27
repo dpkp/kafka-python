@@ -575,7 +575,7 @@ class ConsumerCoordinator(BaseCoordinator):
             offset_data[tp.topic][tp.partition] = offset
 
         if self._subscription.partitions_auto_assigned():
-            generation = self.generation()
+            generation = self.generation() or Generation.NO_GENERATION
         else:
             generation = Generation.NO_GENERATION
 
