@@ -19,6 +19,7 @@ class FindCoordinatorResponse_v1(Response):
     API_KEY = 10
     API_VERSION = 1
     SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('error_message', String('utf-8')),
         ('coordinator_id', Int32),
@@ -42,7 +43,7 @@ class FindCoordinatorRequest_v1(Request):
     RESPONSE_TYPE = FindCoordinatorResponse_v1
     SCHEMA = Schema(
         ('coordinator_key', String('utf-8')),
-        ('coordinator_type', Int8)
+        ('coordinator_type', Int8) # 0: consumer, 1: transaction
     )
 
 
