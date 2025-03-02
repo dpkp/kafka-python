@@ -1017,7 +1017,7 @@ class FetchSessionHandler(object):
         log.debug("Built incremental fetch %s for node %s. Added %s, altered %s, removed %s out of %s",
                 self.next_metadata, self.node_id, added, altered, removed, self.session_partitions.keys())
         to_send = {tp: next_partitions[tp] for tp in (added | altered)}
-        return FetchRequestData(to_send, removed, self.session_partitions.copy(), self.next_metadata)
+        return FetchRequestData(to_send, removed, self.next_metadata)
 
     def handle_response(self, response):
         if response.error_code != Errors.NoError.errno:
@@ -1127,7 +1127,7 @@ class FetchRequestData(object):
 
     def __init__(self, to_send, to_forget, metadata):
         self._to_send = to_send # {TopicPartition: (partition, ...)}
-        self._to_forget = to_forget
+        self._to_forget = to_forget # {TopicPartition}
         self._metadata = metadata
 
     @property
@@ -1153,7 +1153,12 @@ class FetchRequestData(object):
 
     @property
     def to_forget(self):
-        return self._to_forget
+        # Return as list of [(topic, (partiiton, ...)), ...]
+        # so it an be passed directly to encoder
+        partition_data = collections.defaultdict(list)
+        for tp in six.iteritems(self._to_forget):
+            partition_data[tp.topic].append(tp.partition)
+        return list(partition_data.items())
 
 
 class FetchResponseMetricAggregator(object):
