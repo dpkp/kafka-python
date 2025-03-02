@@ -734,16 +734,16 @@ class Fetcher(six.Iterator):
 
         requests = {}
         for node_id, partition_data in six.iteritems(fetchable):
+            next_partitions = {TopicPartition(topic, partition_info[0]): partition_info
+                                  for topic, partitions in six.iteritems(partition_data)
+                                      for partition_info in partitions}
             if version >= 7 and self.config['enable_incremental_fetch_sessions']:
                 if node_id not in self._session_handlers:
                     self._session_handlers[node_id] = FetchSessionHandler(node_id)
-                next_partitions = {TopicPartition(topic, partition_info[0]): partition_info
-                                      for topic, partitions in six.iteritems(partition_data)
-                                          for partition_info in partitions}
                 session = self._session_handlers[node_id].build_next(next_partitions)
             else:
                 # No incremental fetch support
-                session = FetchRequestData(partition_data, [], FetchMetadata.LEGACY)
+                session = FetchRequestData(next_partitions, None, FetchMetadata.LEGACY)
                 # As of version == 3 partitions will be returned in order as
                 # they are requested, so to avoid starvation with
                 # `fetch_max_bytes` option we need this shuffle
@@ -789,10 +789,9 @@ class Fetcher(six.Iterator):
                     session.to_forget)
 
             fetch_offsets = {}
-            for topic, partitions in six.iteritems(partition_data):
-                for partition_data in partitions:
-                    partition, offset = partition_data[:2]
-                    fetch_offsets[TopicPartition(topic, partition)] = offset
+            for tp, partition_data in six.iteritems(next_partitions):
+                offset = partition_data[1]
+                fetch_offsets[tp] = offset
 
             requests[node_id] = (request, fetch_offsets)
 
@@ -997,7 +996,7 @@ class FetchSessionHandler(object):
             log.debug("Built full fetch %s for node %s with %s partition(s).",
                 self.next_metadata, self.node_id, len(next_partitions))
             self.session_partitions = next_partitions
-            return FetchRequestData(next_partitions, [], self.next_metadata);
+            return FetchRequestData(next_partitions, None, self.next_metadata);
 
         prev_tps = set(self.session_partitions.keys())
         next_tps = set(next_partitions.keys())
@@ -1126,8 +1125,8 @@ class FetchRequestData(object):
     __slots__ = ('_to_send', '_to_forget', '_metadata')
 
     def __init__(self, to_send, to_forget, metadata):
-        self._to_send = to_send # {TopicPartition: (partition, ...)}
-        self._to_forget = to_forget # {TopicPartition}
+        self._to_send = to_send or dict() # {TopicPartition: (partition, ...)}
+        self._to_forget = to_forget or set() # {TopicPartition}
         self._metadata = metadata
 
     @property
@@ -1156,7 +1155,7 @@ class FetchRequestData(object):
         # Return as list of [(topic, (partiiton, ...)), ...]
         # so it an be passed directly to encoder
         partition_data = collections.defaultdict(list)
-        for tp in six.iteritems(self._to_forget):
+        for tp in self._to_forget:
             partition_data[tp.topic].append(tp.partition)
         return list(partition_data.items())
 
