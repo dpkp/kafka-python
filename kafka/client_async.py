@@ -896,6 +896,26 @@ class KafkaClient(object):
             log.debug("Give up sending metadata request since no node is available. (reconnect delay %d ms)", next_connect_ms)
             return next_connect_ms
 
+        if not self._can_send_request(node_id):
+            # If there's any connection establishment underway, wait until it completes. This prevents
+            # the client from unnecessarily connecting to additional nodes while a previous connection
+            # attempt has not been completed.
+            if self._connecting:
+                return float('inf')
+
+            elif self._can_connect(node_id):
+                log.debug("Initializing connection to node %s for metadata request", node_id)
+                self._connecting.add(node_id)
+                if not self._init_connect(node_id):
+                    if node_id in self._connecting:
+                        self._connecting.remove(node_id)
+                    # Connection attempt failed immediately, need to retry with a different node
+                    return self.config['reconnect_backoff_ms']
+            else:
+                # Existing connection with max in flight requests. Wait for request to complete.
+                return self.config['request_timeout_ms']
+
+        # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
             topics = list(self._topics)
             if not topics and self.cluster.is_bootstrap(node_id):
@@ -920,20 +940,11 @@ class KafkaClient(object):
             future.add_errback(refresh_done)
             return self.config['request_timeout_ms']
 
-        # If there's any connection establishment underway, wait until it completes. This prevents
-        # the client from unnecessarily connecting to additional nodes while a previous connection
-        # attempt has not been completed.
+        # Should only get here if still connecting
         if self._connecting:
             return float('inf')
-
-        if self.maybe_connect(node_id, wakeup=wakeup):
-            log.debug("Initializing connection to node %s for metadata request", node_id)
-            return float('inf')
-
-        # connected but can't send more, OR connecting
-        # In either case we just need to wait for a network event
-        # to let us know the selected connection might be usable again.
-        return float('inf')
+        else:
+            return self.config['reconnect_backoff_ms']
 
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
