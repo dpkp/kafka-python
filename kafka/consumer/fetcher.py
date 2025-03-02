@@ -687,7 +687,7 @@ class Fetcher(six.Iterator):
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
         version = self._client.api_version(FetchRequest, max_version=7)
-        fetchable = collections.defaultdict(lambda: collections.defaultdict(list))
+        fetchable = collections.defaultdict(dict)
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
@@ -728,15 +728,12 @@ class Fetcher(six.Iterator):
                     -1, # log_start_offset is used internally by brokers / replicas only
                     self.config['max_partition_fetch_bytes'],
                 )
-            fetchable[node_id][partition.topic].append(partition_info)
+            fetchable[node_id][partition] = partition_info
             log.debug("Adding fetch request for partition %s at offset %d",
                       partition, position)
 
         requests = {}
-        for node_id, partition_data in six.iteritems(fetchable):
-            next_partitions = {TopicPartition(topic, partition_info[0]): partition_info
-                                  for topic, partitions in six.iteritems(partition_data)
-                                      for partition_info in partitions}
+        for node_id, next_partitions in six.iteritems(fetchable):
             if version >= 7 and self.config['enable_incremental_fetch_sessions']:
                 if node_id not in self._session_handlers:
                     self._session_handlers[node_id] = FetchSessionHandler(node_id)
@@ -744,29 +741,20 @@ class Fetcher(six.Iterator):
             else:
                 # No incremental fetch support
                 session = FetchRequestData(next_partitions, None, FetchMetadata.LEGACY)
-                # As of version == 3 partitions will be returned in order as
-                # they are requested, so to avoid starvation with
-                # `fetch_max_bytes` option we need this shuffle
-                # NOTE: we do have partition_data in random order due to usage
-                #       of unordered structures like dicts, but that does not
-                #       guarantee equal distribution, and starting in Python3.6
-                #       dicts retain insert order.
-                partition_data = list(partition_data.items())
-                random.shuffle(partition_data)
 
             if version <= 2:
                 request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
-                    partition_data)
+                    session.to_send)
             elif version == 3:
                 request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
                     self.config['fetch_max_bytes'],
-                    partition_data)
+                    session.to_send)
             elif version <= 6:
                 request = FetchRequest[version](
                     -1,  # replica_id
@@ -774,7 +762,7 @@ class Fetcher(six.Iterator):
                     self.config['fetch_min_bytes'],
                     self.config['fetch_max_bytes'],
                     self._isolation_level,
-                    partition_data)
+                    session.to_send)
             else:
                 # Through v8
                 request = FetchRequest[version](
@@ -1148,7 +1136,14 @@ class FetchRequestData(object):
         partition_data = collections.defaultdict(list)
         for tp, partition_info in six.iteritems(self._to_send):
             partition_data[tp.topic].append(partition_info)
-        return list(partition_data.items())
+        # As of version == 3 partitions will be returned in order as
+        # they are requested, so to avoid starvation with
+        # `fetch_max_bytes` option we need this shuffle
+        # NOTE: we do have partition_data in random order due to usage
+        #       of unordered structures like dicts, but that does not
+        #       guarantee equal distribution, and starting in Python3.6
+        #       dicts retain insert order.
+        return random.sample(list(partition_data.items()), k=len(partition_data))
 
     @property
     def to_forget(self):
