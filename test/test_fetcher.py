@@ -79,8 +79,17 @@ def test_send_fetches(fetcher, topic, mocker):
             ])])
     ]
 
-    mocker.patch.object(fetcher, '_create_fetch_requests',
-                        return_value=dict(enumerate(fetch_requests)))
+    def build_fetch_offsets(request):
+        fetch_offsets = {}
+        for topic, partitions in request.topics:
+            for partition_data in partitions:
+                partition, offset = partition_data[:2]
+                fetch_offsets[TopicPartition(topic, partition)] = offset
+        return fetch_offsets
+
+    mocker.patch.object(
+        fetcher, '_create_fetch_requests',
+        return_value=(dict(enumerate(map(lambda r: (r, build_fetch_offsets(r)), fetch_requests)))))
 
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher._client, 'send')
@@ -100,8 +109,8 @@ def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
     fetcher._client._api_versions = BROKER_API_VERSIONS[api_version]
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
     by_node = fetcher._create_fetch_requests()
-    requests = by_node.values()
-    assert set([r.API_VERSION for r in requests]) == set([fetch_version])
+    requests_and_offsets = by_node.values()
+    assert set([r.API_VERSION for (r, _offsets) in requests_and_offsets]) == set([fetch_version])
 
 
 def test_update_fetch_positions(fetcher, topic, mocker):
@@ -345,19 +354,15 @@ def test_fetched_records(fetcher, topic, mocker):
     assert partial is False
 
 
-@pytest.mark.parametrize(("fetch_request", "fetch_response", "num_partitions"), [
+@pytest.mark.parametrize(("fetch_offsets", "fetch_response", "num_partitions"), [
     (
-        FetchRequest[0](
-            -1, 100, 100,
-            [('foo', [(0, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0},
         FetchResponse[0](
             [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
         1,
     ),
     (
-        FetchRequest[1](
-            -1, 100, 100,
-            [('foo', [(0, 0, 1000), (1, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0, TopicPartition('foo', 1): 0},
         FetchResponse[1](
             0,
             [("foo", [
@@ -367,41 +372,33 @@ def test_fetched_records(fetcher, topic, mocker):
         2,
     ),
     (
-        FetchRequest[2](
-            -1, 100, 100,
-            [('foo', [(0, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0},
         FetchResponse[2](
             0, [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
         1,
     ),
     (
-        FetchRequest[3](
-            -1, 100, 100, 10000,
-            [('foo', [(0, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0},
         FetchResponse[3](
             0, [("foo", [(0, 0, 1000, [(0, b'xxx'),])]),]),
         1,
     ),
     (
-        FetchRequest[4](
-            -1, 100, 100, 10000, 0,
-            [('foo', [(0, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0},
         FetchResponse[4](
             0, [("foo", [(0, 0, 1000, 0, [], [(0, b'xxx'),])]),]),
         1,
     ),
     (
         # This may only be used in broker-broker api calls
-        FetchRequest[5](
-            -1, 100, 100, 10000, 0,
-            [('foo', [(0, 0, 1000),])]),
+        {TopicPartition('foo', 0): 0},
         FetchResponse[5](
             0, [("foo", [(0, 0, 1000, 0, 0, [], [(0, b'xxx'),])]),]),
         1,
     ),
 ])
-def test__handle_fetch_response(fetcher, fetch_request, fetch_response, num_partitions):
-    fetcher._handle_fetch_response(fetch_request, time.time(), fetch_response)
+def test__handle_fetch_response(fetcher, fetch_offsets, fetch_response, num_partitions):
+    fetcher._handle_fetch_response(0, fetch_offsets, time.time(), fetch_response)
     assert len(fetcher._completed_fetches) == num_partitions
 
 
