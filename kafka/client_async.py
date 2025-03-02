@@ -627,7 +627,10 @@ class KafkaClient(object):
                     # False return means no more connection progress is possible
                     # Connected nodes will update _connecting via state_change callback
                     if not self._init_connect(node_id):
-                        self._connecting.remove(node_id)
+                        # It's possible that the connection attempt triggered a state change
+                        # but if not, make sure to remove from _connecting list
+                        if node_id in self._connecting:
+                            self._connecting.remove(node_id)
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
