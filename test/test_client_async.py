@@ -340,7 +340,6 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, '_can_send_request', return_value=False)
     mocker.patch.object(client, '_can_connect', return_value=True)
     mocker.patch.object(client, '_init_connect', return_value=True)
-    mocker.patch.object(client, 'maybe_connect', return_value=True)
 
     now = time.time()
     t = mocker.patch('time.time')
@@ -349,7 +348,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(12345.678)
-    client.maybe_connect.assert_called_once_with('foobar', wakeup=False)
+    client._init_connect.assert_called_once_with('foobar')
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
