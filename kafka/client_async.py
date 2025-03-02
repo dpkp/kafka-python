@@ -619,9 +619,6 @@ class KafkaClient(object):
                 if self._closed:
                     break
 
-                # Send a metadata request if needed (or initiate new connection)
-                metadata_timeout_ms = self._maybe_refresh_metadata()
-
                 # Attempt to complete pending connections
                 for node_id in list(self._connecting):
                     # False return means no more connection progress is possible
@@ -631,6 +628,9 @@ class KafkaClient(object):
                         # but if not, make sure to remove from _connecting list
                         if node_id in self._connecting:
                             self._connecting.remove(node_id)
+
+                # Send a metadata request if needed (or initiate new connection)
+                metadata_timeout_ms = self._maybe_refresh_metadata()
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
