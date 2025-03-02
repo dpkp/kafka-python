@@ -58,7 +58,7 @@ def test_can_connect(cli, conn):
     assert cli._can_connect(0)
 
     # Node is connected, can't reconnect
-    assert cli._maybe_connect(0) is True
+    assert cli._init_connect(0) is True
     assert not cli._can_connect(0)
 
     # Node is disconnected, can connect
@@ -70,15 +70,15 @@ def test_can_connect(cli, conn):
     assert not cli._can_connect(0)
 
 
-def test_maybe_connect(cli, conn):
+def test_init_connect(cli, conn):
     # Node not in metadata, return False
-    assert not cli._maybe_connect(2)
+    assert not cli._init_connect(2)
 
     # New node_id creates a conn object
     assert 0 not in cli._conns
     conn.state = ConnectionStates.DISCONNECTED
     conn.connect.side_effect = lambda: conn._set_conn_state(ConnectionStates.CONNECTING)
-    assert cli._maybe_connect(0) is True
+    assert cli._init_connect(0) is True
     assert cli._conns[0] is conn
 
 
@@ -122,8 +122,8 @@ def test_ready(mocker, cli, conn):
 
 
 def test_is_ready(mocker, cli, conn):
-    cli._maybe_connect(0)
-    cli._maybe_connect(1)
+    cli._init_connect(0)
+    cli._init_connect(1)
 
     # metadata refresh blocks ready nodes
     assert cli.is_ready(0)
@@ -166,14 +166,14 @@ def test_close(mocker, cli, conn):
     assert conn.close.call_count == call_count
 
     # Single node close
-    cli._maybe_connect(0)
+    cli._init_connect(0)
     assert conn.close.call_count == call_count
     cli.close(0)
     call_count += 1
     assert conn.close.call_count == call_count
 
     # All node close
-    cli._maybe_connect(1)
+    cli._init_connect(1)
     cli.close()
     # +2 close: node 1, node bootstrap (node 0 already closed)
     call_count += 2
@@ -185,7 +185,7 @@ def test_is_disconnected(cli, conn):
     conn.state = ConnectionStates.DISCONNECTED
     assert not cli.is_disconnected(0)
 
-    cli._maybe_connect(0)
+    cli._init_connect(0)
     assert cli.is_disconnected(0)
 
     conn.state = ConnectionStates.CONNECTING
@@ -210,7 +210,7 @@ def test_send(cli, conn):
     assert isinstance(f.exception, Errors.NodeNotReadyError)
 
     conn.state = ConnectionStates.CONNECTED
-    cli._maybe_connect(0)
+    cli._init_connect(0)
     # ProduceRequest w/ 0 required_acks -> no response
     request = ProduceRequest[0](0, 0, [])
     assert request.expect_response() is False
@@ -339,8 +339,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
     mocker.patch.object(client, '_can_send_request', return_value=False)
     mocker.patch.object(client, '_can_connect', return_value=True)
-    mocker.patch.object(client, '_maybe_connect', return_value=True)
-    mocker.patch.object(client, 'maybe_connect', return_value=True)
+    mocker.patch.object(client, '_init_connect', return_value=True)
 
     now = time.time()
     t = mocker.patch('time.time')
@@ -349,7 +348,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     # first poll attempts connection
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(12345.678)
-    client.maybe_connect.assert_called_once_with('foobar', wakeup=False)
+    client._init_connect.assert_called_once_with('foobar')
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')

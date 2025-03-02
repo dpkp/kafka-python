@@ -398,7 +398,7 @@ class KafkaClient(object):
 
         return False
 
-    def _maybe_connect(self, node_id):
+    def _init_connect(self, node_id):
         """Idempotent non-blocking connection attempt to the given node id.
 
         Returns True if connection object exists and is connected / connecting
@@ -427,10 +427,8 @@ class KafkaClient(object):
                                         **self.config)
                 self._conns[node_id] = conn
 
-            elif conn.connected():
-                return True
-
-            conn.connect()
+            if conn.disconnected():
+                conn.connect()
             return not conn.disconnected()
 
     def ready(self, node_id, metadata_priority=True):
@@ -621,15 +619,18 @@ class KafkaClient(object):
                 if self._closed:
                     break
 
-                # Send a metadata request if needed (or initiate new connection)
-                metadata_timeout_ms = self._maybe_refresh_metadata()
-
                 # Attempt to complete pending connections
                 for node_id in list(self._connecting):
                     # False return means no more connection progress is possible
                     # Connected nodes will update _connecting via state_change callback
-                    if not self._maybe_connect(node_id):
-                        self._connecting.remove(node_id)
+                    if not self._init_connect(node_id):
+                        # It's possible that the connection attempt triggered a state change
+                        # but if not, make sure to remove from _connecting list
+                        if node_id in self._connecting:
+                            self._connecting.remove(node_id)
+
+                # Send a metadata request if needed (or initiate new connection)
+                metadata_timeout_ms = self._maybe_refresh_metadata()
 
                 # If we got a future that is already done, don't block in _poll
                 if future is not None and future.is_done:
@@ -679,6 +680,8 @@ class KafkaClient(object):
         self._register_send_sockets()
 
         start_select = time.time()
+        if timeout == float('inf'):
+            timeout = None
         ready = self._selector.select(timeout)
         end_select = time.time()
         if self._sensors:
@@ -893,6 +896,26 @@ class KafkaClient(object):
             log.debug("Give up sending metadata request since no node is available. (reconnect delay %d ms)", next_connect_ms)
             return next_connect_ms
 
+        if not self._can_send_request(node_id):
+            # If there's any connection establishment underway, wait until it completes. This prevents
+            # the client from unnecessarily connecting to additional nodes while a previous connection
+            # attempt has not been completed.
+            if self._connecting:
+                return float('inf')
+
+            elif self._can_connect(node_id):
+                log.debug("Initializing connection to node %s for metadata request", node_id)
+                self._connecting.add(node_id)
+                if not self._init_connect(node_id):
+                    if node_id in self._connecting:
+                        self._connecting.remove(node_id)
+                    # Connection attempt failed immediately, need to retry with a different node
+                    return self.config['reconnect_backoff_ms']
+            else:
+                # Existing connection with max in flight requests. Wait for request to complete.
+                return self.config['request_timeout_ms']
+
+        # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
             topics = list(self._topics)
             if not topics and self.cluster.is_bootstrap(node_id):
@@ -917,20 +940,11 @@ class KafkaClient(object):
             future.add_errback(refresh_done)
             return self.config['request_timeout_ms']
 
-        # If there's any connection establishment underway, wait until it completes. This prevents
-        # the client from unnecessarily connecting to additional nodes while a previous connection
-        # attempt has not been completed.
+        # Should only get here if still connecting
         if self._connecting:
             return float('inf')
-
-        if self.maybe_connect(node_id, wakeup=wakeup):
-            log.debug("Initializing connection to node %s for metadata request", node_id)
-            return float('inf')
-
-        # connected but can't send more, OR connecting
-        # In either case we just need to wait for a network event
-        # to let us know the selected connection might be usable again.
-        return float('inf')
+        else:
+            return self.config['reconnect_backoff_ms']
 
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
@@ -973,7 +987,7 @@ class KafkaClient(object):
             if try_node is None:
                 self._lock.release()
                 raise Errors.NoBrokersAvailable()
-            if not self._maybe_connect(try_node):
+            if not self._init_connect(try_node):
                 if try_node == node_id:
                     raise Errors.NodeNotReadyError("Connection failed to %s" % node_id)
                 else:
