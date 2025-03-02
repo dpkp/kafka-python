@@ -680,6 +680,8 @@ class KafkaClient(object):
         self._register_send_sockets()
 
         start_select = time.time()
+        if timeout == float('inf'):
+            timeout = None
         ready = self._selector.select(timeout)
         end_select = time.time()
         if self._sensors:
