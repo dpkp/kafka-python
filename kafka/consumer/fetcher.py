@@ -686,7 +686,7 @@ class Fetcher(six.Iterator):
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
-        version = self._client.api_version(FetchRequest, max_version=7)
+        version = self._client.api_version(FetchRequest, max_version=8)
         fetchable = collections.defaultdict(dict)
 
         for partition in self._fetchable_partitions():
