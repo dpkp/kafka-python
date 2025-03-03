@@ -100,7 +100,8 @@ class ConnectionStates(object):
     HANDSHAKE = '<handshake>'
     CONNECTED = '<connected>'
     AUTHENTICATING = '<authenticating>'
-    API_VERSIONS = '<checking_api_versions>'
+    API_VERSIONS_SEND = '<checking_api_versions_send>'
+    API_VERSIONS_RECV = '<checking_api_versions_recv>'
 
 
 class BrokerConnection(object):
@@ -419,7 +420,7 @@ class BrokerConnection(object):
                     self._wrap_ssl()
                 else:
                     log.debug('%s: checking broker Api Versions', self)
-                    self.state = ConnectionStates.API_VERSIONS
+                    self.state = ConnectionStates.API_VERSIONS_SEND
                     self.config['state_change_callback'](self.node_id, self._sock, self)
 
             # Connection failed
@@ -439,13 +440,13 @@ class BrokerConnection(object):
             if self._try_handshake():
                 log.debug('%s: completed SSL handshake.', self)
                 log.debug('%s: checking broker Api Versions', self)
-                self.state = ConnectionStates.API_VERSIONS
+                self.state = ConnectionStates.API_VERSIONS_SEND
                 self.config['state_change_callback'](self.node_id, self._sock, self)
 
-        if self.state is ConnectionStates.API_VERSIONS:
+        if self.state in (ConnectionStates.API_VERSIONS_SEND, ConnectionStates.API_VERSIONS_RECV):
             if self._try_api_versions_check():
                 # _try_api_versions_check has side-effects: possibly disconnected on socket errors
-                if self.state is ConnectionStates.API_VERSIONS:
+                if self.state in (ConnectionStates.API_VERSIONS_SEND, ConnectionStates.API_VERSIONS_RECV):
                     if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
                         log.debug('%s: initiating SASL authentication', self)
                         self.state = ConnectionStates.AUTHENTICATING
@@ -555,6 +556,8 @@ class BrokerConnection(object):
                 response.add_callback(self._handle_api_versions_response, future)
                 response.add_errback(self._handle_api_versions_failure, future)
                 self._api_versions_future = future
+                self.state = ConnectionStates.API_VERSIONS_RECV
+                self.config['state_change_callback'](self.node_id, self._sock, self)
             elif self._check_version_idx < len(self.VERSION_CHECKS):
                 version, request = self.VERSION_CHECKS[self._check_version_idx]
                 future = Future()
@@ -562,6 +565,8 @@ class BrokerConnection(object):
                 response.add_callback(self._handle_check_version_response, future, version)
                 response.add_errback(self._handle_check_version_failure, future)
                 self._api_versions_future = future
+                self.state = ConnectionStates.API_VERSIONS_RECV
+                self.config['state_change_callback'](self.node_id, self._sock, self)
             else:
                 raise 'Unable to determine broker version.'
 
@@ -991,14 +996,16 @@ class BrokerConnection(object):
         return self.state in (ConnectionStates.CONNECTING,
                               ConnectionStates.HANDSHAKE,
                               ConnectionStates.AUTHENTICATING,
-                              ConnectionStates.API_VERSIONS)
+                              ConnectionStates.API_VERSIONS_SEND,
+                              ConnectionStates.API_VERSIONS_RECV)
 
     def initializing(self):
         """Returns True if socket is connected but full connection is not complete.
         During this time the connection may send api requests to the broker to
         check api versions and perform SASL authentication."""
         return self.state in (ConnectionStates.AUTHENTICATING,
-                              ConnectionStates.API_VERSIONS)
+                              ConnectionStates.API_VERSIONS_SEND,
+                              ConnectionStates.API_VERSIONS_RECV)
 
     def disconnected(self):
         """Return True iff socket is closed"""

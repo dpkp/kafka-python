@@ -315,7 +315,13 @@ class KafkaClient(object):
                 if self.cluster.is_bootstrap(node_id):
                     self._last_bootstrap = time.time()
 
-            elif conn.state in (ConnectionStates.API_VERSIONS, ConnectionStates.AUTHENTICATING):
+            elif conn.state is ConnectionStates.API_VERSIONS_SEND:
+                try:
+                    self._selector.register(sock, selectors.EVENT_WRITE, conn)
+                except KeyError:
+                    self._selector.modify(sock, selectors.EVENT_WRITE, conn)
+
+            elif conn.state in (ConnectionStates.API_VERSIONS_RECV, ConnectionStates.AUTHENTICATING):
                 try:
                     self._selector.register(sock, selectors.EVENT_READ, conn)
                 except KeyError:
