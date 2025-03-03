@@ -249,6 +249,7 @@ class BrokerConnection(object):
         self._api_versions = None
         self._api_version = None
         self._check_version_idx = None
+        self._api_versions_idx = 2
         self._throttle_time = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -544,13 +545,7 @@ class BrokerConnection(object):
                 self._api_version = self.config['api_version']
                 return True
             elif self._check_version_idx is None:
-                # TODO: Implement newer versions
-                # ((3, 9), ApiVersionsRequest[4]()),
-                # ((2, 4), ApiVersionsRequest[3]()),
-                # ((2, 0), ApiVersionsRequest[2]()),
-                # ((0, 11), ApiVersionsRequest[1]()),
-                # ((0, 10), ApiVersionsRequest[0]()),
-                request = ApiVersionsRequest[0]()
+                request = ApiVersionsRequest[self._api_versions_idx]()
                 future = Future()
                 response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_api_versions_response, future)
@@ -585,7 +580,17 @@ class BrokerConnection(object):
     def _handle_api_versions_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
         # if error_type i UNSUPPORTED_VERSION: retry w/ latest version from response
-        assert error_type is Errors.NoError, "API version check failed"
+        if error_type is not Errors.NoError:
+            future.failure(error_type())
+            if error_type is Errors.UnsupportedVersionError:
+                self._api_versions_idx -= 1
+                if self._api_versions_idx >= 0:
+                    self._api_versions_future = None
+                    self.state = ConnectionStates.API_VERSIONS_SEND
+                    self.config['state_change_callback'](self.node_id, self._sock, self)
+            else:
+                self.close(error=error_type())
+            return
         self._api_versions = dict([
             (api_key, (min_version, max_version))
             for api_key, min_version, max_version in response.api_versions
@@ -597,6 +602,7 @@ class BrokerConnection(object):
     def _handle_api_versions_failure(self, future, ex):
         future.failure(ex)
         self._check_version_idx = 0
+        # after failure connection is closed, so state should already be DISCONNECTED
 
     def _handle_check_version_response(self, future, version, _response):
         log.info('Broker version identified as %s', '.'.join(map(str, version)))
@@ -610,6 +616,7 @@ class BrokerConnection(object):
     def _handle_check_version_failure(self, future, ex):
         future.failure(ex)
         self._check_version_idx += 1
+        # after failure connection is closed, so state should already be DISCONNECTED
 
     def _try_authenticate(self):
         assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10, 0)
