@@ -60,6 +60,8 @@ class KafkaConsumer(six.Iterator):
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
             raw message value and returns a deserialized value.
+        enable_incremental_fetch_sessions: (bool): Use incremental fetch sessions
+            when available / supported by kafka broker. See KIP-227. Default: True.
         fetch_min_bytes (int): Minimum amount of data the server should
             return for a fetch request, otherwise wait up to
             fetch_max_wait_ms for more data to accumulate. Default: 1.
@@ -266,6 +268,7 @@ class KafkaConsumer(six.Iterator):
         'group_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
+        'enable_incremental_fetch_sessions': True,
         'fetch_max_wait_ms': 500,
         'fetch_min_bytes': 1,
         'fetch_max_bytes': 52428800,
