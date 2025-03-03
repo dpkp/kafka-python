@@ -57,7 +57,8 @@ class Fetcher(six.Iterator):
         'check_crcs': True,
         'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
-        'retry_backoff_ms': 100
+        'retry_backoff_ms': 100,
+        'enable_incremental_fetch_sessions': True,
     }
 
     def __init__(self, client, subscriptions, metrics, **configs):
@@ -68,6 +69,8 @@ class Fetcher(six.Iterator):
                 raw message key and returns a deserialized key.
             value_deserializer (callable, optional): Any callable that takes a
                 raw message value and returns a deserialized value.
+            enable_incremental_fetch_sessions: (bool): Use incremental fetch sessions
+                when available / supported by kafka broker. See KIP-227. Default: True.
             fetch_min_bytes (int): Minimum amount of data the server should
                 return for a fetch request, otherwise wait up to
                 fetch_max_wait_ms for more data to accumulate. Default: 1.
@@ -110,6 +113,7 @@ class Fetcher(six.Iterator):
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
+        self._session_handlers = {}
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -119,11 +123,11 @@ class Fetcher(six.Iterator):
             List of Futures: each future resolves to a FetchResponse
         """
         futures = []
-        for node_id, request in six.iteritems(self._create_fetch_requests()):
+        for node_id, (request, fetch_offsets) in six.iteritems(self._create_fetch_requests()):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
                 future = self._client.send(node_id, request, wakeup=False)
-                future.add_callback(self._handle_fetch_response, request, time.time())
+                future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
                 future.add_errback(self._handle_fetch_error, node_id)
                 futures.append(future)
         self._fetch_futures.extend(futures)
@@ -680,12 +684,12 @@ class Fetcher(six.Iterator):
         FetchRequests skipped if no leader, or node has requests in flight
 
         Returns:
-            dict: {node_id: FetchRequest, ...} (version depends on client api_versions)
+            dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...} (version depends on client api_versions)
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
-        version = self._client.api_version(FetchRequest, max_version=6)
-        fetchable = collections.defaultdict(lambda: collections.defaultdict(list))
+        version = self._client.api_version(FetchRequest, max_version=7)
+        fetchable = collections.defaultdict(dict)
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
@@ -708,70 +712,89 @@ class Fetcher(six.Iterator):
                           " Requesting metadata update", partition)
                 self._client.cluster.request_update()
 
-            elif self._client.in_flight_request_count(node_id) == 0:
-                if version < 5:
-                    partition_info = (
-                        partition.partition,
-                        position,
-                        self.config['max_partition_fetch_bytes']
-                    )
-                else:
-                    partition_info = (
-                        partition.partition,
-                        position,
-                        -1, # log_start_offset is used internally by brokers / replicas only
-                        self.config['max_partition_fetch_bytes'],
-                    )
-                fetchable[node_id][partition.topic].append(partition_info)
-                log.debug("Adding fetch request for partition %s at offset %d",
-                          partition, position)
-            else:
+            elif self._client.in_flight_request_count(node_id) > 0:
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
+                continue
+
+            if version < 5:
+                partition_info = (
+                    partition.partition,
+                    position,
+                    self.config['max_partition_fetch_bytes']
+                )
+            else:
+                partition_info = (
+                    partition.partition,
+                    position,
+                    -1, # log_start_offset is used internally by brokers / replicas only
+                    self.config['max_partition_fetch_bytes'],
+                )
+            fetchable[node_id][partition] = partition_info
+            log.debug("Adding fetch request for partition %s at offset %d",
+                      partition, position)
 
         requests = {}
-        for node_id, partition_data in six.iteritems(fetchable):
-            # As of version == 3 partitions will be returned in order as
-            # they are requested, so to avoid starvation with
-            # `fetch_max_bytes` option we need this shuffle
-            # NOTE: we do have partition_data in random order due to usage
-            #       of unordered structures like dicts, but that does not
-            #       guarantee equal distribution, and starting in Python3.6
-            #       dicts retain insert order.
-            partition_data = list(partition_data.items())
-            random.shuffle(partition_data)
+        for node_id, next_partitions in six.iteritems(fetchable):
+            if version >= 7 and self.config['enable_incremental_fetch_sessions']:
+                if node_id not in self._session_handlers:
+                    self._session_handlers[node_id] = FetchSessionHandler(node_id)
+                session = self._session_handlers[node_id].build_next(next_partitions)
+            else:
+                # No incremental fetch support
+                session = FetchRequestData(next_partitions, None, FetchMetadata.LEGACY)
 
             if version <= 2:
-                requests[node_id] = FetchRequest[version](
+                request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
-                    partition_data)
+                    session.to_send)
             elif version == 3:
-                requests[node_id] = FetchRequest[version](
+                request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
                     self.config['fetch_max_bytes'],
-                    partition_data)
-            else:
-                # through v6
-                requests[node_id] = FetchRequest[version](
+                    session.to_send)
+            elif version <= 6:
+                request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
                     self.config['fetch_max_bytes'],
                     self._isolation_level,
-                    partition_data)
+                    session.to_send)
+            else:
+                # Through v8
+                request = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    self._isolation_level,
+                    session.id,
+                    session.epoch,
+                    session.to_send,
+                    session.to_forget)
+
+            fetch_offsets = {}
+            for tp, partition_data in six.iteritems(next_partitions):
+                offset = partition_data[1]
+                fetch_offsets[tp] = offset
+
+            requests[node_id] = (request, fetch_offsets)
+
         return requests
 
-    def _handle_fetch_response(self, request, send_time, response):
+    def _handle_fetch_response(self, node_id, fetch_offsets, send_time, response):
         """The callback for fetch completion"""
-        fetch_offsets = {}
-        for topic, partitions in request.topics:
-            for partition_data in partitions:
-                partition, offset = partition_data[:2]
-                fetch_offsets[TopicPartition(topic, partition)] = offset
+        if response.API_VERSION >= 7 and self.config['enable_incremental_fetch_sessions']:
+            if node_id not in self._session_handlers:
+                log.error("Unable to find fetch session handler for node %s. Ignoring fetch response", node_id)
+                return
+            if not self._session_handlers[node_id].handle_response(response):
+                return
 
         partitions = set([TopicPartition(topic, partition_data[0])
                           for topic, partitions in response.topics
@@ -784,6 +807,7 @@ class Fetcher(six.Iterator):
             random.shuffle(partitions)
             for partition_data in partitions:
                 tp = TopicPartition(topic, partition_data[0])
+                fetch_offset = fetch_offsets[tp]
                 completed_fetch = CompletedFetch(
                     tp, fetch_offsets[tp],
                     response.API_VERSION,
@@ -797,12 +821,10 @@ class Fetcher(six.Iterator):
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
 
     def _handle_fetch_error(self, node_id, exception):
-        log.log(
-            logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR,
-            'Fetch to node %s failed: %s',
-            node_id,
-            exception
-        )
+        level = logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR
+        log.log(level, 'Fetch to node %s failed: %s', node_id, exception)
+        if node_id in self._session_handlers:
+            self._session_handlers[node_id].handle_error(exception)
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
@@ -938,6 +960,201 @@ class Fetcher(six.Iterator):
             # subscription position (also incremented by 1)
             self.fetch_offset = max(self.fetch_offset, res[-1].offset + 1)
             return res
+
+
+class FetchSessionHandler(object):
+    """
+    FetchSessionHandler maintains the fetch session state for connecting to a broker.
+
+    Using the protocol outlined by KIP-227, clients can create incremental fetch sessions.
+    These sessions allow the client to fetch information about a set of partition over
+    and over, without explicitly enumerating all the partitions in the request and the
+    response.
+
+    FetchSessionHandler tracks the partitions which are in the session.  It also
+    determines which partitions need to be included in each fetch request, and what
+    the attached fetch session metadata should be for each request.
+    """
+
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.next_metadata = FetchMetadata.INITIAL
+        self.session_partitions = {}
+
+    def build_next(self, next_partitions):
+        if self.next_metadata.is_full:
+            log.debug("Built full fetch %s for node %s with %s partition(s).",
+                self.next_metadata, self.node_id, len(next_partitions))
+            self.session_partitions = next_partitions
+            return FetchRequestData(next_partitions, None, self.next_metadata);
+
+        prev_tps = set(self.session_partitions.keys())
+        next_tps = set(next_partitions.keys())
+        log.debug("Building incremental partitions from next: %s, previous: %s", next_tps, prev_tps)
+        added = next_tps - prev_tps
+        for tp in added:
+            self.session_partitions[tp] = next_partitions[tp]
+        removed = prev_tps - next_tps
+        for tp in removed:
+            self.session_partitions.pop(tp)
+        altered = set()
+        for tp in next_tps & prev_tps:
+            if next_partitions[tp] != self.session_partitions[tp]:
+                self.session_partitions[tp] = next_partitions[tp]
+                altered.add(tp)
+
+        log.debug("Built incremental fetch %s for node %s. Added %s, altered %s, removed %s out of %s",
+                self.next_metadata, self.node_id, added, altered, removed, self.session_partitions.keys())
+        to_send = {tp: next_partitions[tp] for tp in (added | altered)}
+        return FetchRequestData(to_send, removed, self.next_metadata)
+
+    def handle_response(self, response):
+        if response.error_code != Errors.NoError.errno:
+            error_type = Errors.for_code(response.error_code)
+            log.info("Node %s was unable to process the fetch request with %s: %s.",
+                self.node_id, self.next_metadata, error_type())
+            if error_type is Errors.FetchSessionIdNotFoundError:
+                self.next_metadata = FetchMetadata.INITIAL
+            else:
+                self.next_metadata = self.next_metadata.next_close_existing()
+            return False
+
+        response_tps = self._response_partitions(response)
+        session_tps = set(self.session_partitions.keys())
+        if self.next_metadata.is_full:
+            if response_tps != session_tps:
+                log.info("Node %s sent an invalid full fetch response with extra %s / omitted %s",
+                         self.node_id, response_tps - session_tps, session_tps - response_tps)
+                self.next_metadata = FetchMetadata.INITIAL
+                return False
+            elif response.session_id == FetchMetadata.INVALID_SESSION_ID:
+                log.debug("Node %s sent a full fetch response with %s partitions",
+                          self.node_id, len(response_tps))
+                self.next_metadata = FetchMetadata.INITIAL
+                return True
+            else:
+                # The server created a new incremental fetch session.
+                log.debug("Node %s sent a full fetch response that created a new incremental fetch session %s"
+                          " with %s response partitions",
+                          self.node_id, response.session_id,
+                          len(response_tps))
+                self.next_metadata = FetchMetadata.new_incremental(response.session_id)
+                return True
+        else:
+            if response_tps - session_tps:
+                log.info("Node %s sent an invalid incremental fetch response with extra partitions %s",
+                         self.node_id, response_tps - session_tps)
+                self.next_metadata = self.next_metadata.next_close_existing()
+                return False
+            elif response.session_id == FetchMetadata.INVALID_SESSION_ID:
+                # The incremental fetch session was closed by the server.
+                log.debug("Node %s sent an incremental fetch response closing session %s"
+                          " with %s response partitions (%s implied)",
+                          self.node_id, self.next_metadata.session_id,
+                          len(response_tps), len(self.session_partitions) - len(response_tps))
+                self.next_metadata = FetchMetadata.INITIAL
+                return True
+            else:
+                # The incremental fetch session was continued by the server.
+                log.debug("Node %s sent an incremental fetch response for session %s"
+                          " with %s response partitions (%s implied)",
+                          self.node_id, response.session_id,
+                          len(response_tps), len(self.session_partitions) - len(response_tps))
+                self.next_metadata = self.next_metadata.next_incremental()
+                return True
+
+    def handle_error(self, _exception):
+        self.next_metadata = self.next_metadata.next_close_existing()
+
+    def _response_partitions(self, response):
+        return {TopicPartition(topic, partition_data[0])
+                for topic, partitions in response.topics
+                for partition_data in partitions}
+
+
+class FetchMetadata(object):
+    __slots__ = ('session_id', 'epoch')
+
+    MAX_EPOCH = 2147483647
+    INVALID_SESSION_ID = 0 # used by clients with no session.
+    INITIAL_EPOCH = 0 # client wants to create or recreate a session.
+    FINAL_EPOCH = -1 # client wants to close any existing session, and not create a new one.
+
+    def __init__(self, session_id, epoch):
+        self.session_id = session_id
+        self.epoch = epoch
+
+    @property
+    def is_full(self):
+        return self.epoch == self.INITIAL_EPOCH or self.epoch == self.FINAL_EPOCH
+
+    @classmethod
+    def next_epoch(cls, prev_epoch):
+        if prev_epoch < 0:
+            return cls.FINAL_EPOCH
+        elif prev_epoch == cls.MAX_EPOCH:
+            return 1
+        else:
+            return prev_epoch + 1
+
+    def next_close_existing(self):
+        return self.__class__(self.session_id, self.INITIAL_EPOCH)
+
+    @classmethod
+    def new_incremental(cls, session_id):
+        return cls(session_id, cls.next_epoch(cls.INITIAL_EPOCH))
+
+    def next_incremental(self):
+        return self.__class__(self.session_id, self.next_epoch(self.epoch))
+
+FetchMetadata.INITIAL = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMetadata.INITIAL_EPOCH)
+FetchMetadata.LEGACY = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMetadata.FINAL_EPOCH)
+
+
+class FetchRequestData(object):
+    __slots__ = ('_to_send', '_to_forget', '_metadata')
+
+    def __init__(self, to_send, to_forget, metadata):
+        self._to_send = to_send or dict() # {TopicPartition: (partition, ...)}
+        self._to_forget = to_forget or set() # {TopicPartition}
+        self._metadata = metadata
+
+    @property
+    def metadata(self):
+        return self._metadata
+
+    @property
+    def id(self):
+        return self._metadata.session_id
+
+    @property
+    def epoch(self):
+        return self._metadata.epoch
+
+    @property
+    def to_send(self):
+        # Return as list of [(topic, [(partition, ...), ...]), ...]
+        # so it an be passed directly to encoder
+        partition_data = collections.defaultdict(list)
+        for tp, partition_info in six.iteritems(self._to_send):
+            partition_data[tp.topic].append(partition_info)
+        # As of version == 3 partitions will be returned in order as
+        # they are requested, so to avoid starvation with
+        # `fetch_max_bytes` option we need this shuffle
+        # NOTE: we do have partition_data in random order due to usage
+        #       of unordered structures like dicts, but that does not
+        #       guarantee equal distribution, and starting in Python3.6
+        #       dicts retain insert order.
+        return random.sample(list(partition_data.items()), k=len(partition_data))
+
+    @property
+    def to_forget(self):
+        # Return as list of [(topic, (partiiton, ...)), ...]
+        # so it an be passed directly to encoder
+        partition_data = collections.defaultdict(list)
+        for tp in self._to_forget:
+            partition_data[tp.topic].append(tp.partition)
+        return list(partition_data.items())
 
 
 class FetchResponseMetricAggregator(object):
