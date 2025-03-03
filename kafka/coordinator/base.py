@@ -488,11 +488,6 @@ class BaseCoordinator(object):
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
-        if response.API_VERSION >= 2:
-            self.sensors.throttle_time.record(response.throttle_time_ms)
-            if response.throttle_time_ms > 0:
-                log.warning("JoinGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             log.debug("Received successful JoinGroup response for group %s: %s",
@@ -614,11 +609,6 @@ class BaseCoordinator(object):
         return future
 
     def _handle_sync_group_response(self, future, send_time, response):
-        if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time_ms)
-            if response.throttle_time_ms > 0:
-                log.warning("SyncGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             self.sensors.sync_latency.record((time.time() - send_time) * 1000)
@@ -678,9 +668,6 @@ class BaseCoordinator(object):
         return future
 
     def _handle_group_coordinator_response(self, future, response):
-        if response.API_VERSION >= 1 and response.throttle_time_ms > 0:
-            log.warning("FindCoordinatorRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         log.debug("Received group coordinator response %s", response)
 
         error_type = Errors.for_code(response.error_code)
@@ -785,11 +772,6 @@ class BaseCoordinator(object):
             self.reset_generation()
 
     def _handle_leave_group_response(self, response):
-        if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time_ms)
-            if response.throttle_time_ms > 0:
-                log.warning("LeaveGroupRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             log.debug("LeaveGroup request for group %s returned successfully",
@@ -821,11 +803,6 @@ class BaseCoordinator(object):
         return future
 
     def _handle_heartbeat_response(self, future, send_time, response):
-        if response.API_VERSION >= 1:
-            self.sensors.throttle_time.record(response.throttle_time_ms)
-            if response.throttle_time_ms > 0:
-                log.warning("HeartbeatRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         self.sensors.heartbeat_latency.record((time.time() - send_time) * 1000)
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
@@ -913,14 +890,6 @@ class GroupCoordinatorMetrics(object):
             'The number of seconds since the last controller heartbeat was sent',
             tags), AnonMeasurable(
                 lambda _, now: (now / 1000) - self.heartbeat.last_send))
-
-        self.throttle_time = metrics.sensor('throttle-time')
-        self.throttle_time.add(metrics.metric_name(
-            'throttle-time-avg', self.metric_group_name,
-            'The average throttle time in ms'), Avg())
-        self.throttle_time.add(metrics.metric_name(
-            'throttle-time-max', self.metric_group_name,
-            'The maximum throttle time in ms'), Max())
 
 
 class HeartbeatThread(threading.Thread):

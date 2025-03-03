@@ -614,8 +614,6 @@ class Fetcher(six.Iterator):
         Raises:
             AssertionError: if response does not match partition
         """
-        if response.API_VERSION >= 2 and response.throttle_time_ms > 0:
-            log.warning("ListOffsetsRequest throttled by broker (%d ms)", response.throttle_time_ms)
         timestamp_offset_map = {}
         for topic, part_data in response.topics:
             for partition_info in part_data:
@@ -816,8 +814,6 @@ class Fetcher(six.Iterator):
                 )
                 self._completed_fetches.append(completed_fetch)
 
-        if response.API_VERSION >= 1:
-            self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
 
     def _handle_fetch_error(self, node_id, exception):
@@ -1032,6 +1028,11 @@ class FetchSessionHandler(object):
                           self.node_id, len(response_tps))
                 self.next_metadata = FetchMetadata.INITIAL
                 return True
+            elif response.session_id == FetchMetadata.THROTTLED_SESSION_ID:
+                log.debug("Node %s sent a empty full fetch response due to a quota violation (%s partitions)",
+                          self.node_id, len(response_tps))
+                # Keep current metadata
+                return True
             else:
                 # The server created a new incremental fetch session.
                 log.debug("Node %s sent a full fetch response that created a new incremental fetch session %s"
@@ -1053,6 +1054,11 @@ class FetchSessionHandler(object):
                           self.node_id, self.next_metadata.session_id,
                           len(response_tps), len(self.session_partitions) - len(response_tps))
                 self.next_metadata = FetchMetadata.INITIAL
+                return True
+            elif response.session_id == FetchMetadata.THROTTLED_SESSION_ID:
+                log.debug("Node %s sent a empty incremental fetch response due to a quota violation (%s partitions)",
+                          self.node_id, len(response_tps))
+                # Keep current metadata
                 return True
             else:
                 # The incremental fetch session was continued by the server.
@@ -1077,6 +1083,7 @@ class FetchMetadata(object):
 
     MAX_EPOCH = 2147483647
     INVALID_SESSION_ID = 0 # used by clients with no session.
+    THROTTLED_SESSION_ID = -1 # returned with empty response on quota violation
     INITIAL_EPOCH = 0 # client wants to create or recreate a session.
     FINAL_EPOCH = -1 # client wants to close any existing session, and not create a new one.
 
@@ -1216,12 +1223,6 @@ class FetchManagerMetrics(object):
         self.records_fetch_lag = metrics.sensor('records-lag')
         self.records_fetch_lag.add(metrics.metric_name('records-lag-max', self.group_name,
             'The maximum lag in terms of number of records for any partition in self window'), Max())
-
-        self.fetch_throttle_time_sensor = metrics.sensor('fetch-throttle-time')
-        self.fetch_throttle_time_sensor.add(metrics.metric_name('fetch-throttle-time-avg', self.group_name,
-            'The average throttle time in ms'), Avg())
-        self.fetch_throttle_time_sensor.add(metrics.metric_name('fetch-throttle-time-max', self.group_name,
-            'The maximum throttle time in ms'), Max())
 
     def record_topic_fetch_metrics(self, topic, num_bytes, num_records):
         # record bytes fetched

@@ -517,6 +517,16 @@ class KafkaClient(object):
             return 0
         return conn.connection_delay()
 
+    def throttle_delay(self, node_id):
+        """
+        Return the number of milliseconds to wait until a broker is no longer throttled.
+        When disconnected / connecting, returns 0.
+        """
+        conn = self._conns.get(node_id)
+        if conn is None:
+            return 0
+        return conn.throttle_delay()
+
     def is_ready(self, node_id, metadata_priority=True):
         """Check whether a node is ready to send more requests.
 
@@ -793,16 +803,17 @@ class KafkaClient(object):
                 break
             future.success(response)
             responses.append(response)
+
         return responses
 
     def least_loaded_node(self):
         """Choose the node with fewest outstanding requests, with fallbacks.
 
-        This method will prefer a node with an existing connection and no
-        in-flight-requests. If no such node is found, a node will be chosen
-        randomly from disconnected nodes that are not "blacked out" (i.e.,
+        This method will prefer a node with an existing connection (not throttled)
+        with no in-flight-requests. If no such node is found, a node will be chosen
+        randomly from all nodes that are not throttled or "blacked out" (i.e.,
         are not subject to a reconnect backoff). If no node metadata has been
-        obtained, will return a bootstrap node (subject to exponential backoff).
+        obtained, will return a bootstrap node.
 
         Returns:
             node_id or None if no suitable node was found
@@ -814,11 +825,11 @@ class KafkaClient(object):
         found = None
         for node_id in nodes:
             conn = self._conns.get(node_id)
-            connected = conn is not None and conn.connected()
-            blacked_out = conn is not None and conn.blacked_out()
+            connected = conn is not None and conn.connected() and conn.can_send_more()
+            blacked_out = conn is not None and (conn.blacked_out() or conn.throttled())
             curr_inflight = len(conn.in_flight_requests) if conn is not None else 0
             if connected and curr_inflight == 0:
-                # if we find an established connection
+                # if we find an established connection (not throttled)
                 # with no in-flight requests, we can stop right away
                 return node_id
             elif not blacked_out and curr_inflight < inflight:
@@ -828,8 +839,15 @@ class KafkaClient(object):
 
         return found
 
+    def _refresh_delay_ms(self, node_id):
+        conn = self._conns.get(node_id)
+        if conn is not None and conn.connected():
+            return self.throttle_delay(node_id)
+        else:
+            return self.connection_delay(node_id)
+
     def least_loaded_node_refresh_ms(self):
-        """Return connection delay in milliseconds for next available node.
+        """Return connection or throttle delay in milliseconds for next available node.
 
         This method is used primarily for retry/backoff during metadata refresh
         during / after a cluster outage, in which there are no available nodes.
@@ -837,7 +855,7 @@ class KafkaClient(object):
         Returns:
            float: delay_ms
         """
-        return min([self.connection_delay(broker.nodeId) for broker in self.cluster.brokers()])
+        return min([self._refresh_delay_ms(broker.nodeId) for broker in self.cluster.brokers()])
 
     def set_topics(self, topics):
         """Set specific topics to track for metadata.
@@ -915,8 +933,8 @@ class KafkaClient(object):
                     # Connection attempt failed immediately, need to retry with a different node
                     return self.config['reconnect_backoff_ms']
             else:
-                # Existing connection with max in flight requests. Wait for request to complete.
-                return self.config['request_timeout_ms']
+                # Existing connection throttled or max in flight requests.
+                return self.throttle_delay(node_id) or self.config['request_timeout_ms']
 
         # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
