@@ -856,9 +856,9 @@ class BrokerConnection(object):
         """
         Return True if we are connected but currently throttled.
         """
-        if self.state is ConnectionStates.CONNECTED:
-            return self._throttle_time is not None and self._throttle_time > time.time()
-        return False
+        if self.state is not ConnectionStates.CONNECTED:
+            return False
+        return self.throttle_delay() > 0
 
     def throttle_delay(self):
         """
@@ -1105,11 +1105,8 @@ class BrokerConnection(object):
 
     def can_send_more(self):
         """Check for throttling / quota violations and max in-flight-requests"""
-        if self._throttle_time is not None:
-            if self._throttle_time > time.time():
-                return False
-            # Reset throttle_time if needed
-            self._throttle_time = None
+        if self.throttle_delay() > 0:
+            return False
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
