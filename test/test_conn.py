@@ -9,6 +9,7 @@ import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
 from kafka.protocol.api import RequestHeader
+from kafka.protocol.group import HeartbeatResponse
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 
@@ -360,3 +361,29 @@ def test_requests_timed_out(conn):
         # Drop the expired request and we should be good to go again
         conn.in_flight_requests.pop(1)
         assert not conn.requests_timed_out()
+
+
+def test_maybe_throttle(conn):
+    assert conn.state is ConnectionStates.DISCONNECTED
+    assert not conn.throttled()
+
+    conn.state = ConnectionStates.CONNECTED
+    assert not conn.throttled()
+
+    # No throttle_time_ms attribute
+    conn._maybe_throttle(HeartbeatResponse[0](error_code=0))
+    assert not conn.throttled()
+
+    with mock.patch("time.time", return_value=1000) as time:
+        # server-side throttling in v1.0
+        conn.config['api_version'] = (1, 0)
+        conn._maybe_throttle(HeartbeatResponse[1](throttle_time_ms=1000, error_code=0))
+        assert not conn.throttled()
+
+        # client-side throttling in v2.0
+        conn.config['api_version'] = (2, 0)
+        conn._maybe_throttle(HeartbeatResponse[2](throttle_time_ms=1000, error_code=0))
+        assert conn.throttled()
+
+        time.return_value = 3000
+        assert not conn.throttled()

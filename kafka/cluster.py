@@ -235,9 +235,6 @@ class ClusterMetadata(object):
 
         Returns: None
         """
-        if metadata.API_VERSION >= 3 and metadata.throttle_time_ms > 0:
-            log.warning("MetadataRequest throttled by broker (%d ms)", metadata.throttle_time_ms)
-
         # In the common case where we ask for a single topic and get back an
         # error, we should fail the future
         if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:

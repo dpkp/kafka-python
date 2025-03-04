@@ -236,6 +236,7 @@ class BrokerConnection(object):
         self._sock_afi = afi
         self._sock_addr = None
         self._api_versions = None
+        self._throttle_time = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -851,6 +852,27 @@ class BrokerConnection(object):
             return self.connection_delay() > 0
         return False
 
+    def throttled(self):
+        """
+        Return True if we are connected but currently throttled.
+        """
+        if self.state is not ConnectionStates.CONNECTED:
+            return False
+        return self.throttle_delay() > 0
+
+    def throttle_delay(self):
+        """
+        Return the number of milliseconds to wait until connection is no longer throttled.
+        """
+        if self._throttle_time is not None:
+            remaining_ms = (self._throttle_time - time.time()) * 1000
+            if remaining_ms > 0:
+                return remaining_ms
+            else:
+                self._throttle_time = None
+                return 0
+        return 0
+
     def connection_delay(self):
         """
         Return the number of milliseconds to wait, based on the connection
@@ -976,6 +998,9 @@ class BrokerConnection(object):
         elif not self.connected():
             return future.failure(Errors.KafkaConnectionError(str(self)))
         elif not self.can_send_more():
+            # very small race here, but prefer it over breaking abstraction to check self._throttle_time
+            if self.throttled():
+                return future.failure(Errors.ThrottlingQuotaExceededError(str(self)))
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
         return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
 
@@ -1063,8 +1088,26 @@ class BrokerConnection(object):
             self.close(error=error)
             return False
 
+    def _maybe_throttle(self, response):
+        throttle_time_ms = getattr(response, 'throttle_time_ms', 0)
+        if self._sensors:
+            self._sensors.throttle_time.record(throttle_time_ms)
+        if not throttle_time_ms:
+            if self._throttle_time is not None:
+                self._throttle_time = None
+            return
+        # Client side throttling enabled in v2.0 brokers
+        # prior to that throttling (if present) was managed broker-side
+        if self.config['api_version'] is not None and self.config['api_version'] >= (2, 0):
+            throttle_time = time.time() + throttle_time_ms / 1000
+            self._throttle_time = max(throttle_time, self._throttle_time or 0)
+        log.warning("%s: %s throttled by broker (%d ms)", self,
+                    response.__class__.__name__, throttle_time_ms)
+
     def can_send_more(self):
-        """Return True unless there are max_in_flight_requests_per_connection."""
+        """Check for throttling / quota violations and max in-flight-requests"""
+        if self.throttle_delay() > 0:
+            return False
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
@@ -1097,6 +1140,7 @@ class BrokerConnection(object):
                 self._sensors.request_time.record(latency_ms)
 
             log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
+            self._maybe_throttle(response)
             responses[i] = (response, future)
 
         return responses
@@ -1399,6 +1443,16 @@ class BrokerConnectionMetrics(object):
                 'The maximum request latency in ms.'),
                 Max())
 
+            throttle_time = metrics.sensor('throttle-time')
+            throttle_time.add(metrics.metric_name(
+                'throttle-time-avg', metric_group_name,
+                'The average throttle time in ms.'),
+                Avg())
+            throttle_time.add(metrics.metric_name(
+                'throttle-time-max', metric_group_name,
+                'The maximum throttle time in ms.'),
+                Max())
+
         # if one sensor of the metrics has been registered for the connection,
         # then all other sensors should have been registered; and vice versa
         node_str = 'node-{0}'.format(node_id)
@@ -1450,9 +1504,23 @@ class BrokerConnectionMetrics(object):
                 'The maximum request latency in ms.'),
                 Max())
 
+            throttle_time = metrics.sensor(
+                node_str + '.throttle',
+                parents=[metrics.get_sensor('throttle-time')])
+            throttle_time.add(metrics.metric_name(
+                'throttle-time-avg', metric_group_name,
+                'The average throttle time in ms.'),
+                Avg())
+            throttle_time.add(metrics.metric_name(
+                'throttle-time-max', metric_group_name,
+                'The maximum throttle time in ms.'),
+                Max())
+
+
         self.bytes_sent = metrics.sensor(node_str + '.bytes-sent')
         self.bytes_received = metrics.sensor(node_str + '.bytes-received')
         self.request_time = metrics.sensor(node_str + '.latency')
+        self.throttle_time = metrics.sensor(node_str + '.throttle')
 
 
 def _address_family(address):

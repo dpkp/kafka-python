@@ -211,9 +211,6 @@ class Sender(threading.Thread):
                     batch = batches_by_partition[tp]
                     self._complete_batch(batch, error, offset, ts, log_start_offset, global_error)
 
-            if response.API_VERSION > 0:
-                self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
-
         else:
             # this is the acks = 0 case, just complete all requests
             for batch in batches:
@@ -348,15 +345,6 @@ class SenderMetrics(object):
         self.add_metric('record-queue-time-max', Max(),
                         sensor_name=sensor_name,
                         description='The maximum time in ms record batches spent in the record accumulator.')
-
-        sensor_name = 'produce-throttle-time'
-        self.produce_throttle_time_sensor = self.metrics.sensor(sensor_name)
-        self.add_metric('produce-throttle-time-avg', Avg(),
-                        sensor_name=sensor_name,
-                        description='The average throttle time in ms')
-        self.add_metric('produce-throttle-time-max', Max(),
-                        sensor_name=sensor_name,
-                        description='The maximum throttle time in ms')
 
         sensor_name = 'records-per-request'
         self.records_per_request_sensor = self.metrics.sensor(sensor_name)
@@ -494,6 +482,3 @@ class SenderMetrics(object):
         sensor = self.metrics.get_sensor('topic.' + topic + '.record-errors')
         if sensor:
             sensor.record(count)
-
-    def record_throttle_time(self, throttle_time_ms, node=None):
-        self.produce_throttle_time_sensor.record(throttle_time_ms)

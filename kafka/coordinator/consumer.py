@@ -665,9 +665,6 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_commit_response(self, offsets, future, send_time, response):
-        if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
-            log.warning("OffsetCommitRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         # TODO look at adding request_latency_ms to response (like java kafka)
         self.consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
         unauthorized_topics = set()
@@ -785,9 +782,6 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_fetch_response(self, future, response):
-        if response.API_VERSION >= 3 and response.throttle_time_ms > 0:
-            log.warning("OffsetFetchRequest throttled by broker (%d ms)", response.throttle_time_ms)
-
         if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
             error_type = Errors.for_code(response.error_code)
             log.debug("Offset fetch failed: %s", error_type.__name__)
