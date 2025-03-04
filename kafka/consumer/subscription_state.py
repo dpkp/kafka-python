@@ -319,7 +319,7 @@ class SubscriptionState(object):
         all_consumed = {}
         for partition, state in six.iteritems(self.assignment):
             if state.has_valid_position:
-                all_consumed[partition] = OffsetAndMetadata(state.position, '')
+                all_consumed[partition] = OffsetAndMetadata(state.position, b'', -1)
         return all_consumed
 
     def need_offset_reset(self, partition, offset_reset_strategy=None):
