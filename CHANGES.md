@@ -1,3 +1,21 @@
+# 2.0.6 (Mar 4, 2025)
+
+Networking
+* Improve error handling in `client._maybe_connect` (#2504)
+* Client connection / `maybe_refresh_metadata` changes (#2507)
+* Improve too-large timeout handling in client poll
+* Default `client.check_version` timeout to `api_version_auto_timeout_ms` (#2496)
+
+Fixes
+* Decode and skip transactional control records in consumer (#2499)
+* try / except in consumer coordinator `__del__`
+
+Testing
+* test_conn fixup for py2
+
+Project Maintenance
+* Add 2.0 branch for backports
+
 # 2.0.5 (Feb 25, 2025)
 
 Networking
