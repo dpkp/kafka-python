@@ -865,7 +865,12 @@ class BrokerConnection(object):
         Return the number of milliseconds to wait until connection is no longer throttled.
         """
         if self._throttle_time is not None:
-            return max(0, time.time() - self._throttle_time) * 1000
+            remaining_ms = (self._throttle_time - time.time()) * 1000
+            if remaining_ms > 0:
+                return remaining_ms
+            else:
+                self._throttle_time = None
+                return 0
         return 0
 
     def connection_delay(self):
