@@ -998,7 +998,8 @@ class BrokerConnection(object):
         elif not self.connected():
             return future.failure(Errors.KafkaConnectionError(str(self)))
         elif not self.can_send_more():
-            if self._throttle_time:
+            # very small race here, but prefer it over breaking abstraction to check self._throttle_time
+            if self.throttled():
                 return future.failure(Errors.ThrottlingQuotaExceededError(str(self)))
             return future.failure(Errors.TooManyInFlightRequests(str(self)))
         return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
@@ -1097,7 +1098,7 @@ class BrokerConnection(object):
             return
         # Client side throttling enabled in v2.0 brokers
         # prior to that throttling (if present) was managed broker-side
-        if not self.config['api_version'] or self.config['api_version'] >= (2, 0):
+        if self.config['api_version'] is not None and self.config['api_version'] >= (2, 0):
             throttle_time = time.time() + throttle_time_ms / 1000
             self._throttle_time = max(throttle_time, self._throttle_time or 0)
         log.warning("%s: %s throttled by broker (%d ms)", self,
