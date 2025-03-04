@@ -253,9 +253,10 @@ class Fetcher(six.Iterator):
         or ``timeout_ms`` passed.
 
         Arguments:
-            timestamps: {TopicPartition: int} dict with timestamps to fetch
-                offsets by. -1 for the latest available, -2 for the earliest
-                available. Otherwise timestamp is treated as epoch milliseconds.
+            timestamps: {TopicPartition: (int, int)} dict with (timestamp, leader_epoch)
+                tuples s to fetch offsets by. Timestamp is -1 for the latest available, and
+                -2 for the earliest available. Otherwise timestamp is treated as epoch milliseconds.
+                Leader epoch is -1 to ignore, otherwise last known epoch value from partition.
 
         Returns:
             {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
@@ -578,7 +579,8 @@ class Fetcher(six.Iterator):
         by_topic = collections.defaultdict(list)
         for tp, timestamp in six.iteritems(timestamps):
             if version >= 4:
-                data = (tp.partition, leader_epoch, timestamp)
+                # TODO: leader_epoch
+                data = (tp.partition, -1, timestamp)
             elif version >= 1:
                 data = (tp.partition, timestamp)
             else:
