@@ -59,7 +59,7 @@ class SpawnedService(threading.Thread):
             self.args,
             preexec_fn=os.setsid, # to avoid propagating signals
             env=self.env,
-            bufsize=1,
+            bufsize=0,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         self.alive = self.child.poll() is None

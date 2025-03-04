@@ -23,7 +23,7 @@ def test_consumer(kafka_broker, topic):
     # The `topic` fixture is included because
     # 0.8.2 brokers need a topic to function well
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
-    consumer.poll(500)
+    consumer.poll(timeout_ms=500)
     assert len(consumer._client._conns) > 0
     node_id = list(consumer._client._conns.keys())[0]
     assert consumer._client._conns[node_id].state is ConnectionStates.CONNECTED
@@ -34,7 +34,7 @@ def test_consumer(kafka_broker, topic):
 def test_consumer_topics(kafka_broker, topic):
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     # Necessary to drive the IO
-    consumer.poll(500)
+    consumer.poll(timeout_ms=500)
     assert topic in consumer.topics()
     assert len(consumer.partitions_for_topic(topic)) > 0
     consumer.close()
@@ -58,7 +58,7 @@ def test_group(kafka_broker, topic):
                                      group_id=group_id,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
-            for tp, records in six.itervalues(consumers[i].poll(100)):
+            for tp, records in six.itervalues(consumers[i].poll(timeout_ms=200)):
                 messages[i][tp].extend(records)
         consumers[i].close()
         consumers[i] = None
