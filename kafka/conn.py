@@ -1100,7 +1100,8 @@ class BrokerConnection(object):
         if not self.config['api_version'] or self.config['api_version'] >= (2, 0):
             throttle_time = time.time() + throttle_time_ms / 1000
             self._throttle_time = max(throttle_time, self._throttle_time or 0)
-        log.warning("%s throttled by broker (%d ms)", response.__name__, throttle_time_ms)
+        log.warning("%s: %s throttled by broker (%d ms)", self,
+                    response.__class__.__name__, throttle_time_ms)
 
     def can_send_more(self):
         """Check for throttling / quota violations and max in-flight-requests"""
