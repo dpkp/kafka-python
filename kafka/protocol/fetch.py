@@ -287,7 +287,7 @@ class FetchRequest_v7(Request):
                 ('log_start_offset', Int64),
                 ('max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
-            ('topic', String),
+            ('topic', String('utf-8')),
             ('partitions', Array(Int32))
         )),
     )
@@ -327,7 +327,7 @@ class FetchRequest_v9(Request):
                 ('log_start_offset', Int64),
                 ('max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
-            ('topic', String),
+            ('topic', String('utf-8')),
             ('partitions', Array(Int32)),
         )),
     )
@@ -367,7 +367,7 @@ class FetchRequest_v11(Request):
                 ('log_start_offset', Int64),
                 ('max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
-            ('topic', String),
+            ('topic', String('utf-8')),
             ('partitions', Array(Int32))
         )),
         ('rack_id', String('utf-8')),
