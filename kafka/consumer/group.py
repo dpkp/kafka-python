@@ -732,16 +732,16 @@ class KafkaConsumer(six.Iterator):
             partition (TopicPartition): Partition to check
 
         Returns:
-            int: Offset
+            int: Offset or None
         """
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
         position = self._subscription.assignment[partition].position
-        if offset is None:
+        if position is None:
             self._update_fetch_positions([partition])
             position = self._subscription.assignment[partition].position
-        return position.offset
+        return position.offset if position else None
 
     def highwater(self, partition):
         """Last known highwater offset for a partition.
