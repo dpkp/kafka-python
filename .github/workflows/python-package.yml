@@ -6,7 +6,7 @@ on:
   push:
     branches: ["master"]
   pull_request:
-    branches: ["master"]
+    branches: ["master", "2.0"]
 
 env:
   FORCE_COLOR: "1"  # Make tools pretty.
