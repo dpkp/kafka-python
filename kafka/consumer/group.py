@@ -17,7 +17,7 @@ from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.list_offsets import OffsetResetStrategy
-from kafka.structs import TopicPartition
+from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
@@ -737,11 +737,11 @@ class KafkaConsumer(six.Iterator):
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
-        offset = self._subscription.assignment[partition].position
+        position = self._subscription.assignment[partition].position
         if offset is None:
             self._update_fetch_positions([partition])
-            offset = self._subscription.assignment[partition].position
-        return offset
+            position = self._subscription.assignment[partition].position
+        return position.offset
 
     def highwater(self, partition):
         """Last known highwater offset for a partition.
@@ -1144,7 +1144,7 @@ class KafkaConsumer(six.Iterator):
                     log.debug("Not returning fetched records for partition %s"
                               " since it is no longer fetchable", tp)
                     break
-                self._subscription.assignment[tp].position = record.offset + 1
+                self._subscription.assignment[tp].position = OffsetAndMetadata(record.offset + 1, b'', -1)
                 yield record
 
     def _message_generator(self):

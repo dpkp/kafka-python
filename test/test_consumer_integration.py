@@ -259,8 +259,8 @@ def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_pro
     })
 
     assert offsets == {
-        tp0: OffsetAndTimestamp(p0msg.offset, send_time),
-        tp1: OffsetAndTimestamp(p1msg.offset, send_time)
+        tp0: OffsetAndTimestamp(p0msg.offset, send_time, -1),
+        tp1: OffsetAndTimestamp(p1msg.offset, send_time, -1)
     }
 
     offsets = consumer.beginning_offsets([tp0, tp1])

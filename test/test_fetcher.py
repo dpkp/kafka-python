@@ -24,7 +24,7 @@ from kafka.errors import (
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
 )
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
-from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.structs import OffsetAndMetadata, OffsetAndTimestamp, TopicPartition
 
 
 @pytest.fixture
@@ -152,10 +152,10 @@ def test__reset_offset(fetcher, mocker):
     fetcher._subscriptions.need_offset_reset(tp)
     mocked = mocker.patch.object(fetcher, '_retrieve_offsets')
 
-    mocked.return_value = {tp: (1001, None)}
+    mocked.return_value = {tp: OffsetAndTimestamp(1001, None, -1)}
     fetcher._reset_offset(tp)
     assert not fetcher._subscriptions.assignment[tp].awaiting_reset
-    assert fetcher._subscriptions.assignment[tp].position == 1001
+    assert fetcher._subscriptions.assignment[tp].position.offset == 1001
 
 
 def test__send_list_offsets_requests(fetcher, mocker):
@@ -279,7 +279,7 @@ def test__handle_list_offsets_response_v1(fetcher, mocker):
     ])
     fetcher._handle_list_offsets_response(fut, res)
     assert fut.succeeded()
-    assert fut.value == {TopicPartition("topic", 1): (9999, 1000)}
+    assert fut.value == {TopicPartition("topic", 1): OffsetAndTimestamp(9999, 1000, -1)}
 
     # Broker returns NotLeaderForPartitionError
     fut = Future()
@@ -322,7 +322,7 @@ def test__handle_list_offsets_response_v2_v3(fetcher, mocker):
     ])
     fetcher._handle_list_offsets_response(fut, res)
     assert fut.succeeded()
-    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
+    assert fut.value == {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}
 
     # v3 response is the same format
     fut = Future()
@@ -332,7 +332,29 @@ def test__handle_list_offsets_response_v2_v3(fetcher, mocker):
     ])
     fetcher._handle_list_offsets_response(fut, res)
     assert fut.succeeded()
-    assert fut.value == {TopicPartition("topic", 0): (9999, 1000)}
+    assert fut.value == {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}
+
+
+def test__handle_list_offsets_response_v4_v5(fetcher, mocker):
+    # includes leader_epoch
+    fut = Future()
+    res = ListOffsetsResponse[4](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999, 1234)])
+    ])
+    fetcher._handle_list_offsets_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}
+
+    # v5 response is the same format
+    fut = Future()
+    res = ListOffsetsResponse[5](
+        123, # throttle_time_ms
+        [("topic", [(0, 0, 1000, 9999, 1234)])
+    ])
+    fetcher._handle_list_offsets_response(fut, res)
+    assert fut.succeeded()
+    assert fut.value == {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}
 
 
 def test_fetched_records(fetcher, topic, mocker):
@@ -546,7 +568,7 @@ def test_partition_records_offset():
     batch_end = 130
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
                                None, None, 'key', 'value', [], 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end)]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
@@ -571,7 +593,7 @@ def test_partition_records_no_fetch_offset():
     batch_end = 100
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
                                None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end)]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
@@ -586,7 +608,7 @@ def test_partition_records_compacted_offset():
     batch_end = 100
     fetch_offset = 42
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, i,
+    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
                                None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
                 for i in range(batch_start, batch_end) if i != fetch_offset]
     records = Fetcher.PartitionRecords(fetch_offset, None, messages)
