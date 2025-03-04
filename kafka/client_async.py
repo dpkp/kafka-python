@@ -672,6 +672,11 @@ class KafkaClient(object):
                 self._selector.register(conn._sock, selectors.EVENT_WRITE, conn)
 
     def _poll(self, timeout):
+        # Python throws OverflowError if timeout is > 2147483647 milliseconds
+        # (though the param to selector.select is in seconds)
+        # so convert any too-large timeout to blocking
+        if timeout > 2147483:
+            timeout = None
         # This needs to be locked, but since it is only called from within the
         # locked section of poll(), there is no additional lock acquisition here
         processed = set()
@@ -680,8 +685,6 @@ class KafkaClient(object):
         self._register_send_sockets()
 
         start_select = time.time()
-        if timeout == float('inf'):
-            timeout = None
         ready = self._selector.select(timeout)
         end_select = time.time()
         if self._sensors:
