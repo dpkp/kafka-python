@@ -385,7 +385,7 @@ class Fetcher(six.Iterator):
                     drained[tp].append(record)
 
                 if update_offsets:
-                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, b'', leader_epoch)
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', leader_epoch)
                 return len(part_records)
 
             else:
@@ -449,7 +449,7 @@ class Fetcher(six.Iterator):
                               self._subscriptions.assignment[tp].position.offset)
                     continue
 
-                self._subscriptions.assignment[tp].position = OffsetAndMetadata(msg.offset + 1, b'', -1)
+                self._subscriptions.assignment[tp].position = OffsetAndMetadata(msg.offset + 1, '', -1)
                 yield msg
 
             self._next_partition_records = None
@@ -705,7 +705,7 @@ class Fetcher(six.Iterator):
                         "Advance position for partition %s from %s to %s (last record batch location plus one)"
                         " to correct for deleted compacted messages and/or transactional control records",
                         partition, self._subscriptions.assignment[partition].position.offset, next_offset_from_batch_header)
-                    self._subscriptions.assignment[partition].position = OffsetAndMetadata(next_offset_from_batch_header, b'', -1)
+                    self._subscriptions.assignment[partition].position = OffsetAndMetadata(next_offset_from_batch_header, '', -1)
 
             position = self._subscriptions.assignment[partition].position
 

@@ -1144,7 +1144,7 @@ class KafkaConsumer(six.Iterator):
                     log.debug("Not returning fetched records for partition %s"
                               " since it is no longer fetchable", tp)
                     break
-                self._subscription.assignment[tp].position = OffsetAndMetadata(record.offset + 1, b'', -1)
+                self._subscription.assignment[tp].position = OffsetAndMetadata(record.offset + 1, '', -1)
                 yield record
 
     def _message_generator(self):

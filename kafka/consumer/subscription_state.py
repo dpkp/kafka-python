@@ -404,7 +404,7 @@ class TopicPartitionState(object):
         self.has_valid_position = False
 
     def seek(self, offset):
-        self._position = OffsetAndMetadata(offset, b'', -1)
+        self._position = OffsetAndMetadata(offset, '', -1)
         self.awaiting_reset = False
         self.reset_strategy = None
         self.has_valid_position = True

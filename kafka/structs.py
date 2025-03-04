@@ -48,13 +48,13 @@ PartitionMetadata = namedtuple("PartitionMetadata",
 """The Kafka offset commit API
 
 The Kafka offset commit API allows users to provide additional metadata
-(in the form of raw bytes) when an offset is committed. This can be useful
+(in the form of a string) when an offset is committed. This can be useful
 (for example) to store information about which node made the commit,
 what time the commit was made, etc.
 
 Keyword Arguments:
     offset (int): The offset to be committed
-    metadata (bytes): Non-null metadata
+    metadata (str): Non-null metadata
     leader_epoch (int): The last known epoch from the leader / broker
 """
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
