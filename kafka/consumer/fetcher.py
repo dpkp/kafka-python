@@ -253,10 +253,9 @@ class Fetcher(six.Iterator):
         or ``timeout_ms`` passed.
 
         Arguments:
-            timestamps: {TopicPartition: (int, int)} dict with (timestamp, leader_epoch)
-                tuples s to fetch offsets by. Timestamp is -1 for the latest available, and
-                -2 for the earliest available. Otherwise timestamp is treated as epoch milliseconds.
-                Leader epoch is -1 to ignore, otherwise last known epoch value from partition.
+            timestamps: {TopicPartition: int} dict with timestamps to fetch
+                offsets by. -1 for the latest available, -2 for the earliest
+                available. Otherwise timestamp is treated as epoch milliseconds.
 
         Returns:
             {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
@@ -385,7 +384,8 @@ class Fetcher(six.Iterator):
                     drained[tp].append(record)
 
                 if update_offsets:
-                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', leader_epoch)
+                    # TODO: save leader_epoch
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', -1)
                 return len(part_records)
 
             else:
@@ -549,7 +549,7 @@ class Fetcher(six.Iterator):
                 return Future().failure(
                     Errors.LeaderNotAvailableError(partition))
             else:
-                leader_epoch = self._client.cluster.leader_epoch_for_partition(partition)
+                leader_epoch = -1
                 timestamps_by_node[node_id][partition] = (timestamp, leader_epoch)
 
         # Aggregate results until we have all

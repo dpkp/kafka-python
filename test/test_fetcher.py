@@ -244,8 +244,8 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
         else:
             second_future = f
     assert req_by_node == {
-        0: {tp1: (0, 0), tp3: (0, 0)},
-        1: {tp2: (0, 0), tp4: (0, 0)}
+        0: {tp1: (0, -1), tp3: (0, -1)},
+        1: {tp2: (0, -1), tp4: (0, -1)}
     }
 
     # We only resolved 1 future so far, so result future is not yet ready

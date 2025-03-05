@@ -835,7 +835,8 @@ class ConsumerCoordinator(BaseCoordinator):
                 elif offset >= 0:
                     # record the position with the offset
                     # (-1 indicates no committed offset to fetch)
-                    offsets[tp] = OffsetAndMetadata(offset, metadata, leader_epoch)
+                    # TODO: save leader_epoch
+                    offsets[tp] = OffsetAndMetadata(offset, metadata, -1)
                 else:
                     log.debug("Group %s has no committed offset for partition"
                               " %s", self.group_id, tp)
