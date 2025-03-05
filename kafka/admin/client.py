@@ -1353,7 +1353,7 @@ class KafkaAdminClient(object):
         Returns:
             A message future
         """
-        version = self._client.api_version(OffsetFetchRequest, max_version=3)
+        version = self._client.api_version(OffsetFetchRequest, max_version=5)
         if version <= 3:
             if partitions is None:
                 if version <= 1:
@@ -1386,7 +1386,7 @@ class KafkaAdminClient(object):
             A dictionary composed of TopicPartition keys and
             OffsetAndMetadata values.
         """
-        if response.API_VERSION <= 3:
+        if response.API_VERSION <= 5:
 
             # OffsetFetchResponse_v1 lacks a top-level error_code
             if response.API_VERSION > 1:
@@ -1401,13 +1401,18 @@ class KafkaAdminClient(object):
             # OffsetAndMetadata values--this is what the Java AdminClient returns
             offsets = {}
             for topic, partitions in response.topics:
-                for partition, offset, metadata, error_code in partitions:
+                for partition_data in partitions:
+                    if response.API_VERSION <= 4:
+                        partition, offset, metadata, error_code = partition_data
+                        leader_epoch = -1
+                    else:
+                        partition, offset, leader_epoch, metadata, error_code = partition_data
                     error_type = Errors.for_code(error_code)
                     if error_type is not Errors.NoError:
                         raise error_type(
                             "Unable to fetch consumer group offsets for topic {}, partition {}"
                             .format(topic, partition))
-                    offsets[TopicPartition(topic, partition)] = OffsetAndMetadata(offset, metadata)
+                    offsets[TopicPartition(topic, partition)] = OffsetAndMetadata(offset, metadata, leader_epoch)
         else:
             raise NotImplementedError(
                 "Support for OffsetFetchResponse_v{} has not yet been added to KafkaAdminClient."
@@ -1439,7 +1444,7 @@ class KafkaAdminClient(object):
 
         Returns:
             dictionary: A dictionary with TopicPartition keys and
-            OffsetAndMetada values. Partitions that are not specified and for
+            OffsetAndMetadata values. Partitions that are not specified and for
             which the group_id does not have a recorded offset are omitted. An
             offset value of `-1` indicates the group_id has no offset for that
             TopicPartition. A `-1` can only happen for partitions that are

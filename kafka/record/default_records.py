@@ -137,6 +137,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[0]
 
     @property
+    def leader_epoch(self):
+        return self._header_data[2]
+
+    @property
     def magic(self):
         return self._header_data[3]
 

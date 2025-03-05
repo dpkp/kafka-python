@@ -55,10 +55,10 @@ what time the commit was made, etc.
 Keyword Arguments:
     offset (int): The offset to be committed
     metadata (str): Non-null metadata
+    leader_epoch (int): The last known epoch from the leader / broker
 """
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
-    # TODO add leaderEpoch: OffsetAndMetadata(offset, leaderEpoch, metadata)
-    ["offset", "metadata"])
+    ["offset", "metadata", "leader_epoch"])
 
 
 """An offset and timestamp tuple
@@ -66,9 +66,10 @@ OffsetAndMetadata = namedtuple("OffsetAndMetadata",
 Keyword Arguments:
     offset (int): An offset
     timestamp (int): The timestamp associated to the offset
+    leader_epoch (int): The last known epoch from the leader / broker
 """
 OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
-    ["offset", "timestamp"])
+    ["offset", "timestamp", "leader_epoch"])
 
 MemberInformation = namedtuple("MemberInformation",
     ["member_id", "client_id", "client_host", "member_metadata", "member_assignment"])

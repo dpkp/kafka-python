@@ -230,13 +230,13 @@ def test_need_rejoin(coordinator):
 def test_refresh_committed_offsets_if_needed(mocker, coordinator):
     mocker.patch.object(ConsumerCoordinator, 'fetch_committed_offsets',
                         return_value = {
-                            TopicPartition('foobar', 0): OffsetAndMetadata(123, b''),
-                            TopicPartition('foobar', 1): OffsetAndMetadata(234, b'')})
+                            TopicPartition('foobar', 0): OffsetAndMetadata(123, '', -1),
+                            TopicPartition('foobar', 1): OffsetAndMetadata(234, '', -1)})
     coordinator._subscription.assign_from_user([TopicPartition('foobar', 0)])
     assert coordinator._subscription.needs_fetch_committed_offsets is True
     coordinator.refresh_committed_offsets_if_needed()
     assignment = coordinator._subscription.assignment
-    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, b'')
+    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, '', -1)
     assert TopicPartition('foobar', 1) not in assignment
     assert coordinator._subscription.needs_fetch_committed_offsets is False
 
@@ -303,8 +303,8 @@ def test_close(mocker, coordinator):
 @pytest.fixture
 def offsets():
     return {
-        TopicPartition('foobar', 0): OffsetAndMetadata(123, b''),
-        TopicPartition('foobar', 1): OffsetAndMetadata(234, b''),
+        TopicPartition('foobar', 0): OffsetAndMetadata(123, '', -1),
+        TopicPartition('foobar', 1): OffsetAndMetadata(234, '', -1),
     }
 
 
@@ -594,27 +594,27 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
 
 
 @pytest.mark.parametrize('response,error,dead', [
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 14), (1, 234, b'', 14)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 14), (1, 234, '', 14)])]),
      Errors.GroupLoadInProgressError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 16), (1, 234, b'', 16)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 16), (1, 234, '', 16)])]),
      Errors.NotCoordinatorForGroupError, True),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 25), (1, 234, b'', 25)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 25), (1, 234, '', 25)])]),
      Errors.UnknownMemberIdError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 22), (1, 234, b'', 22)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 22), (1, 234, '', 22)])]),
      Errors.IllegalGenerationError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 29), (1, 234, b'', 29)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 29), (1, 234, '', 29)])]),
      Errors.TopicAuthorizationFailedError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
      None, False),
-    (OffsetFetchResponse[1]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])]),
+    (OffsetFetchResponse[1]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
      None, False),
-    (OffsetFetchResponse[2]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+    (OffsetFetchResponse[2]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
      None, False),
-    (OffsetFetchResponse[3](0, [('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+    (OffsetFetchResponse[3](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
      None, False),
-    (OffsetFetchResponse[4](0, [('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])], 0),
+    (OffsetFetchResponse[4](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
      None, False),
-    (OffsetFetchResponse[5](0, [('foobar', [(0, 123, -1, b'', 0), (1, 234, -1, b'', 0)])], 0),
+    (OffsetFetchResponse[5](0, [('foobar', [(0, 123, -1, '', 0), (1, 234, -1, '', 0)])], 0),
      None, False),
 ])
 def test_handle_offset_fetch_response(patched_coord, offsets,

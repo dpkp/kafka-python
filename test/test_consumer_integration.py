@@ -1,7 +1,7 @@
 import logging
 import time
 
-from mock import patch
+from mock import patch, ANY
 import pytest
 from kafka.vendor.six.moves import range
 
@@ -258,9 +258,10 @@ def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_pro
         tp1: send_time
     })
 
+    leader_epoch = ANY if env_kafka_version() >= (2, 1) else -1
     assert offsets == {
-        tp0: OffsetAndTimestamp(p0msg.offset, send_time),
-        tp1: OffsetAndTimestamp(p1msg.offset, send_time)
+        tp0: OffsetAndTimestamp(p0msg.offset, send_time, leader_epoch),
+        tp1: OffsetAndTimestamp(p1msg.offset, send_time, leader_epoch)
     }
 
     offsets = consumer.beginning_offsets([tp0, tp1])

@@ -319,7 +319,7 @@ class SubscriptionState(object):
         all_consumed = {}
         for partition, state in six.iteritems(self.assignment):
             if state.has_valid_position:
-                all_consumed[partition] = OffsetAndMetadata(state.position, '')
+                all_consumed[partition] = state.position
         return all_consumed
 
     def need_offset_reset(self, partition, offset_reset_strategy=None):
@@ -379,7 +379,7 @@ class TopicPartitionState(object):
         self.paused = False # whether this partition has been paused by the user
         self.awaiting_reset = False # whether we are awaiting reset
         self.reset_strategy = None # the reset strategy if awaitingReset is set
-        self._position = None # offset exposed to the user
+        self._position = None # OffsetAndMetadata exposed to the user
         self.highwater = None
         self.drop_pending_record_batch = False
         # The last message offset hint available from a record batch with
@@ -388,6 +388,7 @@ class TopicPartitionState(object):
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
+        assert isinstance(offset, OffsetAndMetadata)
         self._position = offset
 
     def _get_position(self):
@@ -403,7 +404,7 @@ class TopicPartitionState(object):
         self.has_valid_position = False
 
     def seek(self, offset):
-        self._position = offset
+        self._position = OffsetAndMetadata(offset, '', -1)
         self.awaiting_reset = False
         self.reset_strategy = None
         self.has_valid_position = True

@@ -141,6 +141,9 @@ class ClusterMetadata(object):
             return None
         return self._partitions[partition.topic][partition.partition].leader
 
+    def leader_epoch_for_partition(self, partition):
+        return self._partitions[partition.topic][partition.partition].leader_epoch
+
     def partitions_for_broker(self, broker_id):
         """Return TopicPartitions for which the broker is a leader.
 

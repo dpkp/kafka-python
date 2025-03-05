@@ -18,7 +18,7 @@ from kafka.protocol.list_offsets import (
 )
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
-from kafka.structs import TopicPartition, OffsetAndTimestamp
+from kafka.structs import TopicPartition, OffsetAndMetadata, OffsetAndTimestamp
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ READ_UNCOMMITTED = 0
 READ_COMMITTED = 1
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
-    ["topic", "partition", "offset", "timestamp", "timestamp_type",
+    ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
      "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
 
 
@@ -198,9 +198,6 @@ class Fetcher(six.Iterator):
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
-            else:
-                offset, timestamp = offsets[tp]
-                offsets[tp] = OffsetAndTimestamp(offset, timestamp)
         return offsets
 
     def beginning_offsets(self, partitions, timeout_ms):
@@ -215,7 +212,7 @@ class Fetcher(six.Iterator):
         timestamps = dict([(tp, timestamp) for tp in partitions])
         offsets = self._retrieve_offsets(timestamps, timeout_ms)
         for tp in timestamps:
-            offsets[tp] = offsets[tp][0]
+            offsets[tp] = offsets[tp].offset
         return offsets
 
     def _reset_offset(self, partition):
@@ -240,7 +237,7 @@ class Fetcher(six.Iterator):
         offsets = self._retrieve_offsets({partition: timestamp})
 
         if partition in offsets:
-            offset = offsets[partition][0]
+            offset = offsets[partition].offset
 
             # we might lose the assignment while fetching the offset,
             # so check it is still active
@@ -261,8 +258,8 @@ class Fetcher(six.Iterator):
                 available. Otherwise timestamp is treated as epoch milliseconds.
 
         Returns:
-            {TopicPartition: (int, int)}: Mapping of partition to
-                retrieved offset and timestamp. If offset does not exist for
+            {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
+                retrieved offset, timestamp, and leader_epoch. If offset does not exist for
                 the provided timestamp, that partition will be missing from
                 this mapping.
         """
@@ -373,20 +370,22 @@ class Fetcher(six.Iterator):
                 log.debug("Not returning fetched records for assigned partition"
                           " %s since it is no longer fetchable", tp)
 
-            elif fetch_offset == position:
+            elif fetch_offset == position.offset:
                 # we are ensured to have at least one record since we already checked for emptiness
                 part_records = part.take(max_records)
                 next_offset = part_records[-1].offset + 1
+                leader_epoch = part_records[-1].leader_epoch
 
                 log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s and update position to %s", position,
-                           tp, next_offset)
+                           " partition %s and update position to %s (leader epoch %s)", position.offset,
+                           tp, next_offset, leader_epoch)
 
                 for record in part_records:
                     drained[tp].append(record)
 
                 if update_offsets:
-                    self._subscriptions.assignment[tp].position = next_offset
+                    # TODO: save leader_epoch
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', -1)
                 return len(part_records)
 
             else:
@@ -394,7 +393,7 @@ class Fetcher(six.Iterator):
                 # position, ignore them they must be from an obsolete request
                 log.debug("Ignoring fetched records for %s at offset %s since"
                           " the current position is %d", tp, part.fetch_offset,
-                          position)
+                          position.offset)
 
         part.discard()
         return 0
@@ -444,13 +443,13 @@ class Fetcher(six.Iterator):
                     break
 
                 # Compressed messagesets may include earlier messages
-                elif msg.offset < self._subscriptions.assignment[tp].position:
+                elif msg.offset < self._subscriptions.assignment[tp].position.offset:
                     log.debug("Skipping message offset: %s (expecting %s)",
                               msg.offset,
-                              self._subscriptions.assignment[tp].position)
+                              self._subscriptions.assignment[tp].position.offset)
                     continue
 
-                self._subscriptions.assignment[tp].position = msg.offset + 1
+                self._subscriptions.assignment[tp].position = OffsetAndMetadata(msg.offset + 1, '', -1)
                 yield msg
 
             self._next_partition_records = None
@@ -463,8 +462,9 @@ class Fetcher(six.Iterator):
                 # Try DefaultsRecordBatch / message log format v2
                 # base_offset, last_offset_delta, and control batches
                 try:
-                    self._subscriptions.assignment[tp].last_offset_from_record_batch = batch.base_offset + \
-                                                                                       batch.last_offset_delta
+                    batch_offset = batch.base_offset + batch.last_offset_delta
+                    leader_epoch = batch.leader_epoch
+                    self._subscriptions.assignment[tp].last_offset_from_record_batch = batch_offset
                     # Control batches have a single record indicating whether a transaction
                     # was aborted or committed.
                     # When isolation_level is READ_COMMITTED (currently unsupported)
@@ -475,6 +475,7 @@ class Fetcher(six.Iterator):
                         batch = records.next_batch()
                         continue
                 except AttributeError:
+                    leader_epoch = -1
                     pass
 
                 for record in batch:
@@ -491,7 +492,7 @@ class Fetcher(six.Iterator):
                         len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
                         headers) if headers else -1
                     yield ConsumerRecord(
-                        tp.topic, tp.partition, record.offset, record.timestamp,
+                        tp.topic, tp.partition, leader_epoch, record.offset, record.timestamp,
                         record.timestamp_type, key, value, headers, record.checksum,
                         key_size, value_size, header_size)
 
@@ -548,7 +549,8 @@ class Fetcher(six.Iterator):
                 return Future().failure(
                     Errors.LeaderNotAvailableError(partition))
             else:
-                timestamps_by_node[node_id][partition] = timestamp
+                leader_epoch = -1
+                timestamps_by_node[node_id][partition] = (timestamp, leader_epoch)
 
         # Aggregate results until we have all
         list_offsets_future = Future()
@@ -573,11 +575,13 @@ class Fetcher(six.Iterator):
             _f.add_errback(on_fail)
         return list_offsets_future
 
-    def _send_list_offsets_request(self, node_id, timestamps):
-        version = self._client.api_version(ListOffsetsRequest, max_version=3)
+    def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
+        version = self._client.api_version(ListOffsetsRequest, max_version=4)
         by_topic = collections.defaultdict(list)
-        for tp, timestamp in six.iteritems(timestamps):
-            if version >= 1:
+        for tp, (timestamp, leader_epoch) in six.iteritems(timestamps_and_epochs):
+            if version >= 4:
+                data = (tp.partition, leader_epoch, timestamp)
+            elif version >= 1:
                 data = (tp.partition, timestamp)
             else:
                 data = (tp.partition, timestamp, 1)
@@ -628,38 +632,40 @@ class Fetcher(six.Iterator):
                             offset = UNKNOWN_OFFSET
                         else:
                             offset = offsets[0]
-                        log.debug("Handling v0 ListOffsetsResponse response for %s. "
-                                  "Fetched offset %s", partition, offset)
-                        if offset != UNKNOWN_OFFSET:
-                            timestamp_offset_map[partition] = (offset, None)
-                    else:
+                        timestamp = None
+                        leader_epoch = -1
+                    elif response.API_VERSION <= 3:
                         timestamp, offset = partition_info[2:]
-                        log.debug("Handling ListOffsetsResponse response for %s. "
-                                  "Fetched offset %s, timestamp %s",
-                                  partition, offset, timestamp)
-                        if offset != UNKNOWN_OFFSET:
-                            timestamp_offset_map[partition] = (offset, timestamp)
+                        leader_epoch = -1
+                    else:
+                        timestamp, offset, leader_epoch = partition_info[2:]
+                    log.debug("Handling ListOffsetsResponse response for %s. "
+                              "Fetched offset %s, timestamp %s, leader_epoch %s",
+                              partition, offset, timestamp, leader_epoch)
+                    if offset != UNKNOWN_OFFSET:
+                        timestamp_offset_map[partition] = OffsetAndTimestamp(offset, timestamp, leader_epoch)
                 elif error_type is Errors.UnsupportedForMessageFormatError:
                     # The message format on the broker side is before 0.10.0,
                     # we simply put None in the response.
                     log.debug("Cannot search by timestamp for partition %s because the"
                               " message format version is before 0.10.0", partition)
-                elif error_type is Errors.NotLeaderForPartitionError:
+                elif error_type in (Errors.NotLeaderForPartitionError,
+                                    Errors.ReplicaNotAvailableError,
+                                    Errors.KafkaStorageError):
                     log.debug("Attempt to fetch offsets for partition %s failed due"
-                              " to obsolete leadership information, retrying.",
-                              partition)
+                              " to %s, retrying.", error_type.__name__, partition)
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
                     log.warning("Received unknown topic or partition error in ListOffsets "
-                             "request for partition %s. The topic/partition " +
-                             "may not exist or the user may not have Describe access "
-                             "to it.", partition)
+                                "request for partition %s. The topic/partition " +
+                                "may not exist or the user may not have Describe access "
+                                "to it.", partition)
                     future.failure(error_type(partition))
                     return
                 else:
                     log.warning("Attempt to fetch offsets for partition %s failed due to:"
-                                " %s", partition, error_type)
+                                " %s", partition, error_type.__name__)
                     future.failure(error_type(partition))
                     return
         if not future.is_done:
@@ -686,7 +692,7 @@ class Fetcher(six.Iterator):
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
-        version = self._client.api_version(FetchRequest, max_version=8)
+        version = self._client.api_version(FetchRequest, max_version=10)
         fetchable = collections.defaultdict(dict)
 
         for partition in self._fetchable_partitions():
@@ -695,12 +701,12 @@ class Fetcher(six.Iterator):
             # advance position for any deleted compacted messages if required
             if self._subscriptions.assignment[partition].last_offset_from_record_batch:
                 next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_record_batch + 1
-                if next_offset_from_batch_header > self._subscriptions.assignment[partition].position:
+                if next_offset_from_batch_header > self._subscriptions.assignment[partition].position.offset:
                     log.debug(
                         "Advance position for partition %s from %s to %s (last record batch location plus one)"
                         " to correct for deleted compacted messages and/or transactional control records",
-                        partition, self._subscriptions.assignment[partition].position, next_offset_from_batch_header)
-                    self._subscriptions.assignment[partition].position = next_offset_from_batch_header
+                        partition, self._subscriptions.assignment[partition].position.offset, next_offset_from_batch_header)
+                    self._subscriptions.assignment[partition].position = OffsetAndMetadata(next_offset_from_batch_header, '', -1)
 
             position = self._subscriptions.assignment[partition].position
 
@@ -718,19 +724,28 @@ class Fetcher(six.Iterator):
             if version < 5:
                 partition_info = (
                     partition.partition,
-                    position,
+                    position.offset,
                     self.config['max_partition_fetch_bytes']
+                )
+            elif version <= 8:
+                partition_info = (
+                    partition.partition,
+                    position.offset,
+                    -1, # log_start_offset is used internally by brokers / replicas only
+                    self.config['max_partition_fetch_bytes'],
                 )
             else:
                 partition_info = (
                     partition.partition,
-                    position,
+                    position.leader_epoch,
+                    position.offset,
                     -1, # log_start_offset is used internally by brokers / replicas only
                     self.config['max_partition_fetch_bytes'],
                 )
+
             fetchable[node_id][partition] = partition_info
             log.debug("Adding fetch request for partition %s at offset %d",
-                      partition, position)
+                      partition, position.offset)
 
         requests = {}
         for node_id, next_partitions in six.iteritems(fetchable):
@@ -778,7 +793,10 @@ class Fetcher(six.Iterator):
 
             fetch_offsets = {}
             for tp, partition_data in six.iteritems(next_partitions):
-                offset = partition_data[1]
+                if version <= 8:
+                    offset = partition_data[1]
+                else:
+                    offset = partition_data[2]
                 fetch_offsets[tp] = offset
 
             requests[node_id] = (request, fetch_offsets)
@@ -807,7 +825,7 @@ class Fetcher(six.Iterator):
                 tp = TopicPartition(topic, partition_data[0])
                 fetch_offset = fetch_offsets[tp]
                 completed_fetch = CompletedFetch(
-                    tp, fetch_offsets[tp],
+                    tp, fetch_offset,
                     response.API_VERSION,
                     partition_data[1:],
                     metric_aggregator
@@ -847,18 +865,18 @@ class Fetcher(six.Iterator):
                 # Note that the *response* may return a messageset that starts
                 # earlier (e.g., compressed messages) or later (e.g., compacted topic)
                 position = self._subscriptions.assignment[tp].position
-                if position is None or position != fetch_offset:
+                if position is None or position.offset != fetch_offset:
                     log.debug("Discarding fetch response for partition %s"
                               " since its offset %d does not match the"
                               " expected offset %d", tp, fetch_offset,
-                              position)
+                              position.offset)
                     return None
 
                 records = MemoryRecords(completed_fetch.partition_data[-1])
                 if records.has_next():
                     log.debug("Adding fetched record for partition %s with"
                               " offset %d to buffered record list", tp,
-                              position)
+                              position.offset)
                     unpacked = list(self._unpack_records(tp, records))
                     parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
                     if unpacked:
@@ -883,16 +901,17 @@ class Fetcher(six.Iterator):
                 self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
 
             elif error_type in (Errors.NotLeaderForPartitionError,
+                                Errors.ReplicaNotAvailableError,
                                 Errors.UnknownTopicOrPartitionError,
                                 Errors.KafkaStorageError):
                 log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
                 self._client.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:
                 position = self._subscriptions.assignment[tp].position
-                if position is None or position != fetch_offset:
+                if position is None or position.offset != fetch_offset:
                     log.debug("Discarding stale fetch response for partition %s"
                               " since the fetched offset %d does not match the"
-                              " current offset %d", tp, fetch_offset, position)
+                              " current offset %d", tp, fetch_offset, position.offset)
                 elif self._subscriptions.has_default_offset_reset_policy():
                     log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
                     self._subscriptions.need_offset_reset(tp)

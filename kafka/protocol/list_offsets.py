@@ -166,7 +166,7 @@ class ListOffsetsRequest_v4(Request):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('current_leader_epoch', Int64),
+                ('current_leader_epoch', Int32),
                 ('timestamp', Int64)))))
     )
     DEFAULTS = {

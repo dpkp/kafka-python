@@ -664,6 +664,7 @@ class UnknownLeaderEpochError(BrokerResponseError):
     message = 'UNKNOWN_LEADER_EPOCH'
     description = 'The leader epoch in the request is newer than the epoch on the broker.'
     retriable = True
+    invalid_metadata = True
 
 
 class UnsupportedCompressionTypeError(BrokerResponseError):
