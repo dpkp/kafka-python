@@ -549,7 +549,8 @@ class Fetcher(six.Iterator):
                 return Future().failure(
                     Errors.LeaderNotAvailableError(partition))
             else:
-                timestamps_by_node[node_id][partition] = timestamp
+                leader_epoch = self._client.cluster.leader_epoch_for_partition(partition)
+                timestamps_by_node[node_id][partition] = (timestamp, leader_epoch)
 
         # Aggregate results until we have all
         list_offsets_future = Future()
@@ -574,13 +575,12 @@ class Fetcher(six.Iterator):
             _f.add_errback(on_fail)
         return list_offsets_future
 
-    def _send_list_offsets_request(self, node_id, timestamps):
+    def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
         version = self._client.api_version(ListOffsetsRequest, max_version=3)
         by_topic = collections.defaultdict(list)
-        for tp, timestamp in six.iteritems(timestamps):
+        for tp, (timestamp, leader_epoch) in six.iteritems(timestamps_and_epochs):
             if version >= 4:
-                # TODO: leader_epoch
-                data = (tp.partition, -1, timestamp)
+                data = (tp.partition, leader_epoch, timestamp)
             elif version >= 1:
                 data = (tp.partition, timestamp)
             else:
