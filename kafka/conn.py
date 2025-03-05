@@ -24,16 +24,17 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest, SaslHandShakeRequest
+from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.api_versions import ApiVersionsRequest
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.list_offsets import ListOffsetsRequest
-from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.parser import KafkaProtocol
+from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.sasl_handshake import SaslHandshakeRequest
 from kafka.protocol.types import Int32, Int8
 from kafka.scram import ScramClient
 from kafka.version import __version__
@@ -624,8 +625,8 @@ class BrokerConnection(object):
         assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10, 0)
 
         if self._sasl_auth_future is None:
-            # Build a SaslHandShakeRequest message
-            request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
+            # Build a SaslHandshakeRequest message
+            request = SaslHandshakeRequest[0](self.config['sasl_mechanism'])
             future = Future()
             sasl_response = self._send(request, blocking=True)
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)

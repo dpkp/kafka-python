@@ -346,41 +346,6 @@ DescribeGroupsResponse = [
 ]
 
 
-class SaslHandShakeResponse_v0(Response):
-    API_KEY = 17
-    API_VERSION = 0
-    SCHEMA = Schema(
-        ('error_code', Int16),
-        ('enabled_mechanisms', Array(String('utf-8')))
-    )
-
-
-class SaslHandShakeResponse_v1(Response):
-    API_KEY = 17
-    API_VERSION = 1
-    SCHEMA = SaslHandShakeResponse_v0.SCHEMA
-
-
-class SaslHandShakeRequest_v0(Request):
-    API_KEY = 17
-    API_VERSION = 0
-    RESPONSE_TYPE = SaslHandShakeResponse_v0
-    SCHEMA = Schema(
-        ('mechanism', String('utf-8'))
-    )
-
-
-class SaslHandShakeRequest_v1(Request):
-    API_KEY = 17
-    API_VERSION = 1
-    RESPONSE_TYPE = SaslHandShakeResponse_v1
-    SCHEMA = SaslHandShakeRequest_v0.SCHEMA
-
-
-SaslHandShakeRequest = [SaslHandShakeRequest_v0, SaslHandShakeRequest_v1]
-SaslHandShakeResponse = [SaslHandShakeResponse_v0, SaslHandShakeResponse_v1]
-
-
 class DescribeAclsResponse_v0(Response):
     API_KEY = 29
     API_VERSION = 0
