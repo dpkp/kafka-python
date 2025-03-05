@@ -649,22 +649,23 @@ class Fetcher(six.Iterator):
                     # we simply put None in the response.
                     log.debug("Cannot search by timestamp for partition %s because the"
                               " message format version is before 0.10.0", partition)
-                elif error_type is Errors.NotLeaderForPartitionError:
+                elif error_type in (Errors.NotLeaderForPartitionError,
+                                    Errors.ReplicaNotAvailableError,
+                                    Errors.KafkaStorageError):
                     log.debug("Attempt to fetch offsets for partition %s failed due"
-                              " to obsolete leadership information, retrying.",
-                              partition)
+                              " to %s, retrying.", error_type.__name__, partition)
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
                     log.warning("Received unknown topic or partition error in ListOffsets "
-                             "request for partition %s. The topic/partition " +
-                             "may not exist or the user may not have Describe access "
-                             "to it.", partition)
+                                "request for partition %s. The topic/partition " +
+                                "may not exist or the user may not have Describe access "
+                                "to it.", partition)
                     future.failure(error_type(partition))
                     return
                 else:
                     log.warning("Attempt to fetch offsets for partition %s failed due to:"
-                                " %s", partition, error_type)
+                                " %s", partition, error_type.__name__)
                     future.failure(error_type(partition))
                     return
         if not future.is_done:
@@ -900,6 +901,7 @@ class Fetcher(six.Iterator):
                 self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
 
             elif error_type in (Errors.NotLeaderForPartitionError,
+                                Errors.ReplicaNotAvailableError,
                                 Errors.UnknownTopicOrPartitionError,
                                 Errors.KafkaStorageError):
                 log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
