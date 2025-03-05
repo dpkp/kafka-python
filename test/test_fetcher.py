@@ -108,6 +108,7 @@ def test_send_fetches(fetcher, topic, mocker):
 def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
     fetcher._client._api_versions = BROKER_API_VERSIONS[api_version]
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
+    mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
     by_node = fetcher._create_fetch_requests()
     requests_and_offsets = by_node.values()
     assert set([r.API_VERSION for (r, _offsets) in requests_and_offsets]) == set([fetch_version])
@@ -175,6 +176,7 @@ def test__send_list_offsets_requests(fetcher, mocker):
     # always as available
     mocked_leader.side_effect = itertools.chain(
         [None, -1], itertools.cycle([0]))
+    mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
 
     # Leader == None
     fut = fetcher._send_list_offsets_requests({tp: 0})
@@ -224,6 +226,7 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
     mocked_leader = mocker.patch.object(
         fetcher._client.cluster, "leader_for_partition")
     mocked_leader.side_effect = itertools.cycle([0, 1])
+    mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
 
     # -- All node succeeded case
     tss = OrderedDict([(tp1, 0), (tp2, 0), (tp3, 0), (tp4, 0)])
@@ -241,8 +244,8 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
         else:
             second_future = f
     assert req_by_node == {
-        0: {tp1: 0, tp3: 0},
-        1: {tp2: 0, tp4: 0}
+        0: {tp1: (0, 0), tp3: (0, 0)},
+        1: {tp2: (0, 0), tp4: (0, 0)}
     }
 
     # We only resolved 1 future so far, so result future is not yet ready
