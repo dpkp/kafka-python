@@ -576,7 +576,7 @@ class Fetcher(six.Iterator):
         return list_offsets_future
 
     def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
-        version = self._client.api_version(ListOffsetsRequest, max_version=3)
+        version = self._client.api_version(ListOffsetsRequest, max_version=4)
         by_topic = collections.defaultdict(list)
         for tp, (timestamp, leader_epoch) in six.iteritems(timestamps_and_epochs):
             if version >= 4:
