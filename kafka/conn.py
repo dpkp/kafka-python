@@ -597,6 +597,7 @@ class BrokerConnection(object):
             for api_key, min_version, max_version in response.api_versions
         ])
         self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
+        log.info('Broker version identified as %s', '.'.join(map(str, self._api_version)))
         future.success(self._api_version)
         self.connect()
 
@@ -607,8 +608,8 @@ class BrokerConnection(object):
 
     def _handle_check_version_response(self, future, version, _response):
         log.info('Broker version identified as %s', '.'.join(map(str, version)))
-        #log.info('Set configuration api_version=%s to skip auto'
-        #         ' check_version requests on startup', version)
+        log.info('Set configuration api_version=%s to skip auto'
+                 ' check_version requests on startup', version)
         self._api_versions = BROKER_API_VERSIONS[version]
         self._api_version = version
         future.success(version)
