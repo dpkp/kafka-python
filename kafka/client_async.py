@@ -1071,7 +1071,7 @@ class KafkaClient(object):
         broker_api_versions = self._api_versions
         api_key = operation[0].API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
-            raise IncompatibleBrokerVersion(
+            raise Errors.IncompatibleBrokerVersion(
                 "Kafka broker does not support the '{}' Kafka protocol."
                 .format(operation[0].__name__))
         broker_min_version, broker_max_version = broker_api_versions[api_key]
@@ -1079,7 +1079,7 @@ class KafkaClient(object):
         if version < broker_min_version:
             # max library version is less than min broker version. Currently,
             # no Kafka versions specify a min msg version. Maybe in the future?
-            raise IncompatibleBrokerVersion(
+            raise Errors.IncompatibleBrokerVersion(
                 "No version of the '{}' Kafka protocol is supported by both the client and broker."
                 .format(operation[0].__name__))
         return version
