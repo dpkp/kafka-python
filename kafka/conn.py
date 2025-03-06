@@ -743,7 +743,7 @@ class BrokerConnection(object):
             if error_type is not Errors.NoError:
                 log.error("%s: SaslAuthenticate error: %s (%s)",
                           self, error_type.__name__, response.error_message)
-                self.close(error=error_type())
+                self.close(error=error_type(response.error_message))
                 return
             return response.auth_bytes
         else:
