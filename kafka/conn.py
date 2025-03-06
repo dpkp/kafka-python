@@ -543,6 +543,7 @@ class BrokerConnection(object):
         if self._api_versions_future is None:
             if self.config['api_version'] is not None:
                 self._api_version = self.config['api_version']
+                self._api_versions = BROKER_API_VERSIONS[self._api_version]
                 return True
             elif self._check_version_idx is None:
                 request = ApiVersionsRequest[self._api_versions_idx]()
