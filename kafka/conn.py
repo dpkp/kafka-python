@@ -732,7 +732,13 @@ class BrokerConnection(object):
             return
 
         if version == 1:
-            ((_correlation_id, response),) = self._protocol.receive_bytes(data)
+            ((correlation_id, response),) = self._protocol.receive_bytes(data)
+            (future, timestamp, _timeout) = self.in_flight_requests.pop(correlation_id)
+            latency_ms = (time.time() - timestamp) * 1000
+            if self._sensors:
+                self._sensors.request_time.record(latency_ms)
+            log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
+
             error_type = Errors.for_code(response.error_code)
             if error_type is not Errors.NoError:
                 log.error("%s: SaslAuthenticate error: %s (%s)",
