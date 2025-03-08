@@ -76,8 +76,8 @@ class ApiVersionsRequest_v1(Request):
 class ApiVersionsRequest_v2(Request):
     API_KEY = 18
     API_VERSION = 2
-    RESPONSE_TYPE = ApiVersionsResponse_v1
-    SCHEMA = ApiVersionsRequest_v0.SCHEMA
+    RESPONSE_TYPE = ApiVersionsResponse_v2
+    SCHEMA = ApiVersionsRequest_v1.SCHEMA
 
 
 ApiVersionsRequest = [
