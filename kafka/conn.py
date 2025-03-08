@@ -24,18 +24,20 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.oauth.abstract import AbstractTokenProvider
-from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest, SaslHandShakeRequest
+from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.api_versions import ApiVersionsRequest
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.list_offsets import ListOffsetsRequest
-from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.fetch import FetchRequest
 from kafka.protocol.parser import KafkaProtocol
+from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.sasl_authenticate import SaslAuthenticateRequest
+from kafka.protocol.sasl_handshake import SaslHandshakeRequest
 from kafka.protocol.types import Int32, Int8
-from kafka.scram import ScramClient
+from kafka.sasl import get_sasl_mechanism
 from kafka.version import __version__
 
 
@@ -47,10 +49,6 @@ if six.PY2:
 log = logging.getLogger(__name__)
 
 DEFAULT_KAFKA_PORT = 9092
-
-SASL_QOP_AUTH = 1
-SASL_QOP_AUTH_INT = 2
-SASL_QOP_AUTH_CONF = 4
 
 try:
     import ssl
@@ -76,15 +74,6 @@ except ImportError:
         pass
     class SSLWantWriteError(Exception):
         pass
-
-# needed for SASL_GSSAPI authentication:
-try:
-    import gssapi
-    from gssapi.raw.misc import GSSError
-except (ImportError, OSError):
-    #no gssapi available, will disable gssapi mechanism
-    gssapi = None
-    GSSError = None
 
 
 AFI_NAMES = {
@@ -232,7 +221,6 @@ class BrokerConnection(object):
         'sasl_oauth_token_provider': None
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
-    SASL_MECHANISMS = ('PLAIN', 'GSSAPI', 'OAUTHBEARER', "SCRAM-SHA-256", "SCRAM-SHA-512")
     VERSION_CHECKS = (
         ((0, 9), ListGroupsRequest[0]()),
         ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
@@ -271,26 +259,13 @@ class BrokerConnection(object):
         assert self.config['security_protocol'] in self.SECURITY_PROTOCOLS, (
             'security_protocol must be in ' + ', '.join(self.SECURITY_PROTOCOLS))
 
+        self._sasl_mechanism = None
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
             assert ssl_available, "Python wasn't built with SSL support"
 
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
-            assert self.config['sasl_mechanism'] in self.SASL_MECHANISMS, (
-                'sasl_mechanism must be in ' + ', '.join(self.SASL_MECHANISMS))
-            if self.config['sasl_mechanism'] in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
-                assert self.config['sasl_plain_username'] is not None, (
-                    'sasl_plain_username required for PLAIN or SCRAM sasl'
-                )
-                assert self.config['sasl_plain_password'] is not None, (
-                    'sasl_plain_password required for PLAIN or SCRAM sasl'
-                )
-            if self.config['sasl_mechanism'] == 'GSSAPI':
-                assert gssapi is not None, 'GSSAPI lib not available'
-                assert self.config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
-            if self.config['sasl_mechanism'] == 'OAUTHBEARER':
-                token_provider = self.config['sasl_oauth_token_provider']
-                assert token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
-                assert callable(getattr(token_provider, "token", None)), 'sasl_oauth_token_provider must implement method #token()'
+            self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
+
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
         # per-connection locks to the upstream client, we will use this lock to
@@ -620,12 +595,22 @@ class BrokerConnection(object):
         self._check_version_idx += 1
         # after failure connection is closed, so state should already be DISCONNECTED
 
-    def _try_authenticate(self):
-        assert self.config['api_version'] is None or self.config['api_version'] >= (0, 10, 0)
+    def _sasl_handshake_version(self):
+        if self._api_versions is None:
+            raise RuntimeError('_api_versions not set')
+        if SaslHandshakeRequest[0].API_KEY not in self._api_versions:
+            raise Errors.UnsupportedVersionError('SaslHandshake')
 
+        # Build a SaslHandshakeRequest message
+        min_version, max_version = self._api_versions[SaslHandshakeRequest[0].API_KEY]
+        if min_version > 1:
+            raise Errors.UnsupportedVersionError('SaslHandshake %s' % min_version)
+        return min(max_version, 1)
+
+    def _try_authenticate(self):
         if self._sasl_auth_future is None:
-            # Build a SaslHandShakeRequest message
-            request = SaslHandShakeRequest[0](self.config['sasl_mechanism'])
+            version = self._sasl_handshake_version()
+            request = SaslHandshakeRequest[version](self.config['sasl_mechanism'])
             future = Future()
             sasl_response = self._send(request, blocking=True)
             sasl_response.add_callback(self._handle_sasl_handshake_response, future)
@@ -656,19 +641,9 @@ class BrokerConnection(object):
                 Errors.UnsupportedSaslMechanismError(
                     'Kafka broker does not support %s sasl mechanism. Enabled mechanisms are: %s'
                     % (self.config['sasl_mechanism'], response.enabled_mechanisms)))
-        elif self.config['sasl_mechanism'] == 'PLAIN':
-            self._try_authenticate_plain(future)
-        elif self.config['sasl_mechanism'] == 'GSSAPI':
-            self._try_authenticate_gssapi(future)
-        elif self.config['sasl_mechanism'] == 'OAUTHBEARER':
-            self._try_authenticate_oauth(future)
-        elif self.config['sasl_mechanism'].startswith("SCRAM-SHA-"):
-            self._try_authenticate_scram(future)
         else:
-            future.failure(
-                Errors.UnsupportedSaslMechanismError(
-                    'kafka-python does not support SASL mechanism %s' %
-                    self.config['sasl_mechanism']))
+            self._sasl_authenticate(future)
+
         assert future.is_done, 'SASL future not complete after mechanism processing!'
         if future.failed():
             self.close(error=future.exception)
@@ -727,224 +702,72 @@ class BrokerConnection(object):
         finally:
             self._sock.settimeout(0.0)
 
-    def _try_authenticate_plain(self, future):
-        if self.config['security_protocol'] == 'SASL_PLAINTEXT':
-            log.warning('%s: Sending username and password in the clear', self)
-
-        data = b''
-        # Send PLAIN credentials per RFC-4616
-        msg = bytes('\0'.join([self.config['sasl_plain_username'],
-                               self.config['sasl_plain_username'],
-                               self.config['sasl_plain_password']]).encode('utf-8'))
-        size = Int32.encode(len(msg))
-
-        err = None
-        close = False
-        with self._lock:
-            if not self._can_send_recv():
-                err = Errors.NodeNotReadyError(str(self))
-                close = False
-            else:
-                try:
-                    self._send_bytes_blocking(size + msg)
-
-                    # The server will send a zero sized message (that is Int32(0)) on success.
-                    # The connection is closed on failure
-                    data = self._recv_bytes_blocking(4)
-
-                except (ConnectionError, TimeoutError) as e:
-                    log.exception("%s: Error receiving reply from server", self)
-                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
-                    close = True
-
-        if err is not None:
-            if close:
-                self.close(error=err)
-            return future.failure(err)
-
-        if data != b'\x00\x00\x00\x00':
-            error = Errors.AuthenticationFailedError('Unrecognized response during authentication')
-            return future.failure(error)
-
-        log.info('%s: Authenticated as %s via PLAIN', self, self.config['sasl_plain_username'])
-        return future.success(True)
-
-    def _try_authenticate_scram(self, future):
-        if self.config['security_protocol'] == 'SASL_PLAINTEXT':
-            log.warning('%s: Exchanging credentials in the clear', self)
-
-        scram_client = ScramClient(
-            self.config['sasl_plain_username'], self.config['sasl_plain_password'], self.config['sasl_mechanism']
-        )
-
-        err = None
-        close = False
-        with self._lock:
-            if not self._can_send_recv():
-                err = Errors.NodeNotReadyError(str(self))
-                close = False
-            else:
-                try:
-                    client_first = scram_client.first_message().encode('utf-8')
-                    size = Int32.encode(len(client_first))
-                    self._send_bytes_blocking(size + client_first)
-
-                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
-                    server_first = self._recv_bytes_blocking(data_len).decode('utf-8')
-                    scram_client.process_server_first_message(server_first)
-
-                    client_final = scram_client.final_message().encode('utf-8')
-                    size = Int32.encode(len(client_final))
-                    self._send_bytes_blocking(size + client_final)
-
-                    (data_len,) = struct.unpack('>i', self._recv_bytes_blocking(4))
-                    server_final = self._recv_bytes_blocking(data_len).decode('utf-8')
-                    scram_client.process_server_final_message(server_final)
-
-                except (ConnectionError, TimeoutError) as e:
-                    log.exception("%s: Error receiving reply from server", self)
-                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
-                    close = True
-
-        if err is not None:
-            if close:
-                self.close(error=err)
-            return future.failure(err)
-
-        log.info(
-            '%s: Authenticated as %s via %s', self, self.config['sasl_plain_username'], self.config['sasl_mechanism']
-        )
-        return future.success(True)
-
-    def _try_authenticate_gssapi(self, future):
-        kerberos_damin_name = self.config['sasl_kerberos_domain_name'] or self.host
-        auth_id = self.config['sasl_kerberos_service_name'] + '@' + kerberos_damin_name
-        gssapi_name = gssapi.Name(
-            auth_id,
-            name_type=gssapi.NameType.hostbased_service
-        ).canonicalize(gssapi.MechType.kerberos)
-        log.debug('%s: GSSAPI name: %s', self, gssapi_name)
-
-        err = None
-        close = False
-        with self._lock:
-            if not self._can_send_recv():
-                err = Errors.NodeNotReadyError(str(self))
-                close = False
-            else:
-                # Establish security context and negotiate protection level
-                # For reference RFC 2222, section 7.2.1
-                try:
-                    # Exchange tokens until authentication either succeeds or fails
-                    client_ctx = gssapi.SecurityContext(name=gssapi_name, usage='initiate')
-                    received_token = None
-                    while not client_ctx.complete:
-                        # calculate an output token from kafka token (or None if first iteration)
-                        output_token = client_ctx.step(received_token)
-
-                        # pass output token to kafka, or send empty response if the security
-                        # context is complete (output token is None in that case)
-                        if output_token is None:
-                            self._send_bytes_blocking(Int32.encode(0))
-                        else:
-                            msg = output_token
-                            size = Int32.encode(len(msg))
-                            self._send_bytes_blocking(size + msg)
-
-                        # The server will send a token back. Processing of this token either
-                        # establishes a security context, or it needs further token exchange.
-                        # The gssapi will be able to identify the needed next step.
-                        # The connection is closed on failure.
-                        header = self._recv_bytes_blocking(4)
-                        (token_size,) = struct.unpack('>i', header)
-                        received_token = self._recv_bytes_blocking(token_size)
-
-                    # Process the security layer negotiation token, sent by the server
-                    # once the security context is established.
-
-                    # unwraps message containing supported protection levels and msg size
-                    msg = client_ctx.unwrap(received_token).message
-                    # Kafka currently doesn't support integrity or confidentiality security layers, so we
-                    # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
-                    # by the server
-                    msg = Int8.encode(SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))) + msg[1:]
-                    # add authorization identity to the response, GSS-wrap and send it
-                    msg = client_ctx.wrap(msg + auth_id.encode(), False).message
-                    size = Int32.encode(len(msg))
-                    self._send_bytes_blocking(size + msg)
-
-                except (ConnectionError, TimeoutError) as e:
-                    log.exception("%s: Error receiving reply from server",  self)
-                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
-                    close = True
-                except Exception as e:
-                    err = e
-                    close = True
-
-        if err is not None:
-            if close:
-                self.close(error=err)
-            return future.failure(err)
-
-        log.info('%s: Authenticated as %s via GSSAPI', self, gssapi_name)
-        return future.success(True)
-
-    def _try_authenticate_oauth(self, future):
-        data = b''
-
-        msg = bytes(self._build_oauth_client_request().encode("utf-8"))
-        size = Int32.encode(len(msg))
-
-        err = None
-        close = False
-        with self._lock:
-            if not self._can_send_recv():
-                err = Errors.NodeNotReadyError(str(self))
-                close = False
-            else:
-                try:
-                    # Send SASL OAuthBearer request with OAuth token
-                    self._send_bytes_blocking(size + msg)
-
-                    # The server will send a zero sized message (that is Int32(0)) on success.
-                    # The connection is closed on failure
-                    data = self._recv_bytes_blocking(4)
-
-                except (ConnectionError, TimeoutError) as e:
-                    log.exception("%s: Error receiving reply from server", self)
-                    err = Errors.KafkaConnectionError("%s: %s" % (self, e))
-                    close = True
-
-        if err is not None:
-            if close:
-                self.close(error=err)
-            return future.failure(err)
-
-        if data != b'\x00\x00\x00\x00':
-            error = Errors.AuthenticationFailedError('Unrecognized response during authentication')
-            return future.failure(error)
-
-        log.info('%s: Authenticated via OAuth', self)
-        return future.success(True)
-
-    def _build_oauth_client_request(self):
-        token_provider = self.config['sasl_oauth_token_provider']
-        return "n,,\x01auth=Bearer {}{}\x01\x01".format(token_provider.token(), self._token_extensions())
-
-    def _token_extensions(self):
-        """
-        Return a string representation of the OPTIONAL key-value pairs that can be sent with an OAUTHBEARER
-        initial request.
-        """
-        token_provider = self.config['sasl_oauth_token_provider']
-
-        # Only run if the #extensions() method is implemented by the clients Token Provider class
-        # Builds up a string separated by \x01 via a dict of key value pairs
-        if callable(getattr(token_provider, "extensions", None)) and len(token_provider.extensions()) > 0:
-            msg = "\x01".join(["{}={}".format(k, v) for k, v in token_provider.extensions().items()])
-            return "\x01" + msg
+    def _send_sasl_authenticate(self, sasl_auth_bytes):
+        version = self._sasl_handshake_version()
+        if version == 1:
+            request = SaslAuthenticateRequest[0](sasl_auth_bytes)
+            self._send(request, blocking=True)
         else:
-            return ""
+            try:
+                self._send_bytes_blocking(Int32.encode(len(sasl_auth_bytes)) + sasl_auth_bytes)
+            except (ConnectionError, TimeoutError) as e:
+                log.exception("%s: Error sending sasl auth bytes to server", self)
+                err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+                self.close(error=err)
+
+    def _recv_sasl_authenticate(self):
+        version = self._sasl_handshake_version()
+        # GSSAPI mechanism does not get a final recv in old non-framed mode
+        if version == 0 and self._sasl_mechanism.is_done():
+            return b''
+
+        try:
+            data = self._recv_bytes_blocking(4)
+            nbytes = Int32.decode(io.BytesIO(data))
+            data += self._recv_bytes_blocking(nbytes)
+        except (ConnectionError, TimeoutError) as e:
+            log.exception("%s: Error receiving sasl auth bytes from server", self)
+            err = Errors.KafkaConnectionError("%s: %s" % (self, e))
+            self.close(error=err)
+            return
+
+        if version == 1:
+            ((correlation_id, response),) = self._protocol.receive_bytes(data)
+            (future, timestamp, _timeout) = self.in_flight_requests.pop(correlation_id)
+            latency_ms = (time.time() - timestamp) * 1000
+            if self._sensors:
+                self._sensors.request_time.record(latency_ms)
+            log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
+
+            error_type = Errors.for_code(response.error_code)
+            if error_type is not Errors.NoError:
+                log.error("%s: SaslAuthenticate error: %s (%s)",
+                          self, error_type.__name__, response.error_message)
+                self.close(error=error_type(response.error_message))
+                return
+            return response.auth_bytes
+        else:
+            # unframed bytes w/ SaslHandhake v0
+            return data[4:]
+
+    def _sasl_authenticate(self, future):
+        while not self._sasl_mechanism.is_done():
+            send_token = self._sasl_mechanism.auth_bytes()
+            self._send_sasl_authenticate(send_token)
+            if not self._can_send_recv():
+                return future.failure(Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self))
+
+            recv_token = self._recv_sasl_authenticate()
+            if recv_token is None:
+                return future.failure(Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self))
+            else:
+                self._sasl_mechanism.receive(recv_token)
+
+        if self._sasl_mechanism.is_authenticated():
+            log.info('%s: Authenticated via %s', self, self.config['sasl_mechanism'])
+            return future.success(True)
+        else:
+            return future.failure(Errors.AuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))
 
     def blacked_out(self):
         """
