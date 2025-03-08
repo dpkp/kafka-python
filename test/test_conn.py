@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
 
-import mock
+from unittest import mock
 import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts

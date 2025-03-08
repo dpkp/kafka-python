@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 import pytest
-from mock import patch
+from unittest.mock import patch
 import kafka.codec
 from kafka.record.default_records import (
     DefaultRecordBatch, DefaultRecordBatchBuilder
