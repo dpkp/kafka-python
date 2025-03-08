@@ -18,9 +18,8 @@ class SaslMechanismOAuth(SaslMechanism):
         return "n,,\x01auth=Bearer {}{}\x01\x01".format(token, extensions).encode('utf-8')
 
     def receive(self, auth_bytes):
-        if auth_bytes != b'':
-            self._is_authenticated = False
-            self._is_done = True
+        self._is_done = True
+        self._is_authenticated = auth_bytes == b''
 
     def is_done(self):
         return self._is_done
