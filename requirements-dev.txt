@@ -3,7 +3,7 @@ crc32c
 docker-py
 flake8
 lz4
-mock
+mock; python_version < '3.3'
 py
 pylint
 pytest
