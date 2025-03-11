@@ -21,6 +21,9 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def __init__(self, **config):
         assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
         assert config.get('security_protocol', '') == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
+        assert 'host' in config, 'AWS_MSK_IAM requires host configuration'
+        self.host = config['host']
+        self._auth = None
         self._is_done = False
         self._is_authenticated = False
 
@@ -39,6 +42,7 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def receive(self, auth_bytes):
         self._is_done = True
         self._is_authenticated = auth_bytes != b''
+        self._auth = auth_bytes.deode('utf-8')
 
     def is_done(self):
         return self._is_done
@@ -49,7 +53,7 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def auth_details(self):
         if not self.is_authenticated:
             raise RuntimeError('Not authenticated yet!')
-        return 'Authenticated via SASL / AWS_MSK_IAM %s' % (auth_bytes.decode('utf-8'),)
+        return 'Authenticated via SASL / AWS_MSK_IAM %s' % (self._auth,)
 
 
 class AwsMskIamClient:
