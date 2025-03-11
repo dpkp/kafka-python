@@ -250,6 +250,9 @@ class KafkaConsumer(six.Iterator):
             Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
         sasl_plain_password (str): password for sasl PLAIN and SCRAM authentication.
             Required if sasl_mechanism is PLAIN or one of the SCRAM mechanisms.
+        sasl_kerberos_name (str or gssapi.Name): Constructed gssapi.Name for use with
+            sasl mechanism handshake. If provided, sasl_kerberos_service_name and
+            sasl_kerberos_domain name are ignored. Default: None.
         sasl_kerberos_service_name (str): Service name to include in GSSAPI
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
@@ -317,6 +320,7 @@ class KafkaConsumer(six.Iterator):
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
+        'sasl_kerberos_name': None,
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
