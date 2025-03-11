@@ -6,8 +6,8 @@ from kafka.sasl.abc import SaslMechanism
 class SaslMechanismOAuth(SaslMechanism):
 
     def __init__(self, **config):
+        assert 'sasl_oauth_token_provider' in config, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
         self.token_provider = config['sasl_oauth_token_provider']
-        assert self.token_provider is not None, 'sasl_oauth_token_provider required for OAUTHBEARER sasl'
         assert callable(getattr(self.token_provider, 'token', None)), 'sasl_oauth_token_provider must implement method #token()'
         self._is_done = False
         self._is_authenticated = False

@@ -23,11 +23,11 @@ else:
 
 
 class SaslMechanismScram(SaslMechanism):
-
     def __init__(self, **config):
-        assert config['sasl_plain_username'] is not None, 'sasl_plain_username required for SCRAM sasl'
-        assert config['sasl_plain_password'] is not None, 'sasl_plain_password required for SCRAM sasl'
-        if config['security_protocol'] == 'SASL_PLAINTEXT':
+        assert 'sasl_plain_username' in config, 'sasl_plain_username required for SCRAM sasl'
+        assert 'sasl_plain_password' in config, 'sasl_plain_password required for SCRAM sasl'
+        assert config.get('sasl_mechanism', '') in ScramClient.MECHANISMS, 'Unrecognized SCRAM mechanism'
+        if config.get('security_protocol', '') == 'SASL_PLAINTEXT':
             log.warning('Exchanging credentials in the clear during Sasl Authentication')
 
         self._scram_client = ScramClient(

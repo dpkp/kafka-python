@@ -22,12 +22,19 @@ class SaslMechanismGSSAPI(SaslMechanism):
 
     def __init__(self, **config):
         assert gssapi is not None, 'GSSAPI lib not available'
-        assert config['sasl_kerberos_service_name'] is not None, 'sasl_kerberos_service_name required for GSSAPI sasl'
+        if 'sasl_kerberos_name' not in config and 'sasl_kerberos_service_name' not in config:
+            raise ValueError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
         self._is_done = False
         self._is_authenticated = False
-        self.kerberos_damin_name = config['sasl_kerberos_domain_name'] or config['host']
-        self.auth_id = config['sasl_kerberos_service_name'] + '@' + kerberos_damin_name
-        self.gssapi_name = gssapi.Name(auth_id, name_type=gssapi.NameType.hostbased_service).canonicalize(gssapi.MechType.kerberos)
+        if config.get('sasl_kerberos_name', None) is not None:
+            self.auth_id = str(config['sasl_kerberos_name'])
+        else:
+            kerberos_domain_name = config.get('sasl_kerberos_domain_name', '') or config.get('host', '')
+            self.auth_id = config['sasl_kerberos_service_name'] + '@' + kerberos_domain_name
+        if isinstance(config.get('sasl_kerberos_name', None), gssapi.Name):
+            self.gssapi_name = config['sasl_kerberos_name']
+        else:
+            self.gssapi_name = gssapi.Name(self.auth_id, name_type=gssapi.NameType.hostbased_service).canonicalize(gssapi.MechType.kerberos)
         self._client_ctx = gssapi.SecurityContext(name=self.gssapi_name, usage='initiate')
         self._next_token = self._client_ctx.step(None)
 
@@ -54,7 +61,7 @@ class SaslMechanismGSSAPI(SaslMechanism):
                 raise ValueError("Unexpected receive auth_bytes after sasl/gssapi completion")
         else:
             # unwraps message containing supported protection levels and msg size
-            msg = client_ctx.unwrap(received_token).message
+            msg = self._client_ctx.unwrap(auth_bytes).message
             # Kafka currently doesn't support integrity or confidentiality security layers, so we
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server

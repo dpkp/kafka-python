@@ -11,10 +11,10 @@ log = logging.getLogger(__name__)
 class SaslMechanismPlain(SaslMechanism):
 
     def __init__(self, **config):
-        if config['security_protocol'] == 'SASL_PLAINTEXT':
+        if config.get('security_protocol', '') == 'SASL_PLAINTEXT':
             log.warning('Sending username and password in the clear')
-        assert config['sasl_plain_username'] is not None, 'sasl_plain_username required for PLAIN sasl'
-        assert config['sasl_plain_password'] is not None, 'sasl_plain_password required for PLAIN sasl'
+        assert 'sasl_plain_username' in config, 'sasl_plain_username required for PLAIN sasl'
+        assert 'sasl_plain_password' in config, 'sasl_plain_password required for PLAIN sasl'
 
         self.username = config['sasl_plain_username']
         self.password = config['sasl_plain_password']
