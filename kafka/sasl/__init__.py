@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.sasl.gssapi import SaslMechanismGSSAPI
+from kafka.sasl.msk import SaslMechanismAwsMskIam
 from kafka.sasl.oauth import SaslMechanismOAuth
 from kafka.sasl.plain import SaslMechanismPlain
 from kafka.sasl.scram import SaslMechanismScram
@@ -24,3 +25,4 @@ register_sasl_mechanism('OAUTHBEARER', SaslMechanismOAuth)
 register_sasl_mechanism('PLAIN', SaslMechanismPlain)
 register_sasl_mechanism('SCRAM-SHA-256', SaslMechanismScram)
 register_sasl_mechanism('SCRAM-SHA-512', SaslMechanismScram)
+register_sasl_mechanism('AWS_MSK_IAM', SaslMechanismAwsMskIam)

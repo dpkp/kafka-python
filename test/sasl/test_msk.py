@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from kafka.msk import AwsMskIamClient
+from kafka.sasl.msk import AwsMskIamClient
 
 try:
     from unittest import mock
@@ -11,7 +11,7 @@ except ImportError:
 
 def client_factory(token=None):
     now = datetime.datetime.utcfromtimestamp(1629321911)
-    with mock.patch('kafka.msk.datetime') as mock_dt:
+    with mock.patch('kafka.sasl.msk.datetime') as mock_dt:
         mock_dt.datetime.utcnow = mock.Mock(return_value=now)
         return AwsMskIamClient(
             host='localhost',

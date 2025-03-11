@@ -1,10 +1,55 @@
+from __future__ import absolute_import
+
 import datetime
 import hashlib
 import hmac
 import json
+import logging
 import string
 
+# needed for AWS_MSK_IAM authentication:
+try:
+    from botocore.session import Session as BotoSession
+except ImportError:
+    # no botocore available, will disable AWS_MSK_IAM mechanism
+    BotoSession = None
+
+from kafka.sasl.abc import SaslMechanism
 from kafka.vendor.six.moves import urllib
+
+
+log = logging.getLogger(__name__)
+
+
+class SaslMechanismAwsMskIam(SaslMechanism):
+    def __init__(self, **config):
+        assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
+        assert config['security_protocol'] == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
+        self._is_done = False
+        self._is_authenticated = False
+
+    def auth_bytes(self):
+        session = BotoSession()
+        credentials = session.get_credentials().get_frozen_credentials()
+        client = AwsMskIamClient(
+            host=self.host,
+            access_key=credentials.access_key,
+            secret_key=credentials.secret_key,
+            region=session.get_config_variable('region'),
+            token=credentials.token,
+        )
+        return client.first_message()
+
+    def receive(self, auth_bytes):
+        self._is_done = True
+        self._is_authenticated = auth_bytes != b''
+        log.info('Authenticated via AWS_MSK_IAM %s', auth_bytes.decode('utf-8'))
+
+    def is_done(self):
+        return self._is_done
+
+    def is_authenticated(self):
+        return self._is_authenticated
 
 
 class AwsMskIamClient:
