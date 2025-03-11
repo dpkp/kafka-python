@@ -4,7 +4,6 @@ import datetime
 import hashlib
 import hmac
 import json
-import logging
 import string
 
 # needed for AWS_MSK_IAM authentication:
@@ -16,9 +15,6 @@ except ImportError:
 
 from kafka.sasl.abc import SaslMechanism
 from kafka.vendor.six.moves import urllib
-
-
-log = logging.getLogger(__name__)
 
 
 class SaslMechanismAwsMskIam(SaslMechanism):
@@ -43,13 +39,17 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def receive(self, auth_bytes):
         self._is_done = True
         self._is_authenticated = auth_bytes != b''
-        log.info('Authenticated via AWS_MSK_IAM %s', auth_bytes.decode('utf-8'))
 
     def is_done(self):
         return self._is_done
 
     def is_authenticated(self):
         return self._is_authenticated
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated via SASL / AWS_MSK_IAM %s' % (auth_bytes.decode('utf-8'),)
 
 
 class AwsMskIamClient:
