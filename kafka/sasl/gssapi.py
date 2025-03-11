@@ -1,7 +1,5 @@
 from __future__ import absolute_import
 
-import struct
-
 # needed for SASL_GSSAPI authentication:
 try:
     import gssapi
@@ -67,8 +65,10 @@ class SaslMechanismGSSAPI(SaslMechanism):
             # Kafka currently doesn't support integrity or confidentiality security layers, so we
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
+            client_flags = self.SASL_QOP_AUTH
+            server_flags = msg[0]
             message_parts = [
-                struct.pack('>b', self.SASL_QOP_AUTH & struct.unpack('>b', msg[0:1])),
+                bytes(client_flags & server_flags),
                 msg[:1],
                 self.auth_id.encode('utf-8'),
             ]
