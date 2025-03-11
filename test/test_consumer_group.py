@@ -56,6 +56,7 @@ def test_group(kafka_broker, topic):
         consumers[i] = KafkaConsumer(topic,
                                      bootstrap_servers=connect_str,
                                      group_id=group_id,
+                                     client_id="consumer_thread-%s" % i,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
             for tp, records in six.itervalues(consumers[i].poll(timeout_ms=200)):
