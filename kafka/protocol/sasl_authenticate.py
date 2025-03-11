@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Bytes, Int16, Int64, Schema, String
+from kafka.protocol.types import Bytes, Int16, Int64, Schema, String
 
 
 class SaslAuthenticateResponse_v0(Response):

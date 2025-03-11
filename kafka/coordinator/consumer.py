@@ -796,7 +796,7 @@ class ConsumerCoordinator(BaseCoordinator):
             elif error_type is Errors.GroupAuthorizationFailedError:
                 future.failure(error)
             else:
-                log.error("Unknown error fetching offsets for %s: %s", tp, error)
+                log.error("Unknown error fetching offsets: %s", error)
                 future.failure(error)
             return
 

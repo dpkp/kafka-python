@@ -2,8 +2,6 @@
 import io
 import struct
 
-import pytest
-
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
@@ -273,7 +271,7 @@ def test_decode_fetch_response_partial():
 
 def test_struct_unrecognized_kwargs():
     try:
-        mr = MetadataRequest[0](topicz='foo')
+        _mr = MetadataRequest[0](topicz='foo')
         assert False, 'Structs should not allow unrecognized kwargs'
     except ValueError:
         pass
@@ -331,6 +329,6 @@ def test_compact_data_structs():
     assert CompactBytes.decode(io.BytesIO(b'\x00')) is None
     enc = CompactBytes.encode(b'')
     assert enc == b'\x01'
-    assert CompactBytes.decode(io.BytesIO(b'\x01')) is b''
+    assert CompactBytes.decode(io.BytesIO(b'\x01')) == b''
     enc = CompactBytes.encode(b'foo')
     assert CompactBytes.decode(io.BytesIO(enc)) == b'foo'
