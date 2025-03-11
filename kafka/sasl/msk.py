@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 class SaslMechanismAwsMskIam(SaslMechanism):
     def __init__(self, **config):
         assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
-        assert config['security_protocol'] == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
+        assert config.get('security_protocol', '') == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
         self._is_done = False
         self._is_authenticated = False
 
