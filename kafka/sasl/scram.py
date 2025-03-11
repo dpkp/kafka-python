@@ -30,6 +30,8 @@ class SaslMechanismScram(SaslMechanism):
         if config.get('security_protocol', '') == 'SASL_PLAINTEXT':
             log.warning('Exchanging credentials in the clear during Sasl Authentication')
 
+        self.username = config['sasl_plain_username']
+        self.mechanism = config['sasl_mechanism']
         self._scram_client = ScramClient(
             config['sasl_plain_username'],
             config['sasl_plain_password'],
@@ -61,6 +63,11 @@ class SaslMechanismScram(SaslMechanism):
     def is_authenticated(self):
         # receive raises if authentication fails...?
         return self._state == 2
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated as %s via SASL / %s' % (self.username, self.mechanism)
 
 
 class ScramClient:

@@ -70,7 +70,7 @@ class SaslMechanismGSSAPI(SaslMechanism):
             message_parts = [
                 struct.pack('>b', self.SASL_QOP_AUTH & struct.unpack('>b', msg[0:1])),
                 msg[:1],
-                self.auth_id.encode(),
+                self.auth_id.encode('utf-8'),
             ]
             # add authorization identity to the response, and GSS-wrap
             self._next_token = self._client_ctx.wrap(b''.join(message_parts), False).message
@@ -80,3 +80,8 @@ class SaslMechanismGSSAPI(SaslMechanism):
 
     def is_authenticated(self):
         return self._is_authenticated
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated as %s to %s via SASL / GSSAPI' % (self._client_ctx.initiator_name, self._client_ctx.target_name)
