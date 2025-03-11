@@ -13,6 +13,5 @@ pytest-pylint
 python-snappy
 Sphinx
 sphinx-rtd-theme
-tox
 xxhash
 zstandard
