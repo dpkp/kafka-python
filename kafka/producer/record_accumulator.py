@@ -68,17 +68,19 @@ class ProducerBatch(object):
                                       sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
         return future
 
-    def done(self, base_offset=None, timestamp_ms=None, exception=None, log_start_offset=None, global_error=None):
-        level = logging.DEBUG if exception is None else logging.WARNING
-        log.log(level, "Produced messages to topic-partition %s with base offset"
-                  " %s log start offset %s and error %s.", self.topic_partition, base_offset,
-                  log_start_offset, global_error)  # trace
+    def done(self, base_offset=None, timestamp_ms=None, exception=None, log_start_offset=None):
         if self.produce_future.is_done:
             log.warning('Batch is already closed -- ignoring batch.done()')
             return
         elif exception is None:
+            log.debug("Produced messages to topic-partition %s with base offset"
+                      " %s log start offset %s.", self.topic_partition, base_offset,
+                      log_start_offset)  # trace
             self.produce_future.success((base_offset, timestamp_ms, log_start_offset))
         else:
+            log.warning("Failed to produce messages to topic-partition %s with base offset"
+                        " %s log start offset %s and error %s.", self.topic_partition, base_offset,
+                        log_start_offset, exception)  # trace
             self.produce_future.failure(exception)
 
     def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full):
@@ -109,7 +111,7 @@ class ProducerBatch(object):
 
         if error:
             self.records.close()
-            self.done(-1, None, Errors.KafkaTimeoutError(
+            self.done(base_offset=-1, exception=Errors.KafkaTimeoutError(
                 "Batch for %s containing %s record(s) expired: %s" % (
                 self.topic_partition, self.records.next_offset(), error)))
             return True
