@@ -234,10 +234,25 @@ class BaseCoordinator(object):
         else:
             return self.coordinator_id
 
-    def ensure_coordinator_ready(self):
-        """Block until the coordinator for this group is known
-        (and we have an active connection -- java client uses unsent queue).
+    def ensure_coordinator_ready(self, timeout_ms=None):
+        """Block until the coordinator for this group is known.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Maximum number of milliseconds to
+                block waiting to find coordinator. Default: None.
+
+        Raises: KafkaTimeoutError if timeout_ms is not None
         """
+        elapsed = 0.0 # noqa: F841
+        begin = time.time()
+        def inner_timeout_ms():
+            if timeout_ms is None:
+                return None
+            elapsed = (time.time() - begin) * 1000
+            if elapsed >= timeout_ms:
+                raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
+            return max(0, timeout_ms - elapsed)
+
         with self._client._lock, self._lock:
             while self.coordinator_unknown():
 
@@ -251,16 +266,16 @@ class BaseCoordinator(object):
                     continue
 
                 future = self.lookup_coordinator()
-                self._client.poll(future=future)
+                self._client.poll(future=future, timeout_ms=inner_timeout_ms())
 
                 if future.failed():
                     if future.retriable():
                         if getattr(future.exception, 'invalid_metadata', False):
                             log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                             metadata_update = self._client.cluster.request_update()
-                            self._client.poll(future=metadata_update)
+                            self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
                         else:
-                            time.sleep(self.config['retry_backoff_ms'] / 1000)
+                            time.sleep(min(inner_timeout_ms(), self.config['retry_backoff_ms']) / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
 
@@ -339,14 +354,31 @@ class BaseCoordinator(object):
         with self._lock:
             self.state = MemberState.UNJOINED
 
-    def ensure_active_group(self):
-        """Ensure that the group is active (i.e. joined and synced)"""
+    def ensure_active_group(self, timeout_ms=None):
+        """Ensure that the group is active (i.e. joined and synced)
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Maximum number of milliseconds to
+                block waiting to join group. Default: None.
+
+        Raises: KafkaTimeoutError if timeout_ms is not None
+        """
         with self._client._lock, self._lock:
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
 
+            elapsed = 0.0 # noqa: F841
+            begin = time.time()
+            def inner_timeout_ms():
+                if timeout_ms is None:
+                    return None
+                elapsed = (time.time() - begin) * 1000
+                if elapsed >= timeout_ms:
+                    raise Errors.KafkaTimeoutError()
+                return max(0, timeout_ms - elapsed)
+
             while self.need_rejoin() or self._rejoin_incomplete():
-                self.ensure_coordinator_ready()
+                self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
 
                 # call on_join_prepare if needed. We set a flag
                 # to make sure that we do not call it a second
@@ -367,7 +399,7 @@ class BaseCoordinator(object):
                 while not self.coordinator_unknown():
                     if not self._client.in_flight_request_count(self.coordinator_id):
                         break
-                    self._client.poll(timeout_ms=200)
+                    self._client.poll(timeout_ms=min(200, inner_timeout_ms()))
                 else:
                     continue
 
@@ -400,7 +432,7 @@ class BaseCoordinator(object):
                 else:
                     future = self.join_future
 
-                self._client.poll(future=future)
+                self._client.poll(future=future, timeout_ms=inner_timeout_ms())
 
                 if future.succeeded():
                     self._on_join_complete(self._generation.generation_id,
@@ -419,7 +451,7 @@ class BaseCoordinator(object):
                         continue
                     elif not future.retriable():
                         raise exception  # pylint: disable-msg=raising-bad-type
-                    time.sleep(self.config['retry_backoff_ms'] / 1000)
+                    time.sleep(min(inner_timeout_ms(), self.config['retry_backoff_ms']) / 1000)
 
     def _rejoin_incomplete(self):
         return self.join_future is not None
