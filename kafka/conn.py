@@ -679,6 +679,7 @@ class BrokerConnection(object):
         return total_sent
 
     def _send_bytes_blocking(self, data):
+        self._sock.setblocking(True)
         self._sock.settimeout(self.config['request_timeout_ms'] / 1000)
         total_sent = 0
         try:
@@ -690,8 +691,10 @@ class BrokerConnection(object):
             return total_sent
         finally:
             self._sock.settimeout(0.0)
+            self._sock.setblocking(False)
 
     def _recv_bytes_blocking(self, n):
+        self._sock.setblocking(True)
         self._sock.settimeout(self.config['request_timeout_ms'] / 1000)
         try:
             data = b''
@@ -703,6 +706,7 @@ class BrokerConnection(object):
             return data
         finally:
             self._sock.settimeout(0.0)
+            self._sock.setblocking(False)
 
     def _send_sasl_authenticate(self, sasl_auth_bytes):
         version = self._sasl_handshake_version()
