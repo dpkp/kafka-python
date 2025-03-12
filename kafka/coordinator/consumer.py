@@ -258,7 +258,7 @@ class ConsumerCoordinator(BaseCoordinator):
                               self._subscription.listener, self.group_id,
                               assigned)
 
-    def poll(self):
+    def poll(self, timeout_ms=None):
         """
         Poll for coordinator events. Only applicable if group_id is set, and
         broker version supports GroupCoordinators. This ensures that the
@@ -269,31 +269,45 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.group_id is None:
             return
 
-        self._invoke_completed_offset_commit_callbacks()
-        self.ensure_coordinator_ready()
+        elapsed = 0.0 # noqa: F841
+        begin = time.time()
+        def inner_timeout_ms():
+            if timeout_ms is None:
+                return None
+            elapsed = (time.time() - begin) * 1000
+            if elapsed >= timeout_ms:
+                raise Errors.KafkaTimeoutError()
+            return max(0, timeout_ms - elapsed)
 
-        if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
-            if self.need_rejoin():
-                # due to a race condition between the initial metadata fetch and the
-                # initial rebalance, we need to ensure that the metadata is fresh
-                # before joining initially, and then request the metadata update. If
-                # metadata update arrives while the rebalance is still pending (for
-                # example, when the join group is still inflight), then we will lose
-                # track of the fact that we need to rebalance again to reflect the
-                # change to the topic subscription. Without ensuring that the
-                # metadata is fresh, any metadata update that changes the topic
-                # subscriptions and arrives while a rebalance is in progress will
-                # essentially be ignored. See KAFKA-3949 for the complete
-                # description of the problem.
-                if self._subscription.subscribed_pattern:
-                    metadata_update = self._client.cluster.request_update()
-                    self._client.poll(future=metadata_update)
+        try:
+            self._invoke_completed_offset_commit_callbacks()
+            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
 
-                self.ensure_active_group()
+            if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
+                if self.need_rejoin():
+                    # due to a race condition between the initial metadata fetch and the
+                    # initial rebalance, we need to ensure that the metadata is fresh
+                    # before joining initially, and then request the metadata update. If
+                    # metadata update arrives while the rebalance is still pending (for
+                    # example, when the join group is still inflight), then we will lose
+                    # track of the fact that we need to rebalance again to reflect the
+                    # change to the topic subscription. Without ensuring that the
+                    # metadata is fresh, any metadata update that changes the topic
+                    # subscriptions and arrives while a rebalance is in progress will
+                    # essentially be ignored. See KAFKA-3949 for the complete
+                    # description of the problem.
+                    if self._subscription.subscribed_pattern:
+                        metadata_update = self._client.cluster.request_update()
+                        self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
 
-            self.poll_heartbeat()
+                    self.ensure_active_group(timeout_ms=inner_timeout_ms())
 
-        self._maybe_auto_commit_offsets_async()
+                self.poll_heartbeat()
+
+            self._maybe_auto_commit_offsets_async()
+
+        except Errors.KafkaTimeoutError:
+            return
 
     def time_to_next_poll(self):
         """Return seconds (float) remaining until :meth:`.poll` should be called again"""

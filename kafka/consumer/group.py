@@ -694,7 +694,8 @@ class KafkaConsumer(six.Iterator):
         Returns:
             dict: Map of topic to list of records (may be empty).
         """
-        self._coordinator.poll()
+        begin = time.time()
+        self._coordinator.poll(timeout_ms=timeout_ms)
 
         # Fetch positions if we have partitions we're subscribed to that we
         # don't know the offset for
@@ -720,7 +721,8 @@ class KafkaConsumer(six.Iterator):
         if len(futures):
             self._client.poll(timeout_ms=0)
 
-        timeout_ms = min(timeout_ms, self._coordinator.time_to_next_poll() * 1000)
+        timeout_ms -= (time.time() - begin) * 1000
+        timeout_ms = max(0, min(timeout_ms, self._coordinator.time_to_next_poll() * 1000))
         self._client.poll(timeout_ms=timeout_ms)
         # after the long poll, we should check whether the group needs to rebalance
         # prior to returning data so that the group can stabilize faster
@@ -1154,17 +1156,20 @@ class KafkaConsumer(six.Iterator):
 
     def _message_generator(self):
         assert self.assignment() or self.subscription() is not None, 'No topic subscription or manual partition assignment'
+
+        def inner_poll_ms():
+            return max(0, min((1000 * (self._consumer_timeout - time.time())), self.config['retry_backoff_ms']))
+
         while time.time() < self._consumer_timeout:
 
-            self._coordinator.poll()
+            self._coordinator.poll(timeout_ms=inner_poll_ms())
 
             # Fetch offsets for any subscribed partitions that we arent tracking yet
             if not self._subscription.has_all_fetch_positions():
                 partitions = self._subscription.missing_fetch_positions()
                 self._update_fetch_positions(partitions)
 
-            poll_ms = min((1000 * (self._consumer_timeout - time.time())), self.config['retry_backoff_ms'])
-            self._client.poll(timeout_ms=poll_ms)
+            self._client.poll(timeout_ms=inner_poll_ms())
 
             # after the long poll, we should check whether the group needs to rebalance
             # prior to returning data so that the group can stabilize faster
