@@ -182,7 +182,7 @@ class Sender(threading.Thread):
     def _failed_produce(self, batches, node_id, error):
         log.error("Error sending produce request to node %d: %s", node_id, error) # trace
         for batch in batches:
-            self._complete_batch(batch, error, -1, None)
+            self._complete_batch(batch, error, -1)
 
     def _handle_produce_response(self, node_id, send_time, batches, response):
         """Handle a produce response."""
@@ -194,7 +194,6 @@ class Sender(threading.Thread):
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
-                    global_error = None
                     log_start_offset = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
@@ -204,19 +203,19 @@ class Sender(threading.Thread):
                     elif 5 <= response.API_VERSION <= 7:
                         partition, error_code, offset, ts, log_start_offset = partition_info
                     else:
-                        # the ignored parameter is record_error of type list[(batch_index: int, error_message: str)]
-                        partition, error_code, offset, ts, log_start_offset, _, global_error = partition_info
+                        # Currently unused / TODO: KIP-467
+                        partition, error_code, offset, ts, log_start_offset, _record_errors, _global_error = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, ts, log_start_offset, global_error)
+                    self._complete_batch(batch, error, offset, timestamp_ms=ts, log_start_offset=log_start_offset)
 
         else:
             # this is the acks = 0 case, just complete all requests
             for batch in batches:
-                self._complete_batch(batch, None, -1, None)
+                self._complete_batch(batch, None, -1)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None, global_error=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -224,8 +223,7 @@ class Sender(threading.Thread):
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
-            log_start_offset (int): The start offset of the log at the time this produce response was created
-            global_error (str): The summarising error message
+            log_start_offset (int, optional): The start offset of the log at the time this produce response was created
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -237,7 +235,7 @@ class Sender(threading.Thread):
                         " retrying (%d attempts left). Error: %s",
                         batch.topic_partition,
                         self.config['retries'] - batch.attempts - 1,
-                        global_error or error)
+                        error)
             self._accumulator.reenqueue(batch)
             self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
         else:
@@ -245,7 +243,7 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, timestamp_ms, error, log_start_offset, global_error)
+            batch.done(base_offset, timestamp_ms, error, log_start_offset)
             self._accumulator.deallocate(batch)
             if error is not None:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
