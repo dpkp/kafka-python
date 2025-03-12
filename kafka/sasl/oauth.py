@@ -37,3 +37,8 @@ class SaslMechanismOAuth(SaslMechanism):
         extensions = getattr(self.token_provider, 'extensions', lambda: [])()
         msg = '\x01'.join(['{}={}'.format(k, v) for k, v in extensions.items()])
         return '\x01' + msg if msg else ''
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated via SASL / OAuth'

@@ -34,3 +34,8 @@ class SaslMechanismPlain(SaslMechanism):
 
     def is_authenticated(self):
         return self._is_authenticated
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated as %s via SASL / Plain' % self.username

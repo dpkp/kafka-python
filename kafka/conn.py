@@ -766,7 +766,7 @@ class BrokerConnection(object):
                 self._sasl_mechanism.receive(recv_token)
 
         if self._sasl_mechanism.is_authenticated():
-            log.info('%s: Authenticated via %s', self, self.config['sasl_mechanism'])
+            log.info('%s: %s', self, self._sasl_mechanism.auth_details())
             return future.success(True)
         else:
             return future.failure(Errors.AuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))

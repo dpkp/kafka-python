@@ -1,7 +1,5 @@
 from __future__ import absolute_import
 
-import struct
-
 # needed for SASL_GSSAPI authentication:
 try:
     import gssapi
@@ -67,10 +65,12 @@ class SaslMechanismGSSAPI(SaslMechanism):
             # Kafka currently doesn't support integrity or confidentiality security layers, so we
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
+            client_flags = self.SASL_QOP_AUTH
+            server_flags = msg[0]
             message_parts = [
-                struct.pack('>b', self.SASL_QOP_AUTH & struct.unpack('>b', msg[0:1])),
+                bytes(client_flags & server_flags),
                 msg[:1],
-                self.auth_id.encode(),
+                self.auth_id.encode('utf-8'),
             ]
             # add authorization identity to the response, and GSS-wrap
             self._next_token = self._client_ctx.wrap(b''.join(message_parts), False).message
@@ -80,3 +80,8 @@ class SaslMechanismGSSAPI(SaslMechanism):
 
     def is_authenticated(self):
         return self._is_authenticated
+
+    def auth_details(self):
+        if not self.is_authenticated:
+            raise RuntimeError('Not authenticated yet!')
+        return 'Authenticated as %s to %s via SASL / GSSAPI' % (self._client_ctx.initiator_name, self._client_ctx.target_name)
