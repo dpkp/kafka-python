@@ -920,7 +920,7 @@ class Fetcher(six.Iterator):
 
             elif error_type is Errors.TopicAuthorizationFailedError:
                 log.warning("Not authorized to read from topic %s.", tp.topic)
-                raise Errors.TopicAuthorizationFailedError(set(tp.topic))
+                raise Errors.TopicAuthorizationFailedError(set([tp.topic]))
             elif error_type.is_retriable:
                 log.debug("Retriable error fetching partition %s: %s", tp, error_type())
                 if error_type.invalid_metadata:

@@ -738,7 +738,7 @@ class KafkaProducer(object):
                 raise Errors.KafkaTimeoutError(
                     "Failed to update metadata after %.1f secs." % (max_wait,))
             elif topic in self._metadata.unauthorized_topics:
-                raise Errors.TopicAuthorizationFailedError(topic)
+                raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
                 elapsed = time.time() - begin
                 log.debug("_wait_on_metadata woke after %s secs.", elapsed)
