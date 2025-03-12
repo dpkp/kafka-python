@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+from io import BytesIO
+
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Int16, Int32, Schema
 

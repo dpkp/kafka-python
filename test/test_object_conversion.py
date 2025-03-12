@@ -207,7 +207,7 @@ def test_with_metadata_response():
     assert len(obj['topics']) == 2
     assert obj['topics'][0]['error_code'] == 0
     assert obj['topics'][0]['topic'] == 'testtopic1'
-    assert obj['topics'][0]['is_internal'] == False
+    assert obj['topics'][0]['is_internal'] is False
     assert len(obj['topics'][0]['partitions']) == 2
     assert obj['topics'][0]['partitions'][0]['error_code'] == 0
     assert obj['topics'][0]['partitions'][0]['partition'] == 0
@@ -224,7 +224,7 @@ def test_with_metadata_response():
 
     assert obj['topics'][1]['error_code'] == 0
     assert obj['topics'][1]['topic'] == 'other-test-topic'
-    assert obj['topics'][1]['is_internal'] == True
+    assert obj['topics'][1]['is_internal'] is True
     assert len(obj['topics'][1]['partitions']) == 1
     assert obj['topics'][1]['partitions'][0]['error_code'] == 0
     assert obj['topics'][1]['partitions'][0]['partition'] == 0

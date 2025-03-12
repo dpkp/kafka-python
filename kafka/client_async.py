@@ -19,7 +19,7 @@ except ImportError:
 from kafka.vendor import six
 
 from kafka.cluster import ClusterMetadata
-from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts, get_ip_port_afi
+from kafka.conn import BrokerConnection, ConnectionStates, get_ip_port_afi
 from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable

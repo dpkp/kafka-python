@@ -140,7 +140,7 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
     broker_id = "str"
 
     with pytest.raises(ValueError):
-        configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
+        kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
@@ -148,7 +148,7 @@ def test_describe_consumer_group_does_not_exist(kafka_admin_client):
     """Tests that the describe consumer group call fails if the group coordinator is not available
     """
     with pytest.raises(GroupCoordinatorNotAvailableError):
-        group_description = kafka_admin_client.describe_consumer_groups(['test'])
+        kafka_admin_client.describe_consumer_groups(['test'])
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')

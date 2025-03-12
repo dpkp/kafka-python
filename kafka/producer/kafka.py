@@ -612,8 +612,8 @@ class KafkaProducer(object):
 
             if headers is None:
                 headers = []
-            assert type(headers) == list
-            assert all(type(item) == tuple and len(item) == 2 and type(item[0]) == str and type(item[1]) == bytes for item in headers)
+            assert isinstance(headers, list)
+            assert all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers)
 
             message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
             self._ensure_valid_record_size(message_size)

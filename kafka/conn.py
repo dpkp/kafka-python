@@ -14,7 +14,6 @@ except ImportError:
     from kafka.vendor import selectors34 as selectors
 
 import socket
-import struct
 import threading
 import time
 
@@ -23,7 +22,6 @@ from kafka.vendor import six
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.oauth.abstract import AbstractTokenProvider
 from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.api_versions import ApiVersionsRequest
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
@@ -36,7 +34,7 @@ from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.produce import ProduceRequest
 from kafka.protocol.sasl_authenticate import SaslAuthenticateRequest
 from kafka.protocol.sasl_handshake import SaslHandshakeRequest
-from kafka.protocol.types import Int32, Int8
+from kafka.protocol.types import Int32
 from kafka.sasl import get_sasl_mechanism
 from kafka.version import __version__
 
@@ -1151,7 +1149,8 @@ class BrokerConnection(object):
     def next_ifr_request_timeout_ms(self):
         with self._lock:
             if self.in_flight_requests:
-                get_timeout = lambda v: v[2]
+                def get_timeout(v):
+                    return v[2]
                 next_timeout = min(map(get_timeout,
                                    self.in_flight_requests.values()))
                 return max(0, (next_timeout - time.time()) * 1000)
@@ -1159,11 +1158,11 @@ class BrokerConnection(object):
                 return float('inf')
 
     def get_api_versions(self):
-        if self._api_versions is not None:
-            return self._api_versions
-
-        version = self.check_version()
-        # _api_versions is set as a side effect of check_versions()
+        # _api_versions is set as a side effect of first connection
+        # which should typically be bootstrap, but call check_version
+        # if that hasn't happened yet
+        if self._api_versions is None:
+            self.check_version()
         return self._api_versions
 
     def _infer_broker_version_from_api_versions(self, api_versions):
@@ -1201,11 +1200,11 @@ class BrokerConnection(object):
         ]
 
         # Get the best match of test cases
-        for broker_version, struct in sorted(test_cases, reverse=True):
-            if struct.API_KEY not in api_versions:
+        for broker_version, proto_struct in sorted(test_cases, reverse=True):
+            if proto_struct.API_KEY not in api_versions:
                 continue
-            min_version, max_version = api_versions[struct.API_KEY]
-            if min_version <= struct.API_VERSION <= max_version:
+            min_version, max_version = api_versions[proto_struct.API_KEY]
+            if min_version <= proto_struct.API_VERSION <= max_version:
                 return broker_version
 
         # We know that ApiVersionsResponse is only supported in 0.10+

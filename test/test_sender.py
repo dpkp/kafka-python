@@ -5,7 +5,6 @@ import pytest
 import io
 
 from kafka.client_async import KafkaClient
-from kafka.cluster import ClusterMetadata
 from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.produce import ProduceRequest

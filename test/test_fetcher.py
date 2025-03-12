@@ -10,7 +10,7 @@ import time
 
 from kafka.client_async import KafkaClient
 from kafka.consumer.fetcher import (
-    CompletedFetch, ConsumerRecord, Fetcher, NoOffsetForPartitionError
+    CompletedFetch, ConsumerRecord, Fetcher
 )
 from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors

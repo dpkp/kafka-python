@@ -501,7 +501,7 @@ class Fetcher(six.Iterator):
         # If unpacking raises StopIteration, it is erroneously
         # caught by the generator. We want all exceptions to be raised
         # back to the user. See Issue 545
-        except StopIteration as e:
+        except StopIteration:
             log.exception('StopIteration raised unpacking messageset')
             raise RuntimeError('StopIteration raised unpacking messageset')
 
@@ -1001,7 +1001,7 @@ class FetchSessionHandler(object):
             log.debug("Built full fetch %s for node %s with %s partition(s).",
                 self.next_metadata, self.node_id, len(next_partitions))
             self.session_partitions = next_partitions
-            return FetchRequestData(next_partitions, None, self.next_metadata);
+            return FetchRequestData(next_partitions, None, self.next_metadata)
 
         prev_tps = set(self.session_partitions.keys())
         next_tps = set(next_partitions.keys())

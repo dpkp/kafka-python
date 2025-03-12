@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String
+from kafka.protocol.types import Int8, Int16, Int32, Schema, String
 
 
 class FindCoordinatorResponse_v0(Response):

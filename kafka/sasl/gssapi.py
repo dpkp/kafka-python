@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import struct
+
 # needed for SASL_GSSAPI authentication:
 try:
     import gssapi
@@ -66,7 +68,7 @@ class SaslMechanismGSSAPI(SaslMechanism):
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
             message_parts = [
-                Int8.encode(self.SASL_QOP_AUTH & Int8.decode(io.BytesIO(msg[0:1]))),
+                struct.pack('>b', self.SASL_QOP_AUTH & struct.unpack('>b', msg[0:1])),
                 msg[:1],
                 self.auth_id.encode(),
             ]

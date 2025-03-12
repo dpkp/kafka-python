@@ -6,7 +6,7 @@ from kafka.errors import IllegalArgumentError
 
 def test_config_resource():
     with pytest.raises(KeyError):
-        bad_resource = kafka.admin.ConfigResource('something', 'foo')
+        _bad_resource = kafka.admin.ConfigResource('something', 'foo')
     good_resource = kafka.admin.ConfigResource('broker', 'bar')
     assert good_resource.resource_type == kafka.admin.ConfigResourceType.BROKER
     assert good_resource.name == 'bar'
@@ -59,11 +59,11 @@ def test_acl_resource():
 
 def test_new_topic():
     with pytest.raises(IllegalArgumentError):
-        bad_topic = kafka.admin.NewTopic('foo', -1, -1)
+        _bad_topic = kafka.admin.NewTopic('foo', -1, -1)
     with pytest.raises(IllegalArgumentError):
-        bad_topic = kafka.admin.NewTopic('foo', 1, -1)
+        _bad_topic = kafka.admin.NewTopic('foo', 1, -1)
     with pytest.raises(IllegalArgumentError):
-        bad_topic = kafka.admin.NewTopic('foo', 1, 1, {1: [1, 1, 1]})
+        _bad_topic = kafka.admin.NewTopic('foo', 1, 1, {1: [1, 1, 1]})
     good_topic = kafka.admin.NewTopic('foo', 1, 2)
     assert good_topic.name == 'foo'
     assert good_topic.num_partitions == 1

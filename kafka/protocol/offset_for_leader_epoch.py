@@ -4,7 +4,7 @@ from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, CompactArray, CompactString, Int16, Int32, Int64, Schema, String, TaggedFields
 
 
-class OffsetForLeaderEpochResponse_v0(Request):
+class OffsetForLeaderEpochResponse_v0(Response):
     API_KEY = 23
     API_VERSION = 0
     SCHEMA = Schema(
@@ -16,7 +16,7 @@ class OffsetForLeaderEpochResponse_v0(Request):
                 ('end_offset', Int64))))))
 
 
-class OffsetForLeaderEpochResponse_v1(Request):
+class OffsetForLeaderEpochResponse_v1(Response):
     API_KEY = 23
     API_VERSION = 1
     SCHEMA = Schema(
@@ -29,7 +29,7 @@ class OffsetForLeaderEpochResponse_v1(Request):
                 ('end_offset', Int64))))))
 
 
-class OffsetForLeaderEpochResponse_v2(Request):
+class OffsetForLeaderEpochResponse_v2(Response):
     API_KEY = 23
     API_VERSION = 2
     SCHEMA = Schema(
@@ -43,13 +43,13 @@ class OffsetForLeaderEpochResponse_v2(Request):
                 ('end_offset', Int64))))))
 
 
-class OffsetForLeaderEpochResponse_v3(Request):
+class OffsetForLeaderEpochResponse_v3(Response):
     API_KEY = 23
     API_VERSION = 3
     SCHEMA = OffsetForLeaderEpochResponse_v2.SCHEMA
 
 
-class OffsetForLeaderEpochResponse_v4(Request):
+class OffsetForLeaderEpochResponse_v4(Response):
     API_KEY = 23
     API_VERSION = 4
     SCHEMA = Schema(
