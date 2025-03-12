@@ -54,20 +54,23 @@
 # * Timestamp Type (3)
 # * Compression Type (0-2)
 
-import io
 import struct
 import time
 from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
-from kafka.record.util import decode_varint, encode_varint, calc_crc32c, size_of_varint
-
-from kafka.errors import CorruptRecordException
-from kafka.codec import (
-    gzip_encode, snappy_encode, lz4_encode,
-    gzip_decode, snappy_decode, lz4_decode
+from kafka.record.util import (
+    decode_varint, encode_varint, calc_crc32c, size_of_varint
 )
+from kafka.errors import CorruptRecordException, UnsupportedCodecError
+from kafka.codec import (
+    gzip_encode, snappy_encode, lz4_encode, zstd_encode,
+    gzip_decode, snappy_decode, lz4_decode, zstd_decode
+)
+import kafka.codec as codecs
 
 
 class DefaultRecordBase(object):
+
+    __slots__ = ()
 
     HEADER_STRUCT = struct.Struct(
         ">q"  # BaseOffset => Int64
@@ -94,6 +97,7 @@ class DefaultRecordBase(object):
     CODEC_GZIP = 0x01
     CODEC_SNAPPY = 0x02
     CODEC_LZ4 = 0x03
+    CODEC_ZSTD = 0x04
     TIMESTAMP_TYPE_MASK = 0x08
     TRANSACTIONAL_MASK = 0x10
     CONTROL_MASK = 0x20
@@ -101,8 +105,24 @@ class DefaultRecordBase(object):
     LOG_APPEND_TIME = 1
     CREATE_TIME = 0
 
+    def _assert_has_codec(self, compression_type):
+        if compression_type == self.CODEC_GZIP:
+            checker, name = codecs.has_gzip, "gzip"
+        elif compression_type == self.CODEC_SNAPPY:
+            checker, name = codecs.has_snappy, "snappy"
+        elif compression_type == self.CODEC_LZ4:
+            checker, name = codecs.has_lz4, "lz4"
+        elif compression_type == self.CODEC_ZSTD:
+            checker, name = codecs.has_zstd, "zstd"
+        if not checker():
+            raise UnsupportedCodecError(
+                "Libraries for {} compression codec not found".format(name))
+
 
 class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
+
+    __slots__ = ("_buffer", "_header_data", "_pos", "_num_records",
+                 "_next_record_index", "_decompressed")
 
     def __init__(self, buffer):
         self._buffer = bytearray(buffer)
@@ -117,6 +137,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[0]
 
     @property
+    def leader_epoch(self):
+        return self._header_data[2]
+
+    @property
     def magic(self):
         return self._header_data[3]
 
@@ -127,6 +151,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     @property
     def attributes(self):
         return self._header_data[5]
+
+    @property
+    def last_offset_delta(self):
+        return self._header_data[6]
 
     @property
     def compression_type(self):
@@ -156,6 +184,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         if not self._decompressed:
             compression_type = self.compression_type
             if compression_type != self.CODEC_NONE:
+                self._assert_has_codec(compression_type)
                 data = memoryview(self._buffer)[self._pos:]
                 if compression_type == self.CODEC_GZIP:
                     uncompressed = gzip_decode(data)
@@ -163,6 +192,8 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
                     uncompressed = snappy_decode(data.tobytes())
                 if compression_type == self.CODEC_LZ4:
                     uncompressed = lz4_decode(data.tobytes())
+                if compression_type == self.CODEC_ZSTD:
+                    uncompressed = zstd_decode(data.tobytes())
                 self._buffer = bytearray(uncompressed)
                 self._pos = 0
         self._decompressed = True
@@ -237,13 +268,17 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         # validate whether we have read all header bytes in the current record
         if pos - start_pos != length:
-            CorruptRecordException(
+            raise CorruptRecordException(
                 "Invalid record size: expected to read {} bytes in record "
                 "payload, but instead read {}".format(length, pos - start_pos))
         self._pos = pos
 
-        return DefaultRecord(
-            offset, timestamp, self.timestamp_type, key, value, headers)
+        if self.is_control_batch:
+            return ControlRecord(
+                offset, timestamp, self.timestamp_type, key, value, headers)
+        else:
+            return DefaultRecord(
+                offset, timestamp, self.timestamp_type, key, value, headers)
 
     def __iter__(self):
         self._maybe_uncompress()
@@ -335,11 +370,55 @@ class DefaultRecord(ABCRecord):
         )
 
 
+class ControlRecord(DefaultRecord):
+    __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
+                 "_headers", "_version", "_type")
+
+    KEY_STRUCT = struct.Struct(
+        ">h"  # Current Version => Int16
+        "h"  # Type => Int16 (0 indicates an abort marker, 1 indicates a commit)
+    )
+
+    def __init__(self, offset, timestamp, timestamp_type, key, value, headers):
+        super(ControlRecord, self).__init__(offset, timestamp, timestamp_type, key, value, headers)
+        (self._version, self._type) = self.KEY_STRUCT.unpack(self._key)
+
+    # see https://kafka.apache.org/documentation/#controlbatch
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def abort(self):
+        return self._type == 0
+
+    @property
+    def commit(self):
+        return self._type == 1
+
+    def __repr__(self):
+        return (
+            "ControlRecord(offset={!r}, timestamp={!r}, timestamp_type={!r},"
+            " version={!r}, type={!r} <{!s}>)".format(
+                self._offset, self._timestamp, self._timestamp_type,
+                self._version, self._type, "abort" if self.abort else "commit")
+        )
+
+
 class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
     # excluding key, value and headers:
     # 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
     MAX_RECORD_OVERHEAD = 21
+
+    __slots__ = ("_magic", "_compression_type", "_batch_size", "_is_transactional",
+                 "_producer_id", "_producer_epoch", "_base_sequence",
+                 "_first_timestamp", "_max_timestamp", "_last_offset", "_num_records",
+                 "_buffer")
 
     def __init__(
             self, magic, compression_type, is_transactional,
@@ -481,6 +560,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
     def _maybe_compress(self):
         if self._compression_type != self.CODEC_NONE:
+            self._assert_has_codec(self._compression_type)
             header_size = self.HEADER_STRUCT.size
             data = bytes(self._buffer[header_size:])
             if self._compression_type == self.CODEC_GZIP:
@@ -489,6 +569,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 compressed = snappy_encode(data)
             elif self._compression_type == self.CODEC_LZ4:
                 compressed = lz4_encode(data)
+            elif self._compression_type == self.CODEC_ZSTD:
+                compressed = zstd_encode(data)
             compressed_size = len(compressed)
             if len(data) <= compressed_size:
                 # We did not get any benefit from compression, lets send

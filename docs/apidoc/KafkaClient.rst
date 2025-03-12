@@ -1,5 +1,5 @@
 KafkaClient
 ===========
 
-.. autoclass:: kafka.client.KafkaClient
+.. autoclass:: kafka.KafkaClient
     :members:

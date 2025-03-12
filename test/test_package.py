@@ -1,28 +1,25 @@
-from . import unittest
-
-
-class TestPackage(unittest.TestCase):
+class TestPackage:
     def test_top_level_namespace(self):
         import kafka as kafka1
-        self.assertEqual(kafka1.KafkaConsumer.__name__, "KafkaConsumer")
-        self.assertEqual(kafka1.consumer.__name__, "kafka.consumer")
-        self.assertEqual(kafka1.codec.__name__, "kafka.codec")
+        assert kafka1.KafkaConsumer.__name__ == "KafkaConsumer"
+        assert kafka1.consumer.__name__ == "kafka.consumer"
+        assert kafka1.codec.__name__ == "kafka.codec"
 
     def test_submodule_namespace(self):
-        import kafka.client as client1
-        self.assertEqual(client1.__name__, "kafka.client")
+        import kafka.client_async as client1
+        assert client1.__name__ == "kafka.client_async"
 
-        from kafka import client as client2
-        self.assertEqual(client2.__name__, "kafka.client")
+        from kafka import client_async as client2
+        assert client2.__name__ == "kafka.client_async"
 
-        from kafka.client import SimpleClient as SimpleClient1
-        self.assertEqual(SimpleClient1.__name__, "SimpleClient")
+        from kafka.client_async import KafkaClient as KafkaClient1
+        assert KafkaClient1.__name__ == "KafkaClient"
+
+        from kafka import KafkaClient as KafkaClient2
+        assert KafkaClient2.__name__ == "KafkaClient"
 
         from kafka.codec import gzip_encode as gzip_encode1
-        self.assertEqual(gzip_encode1.__name__, "gzip_encode")
-
-        from kafka import SimpleClient as SimpleClient2
-        self.assertEqual(SimpleClient2.__name__, "SimpleClient")
+        assert gzip_encode1.__name__ == "gzip_encode"
 
         from kafka.codec import snappy_encode
-        self.assertEqual(snappy_encode.__name__, "snappy_encode")
+        assert snappy_encode.__name__ == "snappy_encode"

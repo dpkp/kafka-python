@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kafka-python"
+dynamic = ["version"]
+authors = [{name = "Dana Powers", email = "dana.powers@gmail.com"}]
+description = "Pure Python client for Apache Kafka"
+keywords = ["apache kafka", "kafka"]
+readme = "README.rst"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 2",
+    "Programming Language :: Python :: 2.7",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.4",
+    "Programming Language :: Python :: 3.5",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+urls = {Homepage = "https://github.com/dpkp/kafka-python"}
+
+[project.optional-dependencies]
+crc32c = ["crc32c"]
+lz4 = ["lz4"]
+snappy = ["python-snappy"]
+zstd = ["zstandard"]
+testing = ["pytest", "mock; python_version < '3.3'", "pytest-mock"]
+
+[tool.setuptools]
+include-package-data = false
+license-files = [] # workaround for https://github.com/pypa/setuptools/issues/4759
+
+[tool.setuptools.packages.find]
+exclude = ["test"]
+namespaces = false
+
+[tool.distutils.bdist_wheel]
+universal = 1
+
+[tool.setuptools.dynamic]
+version = {attr = "kafka.__version__"}

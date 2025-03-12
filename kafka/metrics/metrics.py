@@ -225,7 +225,7 @@ class Metrics(object):
         with self._lock:
             if metric.metric_name in self.metrics:
                 raise ValueError('A metric named "%s" already exists, cannot'
-                                 ' register another one.' % metric.metric_name)
+                                 ' register another one.' % (metric.metric_name,))
             self.metrics[metric.metric_name] = metric
             for reporter in self._reporters:
                 reporter.metric_change(metric)
@@ -257,3 +257,5 @@ class Metrics(object):
         """Close this metrics repository."""
         for reporter in self._reporters:
             reporter.close()
+
+        self._metrics.clear()

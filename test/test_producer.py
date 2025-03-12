@@ -7,8 +7,7 @@ import pytest
 
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.producer.buffer import SimpleBufferPool
-from test.conftest import version
-from test.testutil import random_string
+from test.testutil import env_kafka_version, random_string
 
 
 def test_buffer_pool():
@@ -23,17 +22,17 @@ def test_buffer_pool():
     assert buf2.read() == b''
 
 
-@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
-@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_end_to_end(kafka_broker, compression):
-
     if compression == 'lz4':
-        # LZ4 requires 0.8.2
-        if version() < (0, 8, 2):
-            return
-        # python-lz4 crashes on older versions of pypy
+        if env_kafka_version() < (0, 8, 2):
+            pytest.skip('LZ4 requires 0.8.2')
         elif platform.python_implementation() == 'PyPy':
-            return
+            pytest.skip('python-lz4 crashes on older versions of pypy')
+
+    if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
+        pytest.skip('zstd requires kafka 2.1.0 or newer')
 
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
@@ -65,7 +64,7 @@ def test_end_to_end(kafka_broker, compression):
         except StopIteration:
             break
 
-    assert msgs == set(['msg %d' % i for i in range(messages)])
+    assert msgs == set(['msg %d' % (i,) for i in range(messages)])
     consumer.close()
 
 
@@ -81,9 +80,11 @@ def test_kafka_producer_gc_cleanup():
     assert threading.active_count() == threads
 
 
-@pytest.mark.skipif(not version(), reason="No KAFKA_VERSION set")
-@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4'])
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
+@pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
+    if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
+        pytest.skip('zstd requires 2.1.0 or more')
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer = KafkaProducer(bootstrap_servers=connect_str,
                              retries=5,
@@ -91,10 +92,16 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
                              compression_type=compression)
     magic = producer._max_usable_produce_magic()
 
+    # record headers are supported in 0.11.0
+    if env_kafka_version() < (0, 11, 0):
+        headers = None
+    else:
+        headers = [("Header Key", b"Header Value")]
+
     topic = random_string(5)
     future = producer.send(
         topic,
-        value=b"Simple value", key=b"Simple key", timestamp_ms=9999999,
+        value=b"Simple value", key=b"Simple key", headers=headers, timestamp_ms=9999999,
         partition=0)
     record = future.get(timeout=5)
     assert record is not None
@@ -116,11 +123,11 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
 
     assert record.serialized_key_size == 10
     assert record.serialized_value_size == 12
+    if headers:
+        assert record.serialized_header_size == 22
 
-    # generated timestamp case is skipped for broker 0.9 and below
     if magic == 0:
-        return
-
+        pytest.skip('generated timestamp case is skipped for broker 0.9 and below')
     send_time = time.time() * 1000
     future = producer.send(
         topic,

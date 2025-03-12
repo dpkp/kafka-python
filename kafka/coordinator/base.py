@@ -3,7 +3,6 @@ from __future__ import absolute_import, division
 import abc
 import copy
 import logging
-import sys
 import threading
 import time
 import weakref
@@ -15,9 +14,8 @@ from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.commit import GroupCoordinatorRequest, OffsetCommitRequest
-from kafka.protocol.group import (HeartbeatRequest, JoinGroupRequest,
-                            LeaveGroupRequest, SyncGroupRequest)
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
+from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -34,10 +32,7 @@ class Generation(object):
         self.member_id = member_id
         self.protocol = protocol
 
-Generation.NO_GENERATION = Generation(
-    OffsetCommitRequest[2].DEFAULT_GENERATION_ID,
-    JoinGroupRequest[0].UNKNOWN_MEMBER_ID,
-    None)
+Generation.NO_GENERATION = Generation(DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, None)
 
 
 class UnjoinedGroupException(Errors.KafkaError):
@@ -236,14 +231,13 @@ class BaseCoordinator(object):
 
         Returns: the current coordinator id or None if it is unknown
         """
-        with self._lock:
-            if self.coordinator_id is None:
-                return None
-            elif self._client.is_disconnected(self.coordinator_id):
-                self.coordinator_dead('Node Disconnected')
-                return None
-            else:
-                return self.coordinator_id
+        if self.coordinator_id is None:
+            return None
+        elif self._client.is_disconnected(self.coordinator_id):
+            self.coordinator_dead('Node Disconnected')
+            return None
+        else:
+            return self.coordinator_id
 
     def ensure_coordinator_ready(self, timeout_ms=None):
         """Block until the coordinator for this group is known
@@ -251,7 +245,7 @@ class BaseCoordinator(object):
         """
         retry_timeout_ms = timeout_ms or self.config['coordinator_not_ready_retry_timeout_ms']
         retry_start_time_in_secs = time.time()
-        with self._lock:
+        with self._client._lock, self._lock:
             while self.coordinator_unknown():
 
                 # Prior to 0.8.2 there was no group coordinator
@@ -260,7 +254,7 @@ class BaseCoordinator(object):
                 if self.config['api_version'] < (0, 8, 2):
                     self.coordinator_id = self._client.least_loaded_node()
                     if self.coordinator_id is not None:
-                        self._client.ready(self.coordinator_id)
+                        self._client.maybe_connect(self.coordinator_id)
                     continue
 
                 future = self.lookup_coordinator()
@@ -289,17 +283,18 @@ class BaseCoordinator(object):
         self._find_coordinator_future = None
 
     def lookup_coordinator(self):
-        if self._find_coordinator_future is not None:
-            return self._find_coordinator_future
+        with self._lock:
+            if self._find_coordinator_future is not None:
+                return self._find_coordinator_future
 
-        # If there is an error sending the group coordinator request
-        # then _reset_find_coordinator_future will immediately fire and
-        # set _find_coordinator_future = None
-        # To avoid returning None, we capture the future in a local variable
-        self._find_coordinator_future = self._send_group_coordinator_request()
-        future = self._find_coordinator_future
-        self._find_coordinator_future.add_both(self._reset_find_coordinator_future)
-        return future
+            # If there is an error sending the group coordinator request
+            # then _reset_find_coordinator_future will immediately fire and
+            # set _find_coordinator_future = None
+            # To avoid returning None, we capture the future in a local variable
+            future = self._send_group_coordinator_request()
+            self._find_coordinator_future = future
+            self._find_coordinator_future.add_both(self._reset_find_coordinator_future)
+            return future
 
     def need_rejoin(self):
         """Check whether the group should be rejoined (e.g. if metadata changes)
@@ -336,37 +331,36 @@ class BaseCoordinator(object):
                 self.heartbeat.poll()
 
     def time_to_next_heartbeat(self):
+        """Returns seconds (float) remaining before next heartbeat should be sent
+
+        Note: Returns infinite if group is not joined
+        """
         with self._lock:
             # if we have not joined the group, we don't need to send heartbeats
             if self.state is MemberState.UNJOINED:
-                return sys.maxsize
+                return float('inf')
             return self.heartbeat.time_to_next_heartbeat()
 
     def _handle_join_success(self, member_assignment_bytes):
         with self._lock:
             log.info("Successfully joined group %s with generation %s",
                      self.group_id, self._generation.generation_id)
-            self.join_future = None
             self.state = MemberState.STABLE
-            self.rejoining = False
-            self._heartbeat_thread.enable()
-        self._on_join_complete(self._generation.generation_id,
-                               self._generation.member_id,
-                               self._generation.protocol,
-                               member_assignment_bytes)
+            self.rejoin_needed = False
+            if self._heartbeat_thread:
+                self._heartbeat_thread.enable()
 
     def _handle_join_failure(self, _):
         with self._lock:
-            self.join_future = None
             self.state = MemberState.UNJOINED
 
     def ensure_active_group(self):
         """Ensure that the group is active (i.e. joined and synced)"""
-        with self._lock:
+        with self._client._lock, self._lock:
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
 
-            while self.need_rejoin():
+            while self.need_rejoin() or self._rejoin_incomplete():
                 self.ensure_coordinator_ready()
 
                 # call on_join_prepare if needed. We set a flag
@@ -388,7 +382,7 @@ class BaseCoordinator(object):
                 while not self.coordinator_unknown():
                     if not self._client.in_flight_request_count(self.coordinator_id):
                         break
-                    self._client.poll()
+                    self._client.poll(timeout_ms=200)
                 else:
                     continue
 
@@ -397,6 +391,12 @@ class BaseCoordinator(object):
                 # This ensures that we do not mistakenly attempt to rejoin
                 # before the pending rebalance has completed.
                 if self.join_future is None:
+                    # Fence off the heartbeat thread explicitly so that it cannot
+                    # interfere with the join group. Note that this must come after
+                    # the call to _on_join_prepare since we must be able to continue
+                    # sending heartbeats if that callback takes some time.
+                    self._heartbeat_thread.disable()
+
                     self.state = MemberState.REBALANCING
                     future = self._send_join_group_request()
 
@@ -417,7 +417,16 @@ class BaseCoordinator(object):
 
                 self._client.poll(future=future)
 
-                if future.failed():
+                if future.succeeded():
+                    self._on_join_complete(self._generation.generation_id,
+                                           self._generation.member_id,
+                                           self._generation.protocol,
+                                           future.value)
+                    self.join_future = None
+                    self.rejoining = False
+
+                else:
+                    self.join_future = None
                     exception = future.exception
                     if isinstance(exception, (Errors.UnknownMemberIdError,
                                               Errors.RebalanceInProgressError,
@@ -426,6 +435,9 @@ class BaseCoordinator(object):
                     elif not future.retriable():
                         raise exception  # pylint: disable-msg=raising-bad-type
                     time.sleep(self.config['retry_backoff_ms'] / 1000)
+
+    def _rejoin_incomplete(self):
+        return self.join_future is not None
 
     def _send_join_group_request(self):
         """Join the group and return the assignment for the next generation.
@@ -451,25 +463,16 @@ class BaseCoordinator(object):
             (protocol, metadata if isinstance(metadata, bytes) else metadata.encode())
             for protocol, metadata in self.group_protocols()
         ]
-        if self.config['api_version'] < (0, 9):
-            raise Errors.KafkaError('JoinGroupRequest api requires 0.9+ brokers')
-        elif (0, 9) <= self.config['api_version'] < (0, 10, 1):
-            request = JoinGroupRequest[0](
+        version = self._client.api_version(JoinGroupRequest, max_version=3)
+        if version == 0:
+            request = JoinGroupRequest[version](
                 self.group_id,
                 self.config['session_timeout_ms'],
-                self._generation.member_id,
-                self.protocol_type(),
-                member_metadata)
-        elif (0, 10, 1) <= self.config['api_version'] < (0, 11, 0):
-            request = JoinGroupRequest[1](
-                self.group_id,
-                self.config['session_timeout_ms'],
-                self.config['max_poll_interval_ms'],
                 self._generation.member_id,
                 self.protocol_type(),
                 member_metadata)
         else:
-            request = JoinGroupRequest[2](
+            request = JoinGroupRequest[version](
                 self.group_id,
                 self.config['session_timeout_ms'],
                 self.config['max_poll_interval_ms'],
@@ -487,13 +490,16 @@ class BaseCoordinator(object):
         return future
 
     def _failed_request(self, node_id, request, future, error):
-        log.error('Error sending %s to node %s [%s]',
-                  request.__class__.__name__, node_id, error)
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining
         if not isinstance(error, (Errors.NodeNotReadyError,
                                   Errors.TooManyInFlightRequests)):
+            log.error('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
             self.coordinator_dead(error)
+        else:
+            log.debug('Error sending %s to node %s [%s]',
+                      request.__class__.__name__, node_id, error)
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
@@ -512,7 +518,6 @@ class BaseCoordinator(object):
                     self._generation = Generation(response.generation_id,
                                                   response.member_id,
                                                   response.group_protocol)
-                    self.rejoin_needed = False
 
                 if response.leader_id == response.member_id:
                     log.info("Elected group leader -- performing partition"
@@ -559,7 +564,7 @@ class BaseCoordinator(object):
 
     def _on_join_follower(self):
         # send follower's sync group with an empty assignment
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = self._client.api_version(SyncGroupRequest, max_version=2)
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -587,7 +592,7 @@ class BaseCoordinator(object):
         except Exception as e:
             return Future().failure(e)
 
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = self._client.api_version(SyncGroupRequest, max_version=2)
         request = SyncGroupRequest[version](
             self.group_id,
             self._generation.generation_id,
@@ -666,7 +671,11 @@ class BaseCoordinator(object):
 
         log.debug("Sending group coordinator request for group %s to broker %s",
                   self.group_id, node_id)
-        request = GroupCoordinatorRequest[0](self.group_id)
+        version = self._client.api_version(FindCoordinatorRequest, max_version=2)
+        if version == 0:
+            request = FindCoordinatorRequest[version](self.group_id)
+        else:
+            request = FindCoordinatorRequest[version](self.group_id, 0)
         future = Future()
         _f = self._client.send(node_id, request)
         _f.add_callback(self._handle_group_coordinator_response, future)
@@ -679,17 +688,17 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                ok = self._client.cluster.add_group_coordinator(self.group_id, response)
-                if not ok:
+                coordinator_id = self._client.cluster.add_group_coordinator(self.group_id, response)
+                if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
                     future.failure(Errors.IllegalStateError())
                     return
 
-                self.coordinator_id = response.coordinator_id
+                self.coordinator_id = coordinator_id
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
-                self._client.ready(self.coordinator_id)
+                self._client.maybe_connect(self.coordinator_id)
                 self.heartbeat.reset_timeouts()
             future.success(self.coordinator_id)
 
@@ -708,11 +717,10 @@ class BaseCoordinator(object):
 
     def coordinator_dead(self, error):
         """Mark the current coordinator as dead."""
-        with self._lock:
-            if self.coordinator_id is not None:
-                log.warning("Marking the coordinator dead (node %s) for group %s: %s.",
-                            self.coordinator_id, self.group_id, error)
-                self.coordinator_id = None
+        if self.coordinator_id is not None:
+            log.warning("Marking the coordinator dead (node %s) for group %s: %s.",
+                        self.coordinator_id, self.group_id, error)
+            self.coordinator_id = None
 
     def generation(self):
         """Get the current generation state if the group is stable.
@@ -742,7 +750,7 @@ class BaseCoordinator(object):
             self._heartbeat_thread.start()
 
     def _close_heartbeat_thread(self):
-        if self._heartbeat_thread is not None:
+        if hasattr(self, '_heartbeat_thread') and self._heartbeat_thread is not None:
             log.info('Stopping heartbeat thread')
             try:
                 self._heartbeat_thread.close()
@@ -756,13 +764,12 @@ class BaseCoordinator(object):
     def close(self):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        with self._lock:
-            self._close_heartbeat_thread()
-            self.maybe_leave_group()
+        self._close_heartbeat_thread()
+        self.maybe_leave_group()
 
     def maybe_leave_group(self):
         """Leave the current group and reset local generation/memberId."""
-        with self._lock:
+        with self._client._lock, self._lock:
             if (not self.coordinator_unknown()
                 and self.state is not MemberState.UNJOINED
                 and self._generation is not Generation.NO_GENERATION):
@@ -770,7 +777,7 @@ class BaseCoordinator(object):
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
                 log.info('Leaving consumer group (%s).', self.group_id)
-                version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+                version = self._client.api_version(LeaveGroupRequest, max_version=2)
                 request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
                 future = self._client.send(self.coordinator_id, request)
                 future.add_callback(self._handle_leave_group_response)
@@ -798,7 +805,7 @@ class BaseCoordinator(object):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
-        version = 0 if self.config['api_version'] < (0, 11, 0) else 1
+        version = self._client.api_version(HeartbeatRequest, max_version=2)
         request = HeartbeatRequest[version](self.group_id,
                                             self._generation.generation_id,
                                             self._generation.member_id)
@@ -919,9 +926,23 @@ class HeartbeatThread(threading.Thread):
         self.enabled = False
 
     def close(self):
+        if self.closed:
+            return
         self.closed = True
+
+        # Generally this should not happen - close() is triggered
+        # by the coordinator. But in some cases GC may close the coordinator
+        # from within the heartbeat thread.
+        if threading.current_thread() == self:
+            return
+
         with self.coordinator._lock:
             self.coordinator._lock.notify()
+
+        if self.is_alive():
+            self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
+        if self.is_alive():
+            log.warning("Heartbeat thread did not fully terminate during close")
 
     def run(self):
         try:
@@ -941,6 +962,15 @@ class HeartbeatThread(threading.Thread):
             log.debug('Heartbeat thread closed')
 
     def _run_once(self):
+        with self.coordinator._client._lock, self.coordinator._lock:
+            if self.enabled and self.coordinator.state is MemberState.STABLE:
+                # TODO: When consumer.wakeup() is implemented, we need to
+                # disable here to prevent propagating an exception to this
+                # heartbeat thread
+                # must get client._lock, or maybe deadlock at heartbeat 
+                # failure callback in consumer poll
+                self.coordinator._client.poll(timeout_ms=0)
+
         with self.coordinator._lock:
             if not self.enabled:
                 log.debug('Heartbeat disabled. Waiting')
@@ -955,11 +985,6 @@ class HeartbeatThread(threading.Thread):
                 log.debug('Group state is not stable, disabling heartbeats')
                 self.disable()
                 return
-
-            # TODO: When consumer.wakeup() is implemented, we need to
-            # disable here to prevent propagating an exception to this
-            # heartbeat thread
-            self.coordinator._client.poll(timeout_ms=0)
 
             if self.coordinator.coordinator_unknown():
                 future = self.coordinator.lookup_coordinator()
@@ -981,6 +1006,11 @@ class HeartbeatThread(threading.Thread):
                 # foreground thread has stalled in between calls to
                 # poll(), so we explicitly leave the group.
                 log.warning('Heartbeat poll expired, leaving group')
+                ### XXX
+                # maybe_leave_group acquires client + coordinator lock;
+                # if we hold coordinator lock before calling, we risk deadlock
+                # release() is safe here because this is the last code in the current context
+                self.coordinator._lock.release()
                 self.coordinator.maybe_leave_group()
 
             elif not self.coordinator.heartbeat.should_heartbeat():

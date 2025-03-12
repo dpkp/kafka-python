@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
+import functools
 import logging
 import time
 
@@ -10,8 +11,9 @@ from kafka.vendor import six
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
-from kafka import errors as Errors
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
@@ -30,7 +32,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
-        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor),
+        'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor),
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
@@ -131,7 +133,10 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def __del__(self):
         if hasattr(self, '_cluster') and self._cluster:
-            self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
+            try:
+                self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
+            except TypeError:
+                pass
         super(ConsumerCoordinator, self).__del__()
 
     def protocol_type(self):
@@ -221,7 +226,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignment_snapshot = None
 
         assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % protocol
+        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
         assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
 
@@ -229,11 +234,17 @@ class ConsumerCoordinator(BaseCoordinator):
         self._subscription.needs_fetch_committed_offsets = True
 
         # update partition assignment
-        self._subscription.assign_from_subscribed(assignment.partitions())
+        try:
+            self._subscription.assign_from_subscribed(assignment.partitions())
+        except ValueError as e:
+            log.warning("%s. Probably due to a deleted topic. Requesting Re-join" % e)
+            self.request_rejoin()
 
         # give the assignor a chance to update internal state
         # based on the received assignment
         assignor.on_assignment(assignment)
+        if assignor.name == 'sticky':
+            assignor.on_generation_assignment(generation)
 
         # reschedule the auto commit starting from now
         self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
@@ -260,7 +271,7 @@ class ConsumerCoordinator(BaseCoordinator):
         ensures that the consumer has joined the group. This also handles
         periodic offset commits if they are enabled.
         """
-        if self.group_id is None or self.config['api_version'] < (0, 8, 2):
+        if self.group_id is None:
             return
 
         self._invoke_completed_offset_commit_callbacks()
@@ -302,7 +313,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
-        assert assignor, 'Invalid assignment protocol: %s' % assignment_strategy
+        assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
         member_metadata = {}
         all_subscribed_topics = set()
         for member_id, metadata_bytes in members:
@@ -387,7 +398,7 @@ class ConsumerCoordinator(BaseCoordinator):
             for partition, offset in six.iteritems(offsets):
                 # verify assignment is still active
                 if self._subscription.is_assigned(partition):
-                    self._subscription.assignment[partition].committed = offset.offset
+                    self._subscription.assignment[partition].committed = offset
             self._subscription.needs_fetch_committed_offsets = False
 
     def fetch_committed_offsets(self, partitions):
@@ -446,10 +457,13 @@ class ConsumerCoordinator(BaseCoordinator):
                 response will be either an Exception or a OffsetCommitResponse
                 struct. This callback can be used to trigger custom actions when
                 a commit request completes.
+
+        Returns:
+            kafka.future.Future
         """
         self._invoke_completed_offset_commit_callbacks()
         if not self.coordinator_unknown():
-            self._do_commit_offsets_async(offsets, callback)
+            future = self._do_commit_offsets_async(offsets, callback)
         else:
             # we don't know the current coordinator, so try to find it and then
             # send the commit or fail (we don't want recursive retries which can
@@ -459,7 +473,7 @@ class ConsumerCoordinator(BaseCoordinator):
             # same order that they were added. Note also that BaseCoordinator
             # prevents multiple concurrent coordinator lookup requests.
             future = self.lookup_coordinator()
-            future.add_callback(self._do_commit_offsets_async, offsets, callback)
+            future.add_callback(lambda r: functools.partial(self._do_commit_offsets_async, offsets, callback)())
             if callback:
                 future.add_errback(lambda e: self.completed_offset_commits.appendleft((callback, offsets, e)))
 
@@ -468,6 +482,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # coordinator, so there is no need to explicitly allow heartbeats
         # through delayed task execution.
         self._client.poll(timeout_ms=0) # no wakeup if we add that feature
+
+        return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
@@ -564,7 +580,7 @@ class ConsumerCoordinator(BaseCoordinator):
             offset_data[tp.topic][tp.partition] = offset
 
         if self._subscription.partitions_auto_assigned():
-            generation = self.generation()
+            generation = self.generation() or Generation.NO_GENERATION
         else:
             generation = Generation.NO_GENERATION
 
@@ -574,12 +590,40 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.config['api_version'] >= (0, 9) and generation is None:
             return Future().failure(Errors.CommitFailedError())
 
-        if self.config['api_version'] >= (0, 9):
-            request = OffsetCommitRequest[2](
+        version = self._client.api_version(OffsetCommitRequest, max_version=6)
+        if version == 0:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
+        elif version == 1:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                # This api version was only used in v0.8.2, prior to join group apis
+                # so this always ends up as NO_GENERATION
+                generation.generation_id,
+                generation.member_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        -1, # timestamp, unused
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
+        elif version <= 4:
+            request = OffsetCommitRequest[version](
                 self.group_id,
                 generation.generation_id,
                 generation.member_id,
-                OffsetCommitRequest[2].DEFAULT_RETENTION_TIME,
+                OffsetCommitRequest[version].DEFAULT_RETENTION_TIME,
                 [(
                     topic, [(
                         partition,
@@ -588,25 +632,29 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
-        elif self.config['api_version'] >= (0, 8, 2):
-            request = OffsetCommitRequest[1](
-                self.group_id, -1, '',
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        -1,
-                        offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
-            )
-        elif self.config['api_version'] >= (0, 8, 1):
-            request = OffsetCommitRequest[0](
+        elif version <= 5:
+            request = OffsetCommitRequest[version](
                 self.group_id,
+                generation.generation_id,
+                generation.member_id,
                 [(
                     topic, [(
                         partition,
                         offset.offset,
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
+        else:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                generation.generation_id,
+                generation.member_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        offset.leader_epoch,
                         offset.metadata
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
@@ -636,7 +684,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.debug("Group %s committed offset %s for partition %s",
                               self.group_id, offset, tp)
                     if self._subscription.is_assigned(tp):
-                        self._subscription.assignment[tp].committed = offset.offset
+                        self._subscription.assignment[tp].committed = offset
                 elif error_type is Errors.GroupAuthorizationFailedError:
                     log.error("Not authorized to commit offsets for group %s",
                               self.group_id)
@@ -699,7 +747,7 @@ class ConsumerCoordinator(BaseCoordinator):
             partitions (list of TopicPartition): the partitions to fetch
 
         Returns:
-            Future: resolves to dict of offsets: {TopicPartition: int}
+            Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
@@ -723,16 +771,13 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp in partitions:
             topic_partitions[tp.topic].add(tp.partition)
 
-        if self.config['api_version'] >= (0, 8, 2):
-            request = OffsetFetchRequest[1](
-                self.group_id,
-                list(topic_partitions.items())
-            )
-        else:
-            request = OffsetFetchRequest[0](
-                self.group_id,
-                list(topic_partitions.items())
-            )
+        version = self._client.api_version(OffsetFetchRequest, max_version=5)
+        # Starting in version 2, the request can contain a null topics array to indicate that offsets should be fetched
+        # TODO: support
+        request = OffsetFetchRequest[version](
+            self.group_id,
+            list(topic_partitions.items())
+        )
 
         # send the request with a callback
         future = Future()
@@ -742,9 +787,33 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_fetch_response(self, future, response):
+        if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
+            error_type = Errors.for_code(response.error_code)
+            log.debug("Offset fetch failed: %s", error_type.__name__)
+            error = error_type()
+            if error_type is Errors.GroupLoadInProgressError:
+                # Retry
+                future.failure(error)
+            elif error_type is Errors.NotCoordinatorForGroupError:
+                # re-discover the coordinator and retry
+                self.coordinator_dead(error)
+                future.failure(error)
+            elif error_type is Errors.GroupAuthorizationFailedError:
+                future.failure(error)
+            else:
+                log.error("Unknown error fetching offsets: %s", error)
+                future.failure(error)
+            return
+
         offsets = {}
         for topic, partitions in response.topics:
-            for partition, offset, metadata, error_code in partitions:
+            for partition_data in partitions:
+                partition, offset = partition_data[:2]
+                if response.API_VERSION >= 5:
+                    leader_epoch, metadata, error_code = partition_data[2:]
+                else:
+                    metadata, error_code = partition_data[2:]
+                    leader_epoch = -1
                 tp = TopicPartition(topic, partition)
                 error_type = Errors.for_code(error_code)
                 if error_type is not Errors.NoError:
@@ -756,7 +825,7 @@ class ConsumerCoordinator(BaseCoordinator):
                         future.failure(error)
                     elif error_type is Errors.NotCoordinatorForGroupError:
                         # re-discover the coordinator and retry
-                        self.coordinator_dead(error_type())
+                        self.coordinator_dead(error)
                         future.failure(error)
                     elif error_type is Errors.UnknownTopicOrPartitionError:
                         log.warning("OffsetFetchRequest -- unknown topic %s"
@@ -771,7 +840,8 @@ class ConsumerCoordinator(BaseCoordinator):
                 elif offset >= 0:
                     # record the position with the offset
                     # (-1 indicates no committed offset to fetch)
-                    offsets[tp] = OffsetAndMetadata(offset, metadata)
+                    # TODO: save leader_epoch
+                    offsets[tp] = OffsetAndMetadata(offset, metadata, -1)
                 else:
                     log.debug("Group %s has no committed offset for partition"
                               " %s", self.group_id, tp)
@@ -804,7 +874,7 @@ class ConsumerCoordinator(BaseCoordinator):
 class ConsumerCoordinatorMetrics(object):
     def __init__(self, metrics, metric_group_prefix, subscription):
         self.metrics = metrics
-        self.metric_group_name = '%s-coordinator-metrics' % metric_group_prefix
+        self.metric_group_name = '%s-coordinator-metrics' % (metric_group_prefix,)
 
         self.commit_latency = metrics.sensor('commit-latency')
         self.commit_latency.add(metrics.metric_name(

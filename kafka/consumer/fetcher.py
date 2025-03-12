@@ -13,12 +13,12 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.fetch import FetchRequest
-from kafka.protocol.offset import (
-    OffsetRequest, OffsetResetStrategy, UNKNOWN_OFFSET
+from kafka.protocol.list_offsets import (
+    ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
-from kafka.structs import TopicPartition, OffsetAndTimestamp
+from kafka.structs import TopicPartition, OffsetAndMetadata, OffsetAndTimestamp
 
 log = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ READ_UNCOMMITTED = 0
 READ_COMMITTED = 1
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
-    ["topic", "partition", "offset", "timestamp", "timestamp_type",
-     "key", "value", "checksum", "serialized_key_size", "serialized_value_size"])
+    ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
+     "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
 
 
 CompletedFetch = collections.namedtuple("CompletedFetch",
@@ -55,11 +55,10 @@ class Fetcher(six.Iterator):
         'max_partition_fetch_bytes': 1048576,
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
-        'skip_double_compressed_messages': False,
         'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
-        'api_version': (0, 8, 0),
-        'retry_backoff_ms': 100
+        'retry_backoff_ms': 100,
+        'enable_incremental_fetch_sessions': True,
     }
 
     def __init__(self, client, subscriptions, metrics, **configs):
@@ -70,6 +69,8 @@ class Fetcher(six.Iterator):
                 raw message key and returns a deserialized key.
             value_deserializer (callable, optional): Any callable that takes a
                 raw message value and returns a deserialized value.
+            enable_incremental_fetch_sessions: (bool): Use incremental fetch sessions
+                when available / supported by kafka broker. See KIP-227. Default: True.
             fetch_min_bytes (int): Minimum amount of data the server should
                 return for a fetch request, otherwise wait up to
                 fetch_max_wait_ms for more data to accumulate. Default: 1.
@@ -98,13 +99,6 @@ class Fetcher(six.Iterator):
                 consumed. This ensures no on-the-wire or on-disk corruption to
                 the messages occurred. This check adds some overhead, so it may
                 be disabled in cases seeking extreme performance. Default: True
-            skip_double_compressed_messages (bool): A bug in KafkaProducer
-                caused some messages to be corrupted via double-compression.
-                By default, the fetcher will return the messages as a compressed
-                blob of bytes with a single offset, i.e. how the message was
-                actually published to the cluster. If you prefer to have the
-                fetcher automatically detect corrupt messages and skip them,
-                set this option to True. Default: False.
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -119,6 +113,7 @@ class Fetcher(six.Iterator):
         self._fetch_futures = collections.deque()
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
+        self._session_handlers = {}
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -128,12 +123,12 @@ class Fetcher(six.Iterator):
             List of Futures: each future resolves to a FetchResponse
         """
         futures = []
-        for node_id, request in six.iteritems(self._create_fetch_requests()):
+        for node_id, (request, fetch_offsets) in six.iteritems(self._create_fetch_requests()):
             if self._client.ready(node_id):
                 log.debug("Sending FetchRequest to node %s", node_id)
-                future = self._client.send(node_id, request)
-                future.add_callback(self._handle_fetch_response, request, time.time())
-                future.add_errback(log.error, 'Fetch to node %s failed: %s', node_id)
+                future = self._client.send(node_id, request, wakeup=False)
+                future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
+                future.add_errback(self._handle_fetch_error, node_id)
                 futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
@@ -193,7 +188,7 @@ class Fetcher(six.Iterator):
                 self._subscriptions.need_offset_reset(tp)
                 self._reset_offset(tp)
             else:
-                committed = self._subscriptions.assignment[tp].committed
+                committed = self._subscriptions.assignment[tp].committed.offset
                 log.debug("Resetting offset for partition %s to the committed"
                           " offset %s", tp, committed)
                 self._subscriptions.seek(tp, committed)
@@ -203,9 +198,6 @@ class Fetcher(six.Iterator):
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
-            else:
-                offset, timestamp = offsets[tp]
-                offsets[tp] = OffsetAndTimestamp(offset, timestamp)
         return offsets
 
     def beginning_offsets(self, partitions, timeout_ms):
@@ -220,7 +212,7 @@ class Fetcher(six.Iterator):
         timestamps = dict([(tp, timestamp) for tp in partitions])
         offsets = self._retrieve_offsets(timestamps, timeout_ms)
         for tp in timestamps:
-            offsets[tp] = offsets[tp][0]
+            offsets[tp] = offsets[tp].offset
         return offsets
 
     def _reset_offset(self, partition):
@@ -243,14 +235,16 @@ class Fetcher(six.Iterator):
         log.debug("Resetting offset for partition %s to %s offset.",
                   partition, strategy)
         offsets = self._retrieve_offsets({partition: timestamp})
-        if partition not in offsets:
-            raise NoOffsetForPartitionError(partition)
-        offset = offsets[partition][0]
 
-        # we might lose the assignment while fetching the offset,
-        # so check it is still active
-        if self._subscriptions.is_assigned(partition):
-            self._subscriptions.seek(partition, offset)
+        if partition in offsets:
+            offset = offsets[partition].offset
+
+            # we might lose the assignment while fetching the offset,
+            # so check it is still active
+            if self._subscriptions.is_assigned(partition):
+                self._subscriptions.seek(partition, offset)
+        else:
+            log.debug("Could not find offset for partition %s since it is probably deleted" % (partition,))
 
     def _retrieve_offsets(self, timestamps, timeout_ms=float("inf")):
         """Fetch offset for each partition passed in ``timestamps`` map.
@@ -261,11 +255,11 @@ class Fetcher(six.Iterator):
         Arguments:
             timestamps: {TopicPartition: int} dict with timestamps to fetch
                 offsets by. -1 for the latest available, -2 for the earliest
-                available. Otherwise timestamp is treated as epoch miliseconds.
+                available. Otherwise timestamp is treated as epoch milliseconds.
 
         Returns:
-            {TopicPartition: (int, int)}: Mapping of partition to
-                retrieved offset and timestamp. If offset does not exist for
+            {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
+                retrieved offset, timestamp, and leader_epoch. If offset does not exist for
                 the provided timestamp, that partition will be missing from
                 this mapping.
         """
@@ -274,8 +268,12 @@ class Fetcher(six.Iterator):
 
         start_time = time.time()
         remaining_ms = timeout_ms
+        timestamps = copy.copy(timestamps)
         while remaining_ms > 0:
-            future = self._send_offset_requests(timestamps)
+            if not timestamps:
+                return {}
+
+            future = self._send_list_offsets_requests(timestamps)
             self._client.poll(future=future, timeout_ms=remaining_ms)
 
             if future.succeeded():
@@ -291,6 +289,15 @@ class Fetcher(six.Iterator):
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
                 self._client.poll(future=refresh_future, timeout_ms=remaining_ms)
+
+                # Issue #1780
+                # Recheck partition existence after after a successful metadata refresh
+                if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
+                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existence")
+                    unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
+                    if self._client.cluster.leader_for_partition(unknown_partition) is None:
+                        log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
+                        timestamps.pop(unknown_partition)
             else:
                 time.sleep(self.config['retry_backoff_ms'] / 1000.0)
 
@@ -298,9 +305,9 @@ class Fetcher(six.Iterator):
             remaining_ms = timeout_ms - elapsed_ms
 
         raise Errors.KafkaTimeoutError(
-            "Failed to get offsets by timestamps in %s ms" % timeout_ms)
+            "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
 
-    def fetched_records(self, max_records=None):
+    def fetched_records(self, max_records=None, update_offsets=True):
         """Returns previously fetched records and updates consumed offsets.
 
         Arguments:
@@ -338,10 +345,11 @@ class Fetcher(six.Iterator):
             else:
                 records_remaining -= self._append(drained,
                                                   self._next_partition_records,
-                                                  records_remaining)
+                                                  records_remaining,
+                                                  update_offsets)
         return dict(drained), bool(self._completed_fetches)
 
-    def _append(self, drained, part, max_records):
+    def _append(self, drained, part, max_records, update_offsets):
         if not part:
             return 0
 
@@ -362,19 +370,22 @@ class Fetcher(six.Iterator):
                 log.debug("Not returning fetched records for assigned partition"
                           " %s since it is no longer fetchable", tp)
 
-            elif fetch_offset == position:
+            elif fetch_offset == position.offset:
                 # we are ensured to have at least one record since we already checked for emptiness
                 part_records = part.take(max_records)
                 next_offset = part_records[-1].offset + 1
+                leader_epoch = part_records[-1].leader_epoch
 
                 log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s and update position to %s", position,
-                           tp, next_offset)
+                           " partition %s and update position to %s (leader epoch %s)", position.offset,
+                           tp, next_offset, leader_epoch)
 
                 for record in part_records:
                     drained[tp].append(record)
 
-                self._subscriptions.assignment[tp].position = next_offset
+                if update_offsets:
+                    # TODO: save leader_epoch
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', -1)
                 return len(part_records)
 
             else:
@@ -382,7 +393,7 @@ class Fetcher(six.Iterator):
                 # position, ignore them they must be from an obsolete request
                 log.debug("Ignoring fetched records for %s at offset %s since"
                           " the current position is %d", tp, part.fetch_offset,
-                          position)
+                          position.offset)
 
         part.discard()
         return 0
@@ -403,10 +414,10 @@ class Fetcher(six.Iterator):
 
             tp = self._next_partition_records.topic_partition
 
-            # We can ignore any prior signal to drop pending message sets
+            # We can ignore any prior signal to drop pending record batches
             # because we are starting from a fresh one where fetch_offset == position
             # i.e., the user seek()'d to this position
-            self._subscriptions.assignment[tp].drop_pending_message_set = False
+            self._subscriptions.assignment[tp].drop_pending_record_batch = False
 
             for msg in self._next_partition_records.take():
 
@@ -422,31 +433,51 @@ class Fetcher(six.Iterator):
                     break
 
                 # If there is a seek during message iteration,
-                # we should stop unpacking this message set and
+                # we should stop unpacking this record batch and
                 # wait for a new fetch response that aligns with the
                 # new seek position
-                elif self._subscriptions.assignment[tp].drop_pending_message_set:
-                    log.debug("Skipping remainder of message set for partition %s", tp)
-                    self._subscriptions.assignment[tp].drop_pending_message_set = False
+                elif self._subscriptions.assignment[tp].drop_pending_record_batch:
+                    log.debug("Skipping remainder of record batch for partition %s", tp)
+                    self._subscriptions.assignment[tp].drop_pending_record_batch = False
                     self._next_partition_records = None
                     break
 
                 # Compressed messagesets may include earlier messages
-                elif msg.offset < self._subscriptions.assignment[tp].position:
+                elif msg.offset < self._subscriptions.assignment[tp].position.offset:
                     log.debug("Skipping message offset: %s (expecting %s)",
                               msg.offset,
-                              self._subscriptions.assignment[tp].position)
+                              self._subscriptions.assignment[tp].position.offset)
                     continue
 
-                self._subscriptions.assignment[tp].position = msg.offset + 1
+                self._subscriptions.assignment[tp].position = OffsetAndMetadata(msg.offset + 1, '', -1)
                 yield msg
 
             self._next_partition_records = None
 
-    def _unpack_message_set(self, tp, records):
+    def _unpack_records(self, tp, records):
         try:
             batch = records.next_batch()
             while batch is not None:
+
+                # Try DefaultsRecordBatch / message log format v2
+                # base_offset, last_offset_delta, and control batches
+                try:
+                    batch_offset = batch.base_offset + batch.last_offset_delta
+                    leader_epoch = batch.leader_epoch
+                    self._subscriptions.assignment[tp].last_offset_from_record_batch = batch_offset
+                    # Control batches have a single record indicating whether a transaction
+                    # was aborted or committed.
+                    # When isolation_level is READ_COMMITTED (currently unsupported)
+                    # we should also skip all messages from aborted transactions
+                    # For now we only support READ_UNCOMMITTED and so we ignore the
+                    # abort/commit signal.
+                    if batch.is_control_batch:
+                        batch = records.next_batch()
+                        continue
+                except AttributeError:
+                    leader_epoch = -1
+                    pass
+
                 for record in batch:
                     key_size = len(record.key) if record.key is not None else -1
                     value_size = len(record.value) if record.value is not None else -1
@@ -456,17 +487,21 @@ class Fetcher(six.Iterator):
                     value = self._deserialize(
                         self.config['value_deserializer'],
                         tp.topic, record.value)
+                    headers = record.headers
+                    header_size = sum(
+                        len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
+                        headers) if headers else -1
                     yield ConsumerRecord(
-                        tp.topic, tp.partition, record.offset, record.timestamp,
-                        record.timestamp_type, key, value, record.checksum,
-                        key_size, value_size)
+                        tp.topic, tp.partition, leader_epoch, record.offset, record.timestamp,
+                        record.timestamp_type, key, value, headers, record.checksum,
+                        key_size, value_size, header_size)
 
                 batch = records.next_batch()
 
         # If unpacking raises StopIteration, it is erroneously
         # caught by the generator. We want all exceptions to be raised
         # back to the user. See Issue 545
-        except StopIteration as e:
+        except StopIteration:
             log.exception('StopIteration raised unpacking messageset')
             raise RuntimeError('StopIteration raised unpacking messageset')
 
@@ -489,7 +524,7 @@ class Fetcher(six.Iterator):
             return f.deserialize(topic, bytes_)
         return f(bytes_)
 
-    def _send_offset_requests(self, timestamps):
+    def _send_list_offsets_requests(self, timestamps):
         """Fetch offsets for each partition in timestamps dict. This may send
         request to multiple nodes, based on who is Leader for partition.
 
@@ -514,7 +549,8 @@ class Fetcher(six.Iterator):
                 return Future().failure(
                     Errors.LeaderNotAvailableError(partition))
             else:
-                timestamps_by_node[node_id][partition] = timestamp
+                leader_epoch = -1
+                timestamps_by_node[node_id][partition] = (timestamp, leader_epoch)
 
         # Aggregate results until we have all
         list_offsets_future = Future()
@@ -534,24 +570,33 @@ class Fetcher(six.Iterator):
                 list_offsets_future.failure(err)
 
         for node_id, timestamps in six.iteritems(timestamps_by_node):
-            _f = self._send_offset_request(node_id, timestamps)
+            _f = self._send_list_offsets_request(node_id, timestamps)
             _f.add_callback(on_success)
             _f.add_errback(on_fail)
         return list_offsets_future
 
-    def _send_offset_request(self, node_id, timestamps):
+    def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
+        version = self._client.api_version(ListOffsetsRequest, max_version=4)
         by_topic = collections.defaultdict(list)
-        for tp, timestamp in six.iteritems(timestamps):
-            if self.config['api_version'] >= (0, 10, 1):
+        for tp, (timestamp, leader_epoch) in six.iteritems(timestamps_and_epochs):
+            if version >= 4:
+                data = (tp.partition, leader_epoch, timestamp)
+            elif version >= 1:
                 data = (tp.partition, timestamp)
             else:
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        if self.config['api_version'] >= (0, 10, 1):
-            request = OffsetRequest[1](-1, list(six.iteritems(by_topic)))
+        if version <= 1:
+            request = ListOffsetsRequest[version](
+                    -1,
+                    list(six.iteritems(by_topic)))
         else:
-            request = OffsetRequest[0](-1, list(six.iteritems(by_topic)))
+            request = ListOffsetsRequest[version](
+                    -1,
+                    self._isolation_level,
+                    list(six.iteritems(by_topic)))
+
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -559,16 +604,16 @@ class Fetcher(six.Iterator):
         future = Future()
 
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_offset_response, future)
+        _f.add_callback(self._handle_list_offsets_response, future)
         _f.add_errback(lambda e: future.failure(e))
         return future
 
-    def _handle_offset_response(self, future, response):
-        """Callback for the response of the list offset call above.
+    def _handle_list_offsets_response(self, future, response):
+        """Callback for the response of the ListOffsets api call
 
         Arguments:
             future (Future): the future to update based on response
-            response (OffsetResponse): response from the server
+            response (ListOffsetsResponse): response from the server
 
         Raises:
             AssertionError: if response does not match partition
@@ -582,43 +627,45 @@ class Fetcher(six.Iterator):
                 if error_type is Errors.NoError:
                     if response.API_VERSION == 0:
                         offsets = partition_info[2]
-                        assert len(offsets) <= 1, 'Expected OffsetResponse with one offset'
+                        assert len(offsets) <= 1, 'Expected ListOffsetsResponse with one offset'
                         if not offsets:
                             offset = UNKNOWN_OFFSET
                         else:
                             offset = offsets[0]
-                        log.debug("Handling v0 ListOffsetResponse response for %s. "
-                                  "Fetched offset %s", partition, offset)
-                        if offset != UNKNOWN_OFFSET:
-                            timestamp_offset_map[partition] = (offset, None)
-                    else:
+                        timestamp = None
+                        leader_epoch = -1
+                    elif response.API_VERSION <= 3:
                         timestamp, offset = partition_info[2:]
-                        log.debug("Handling ListOffsetResponse response for %s. "
-                                  "Fetched offset %s, timestamp %s",
-                                  partition, offset, timestamp)
-                        if offset != UNKNOWN_OFFSET:
-                            timestamp_offset_map[partition] = (offset, timestamp)
+                        leader_epoch = -1
+                    else:
+                        timestamp, offset, leader_epoch = partition_info[2:]
+                    log.debug("Handling ListOffsetsResponse response for %s. "
+                              "Fetched offset %s, timestamp %s, leader_epoch %s",
+                              partition, offset, timestamp, leader_epoch)
+                    if offset != UNKNOWN_OFFSET:
+                        timestamp_offset_map[partition] = OffsetAndTimestamp(offset, timestamp, leader_epoch)
                 elif error_type is Errors.UnsupportedForMessageFormatError:
                     # The message format on the broker side is before 0.10.0,
                     # we simply put None in the response.
                     log.debug("Cannot search by timestamp for partition %s because the"
                               " message format version is before 0.10.0", partition)
-                elif error_type is Errors.NotLeaderForPartitionError:
+                elif error_type in (Errors.NotLeaderForPartitionError,
+                                    Errors.ReplicaNotAvailableError,
+                                    Errors.KafkaStorageError):
                     log.debug("Attempt to fetch offsets for partition %s failed due"
-                              " to obsolete leadership information, retrying.",
-                              partition)
+                              " to %s, retrying.", error_type.__name__, partition)
                     future.failure(error_type(partition))
                     return
                 elif error_type is Errors.UnknownTopicOrPartitionError:
-                    log.warn("Received unknown topic or partition error in ListOffset "
-                             "request for partition %s. The topic/partition " +
-                             "may not exist or the user may not have Describe access "
-                             "to it.", partition)
+                    log.warning("Received unknown topic or partition error in ListOffsets "
+                                "request for partition %s. The topic/partition " +
+                                "may not exist or the user may not have Describe access "
+                                "to it.", partition)
                     future.failure(error_type(partition))
                     return
                 else:
                     log.warning("Attempt to fetch offsets for partition %s failed due to:"
-                                " %s", partition, error_type)
+                                " %s", partition, error_type.__name__)
                     future.failure(error_type(partition))
                     return
         if not future.is_done:
@@ -641,14 +688,26 @@ class Fetcher(six.Iterator):
         FetchRequests skipped if no leader, or node has requests in flight
 
         Returns:
-            dict: {node_id: FetchRequest, ...} (version depends on api_version)
+            dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...} (version depends on client api_versions)
         """
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
-        fetchable = collections.defaultdict(lambda: collections.defaultdict(list))
+        version = self._client.api_version(FetchRequest, max_version=10)
+        fetchable = collections.defaultdict(dict)
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
+
+            # advance position for any deleted compacted messages if required
+            if self._subscriptions.assignment[partition].last_offset_from_record_batch:
+                next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_record_batch + 1
+                if next_offset_from_batch_header > self._subscriptions.assignment[partition].position.offset:
+                    log.debug(
+                        "Advance position for partition %s from %s to %s (last record batch location plus one)"
+                        " to correct for deleted compacted messages and/or transactional control records",
+                        partition, self._subscriptions.assignment[partition].position.offset, next_offset_from_batch_header)
+                    self._subscriptions.assignment[partition].position = OffsetAndMetadata(next_offset_from_batch_header, '', -1)
+
             position = self._subscriptions.assignment[partition].position
 
             # fetch if there is a leader and no in-flight requests
@@ -657,71 +716,101 @@ class Fetcher(six.Iterator):
                           " Requesting metadata update", partition)
                 self._client.cluster.request_update()
 
-            elif self._client.in_flight_request_count(node_id) == 0:
-                partition_info = (
-                    partition.partition,
-                    position,
-                    self.config['max_partition_fetch_bytes']
-                )
-                fetchable[node_id][partition.topic].append(partition_info)
-                log.debug("Adding fetch request for partition %s at offset %d",
-                          partition, position)
-            else:
+            elif self._client.in_flight_request_count(node_id) > 0:
                 log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
                         partition, node_id)
+                continue
 
-        if self.config['api_version'] >= (0, 11, 0):
-            version = 4
-        elif self.config['api_version'] >= (0, 10, 1):
-            version = 3
-        elif self.config['api_version'] >= (0, 10):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+            if version < 5:
+                partition_info = (
+                    partition.partition,
+                    position.offset,
+                    self.config['max_partition_fetch_bytes']
+                )
+            elif version <= 8:
+                partition_info = (
+                    partition.partition,
+                    position.offset,
+                    -1, # log_start_offset is used internally by brokers / replicas only
+                    self.config['max_partition_fetch_bytes'],
+                )
+            else:
+                partition_info = (
+                    partition.partition,
+                    position.leader_epoch,
+                    position.offset,
+                    -1, # log_start_offset is used internally by brokers / replicas only
+                    self.config['max_partition_fetch_bytes'],
+                )
+
+            fetchable[node_id][partition] = partition_info
+            log.debug("Adding fetch request for partition %s at offset %d",
+                      partition, position.offset)
+
         requests = {}
-        for node_id, partition_data in six.iteritems(fetchable):
-            if version < 3:
-                requests[node_id] = FetchRequest[version](
+        for node_id, next_partitions in six.iteritems(fetchable):
+            if version >= 7 and self.config['enable_incremental_fetch_sessions']:
+                if node_id not in self._session_handlers:
+                    self._session_handlers[node_id] = FetchSessionHandler(node_id)
+                session = self._session_handlers[node_id].build_next(next_partitions)
+            else:
+                # No incremental fetch support
+                session = FetchRequestData(next_partitions, None, FetchMetadata.LEGACY)
+
+            if version <= 2:
+                request = FetchRequest[version](
                     -1,  # replica_id
                     self.config['fetch_max_wait_ms'],
                     self.config['fetch_min_bytes'],
-                    partition_data.items())
+                    session.to_send)
+            elif version == 3:
+                request = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    session.to_send)
+            elif version <= 6:
+                request = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    self._isolation_level,
+                    session.to_send)
             else:
-                # As of version == 3 partitions will be returned in order as
-                # they are requested, so to avoid starvation with
-                # `fetch_max_bytes` option we need this shuffle
-                # NOTE: we do have partition_data in random order due to usage
-                #       of unordered structures like dicts, but that does not
-                #       guarantee equal distribution, and starting in Python3.6
-                #       dicts retain insert order.
-                partition_data = list(partition_data.items())
-                random.shuffle(partition_data)
-                if version == 3:
-                    requests[node_id] = FetchRequest[version](
-                        -1,  # replica_id
-                        self.config['fetch_max_wait_ms'],
-                        self.config['fetch_min_bytes'],
-                        self.config['fetch_max_bytes'],
-                        partition_data)
+                # Through v8
+                request = FetchRequest[version](
+                    -1,  # replica_id
+                    self.config['fetch_max_wait_ms'],
+                    self.config['fetch_min_bytes'],
+                    self.config['fetch_max_bytes'],
+                    self._isolation_level,
+                    session.id,
+                    session.epoch,
+                    session.to_send,
+                    session.to_forget)
+
+            fetch_offsets = {}
+            for tp, partition_data in six.iteritems(next_partitions):
+                if version <= 8:
+                    offset = partition_data[1]
                 else:
-                    requests[node_id] = FetchRequest[version](
-                        -1,  # replica_id
-                        self.config['fetch_max_wait_ms'],
-                        self.config['fetch_min_bytes'],
-                        self.config['fetch_max_bytes'],
-                        self._isolation_level,
-                        partition_data)
+                    offset = partition_data[2]
+                fetch_offsets[tp] = offset
+
+            requests[node_id] = (request, fetch_offsets)
+
         return requests
 
-    def _handle_fetch_response(self, request, send_time, response):
+    def _handle_fetch_response(self, node_id, fetch_offsets, send_time, response):
         """The callback for fetch completion"""
-        fetch_offsets = {}
-        for topic, partitions in request.topics:
-            for partition_data in partitions:
-                partition, offset = partition_data[:2]
-                fetch_offsets[TopicPartition(topic, partition)] = offset
+        if response.API_VERSION >= 7 and self.config['enable_incremental_fetch_sessions']:
+            if node_id not in self._session_handlers:
+                log.error("Unable to find fetch session handler for node %s. Ignoring fetch response", node_id)
+                return
+            if not self._session_handlers[node_id].handle_response(response):
+                return
 
         partitions = set([TopicPartition(topic, partition_data[0])
                           for topic, partitions in response.topics
@@ -734,17 +823,22 @@ class Fetcher(six.Iterator):
             random.shuffle(partitions)
             for partition_data in partitions:
                 tp = TopicPartition(topic, partition_data[0])
+                fetch_offset = fetch_offsets[tp]
                 completed_fetch = CompletedFetch(
-                    tp, fetch_offsets[tp],
+                    tp, fetch_offset,
                     response.API_VERSION,
                     partition_data[1:],
                     metric_aggregator
                 )
                 self._completed_fetches.append(completed_fetch)
 
-        if response.API_VERSION >= 1:
-            self._sensors.fetch_throttle_time_sensor.record(response.throttle_time_ms)
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+
+    def _handle_fetch_error(self, node_id, exception):
+        level = logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR
+        log.log(level, 'Fetch to node %s failed: %s', node_id, exception)
+        if node_id in self._session_handlers:
+            self._session_handlers[node_id].handle_error(exception)
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
@@ -771,22 +865,23 @@ class Fetcher(six.Iterator):
                 # Note that the *response* may return a messageset that starts
                 # earlier (e.g., compressed messages) or later (e.g., compacted topic)
                 position = self._subscriptions.assignment[tp].position
-                if position is None or position != fetch_offset:
+                if position is None or position.offset != fetch_offset:
                     log.debug("Discarding fetch response for partition %s"
                               " since its offset %d does not match the"
                               " expected offset %d", tp, fetch_offset,
-                              position)
+                              position.offset)
                     return None
 
                 records = MemoryRecords(completed_fetch.partition_data[-1])
                 if records.has_next():
                     log.debug("Adding fetched record for partition %s with"
                               " offset %d to buffered record list", tp,
-                              position)
-                    unpacked = list(self._unpack_message_set(tp, records))
+                              position.offset)
+                    unpacked = list(self._unpack_records(tp, records))
                     parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
-                    last_offset = unpacked[-1].offset
-                    self._sensors.records_fetch_lag.record(highwater - last_offset)
+                    if unpacked:
+                        last_offset = unpacked[-1].offset
+                        self._sensors.records_fetch_lag.record(highwater - last_offset)
                     num_bytes = records.valid_bytes()
                     records_count = len(unpacked)
                 elif records.size_in_bytes() > 0:
@@ -806,14 +901,17 @@ class Fetcher(six.Iterator):
                 self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
 
             elif error_type in (Errors.NotLeaderForPartitionError,
-                                Errors.UnknownTopicOrPartitionError):
+                                Errors.ReplicaNotAvailableError,
+                                Errors.UnknownTopicOrPartitionError,
+                                Errors.KafkaStorageError):
+                log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
                 self._client.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:
                 position = self._subscriptions.assignment[tp].position
-                if position is None or position != fetch_offset:
+                if position is None or position.offset != fetch_offset:
                     log.debug("Discarding stale fetch response for partition %s"
                               " since the fetched offset %d does not match the"
-                              " current offset %d", tp, fetch_offset, position)
+                              " current offset %d", tp, fetch_offset, position.offset)
                 elif self._subscriptions.has_default_offset_reset_policy():
                     log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
                     self._subscriptions.need_offset_reset(tp)
@@ -821,10 +919,12 @@ class Fetcher(six.Iterator):
                     raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
 
             elif error_type is Errors.TopicAuthorizationFailedError:
-                log.warn("Not authorized to read from topic %s.", tp.topic)
+                log.warning("Not authorized to read from topic %s.", tp.topic)
                 raise Errors.TopicAuthorizationFailedError(set(tp.topic))
-            elif error_type is Errors.UnknownError:
-                log.warn("Unknown error fetching data for topic-partition %s", tp)
+            elif error_type.is_retriable:
+                log.debug("Retriable error fetching partition %s: %s", tp, error_type())
+                if error_type.invalid_metadata:
+                    self._client.cluster.request_update()
             else:
                 raise error_type('Unexpected error while fetching data')
 
@@ -877,6 +977,212 @@ class Fetcher(six.Iterator):
             return res
 
 
+class FetchSessionHandler(object):
+    """
+    FetchSessionHandler maintains the fetch session state for connecting to a broker.
+
+    Using the protocol outlined by KIP-227, clients can create incremental fetch sessions.
+    These sessions allow the client to fetch information about a set of partition over
+    and over, without explicitly enumerating all the partitions in the request and the
+    response.
+
+    FetchSessionHandler tracks the partitions which are in the session.  It also
+    determines which partitions need to be included in each fetch request, and what
+    the attached fetch session metadata should be for each request.
+    """
+
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.next_metadata = FetchMetadata.INITIAL
+        self.session_partitions = {}
+
+    def build_next(self, next_partitions):
+        if self.next_metadata.is_full:
+            log.debug("Built full fetch %s for node %s with %s partition(s).",
+                self.next_metadata, self.node_id, len(next_partitions))
+            self.session_partitions = next_partitions
+            return FetchRequestData(next_partitions, None, self.next_metadata)
+
+        prev_tps = set(self.session_partitions.keys())
+        next_tps = set(next_partitions.keys())
+        log.debug("Building incremental partitions from next: %s, previous: %s", next_tps, prev_tps)
+        added = next_tps - prev_tps
+        for tp in added:
+            self.session_partitions[tp] = next_partitions[tp]
+        removed = prev_tps - next_tps
+        for tp in removed:
+            self.session_partitions.pop(tp)
+        altered = set()
+        for tp in next_tps & prev_tps:
+            if next_partitions[tp] != self.session_partitions[tp]:
+                self.session_partitions[tp] = next_partitions[tp]
+                altered.add(tp)
+
+        log.debug("Built incremental fetch %s for node %s. Added %s, altered %s, removed %s out of %s",
+                self.next_metadata, self.node_id, added, altered, removed, self.session_partitions.keys())
+        to_send = {tp: next_partitions[tp] for tp in (added | altered)}
+        return FetchRequestData(to_send, removed, self.next_metadata)
+
+    def handle_response(self, response):
+        if response.error_code != Errors.NoError.errno:
+            error_type = Errors.for_code(response.error_code)
+            log.info("Node %s was unable to process the fetch request with %s: %s.",
+                self.node_id, self.next_metadata, error_type())
+            if error_type is Errors.FetchSessionIdNotFoundError:
+                self.next_metadata = FetchMetadata.INITIAL
+            else:
+                self.next_metadata = self.next_metadata.next_close_existing()
+            return False
+
+        response_tps = self._response_partitions(response)
+        session_tps = set(self.session_partitions.keys())
+        if self.next_metadata.is_full:
+            if response_tps != session_tps:
+                log.info("Node %s sent an invalid full fetch response with extra %s / omitted %s",
+                         self.node_id, response_tps - session_tps, session_tps - response_tps)
+                self.next_metadata = FetchMetadata.INITIAL
+                return False
+            elif response.session_id == FetchMetadata.INVALID_SESSION_ID:
+                log.debug("Node %s sent a full fetch response with %s partitions",
+                          self.node_id, len(response_tps))
+                self.next_metadata = FetchMetadata.INITIAL
+                return True
+            elif response.session_id == FetchMetadata.THROTTLED_SESSION_ID:
+                log.debug("Node %s sent a empty full fetch response due to a quota violation (%s partitions)",
+                          self.node_id, len(response_tps))
+                # Keep current metadata
+                return True
+            else:
+                # The server created a new incremental fetch session.
+                log.debug("Node %s sent a full fetch response that created a new incremental fetch session %s"
+                          " with %s response partitions",
+                          self.node_id, response.session_id,
+                          len(response_tps))
+                self.next_metadata = FetchMetadata.new_incremental(response.session_id)
+                return True
+        else:
+            if response_tps - session_tps:
+                log.info("Node %s sent an invalid incremental fetch response with extra partitions %s",
+                         self.node_id, response_tps - session_tps)
+                self.next_metadata = self.next_metadata.next_close_existing()
+                return False
+            elif response.session_id == FetchMetadata.INVALID_SESSION_ID:
+                # The incremental fetch session was closed by the server.
+                log.debug("Node %s sent an incremental fetch response closing session %s"
+                          " with %s response partitions (%s implied)",
+                          self.node_id, self.next_metadata.session_id,
+                          len(response_tps), len(self.session_partitions) - len(response_tps))
+                self.next_metadata = FetchMetadata.INITIAL
+                return True
+            elif response.session_id == FetchMetadata.THROTTLED_SESSION_ID:
+                log.debug("Node %s sent a empty incremental fetch response due to a quota violation (%s partitions)",
+                          self.node_id, len(response_tps))
+                # Keep current metadata
+                return True
+            else:
+                # The incremental fetch session was continued by the server.
+                log.debug("Node %s sent an incremental fetch response for session %s"
+                          " with %s response partitions (%s implied)",
+                          self.node_id, response.session_id,
+                          len(response_tps), len(self.session_partitions) - len(response_tps))
+                self.next_metadata = self.next_metadata.next_incremental()
+                return True
+
+    def handle_error(self, _exception):
+        self.next_metadata = self.next_metadata.next_close_existing()
+
+    def _response_partitions(self, response):
+        return {TopicPartition(topic, partition_data[0])
+                for topic, partitions in response.topics
+                for partition_data in partitions}
+
+
+class FetchMetadata(object):
+    __slots__ = ('session_id', 'epoch')
+
+    MAX_EPOCH = 2147483647
+    INVALID_SESSION_ID = 0 # used by clients with no session.
+    THROTTLED_SESSION_ID = -1 # returned with empty response on quota violation
+    INITIAL_EPOCH = 0 # client wants to create or recreate a session.
+    FINAL_EPOCH = -1 # client wants to close any existing session, and not create a new one.
+
+    def __init__(self, session_id, epoch):
+        self.session_id = session_id
+        self.epoch = epoch
+
+    @property
+    def is_full(self):
+        return self.epoch == self.INITIAL_EPOCH or self.epoch == self.FINAL_EPOCH
+
+    @classmethod
+    def next_epoch(cls, prev_epoch):
+        if prev_epoch < 0:
+            return cls.FINAL_EPOCH
+        elif prev_epoch == cls.MAX_EPOCH:
+            return 1
+        else:
+            return prev_epoch + 1
+
+    def next_close_existing(self):
+        return self.__class__(self.session_id, self.INITIAL_EPOCH)
+
+    @classmethod
+    def new_incremental(cls, session_id):
+        return cls(session_id, cls.next_epoch(cls.INITIAL_EPOCH))
+
+    def next_incremental(self):
+        return self.__class__(self.session_id, self.next_epoch(self.epoch))
+
+FetchMetadata.INITIAL = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMetadata.INITIAL_EPOCH)
+FetchMetadata.LEGACY = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMetadata.FINAL_EPOCH)
+
+
+class FetchRequestData(object):
+    __slots__ = ('_to_send', '_to_forget', '_metadata')
+
+    def __init__(self, to_send, to_forget, metadata):
+        self._to_send = to_send or dict() # {TopicPartition: (partition, ...)}
+        self._to_forget = to_forget or set() # {TopicPartition}
+        self._metadata = metadata
+
+    @property
+    def metadata(self):
+        return self._metadata
+
+    @property
+    def id(self):
+        return self._metadata.session_id
+
+    @property
+    def epoch(self):
+        return self._metadata.epoch
+
+    @property
+    def to_send(self):
+        # Return as list of [(topic, [(partition, ...), ...]), ...]
+        # so it an be passed directly to encoder
+        partition_data = collections.defaultdict(list)
+        for tp, partition_info in six.iteritems(self._to_send):
+            partition_data[tp.topic].append(partition_info)
+        # As of version == 3 partitions will be returned in order as
+        # they are requested, so to avoid starvation with
+        # `fetch_max_bytes` option we need this shuffle
+        # NOTE: we do have partition_data in random order due to usage
+        #       of unordered structures like dicts, but that does not
+        #       guarantee equal distribution, and starting in Python3.6
+        #       dicts retain insert order.
+        return random.sample(list(partition_data.items()), k=len(partition_data))
+
+    @property
+    def to_forget(self):
+        # Return as list of [(topic, (partiiton, ...)), ...]
+        # so it an be passed directly to encoder
+        partition_data = collections.defaultdict(list)
+        for tp in self._to_forget:
+            partition_data[tp.topic].append(tp.partition)
+        return list(partition_data.items())
+
+
 class FetchResponseMetricAggregator(object):
     """
     Since we parse the message data for each partition from each fetch
@@ -909,7 +1215,7 @@ class FetchResponseMetricAggregator(object):
 class FetchManagerMetrics(object):
     def __init__(self, metrics, prefix):
         self.metrics = metrics
-        self.group_name = '%s-fetch-manager-metrics' % prefix
+        self.group_name = '%s-fetch-manager-metrics' % (prefix,)
 
         self.bytes_fetched = metrics.sensor('bytes-fetched')
         self.bytes_fetched.add(metrics.metric_name('fetch-size-avg', self.group_name,
@@ -937,12 +1243,6 @@ class FetchManagerMetrics(object):
         self.records_fetch_lag.add(metrics.metric_name('records-lag-max', self.group_name,
             'The maximum lag in terms of number of records for any partition in self window'), Max())
 
-        self.fetch_throttle_time_sensor = metrics.sensor('fetch-throttle-time')
-        self.fetch_throttle_time_sensor.add(metrics.metric_name('fetch-throttle-time-avg', self.group_name,
-            'The average throttle time in ms'), Avg())
-        self.fetch_throttle_time_sensor.add(metrics.metric_name('fetch-throttle-time-max', self.group_name,
-            'The maximum throttle time in ms'), Max())
-
     def record_topic_fetch_metrics(self, topic, num_bytes, num_records):
         # record bytes fetched
         name = '.'.join(['topic', topic, 'bytes-fetched'])
@@ -953,15 +1253,15 @@ class FetchManagerMetrics(object):
             bytes_fetched = self.metrics.sensor(name)
             bytes_fetched.add(self.metrics.metric_name('fetch-size-avg',
                     self.group_name,
-                    'The average number of bytes fetched per request for topic %s' % topic,
+                    'The average number of bytes fetched per request for topic %s' % (topic,),
                     metric_tags), Avg())
             bytes_fetched.add(self.metrics.metric_name('fetch-size-max',
                     self.group_name,
-                    'The maximum number of bytes fetched per request for topic %s' % topic,
+                    'The maximum number of bytes fetched per request for topic %s' % (topic,),
                     metric_tags), Max())
             bytes_fetched.add(self.metrics.metric_name('bytes-consumed-rate',
                     self.group_name,
-                    'The average number of bytes consumed per second for topic %s' % topic,
+                    'The average number of bytes consumed per second for topic %s' % (topic,),
                     metric_tags), Rate())
         bytes_fetched.record(num_bytes)
 
@@ -974,10 +1274,10 @@ class FetchManagerMetrics(object):
             records_fetched = self.metrics.sensor(name)
             records_fetched.add(self.metrics.metric_name('records-per-request-avg',
                     self.group_name,
-                    'The average number of records in each request for topic %s' % topic,
+                    'The average number of records in each request for topic %s' % (topic,),
                     metric_tags), Avg())
             records_fetched.add(self.metrics.metric_name('records-consumed-rate',
                     self.group_name,
-                    'The average number of records consumed per second for topic %s' % topic,
+                    'The average number of records consumed per second for topic %s' % (topic,),
                     metric_tags), Rate())
         records_fetched.record(num_records)

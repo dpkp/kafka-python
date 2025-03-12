@@ -128,6 +128,42 @@ class MetadataResponse_v5(Response):
     )
 
 
+class MetadataResponse_v6(Response):
+    """Metadata Request/Response v6 is the same as v5,
+    but on quota violation, brokers send out responses before throttling."""
+    API_KEY = 3
+    API_VERSION = 6
+    SCHEMA = MetadataResponse_v5.SCHEMA
+
+
+class MetadataResponse_v7(Response):
+    """v7 adds per-partition leader_epoch field"""
+    API_KEY = 3
+    API_VERSION = 7
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('brokers', Array(
+            ('node_id', Int32),
+            ('host', String('utf-8')),
+            ('port', Int32),
+            ('rack', String('utf-8')))),
+        ('cluster_id', String('utf-8')),
+        ('controller_id', Int32),
+        ('topics', Array(
+            ('error_code', Int16),
+            ('topic', String('utf-8')),
+            ('is_internal', Boolean),
+            ('partitions', Array(
+                ('error_code', Int16),
+                ('partition', Int32),
+                ('leader', Int32),
+                ('leader_epoch', Int32),
+                ('replicas', Array(Int32)),
+                ('isr', Array(Int32)),
+                ('offline_replicas', Array(Int32))))))
+    )
+
+
 class MetadataRequest_v0(Request):
     API_KEY = 3
     API_VERSION = 0
@@ -135,7 +171,7 @@ class MetadataRequest_v0(Request):
     SCHEMA = Schema(
         ('topics', Array(String('utf-8')))
     )
-    ALL_TOPICS = None  # Empty Array (len 0) for topics returns all topics
+    ALL_TOPICS = [] # Empty Array (len 0) for topics returns all topics
 
 
 class MetadataRequest_v1(Request):
@@ -143,8 +179,8 @@ class MetadataRequest_v1(Request):
     API_VERSION = 1
     RESPONSE_TYPE = MetadataResponse_v1
     SCHEMA = MetadataRequest_v0.SCHEMA
-    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
-    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
+    ALL_TOPICS = None # Null Array (len -1) for topics returns all topics
+    NO_TOPICS = [] # Empty array (len 0) for topics returns no topics
 
 
 class MetadataRequest_v2(Request):
@@ -152,8 +188,8 @@ class MetadataRequest_v2(Request):
     API_VERSION = 2
     RESPONSE_TYPE = MetadataResponse_v2
     SCHEMA = MetadataRequest_v1.SCHEMA
-    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
-    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
+    ALL_TOPICS = None
+    NO_TOPICS = []
 
 
 class MetadataRequest_v3(Request):
@@ -161,8 +197,8 @@ class MetadataRequest_v3(Request):
     API_VERSION = 3
     RESPONSE_TYPE = MetadataResponse_v3
     SCHEMA = MetadataRequest_v1.SCHEMA
-    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
-    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
+    ALL_TOPICS = None
+    NO_TOPICS = []
 
 
 class MetadataRequest_v4(Request):
@@ -173,8 +209,8 @@ class MetadataRequest_v4(Request):
         ('topics', Array(String('utf-8'))),
         ('allow_auto_topic_creation', Boolean)
     )
-    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
-    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
+    ALL_TOPICS = None
+    NO_TOPICS = []
 
 
 class MetadataRequest_v5(Request):
@@ -186,15 +222,35 @@ class MetadataRequest_v5(Request):
     API_VERSION = 5
     RESPONSE_TYPE = MetadataResponse_v5
     SCHEMA = MetadataRequest_v4.SCHEMA
-    ALL_TOPICS = -1  # Null Array (len -1) for topics returns all topics
-    NO_TOPICS = None  # Empty array (len 0) for topics returns no topics
+    ALL_TOPICS = None
+    NO_TOPICS = []
+
+
+class MetadataRequest_v6(Request):
+    API_KEY = 3
+    API_VERSION = 6
+    RESPONSE_TYPE = MetadataResponse_v6
+    SCHEMA = MetadataRequest_v5.SCHEMA
+    ALL_TOPICS = None
+    NO_TOPICS = []
+
+
+class MetadataRequest_v7(Request):
+    API_KEY = 3
+    API_VERSION = 7
+    RESPONSE_TYPE = MetadataResponse_v7
+    SCHEMA = MetadataRequest_v6.SCHEMA
+    ALL_TOPICS = None
+    NO_TOPICS = []
 
 
 MetadataRequest = [
     MetadataRequest_v0, MetadataRequest_v1, MetadataRequest_v2,
-    MetadataRequest_v3, MetadataRequest_v4, MetadataRequest_v5
+    MetadataRequest_v3, MetadataRequest_v4, MetadataRequest_v5,
+    MetadataRequest_v6, MetadataRequest_v7,
 ]
 MetadataResponse = [
     MetadataResponse_v0, MetadataResponse_v1, MetadataResponse_v2,
-    MetadataResponse_v3, MetadataResponse_v4, MetadataResponse_v5
+    MetadataResponse_v3, MetadataResponse_v4, MetadataResponse_v5,
+    MetadataResponse_v6, MetadataResponse_v7,
 ]

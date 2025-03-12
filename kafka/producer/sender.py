@@ -31,7 +31,6 @@ class Sender(threading.Thread):
         'request_timeout_ms': 30000,
         'guarantee_message_order': False,
         'client_id': 'kafka-python-' + __version__,
-        'api_version': (0, 8, 0),
     }
 
     def __init__(self, client, metadata, accumulator, metrics, **configs):
@@ -103,13 +102,14 @@ class Sender(threading.Thread):
             self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
-        not_ready_timeout = float('inf')
+        not_ready_timeout_ms = float('inf')
         for node in list(ready_nodes):
-            if not self._client.ready(node):
-                log.debug('Node %s not ready; delaying produce of accumulated batch', node)
+            if not self._client.is_ready(node):
+                node_delay_ms = self._client.connection_delay(node)
+                log.debug('Node %s not ready; delaying produce of accumulated batch (%f ms)', node, node_delay_ms)
+                self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
-                not_ready_timeout = min(not_ready_timeout,
-                                        self._client.connection_delay(node))
+                not_ready_timeout_ms = min(not_ready_timeout_ms, node_delay_ms)
 
         # create produce requests
         batches_by_node = self._accumulator.drain(
@@ -135,7 +135,7 @@ class Sender(threading.Thread):
         # off). Note that this specifically does not include nodes with
         # sendable data that aren't ready to send since they would cause busy
         # looping.
-        poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout)
+        poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout_ms)
         if ready_nodes:
             log.debug("Nodes with data ready to send: %s", ready_nodes) # trace
             log.debug("Created %d produce requests: %s", len(requests), requests) # trace
@@ -144,7 +144,7 @@ class Sender(threading.Thread):
         for node_id, request in six.iteritems(requests):
             batches = batches_by_node[node_id]
             log.debug('Sending Produce Request: %r', request)
-            (self._client.send(node_id, request)
+            (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
                      self._handle_produce_response, node_id, time.time(), batches)
                  .add_errback(
@@ -156,7 +156,7 @@ class Sender(threading.Thread):
         # difference between now and its linger expiry time; otherwise the
         # select time will be the time difference between now and the
         # metadata expiry time
-        self._client.poll(poll_timeout_ms)
+        self._client.poll(timeout_ms=poll_timeout_ms)
 
     def initiate_close(self):
         """Start closing the sender (won't complete until all data is sent)."""
@@ -180,7 +180,7 @@ class Sender(threading.Thread):
             self.wakeup()
 
     def _failed_produce(self, batches, node_id, error):
-        log.debug("Error sending produce request to node %d: %s", node_id, error) # trace
+        log.error("Error sending produce request to node %d: %s", node_id, error) # trace
         for batch in batches:
             self._complete_batch(batch, error, -1, None)
 
@@ -194,25 +194,29 @@ class Sender(threading.Thread):
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
+                    global_error = None
+                    log_start_offset = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
-                    else:
+                    elif 2 <= response.API_VERSION <= 4:
                         partition, error_code, offset, ts = partition_info
+                    elif 5 <= response.API_VERSION <= 7:
+                        partition, error_code, offset, ts, log_start_offset = partition_info
+                    else:
+                        # the ignored parameter is record_error of type list[(batch_index: int, error_message: str)]
+                        partition, error_code, offset, ts, log_start_offset, _, global_error = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, ts)
-
-            if response.API_VERSION > 0:
-                self._sensors.record_throttle_time(response.throttle_time_ms, node=node_id)
+                    self._complete_batch(batch, error, offset, ts, log_start_offset, global_error)
 
         else:
             # this is the acks = 0 case, just complete all requests
             for batch in batches:
                 self._complete_batch(batch, None, -1, None)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None, global_error=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -220,6 +224,8 @@ class Sender(threading.Thread):
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
+            log_start_offset (int): The start offset of the log at the time this produce response was created
+            global_error (str): The summarising error message
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -231,7 +237,7 @@ class Sender(threading.Thread):
                         " retrying (%d attempts left). Error: %s",
                         batch.topic_partition,
                         self.config['retries'] - batch.attempts - 1,
-                        error)
+                        global_error or error)
             self._accumulator.reenqueue(batch)
             self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
         else:
@@ -239,7 +245,7 @@ class Sender(threading.Thread):
                 error = error(batch.topic_partition.topic)
 
             # tell the user the result of their request
-            batch.done(base_offset, timestamp_ms, error)
+            batch.done(base_offset, timestamp_ms, error, log_start_offset, global_error)
             self._accumulator.deallocate(batch)
             if error is not None:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
@@ -268,7 +274,7 @@ class Sender(threading.Thread):
             collated: {node_id: [RecordBatch]}
 
         Returns:
-            dict: {node_id: ProduceRequest} (version depends on api_version)
+            dict: {node_id: ProduceRequest} (version depends on client api_versions)
         """
         requests = {}
         for node_id, batches in six.iteritems(collated):
@@ -281,7 +287,7 @@ class Sender(threading.Thread):
         """Create a produce request from the given record batches.
 
         Returns:
-            ProduceRequest (version depends on api_version)
+            ProduceRequest (version depends on client api_versions)
         """
         produce_records_by_partition = collections.defaultdict(dict)
         for batch in batches:
@@ -291,28 +297,22 @@ class Sender(threading.Thread):
             buf = batch.records.buffer()
             produce_records_by_partition[topic][partition] = buf
 
-        kwargs = {}
-        if self.config['api_version'] >= (0, 11):
-            version = 3
-            kwargs = dict(transactional_id=None)
-        elif self.config['api_version'] >= (0, 10):
-            version = 2
-        elif self.config['api_version'] == (0, 9):
-            version = 1
-        else:
-            version = 0
+        version = self._client.api_version(ProduceRequest, max_version=7)
+        # TODO: support transactional_id
         return ProduceRequest[version](
             required_acks=acks,
             timeout=timeout,
             topics=[(topic, list(partition_info.items()))
                     for topic, partition_info
                     in six.iteritems(produce_records_by_partition)],
-            **kwargs
         )
 
     def wakeup(self):
         """Wake up the selector associated with this send thread."""
         self._client.wakeup()
+
+    def bootstrap_connected(self):
+        return self._client.bootstrap_connected()
 
 
 class SenderMetrics(object):
@@ -345,15 +345,6 @@ class SenderMetrics(object):
         self.add_metric('record-queue-time-max', Max(),
                         sensor_name=sensor_name,
                         description='The maximum time in ms record batches spent in the record accumulator.')
-
-        sensor_name = 'produce-throttle-time'
-        self.produce_throttle_time_sensor = self.metrics.sensor(sensor_name)
-        self.add_metric('produce-throttle-time-avg', Avg(),
-                        sensor_name=sensor_name,
-                        description='The average throttle time in ms')
-        self.add_metric('produce-throttle-time-max', Max(),
-                        sensor_name=sensor_name,
-                        description='The maximum throttle time in ms')
 
         sensor_name = 'records-per-request'
         self.records_per_request_sensor = self.metrics.sensor(sensor_name)
@@ -491,6 +482,3 @@ class SenderMetrics(object):
         sensor = self.metrics.get_sensor('topic.' + topic + '.record-errors')
         if sensor:
             sensor.record(count)
-
-    def record_throttle_time(self, throttle_time_ms, node=None):
-        self.produce_throttle_time_sensor.record(throttle_time_ms)

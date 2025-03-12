@@ -9,6 +9,8 @@ import sys
 import threading
 import traceback
 
+from kafka.vendor.six.moves import range
+
 from kafka import KafkaProducer
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
@@ -24,7 +26,7 @@ def start_brokers(n):
     replicas = min(n, 3)
     print('-> {0} Brokers [{1} partitions / {2} replicas]'.format(n, partitions, replicas))
     brokers = [
-        KafkaFixture.instance(i, zk.host, zk.port, zk_chroot='',
+        KafkaFixture.instance(i, zk, zk_chroot='',
                               partitions=partitions, replicas=replicas)
         for i in range(n)
     ]
@@ -77,7 +79,7 @@ class ProducerPerformance(object):
             print('-> OK!')
             print()
 
-            for i in xrange(args.num_records):
+            for i in range(args.num_records):
                 producer.send(topic=args.topic, value=record)
             producer.flush()
 
@@ -128,7 +130,7 @@ def get_args_parser():
         help='Topic name for test',
         default='kafka-python-benchmark-test')
     parser.add_argument(
-        '--num-records', type=long,
+        '--num-records', type=int,
         help='number of messages to produce',
         default=1000000)
     parser.add_argument(

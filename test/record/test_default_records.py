@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 import pytest
+try:
+    from unittest.mock import patch
+except ImportError:
+    from mock import patch
+import kafka.codec
 from kafka.record.default_records import (
     DefaultRecordBatch, DefaultRecordBatchBuilder
 )
+from kafka.errors import UnsupportedCodecError
 
 
 @pytest.mark.parametrize("compression_type", [
@@ -17,7 +23,7 @@ def test_read_write_serde_v2(compression_type):
         magic=2, compression_type=compression_type, is_transactional=1,
         producer_id=123456, producer_epoch=123, base_sequence=9999,
         batch_size=999999)
-    headers = []  # [("header1", b"aaa"), ("header2", b"bbb")]
+    headers = [("header1", b"aaa"), ("header2", b"bbb")]
     for offset in range(10):
         builder.append(
             offset, timestamp=9999999, key=b"test", value=b"Super",
@@ -116,8 +122,12 @@ def test_default_batch_builder_validates_arguments():
     builder.append(
         5, timestamp=9999999, key=b"123", value=None, headers=[])
 
+    # Check record with headers
+    builder.append(
+        6, timestamp=9999999, key=b"234", value=None, headers=[("hkey", b"hval")])
+
     # in case error handling code fails to fix inner buffer in builder
-    assert len(builder.build()) == 104
+    assert len(builder.build()) == 124
 
 
 def test_default_correct_metadata_response():
@@ -167,3 +177,35 @@ def test_default_batch_size_limit():
         2, timestamp=None, key=None, value=b"M" * 700, headers=[])
     assert meta is None
     assert len(builder.build()) < 1000
+
+
+@pytest.mark.parametrize("compression_type,name,checker_name", [
+    (DefaultRecordBatch.CODEC_GZIP, "gzip", "has_gzip"),
+    (DefaultRecordBatch.CODEC_SNAPPY, "snappy", "has_snappy"),
+    (DefaultRecordBatch.CODEC_LZ4, "lz4", "has_lz4")
+])
+@pytest.mark.parametrize("magic", [0, 1])
+def test_unavailable_codec(magic, compression_type, name, checker_name):
+    builder = DefaultRecordBatchBuilder(
+        magic=2, compression_type=compression_type, is_transactional=0,
+        producer_id=-1, producer_epoch=-1, base_sequence=-1,
+        batch_size=1024)
+    builder.append(0, timestamp=None, key=None, value=b"M" * 2000, headers=[])
+    correct_buffer = builder.build()
+
+    with patch.object(kafka.codec, checker_name) as mocked:
+        mocked.return_value = False
+        # Check that builder raises error
+        builder = DefaultRecordBatchBuilder(
+            magic=2, compression_type=compression_type, is_transactional=0,
+            producer_id=-1, producer_epoch=-1, base_sequence=-1,
+            batch_size=1024)
+        error_msg = "Libraries for {} compression codec not found".format(name)
+        with pytest.raises(UnsupportedCodecError, match=error_msg):
+            builder.append(0, timestamp=None, key=None, value=b"M", headers=[])
+            builder.build()
+
+        # Check that reader raises same error
+        batch = DefaultRecordBatch(bytes(correct_buffer))
+        with pytest.raises(UnsupportedCodecError, match=error_msg):
+            list(batch)

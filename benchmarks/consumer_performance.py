@@ -10,6 +10,8 @@ import sys
 import threading
 import traceback
 
+from kafka.vendor.six.moves import range
+
 from kafka import KafkaConsumer, KafkaProducer
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
@@ -27,7 +29,7 @@ def start_brokers(n):
     replicas = min(n, 3)
     print('-> {0} Brokers [{1} partitions / {2} replicas]'.format(n, partitions, replicas))
     brokers = [
-        KafkaFixture.instance(i, zk.host, zk.port, zk_chroot='',
+        KafkaFixture.instance(i, zk, zk_chroot='',
                               partitions=partitions, replicas=replicas)
         for i in range(n)
     ]
@@ -64,7 +66,7 @@ class ConsumerPerformance(object):
                 record = bytes(bytearray(args.record_size))
                 producer = KafkaProducer(compression_type=args.fixture_compression,
                                          **props)
-                for i in xrange(args.num_records):
+                for i in range(args.num_records):
                     producer.send(topic=args.topic, value=record)
                 producer.flush()
                 producer.close()
@@ -146,7 +148,7 @@ def get_args_parser():
         help='Topic for consumer test',
         default='kafka-python-benchmark-test')
     parser.add_argument(
-        '--num-records', type=long,
+        '--num-records', type=int,
         help='number of messages to consume',
         default=1000000)
     parser.add_argument(
@@ -155,7 +157,7 @@ def get_args_parser():
         default=100)
     parser.add_argument(
         '--consumer-config', type=str, nargs='+', default=(),
-        help='kafka consumer related configuaration properties like '
+        help='kafka consumer related configuration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(
         '--fixture-compression', type=str,

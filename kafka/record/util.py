@@ -2,7 +2,7 @@ import binascii
 
 from kafka.record._crc32c import crc as crc32c_py
 try:
-    from crc32c import crc32 as crc32c_c
+    from crc32c import crc32c as crc32c_c
 except ImportError:
     crc32c_c = None
 
@@ -91,7 +91,7 @@ def decode_varint(buffer, pos=0):
     on how those can be produced.
 
         Arguments:
-            buffer (bytearry): buffer to read from.
+            buffer (bytearray): buffer to read from.
             pos (int): optional position to read from
 
         Returns:

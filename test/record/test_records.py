@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 import pytest
-from kafka.record import MemoryRecords
+from kafka.record import MemoryRecords, MemoryRecordsBuilder
 from kafka.errors import CorruptRecordException
 
 # This is real live data from Kafka 11 broker
@@ -20,6 +22,11 @@ record_batch_data_v2 = [
     b'\x85\xb7\x00\x00\x00\x00\x00\x00\x00\x00\x01]\xff|\xe7\x9d\x00\x00\x01]'
     b'\xff|\xe7\x9d\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
     b'\x00\x00\x00\x01\x12\x00\x00\x00\x01\x06123\x00'
+    # Fourth batch value = "hdr" with header hkey=hval
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00E\x00\x00\x00\x00\x02\\'
+    b'\xd8\xefR\x00\x00\x00\x00\x00\x00\x00\x00\x01e\x85\xb6\xf3\xc1\x00\x00'
+    b'\x01e\x85\xb6\xf3\xc1\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
+    b'\xff\xff\x00\x00\x00\x01&\x00\x00\x00\x01\x06hdr\x02\x08hkey\x08hval'
 ]
 
 record_batch_data_v1 = [
@@ -53,13 +60,22 @@ record_batch_data_v0 = [
     b'\x00\xff\xff\xff\xff\x00\x00\x00\x03123'
 ]
 
+# Single record control batch (abort)
+control_batch_data_v2 = [
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00R\x00\x00\x00\x00'
+    b'\x02e\x97\xff\xd0\x00\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    b'\x98\x96\x7f\x00\x00\x00\x00\x00\x98\x96'
+    b'\x7f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
+    b'\x00\x00\x00\x01@\x00\x00\x00\x08\x00\x00\x00\x00,opaque-control-message\x00'
+]
+
 
 def test_memory_records_v2():
     data_bytes = b"".join(record_batch_data_v2) + b"\x00" * 4
     records = MemoryRecords(data_bytes)
 
-    assert records.size_in_bytes() == 222
-    assert records.valid_bytes() == 218
+    assert records.size_in_bytes() == 303
+    assert records.valid_bytes() == 299
 
     assert records.has_next() is True
     batch = records.next_batch()
@@ -74,6 +90,12 @@ def test_memory_records_v2():
 
     assert records.next_batch() is not None
     assert records.next_batch() is not None
+
+    batch = records.next_batch()
+    recs = list(batch)
+    assert len(recs) == 1
+    assert recs[0].value == b"hdr"
+    assert recs[0].headers == [('hkey', b'hval')]
 
     assert records.has_next() is False
     assert records.next_batch() is None
@@ -152,3 +174,83 @@ def test_memory_records_corrupt():
     )
     with pytest.raises(CorruptRecordException):
         records.next_batch()
+
+
+@pytest.mark.parametrize("compression_type", [0, 1, 2, 3])
+@pytest.mark.parametrize("magic", [0, 1, 2])
+def test_memory_records_builder(magic, compression_type):
+    builder = MemoryRecordsBuilder(
+        magic=magic, compression_type=compression_type, batch_size=1024 * 10)
+    base_size = builder.size_in_bytes()  # V2 has a header before
+
+    msg_sizes = []
+    for offset in range(10):
+        metadata = builder.append(
+            timestamp=10000 + offset, key=b"test", value=b"Super")
+        msg_sizes.append(metadata.size)
+        assert metadata.offset == offset
+        if magic > 0:
+            assert metadata.timestamp == 10000 + offset
+        else:
+            assert metadata.timestamp == -1
+        assert builder.next_offset() == offset + 1
+
+    # Error appends should not leave junk behind, like null bytes or something
+    with pytest.raises(TypeError):
+        builder.append(
+            timestamp=None, key="test", value="Super")  # Not bytes, but str
+
+    assert not builder.is_full()
+    size_before_close = builder.size_in_bytes()
+    assert size_before_close == sum(msg_sizes) + base_size
+
+    # Size should remain the same after closing. No trailing bytes
+    builder.close()
+    assert builder.compression_rate() > 0
+    expected_size = int(size_before_close * builder.compression_rate())
+    assert builder.is_full()
+    assert builder.size_in_bytes() == expected_size
+    buffer = builder.buffer()
+    assert len(buffer) == expected_size
+
+    # We can close second time, as in retry
+    builder.close()
+    assert builder.size_in_bytes() == expected_size
+    assert builder.buffer() == buffer
+
+    # Can't append after close
+    meta = builder.append(timestamp=None, key=b"test", value=b"Super")
+    assert meta is None
+
+
+@pytest.mark.parametrize("compression_type", [0, 1, 2, 3])
+@pytest.mark.parametrize("magic", [0, 1, 2])
+def test_memory_records_builder_full(magic, compression_type):
+    builder = MemoryRecordsBuilder(
+        magic=magic, compression_type=compression_type, batch_size=1024 * 10)
+
+    # 1 message should always be appended
+    metadata = builder.append(
+        key=None, timestamp=None, value=b"M" * 10240)
+    assert metadata is not None
+    assert builder.is_full()
+
+    metadata = builder.append(
+        key=None, timestamp=None, value=b"M")
+    assert metadata is None
+    assert builder.next_offset() == 1
+
+
+def test_control_record_v2():
+    data_bytes = b"".join(control_batch_data_v2)
+    records = MemoryRecords(data_bytes)
+
+    assert records.has_next() is True
+    batch = records.next_batch()
+    assert batch.is_control_batch is True
+    recs = list(batch)
+    assert len(recs) == 1
+    assert recs[0].version == 0
+    assert recs[0].type == 0
+    assert recs[0].abort is True
+    assert recs[0].commit is False

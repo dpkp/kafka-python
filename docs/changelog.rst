@@ -1,6 +1,563 @@
 Changelog
 =========
 
+2.0.6 (Mar 4, 2025)
+###################
+
+Networking
+----------
+* Improve error handling in `client._maybe_connect` (#2504)
+* Client connection / `maybe_refresh_metadata` changes (#2507)
+* Improve too-large timeout handling in client poll
+* Default `client.check_version` timeout to `api_version_auto_timeout_ms` (#2496)
+
+Fixes
+-----
+* Decode and skip transactional control records in consumer (#2499)
+* try / except in consumer coordinator `__del__`
+
+Testing
+-------
+* test_conn fixup for py2
+
+Project Maintenance
+-------------------
+* Add 2.0 branch for backports
+
+
+2.0.5 (Feb 25, 2025)
+####################
+
+Networking
+----------
+* Remove unused client bootstrap backoff code
+* 200ms timeout for client.poll in ensure_active_group and admin client
+
+Fixes
+-----
+* Admin client: check_version only if needed, use node_id kwarg for controller
+* Check for -1 controller_id in admin client
+* Only acquire coordinator lock in heartbeat thread close if not self thread
+
+Testing
+-------
+* Also sleep when waiting for consumers in test_describe_consumer_group_exists
+* Refactor sasl_integration test_client - wait for node ready; use send future
+* Add timeout to test_kafka_consumer
+* Add error str to assert_message_count checks
+* Retry on error in test fixture create_topic_via_metadata
+* Fixup variable interpolation in test fixture error
+
+Documentation
+-------------
+* Update compatibility docs
+* Include client_id in BrokerConnection __str__ output
+
+Project Maintenance
+-------------------
+* Add make targets `servers/*/api_versions` and `servers/*/messages`
+
+
+2.0.4 (Feb 21, 2025)
+####################
+
+Networking
+----------
+* Check for wakeup socket errors on read and close and reinit to reset (#2482)
+* Improve client networking backoff / retry (#2480)
+* Check for socket and unresolved futures before creating selector in conn.check_version (#2477)
+* Handle socket init errors, e.g., when IPv6 is disabled (#2476)
+
+Fixes
+-----
+* Avoid self-join in heartbeat thread close (#2488)
+
+Error Handling
+--------------
+* Always log broker errors in producer.send (#2478)
+* Retain unrecognized broker response error codes with dynamic error class (#2481)
+* Update kafka.errors with latest types (#2485)
+
+Compatibility
+-------------
+* Do not validate snappy xerial header version and compat fields (for redpanda) (#2483)
+
+Documentation
+-------------
+* Added missing docstrings in admin/client.py (#2487)
+
+Testing
+-------
+* Update kafka broker test matrix; test against 3.9.0 (#2486)
+* Add default resources for new kafka server fixtures (#2484)
+* Drop make test-local; add PYTESTS configuration var
+* Fix pytest runs when KAFKA_VERSION is not set
+
+Project Maintenance
+-------------------
+* Migrate to pyproject.toml / PEP-621
+* Remove old travis files; update compatibility tests link to gha
+
+
+2.0.3 (Feb 12, 2025)
+####################
+
+Improvements
+------------
+* Add optional compression libs to extras_require (#2123, #2387)
+* KafkaConsumer: Exit poll if consumer is closed (#2152)
+* Support configuration of custom kafka client for Admin/Consumer/Producer (#2144)
+* Core Protocol: Add support for flexible versions (#2151)
+* (Internal) Allow disabling thread wakeup in _send_request_to_node (#2335)
+* Change loglevel of cancelled errors to info (#2467)
+* Strip trailing dot off hostname for SSL validation. (#2472)
+* Log connection close(error) at ERROR level (#2473)
+* Support DescribeLogDirs admin api (#2475)
+
+Compatibility
+-------------
+* Support for python 3.12 (#2379, #2382)
+* Kafka 2.5 / 2.6 (#2162)
+* Try collections.abc imports in vendored selectors34 (#2394)
+* Catch OSError when checking for gssapi import for windows compatibility (#2407)
+* Update vendored six to 1.16.0 (#2398)
+
+Documentation
+-------------
+* Update usage.rst (#2308, #2334)
+* Fix typos (#2319, #2207, #2178)
+* Fix links to the compatibility page (#2295, #2226)
+* Cleanup install instructions for optional libs (#2139)
+* Update license_file to license_files (#2462)
+* Update some RST documentation syntax (#2463)
+* Add .readthedocs.yaml; update copyright date (#2474)
+
+Fixes
+-----
+* Use isinstance in builtin crc32 (#2329)
+* Use six.viewitems instead of six.iteritems to avoid encoding problems in StickyPartitionAssignor (#2154)
+* Fix array encoding TypeError: object of type 'dict_itemiterator' has no len() (#2167)
+* Only try to update sensors fetch lag if the unpacked list contains elements (#2158)
+* Avoid logging errors during test fixture cleanup (#2458)
+* Release coordinator lock before calling maybe_leave_group (#2460)
+* Dont raise RuntimeError for dead process in SpawnedService.wait_for() (#2461)
+* Cast the size of a MemoryRecordsBuilder object (#2438)
+* Fix DescribeConfigsResponse_v1 config_source (#2464)
+* Fix base class of DescribeClientQuotasResponse_v0 (#2465)
+* Update socketpair w/ CVE-2024-3219 fix (#2468)
+
+Testing
+-------
+* Transition CI/CD to GitHub Workflows (#2378, #2392, #2381, #2406, #2419, #2418, #2417, #2456)
+* Refactor Makefile (#2457)
+* Use assert_called_with in client_async tests (#2375)
+* Cover sticky assignor's metadata method with tests (#2161)
+* Update fixtures.py to check "127.0.0.1" for auto port assignment (#2384)
+* Use -Djava.security.manager=allow for Java 23 sasl tests (#2469)
+* Test with Java 23 (#2470)
+* Update kafka properties template; disable group rebalance delay (#2471)
+
+
+2.0.2 (Sep 29, 2020)
+####################
+
+Consumer
+--------
+* KIP-54: Implement sticky partition assignment strategy (aynroot / PR #2057)
+* Fix consumer deadlock when heartbeat thread request timeout (huangcuiyang / PR #2064)
+
+Compatibility
+-------------
+* Python 3.8 support (Photonios / PR #2088)
+
+Cleanups
+--------
+* Bump dev requirements (jeffwidman / PR #2129)
+* Fix crc32c deprecation warning (crc32c==2.1) (jeffwidman / PR #2128)
+* Lint cleanup (jeffwidman / PR #2126)
+* Fix initialization order in KafkaClient (pecalleja / PR #2119)
+* Allow installing crc32c via extras (mishas / PR #2069)
+* Remove unused imports (jameslamb / PR #2046)
+
+Admin Client
+------------
+* Merge _find_coordinator_id methods (jeffwidman / PR #2127)
+* Feature: delete consumergroups (swenzel / PR #2040)
+* Allow configurable timeouts in admin client check version (sunnyakaxd / PR #2107)
+* Enhancement for Kafka Admin Client's "Describe Consumer Group" (Apurva007 / PR #2035)
+
+Protocol
+--------
+* Add support for zstd compression (gabriel-tincu / PR #2021)
+* Add protocol support for brokers 1.1.0 - 2.5.0 (gabriel-tincu / PR #2038)
+* Add ProduceRequest/ProduceResponse v6/v7/v8 (gabriel-tincu / PR #2020)
+* Fix parsing NULL header values (kvfi / PR #2024)
+
+Tests
+-----
+* Add 2.5.0 to automated CI tests (gabriel-tincu / PR #2038)
+* Add 2.1.1 to build_integration (gabriel-tincu / PR #2019)
+
+Documentation / Logging / Errors
+--------------------------------
+* Disable logging during producer object gc (gioele / PR #2043)
+* Update example.py; use threading instead of multiprocessing (Mostafa-Elmenbawy / PR #2081)
+* Fix typo in exception message (haracejacob / PR #2096)
+* Add kafka.structs docstrings (Mostafa-Elmenbawy / PR #2080)
+* Fix broken compatibility page link (anuragrana / PR #2045)
+* Rename README to README.md (qhzxc0015 / PR #2055)
+* Fix docs by adding SASL mention (jeffwidman / #1990)
+
+
+2.0.1 (Feb 19, 2020)
+####################
+
+Admin Client
+------------
+* KAFKA-8962: Use least_loaded_node() for AdminClient.describe_topics() (jeffwidman / PR #2000)
+* Fix AdminClient topic error parsing in MetadataResponse (jtribble / PR #1997)
+
+
+2.0.0 (Feb 10, 2020)
+####################
+
+This release includes breaking changes for any application code that has not
+migrated from older Simple-style classes to newer Kafka-style classes.
+
+Deprecation
+-----------
+* Remove deprecated SimpleClient, Producer, Consumer, Unittest (jeffwidman / PR #1196)
+
+Admin Client
+------------
+* Use the controller for topic metadata requests (TylerLubeck / PR #1995)
+* Implement list_topics, describe_topics, and describe_cluster (TylerLubeck / PR #1993)
+* Implement __eq__ and __hash__ for ACL objects (TylerLubeck / PR #1955)
+* Fixes KafkaAdminClient returning `IncompatibleBrokerVersion` when passing an `api_version` (ian28223 / PR #1953)
+* Admin protocol updates (TylerLubeck / PR #1948)
+* Fix describe config for multi-broker clusters (jlandersen  / PR #1869)
+
+Miscellaneous Bugfixes / Improvements
+-------------------------------------
+* Enable SCRAM-SHA-256 and SCRAM-SHA-512 for sasl (swenzel / PR #1918)
+* Fix slots usage and use more slots (carsonip / PR #1987)
+* Optionally return OffsetAndMetadata from consumer.committed(tp) (dpkp / PR #1979)
+* Reset conn configs on exception in conn.check_version() (dpkp / PR #1977)
+* Do not block on sender thread join after timeout in producer.close() (dpkp / PR #1974)
+* Implement methods to convert a Struct object to a pythonic object (TylerLubeck / PR #1951)
+
+Test Infrastructure / Documentation / Maintenance
+-------------------------------------------------
+* Update 2.4.0 resource files for sasl integration (dpkp)
+* Add kafka 2.4.0 to CI testing (vvuibert / PR #1972)
+* convert test_admin_integration to pytest (ulrikjohansson / PR #1923)
+* xfail test_describe_configs_topic_resource_returns_configs (dpkp / Issue #1929)
+* Add crc32c to README and docs (dpkp)
+* Improve docs for reconnect_backoff_max_ms (dpkp / PR #1976)
+* Fix simple typo: managementment -> management (timgates42 / PR #1966)
+* Fix typos (carsonip / PR #1938)
+* Fix doc import paths (jeffwidman / PR #1933)
+* Update docstring to match conn.py's (dabcoder / PR #1921)
+* Do not log topic-specific errors in full metadata fetch (dpkp / PR #1980)
+* Raise AssertionError if consumer closed in poll() (dpkp / PR #1978)
+* Log retriable coordinator NodeNotReady, TooManyInFlightRequests as debug not error (dpkp / PR #1975)
+* Remove unused import (jeffwidman)
+* Remove some dead code (jeffwidman)
+* Fix a benchmark to Use print() function in both Python 2 and Python 3 (cclauss / PR #1983)
+* Fix a test to use ==/!= to compare str, bytes, and int literals (cclauss / PR #1984)
+* Fix benchmarks to use pyperf (carsonip / PR #1986)
+* Remove unused/empty .gitsubmodules file (jeffwidman / PR #1928)
+* Remove deprecated `ConnectionError` (jeffwidman / PR #1816)
+
+
+1.4.7 (Sep 30, 2019)
+####################
+
+This is a minor release focused on KafkaConsumer performance, Admin Client
+improvements, and Client concurrency. The KafkaConsumer iterator implementation
+has been greatly simplified so that it just wraps consumer.poll(). The prior
+implementation will remain available for a few more releases using the optional
+KafkaConsumer config: `legacy_iterator=True` . This is expected to improve
+consumer throughput substantially and help reduce heartbeat failures / group
+rebalancing.
+
+Client
+------
+* Send socket data via non-blocking IO with send buffer (dpkp / PR #1912)
+* Rely on socket selector to detect completed connection attempts (dpkp / PR #1909)
+* Improve connection lock handling; always use context manager (melor,dpkp / PR #1895)
+* Reduce client poll timeout when there are no in-flight requests (dpkp / PR #1823)
+
+KafkaConsumer
+-------------
+* Do not use wakeup when sending fetch requests from consumer (dpkp / PR #1911)
+* Wrap `consumer.poll()` for KafkaConsumer iteration (dpkp / PR #1902)
+* Allow the coordinator to auto-commit on old brokers (justecorruptio / PR #1832)
+* Reduce internal client poll timeout for (legacy) consumer iterator interface (dpkp / PR #1824)
+* Use dedicated connection for group coordinator (dpkp / PR #1822)
+* Change coordinator lock acquisition order (dpkp / PR #1821)
+* Make `partitions_for_topic` a read-through cache (Baisang / PR #1781,#1809)
+* Fix consumer hanging indefinitely on topic deletion while rebalancing (commanderdishwasher / PR #1782)
+
+Miscellaneous Bugfixes / Improvements
+-------------------------------------
+* Fix crc32c avilability on non-intel architectures (ossdev07 / PR #1904)
+* Load system default SSL CAs if `ssl_cafile` is not provided (iAnomaly / PR #1883)
+* Catch py3 TimeoutError in BrokerConnection send/recv (dpkp / PR #1820)
+* Added a function to determine if bootstrap is successfully connected (Wayde2014 / PR #1876)
+
+Admin Client
+------------
+* Add ACL api support to KafkaAdminClient (ulrikjohansson / PR #1833)
+* Add `sasl_kerberos_domain_name` config to KafkaAdminClient (jeffwidman / PR #1852)
+* Update `security_protocol` config documentation for KafkaAdminClient (cardy31 / PR #1849)
+* Break FindCoordinator into request/response methods in KafkaAdminClient (jeffwidman / PR #1871)
+* Break consumer operations into request / response methods in KafkaAdminClient (jeffwidman / PR #1845)
+* Parallelize calls to `_send_request_to_node()` in KafkaAdminClient (davidheitman / PR #1807)
+
+Test Infrastructure / Documentation / Maintenance
+-------------------------------------------------
+* Add Kafka 2.3.0 to test matrix and compatibility docs (dpkp / PR #1915)
+* Convert remaining `KafkaConsumer` tests to `pytest` (jeffwidman / PR #1886)
+* Bump integration tests to 0.10.2.2 and 0.11.0.3 (jeffwidman / #1890)
+* Cleanup handling of `KAFKA_VERSION` env var in tests (jeffwidman / PR #1887)
+* Minor test cleanup (jeffwidman / PR #1885)
+* Use `socket.SOCK_STREAM` in test assertions (iv-m / PR #1879)
+* Sanity test for `consumer.topics()` and `consumer.partitions_for_topic()` (Baisang / PR #1829)
+* Cleanup seconds conversion in client poll timeout calculation (jeffwidman / PR #1825)
+* Remove unused imports (jeffwidman / PR #1808)
+* Cleanup python nits in RangePartitionAssignor (jeffwidman / PR #1805)
+* Update links to kafka consumer config docs (jeffwidman)
+* Fix minor documentation typos (carsonip / PR #1865)
+* Remove unused/weird comment line (jeffwidman / PR #1813)
+* Update docs for `api_version_auto_timeout_ms` (jeffwidman / PR #1812)
+
+
+1.4.6 (Apr 2, 2019)
+###################
+
+This is a patch release primarily focused on bugs related to concurrency,
+SSL connections and testing, and SASL authentication:
+
+Client Concurrency Issues (Race Conditions / Deadlocks)
+-------------------------------------------------------
+* Fix race condition in `protocol.send_bytes` (isamaru / PR #1752)
+* Do not call `state_change_callback` with lock (dpkp / PR #1775)
+* Additional BrokerConnection locks to synchronize protocol/IFR state (dpkp / PR #1768)
+* Send pending requests before waiting for responses (dpkp / PR #1762)
+* Avoid race condition on `client._conns` in send() (dpkp / PR #1772)
+* Hold lock during `client.check_version` (dpkp / PR #1771)
+
+Producer Wakeup / TimeoutError
+------------------------------
+* Dont wakeup during `maybe_refresh_metadata` -- it is only called by poll() (dpkp / PR #1769)
+* Dont do client wakeup when sending from sender thread (dpkp / PR #1761)
+
+SSL - Python3.7 Support / Bootstrap Hostname Verification / Testing
+-------------------------------------------------------------------
+* Wrap SSL sockets after connecting for python3.7 compatibility (dpkp / PR #1754)
+* Allow configuration of SSL Ciphers (dpkp / PR #1755)
+* Maintain shadow cluster metadata for bootstrapping (dpkp / PR #1753)
+* Generate SSL certificates for local testing (dpkp / PR #1756)
+* Rename ssl.keystore.location and ssl.truststore.location config files (dpkp)
+* Reset reconnect backoff on SSL connection (dpkp / PR #1777)
+
+SASL - OAuthBearer support / api version bugfix
+-----------------------------------------------
+* Fix 0.8.2 protocol quick detection / fix SASL version check (dpkp / PR #1763)
+* Update sasl configuration docstrings to include supported mechanisms (dpkp)
+* Support SASL OAuthBearer Authentication (pt2pham / PR #1750)
+
+Miscellaneous Bugfixes
+----------------------
+* Dont force metadata refresh when closing unneeded bootstrap connections (dpkp / PR #1773)
+* Fix possible AttributeError during conn._close_socket (dpkp / PR #1776)
+* Return connection state explicitly after close in connect() (dpkp / PR #1778)
+* Fix flaky conn tests that use time.time (dpkp / PR #1758)
+* Add py to requirements-dev (dpkp)
+* Fixups to benchmark scripts for py3 / new KafkaFixture interface (dpkp)
+
+
+1.4.5 (Mar 14, 2019)
+####################
+
+This release is primarily focused on addressing lock contention
+and other coordination issues between the KafkaConsumer and the
+background heartbeat thread that was introduced in the 1.4 release.
+
+Consumer
+--------
+* connections_max_idle_ms must be larger than request_timeout_ms (jeffwidman / PR #1688)
+* Avoid race condition during close() / join heartbeat thread (dpkp / PR #1735)
+* Use last offset from fetch v4 if available to avoid getting stuck in compacted topic (keithks / PR #1724)
+* Synchronize puts to KafkaConsumer protocol buffer during async sends (dpkp / PR #1733)
+* Improve KafkaConsumer join group / only enable Heartbeat Thread during stable group (dpkp / PR #1695)
+* Remove unused `skip_double_compressed_messages` (jeffwidman / PR #1677)
+* Fix commit_offsets_async() callback (Faqa / PR #1712)
+
+Client
+------
+* Retry bootstrapping after backoff when necessary (dpkp / PR #1736)
+* Recheck connecting nodes sooner when refreshing metadata (dpkp / PR #1737)
+* Avoid probing broker versions twice on newer brokers (dpkp / PR #1738)
+* Move all network connections and writes to KafkaClient.poll() (dpkp / PR #1729)
+* Do not require client lock for read-only operations (dpkp / PR #1730)
+* Timeout all unconnected conns (incl SSL) after request_timeout_ms (dpkp / PR #1696)
+
+Admin Client
+------------
+* Fix AttributeError in response topic error codes checking (jeffwidman)
+* Fix response error checking in KafkaAdminClient send_to_controller (jeffwidman)
+* Fix NotControllerError check (jeffwidman)
+
+Core/Protocol
+-------------
+* Fix default protocol parser version / 0.8.2 version probe (dpkp / PR #1740)
+* Make NotEnoughReplicasError/NotEnoughReplicasAfterAppendError retriable (le-linh / PR #1722)
+
+Bugfixes
+--------
+* Use copy() in metrics() to avoid thread safety issues (emeric254 / PR #1682)
+
+Test Infrastructure
+-------------------
+* Mock dns lookups in test_conn (dpkp / PR #1739)
+* Use test.fixtures.version not test.conftest.version to avoid warnings (dpkp / PR #1731)
+* Fix test_legacy_correct_metadata_response on x86 arch (stanislavlevin / PR #1718)
+* Travis CI: 'sudo' tag is now deprecated in Travis (cclauss / PR #1698)
+* Use Popen.communicate() instead of Popen.wait() (Baisang / PR #1689)
+
+Compatibility
+-------------
+* Catch thrown OSError by python 3.7 when creating a connection (danjo133 / PR #1694)
+* Update travis test coverage: 2.7, 3.4, 3.7, pypy2.7 (jeffwidman, dpkp / PR #1614)
+* Drop dependency on sphinxcontrib-napoleon (stanislavlevin / PR #1715)
+* Remove unused import from kafka/producer/record_accumulator.py (jeffwidman / PR #1705)
+* Fix SSL connection testing in Python 3.7 (seanthegeek, silentben / PR #1669)
+
+
+1.4.4 (Nov 20, 2018)
+##########
+
+Bugfixes
+--------
+* (Attempt to) Fix deadlock between consumer and heartbeat (zhgjun / dpkp #1628)
+* Fix Metrics dict memory leak (kishorenc #1569)
+
+Client
+------
+* Support Kafka record headers (hnousiainen #1574)
+* Set socket timeout for the write-side of wake socketpair (Fleurer #1577)
+* Add kerberos domain name config for gssapi sasl mechanism handshake (the-sea #1542)
+* Support smaller topic metadata fetch during bootstrap (andyxning #1541)
+* Use TypeError for invalid timeout type (jeffwidman #1636)
+* Break poll if closed (dpkp)
+
+Admin Client
+------------
+* Add KafkaAdminClient class (llamahunter #1540)
+* Fix list_consumer_groups() to query all brokers (jeffwidman #1635)
+* Stop using broker-errors for client-side problems (jeffwidman #1639)
+* Fix send to controller (jeffwidman #1640)
+* Add group coordinator lookup (jeffwidman #1641)
+* Fix describe_groups (jeffwidman #1642)
+* Add list_consumer_group_offsets() (jeffwidman #1643)
+* Remove support for api versions as strings from KafkaAdminClient (jeffwidman #1644)
+* Set a clear default value for `validate_only`/`include_synonyms` (jeffwidman #1645)
+* Bugfix: Always set this_groups_coordinator_id (jeffwidman #1650)
+
+Consumer
+--------
+* Fix linter warning on import of ConsumerRebalanceListener (ben-harack #1591)
+* Remove ConsumerTimeout (emord #1587)
+* Return future from commit_offsets_async() (ekimekim #1560)
+
+Core / Protocol
+---------------
+* Add protocol structs for {Describe,Create,Delete} Acls (ulrikjohansson #1646/partial)
+* Pre-compile pack/unpack function calls (billyevans / jeffwidman #1619)
+* Don't use `kafka.common` internally (jeffwidman #1509)
+* Be explicit with tuples for %s formatting (jeffwidman #1634)
+
+Documentation
+-------------
+* Document connections_max_idle_ms (jeffwidman #1531)
+* Fix sphinx url (jeffwidman #1610)
+* Update remote urls: snappy, https, etc (jeffwidman #1603)
+* Minor cleanup of testing doc (jeffwidman #1613)
+* Various docstring / pep8 / code hygiene cleanups (jeffwidman #1647)
+
+Test Infrastructure
+-------------------
+* Stop pinning `pylint` (jeffwidman #1611)
+* (partial) Migrate from `Unittest` to `pytest` (jeffwidman #1620)
+* Minor aesthetic cleanup of partitioner tests (jeffwidman #1618)
+* Cleanup fixture imports (jeffwidman #1616)
+* Fix typo in test file name (jeffwidman)
+* Remove unused ivy_root variable (jeffwidman)
+* Add test fixtures for kafka versions 1.0.2 -> 2.0.1 (dpkp)
+* Bump travis test for 1.x brokers to 1.1.1 (dpkp)
+
+Logging / Error Messages
+------------------------
+* raising logging level on messages signalling data loss (sibiryakov #1553)
+* Stop using deprecated log.warn() (jeffwidman #1615)
+* Fix typo in logging message (jeffwidman)
+
+Compatibility
+-------------
+* Vendor enum34 (jeffwidman #1604)
+* Bump vendored `six` to `1.11.0` (jeffwidman #1602)
+* Vendor `six` consistently (jeffwidman #1605)
+* Prevent `pylint` import errors on `six.moves` (jeffwidman #1609)
+
+
+1.4.3 (May 26, 2018)
+####################
+
+Compatibility
+-------------
+* Fix for python 3.7 support: remove 'async' keyword from SimpleProducer (dpkp #1454)
+
+Client
+------
+* Improve BrokerConnection initialization time (romulorosa #1475)
+* Ignore MetadataResponses with empty broker list (dpkp #1506)
+* Improve connection handling when bootstrap list is invalid (dpkp #1507)
+
+Consumer
+--------
+* Check for immediate failure when looking up coordinator in heartbeat thread (dpkp #1457)
+
+Core / Protocol
+---------------
+* Always acquire client lock before coordinator lock to avoid deadlocks (dpkp #1464)
+* Added AlterConfigs and DescribeConfigs apis (StephenSorriaux #1472)
+* Fix CreatePartitionsRequest_v0 (StephenSorriaux #1469)
+* Add codec validators to record parser and builder for all formats (tvoinarovskyi #1447)
+* Fix MemoryRecord bugs re error handling and add test coverage (tvoinarovskyi #1448)
+* Force lz4 to disable Kafka-unsupported block linking when encoding (mnito #1476)
+* Stop shadowing `ConnectionError` (jeffwidman #1492)
+
+Documentation
+-------------
+* Document methods that return None (jeffwidman #1504)
+* Minor doc capitalization cleanup (jeffwidman)
+* Adds add_callback/add_errback example to docs (Berkodev #1441)
+* Fix KafkaConsumer docstring for request_timeout_ms default (dpkp #1459)
+
+Test Infrastructure
+-------------------
+* Skip flakey SimpleProducer test (dpkp)
+* Fix skipped integration tests if KAFKA_VERSION unset (dpkp #1453)
+
+Logging / Error Messages
+------------------------
+* Stop using deprecated log.warn() (jeffwidman)
+* Change levels for some heartbeat thread logging (dpkp #1456)
+* Log Heartbeat thread start / close for debugging (dpkp)
+
+
 1.4.2 (Mar 10, 2018)
 ####################
 
@@ -842,7 +1399,7 @@ Consumers
 * Improve FailedPayloadsError handling in KafkaConsumer (dpkp PR 398)
 * KafkaConsumer: avoid raising KeyError in task_done (dpkp PR 389)
 * MultiProcessConsumer -- support configured partitions list (dpkp PR 380)
-* Fix SimpleConsumer leadership change handling (dpkp PR 393) 
+* Fix SimpleConsumer leadership change handling (dpkp PR 393)
 * Fix SimpleConsumer connection error handling (reAsOn2010 PR 392)
 * Improve Consumer handling of 'falsy' partition values (wting PR 342)
 * Fix _offsets call error in KafkaConsumer (hellais PR 376)
@@ -947,7 +1504,7 @@ Internals
 * Add test timers via nose-timer plugin; list 10 slowest timings by default (dpkp)
 * Move fetching last known offset logic to a stand alone function (zever - PR 177)
 * Improve KafkaConnection and add more tests (dpkp - PR 196)
-* Raise TypeError if necessary when encoding strings (mdaniel - PR 204) 
+* Raise TypeError if necessary when encoding strings (mdaniel - PR 204)
 * Use Travis-CI to publish tagged releases to pypi (tkuhlman / mumrah)
 * Use official binary tarballs for integration tests and parallelize travis tests (dpkp - PR 193)
 * Improve new-topic creation handling (wizzat - PR 174)
@@ -961,7 +1518,7 @@ Internals
 * Fix connection error timeout and improve tests (wizzat - PR 158)
 * SimpleProducer randomization of initial round robin ordering (alexcb - PR 139)
 * Fix connection timeout in KafkaClient and KafkaConnection (maciejkula - PR 161)
-* Fix seek + commit behavior (wizzat - PR 148) 
+* Fix seek + commit behavior (wizzat - PR 148)
 
 
 0.9.0 (Mar 21, 2014)

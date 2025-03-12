@@ -49,12 +49,15 @@ from kafka.record.util import calc_crc32
 
 from kafka.codec import (
     gzip_encode, snappy_encode, lz4_encode, lz4_encode_old_kafka,
-    gzip_decode, snappy_decode, lz4_decode, lz4_decode_old_kafka
+    gzip_decode, snappy_decode, lz4_decode, lz4_decode_old_kafka,
 )
-from kafka.errors import CorruptRecordException
+import kafka.codec as codecs
+from kafka.errors import CorruptRecordException, UnsupportedCodecError
 
 
 class LegacyRecordBase(object):
+
+    __slots__ = ()
 
     HEADER_STRUCT_V0 = struct.Struct(
         ">q"  # BaseOffset => Int64
@@ -112,8 +115,22 @@ class LegacyRecordBase(object):
 
     NO_TIMESTAMP = -1
 
+    def _assert_has_codec(self, compression_type):
+        if compression_type == self.CODEC_GZIP:
+            checker, name = codecs.has_gzip, "gzip"
+        elif compression_type == self.CODEC_SNAPPY:
+            checker, name = codecs.has_snappy, "snappy"
+        elif compression_type == self.CODEC_LZ4:
+            checker, name = codecs.has_lz4, "lz4"
+        if not checker():
+            raise UnsupportedCodecError(
+                "Libraries for {} compression codec not found".format(name))
+
 
 class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
+
+    __slots__ = ("_buffer", "_magic", "_offset", "_crc", "_timestamp",
+                 "_attributes", "_decompressed")
 
     def __init__(self, buffer, magic):
         self._buffer = memoryview(buffer)
@@ -166,6 +183,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             data = self._buffer[pos:pos + value_size]
 
         compression_type = self.compression_type
+        self._assert_has_codec(compression_type)
         if compression_type == self.CODEC_GZIP:
             uncompressed = gzip_decode(data)
         elif compression_type == self.CODEC_SNAPPY:
@@ -241,11 +259,11 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                 # There should only ever be a single layer of compression
                 assert not attrs & self.CODEC_MASK, (
                     'MessageSet at offset %d appears double-compressed. This '
-                    'should not happen -- check your producers!' % offset)
+                    'should not happen -- check your producers!' % (offset,))
 
                 # When magic value is greater than 0, the timestamp
                 # of a compressed message depends on the
-                # typestamp type of the wrapper message:
+                # timestamp type of the wrapper message:
                 if timestamp_type == self.LOG_APPEND_TIME:
                     timestamp = self._timestamp
 
@@ -322,6 +340,8 @@ class LegacyRecord(ABCRecord):
 
 
 class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
+
+    __slots__ = ("_magic", "_compression_type", "_batch_size", "_buffer")
 
     def __init__(self, magic, compression_type, batch_size):
         self._magic = magic
@@ -419,6 +439,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
 
     def _maybe_compress(self):
         if self._compression_type:
+            self._assert_has_codec(self._compression_type)
             data = bytes(self._buffer)
             if self._compression_type == self.CODEC_GZIP:
                 compressed = gzip_encode(data)

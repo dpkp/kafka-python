@@ -6,10 +6,11 @@ import platform
 import struct
 
 from kafka.vendor import six
-from kafka.vendor.six.moves import xrange # pylint: disable=import-error
+from kafka.vendor.six.moves import range
 
 _XERIAL_V1_HEADER = (-126, b'S', b'N', b'A', b'P', b'P', b'Y', 0, 1, 1)
 _XERIAL_V1_FORMAT = 'bccccccBii'
+ZSTD_MAX_OUTPUT_SIZE = 1024 * 1024
 
 try:
     import snappy
@@ -17,7 +18,24 @@ except ImportError:
     snappy = None
 
 try:
+    import zstandard as zstd
+except ImportError:
+    zstd = None
+
+try:
     import lz4.frame as lz4
+
+    def _lz4_compress(payload, **kwargs):
+        # Kafka does not support LZ4 dependent blocks
+        try:
+            # For lz4>=0.12.0
+            kwargs.pop('block_linked', None)
+            return lz4.compress(payload, block_linked=False, **kwargs)
+        except TypeError:
+            # For earlier versions of lz4
+            kwargs.pop('block_mode', None)
+            return lz4.compress(payload, block_mode=1, **kwargs)
+
 except ImportError:
     lz4 = None
 
@@ -44,6 +62,10 @@ def has_gzip():
 
 def has_snappy():
     return snappy is not None
+
+
+def has_zstd():
+    return zstd is not None
 
 
 def has_lz4():
@@ -138,7 +160,7 @@ def snappy_encode(payload, xerial_compatible=True, xerial_blocksize=32*1024):
         chunker = lambda payload, i, size: memoryview(payload)[i:size+i].tobytes()
 
     for chunk in (chunker(payload, i, xerial_blocksize)
-                  for i in xrange(0, len(payload), xerial_blocksize)):
+                  for i in range(0, len(payload), xerial_blocksize)):
 
         block = snappy.compress(chunk)
         block_size = len(block)
@@ -165,14 +187,21 @@ def _detect_xerial_stream(payload):
         The version is the version of this format as written by xerial,
         in the wild this is currently 1 as such we only support v1.
 
-        Compat is there to claim the miniumum supported version that
+        Compat is there to claim the minimum supported version that
         can read a xerial block stream, presently in the wild this is
         1.
     """
 
     if len(payload) > 16:
-        header = struct.unpack('!' + _XERIAL_V1_FORMAT, bytes(payload)[:16])
-        return header == _XERIAL_V1_HEADER
+        magic = struct.unpack('!' + _XERIAL_V1_FORMAT[:8], bytes(payload)[:8])
+        version, compat = struct.unpack('!' + _XERIAL_V1_FORMAT[8:], bytes(payload)[8:16])
+        # Until there is more than one way to do xerial blocking, the version + compat
+        # fields can be ignored. Also some producers (i.e., redpanda) are known to
+        # incorrectly encode these as little-endian, and that causes us to fail decoding
+        # when we otherwise would have succeeded.
+        # See https://github.com/dpkp/kafka-python/issues/2414
+        if magic == _XERIAL_V1_HEADER[:8]:
+            return True
     return False
 
 
@@ -202,7 +231,7 @@ def snappy_decode(payload):
 
 
 if lz4:
-    lz4_encode = lz4.compress # pylint: disable-msg=no-member
+    lz4_encode = _lz4_compress # pylint: disable-msg=no-member
 elif lz4f:
     lz4_encode = lz4f.compressFrame # pylint: disable-msg=no-member
 elif lz4framed:
@@ -287,3 +316,18 @@ def lz4_decode_old_kafka(payload):
         payload[header_size:]
     ])
     return lz4_decode(munged_payload)
+
+
+def zstd_encode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    return zstd.ZstdCompressor().compress(payload)
+
+
+def zstd_decode(payload):
+    if not zstd:
+        raise NotImplementedError("Zstd codec is not available")
+    try:
+        return zstd.ZstdDecompressor().decompress(payload)
+    except zstd.ZstdError:
+        return zstd.ZstdDecompressor().decompress(payload, max_output_size=ZSTD_MAX_OUTPUT_SIZE)

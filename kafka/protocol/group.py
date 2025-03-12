@@ -5,6 +5,10 @@ from kafka.protocol.struct import Struct
 from kafka.protocol.types import Array, Bytes, Int16, Int32, Schema, String
 
 
+DEFAULT_GENERATION_ID = -1
+UNKNOWN_MEMBER_ID = ''
+
+
 class JoinGroupResponse_v0(Response):
     API_KEY = 11
     API_VERSION = 0
@@ -42,6 +46,12 @@ class JoinGroupResponse_v2(Response):
     )
 
 
+class JoinGroupResponse_v3(Response):
+    API_KEY = 11
+    API_VERSION = 3
+    SCHEMA = JoinGroupResponse_v2.SCHEMA
+
+
 class JoinGroupRequest_v0(Request):
     API_KEY = 11
     API_VERSION = 0
@@ -55,7 +65,6 @@ class JoinGroupRequest_v0(Request):
             ('protocol_name', String('utf-8')),
             ('protocol_metadata', Bytes)))
     )
-    UNKNOWN_MEMBER_ID = ''
 
 
 class JoinGroupRequest_v1(Request):
@@ -72,7 +81,6 @@ class JoinGroupRequest_v1(Request):
             ('protocol_name', String('utf-8')),
             ('protocol_metadata', Bytes)))
     )
-    UNKNOWN_MEMBER_ID = ''
 
 
 class JoinGroupRequest_v2(Request):
@@ -80,14 +88,21 @@ class JoinGroupRequest_v2(Request):
     API_VERSION = 2
     RESPONSE_TYPE = JoinGroupResponse_v2
     SCHEMA = JoinGroupRequest_v1.SCHEMA
+
+
+class JoinGroupRequest_v3(Request):
+    API_KEY = 11
+    API_VERSION = 3
+    RESPONSE_TYPE = JoinGroupResponse_v3
+    SCHEMA = JoinGroupRequest_v2.SCHEMA
     UNKNOWN_MEMBER_ID = ''
 
 
 JoinGroupRequest = [
-    JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2
+    JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2, JoinGroupRequest_v3
 ]
 JoinGroupResponse = [
-    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2
+    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2, JoinGroupResponse_v3
 ]
 
 
@@ -118,6 +133,12 @@ class SyncGroupResponse_v1(Response):
     )
 
 
+class SyncGroupResponse_v2(Response):
+    API_KEY = 14
+    API_VERSION = 2
+    SCHEMA = SyncGroupResponse_v1.SCHEMA
+
+
 class SyncGroupRequest_v0(Request):
     API_KEY = 14
     API_VERSION = 0
@@ -139,8 +160,15 @@ class SyncGroupRequest_v1(Request):
     SCHEMA = SyncGroupRequest_v0.SCHEMA
 
 
-SyncGroupRequest = [SyncGroupRequest_v0, SyncGroupRequest_v1]
-SyncGroupResponse = [SyncGroupResponse_v0, SyncGroupResponse_v1]
+class SyncGroupRequest_v2(Request):
+    API_KEY = 14
+    API_VERSION = 2
+    RESPONSE_TYPE = SyncGroupResponse_v2
+    SCHEMA = SyncGroupRequest_v1.SCHEMA
+
+
+SyncGroupRequest = [SyncGroupRequest_v0, SyncGroupRequest_v1, SyncGroupRequest_v2]
+SyncGroupResponse = [SyncGroupResponse_v0, SyncGroupResponse_v1, SyncGroupResponse_v2]
 
 
 class MemberAssignment(Struct):
@@ -170,6 +198,12 @@ class HeartbeatResponse_v1(Response):
     )
 
 
+class HeartbeatResponse_v2(Response):
+    API_KEY = 12
+    API_VERSION = 2
+    SCHEMA = HeartbeatResponse_v1.SCHEMA
+
+
 class HeartbeatRequest_v0(Request):
     API_KEY = 12
     API_VERSION = 0
@@ -188,8 +222,15 @@ class HeartbeatRequest_v1(Request):
     SCHEMA = HeartbeatRequest_v0.SCHEMA
 
 
-HeartbeatRequest = [HeartbeatRequest_v0, HeartbeatRequest_v1]
-HeartbeatResponse = [HeartbeatResponse_v0, HeartbeatResponse_v1]
+class HeartbeatRequest_v2(Request):
+    API_KEY = 12
+    API_VERSION = 2
+    RESPONSE_TYPE = HeartbeatResponse_v2
+    SCHEMA = HeartbeatRequest_v1.SCHEMA
+
+
+HeartbeatRequest = [HeartbeatRequest_v0, HeartbeatRequest_v1, HeartbeatRequest_v2]
+HeartbeatResponse = [HeartbeatResponse_v0, HeartbeatResponse_v1, HeartbeatResponse_v2]
 
 
 class LeaveGroupResponse_v0(Response):
@@ -209,6 +250,12 @@ class LeaveGroupResponse_v1(Response):
     )
 
 
+class LeaveGroupResponse_v2(Response):
+    API_KEY = 13
+    API_VERSION = 2
+    SCHEMA = LeaveGroupResponse_v1.SCHEMA
+
+
 class LeaveGroupRequest_v0(Request):
     API_KEY = 13
     API_VERSION = 0
@@ -226,5 +273,12 @@ class LeaveGroupRequest_v1(Request):
     SCHEMA = LeaveGroupRequest_v0.SCHEMA
 
 
-LeaveGroupRequest = [LeaveGroupRequest_v0, LeaveGroupRequest_v1]
-LeaveGroupResponse = [LeaveGroupResponse_v0, LeaveGroupResponse_v1]
+class LeaveGroupRequest_v2(Request):
+    API_KEY = 13
+    API_VERSION = 2
+    RESPONSE_TYPE = LeaveGroupResponse_v2
+    SCHEMA = LeaveGroupRequest_v1.SCHEMA
+
+
+LeaveGroupRequest = [LeaveGroupRequest_v0, LeaveGroupRequest_v1, LeaveGroupRequest_v2]
+LeaveGroupResponse = [LeaveGroupResponse_v0, LeaveGroupResponse_v1, LeaveGroupResponse_v2]

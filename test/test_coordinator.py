@@ -5,11 +5,11 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.structs import TopicPartition, OffsetAndMetadata
 from kafka.consumer.subscription_state import (
     SubscriptionState, ConsumerRebalanceListener)
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
@@ -17,10 +17,12 @@ from kafka.coordinator.protocol import (
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import Metrics
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
 from kafka.protocol.metadata import MetadataResponse
+from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
 
@@ -34,14 +36,15 @@ def coordinator(client):
 
 
 def test_init(client, coordinator):
-    # metadata update on init 
+    # metadata update on init
     assert client.cluster._need_update is True
     assert WeakMethod(coordinator._handle_metadata_update) in client.cluster._listeners
 
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_autocommit_enable_api_version(client, api_version):
-    coordinator = ConsumerCoordinator(client, SubscriptionState(),
+def test_autocommit_enable_api_version(conn, api_version):
+    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+                                      SubscriptionState(),
                                       Metrics(),
                                       enable_auto_commit=True,
                                       session_timeout_ms=30000,   # session_timeout_ms and max_poll_interval_ms
@@ -55,7 +58,7 @@ def test_autocommit_enable_api_version(client, api_version):
 
 
 def test_protocol_type(coordinator):
-    assert coordinator.protocol_type() is 'consumer'
+    assert coordinator.protocol_type() == 'consumer'
 
 
 def test_group_protocols(coordinator):
@@ -77,12 +80,21 @@ def test_group_protocols(coordinator):
             RoundRobinPartitionAssignor.version,
             ['foobar'],
             b'')),
+        ('sticky', ConsumerProtocolMemberMetadata(
+            StickyPartitionAssignor.version,
+            ['foobar'],
+            b'')),
     ]
 
 
 @pytest.mark.parametrize('api_version', [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_pattern_subscription(coordinator, api_version):
-    coordinator.config['api_version'] = api_version
+def test_pattern_subscription(conn, api_version):
+    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+                                      SubscriptionState(),
+                                      Metrics(),
+                                      api_version=api_version,
+                                      session_timeout_ms=10000,
+                                      max_poll_interval_ms=10000)
     coordinator._subscription.subscribe(pattern='foo')
     assert coordinator._subscription.subscription == set([])
     assert coordinator._metadata_snapshot == coordinator._build_metadata_snapshot(coordinator._subscription, {})
@@ -95,7 +107,7 @@ def test_pattern_subscription(coordinator, api_version):
         [(0, 'fizz', []),
          (0, 'foo1', [(0, 0, 0, [], [])]),
          (0, 'foo2', [(0, 0, 1, [], [])])]))
-    assert coordinator._subscription.subscription == set(['foo1', 'foo2'])
+    assert coordinator._subscription.subscription == {'foo1', 'foo2'}
 
     # 0.9 consumers should trigger dynamic partition assignment
     if api_version >= (0, 9):
@@ -103,14 +115,14 @@ def test_pattern_subscription(coordinator, api_version):
 
     # earlier consumers get all partitions assigned locally
     else:
-        assert set(coordinator._subscription.assignment.keys()) == set([
-            TopicPartition('foo1', 0),
-            TopicPartition('foo2', 0)])
+        assert set(coordinator._subscription.assignment.keys()) == {TopicPartition('foo1', 0),
+                                                                    TopicPartition('foo2', 0)}
 
 
 def test_lookup_assignor(coordinator):
     assert coordinator._lookup_assignor('roundrobin') is RoundRobinPartitionAssignor
     assert coordinator._lookup_assignor('range') is RangePartitionAssignor
+    assert coordinator._lookup_assignor('sticky') is StickyPartitionAssignor
     assert coordinator._lookup_assignor('foobar') is None
 
 
@@ -121,10 +133,25 @@ def test_join_complete(mocker, coordinator):
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
+    coordinator._on_join_complete(0, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment)
+
+
+def test_join_complete_with_sticky_assignor(mocker, coordinator):
+    coordinator._subscription.subscribe(topics=['foobar'])
+    assignor = StickyPartitionAssignor()
+    coordinator.config['assignors'] = (assignor,)
+    mocker.spy(assignor, 'on_assignment')
+    mocker.spy(assignor, 'on_generation_assignment')
+    assert assignor.on_assignment.call_count == 0
+    assert assignor.on_generation_assignment.call_count == 0
+    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    coordinator._on_join_complete(0, 'member-foo', 'sticky', assignment.encode())
+    assert assignor.on_assignment.call_count == 1
+    assert assignor.on_generation_assignment.call_count == 1
+    assignor.on_assignment.assert_called_with(assignment)
+    assignor.on_generation_assignment.assert_called_with(0)
 
 
 def test_subscription_listener(mocker, coordinator):
@@ -141,9 +168,7 @@ def test_subscription_listener(mocker, coordinator):
     coordinator._on_join_complete(
         0, 'member-foo', 'roundrobin', assignment.encode())
     assert listener.on_partitions_assigned.call_count == 1
-    listener.on_partitions_assigned.assert_called_with(set([
-        TopicPartition('foobar', 0),
-        TopicPartition('foobar', 1)]))
+    listener.on_partitions_assigned.assert_called_with({TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
 
 
 def test_subscription_listener_failure(mocker, coordinator):
@@ -205,13 +230,13 @@ def test_need_rejoin(coordinator):
 def test_refresh_committed_offsets_if_needed(mocker, coordinator):
     mocker.patch.object(ConsumerCoordinator, 'fetch_committed_offsets',
                         return_value = {
-                            TopicPartition('foobar', 0): OffsetAndMetadata(123, b''),
-                            TopicPartition('foobar', 1): OffsetAndMetadata(234, b'')})
+                            TopicPartition('foobar', 0): OffsetAndMetadata(123, '', -1),
+                            TopicPartition('foobar', 1): OffsetAndMetadata(234, '', -1)})
     coordinator._subscription.assign_from_user([TopicPartition('foobar', 0)])
     assert coordinator._subscription.needs_fetch_committed_offsets is True
     coordinator.refresh_committed_offsets_if_needed()
     assignment = coordinator._subscription.assignment
-    assert assignment[TopicPartition('foobar', 0)].committed == 123
+    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, '', -1)
     assert TopicPartition('foobar', 1) not in assignment
     assert coordinator._subscription.needs_fetch_committed_offsets is False
 
@@ -278,8 +303,8 @@ def test_close(mocker, coordinator):
 @pytest.fixture
 def offsets():
     return {
-        TopicPartition('foobar', 0): OffsetAndMetadata(123, b''),
-        TopicPartition('foobar', 1): OffsetAndMetadata(234, b''),
+        TopicPartition('foobar', 0): OffsetAndMetadata(123, '', -1),
+        TopicPartition('foobar', 1): OffsetAndMetadata(234, '', -1),
     }
 
 
@@ -414,11 +439,15 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
 @pytest.mark.parametrize('api_version,req_type', [
     ((0, 8, 1), OffsetCommitRequest[0]),
     ((0, 8, 2), OffsetCommitRequest[1]),
-    ((0, 9), OffsetCommitRequest[2])])
+    ((0, 9), OffsetCommitRequest[2]),
+    ((0, 11), OffsetCommitRequest[3]),
+    ((2, 0), OffsetCommitRequest[4]),
+    ((2, 1), OffsetCommitRequest[6]),
+])
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, req_type):
     expect_node = 0
-    patched_coord.config['api_version'] = api_version
+    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
 
     patched_coord._send_offset_commit_request(offsets)
     (node, request), _ = patched_coord._client.send.call_args
@@ -474,13 +503,27 @@ def test_send_offset_commit_request_success(mocker, patched_coord, offsets):
      Errors.InvalidTopicError, False),
     (OffsetCommitResponse[0]([('foobar', [(0, 29), (1, 29)])]),
      Errors.TopicAuthorizationFailedError, False),
+    (OffsetCommitResponse[0]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[1]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[2]([('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[3](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[4](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[5](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
+    (OffsetCommitResponse[6](0, [('foobar', [(0, 0), (1, 0)])]),
+     None, False),
 ])
 def test_handle_offset_commit_response(mocker, patched_coord, offsets,
                                        response, error, dead):
     future = Future()
     patched_coord._handle_offset_commit_response(offsets, future, time.time(),
                                                  response)
-    assert isinstance(future.exception, error)
+    assert isinstance(future.exception, error) if error else True
     assert patched_coord.coordinator_id is (None if dead else 0)
 
 
@@ -509,12 +552,17 @@ def test_send_offset_fetch_request_fail(mocker, patched_coord, partitions):
 @pytest.mark.parametrize('api_version,req_type', [
     ((0, 8, 1), OffsetFetchRequest[0]),
     ((0, 8, 2), OffsetFetchRequest[1]),
-    ((0, 9), OffsetFetchRequest[1])])
+    ((0, 9), OffsetFetchRequest[1]),
+    ((0, 10, 2), OffsetFetchRequest[2]),
+    ((0, 11), OffsetFetchRequest[3]),
+    ((2, 0), OffsetFetchRequest[4]),
+    ((2, 1), OffsetFetchRequest[5]),
+])
 def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, req_type):
     # assuming fixture sets coordinator=0, least_loaded_node=1
     expect_node = 0
-    patched_coord.config['api_version'] = api_version
+    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
 
     patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args
@@ -542,21 +590,31 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
     response = OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])])
     _f.success(response)
     patched_coord._handle_offset_fetch_response.assert_called_with(
-        future, response) 
+        future, response)
 
 
 @pytest.mark.parametrize('response,error,dead', [
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 14), (1, 234, b'', 14)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 14), (1, 234, '', 14)])]),
      Errors.GroupLoadInProgressError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 16), (1, 234, b'', 16)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 16), (1, 234, '', 16)])]),
      Errors.NotCoordinatorForGroupError, True),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 25), (1, 234, b'', 25)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 25), (1, 234, '', 25)])]),
      Errors.UnknownMemberIdError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 22), (1, 234, b'', 22)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 22), (1, 234, '', 22)])]),
      Errors.IllegalGenerationError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 29), (1, 234, b'', 29)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 29), (1, 234, '', 29)])]),
      Errors.TopicAuthorizationFailedError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, b'', 0), (1, 234, b'', 0)])]),
+    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
+     None, False),
+    (OffsetFetchResponse[1]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
+     None, False),
+    (OffsetFetchResponse[2]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[3](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[4](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+     None, False),
+    (OffsetFetchResponse[5](0, [('foobar', [(0, 123, -1, '', 0), (1, 234, -1, '', 0)])], 0),
      None, False),
 ])
 def test_handle_offset_fetch_response(patched_coord, offsets,

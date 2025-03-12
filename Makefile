@@ -1,33 +1,31 @@
-# Some simple testing tasks (sorry, UNIX only).
+# Some simple testing tasks
 
-FLAGS=
-KAFKA_VERSION=0.11.0.2
-SCALA_VERSION=2.12
+SHELL = bash
+
+export KAFKA_VERSION ?= 2.4.0
+DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
+
+# Required to support testing old kafka versions on newer java releases
+# The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
+# The values here are taken from the 2.4.0 release.
+# Note that kafka versions 2.0-2.3 crash on newer java releases; openjdk@11 should work with with "-Djava.security.manager=allow" removed from performance opts
+export KAFKA_JVM_PERFORMANCE_OPTS?=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true -Djava.security.manager=allow
+
+PYTESTS ?= 'test'
 
 setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
 
-servers/$(KAFKA_VERSION)/kafka-bin:
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) ./build_integration.sh
+lint:
+	pylint --recursive=y --errors-only kafka test
 
-build-integration: servers/$(KAFKA_VERSION)/kafka-bin
-
-# Test and produce coverage using tox. This is the same as is run on Travis
-test36: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py36 -- $(FLAGS)
-
-test27: build-integration
-	KAFKA_VERSION=$(KAFKA_VERSION) SCALA_VERSION=$(SCALA_VERSION) tox -e py27 -- $(FLAGS)
-
-# Test using py.test directly if you want to use local python. Useful for other
-# platforms that require manual installation for C libraries, ie. Windows.
-test-local: build-integration
-	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF kafka test
+test: build-integration
+	pytest --durations=10 $(PYTESTS)
 
 cov-local: build-integration
-	py.test --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
-		--cov-config=.covrc --cov-report html kafka test
+	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
+		--cov-config=.covrc --cov-report html $(TEST_FLAGS) kafka test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on
@@ -54,4 +52,60 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test36 test27 test-local cov-local clean doc
+.PHONY: all test test-local cov-local clean doc dist publish
+
+kafka_artifact_version=$(lastword $(subst -, ,$(1)))
+
+# Mappings for artifacts -> scala version; any unlisted will use default 2.12
+kafka_scala_0_8_0=2.8.0
+kafka_scala_0_8_1=2.10
+kafka_scala_0_8_1_1=2.10
+kafka_scala_0_8_2_0=2.11
+kafka_scala_0_8_2_1=2.11
+kafka_scala_0_8_2_2=2.11
+kafka_scala_0_9_0_0=2.11
+kafka_scala_0_9_0_1=2.11
+kafka_scala_0_10_0_0=2.11
+kafka_scala_0_10_0_1=2.11
+kafka_scala_0_10_1_0=2.11
+scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),2.12))
+
+kafka_artifact_name=kafka_$(call scala_version,$(1))-$(1).$(if $(filter 0.8.0,$(1)),tar.gz,tgz)
+
+build-integration: servers/$(KAFKA_VERSION)/kafka-bin
+
+servers/dist:
+	mkdir -p servers/dist
+
+servers/dist/kafka_%.tgz servers/dist/kafka_%.tar.gz:
+	@echo "Downloading $(@F)"
+	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
+
+servers/dist/jakarta.xml.bind-api-2.3.3.jar:
+	wget -nv -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
+
+# to allow us to derive the prerequisite artifact name from the target name
+.SECONDEXPANSION:
+
+servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist
+	@echo "Extracting kafka $* binaries from $<"
+	if [ -d "$@" ]; then rm -rf $@.bak; mv $@ $@.bak; fi
+	mkdir -p $@
+	tar xzvf $< -C $@ --strip-components 1
+	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
+
+servers/%/api_versions: servers/$$*/kafka-bin
+	KAFKA_VERSION=$* python -m test.fixtures get_api_versions >$@
+
+servers/%/messages: servers/$$*/kafka-bin
+	cd servers/$*/ && jar xvf kafka-bin/libs/kafka-clients-$*.jar common/message/
+	mv servers/$*/common/message/ servers/$*/messages/
+	rmdir servers/$*/common
+
+servers/patch-libs/%: servers/dist/jakarta.xml.bind-api-2.3.3.jar | servers/$$*/kafka-bin
+	cp $< servers/$*/kafka-bin/libs/
+
+servers/download/%: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist ;
+
+# Avoid removing any pattern match targets as intermediates (without this, .tgz artifacts are removed by make after extraction)
+.SECONDARY:

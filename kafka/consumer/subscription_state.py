@@ -7,7 +7,7 @@ import re
 from kafka.vendor import six
 
 from kafka.errors import IllegalStateError
-from kafka.protocol.offset import OffsetResetStrategy
+from kafka.protocol.list_offsets import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata
 
 log = logging.getLogger(__name__)
@@ -148,7 +148,7 @@ class SubscriptionState(object):
             topics (list of str): topics for subscription
 
         Raises:
-            IllegalStateErrror: if assign_from_user has been used already
+            IllegalStateError: if assign_from_user has been used already
             TypeError: if a topic is None or a non-str
             ValueError: if a topic is an empty string or
                         - a topic name is '.' or '..' or
@@ -247,7 +247,7 @@ class SubscriptionState(object):
 
         for tp in assignments:
             if tp.topic not in self.subscription:
-                raise ValueError("Assigned partition %s for non-subscribed topic." % str(tp))
+                raise ValueError("Assigned partition %s for non-subscribed topic." % (tp,))
 
         # after rebalancing, we always reinitialize the assignment state
         self.assignment.clear()
@@ -319,7 +319,7 @@ class SubscriptionState(object):
         all_consumed = {}
         for partition, state in six.iteritems(self.assignment):
             if state.has_valid_position:
-                all_consumed[partition] = OffsetAndMetadata(state.position, '')
+                all_consumed[partition] = state.position
         return all_consumed
 
     def need_offset_reset(self, partition, offset_reset_strategy=None):
@@ -374,17 +374,21 @@ class SubscriptionState(object):
 
 class TopicPartitionState(object):
     def __init__(self):
-        self.committed = None # last committed position
+        self.committed = None # last committed OffsetAndMetadata
         self.has_valid_position = False # whether we have valid position
         self.paused = False # whether this partition has been paused by the user
         self.awaiting_reset = False # whether we are awaiting reset
         self.reset_strategy = None # the reset strategy if awaitingReset is set
-        self._position = None # offset exposed to the user
+        self._position = None # OffsetAndMetadata exposed to the user
         self.highwater = None
-        self.drop_pending_message_set = False
+        self.drop_pending_record_batch = False
+        # The last message offset hint available from a record batch with
+        # magic=2 which includes deleted compacted messages
+        self.last_offset_from_record_batch = None
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
+        assert isinstance(offset, OffsetAndMetadata)
         self._position = offset
 
     def _get_position(self):
@@ -396,14 +400,16 @@ class TopicPartitionState(object):
         self.awaiting_reset = True
         self.reset_strategy = strategy
         self._position = None
+        self.last_offset_from_record_batch = None
         self.has_valid_position = False
 
     def seek(self, offset):
-        self._position = offset
+        self._position = OffsetAndMetadata(offset, '', -1)
         self.awaiting_reset = False
         self.reset_strategy = None
         self.has_valid_position = True
-        self.drop_pending_message_set = True
+        self.drop_pending_record_batch = True
+        self.last_offset_from_record_batch = None
 
     def pause(self):
         self.paused = True

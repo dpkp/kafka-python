@@ -4,21 +4,22 @@ import platform
 import struct
 
 import pytest
-from six.moves import xrange
+from kafka.vendor.six.moves import range
 
 from kafka.codec import (
-    has_snappy, has_gzip, has_lz4,
+    has_snappy, has_lz4, has_zstd,
     gzip_encode, gzip_decode,
     snappy_encode, snappy_decode,
     lz4_encode, lz4_decode,
     lz4_encode_old_kafka, lz4_decode_old_kafka,
+    zstd_encode, zstd_decode,
 )
 
 from test.testutil import random_string
 
 
 def test_gzip():
-    for i in xrange(1000):
+    for i in range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = gzip_decode(gzip_encode(b1))
         assert b1 == b2
@@ -26,7 +27,7 @@ def test_gzip():
 
 @pytest.mark.skipif(not has_snappy(), reason="Snappy not available")
 def test_snappy():
-    for i in xrange(1000):
+    for i in range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = snappy_decode(snappy_encode(b1))
         assert b1 == b2
@@ -38,12 +39,14 @@ def test_snappy_detect_xerial():
     _detect_xerial_stream = kafka1.codec._detect_xerial_stream
 
     header = b'\x82SNAPPY\x00\x00\x00\x00\x01\x00\x00\x00\x01Some extra bytes'
+    redpanda_header = b'\x82SNAPPY\x00\x01\x00\x00\x00\x01\x00\x00\x00Some extra bytes'
     false_header = b'\x01SNAPPY\x00\x00\x00\x01\x00\x00\x00\x01'
     default_snappy = snappy_encode(b'foobar' * 50)
     random_snappy = snappy_encode(b'SNAPPY' * 50, xerial_compatible=False)
     short_data = b'\x01\x02\x03\x04'
 
     assert _detect_xerial_stream(header) is True
+    assert _detect_xerial_stream(redpanda_header) is True
     assert _detect_xerial_stream(b'') is False
     assert _detect_xerial_stream(b'\x00') is False
     assert _detect_xerial_stream(false_header) is False
@@ -86,7 +89,7 @@ def test_snappy_encode_xerial():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4():
-    for i in xrange(1000):
+    for i in range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = lz4_decode(lz4_encode(b1))
         assert len(b1) == len(b2)
@@ -96,7 +99,7 @@ def test_lz4():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_old():
-    for i in xrange(1000):
+    for i in range(1000):
         b1 = random_string(100).encode('utf-8')
         b2 = lz4_decode_old_kafka(lz4_encode_old_kafka(b1))
         assert len(b1) == len(b2)
@@ -106,10 +109,18 @@ def test_lz4_old():
 @pytest.mark.skipif(not has_lz4() or platform.python_implementation() == 'PyPy',
                     reason="python-lz4 crashes on old versions of pypy")
 def test_lz4_incremental():
-    for i in xrange(1000):
+    for i in range(1000):
         # lz4 max single block size is 4MB
         # make sure we test with multiple-blocks
         b1 = random_string(100).encode('utf-8') * 50000
         b2 = lz4_decode(lz4_encode(b1))
         assert len(b1) == len(b2)
+        assert b1 == b2
+
+
+@pytest.mark.skipif(not has_zstd(), reason="Zstd not available")
+def test_zstd():
+    for _ in range(1000):
+        b1 = random_string(100).encode('utf-8')
+        b2 = zstd_decode(zstd_encode(b1))
         assert b1 == b2
