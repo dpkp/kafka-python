@@ -93,7 +93,7 @@ class ClusterMetadata(object):
         """Get BrokerMetadata
 
         Arguments:
-            broker_id (int): node_id for a broker to check
+            broker_id (int or str): node_id for a broker to check
 
         Returns:
             BrokerMetadata or None if not found
@@ -148,7 +148,7 @@ class ClusterMetadata(object):
         """Return TopicPartitions for which the broker is a leader.
 
         Arguments:
-            broker_id (int): node id for a broker
+            broker_id (int or str): node id for a broker
 
         Returns:
             set: {TopicPartition, ...}
@@ -163,7 +163,7 @@ class ClusterMetadata(object):
             group (str): name of consumer group
 
         Returns:
-            int: node_id for group coordinator
+            node_id (int or str) for group coordinator, -1 if coordinator unknown
             None if the group does not exist.
         """
         return self._groups.get(group)
