@@ -1136,7 +1136,7 @@ class KafkaConsumer(six.Iterator):
             self._fetcher.update_fetch_positions(partitions)
 
     def _message_generator_v2(self):
-        timeout_ms = 1000 * (self._consumer_timeout - time.time())
+        timeout_ms = 1000 * max(0, self._consumer_timeout - time.time())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
         for tp, records in six.iteritems(record_map):
             # Generators are stateful, and it is possible that the tp / records
