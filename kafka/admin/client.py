@@ -149,8 +149,8 @@ class KafkaAdminClient(object):
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
             sasl mechanism handshake. Default: one of bootstrap servers
-        sasl_oauth_token_provider (AbstractTokenProvider): OAuthBearer token provider
-            instance. (See kafka.oauth.abstract). Default: None
+        sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
+            token provider instance. Default: None
         kafka_client (callable): Custom class / callable for creating KafkaClient instances
 
     """
