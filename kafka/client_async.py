@@ -408,7 +408,7 @@ class KafkaClient(object):
         if broker is None:
             return False
 
-        host, _, afi = get_ip_port_afi(broker.host)
+        host, _, _ = get_ip_port_afi(broker.host)
         if conn.host != host or conn.port != broker.port:
             log.info("Broker metadata change detected for node %s"
                      " from %s:%s to %s:%s", conn.node_id, conn.host, conn.port,
