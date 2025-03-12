@@ -72,8 +72,20 @@ jobs:
         with:
           distribution: temurin
           java-version: 23
-      - name: Pull Kafka release
+      - name: Restore cached kafka releases
+        id: cache-servers-dist-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: servers/dist
+          key: servers-dist-${{ matrix.kafka }}
+      - name: Install Kafka release
         run: make servers/${{ matrix.kafka }}/kafka-bin
+      - name: Update kafka release cache
+        id: cache-servers-dist-save
+        uses: actions/cache/save@v4
+        with:
+          path: servers/dist
+          key: ${{ steps.cache-servers-dist-restore.outputs.cache-primary-key }}
       - name: Pytest
         run: make test
         env:
