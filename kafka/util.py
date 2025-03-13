@@ -1,8 +1,10 @@
 from __future__ import absolute_import
 
 import binascii
+import time
 import weakref
 
+from kafka.errors import KafkaTimeoutError
 from kafka.vendor import six
 
 
@@ -20,6 +22,22 @@ if six.PY3:
         return crc
 else:
     from binascii import crc32
+
+
+def timeout_ms_fn(timeout_ms, error_message):
+    elapsed = 0.0 # noqa: F841
+    begin = time.time()
+    def inner_timeout_ms(fallback=None):
+        if timeout_ms is None:
+            return fallback
+        elapsed = (time.time() - begin) * 1000
+        if elapsed >= timeout_ms:
+            raise KafkaTimeoutError(error_message)
+        ret = max(0, timeout_ms - elapsed)
+        if fallback is not None:
+            return min(ret, fallback)
+        return ret
+    return inner_timeout_ms
 
 
 class WeakMethod(object):

@@ -19,7 +19,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.commit import OffsetCommitRequest, OffsetFetchRequest
 from kafka.structs import OffsetAndMetadata, TopicPartition
-from kafka.util import WeakMethod
+from kafka.util import timeout_ms_fn, WeakMethod
 
 
 log = logging.getLogger(__name__)
@@ -269,16 +269,7 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.group_id is None:
             return
 
-        elapsed = 0.0 # noqa: F841
-        begin = time.time()
-        def inner_timeout_ms():
-            if timeout_ms is None:
-                return None
-            elapsed = (time.time() - begin) * 1000
-            if elapsed >= timeout_ms:
-                raise Errors.KafkaTimeoutError()
-            return max(0, timeout_ms - elapsed)
-
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
         try:
             self._invoke_completed_offset_commit_callbacks()
             self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
