@@ -267,7 +267,7 @@ class ConsumerCoordinator(BaseCoordinator):
         periodic offset commits if they are enabled.
         """
         if self.group_id is None:
-            return
+            return True
 
         inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
         try:
@@ -296,9 +296,10 @@ class ConsumerCoordinator(BaseCoordinator):
                 self.poll_heartbeat()
 
             self._maybe_auto_commit_offsets_async()
+            return True
 
         except Errors.KafkaTimeoutError:
-            return
+            return False
 
     def time_to_next_poll(self):
         """Return seconds (float) remaining until :meth:`.poll` should be called again"""
