@@ -695,7 +695,8 @@ class KafkaConsumer(six.Iterator):
             dict: Map of topic to list of records (may be empty).
         """
         begin = time.time()
-        self._coordinator.poll(timeout_ms=timeout_ms)
+        if not self._coordinator.poll(timeout_ms=timeout_ms):
+            return {}
 
         # Fetch positions if we have partitions we're subscribed to that we
         # don't know the offset for
@@ -1162,7 +1163,8 @@ class KafkaConsumer(six.Iterator):
 
         while time.time() < self._consumer_timeout:
 
-            self._coordinator.poll(timeout_ms=inner_poll_ms())
+            if not self._coordinator.poll(timeout_ms=inner_poll_ms()):
+                continue
 
             # Fetch offsets for any subscribed partitions that we arent tracking yet
             if not self._subscription.has_all_fetch_positions():
