@@ -14,7 +14,7 @@ from kafka.vendor.six.moves import urllib, range
 from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
-from kafka.errors import InvalidReplicationFactorError
+from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError
 from kafka.protocol.admin import CreateTopicsRequest
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import env_kafka_version, random_string
@@ -555,6 +555,8 @@ class KafkaFixture(Fixture):
                 future.error_on_callbacks = True
                 future.add_errback(_failure)
                 self._client.poll(future=future, timeout_ms=timeout)
+                if not future.is_done:
+                    raise KafkaTimeoutError()
                 return future.value
             except Exception as exc:
                 time.sleep(1)

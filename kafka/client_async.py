@@ -636,11 +636,14 @@ class KafkaClient(object):
         Returns:
             list: responses received (can be empty)
         """
-        if timeout_ms is None:
-            timeout_ms = self.config['request_timeout_ms']
-        elif not isinstance(timeout_ms, (int, float)):
+        if not isinstance(timeout_ms, (int, float, type(None))):
             raise TypeError('Invalid type for timeout: %s' % type(timeout_ms))
 
+        begin = time.time()
+        if timeout_ms is not None:
+            timeout_at = begin + (timeout_ms / 1000)
+        else:
+            timeout_at = begin + (self.config['request_timeout_ms'] / 1000)
         # Loop for futures, break after first loop if None
         responses = []
         while True:
@@ -665,11 +668,12 @@ class KafkaClient(object):
                 if future is not None and future.is_done:
                     timeout = 0
                 else:
+                    user_timeout_ms = 1000 * max(0, timeout_at - time.time())
                     idle_connection_timeout_ms = self._idle_expiry_manager.next_check_ms()
                     request_timeout_ms = self._next_ifr_request_timeout_ms()
-                    log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
+                    log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", user_timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
                     timeout = min(
-                        timeout_ms,
+                        user_timeout_ms,
                         metadata_timeout_ms,
                         idle_connection_timeout_ms,
                         request_timeout_ms)
@@ -683,7 +687,11 @@ class KafkaClient(object):
 
             # If all we had was a timeout (future is None) - only do one poll
             # If we do have a future, we keep looping until it is done
-            if future is None or future.is_done:
+            if future is None:
+                break
+            elif future.is_done:
+                break
+            elif timeout_ms is not None and time.time() >= timeout_at:
                 break
 
         return responses

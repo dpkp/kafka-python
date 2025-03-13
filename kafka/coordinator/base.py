@@ -260,12 +260,17 @@ class BaseCoordinator(object):
                 future = self.lookup_coordinator()
                 self._client.poll(future=future, timeout_ms=inner_timeout_ms())
 
+                if not future.is_done:
+                    raise Errors.KafkaTimeoutError()
+
                 if future.failed():
                     if future.retriable():
                         if getattr(future.exception, 'invalid_metadata', False):
                             log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                             metadata_update = self._client.cluster.request_update()
                             self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
+                            if not metadata_update.is_done:
+                                raise Errors.KafkaTimeoutError()
                         else:
                             time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
                     else:
@@ -415,6 +420,9 @@ class BaseCoordinator(object):
                     future = self.join_future
 
                 self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+
+                if not future.is_done:
+                    raise Errors.KafkaTimeoutError()
 
                 if future.succeeded():
                     self._on_join_complete(self._generation.generation_id,
