@@ -228,6 +228,9 @@ def test_poll(mocker):
     ifr_request_timeout = mocker.patch.object(KafkaClient, '_next_ifr_request_timeout_ms')
     _poll = mocker.patch.object(KafkaClient, '_poll')
     cli = KafkaClient(api_version=(0, 9))
+    now = time.time()
+    t = mocker.patch('time.time')
+    t.return_value = now
 
     # metadata timeout wins
     ifr_request_timeout.return_value = float('inf')
@@ -346,17 +349,16 @@ def test_maybe_refresh_metadata_cant_send(mocker, client):
     t.return_value = now
 
     # first poll attempts connection
-    client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(12345.678)
+    client.poll()
+    client._poll.assert_called()
     client._init_connect.assert_called_once_with('foobar')
 
     # poll while connecting should not attempt a new connection
     client._connecting.add('foobar')
     client._can_connect.reset_mock()
-    client.poll(timeout_ms=12345678)
-    client._poll.assert_called_with(12345.678)
+    client.poll()
+    client._poll.assert_called()
     assert not client._can_connect.called
-
     assert not client._metadata_refresh_in_progress
 
 

@@ -276,6 +276,10 @@ class Fetcher(six.Iterator):
             future = self._send_list_offsets_requests(timestamps)
             self._client.poll(future=future, timeout_ms=inner_timeout_ms())
 
+            # Timeout w/o future completion
+            if not future.is_done:
+                break
+
             if future.succeeded():
                 return future.value
             if not future.retriable():
