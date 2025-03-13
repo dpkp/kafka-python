@@ -57,7 +57,7 @@ def test_group(kafka_broker, topic):
                                      bootstrap_servers=connect_str,
                                      group_id=group_id,
                                      client_id="consumer_thread-%s" % i,
-                                     api_version_auto_timeout_ms=30000,
+                                     api_version_auto_timeout_ms=5000,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
             for tp, records in six.itervalues(consumers[i].poll(timeout_ms=200)):
@@ -73,16 +73,18 @@ def test_group(kafka_broker, topic):
         threads[i] = t
 
     try:
-        timeout = time.time() + 35
+        timeout = time.time() + 15
         while True:
             for c in range(num_consumers):
 
                 # Verify all consumers have been created
                 if c not in consumers:
+                    logging.info('%s not in consumers list yet...', c)
                     break
 
                 # Verify all consumers have an assignment
                 elif not consumers[c].assignment():
+                    logging.info('Consumer %s does not have assignment yet...', c)
                     break
 
             # If all consumers exist and have an assignment
@@ -96,8 +98,7 @@ def test_group(kafka_broker, topic):
 
                 # New generation assignment is not complete until
                 # coordinator.rejoining = False
-                rejoining = any([consumer._coordinator.rejoining
-                                 for consumer in list(consumers.values())])
+                rejoining = set([c for c, consumer in list(consumers.items()) if consumer._coordinator.rejoining])
 
                 if not rejoining and len(generations) == 1:
                     for c, consumer in list(consumers.items()):
@@ -110,6 +111,7 @@ def test_group(kafka_broker, topic):
                     logging.info('Rejoining: %s, generations: %s', rejoining, generations)
                     time.sleep(1)
             assert time.time() < timeout, "timeout waiting for assignments"
+            time.sleep(1)
 
         logging.info('Group stabilized; verifying assignment')
         group_assignment = set()
@@ -157,7 +159,6 @@ def test_heartbeat_thread(kafka_broker, topic):
     consumer = KafkaConsumer(topic,
                              bootstrap_servers=get_connect_str(kafka_broker),
                              group_id=group_id,
-                             api_version_auto_timeout_ms=30000,
                              heartbeat_interval_ms=500)
 
     # poll until we have joined group / have assignment
