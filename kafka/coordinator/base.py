@@ -228,7 +228,7 @@ class BaseCoordinator(object):
         """
         if self.coordinator_id is None:
             return None
-        elif self._client.is_disconnected(self.coordinator_id):
+        elif self._client.is_disconnected(self.coordinator_id) and self._client.connection_delay(self.coordinator_id) > 0:
             self.coordinator_dead('Node Disconnected')
             return None
         else:
