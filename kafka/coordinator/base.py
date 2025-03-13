@@ -338,7 +338,6 @@ class BaseCoordinator(object):
             log.info("Successfully joined group %s with generation %s",
                      self.group_id, self._generation.generation_id)
             self.state = MemberState.STABLE
-            self.rejoin_needed = False
             if self._heartbeat_thread:
                 self._heartbeat_thread.enable()
 
@@ -424,6 +423,7 @@ class BaseCoordinator(object):
                                            future.value)
                     self.join_future = None
                     self.rejoining = False
+                    self.rejoin_needed = False
 
                 else:
                     self.join_future = None
