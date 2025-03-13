@@ -16,6 +16,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
+from kafka.util import timeout_ms_fn
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -243,19 +244,7 @@ class BaseCoordinator(object):
 
         Raises: KafkaTimeoutError if timeout_ms is not None
         """
-        elapsed = 0.0 # noqa: F841
-        begin = time.time()
-        def inner_timeout_ms(fallback=None):
-            if timeout_ms is None:
-                return fallback
-            elapsed = (time.time() - begin) * 1000
-            if elapsed >= timeout_ms:
-                raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
-            ret = max(0, timeout_ms - elapsed)
-            if fallback is not None:
-                return min(ret, fallback)
-            return ret
-
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to find group coordinator')
         with self._client._lock, self._lock:
             while self.coordinator_unknown():
 
@@ -366,22 +355,10 @@ class BaseCoordinator(object):
 
         Raises: KafkaTimeoutError if timeout_ms is not None
         """
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to join consumer group')
         with self._client._lock, self._lock:
             if self._heartbeat_thread is None:
                 self._start_heartbeat_thread()
-
-            elapsed = 0.0 # noqa: F841
-            begin = time.time()
-            def inner_timeout_ms(fallback=None):
-                if timeout_ms is None:
-                    return fallback
-                elapsed = (time.time() - begin) * 1000
-                if elapsed >= timeout_ms:
-                    raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
-                ret = max(0, timeout_ms - elapsed)
-                if fallback is not None:
-                    return min(ret, fallback)
-                return ret
 
             while self.need_rejoin() or self._rejoin_incomplete():
                 self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())

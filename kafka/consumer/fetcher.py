@@ -19,6 +19,7 @@ from kafka.protocol.list_offsets import (
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
 from kafka.structs import TopicPartition, OffsetAndMetadata, OffsetAndTimestamp
+from kafka.util import timeout_ms_fn
 
 log = logging.getLogger(__name__)
 
@@ -266,19 +267,7 @@ class Fetcher(six.Iterator):
         if not timestamps:
             return {}
 
-        elapsed = 0.0 # noqa: F841
-        begin = time.time()
-        def inner_timeout_ms(fallback=None):
-            if timeout_ms is None:
-                return fallback
-            elapsed = (time.time() - begin) * 1000
-            if elapsed >= timeout_ms:
-                raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
-            ret = max(0, timeout_ms - elapsed)
-            if fallback is not None:
-                return min(ret, fallback)
-            return ret
-
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to find coordinator')
         timestamps = copy.copy(timestamps)
         while True:
             if not timestamps:
