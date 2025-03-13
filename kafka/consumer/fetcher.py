@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import collections
 import copy
@@ -246,7 +246,7 @@ class Fetcher(six.Iterator):
         else:
             log.debug("Could not find offset for partition %s since it is probably deleted" % (partition,))
 
-    def _retrieve_offsets(self, timestamps, timeout_ms=float("inf")):
+    def _retrieve_offsets(self, timestamps, timeout_ms=None):
         """Fetch offset for each partition passed in ``timestamps`` map.
 
         Blocks until offsets are obtained, a non-retriable exception is raised
@@ -266,29 +266,38 @@ class Fetcher(six.Iterator):
         if not timestamps:
             return {}
 
-        start_time = time.time()
-        remaining_ms = timeout_ms
+        elapsed = 0.0 # noqa: F841
+        begin = time.time()
+        def inner_timeout_ms(fallback=None):
+            if timeout_ms is None:
+                return fallback
+            elapsed = (time.time() - begin) * 1000
+            if elapsed >= timeout_ms:
+                raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
+            ret = max(0, timeout_ms - elapsed)
+            if fallback is not None:
+                return min(ret, fallback)
+            return ret
+
         timestamps = copy.copy(timestamps)
-        while remaining_ms > 0:
+        while True:
             if not timestamps:
                 return {}
 
             future = self._send_list_offsets_requests(timestamps)
-            self._client.poll(future=future, timeout_ms=remaining_ms)
+            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
 
             if future.succeeded():
                 return future.value
             if not future.retriable():
                 raise future.exception  # pylint: disable-msg=raising-bad-type
 
-            elapsed_ms = (time.time() - start_time) * 1000
-            remaining_ms = timeout_ms - elapsed_ms
-            if remaining_ms < 0:
-                break
-
             if future.exception.invalid_metadata:
                 refresh_future = self._client.cluster.request_update()
-                self._client.poll(future=refresh_future, timeout_ms=remaining_ms)
+                self._client.poll(future=refresh_future, timeout_ms=inner_timeout_ms())
+
+                if not future.is_done:
+                    break
 
                 # Issue #1780
                 # Recheck partition existence after after a successful metadata refresh
@@ -299,10 +308,7 @@ class Fetcher(six.Iterator):
                         log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
                         timestamps.pop(unknown_partition)
             else:
-                time.sleep(self.config['retry_backoff_ms'] / 1000.0)
-
-            elapsed_ms = (time.time() - start_time) * 1000
-            remaining_ms = timeout_ms - elapsed_ms
+                time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))

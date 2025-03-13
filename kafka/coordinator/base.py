@@ -245,13 +245,16 @@ class BaseCoordinator(object):
         """
         elapsed = 0.0 # noqa: F841
         begin = time.time()
-        def inner_timeout_ms():
+        def inner_timeout_ms(fallback=None):
             if timeout_ms is None:
-                return None
+                return fallback
             elapsed = (time.time() - begin) * 1000
             if elapsed >= timeout_ms:
                 raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
-            return max(0, timeout_ms - elapsed)
+            ret = max(0, timeout_ms - elapsed)
+            if fallback is not None:
+                return min(ret, fallback)
+            return ret
 
         with self._client._lock, self._lock:
             while self.coordinator_unknown():
@@ -275,7 +278,7 @@ class BaseCoordinator(object):
                             metadata_update = self._client.cluster.request_update()
                             self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
                         else:
-                            time.sleep(min(inner_timeout_ms(), self.config['retry_backoff_ms']) / 1000)
+                            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
 
@@ -369,13 +372,16 @@ class BaseCoordinator(object):
 
             elapsed = 0.0 # noqa: F841
             begin = time.time()
-            def inner_timeout_ms():
+            def inner_timeout_ms(fallback=None):
                 if timeout_ms is None:
-                    return None
+                    return fallback
                 elapsed = (time.time() - begin) * 1000
                 if elapsed >= timeout_ms:
-                    raise Errors.KafkaTimeoutError()
-                return max(0, timeout_ms - elapsed)
+                    raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
+                ret = max(0, timeout_ms - elapsed)
+                if fallback is not None:
+                    return min(ret, fallback)
+                return ret
 
             while self.need_rejoin() or self._rejoin_incomplete():
                 self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
@@ -399,7 +405,7 @@ class BaseCoordinator(object):
                 while not self.coordinator_unknown():
                     if not self._client.in_flight_request_count(self.coordinator_id):
                         break
-                    self._client.poll(timeout_ms=min(200, inner_timeout_ms()))
+                    self._client.poll(timeout_ms=inner_timeout_ms(200))
                 else:
                     continue
 
@@ -451,7 +457,7 @@ class BaseCoordinator(object):
                         continue
                     elif not future.retriable():
                         raise exception  # pylint: disable-msg=raising-bad-type
-                    time.sleep(min(inner_timeout_ms(), self.config['retry_backoff_ms']) / 1000)
+                    time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
     def _rejoin_incomplete(self):
         return self.join_future is not None
