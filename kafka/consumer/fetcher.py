@@ -268,13 +268,16 @@ class Fetcher(six.Iterator):
 
         elapsed = 0.0 # noqa: F841
         begin = time.time()
-        def inner_timeout_ms():
+        def inner_timeout_ms(fallback=None):
             if timeout_ms is None:
-                return None
+                return fallback
             elapsed = (time.time() - begin) * 1000
             if elapsed >= timeout_ms:
                 raise Errors.KafkaTimeoutError('Timeout attempting to find coordinator')
-            return max(0, timeout_ms - elapsed)
+            ret = max(0, timeout_ms - elapsed)
+            if fallback is not None:
+                return min(ret, fallback)
+            return ret
 
         timestamps = copy.copy(timestamps)
         while True:
@@ -305,7 +308,7 @@ class Fetcher(six.Iterator):
                         log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
                         timestamps.pop(unknown_partition)
             else:
-                time.sleep(min(inner_timeout_ms(), self.config['retry_backoff_ms']) / 1000)
+                time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
