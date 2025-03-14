@@ -15,14 +15,13 @@ from kafka.client_async import KafkaClient, selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
-    IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError,
+    IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError, UnknownTopicOrPartitionError,
     UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
-    DeleteGroupsRequest, DescribeLogDirsRequest
-)
+    DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest)
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
@@ -1116,8 +1115,118 @@ class KafkaAdminClient(object):
                 .format(version))
         return self._send_request_to_controller(request)
 
-    # delete records protocol not yet implemented
-    # Note: send the request to the partition leaders
+    def _get_leader_for_partitions(self, partitions, timeout_ms=None):
+        """Finds ID of the leader node for every given topic partition.
+
+        Will raise UnknownTopicOrPartitionError if for some partition no leader can be found.
+
+        :param partitions: ``[TopicPartition]``: partitions for which to find leaders.
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
+            config.
+
+        :return: Dictionary with ``{leader_id -> {partitions}}``
+        """
+        timeout_ms = self._validate_timeout(timeout_ms)
+
+        partitions = set(partitions)
+        topics = set(tp.topic for tp in partitions)
+
+        response = self._get_cluster_metadata(topics=topics).to_object()
+
+        leader2partitions = defaultdict(list)
+        valid_partitions = set()
+        for topic in response.get("topics", ()):
+            for partition in topic.get("partitions", ()):
+                t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
+                if t2p in partitions:
+                    leader2partitions[partition["leader"]].append(t2p)
+                    valid_partitions.add(t2p)
+
+        if len(partitions) != len(valid_partitions):
+            unknown = set(partitions) - valid_partitions
+            raise UnknownTopicOrPartitionError(
+                "The following partitions are not known: %s"
+                % ", ".join(str(x) for x in unknown)
+            )
+
+        return leader2partitions
+
+    def delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
+        """Delete records whose offset is smaller than the given offset of the corresponding partition.
+
+        :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
+            given partitions.
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
+            config.
+        :param partition_leader_id: ``str``: If specified, all deletion requests will be sent to
+            this node. No check is performed verifying that this is indeed the leader for all
+            listed partitions: use with caution.
+
+        :return: Dictionary {topicPartition -> metadata}, where metadata is returned by the broker.
+            See DeleteRecordsResponse for possible fields. error_code for all partitions is
+            guaranteed to be zero, otherwise an exception is raised.
+        """
+        timeout_ms = self._validate_timeout(timeout_ms)
+        responses = []
+        version = self._client.api_version(DeleteRecordsRequest, max_version=0)
+        if version is None:
+            raise IncompatibleBrokerVersion("Broker does not support DeleteGroupsRequest")
+
+        # We want to make as few requests as possible
+        # If a single node serves as a partition leader for multiple partitions (and/or
+        # topics), we can send all of those in a single request.
+        # For that we store {leader -> {partitions for leader}}, and do 1 request per leader
+        if partition_leader_id is None:
+            leader2partitions = self._get_leader_for_partitions(
+                set(records_to_delete), timeout_ms
+            )
+        else:
+            leader2partitions = {partition_leader_id: set(records_to_delete)}
+
+        for leader, partitions in leader2partitions.items():
+            topic2partitions = defaultdict(list)
+            for partition in partitions:
+                topic2partitions[partition.topic].append(partition)
+
+            request = DeleteRecordsRequest[version](
+                topics=[
+                    (topic, [(tp.partition, records_to_delete[tp]) for tp in partitions])
+                    for topic, partitions in topic2partitions.items()
+                ],
+                timeout_ms=timeout_ms
+            )
+            future = self._send_request_to_node(leader, request)
+            self._wait_for_futures([future])
+
+            responses.append(future.value.to_object())
+
+        partition2result = {}
+        partition2error = {}
+        for response in responses:
+            for topic in response["topics"]:
+                for partition in topic["partitions"]:
+                    tp = TopicPartition(topic["name"], partition["partition_index"])
+                    partition2result[tp] = partition
+                    if partition["error_code"] != 0:
+                        partition2error[tp] = partition["error_code"]
+
+        if partition2error:
+            if len(partition2error) == 1:
+                key, error = next(iter(partition2error.items()))
+                raise Errors.for_code(error)(
+                    "Error deleting records from topic %s partition %s" % (key.topic, key.partition)
+                )
+            else:
+                raise Errors.BrokerResponseError(
+                    "The following errors occured when trying to delete records: " +
+                    ", ".join(
+                        "%s(partition=%d): %s" %
+                        (partition.topic, partition.partition, Errors.for_code(error).__name__)
+                        for partition, error in partition2error.items()
+                    )
+                )
+
+        return partition2result
 
     # create delegation token protocol not yet implemented
     # Note: send the request to the least_loaded_node()

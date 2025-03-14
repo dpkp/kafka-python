@@ -1,3 +1,4 @@
+from kafka.structs import TopicPartition
 import pytest
 
 from logging import info
@@ -7,7 +8,9 @@ from time import time, sleep
 
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
-from kafka.errors import (NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, GroupIdNotFoundError)
+from kafka.errors import (
+        BrokerResponseError, KafkaError, NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, 
+        GroupIdNotFoundError, OffsetOutOfRangeError, UnknownTopicOrPartitionError)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
@@ -315,3 +318,71 @@ def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_fa
     assert group1 not in consumergroups
     assert group2 in consumergroups
     assert group3 not in consumergroups
+
+@pytest.fixture(name="topic2")
+def _topic2(kafka_broker, request):
+    """Same as `topic` fixture, but a different name if you need to topics."""
+    topic_name = '%s_%s' % (request.node.name, random_string(10))
+    kafka_broker.create_topics([topic_name])
+    return topic_name
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
+def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_messages, topic, topic2):
+    t0p0 = TopicPartition(topic, 0)
+    t0p1 = TopicPartition(topic, 1)
+    t0p2 = TopicPartition(topic, 2)
+    t1p0 = TopicPartition(topic2, 0)
+    t1p1 = TopicPartition(topic2, 1)
+    t1p2 = TopicPartition(topic2, 2)
+
+    partitions = (t0p0, t0p1, t0p2, t1p0, t1p1, t1p2)
+
+    for p in partitions:
+        send_messages(range(0, 100), partition=p.partition, topic=p.topic)
+
+    consumer1 = kafka_consumer_factory(group_id=None, topics=())
+    consumer1.assign(partitions)
+    for _ in range(600):
+        next(consumer1)
+
+    result = kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
+    assert result[t0p0] == {"low_watermark": 100, "error_code": 0, "partition_index": t0p0.partition}
+    assert result[t0p1] == {"low_watermark": 50, "error_code": 0, "partition_index": t0p1.partition}
+    assert result[t1p0] == {"low_watermark": 40, "error_code": 0, "partition_index": t1p0.partition}
+    assert result[t1p2] == {"low_watermark": 30, "error_code": 0, "partition_index": t1p2.partition}
+
+    consumer2 = kafka_consumer_factory(group_id=None, topics=())
+    consumer2.assign(partitions)
+    all_messages = consumer2.poll(max_records=600, timeout_ms=2000)
+    assert sum(len(x) for x in all_messages.values()) == 600 - 100 - 50 - 40 - 30
+    assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure there are no delayed messages
+
+    assert not all_messages.get(t0p0, [])
+    assert [r.offset for r in all_messages[t0p1]] == list(range(50, 100))
+    assert [r.offset for r in all_messages[t0p2]] == list(range(100))
+
+    assert [r.offset for r in all_messages[t1p0]] == list(range(40, 100))
+    assert [r.offset for r in all_messages[t1p1]] == list(range(100))
+    assert [r.offset for r in all_messages[t1p2]] == list(range(30, 100))
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
+def test_delete_records_with_errors(kafka_admin_client, topic, send_messages):
+    sleep(1)  # sometimes the topic is not created yet...?
+    p0 = TopicPartition(topic, 0)
+    p1 = TopicPartition(topic, 1)
+    p2 = TopicPartition(topic, 2)
+    # verify that topic has been created
+    send_messages(range(0, 1), partition=p2.partition, topic=p2.topic)
+
+    with pytest.raises(UnknownTopicOrPartitionError):
+        kafka_admin_client.delete_records({TopicPartition(topic, 9999): -1})
+    with pytest.raises(UnknownTopicOrPartitionError):
+        kafka_admin_client.delete_records({TopicPartition("doesntexist", 0): -1})
+    with pytest.raises(OffsetOutOfRangeError):
+        kafka_admin_client.delete_records({p0: 1000})
+    with pytest.raises(BrokerResponseError):
+        kafka_admin_client.delete_records({p0: 1000, p1: 1000})
+
+
+
