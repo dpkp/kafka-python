@@ -449,7 +449,7 @@ class KafkaProducer(object):
         _self = weakref.proxy(self)
         def wrapper():
             try:
-                _self.close(timeout=0)
+                _self.close(timeout=0, null_logger=True)
             except (ReferenceError, AttributeError):
                 pass
         return wrapper
@@ -472,22 +472,22 @@ class KafkaProducer(object):
         self._cleanup = None
 
     def __del__(self):
-        # Disable logger during destruction to avoid touching dangling references
-        class NullLogger(object):
-            def __getattr__(self, name):
-                return lambda *args: None
+        self.close(null_logger=True)
 
-        global log
-        log = NullLogger()
-
-        self.close()
-
-    def close(self, timeout=None):
+    def close(self, timeout=None, null_logger=False):
         """Close this producer.
 
         Arguments:
             timeout (float, optional): timeout in seconds to wait for completion.
         """
+        if null_logger:
+            # Disable logger during destruction to avoid touching dangling references
+            class NullLogger(object):
+                def __getattr__(self, name):
+                    return lambda *args: None
+
+            global log
+            log = NullLogger()
 
         # drop our atexit handler now to avoid leaks
         self._unregister_cleanup()
