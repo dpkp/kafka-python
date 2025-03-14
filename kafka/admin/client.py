@@ -1168,7 +1168,9 @@ class KafkaAdminClient(object):
         """
         timeout_ms = self._validate_timeout(timeout_ms)
         responses = []
-        version = self._matching_api_version(DeleteRecordsRequest)
+        version = self._client.api_version(DeleteRecordsRequest, max_version=0)
+        if version is None:
+            raise IncompatibleBrokerVersion("Broker does not support DeleteGroupsRequest")
 
         # We want to make as few requests as possible
         # If a single node serves as a partition leader for multiple partitions (and/or
