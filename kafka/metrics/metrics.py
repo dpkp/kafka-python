@@ -55,10 +55,11 @@ class Metrics(object):
         self._reporters = reporters or []
         for reporter in self._reporters:
             reporter.init([])
+        self._closed = False
 
         if enable_expiration:
             def expire_loop():
-                while True:
+                while not self._closed:
                     # delay 30 seconds
                     time.sleep(30)
                     self.ExpireSensorTask.run(self)
@@ -259,3 +260,4 @@ class Metrics(object):
             reporter.close()
 
         self._metrics.clear()
+        self._closed = True
