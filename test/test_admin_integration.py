@@ -348,8 +348,8 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     result = kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
     assert result[t0p0] == {"low_watermark": 100, "error_code": 0, "partition_index": t0p0.partition}
     assert result[t0p1] == {"low_watermark": 50, "error_code": 0, "partition_index": t0p1.partition}
-    assert result[t1p0] == {"low_watermark": 60, "error_code": 0, "partition_index": t1p0.partition}
-    assert result[t1p2] == {"low_watermark": 70, "error_code": 0, "partition_index": t1p2.partition}
+    assert result[t1p0] == {"low_watermark": 40, "error_code": 0, "partition_index": t1p0.partition}
+    assert result[t1p2] == {"low_watermark": 30, "error_code": 0, "partition_index": t1p2.partition}
 
     consumer2 = kafka_consumer_factory(group_id=None, topics=())
     consumer2.assign(partitions)
