@@ -1052,6 +1052,8 @@ class KafkaClient(object):
 
                 if conn._api_version is not None:
                     return conn._api_version
+                else:
+                    log.debug('Failed to identify api_version after connection attempt to %s', conn)
 
             # Timeout
             else:
