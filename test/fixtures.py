@@ -10,8 +10,7 @@ import time
 import uuid
 
 import py
-from kafka.vendor.six.moves import urllib, range
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
+from kafka.vendor.six.moves import range
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError
@@ -75,43 +74,6 @@ class Fixture(object):
             raise FileNotFoundError(self.kafka_root)
 
     @classmethod
-    def download_official_distribution(cls,
-                                       kafka_version=None,
-                                       scala_version=None,
-                                       output_dir=None):
-        if not kafka_version:
-            kafka_version = cls.kafka_version
-        if not scala_version:
-            scala_version = cls.scala_version
-        if not output_dir:
-            output_dir = os.path.join(cls.project_root, 'servers', 'dist')
-
-        distfile = 'kafka_%s-%s' % (scala_version, kafka_version,)
-        url_base = 'https://archive.apache.org/dist/kafka/%s/' % (kafka_version,)
-        output_file = os.path.join(output_dir, distfile + '.tgz')
-
-        if os.path.isfile(output_file):
-            log.info("Found file already on disk: %s", output_file)
-            return output_file
-
-        # New tarballs are .tgz, older ones are sometimes .tar.gz
-        try:
-            url = url_base + distfile + '.tgz'
-            log.info("Attempting to download %s", url)
-            response = urllib.request.urlopen(url)
-        except urllib.error.HTTPError:
-            log.exception("HTTP Error")
-            url = url_base + distfile + '.tar.gz'
-            log.info("Attempting to download %s", url)
-            response = urllib.request.urlopen(url)
-
-        log.info("Saving distribution file to %s", output_file)
-        with open(output_file, 'w') as output_file_fd:
-            output_file_fd.write(response.read())
-
-        return output_file
-
-    @classmethod
     def test_resource(cls, filename):
         path = os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
         if os.path.isfile(path):
@@ -169,23 +131,18 @@ class Fixture(object):
 
 class ZookeeperFixture(Fixture):
     @classmethod
-    def instance(cls):
-        if "ZOOKEEPER_URI" in os.environ:
-            parse = urlparse(os.environ["ZOOKEEPER_URI"])
-            (host, port) = (parse.hostname, parse.port)
-            fixture = ExternalService(host, port)
-        else:
-            (host, port) = ("127.0.0.1", None)
-            fixture = cls(host, port)
-
+    def instance(cls, host=None, port=None, external=False):
+        if host is None:
+            host = "127.0.0.1"
+        fixture = cls(host, port, external=external)
         fixture.open()
         return fixture
 
-    def __init__(self, host, port, tmp_dir=None):
+    def __init__(self, host, port, external=False, tmp_dir=None):
         super(ZookeeperFixture, self).__init__()
         self.host = host
         self.port = port
-
+        self.running = external
         self.tmp_dir = tmp_dir
 
     def kafka_run_class_env(self):
@@ -198,6 +155,8 @@ class ZookeeperFixture(Fixture):
             log.info("*** Zookeeper [%s:%s]: %s", self.host, self.port or '(auto)', message)
 
     def open(self):
+        if self.running:
+            return
         if self.tmp_dir is None:
             self.tmp_dir = py.path.local.mkdtemp() #pylint: disable=no-member
         self.tmp_dir.ensure(dir=True)
@@ -262,34 +221,30 @@ class KafkaFixture(Fixture):
 
     @classmethod
     def instance(cls, broker_id, zookeeper, zk_chroot=None,
-                 host=None, port=None,
-                 transport='PLAINTEXT', replicas=1, partitions=2,
+                 host=None, port=None, external=False,
+                 transport='PLAINTEXT', replicas=1, partitions=4,
                  sasl_mechanism=None, auto_create_topic=True, tmp_dir=None):
 
         if zk_chroot is None:
             zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
-        if "KAFKA_URI" in os.environ:
-            parse = urlparse(os.environ["KAFKA_URI"])
-            (host, port) = (parse.hostname, parse.port)
-            fixture = ExternalService(host, port)
-        else:
-            if host is None:
-                host = "localhost"
-            fixture = KafkaFixture(host, port, broker_id,
-                                   zookeeper, zk_chroot,
-                                   transport=transport,
-                                   replicas=replicas, partitions=partitions,
-                                   sasl_mechanism=sasl_mechanism,
-                                   auto_create_topic=auto_create_topic,
-                                   tmp_dir=tmp_dir)
+        if host is None:
+            host = "localhost"
+        fixture = KafkaFixture(host, port, broker_id,
+                               zookeeper, zk_chroot,
+                               external=external,
+                               transport=transport,
+                               replicas=replicas, partitions=partitions,
+                               sasl_mechanism=sasl_mechanism,
+                               auto_create_topic=auto_create_topic,
+                               tmp_dir=tmp_dir)
 
-            fixture.open()
+        fixture.open()
         return fixture
 
     def __init__(self, host, port, broker_id, zookeeper, zk_chroot,
                  replicas=1, partitions=2, transport='PLAINTEXT',
                  sasl_mechanism=None, auto_create_topic=True,
-                 tmp_dir=None):
+                 tmp_dir=None, external=False):
         super(KafkaFixture, self).__init__()
 
         self.host = host
@@ -321,9 +276,16 @@ class KafkaFixture(Fixture):
         self.partitions = partitions
 
         self.tmp_dir = tmp_dir
-        self.running = False
+        self.external = external
 
-        self._client = None
+        if self.external:
+            self.child = ExternalService(self.host, self.port)
+            (self._client,) = self.get_clients(1, client_id='_internal_client')
+            self.running = True
+        else:
+            self._client = None
+            self.running = False
+
         self.sasl_config = ''
         self.jaas_config = ''
 
@@ -416,6 +378,8 @@ class KafkaFixture(Fixture):
         self.out("Kafka chroot created in Zookeeper!")
 
     def start(self):
+        if self.running:
+            return True
         # Configure Kafka child process
         properties = self.tmp_dir.join("kafka.properties")
         jaas_conf = self.tmp_dir.join("kafka_server_jaas.conf")
@@ -515,6 +479,8 @@ class KafkaFixture(Fixture):
         self.close()
 
     def stop(self):
+        if self.external:
+            return
         if not self.running:
             self.out("Instance already stopped")
             return

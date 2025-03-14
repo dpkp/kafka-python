@@ -1,24 +1,36 @@
 from __future__ import absolute_import
 
+import os
 import uuid
 
 import pytest
 
+from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 from test.testutil import env_kafka_version, random_string
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
 @pytest.fixture(scope="module")
 def zookeeper():
     """Return a Zookeeper fixture"""
-    zk_instance = ZookeeperFixture.instance()
-    yield zk_instance
-    zk_instance.close()
+    if "ZOOKEEPER_URI" in os.environ:
+        parse = urlparse(os.environ["ZOOKEEPER_URI"])
+        (host, port) = (parse.hostname, parse.port)
+        yield ZookeeperFixture.instance(host=host, port=port, external=True)
+    else:
+        zk_instance = ZookeeperFixture.instance()
+        yield zk_instance
+        zk_instance.close()
 
 
 @pytest.fixture(scope="module")
-def kafka_broker(kafka_broker_factory):
+def kafka_broker(kafka_broker_factory, zookeeper):
     """Return a Kafka broker fixture"""
-    return kafka_broker_factory()[0]
+    if "KAFKA_URI" in os.environ:
+        parse = urlparse(os.environ["KAFKA_URI"])
+        (host, port) = (parse.hostname, parse.port)
+        return KafkaFixture.instance(0, zookeeper, host=host, port=port, external=True)
+    else:
+        return kafka_broker_factory()[0]
 
 
 @pytest.fixture(scope="module")
