@@ -948,6 +948,7 @@ class BrokerConnection(object):
         return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
 
     def _send(self, request, blocking=True, request_timeout_ms=None):
+        request_timeout_ms = request_timeout_ms or self.config['request_timeout_ms']
         future = Future()
         with self._lock:
             if not self._can_send_recv():
@@ -958,11 +959,10 @@ class BrokerConnection(object):
 
             correlation_id = self._protocol.send_request(request)
 
-            log.debug('%s Request %d: %s', self, correlation_id, request)
+            log.debug('%s Request %d (timeout_ms %s): %s', self, correlation_id, request_timeout_ms, request)
             if request.expect_response():
                 assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
                 sent_time = time.time()
-                request_timeout_ms = request_timeout_ms or self.config['request_timeout_ms']
                 timeout_at = sent_time + (request_timeout_ms / 1000)
                 self.in_flight_requests[correlation_id] = (future, sent_time, timeout_at)
             else:
