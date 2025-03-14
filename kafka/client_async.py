@@ -236,7 +236,6 @@ class KafkaClient(object):
         self._api_versions = None
         self._connecting = set()
         self._sending = set()
-        self._refresh_on_disconnects = True
 
         # Not currently used, but data is collected internally
         self._last_bootstrap = 0
@@ -382,7 +381,7 @@ class KafkaClient(object):
                 elif self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails += 1
 
-                elif self._refresh_on_disconnects and not self._closed and not idle_disconnect:
+                elif conn.connect_failed() and not self._closed and not idle_disconnect:
                     log.warning("Node %s connection failed -- refreshing metadata", node_id)
                     self.cluster.request_update()
 
