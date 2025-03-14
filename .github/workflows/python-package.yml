@@ -34,12 +34,9 @@ jobs:
           - "3.5.2"
           - "3.9.0"
         python:
-          - "3.12"
+          - "3.13"
         include:
           #- python: "pypy3.9"
-          #  kafka: "2.6.0"
-          #  experimental: true
-          #- python: "~3.13.0-0"
           #  kafka: "2.6.0"
           #  experimental: true
           - python: "3.8"
@@ -49,6 +46,8 @@ jobs:
           - python: "3.10"
             kafka: "3.9.0"
           - python: "3.11"
+            kafka: "3.9.0"
+          - python: "3.12"
             kafka: "3.9.0"
 
     steps:
