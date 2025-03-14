@@ -1715,18 +1715,13 @@ class KafkaAdminClient(object):
 
         :return: Appropriate version of ElectLeadersResponse class.
         """
-        version = self._matching_api_version(ElectLeadersRequest)
+        version = self._client.api_version(ElectLeadersRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if 0 < version <= 1:
-            request = ElectLeadersRequest[version](
-                election_type=ElectionType(election_type),
-                topic_partitions=self._get_topic_partitions(topic_partitions),
-                timeout=timeout_ms,
-            )
-        else:
-            raise NotImplementedError(
-                "Support for CreateTopics v{} has not yet been added to KafkaAdminClient."
-                .format(version))
+        request = ElectLeadersRequest[version](
+            election_type=ElectionType(election_type),
+            topic_partitions=self._get_topic_partitions(topic_partitions),
+            timeout=timeout_ms,
+        )
         # TODO convert structs to a more pythonic interface
         return self._send_request_to_controller(request)
 
