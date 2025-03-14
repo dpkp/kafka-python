@@ -764,6 +764,7 @@ class BaseCoordinator(object):
                 self._heartbeat_thread = HeartbeatThread(weakref.proxy(self))
                 self._heartbeat_thread.daemon = True
                 self._heartbeat_thread.start()
+                log.debug("Started heartbeat thread %s", self._heartbeat_thread.ident)
 
     def _disable_heartbeat_thread(self):
         with self._lock:
