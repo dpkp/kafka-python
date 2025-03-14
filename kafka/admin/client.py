@@ -22,7 +22,6 @@ from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest)
-)
 from kafka.protocol.commit import OffsetFetchRequest
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
