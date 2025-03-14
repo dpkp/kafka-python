@@ -1121,9 +1121,9 @@ class KafkaAdminClient(object):
         Will raise UnknownTopicOrPartitionError if for some partition no leader can be found.
 
         :param partitions: ``[TopicPartition]``: partitions for which to find leaders.
-        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from 
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
             config.
-        
+
         :return: Dictionary with ``{leader_id -> {partitions}}``
         """
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -1145,7 +1145,7 @@ class KafkaAdminClient(object):
         if len(partitions) != len(valid_partitions):
             unknown = set(partitions) - valid_partitions
             raise UnknownTopicOrPartitionError(
-                "The following partitions are not known: %s" 
+                "The following partitions are not known: %s"
                 % ", ".join(str(x) for x in unknown)
             )
 
@@ -1156,14 +1156,14 @@ class KafkaAdminClient(object):
 
         :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
             given partitions.
-        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from 
+        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
             config.
         :param partition_leader_id: ``str``: If specified, all deletion requests will be sent to
             this node. No check is performed verifying that this is indeed the leader for all
             listed partitions: use with caution.
 
         :return: Dictionary {topicPartition -> metadata}, where metadata is returned by the broker.
-            See DeleteRecordsResponse for possible fields. error_code for all partitions is 
+            See DeleteRecordsResponse for possible fields. error_code for all partitions is
             guaranteed to be zero, otherwise an exception is raised.
         """
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -1171,7 +1171,7 @@ class KafkaAdminClient(object):
         version = self._matching_api_version(DeleteRecordsRequest)
 
         # We want to make as few requests as possible
-        # If a single node serves as a partition leader for multiple partitions (and/or 
+        # If a single node serves as a partition leader for multiple partitions (and/or
         # topics), we can send all of those in a single request.
         # For that we store {leader -> {partitions for leader}}, and do 1 request per leader
         if partition_leader_id is None:
@@ -1218,8 +1218,8 @@ class KafkaAdminClient(object):
                 raise Errors.BrokerResponseError(
                     "The following errors occured when trying to delete records: " +
                     ", ".join(
-                        "%s(partition=%d): %s" % 
-                        (partition.topic, partition.partition, Errors.for_code(error).__name__) 
+                        "%s(partition=%d): %s" %
+                        (partition.topic, partition.partition, Errors.for_code(error).__name__)
                         for partition, error in partition2error.items()
                     )
                 )
