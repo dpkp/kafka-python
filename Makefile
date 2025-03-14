@@ -21,7 +21,7 @@ lint:
 	pylint --recursive=y --errors-only kafka test
 
 test: build-integration
-	pytest --durations=10 $(PYTESTS)
+	pytest $(PYTESTS)
 
 cov-local: build-integration
 	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \

@@ -10,6 +10,7 @@ pytest
 pytest-cov
 pytest-mock
 pytest-pylint
+pytest-timeout
 python-snappy
 Sphinx
 sphinx-rtd-theme
