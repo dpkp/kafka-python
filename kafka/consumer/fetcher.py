@@ -538,9 +538,13 @@ class Fetcher(six.Iterator):
         for partition, timestamp in six.iteritems(timestamps):
             node_id = self._client.cluster.leader_for_partition(partition)
             if node_id is None:
+                if partition.topic not in self._client.cluster.topics():
+                    log.warning("Could not lookup offsets for partition %s since no metadata is available for topic. "
+                                "Wait for metadata refresh and try again", partition)
+                else:
+                    log.warning("Could not lookup offsets for partition %s since no metadata is available for it. "
+                                "Wait for metadata refresh and try again", partition)
                 self._client.add_topic(partition.topic)
-                log.debug("Partition %s is unknown for fetching offset,"
-                          " wait for metadata refresh", partition)
                 return Future().failure(Errors.StaleMetadata(partition))
             elif node_id == -1:
                 log.debug("Leader for partition %s unavailable for fetching "
