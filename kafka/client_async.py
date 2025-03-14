@@ -30,7 +30,7 @@ from kafka.protocol.metadata import MetadataRequest
 from kafka.util import Dict, WeakMethod
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
-from kafka.vendor import socketpair
+from kafka.vendor import socketpair # noqa: F401
 from kafka.version import __version__
 
 if six.PY2:
@@ -1184,7 +1184,7 @@ class IdleConnectionManager(object):
 
     def next_check_ms(self):
         now = time.time()
-        if not self.lru_connections:
+        if not self.lru_connections or self.next_idle_close_check_time == float('inf'):
             return float('inf')
         elif self.next_idle_close_check_time <= now:
             return 0
