@@ -506,6 +506,7 @@ class KafkaProducer(object):
             assert timeout >= 0
 
         log.info("Closing the Kafka producer with %s secs timeout.", timeout)
+        self.flush(timeout)
         invoked_from_callback = bool(threading.current_thread() is self._sender)
         if timeout > 0:
             if invoked_from_callback:
