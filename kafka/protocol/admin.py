@@ -1,5 +1,12 @@
 from __future__ import absolute_import
 
+# enum in stdlib as of py3.4
+try:
+    from enum import IntEnum  # pylint: disable=import-error
+except ImportError:
+    # vendored backport module
+    from kafka.vendor.enum34 import IntEnum
+
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields
 
@@ -1049,6 +1056,7 @@ class ElectLeadersResponse_v0(Response):
         ))
     )
 
+
 class ElectLeadersRequest_v0(Request):
     API_KEY = 43
     API_VERSION = 1
@@ -1079,6 +1087,7 @@ class ElectLeadersResponse_v1(Response):
         ))
     )
 
+
 class ElectLeadersRequest_v1(Request):
     API_KEY = 43
     API_VERSION = 1
@@ -1093,6 +1102,13 @@ class ElectLeadersRequest_v1(Request):
     )
 
 
-ElectLeadersRequest = [ElectLeadersRequest_v0, ElectLeadersRequest_v1]
+class ElectionType(IntEnum):
+    """ Leader election type
+    """
 
+    PREFERRED = 0,
+    UNCLEAN = 1
+
+
+ElectLeadersRequest = [ElectLeadersRequest_v0, ElectLeadersRequest_v1]
 ElectLeadersResponse = [ElectLeadersResponse_v0, ElectLeadersResponse_v1]
