@@ -861,6 +861,10 @@ class BrokerConnection(object):
         """Return True iff socket is closed"""
         return self.state is ConnectionStates.DISCONNECTED
 
+    def connect_failed(self):
+        """Return True iff connection attempt failed after attempting all dns records"""
+        return self.disconnected() and self.last_attempt >= 0 and len(self._gai) == 0
+
     def _reset_reconnect_backoff(self):
         self._failures = 0
         self._reconnect_backoff = self.config['reconnect_backoff_ms'] / 1000.0
