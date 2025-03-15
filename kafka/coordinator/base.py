@@ -163,7 +163,7 @@ class BaseCoordinator(object):
         pass
 
     @abc.abstractmethod
-    def _on_join_prepare(self, generation, member_id):
+    def _on_join_prepare(self, generation, member_id, timeout_ms=None):
         """Invoked prior to each group join or rejoin.
 
         This is typically used to perform any cleanup from the previous
@@ -415,7 +415,8 @@ class BaseCoordinator(object):
             # while another rebalance is still in progress.
             if not self.rejoining:
                 self._on_join_prepare(self._generation.generation_id,
-                                      self._generation.member_id)
+                                      self._generation.member_id,
+                                      timeout_ms=inner_timeout_ms())
                 self.rejoining = True
 
             # fence off the heartbeat thread explicitly so that it cannot

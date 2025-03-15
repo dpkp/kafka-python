@@ -5,7 +5,7 @@ import logging
 import socket
 import time
 
-from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
+from kafka.errors import KafkaConfigurationError, KafkaTimeoutError, UnsupportedVersionError
 
 from kafka.vendor import six
 
@@ -18,6 +18,7 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.list_offsets import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.util import timeout_ms_fn
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
@@ -521,7 +522,7 @@ class KafkaConsumer(six.Iterator):
             offsets, callback=callback)
         return future
 
-    def commit(self, offsets=None):
+    def commit(self, offsets=None, timeout_ms=None):
         """Commit offsets to kafka, blocking until success or error.
 
         This commits offsets only to Kafka. The offsets committed using this API
@@ -545,9 +546,9 @@ class KafkaConsumer(six.Iterator):
         assert self.config['group_id'] is not None, 'Requires group_id'
         if offsets is None:
             offsets = self._subscription.all_consumed_offsets()
-        self._coordinator.commit_offsets_sync(offsets)
+        self._coordinator.commit_offsets_sync(offsets, timeout_ms=timeout_ms)
 
-    def committed(self, partition, metadata=False):
+    def committed(self, partition, metadata=False, timeout_ms=None):
         """Get the last committed offset for the given partition.
 
         This offset will be used as the position for the consumer
@@ -564,6 +565,9 @@ class KafkaConsumer(six.Iterator):
 
         Returns:
             The last committed offset (int or OffsetAndMetadata), or None if there was no prior commit.
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
         assert self.config['group_id'] is not None, 'Requires group_id'
@@ -572,10 +576,10 @@ class KafkaConsumer(six.Iterator):
         if self._subscription.is_assigned(partition):
             committed = self._subscription.assignment[partition].committed
             if committed is None:
-                self._coordinator.refresh_committed_offsets_if_needed()
+                self._coordinator.refresh_committed_offsets_if_needed(timeout_ms=timeout_ms)
                 committed = self._subscription.assignment[partition].committed
         else:
-            commit_map = self._coordinator.fetch_committed_offsets([partition])
+            commit_map = self._coordinator.fetch_committed_offsets([partition], timeout_ms=timeout_ms)
             if partition in commit_map:
                 committed = commit_map[partition]
             else:
@@ -670,17 +674,13 @@ class KafkaConsumer(six.Iterator):
         assert not self._closed, 'KafkaConsumer is closed'
 
         # Poll for new data until the timeout expires
-        start = time.time()
-        remaining = timeout_ms
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
         while not self._closed:
-            records = self._poll_once(remaining, max_records, update_offsets=update_offsets)
+            records = self._poll_once(inner_timeout_ms(), max_records, update_offsets=update_offsets)
             if records:
                 return records
 
-            elapsed_ms = (time.time() - start) * 1000
-            remaining = timeout_ms - elapsed_ms
-
-            if remaining <= 0:
+            if inner_timeout_ms() <= 0:
                 break
 
         return {}
@@ -695,14 +695,14 @@ class KafkaConsumer(six.Iterator):
         Returns:
             dict: Map of topic to list of records (may be empty).
         """
-        begin = time.time()
-        if not self._coordinator.poll(timeout_ms=timeout_ms):
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
+        if not self._coordinator.poll(timeout_ms=inner_timeout_ms()):
             return {}
 
         # Fetch positions if we have partitions we're subscribed to that we
         # don't know the offset for
         if not self._subscription.has_all_fetch_positions():
-            self._update_fetch_positions(self._subscription.missing_fetch_positions())
+            self._update_fetch_positions(self._subscription.missing_fetch_positions(), timeout_ms=inner_timeout_ms())
 
         # If data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
@@ -723,9 +723,7 @@ class KafkaConsumer(six.Iterator):
         if len(futures):
             self._client.poll(timeout_ms=0)
 
-        timeout_ms -= (time.time() - begin) * 1000
-        timeout_ms = max(0, min(timeout_ms, self._coordinator.time_to_next_poll() * 1000))
-        self._client.poll(timeout_ms=timeout_ms)
+        self._client.poll(timeout_ms=inner_timeout_ms(self._coordinator.time_to_next_poll() * 1000))
         # after the long poll, we should check whether the group needs to rebalance
         # prior to returning data so that the group can stabilize faster
         if self._coordinator.need_rejoin():
@@ -734,7 +732,7 @@ class KafkaConsumer(six.Iterator):
         records, _ = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
         return records
 
-    def position(self, partition):
+    def position(self, partition, timeout_ms=None):
         """Get the offset of the next record that will be fetched
 
         Arguments:
@@ -748,7 +746,7 @@ class KafkaConsumer(six.Iterator):
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
         position = self._subscription.assignment[partition].position
         if position is None:
-            self._update_fetch_positions([partition])
+            self._update_fetch_positions([partition], timeout_ms=timeout_ms)
             position = self._subscription.assignment[partition].position
         return position.offset if position else None
 
@@ -1103,7 +1101,7 @@ class KafkaConsumer(six.Iterator):
             return False
         return True
 
-    def _update_fetch_positions(self, partitions):
+    def _update_fetch_positions(self, partitions, timeout_ms=None):
         """Set the fetch position to the committed position (if there is one)
         or reset it using the offset reset policy the user has configured.
 
@@ -1111,27 +1109,35 @@ class KafkaConsumer(six.Iterator):
             partitions (List[TopicPartition]): The partitions that need
                 updating fetch positions.
 
+        Returns True if fetch positions updated, False if timeout
+
         Raises:
             NoOffsetForPartitionError: If no offset is stored for a given
                 partition and no offset reset policy is defined.
         """
-        # Lookup any positions for partitions which are awaiting reset (which may be the
-        # case if the user called :meth:`seek_to_beginning` or :meth:`seek_to_end`. We do
-        # this check first to avoid an unnecessary lookup of committed offsets (which
-        # typically occurs when the user is manually assigning partitions and managing
-        # their own offsets).
-        self._fetcher.reset_offsets_if_needed(partitions)
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout updating fetch positions')
+        try:
+            # Lookup any positions for partitions which are awaiting reset (which may be the
+            # case if the user called :meth:`seek_to_beginning` or :meth:`seek_to_end`. We do
+            # this check first to avoid an unnecessary lookup of committed offsets (which
+            # typically occurs when the user is manually assigning partitions and managing
+            # their own offsets).
+            self._fetcher.reset_offsets_if_needed(partitions, timeout_ms=inner_timeout_ms())
 
-        if not self._subscription.has_all_fetch_positions():
-            # if we still don't have offsets for all partitions, then we should either seek
-            # to the last committed position or reset using the auto reset policy
-            if (self.config['api_version'] >= (0, 8, 1) and
-                self.config['group_id'] is not None):
-                # first refresh commits for all assigned partitions
-                self._coordinator.refresh_committed_offsets_if_needed()
+            if not self._subscription.has_all_fetch_positions():
+                # if we still don't have offsets for all partitions, then we should either seek
+                # to the last committed position or reset using the auto reset policy
+                if (self.config['api_version'] >= (0, 8, 1) and
+                    self.config['group_id'] is not None):
+                    # first refresh commits for all assigned partitions
+                    self._coordinator.refresh_committed_offsets_if_needed(timeout_ms=inner_timeout_ms())
 
-            # Then, do any offset lookups in case some positions are not known
-            self._fetcher.update_fetch_positions(partitions)
+                # Then, do any offset lookups in case some positions are not known
+                self._fetcher.update_fetch_positions(partitions, timeout_ms=inner_timeout_ms())
+            return True
+
+        except KafkaTimeoutError:
+            return False
 
     def _message_generator_v2(self):
         timeout_ms = 1000 * max(0, self._consumer_timeout - time.time())
