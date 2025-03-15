@@ -21,7 +21,7 @@ if six.PY3:
             crc -= TO_SIGNED
         return crc
 else:
-    from binascii import crc32
+    from binascii import crc32 # noqa: F401
 
 
 def timeout_ms_fn(timeout_ms, error_message):
@@ -32,7 +32,10 @@ def timeout_ms_fn(timeout_ms, error_message):
             return fallback
         elapsed = (time.time() - begin) * 1000
         if elapsed >= timeout_ms:
-            raise KafkaTimeoutError(error_message)
+            if error_message is not None:
+                raise KafkaTimeoutError(error_message)
+            else:
+                return 0
         ret = max(0, timeout_ms - elapsed)
         if fallback is not None:
             return min(ret, fallback)

@@ -130,10 +130,10 @@ def test_update_fetch_positions(fetcher, topic, mocker):
     fetcher._subscriptions.need_offset_reset(partition)
     fetcher._subscriptions.assignment[partition].awaiting_reset = False
     fetcher.update_fetch_positions([partition])
-    fetcher._reset_offset.assert_called_with(partition)
+    fetcher._reset_offset.assert_called_with(partition, timeout_ms=None)
     assert fetcher._subscriptions.assignment[partition].awaiting_reset is True
     fetcher.update_fetch_positions([partition])
-    fetcher._reset_offset.assert_called_with(partition)
+    fetcher._reset_offset.assert_called_with(partition, timeout_ms=None)
 
     # partition needs reset, has committed offset
     fetcher._reset_offset.reset_mock()

@@ -349,9 +349,9 @@ class ConsumerCoordinator(BaseCoordinator):
             group_assignment[member_id] = assignment
         return group_assignment
 
-    def _on_join_prepare(self, generation, member_id):
+    def _on_join_prepare(self, generation, member_id, timeout_ms=None):
         # commit offsets prior to rebalance if auto-commit enabled
-        self._maybe_auto_commit_offsets_sync()
+        self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
 
         # execute the user's callback before rebalance
         log.info("Revoking previously assigned partitions %s for group %s",
@@ -392,17 +392,17 @@ class ConsumerCoordinator(BaseCoordinator):
 
         return super(ConsumerCoordinator, self).need_rejoin()
 
-    def refresh_committed_offsets_if_needed(self):
+    def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
         if self._subscription.needs_fetch_committed_offsets:
-            offsets = self.fetch_committed_offsets(self._subscription.assigned_partitions())
+            offsets = self.fetch_committed_offsets(self._subscription.assigned_partitions(), timeout_ms=timeout_ms)
             for partition, offset in six.iteritems(offsets):
                 # verify assignment is still active
                 if self._subscription.is_assigned(partition):
                     self._subscription.assignment[partition].committed = offset
             self._subscription.needs_fetch_committed_offsets = False
 
-    def fetch_committed_offsets(self, partitions):
+    def fetch_committed_offsets(self, partitions, timeout_ms=None):
         """Fetch the current committed offsets for specified partitions
 
         Arguments:
@@ -410,16 +410,23 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Returns:
             dict: {TopicPartition: OffsetAndMetadata}
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided
         """
         if not partitions:
             return {}
 
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.fetch_committed_offsets')
         while True:
-            self.ensure_coordinator_ready()
+            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
 
             # contact coordinator to fetch committed offsets
             future = self._send_offset_fetch_request(partitions)
-            self._client.poll(future=future)
+            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+
+            if not future.is_done:
+                raise Errors.KafkaTimeoutError()
 
             if future.succeeded():
                 return future.value
@@ -427,9 +434,9 @@ class ConsumerCoordinator(BaseCoordinator):
             if not future.retriable():
                 raise future.exception # pylint: disable-msg=raising-bad-type
 
-            time.sleep(self.config['retry_backoff_ms'] / 1000)
+            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
-    def close(self, autocommit=True):
+    def close(self, autocommit=True, timeout_ms=None):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id.
 
@@ -440,7 +447,7 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         try:
             if autocommit:
-                self._maybe_auto_commit_offsets_sync()
+                self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
         finally:
             super(ConsumerCoordinator, self).close()
 
@@ -498,7 +505,7 @@ class ConsumerCoordinator(BaseCoordinator):
         future.add_both(lambda res: self.completed_offset_commits.appendleft((callback, offsets, res)))
         return future
 
-    def commit_offsets_sync(self, offsets):
+    def commit_offsets_sync(self, offsets, timeout_ms=None):
         """Commit specific offsets synchronously.
 
         This method will retry until the commit completes successfully or an
@@ -517,11 +524,15 @@ class ConsumerCoordinator(BaseCoordinator):
         if not offsets:
             return
 
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
         while True:
-            self.ensure_coordinator_ready()
+            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
 
             future = self._send_offset_commit_request(offsets)
-            self._client.poll(future=future)
+            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+
+            if not future.is_done:
+                raise Errors.KafkaTimeoutError()
 
             if future.succeeded():
                 return future.value
@@ -529,12 +540,12 @@ class ConsumerCoordinator(BaseCoordinator):
             if not future.retriable():
                 raise future.exception # pylint: disable-msg=raising-bad-type
 
-            time.sleep(self.config['retry_backoff_ms'] / 1000)
+            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
-    def _maybe_auto_commit_offsets_sync(self):
+    def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):
         if self.config['enable_auto_commit']:
             try:
-                self.commit_offsets_sync(self._subscription.all_consumed_offsets())
+                self.commit_offsets_sync(self._subscription.all_consumed_offsets(), timeout_ms=timeout_ms)
 
             # The three main group membership errors are known and should not
             # require a stacktrace -- just a warning
@@ -814,7 +825,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     leader_epoch, metadata, error_code = partition_data[2:]
                 else:
                     metadata, error_code = partition_data[2:]
-                    leader_epoch = -1
+                    leader_epoch = -1 # noqa: F841
                 tp = TopicPartition(topic, partition)
                 error_type = Errors.for_code(error_code)
                 if error_type is not Errors.NoError:

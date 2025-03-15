@@ -135,17 +135,21 @@ class Fetcher(six.Iterator):
         self._clean_done_fetch_futures()
         return futures
 
-    def reset_offsets_if_needed(self, partitions):
+    def reset_offsets_if_needed(self, partitions, timeout_ms=None):
         """Lookup and set offsets for any partitions which are awaiting an
         explicit reset.
 
         Arguments:
             partitions (set of TopicPartitions): the partitions to reset
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided
         """
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout resetting offsets')
         for tp in partitions:
             # TODO: If there are several offsets to reset, we could submit offset requests in parallel
             if self._subscriptions.is_assigned(tp) and self._subscriptions.is_offset_reset_needed(tp):
-                self._reset_offset(tp)
+                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
 
     def _clean_done_fetch_futures(self):
         while True:
@@ -160,7 +164,7 @@ class Fetcher(six.Iterator):
         self._clean_done_fetch_futures()
         return bool(self._fetch_futures)
 
-    def update_fetch_positions(self, partitions):
+    def update_fetch_positions(self, partitions, timeout_ms=None):
         """Update the fetch positions for the provided partitions.
 
         Arguments:
@@ -169,7 +173,9 @@ class Fetcher(six.Iterator):
         Raises:
             NoOffsetForPartitionError: if no offset is stored for a given
                 partition and no reset policy is available
+            KafkaTimeoutError if timeout_ms provided.
         """
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout updating fetch positions')
         # reset the fetch position to the committed position
         for tp in partitions:
             if not self._subscriptions.is_assigned(tp):
@@ -182,12 +188,12 @@ class Fetcher(six.Iterator):
                 continue
 
             if self._subscriptions.is_offset_reset_needed(tp):
-                self._reset_offset(tp)
+                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
             elif self._subscriptions.assignment[tp].committed is None:
                 # there's no committed position, so we need to reset with the
                 # default strategy
                 self._subscriptions.need_offset_reset(tp)
-                self._reset_offset(tp)
+                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
             else:
                 committed = self._subscriptions.assignment[tp].committed.offset
                 log.debug("Resetting offset for partition %s to the committed"
@@ -216,7 +222,7 @@ class Fetcher(six.Iterator):
             offsets[tp] = offsets[tp].offset
         return offsets
 
-    def _reset_offset(self, partition):
+    def _reset_offset(self, partition, timeout_ms=None):
         """Reset offsets for the given partition using the offset reset strategy.
 
         Arguments:
@@ -224,6 +230,7 @@ class Fetcher(six.Iterator):
 
         Raises:
             NoOffsetForPartitionError: if no offset reset strategy is defined
+            KafkaTimeoutError if timeout_ms provided
         """
         timestamp = self._subscriptions.assignment[partition].reset_strategy
         if timestamp is OffsetResetStrategy.EARLIEST:
@@ -235,7 +242,7 @@ class Fetcher(six.Iterator):
 
         log.debug("Resetting offset for partition %s to %s offset.",
                   partition, strategy)
-        offsets = self._retrieve_offsets({partition: timestamp})
+        offsets = self._retrieve_offsets({partition: timestamp}, timeout_ms=timeout_ms)
 
         if partition in offsets:
             offset = offsets[partition].offset
@@ -263,11 +270,14 @@ class Fetcher(six.Iterator):
                 retrieved offset, timestamp, and leader_epoch. If offset does not exist for
                 the provided timestamp, that partition will be missing from
                 this mapping.
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided
         """
         if not timestamps:
             return {}
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to find coordinator')
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout fetching offsets')
         timestamps = copy.copy(timestamps)
         while True:
             if not timestamps:
