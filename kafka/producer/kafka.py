@@ -594,6 +594,7 @@ class KafkaProducer(object):
             KafkaTimeoutError: if unable to fetch topic metadata, or unable
                 to obtain memory buffer prior to configured max_block_ms
         """
+        assert not self._closed, 'KafkaProducer already closed!'
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
