@@ -1,3 +1,11 @@
+# 2.1.1 (Mar 16, 2025)
+
+Fixes
+* Fix packaging of 2.1.0 in Fedora: testing requires "pytest-timeout". (#2550)
+* Improve connection error handling when try_api_versions_check fails all attempts (#2548)
+* Add lock synchronization to Future success/failure (#2549)
+* Fix StickyPartitionAssignor encode
+
 # 2.1.0 (Mar 15, 2025)
 
 Support Kafka Broker 2.1 API Baseline
