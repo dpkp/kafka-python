@@ -1,6 +1,104 @@
 Changelog
 =========
 
+2.1.0 (Mar 14, 2025)
+####################
+
+Support Kafka Broker 2.1 API Baseline
+-------------------------------------
+* Add baseline leader_epoch support for ListOffsets v4 / FetchRequest v10 (#2511)
+* Support OffsetFetch v5 / OffsetCommit v6 (2.1 baseline) (#2505)
+* Support 2.1 baseline consumer group apis (#2503)
+* Support FindCoordinatorRequest v2 in consumer and admin client (#2502)
+* Support ListOffsets v3 in consumer (#2501)
+* Support Fetch Request/Response v6 in consumer (#2500)
+* Add support for Metadata Request/Response v7 (#2497)
+* Implement Incremental Fetch Sessions / KIP-227 (#2508)
+* Implement client-side connection throttling / KIP-219 (#2510)
+* Add KafkaClient.api_version(operation) for best available from api_versions (#2495)
+
+Consumer
+--------
+* Timeout coordinator poll / ensure_coordinator_ready / ensure_active_group (#2526)
+* Add optional timeout_ms kwarg to remaining consumer/coordinator methods (#2544)
+* Check for coordinator.poll failure in KafkaConsumer
+* Only mark coordinator dead if connection_delay > 0 (#2530)
+* Delay group coordinator until after bootstrap (#2539)
+* KAFKA-4160: Ensure rebalance listener not called with coordinator lock (#1438)
+* Call default_offset_commit_callback after `_maybe_auto_commit_offsets_async` (#2546)
+* Remove legacy/v1 consumer message iterator (#2543)
+* Log warning when attempting to list offsets for unknown topic/partition (#2540)
+* Add heartbeat thread id to debug logs on start
+* Add inner_timeout_ms handler to fetcher; add fallback (#2529)
+
+Producer
+--------
+* KafkaProducer: Flush pending records before close() (#2537)
+* Raise immediate error on producer.send after close (#2542)
+* Limit producer close timeout to 1sec in __del__; use context managers to close in test_producer
+* Use NullLogger in producer atexit cleanup
+* Attempt to fix metadata race condition when partitioning in producer.send (#2523)
+* Remove unused partial KIP-467 implementation (ProduceResponse batch error details) (#2524)
+
+AdminClient
+-----------
+* Implement perform leader election (#2536)
+* Support delete_records (#2535)
+
+Networking
+----------
+* Call ApiVersionsRequest during connection, prior to Sasl Handshake (#2493)
+* Fake api_versions for old brokers, rename to ApiVersionsRequest, and handle error decoding (#2494)
+* Debug log when skipping api_versions request with pre-configured api_version
+* Only refresh metadata if connection fails all dns records (#2532)
+* Support connections through SOCKS5 proxies (#2531)
+* Fix OverflowError when connection_max_idle_ms is 0 or inf (#2538)
+* socket.setblocking for eventlet/gevent compatibility
+* Support custom per-request timeouts (#2498)
+* Include request_timeout_ms in request debug log
+* Support client.poll with future and timeout_ms
+* mask unused afi var
+* Debug log if check_version connection attempt fails
+
+SASL Modules
+------------
+* Refactor Sasl authentication with SaslMechanism abstract base class; support SaslAuthenticate (#2515)
+* Add SSPI (Kerberos for Windows) authentication mechanism (#2521)
+* Support AWS_MSK_IAM authentication (#2519)
+* Cleanup sasl mechanism configuration checks; fix gssapi bugs; add sasl_kerberos_name config (#2520)
+* Move kafka.oauth.AbstractTokenProvider -> kafka.sasl.oauth.AbstractTokenProvider (#2525)
+
+Testing
+-------
+* Bump default python to 3.13 in CI tests (#2541)
+* Update pytest log_format: use logger instead of filename; add thread id
+* Improve test_consumer_group::test_group logging before group stabilized (#2534)
+* Limit test duration to 5mins w/ pytest-timeout
+* Fix external kafka/zk fixtures for testing (#2533)
+* Disable zookeeper admin server to avoid port conflicts
+* Set default pytest log level to debug
+* test_group: shorter timeout, more logging, more sleep
+* Cache servers/dist in github actions workflow (#2527)
+* Remove tox.ini; update testing docs
+* Use thread-specific client_id in test_group
+* Fix subprocess log warning; specify timeout_ms kwarg in consumer.poll tests
+* Only set KAFKA_JVM_PERFORMANCE_OPTS in makefile if unset; add note re: 2.0-2.3 broker testing
+* Add kafka command to test.fixtures; raise FileNotFoundError if version not installed
+
+Documentation
+-------------
+* Improve ClusterMetadata docs re: node_id/broker_id str/int types
+* Document api_version_auto_timeout_ms default; override in group tests
+
+Fixes
+-----
+* Signal close to metrics expire_loop
+* Add kafka.util timeout_ms_fn
+* fixup TopicAuthorizationFailedError construction
+* Fix lint issues via ruff check (#2522)
+* Make the "mock" dependency optional (only used in Python < 3.3). (#2518)
+
+
 2.0.6 (Mar 4, 2025)
 ###################
 
