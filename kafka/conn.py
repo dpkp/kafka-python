@@ -533,7 +533,7 @@ class BrokerConnection(object):
                 self._api_version = self.config['api_version']
                 # api_version will be normalized by KafkaClient, so this should not happen
                 if self._api_version not in BROKER_API_VERSIONS:
-                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions', self._api_version)
+                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions' % (self._api_version,))
                 self._api_versions = BROKER_API_VERSIONS[self._api_version]
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self._api_version)
                 return True
