@@ -659,7 +659,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             partitions_by_topic = defaultdict(list)
             for topic_partition in member_assignment_partitions:
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
-            data = StickyAssignorUserDataV1(six.viewitems(partitions_by_topic), generation)
+            data = StickyAssignorUserDataV1(list(partitions_by_topic.items()), generation)
             user_data = data.encode()
         return ConsumerProtocolMemberMetadata(cls.version, list(topics), user_data)
 
