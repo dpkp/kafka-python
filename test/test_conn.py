@@ -93,6 +93,12 @@ def test_api_versions_check(_socket):
     assert conn.disconnected() is True
 
 
+def test_api_versions_check_unrecognized(_socket):
+    conn = BrokerConnection('localhost', 9092, socket.AF_INET, api_version=(0, 0))
+    with pytest.raises(Errors.UnrecognizedBrokerVersion):
+        conn.connect()
+
+
 def test_connect_timeout(_socket, conn):
     assert conn.state is ConnectionStates.DISCONNECTED
 
