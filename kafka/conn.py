@@ -531,6 +531,9 @@ class BrokerConnection(object):
         if self._api_versions_future is None:
             if self.config['api_version'] is not None:
                 self._api_version = self.config['api_version']
+                # api_version will be normalized by KafkaClient, so this should not happen
+                if self._api_version not in BROKER_API_VERSIONS:
+                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions' % (self._api_version,))
                 self._api_versions = BROKER_API_VERSIONS[self._api_version]
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self._api_version)
                 return True
@@ -553,7 +556,8 @@ class BrokerConnection(object):
                 self.state = ConnectionStates.API_VERSIONS_RECV
                 self.config['state_change_callback'](self.node_id, self._sock, self)
             else:
-                raise 'Unable to determine broker version.'
+                self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
+                return False
 
         for r, f in self.recv():
             f.success(r)
