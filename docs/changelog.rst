@@ -1,7 +1,7 @@
 Changelog
 =========
 
-2.1.0 (Mar 14, 2025)
+2.1.0 (Mar 15, 2025)
 ####################
 
 Support Kafka Broker 2.1 API Baseline
