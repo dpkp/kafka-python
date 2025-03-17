@@ -100,6 +100,11 @@ class ABCRecordBatch(object):
             if needed.
         """
 
+    @abc.abstractproperty
+    def magic(self):
+        """ Return magic value (0, 1, 2) for batch.
+        """
+
 
 @add_metaclass(abc.ABCMeta)
 class ABCRecords(object):
