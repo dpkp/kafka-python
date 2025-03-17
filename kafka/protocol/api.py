@@ -5,6 +5,8 @@ import abc
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import Int16, Int32, String, Schema, Array, TaggedFields
 
+from kafka.vendor.six import add_metaclass
+
 
 class RequestHeader(Struct):
     SCHEMA = Schema(
@@ -49,9 +51,8 @@ class ResponseHeaderV2(Struct):
     )
 
 
+@add_metaclass(abc.ABCMeta)
 class Request(Struct):
-    __metaclass__ = abc.ABCMeta
-
     FLEXIBLE_VERSION = False
 
     @abc.abstractproperty
@@ -92,8 +93,8 @@ class Request(Struct):
         return ResponseHeader.decode(read_buffer)
 
 
+@add_metaclass(abc.ABCMeta)
 class Response(Struct):
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractproperty
     def API_KEY(self):

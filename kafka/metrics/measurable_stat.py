@@ -4,8 +4,10 @@ import abc
 
 from kafka.metrics.measurable import AbstractMeasurable
 from kafka.metrics.stat import AbstractStat
+from kafka.vendor.six import add_metaclass
 
 
+@add_metaclass(abc.ABCMeta)
 class AbstractMeasurableStat(AbstractStat, AbstractMeasurable):
     """
     An AbstractMeasurableStat is an AbstractStat that is also
@@ -13,4 +15,3 @@ class AbstractMeasurableStat(AbstractStat, AbstractMeasurable):
     This is the interface used for most of the simple statistics such
     as Avg, Max, Count, etc.
     """
-    __metaclass__ = abc.ABCMeta

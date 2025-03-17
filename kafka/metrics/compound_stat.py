@@ -3,16 +3,16 @@ from __future__ import absolute_import
 import abc
 
 from kafka.metrics.stat import AbstractStat
+from kafka.vendor.six import add_metaclass
 
 
+@add_metaclass(abc.ABCMeta)
 class AbstractCompoundStat(AbstractStat):
     """
     A compound stat is a stat where a single measurement and associated
     data structure feeds many metrics. This is the example for a
     histogram which has many associated percentiles.
     """
-    __metaclass__ = abc.ABCMeta
-
     def stats(self):
         """
         Return list of NamedMeasurable

@@ -421,6 +421,7 @@ class TopicPartitionState(object):
         return not self.paused and self.has_valid_position
 
 
+@six.add_metaclass(abc.ABCMeta)
 class ConsumerRebalanceListener(object):
     """
     A callback interface that the user can implement to trigger custom actions
@@ -462,8 +463,6 @@ class ConsumerRebalanceListener(object):
     taking over that partition has their on_partitions_assigned() callback
     called to load the state.
     """
-    __metaclass__ = abc.ABCMeta
-
     @abc.abstractmethod
     def on_partitions_revoked(self, revoked):
         """
