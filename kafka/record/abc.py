@@ -1,9 +1,12 @@
 from __future__ import absolute_import
+
 import abc
 
+from kafka.vendor.six import add_metaclass
 
+
+@add_metaclass(abc.ABCMeta)
 class ABCRecord(object):
-    __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
     @abc.abstractproperty
@@ -44,8 +47,8 @@ class ABCRecord(object):
         """
 
 
+@add_metaclass(abc.ABCMeta)
 class ABCRecordBatchBuilder(object):
-    __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
     @abc.abstractmethod
@@ -84,11 +87,11 @@ class ABCRecordBatchBuilder(object):
         """
 
 
+@add_metaclass(abc.ABCMeta)
 class ABCRecordBatch(object):
     """ For v2 encapsulates a RecordBatch, for v0/v1 a single (maybe
         compressed) message.
     """
-    __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
     @abc.abstractmethod
@@ -98,8 +101,8 @@ class ABCRecordBatch(object):
         """
 
 
+@add_metaclass(abc.ABCMeta)
 class ABCRecords(object):
-    __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
     @abc.abstractmethod
