@@ -10,6 +10,11 @@ class ABCRecord(object):
     __slots__ = ()
 
     @abc.abstractproperty
+    def size_in_bytes(self):
+        """ Number of total bytes in record
+        """
+
+    @abc.abstractproperty
     def offset(self):
         """ Absolute offset of record
         """

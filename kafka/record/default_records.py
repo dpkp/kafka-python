@@ -275,10 +275,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         if self.is_control_batch:
             return ControlRecord(
-                offset, timestamp, self.timestamp_type, key, value, headers)
+                length, offset, timestamp, self.timestamp_type, key, value, headers)
         else:
             return DefaultRecord(
-                offset, timestamp, self.timestamp_type, key, value, headers)
+                length, offset, timestamp, self.timestamp_type, key, value, headers)
 
     def __iter__(self):
         self._maybe_uncompress()
@@ -314,16 +314,21 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
 class DefaultRecord(ABCRecord):
 
-    __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
+    __slots__ = ("_size_in_bytes", "_offset", "_timestamp", "_timestamp_type", "_key", "_value",
                  "_headers")
 
-    def __init__(self, offset, timestamp, timestamp_type, key, value, headers):
+    def __init__(self, size_in_bytes, offset, timestamp, timestamp_type, key, value, headers):
+        self._size_in_bytes = size_in_bytes
         self._offset = offset
         self._timestamp = timestamp
         self._timestamp_type = timestamp_type
         self._key = key
         self._value = value
         self._headers = headers
+
+    @property
+    def size_in_bytes(self):
+        return self._size_in_bytes
 
     @property
     def offset(self):
@@ -371,7 +376,7 @@ class DefaultRecord(ABCRecord):
 
 
 class ControlRecord(DefaultRecord):
-    __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
+    __slots__ = ("_size_in_bytes", "_offset", "_timestamp", "_timestamp_type", "_key", "_value",
                  "_headers", "_version", "_type")
 
     KEY_STRUCT = struct.Struct(
@@ -379,8 +384,8 @@ class ControlRecord(DefaultRecord):
         "h"  # Type => Int16 (0 indicates an abort marker, 1 indicates a commit)
     )
 
-    def __init__(self, offset, timestamp, timestamp_type, key, value, headers):
-        super(ControlRecord, self).__init__(offset, timestamp, timestamp_type, key, value, headers)
+    def __init__(self, size_in_bytes, offset, timestamp, timestamp_type, key, value, headers):
+        super(ControlRecord, self).__init__(size_in_bytes, offset, timestamp, timestamp_type, key, value, headers)
         (self._version, self._type) = self.KEY_STRUCT.unpack(self._key)
 
     # see https://kafka.apache.org/documentation/#controlbatch
