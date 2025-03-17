@@ -413,6 +413,7 @@ class TopicPartitionState(object):
 
     def pause(self):
         self.paused = True
+        self.last_offset_from_record_batch = None
 
     def resume(self):
         self.paused = False
