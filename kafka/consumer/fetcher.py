@@ -407,62 +407,6 @@ class Fetcher(six.Iterator):
         part.discard()
         return 0
 
-    def _message_generator(self):
-        """Iterate over fetched_records"""
-        while self._next_partition_records or self._completed_fetches:
-
-            if not self._next_partition_records:
-                completion = self._completed_fetches.popleft()
-                self._next_partition_records = self._parse_fetched_data(completion)
-                continue
-
-            # Send additional FetchRequests when the internal queue is low
-            # this should enable moderate pipelining
-            if len(self._completed_fetches) <= self.config['iterator_refetch_records']:
-                self.send_fetches()
-
-            tp = self._next_partition_records.topic_partition
-
-            # We can ignore any prior signal to drop pending record batches
-            # because we are starting from a fresh one where fetch_offset == position
-            # i.e., the user seek()'d to this position
-            self._subscriptions.assignment[tp].drop_pending_record_batch = False
-
-            for msg in self._next_partition_records.take():
-
-                # Because we are in a generator, it is possible for
-                # subscription state to change between yield calls
-                # so we need to re-check on each loop
-                # this should catch assignment changes, pauses
-                # and resets via seek_to_beginning / seek_to_end
-                if not self._subscriptions.is_fetchable(tp):
-                    log.debug("Not returning fetched records for partition %s"
-                              " since it is no longer fetchable", tp)
-                    self._next_partition_records = None
-                    break
-
-                # If there is a seek during message iteration,
-                # we should stop unpacking this record batch and
-                # wait for a new fetch response that aligns with the
-                # new seek position
-                elif self._subscriptions.assignment[tp].drop_pending_record_batch:
-                    log.debug("Skipping remainder of record batch for partition %s", tp)
-                    self._subscriptions.assignment[tp].drop_pending_record_batch = False
-                    self._next_partition_records = None
-                    break
-
-                # Compressed messagesets may include earlier messages
-                elif msg.offset < self._subscriptions.assignment[tp].position.offset:
-                    log.debug("Skipping message offset: %s (expecting %s)",
-                              msg.offset,
-                              self._subscriptions.assignment[tp].position.offset)
-                    continue
-
-                self._subscriptions.assignment[tp].position = OffsetAndMetadata(msg.offset + 1, '', -1)
-                yield msg
-
-            self._next_partition_records = None
-
     def _unpack_records(self, tp, records):
         try:
             batch = records.next_batch()
@@ -513,18 +457,6 @@ class Fetcher(six.Iterator):
         except StopIteration:
             log.exception('StopIteration raised unpacking messageset')
             raise RuntimeError('StopIteration raised unpacking messageset')
-
-    def __iter__(self):  # pylint: disable=non-iterator-returned
-        return self
-
-    def __next__(self):
-        if not self._iterator:
-            self._iterator = self._message_generator()
-        try:
-            return next(self._iterator)
-        except StopIteration:
-            self._iterator = None
-            raise
 
     def _deserialize(self, f, topic, bytes_):
         if not f:

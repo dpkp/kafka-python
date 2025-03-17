@@ -463,24 +463,6 @@ def test__unpack_records(fetcher):
     assert records[2].offset == 2
 
 
-def test__message_generator(fetcher, topic, mocker):
-    fetcher.config['check_crcs'] = False
-    tp = TopicPartition(topic, 0)
-    msgs = []
-    for i in range(10):
-        msgs.append((None, b"foo", None))
-    completed_fetch = CompletedFetch(
-        tp, 0, 0, [0, 100, _build_record_batch(msgs)],
-        mocker.MagicMock()
-    )
-    fetcher._completed_fetches.append(completed_fetch)
-    for i in range(10):
-        msg = next(fetcher)
-        assert isinstance(msg, ConsumerRecord)
-        assert msg.offset == i
-        assert msg.value == b'foo'
-
-
 def test__parse_fetched_data(fetcher, topic, mocker):
     fetcher.config['check_crcs'] = False
     tp = TopicPartition(topic, 0)
