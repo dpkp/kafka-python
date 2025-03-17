@@ -339,6 +339,10 @@ class LegacyRecord(ABCRecord):
     def checksum(self):
         return self._crc
 
+    @property
+    def size_in_bytes(self):
+        return LegacyRecordBatchBuilder.estimate_size_in_bytes(self._magic, None, self._key, self._value)
+
     def __repr__(self):
         return (
             "LegacyRecord(magic={!r} offset={!r}, timestamp={!r}, timestamp_type={!r},"
