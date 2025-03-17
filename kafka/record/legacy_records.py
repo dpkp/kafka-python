@@ -164,6 +164,10 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
     def compression_type(self):
         return self._attributes & self.CODEC_MASK
 
+    @property
+    def magic(self):
+        return self._magic
+
     def validate_crc(self):
         crc = calc_crc32(self._buffer[self.MAGIC_OFFSET:])
         return self._crc == crc
@@ -272,27 +276,32 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
 
                 key, value = self._read_key_value(msg_pos + key_offset)
                 yield LegacyRecord(
-                    offset, timestamp, timestamp_type,
+                    self._magic, offset, timestamp, timestamp_type,
                     key, value, crc)
         else:
             key, value = self._read_key_value(key_offset)
             yield LegacyRecord(
-                self._offset, self._timestamp, timestamp_type,
+                self._magic, self._offset, self._timestamp, timestamp_type,
                 key, value, self._crc)
 
 
 class LegacyRecord(ABCRecord):
 
-    __slots__ = ("_offset", "_timestamp", "_timestamp_type", "_key", "_value",
+    __slots__ = ("_magic", "_offset", "_timestamp", "_timestamp_type", "_key", "_value",
                  "_crc")
 
-    def __init__(self, offset, timestamp, timestamp_type, key, value, crc):
+    def __init__(self, magic, offset, timestamp, timestamp_type, key, value, crc):
+        self._magic = magic
         self._offset = offset
         self._timestamp = timestamp
         self._timestamp_type = timestamp_type
         self._key = key
         self._value = value
         self._crc = crc
+
+    @property
+    def magic(self):
+        return self._magic
 
     @property
     def offset(self):
@@ -332,9 +341,9 @@ class LegacyRecord(ABCRecord):
 
     def __repr__(self):
         return (
-            "LegacyRecord(offset={!r}, timestamp={!r}, timestamp_type={!r},"
+            "LegacyRecord(magic={!r} offset={!r}, timestamp={!r}, timestamp_type={!r},"
             " key={!r}, value={!r}, crc={!r})".format(
-                self._offset, self._timestamp, self._timestamp_type,
+                self._magic, self._offset, self._timestamp, self._timestamp_type,
                 self._key, self._value, self._crc)
         )
 
