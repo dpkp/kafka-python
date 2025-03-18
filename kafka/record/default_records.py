@@ -556,8 +556,8 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
             0,  # CRC will be set below, as we need a filled buffer for it
             self._get_attributes(use_compression_type),
             self._last_offset,
-            self._first_timestamp,
-            self._max_timestamp,
+            self._first_timestamp or 0,
+            self._max_timestamp or 0,
             self._producer_id,
             self._producer_epoch,
             self._base_sequence,
