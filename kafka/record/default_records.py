@@ -366,6 +366,9 @@ class DefaultRecord(ABCRecord):
     def checksum(self):
         return None
 
+    def validate_crc(self):
+        return True
+
     def __repr__(self):
         return (
             "DefaultRecord(offset={!r}, timestamp={!r}, timestamp_type={!r},"
