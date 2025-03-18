@@ -382,9 +382,6 @@ class TopicPartitionState(object):
         self._position = None # OffsetAndMetadata exposed to the user
         self.highwater = None
         self.drop_pending_record_batch = False
-        # The last message offset hint available from a record batch with
-        # magic=2 which includes deleted compacted messages
-        self.last_offset_from_record_batch = None
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -400,7 +397,6 @@ class TopicPartitionState(object):
         self.awaiting_reset = True
         self.reset_strategy = strategy
         self._position = None
-        self.last_offset_from_record_batch = None
         self.has_valid_position = False
 
     def seek(self, offset):
@@ -409,7 +405,6 @@ class TopicPartitionState(object):
         self.reset_strategy = None
         self.has_valid_position = True
         self.drop_pending_record_batch = True
-        self.last_offset_from_record_batch = None
 
     def pause(self):
         self.paused = True
