@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
+import itertools
 import logging
 import random
 import sys
@@ -378,87 +379,34 @@ class Fetcher(six.Iterator):
             # note that the position should always be available
             # as long as the partition is still assigned
             position = self._subscriptions.assignment[tp].position
-            if part.fetch_offset == position.offset:
+            if part.next_fetch_offset == position.offset:
                 part_records = part.take(max_records)
-                next_offset = part_records[-1].offset + 1
-                leader_epoch = part_records[-1].leader_epoch
-
                 log.debug("Returning fetched records at offset %d for assigned"
                           " partition %s", position.offset, tp)
                 drained[tp].extend(part_records)
-                if update_offsets:
+                # We want to increment subscription position if (1) we're using consumer.poll(),
+                # or (2) we didn't return any records (consumer iterator will update position
+                # when each message is yielded). There may be edge cases where we re-fetch records
+                # that we'll end up skipping, but for now we'll live with that.
+                highwater = self._subscriptions.assignment[tp].highwater
+                if highwater is not None:
+                    self._sensors.records_fetch_lag.record(highwater - part.next_fetch_offset)
+                if update_offsets or not part_records:
                     # TODO: save leader_epoch
                     log.debug("Updating fetch position for assigned partition %s to %s (leader epoch %s)",
-                              tp, next_offset, leader_epoch)
-                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', -1)
+                              tp, part.next_fetch_offset, part.leader_epoch)
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(part.next_fetch_offset, '', -1)
                 return len(part_records)
 
             else:
                 # these records aren't next in line based on the last consumed
                 # position, ignore them they must be from an obsolete request
                 log.debug("Ignoring fetched records for %s at offset %s since"
-                          " the current position is %d", tp, part.fetch_offset,
+                          " the current position is %d", tp, part.next_fetch_offset,
                           position.offset)
 
-        part.discard()
+        part.drain()
         return 0
-
-    def _unpack_records(self, tp, records):
-        try:
-            batch = records.next_batch()
-            while batch is not None:
-
-                # Try DefaultsRecordBatch / message log format v2
-                # base_offset, last_offset_delta, and control batches
-                try:
-                    batch_offset = batch.base_offset + batch.last_offset_delta
-                    leader_epoch = batch.leader_epoch
-                    # Control batches have a single record indicating whether a transaction
-                    # was aborted or committed.
-                    # When isolation_level is READ_COMMITTED (currently unsupported)
-                    # we should also skip all messages from aborted transactions
-                    # For now we only support READ_UNCOMMITTED and so we ignore the
-                    # abort/commit signal.
-                    if batch.is_control_batch:
-                        batch = records.next_batch()
-                        continue
-                except AttributeError:
-                    leader_epoch = -1
-                    pass
-
-                for record in batch:
-                    key_size = len(record.key) if record.key is not None else -1
-                    value_size = len(record.value) if record.value is not None else -1
-                    key = self._deserialize(
-                        self.config['key_deserializer'],
-                        tp.topic, record.key)
-                    value = self._deserialize(
-                        self.config['value_deserializer'],
-                        tp.topic, record.value)
-                    headers = record.headers
-                    header_size = sum(
-                        len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
-                        headers) if headers else -1
-                    yield ConsumerRecord(
-                        tp.topic, tp.partition, leader_epoch, record.offset, record.timestamp,
-                        record.timestamp_type, key, value, headers, record.checksum,
-                        key_size, value_size, header_size)
-
-                batch = records.next_batch()
-
-        # If unpacking raises StopIteration, it is erroneously
-        # caught by the generator. We want all exceptions to be raised
-        # back to the user. See Issue 545
-        except StopIteration:
-            log.exception('StopIteration raised unpacking messageset')
-            raise RuntimeError('StopIteration raised unpacking messageset')
-
-    def _deserialize(self, f, topic, bytes_):
-        if not f:
-            return bytes_
-        if isinstance(f, Deserializer):
-            return f.deserialize(topic, bytes_)
-        return f(bytes_)
 
     def _send_list_offsets_requests(self, timestamps):
         """Fetch offsets for each partition in timestamps dict. This may send
@@ -773,12 +721,9 @@ class Fetcher(six.Iterator):
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
         fetch_offset = completed_fetch.fetched_offset
-        num_bytes = 0
-        records_count = 0
-        parsed_records = None
-
         error_code, highwater = completed_fetch.partition_data[:2]
         error_type = Errors.for_code(error_code)
+        parsed_records = None
 
         try:
             if not self._subscriptions.is_fetchable(tp):
@@ -807,13 +752,12 @@ class Fetcher(six.Iterator):
                     log.debug("Adding fetched record for partition %s with"
                               " offset %d to buffered record list", tp,
                               position.offset)
-                    unpacked = list(self._unpack_records(tp, records))
-                    parsed_records = self.PartitionRecords(fetch_offset, tp, unpacked)
-                    if unpacked:
-                        last_offset = unpacked[-1].offset
-                        self._sensors.records_fetch_lag.record(highwater - last_offset)
-                    num_bytes = records.valid_bytes()
-                    records_count = len(unpacked)
+                    parsed_records = self.PartitionRecords(fetch_offset, tp, records,
+                                                           self.config['key_deserializer'],
+                                                           self.config['value_deserializer'],
+                                                           self.config['check_crcs'],
+                                                           completed_fetch.metric_aggregator)
+                    return parsed_records
                 elif records.size_in_bytes() > 0:
                     # we did not read a single message from a non-empty
                     # buffer because that message's size is larger than
@@ -858,52 +802,116 @@ class Fetcher(six.Iterator):
                 raise error_type('Unexpected error while fetching data')
 
         finally:
-            completed_fetch.metric_aggregator.record(tp, num_bytes, records_count)
+            if parsed_records is None:
+                completed_fetch.metric_aggregator.record(tp, 0, 0)
 
-        return parsed_records
+        return None
+
+    def close(self):
+        if self._next_partition_records is not None:
+            self._next_partition_records.drain()
 
     class PartitionRecords(object):
-        def __init__(self, fetch_offset, tp, messages):
+        def __init__(self, fetch_offset, tp, records, key_deserializer, value_deserializer, check_crcs, metric_aggregator):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
-            self.messages = messages
+            self.leader_epoch = -1
+            self.next_fetch_offset = fetch_offset
+            self.bytes_read = 0
+            self.records_read = 0
+            self.metric_aggregator = metric_aggregator
+            self.check_crcs = check_crcs
+            self.record_iterator = itertools.dropwhile(
+                self._maybe_skip_record,
+                self._unpack_records(tp, records, key_deserializer, value_deserializer))
+
+        def _maybe_skip_record(self, record):
             # When fetching an offset that is in the middle of a
             # compressed batch, we will get all messages in the batch.
             # But we want to start 'take' at the fetch_offset
             # (or the next highest offset in case the message was compacted)
-            for i, msg in enumerate(messages):
-                if msg.offset < fetch_offset:
-                    log.debug("Skipping message offset: %s (expecting %s)",
-                              msg.offset, fetch_offset)
-                else:
-                    self.message_idx = i
-                    break
-
+            if record.offset < self.fetch_offset:
+                log.debug("Skipping message offset: %s (expecting %s)",
+                          record.offset, self.fetch_offset)
+                return True
             else:
-                self.message_idx = 0
-                self.messages = None
+                return False
 
-        # For truthiness evaluation we need to define __len__ or __nonzero__
-        def __len__(self):
-            if self.messages is None or self.message_idx >= len(self.messages):
-                return 0
-            return len(self.messages) - self.message_idx
+        # For truthiness evaluation
+        def __bool__(self):
+            return self.record_iterator is not None
 
-        def discard(self):
-            self.messages = None
+        def drain(self):
+            if self.record_iterator is not None:
+                self.record_iterator = None
+                self.metric_aggregator.record(self.topic_partition, self.bytes_read, self.records_read)
 
         def take(self, n=None):
-            if not len(self):
-                return []
-            if n is None or n > len(self):
-                n = len(self)
-            next_idx = self.message_idx + n
-            res = self.messages[self.message_idx:next_idx]
-            self.message_idx = next_idx
-            # fetch_offset should be incremented by 1 to parallel the
-            # subscription position (also incremented by 1)
-            self.fetch_offset = max(self.fetch_offset, res[-1].offset + 1)
-            return res
+            return list(itertools.islice(self.record_iterator, 0, n))
+
+        def _unpack_records(self, tp, records, key_deserializer, value_deserializer):
+            try:
+                batch = records.next_batch()
+                last_batch = None
+                while batch is not None:
+                    last_batch = batch
+
+                    # Try DefaultsRecordBatch / message log format v2
+                    # base_offset, last_offset_delta, and control batches
+                    if batch.magic == 2:
+                        self.leader_epoch = batch.leader_epoch
+                        # Control batches have a single record indicating whether a transaction
+                        # was aborted or committed.
+                        # When isolation_level is READ_COMMITTED (currently unsupported)
+                        # we should also skip all messages from aborted transactions
+                        # For now we only support READ_UNCOMMITTED and so we ignore the
+                        # abort/commit signal.
+                        if batch.is_control_batch:
+                            self.next_fetch_offset = next(batch).offset + 1
+                            batch = records.next_batch()
+                            continue
+
+                    for record in batch:
+                        key_size = len(record.key) if record.key is not None else -1
+                        value_size = len(record.value) if record.value is not None else -1
+                        key = self._deserialize(key_deserializer, tp.topic, record.key)
+                        value = self._deserialize(value_deserializer, tp.topic, record.value)
+                        headers = record.headers
+                        header_size = sum(
+                            len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
+                            headers) if headers else -1
+                        self.records_read += 1
+                        self.bytes_read += record.size_in_bytes
+                        self.next_fetch_offset = record.offset + 1
+                        yield ConsumerRecord(
+                            tp.topic, tp.partition, self.leader_epoch, record.offset, record.timestamp,
+                            record.timestamp_type, key, value, headers, record.checksum,
+                            key_size, value_size, header_size)
+
+                    batch = records.next_batch()
+                else:
+                    # Message format v2 preserves the last offset in a batch even if the last record is removed
+                    # through compaction. By using the next offset computed from the last offset in the batch,
+                    # we ensure that the offset of the next fetch will point to the next batch, which avoids
+                    # unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
+                    # fetching the same batch repeatedly).
+                    if last_batch and last_batch.magic == 2:
+                        self.next_fetch_offset = last_batch.base_offset + last_batch.last_offset_delta + 1
+                    self.drain()
+
+            # If unpacking raises StopIteration, it is erroneously
+            # caught by the generator. We want all exceptions to be raised
+            # back to the user. See Issue 545
+            except StopIteration:
+                log.exception('StopIteration raised unpacking messageset')
+                raise RuntimeError('StopIteration raised unpacking messageset')
+
+        def _deserialize(self, f, topic, bytes_):
+            if not f:
+                return bytes_
+            if isinstance(f, Deserializer):
+                return f.deserialize(topic, bytes_)
+            return f(bytes_)
 
 
 class FetchSessionHandler(object):
