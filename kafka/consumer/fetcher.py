@@ -856,6 +856,11 @@ class Fetcher(six.Iterator):
                 while batch is not None:
                     last_batch = batch
 
+                    if self.check_crcs and not batch.validate_crc():
+                        raise Errors.CorruptRecordException(
+                                "Record batch for partition %s at offset %s failed crc check" % (
+                                    self.topic_partition, batch.base_offset))
+
                     # Try DefaultsRecordBatch / message log format v2
                     # base_offset, last_offset_delta, and control batches
                     if batch.magic == 2:
@@ -872,6 +877,10 @@ class Fetcher(six.Iterator):
                             continue
 
                     for record in batch:
+                        if self.check_crcs and not record.validate_crc():
+                            raise Errors.CorruptRecordException(
+                                    "Record for partition %s at offset %s failed crc check" % (
+                                        self.topic_partition, record.offset))
                         key_size = len(record.key) if record.key is not None else -1
                         value_size = len(record.value) if record.value is not None else -1
                         key = self._deserialize(key_deserializer, tp.topic, record.key)
