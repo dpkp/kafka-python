@@ -707,21 +707,17 @@ class KafkaConsumer(six.Iterator):
         # If data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
         records, partial = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
-        if records:
-            # Before returning the fetched records, we can send off the
-            # next round of fetches and avoid block waiting for their
-            # responses to enable pipelining while the user is handling the
-            # fetched records.
-            if not partial:
-                futures = self._fetcher.send_fetches()
-                if len(futures):
-                    self._client.poll(timeout_ms=0)
-            return records
+        # Before returning the fetched records, we can send off the
+        # next round of fetches and avoid block waiting for their
+        # responses to enable pipelining while the user is handling the
+        # fetched records.
+        if not partial:
+            futures = self._fetcher.send_fetches()
+            if len(futures):
+                self._client.poll(timeout_ms=0)
 
-        # Send any new fetches (won't resend pending fetches)
-        futures = self._fetcher.send_fetches()
-        if len(futures):
-            self._client.poll(timeout_ms=0)
+        if records:
+            return records
 
         self._client.poll(timeout_ms=inner_timeout_ms(self._coordinator.time_to_next_poll() * 1000))
         # after the long poll, we should check whether the group needs to rebalance
