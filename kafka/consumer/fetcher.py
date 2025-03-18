@@ -417,7 +417,6 @@ class Fetcher(six.Iterator):
                 try:
                     batch_offset = batch.base_offset + batch.last_offset_delta
                     leader_epoch = batch.leader_epoch
-                    self._subscriptions.assignment[tp].last_offset_from_record_batch = batch_offset
                     # Control batches have a single record indicating whether a transaction
                     # was aborted or committed.
                     # When isolation_level is READ_COMMITTED (currently unsupported)
@@ -642,16 +641,6 @@ class Fetcher(six.Iterator):
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
-
-            # advance position for any deleted compacted messages if required
-            if self._subscriptions.assignment[partition].last_offset_from_record_batch:
-                next_offset_from_batch_header = self._subscriptions.assignment[partition].last_offset_from_record_batch + 1
-                if next_offset_from_batch_header > self._subscriptions.assignment[partition].position.offset:
-                    log.debug(
-                        "Advance position for partition %s from %s to %s (last record batch location plus one)"
-                        " to correct for deleted compacted messages and/or transactional control records",
-                        partition, self._subscriptions.assignment[partition].position.offset, next_offset_from_batch_header)
-                    self._subscriptions.assignment[partition].position = OffsetAndMetadata(next_offset_from_batch_header, '', -1)
 
             position = self._subscriptions.assignment[partition].position
 
