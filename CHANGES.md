@@ -1,3 +1,22 @@
+# 2.1.2 (Mar 17, 2025)
+
+Fixes
+* Simplify consumer.poll send fetches logic
+* Fix crc validation in consumer / fetcher
+* Lazy `_unpack_records` in PartitionRecords to fix premature fetch offset advance in consumer.poll() (#2555)
+* Debug log fetch records return; separate offsets update log
+* Fix Fetcher retriable error handling (#2554)
+* Use six.add_metaclass for py2/py3 compatible abc (#2551)
+
+Improvements
+* Add FetchMetrics class; move topic_fetch_metrics inside aggregator
+* DefaultRecordsBatchBuilder: support empty batch
+* MemoryRecordsBuilder: support arbitrary offset, skipping offsets
+* Add record.validate_crc() for v0/v1 crc checks
+* Remove fetcher message_generator / iterator interface
+* Add size_in_bytes to ABCRecordBatch and implement for Legacy and Default
+* Add magic property to ABCRecord and implement for LegacyRecord
+
 # 2.1.1 (Mar 16, 2025)
 
 Fixes
