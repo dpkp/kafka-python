@@ -52,9 +52,9 @@ def fetcher(client, subscription_state, topic):
     return Fetcher(client, subscription_state, Metrics())
 
 
-def _build_record_batch(msgs, compression=0):
+def _build_record_batch(msgs, compression=0, offset=0, magic=2):
     builder = MemoryRecordsBuilder(
-        magic=1, compression_type=0, batch_size=9999999)
+        magic=magic, compression_type=0, batch_size=9999999, offset=offset)
     for msg in msgs:
         key, value, timestamp = msg
         builder.append(key=key, value=value, timestamp=timestamp, headers=[])
@@ -443,8 +443,7 @@ def test__handle_fetch_error(fetcher, caplog, exception, log_level):
     assert caplog.records[0].levelname == logging.getLevelName(log_level)
 
 
-def test__unpack_records(fetcher):
-    fetcher.config['check_crcs'] = False
+def test__unpack_records(mocker):
     tp = TopicPartition('foo', 0)
     messages = [
         (None, b"a", None),
@@ -452,7 +451,8 @@ def test__unpack_records(fetcher):
         (None, b"c", None),
     ]
     memory_records = MemoryRecords(_build_record_batch(messages))
-    records = list(fetcher._unpack_records(tp, memory_records))
+    part_records = Fetcher.PartitionRecords(0, tp, memory_records, None, None, False, mocker.MagicMock())
+    records = list(part_records.record_iterator)
     assert len(records) == 3
     assert all(map(lambda x: isinstance(x, ConsumerRecord), records))
     assert records[0].value == b'a'
@@ -475,7 +475,8 @@ def test__parse_fetched_data(fetcher, topic, mocker):
     )
     partition_record = fetcher._parse_fetched_data(completed_fetch)
     assert isinstance(partition_record, fetcher.PartitionRecords)
-    assert len(partition_record) == 10
+    assert partition_record
+    assert len(partition_record.take()) == 10
 
 
 def test__parse_fetched_data__paused(fetcher, topic, mocker):
@@ -545,7 +546,7 @@ def test__parse_fetched_data__out_of_range(fetcher, topic, mocker):
     assert fetcher._subscriptions.assignment[tp].awaiting_reset is True
 
 
-def test_partition_records_offset():
+def test_partition_records_offset(mocker):
     """Test that compressed messagesets are handle correctly
     when fetch offset is in the middle of the message list
     """
@@ -553,39 +554,45 @@ def test_partition_records_offset():
     batch_end = 130
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
-                               None, None, 'key', 'value', [], 'checksum', 0, 0, -1)
-                for i in range(batch_start, batch_end)]
-    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
-    assert len(records) > 0
+    messages = [(None, b'msg', None) for i in range(batch_start, batch_end)]
+    memory_records = MemoryRecords(_build_record_batch(messages, offset=batch_start))
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock())
+    assert records
+    assert records.next_fetch_offset == fetch_offset
     msgs = records.take(1)
     assert msgs[0].offset == fetch_offset
-    assert records.fetch_offset == fetch_offset + 1
+    assert records.next_fetch_offset == fetch_offset + 1
     msgs = records.take(2)
     assert len(msgs) == 2
-    assert len(records) > 0
-    records.discard()
-    assert len(records) == 0
+    assert records
+    assert records.next_fetch_offset == fetch_offset + 3
+    records.drain()
+    assert not records
 
 
-def test_partition_records_empty():
-    records = Fetcher.PartitionRecords(0, None, [])
-    assert len(records) == 0
+def test_partition_records_empty(mocker):
+    tp = TopicPartition('foo', 0)
+    memory_records = MemoryRecords(_build_record_batch([]))
+    records = Fetcher.PartitionRecords(0, tp, memory_records, None, None, False, mocker.MagicMock())
+    msgs = records.take()
+    assert len(msgs) == 0
+    assert not records
 
 
-def test_partition_records_no_fetch_offset():
+def test_partition_records_no_fetch_offset(mocker):
     batch_start = 0
     batch_end = 100
     fetch_offset = 123
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
-                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
-                for i in range(batch_start, batch_end)]
-    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
-    assert len(records) == 0
+    messages = [(None, b'msg', None) for i in range(batch_start, batch_end)]
+    memory_records = MemoryRecords(_build_record_batch(messages, offset=batch_start))
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock())
+    msgs = records.take()
+    assert len(msgs) == 0
+    assert not records
 
 
-def test_partition_records_compacted_offset():
+def test_partition_records_compacted_offset(mocker):
     """Test that messagesets are handle correctly
     when the fetch offset points to a message that has been compacted
     """
@@ -593,10 +600,17 @@ def test_partition_records_compacted_offset():
     batch_end = 100
     fetch_offset = 42
     tp = TopicPartition('foo', 0)
-    messages = [ConsumerRecord(tp.topic, tp.partition, -1, i,
-                               None, None, 'key', 'value', None, 'checksum', 0, 0, -1)
-                for i in range(batch_start, batch_end) if i != fetch_offset]
-    records = Fetcher.PartitionRecords(fetch_offset, None, messages)
-    assert len(records) == batch_end - fetch_offset - 1
-    msgs = records.take(1)
+    builder = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=9999999)
+
+    for i in range(batch_start, batch_end):
+        if i == fetch_offset:
+            builder.skip(1)
+        else:
+            builder.append(key=None, value=b'msg', timestamp=None, headers=[])
+    builder.close()
+    memory_records = MemoryRecords(builder.buffer())
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock())
+    msgs = records.take()
+    assert len(msgs) == batch_end - fetch_offset - 1
     assert msgs[0].offset == fetch_offset + 1
