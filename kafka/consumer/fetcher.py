@@ -363,37 +363,33 @@ class Fetcher(six.Iterator):
             return 0
 
         tp = part.topic_partition
-        fetch_offset = part.fetch_offset
         if not self._subscriptions.is_assigned(tp):
             # this can happen when a rebalance happened before
             # fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition %s"
                       " since it is no longer assigned", tp)
+        elif not self._subscriptions.is_fetchable(tp):
+            # this can happen when a partition is paused before
+            # fetched records are returned to the consumer's poll call
+            log.debug("Not returning fetched records for assigned partition"
+                      " %s since it is no longer fetchable", tp)
+
         else:
             # note that the position should always be available
             # as long as the partition is still assigned
             position = self._subscriptions.assignment[tp].position
-            if not self._subscriptions.is_fetchable(tp):
-                # this can happen when a partition is paused before
-                # fetched records are returned to the consumer's poll call
-                log.debug("Not returning fetched records for assigned partition"
-                          " %s since it is no longer fetchable", tp)
-
-            elif fetch_offset == position.offset:
-                # we are ensured to have at least one record since we already checked for emptiness
+            if part.fetch_offset == position.offset:
                 part_records = part.take(max_records)
                 next_offset = part_records[-1].offset + 1
                 leader_epoch = part_records[-1].leader_epoch
 
-                log.log(0, "Returning fetched records at offset %d for assigned"
-                           " partition %s and update position to %s (leader epoch %s)", position.offset,
-                           tp, next_offset, leader_epoch)
-
-                for record in part_records:
-                    drained[tp].append(record)
-
+                log.debug("Returning fetched records at offset %d for assigned"
+                          " partition %s", position.offset, tp)
+                drained[tp].extend(part_records)
                 if update_offsets:
                     # TODO: save leader_epoch
+                    log.debug("Updating fetch position for assigned partition %s to %s (leader epoch %s)",
+                              tp, next_offset, leader_epoch)
                     self._subscriptions.assignment[tp].position = OffsetAndMetadata(next_offset, '', -1)
                 return len(part_records)
 
