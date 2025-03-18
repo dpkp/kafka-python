@@ -843,7 +843,6 @@ class Fetcher(six.Iterator):
                             record_too_large_partitions,
                             self.config['max_partition_fetch_bytes']),
                         record_too_large_partitions)
-                self._sensors.record_topic_fetch_metrics(tp.topic, num_bytes, records_count)
 
             elif error_type in (Errors.NotLeaderForPartitionError,
                                 Errors.ReplicaNotAvailableError,
@@ -1128,6 +1127,14 @@ class FetchRequestData(object):
         return list(partition_data.items())
 
 
+class FetchMetrics(object):
+    __slots__ = ('total_bytes', 'total_records')
+
+    def __init__(self):
+        self.total_bytes = 0
+        self.total_records = 0
+
+
 class FetchResponseMetricAggregator(object):
     """
     Since we parse the message data for each partition from each fetch
@@ -1138,8 +1145,8 @@ class FetchResponseMetricAggregator(object):
     def __init__(self, sensors, partitions):
         self.sensors = sensors
         self.unrecorded_partitions = partitions
-        self.total_bytes = 0
-        self.total_records = 0
+        self.fetch_metrics = FetchMetrics()
+        self.topic_fetch_metrics = collections.defaultdict(FetchMetrics)
 
     def record(self, partition, num_bytes, num_records):
         """
@@ -1148,13 +1155,17 @@ class FetchResponseMetricAggregator(object):
         have reported, we write the metric.
         """
         self.unrecorded_partitions.remove(partition)
-        self.total_bytes += num_bytes
-        self.total_records += num_records
+        self.fetch_metrics.total_bytes += num_bytes
+        self.fetch_metrics.total_records += num_records
+        self.topic_fetch_metrics[partition.topic].total_bytes += num_bytes
+        self.topic_fetch_metrics[partition.topic].total_records += num_records
 
         # once all expected partitions from the fetch have reported in, record the metrics
         if not self.unrecorded_partitions:
-            self.sensors.bytes_fetched.record(self.total_bytes)
-            self.sensors.records_fetched.record(self.total_records)
+            self.sensors.bytes_fetched.record(self.fetch_metrics.total_bytes)
+            self.sensors.records_fetched.record(self.fetch_metrics.total_records)
+            for topic, metrics in six.iteritems(self.topic_fetch_metrics):
+                self.sensors.record_topic_fetch_metrics(topic, metrics.total_bytes, metrics.total_records)
 
 
 class FetchManagerMetrics(object):
