@@ -115,7 +115,7 @@ class MemoryRecordsBuilder(object):
     __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
                  "_bytes_written")
 
-    def __init__(self, magic, compression_type, batch_size):
+    def __init__(self, magic, compression_type, batch_size, offset=0):
         assert magic in [0, 1, 2], "Not supported magic"
         assert compression_type in [0, 1, 2, 3, 4], "Not valid compression type"
         if magic >= 2:
@@ -130,9 +130,13 @@ class MemoryRecordsBuilder(object):
         self._batch_size = batch_size
         self._buffer = None
 
-        self._next_offset = 0
+        self._next_offset = offset
         self._closed = False
         self._bytes_written = 0
+
+    def skip(self, offsets_to_skip):
+        # Exposed for testing compacted records
+        self._next_offset += offsets_to_skip
 
     def append(self, timestamp, key, value, headers=[]):
         """ Append a message to the buffer.
