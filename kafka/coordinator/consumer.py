@@ -203,8 +203,8 @@ class ConsumerCoordinator(BaseCoordinator):
     def _build_metadata_snapshot(self, subscription, cluster):
         metadata_snapshot = {}
         for topic in subscription.group_subscription():
-            partitions = cluster.partitions_for_topic(topic) or []
-            metadata_snapshot[topic] = set(partitions)
+            partitions = cluster.partitions_for_topic(topic)
+            metadata_snapshot[topic] = partitions or set()
         return metadata_snapshot
 
     def _lookup_assignor(self, name):

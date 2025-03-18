@@ -634,7 +634,7 @@ class KafkaConsumer(six.Iterator):
         if partitions is None:
             self._fetch_all_topic_metadata()
             partitions = cluster.partitions_for_topic(topic)
-        return partitions
+        return partitions or set()
 
     def poll(self, timeout_ms=0, max_records=None, update_offsets=True):
         """Fetch data from assigned topics / partitions.

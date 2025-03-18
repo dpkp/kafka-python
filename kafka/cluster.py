@@ -112,6 +112,7 @@ class ClusterMetadata(object):
 
         Returns:
             set: {partition (int), ...}
+            None if topic not found.
         """
         if topic not in self._partitions:
             return None
