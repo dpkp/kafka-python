@@ -236,6 +236,9 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
             value = self._buffer[pos:pos + value_size].tobytes()
         return key, value
 
+    def _crc_bytes(self, msg_pos, length):
+        return self._buffer[msg_pos + self.MAGIC_OFFSET:msg_pos + self.LOG_OVERHEAD + length]
+
     def __iter__(self):
         if self._magic == 1:
             key_offset = self.KEY_OFFSET_V1
@@ -259,7 +262,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                 absolute_base_offset = -1
 
             for header, msg_pos in headers:
-                offset, _, crc, _, attrs, timestamp = header
+                offset, length, crc, _, attrs, timestamp = header
                 # There should only ever be a single layer of compression
                 assert not attrs & self.CODEC_MASK, (
                     'MessageSet at offset %d appears double-compressed. This '
@@ -275,22 +278,24 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                     offset += absolute_base_offset
 
                 key, value = self._read_key_value(msg_pos + key_offset)
+                crc_bytes = self._crc_bytes(msg_pos, length)
                 yield LegacyRecord(
                     self._magic, offset, timestamp, timestamp_type,
-                    key, value, crc)
+                    key, value, crc, crc_bytes)
         else:
             key, value = self._read_key_value(key_offset)
+            crc_bytes = self._crc_bytes(0, len(self._buffer) - self.LOG_OVERHEAD)
             yield LegacyRecord(
                 self._magic, self._offset, self._timestamp, timestamp_type,
-                key, value, self._crc)
+                key, value, self._crc, crc_bytes)
 
 
 class LegacyRecord(ABCRecord):
 
     __slots__ = ("_magic", "_offset", "_timestamp", "_timestamp_type", "_key", "_value",
-                 "_crc")
+                 "_crc", "_crc_bytes")
 
-    def __init__(self, magic, offset, timestamp, timestamp_type, key, value, crc):
+    def __init__(self, magic, offset, timestamp, timestamp_type, key, value, crc, crc_bytes):
         self._magic = magic
         self._offset = offset
         self._timestamp = timestamp
@@ -298,6 +303,7 @@ class LegacyRecord(ABCRecord):
         self._key = key
         self._value = value
         self._crc = crc
+        self._crc_bytes = crc_bytes
 
     @property
     def magic(self):
@@ -338,6 +344,10 @@ class LegacyRecord(ABCRecord):
     @property
     def checksum(self):
         return self._crc
+
+    def validate_crc(self):
+        crc = calc_crc32(self._crc_bytes)
+        return self._crc == crc
 
     @property
     def size_in_bytes(self):

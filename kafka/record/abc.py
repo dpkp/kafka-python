@@ -45,6 +45,11 @@ class ABCRecord(object):
             be the checksum for v0 and v1 and None for v2 and above.
         """
 
+    @abc.abstractmethod
+    def validate_crc(self):
+        """ Return True if v0/v1 record matches checksum. noop/True for v2 records
+        """
+
     @abc.abstractproperty
     def headers(self):
         """ If supported by version list of key-value tuples, or empty list if
