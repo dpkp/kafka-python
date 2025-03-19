@@ -16,6 +16,6 @@ Although kafka-python is tested and expected to work on recent broker versions,
 not all features are supported. Specifically, transactional producer/consumer
 support is not fully implemented. PRs welcome!
 
-kafka-python is tested on python 2.7, and 3.8-3.12.
+kafka-python is tested on python 2.7, and 3.8-3.13.
 
 Builds and tests via Github Actions Workflows.  See https://github.com/dpkp/kafka-python/actions
