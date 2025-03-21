@@ -101,6 +101,10 @@ class BrokerConnection(object):
             server-side log entries that correspond to this client. Also
             submitted to GroupCoordinator for logging with respect to
             consumer group administration. Default: 'kafka-python-{version}'
+        client_software_name (str): Sent to kafka broker for KIP-511.
+            Default: 'kafka-python'
+        client_software_version (str): Sent to kafka broker for KIP-511.
+            Default: The kafka-python version (via kafka.version).
         reconnect_backoff_ms (int): The amount of time in milliseconds to
             wait before attempting to reconnect to a given host.
             Default: 50.
@@ -191,6 +195,8 @@ class BrokerConnection(object):
 
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
+        'client_software_name': 'kafka-python',
+        'client_software_version': __version__,
         'node_id': 0,
         'request_timeout_ms': 30000,
         'reconnect_backoff_ms': 50,
@@ -242,7 +248,7 @@ class BrokerConnection(object):
         self._api_versions = None
         self._api_version = None
         self._check_version_idx = None
-        self._api_versions_idx = 2
+        self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
         self._throttle_time = None
         self._socks5_proxy = None
 
@@ -538,7 +544,14 @@ class BrokerConnection(object):
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self._api_version)
                 return True
             elif self._check_version_idx is None:
-                request = ApiVersionsRequest[self._api_versions_idx]()
+                version = self._api_versions_idx
+                if version >= 3:
+                    request = ApiVersionsRequest[version](
+                        client_software_name=self.config['client_software_name'],
+                        client_software_version=self.config['client_software_version'],
+                        _tagged_fields={})
+                else:
+                    request = ApiVersionsRequest[version]()
                 future = Future()
                 response = self._send(request, blocking=True, request_timeout_ms=(self.config['api_version_auto_timeout_ms'] * 0.8))
                 response.add_callback(self._handle_api_versions_response, future)
@@ -573,11 +586,15 @@ class BrokerConnection(object):
 
     def _handle_api_versions_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
-        # if error_type i UNSUPPORTED_VERSION: retry w/ latest version from response
         if error_type is not Errors.NoError:
             future.failure(error_type())
             if error_type is Errors.UnsupportedVersionError:
                 self._api_versions_idx -= 1
+                for api_key, min_version, max_version, *rest in response.api_versions:
+                    # If broker provides a lower max_version, skip to that
+                    if api_key == response.API_KEY:
+                        self._api_versions_idx = min(self._api_versions_idx, max_version)
+                        break
                 if self._api_versions_idx >= 0:
                     self._api_versions_future = None
                     self.state = ConnectionStates.API_VERSIONS_SEND
@@ -587,7 +604,7 @@ class BrokerConnection(object):
             return
         self._api_versions = dict([
             (api_key, (min_version, max_version))
-            for api_key, min_version, max_version in response.api_versions
+            for api_key, min_version, max_version, *rest in response.api_versions
         ])
         self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
         log.info('Broker version identified as %s', '.'.join(map(str, self._api_version)))
