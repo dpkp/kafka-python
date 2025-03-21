@@ -229,7 +229,12 @@ class KafkaFixture(Fixture):
         # Kafka requries zookeeper prior to 4.0 release
         if env_kafka_version() < (4, 0):
             if zookeeper is None:
-                zookeeper = ZookeeperFixture.instance()
+                if "ZOOKEEPER_URI" in os.environ:
+                    parse = urlparse(os.environ["ZOOKEEPER_URI"])
+                    (host, port) = (parse.hostname, parse.port)
+                    zookeeper = ZookeeperFixture.instance(host=host, port=port, external=True)
+                elif not external:
+                    zookeeper = ZookeeperFixture.instance()
             if zk_chroot is None:
                 zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
 
@@ -537,7 +542,7 @@ class KafkaFixture(Fixture):
             self.out("Failed to format log dirs for kraft bootstrap!")
             self.out(stdout)
             self.out(stderr)
-            raise RuntimeError("Failed to list topics!")
+            raise RuntimeError("Failed to format log dirs!")
         return True
 
     def _send_request(self, request, timeout=None):
@@ -725,6 +730,7 @@ def get_api_versions():
 def run_brokers():
     logging.basicConfig(level=logging.ERROR)
     k = KafkaFixture.instance(0)
+    zk = k.zookeeper
 
     print("Kafka", k.kafka_version, "running on port:", k.port)
     try:
@@ -733,6 +739,8 @@ def run_brokers():
     except KeyboardInterrupt:
         print("Bye!")
         k.close()
+        if zk:
+            zk.close()
 
 
 if __name__ == '__main__':
