@@ -9,6 +9,7 @@ from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E061
 from test.testutil import env_kafka_version, random_string
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
+
 @pytest.fixture(scope="module")
 def zookeeper():
     """Return a Zookeeper fixture"""
@@ -108,10 +109,12 @@ def kafka_producer_factory(kafka_broker, request):
     if _producer[0]:
         _producer[0].close()
 
+
 @pytest.fixture
 def kafka_admin_client(kafka_admin_client_factory):
     """Return a KafkaAdminClient fixture"""
     yield kafka_admin_client_factory()
+
 
 @pytest.fixture
 def kafka_admin_client_factory(kafka_broker):
@@ -127,6 +130,7 @@ def kafka_admin_client_factory(kafka_broker):
 
     if _admin_client[0]:
         _admin_client[0].close()
+
 
 @pytest.fixture
 def topic(kafka_broker, request):
