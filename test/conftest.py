@@ -9,6 +9,7 @@ from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E061
 from test.testutil import env_kafka_version, random_string
 from test.fixtures import KafkaFixture, ZookeeperFixture
 
+
 @pytest.fixture(scope="module")
 def zookeeper():
     """Return a Zookeeper fixture"""
@@ -23,18 +24,18 @@ def zookeeper():
 
 
 @pytest.fixture(scope="module")
-def kafka_broker(kafka_broker_factory, zookeeper):
+def kafka_broker(kafka_broker_factory):
     """Return a Kafka broker fixture"""
     if "KAFKA_URI" in os.environ:
         parse = urlparse(os.environ["KAFKA_URI"])
         (host, port) = (parse.hostname, parse.port)
-        return KafkaFixture.instance(0, zookeeper, host=host, port=port, external=True)
+        return KafkaFixture.instance(0, host=host, port=port, external=True)
     else:
-        return kafka_broker_factory()[0]
+        return kafka_broker_factory()
 
 
 @pytest.fixture(scope="module")
-def kafka_broker_factory(zookeeper):
+def kafka_broker_factory():
     """Return a Kafka broker fixture factory"""
     assert env_kafka_version(), 'KAFKA_VERSION must be specified to run integration tests'
 
@@ -42,16 +43,20 @@ def kafka_broker_factory(zookeeper):
     def factory(**broker_params):
         params = {} if broker_params is None else broker_params.copy()
         params.setdefault('partitions', 4)
-        num_brokers = params.pop('num_brokers', 1)
-        brokers = tuple(KafkaFixture.instance(x, zookeeper, **params)
-                        for x in range(num_brokers))
-        _brokers.extend(brokers)
-        return brokers
+        node_id = params.pop('node_id', 0)
+        broker = KafkaFixture.instance(node_id, **params)
+        _brokers.append(broker)
+        return broker
 
     yield factory
 
+    zks = set()
     for broker in _brokers:
+        zks.add(broker.zookeeper)
         broker.close()
+    for zk in zks:
+        if zk:
+            zk.close()
 
 
 @pytest.fixture
@@ -108,10 +113,12 @@ def kafka_producer_factory(kafka_broker, request):
     if _producer[0]:
         _producer[0].close()
 
+
 @pytest.fixture
 def kafka_admin_client(kafka_admin_client_factory):
     """Return a KafkaAdminClient fixture"""
     yield kafka_admin_client_factory()
+
 
 @pytest.fixture
 def kafka_admin_client_factory(kafka_broker):
@@ -127,6 +134,7 @@ def kafka_admin_client_factory(kafka_broker):
 
     if _admin_client[0]:
         _admin_client[0].close()
+
 
 @pytest.fixture
 def topic(kafka_broker, request):

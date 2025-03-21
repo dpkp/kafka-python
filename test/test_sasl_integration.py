@@ -25,7 +25,7 @@ from test.testutil import assert_message_count, env_kafka_version, random_string
     ]
 )
 def sasl_kafka(request, kafka_broker_factory):
-    sasl_kafka = kafka_broker_factory(transport="SASL_PLAINTEXT", sasl_mechanism=request.param)[0]
+    sasl_kafka = kafka_broker_factory(transport="SASL_PLAINTEXT", sasl_mechanism=request.param)
     yield sasl_kafka
     sasl_kafka.child.dump_logs()
 

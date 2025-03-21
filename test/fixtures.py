@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division
 
 import atexit
+import base64
 import logging
 import os
 import os.path
@@ -11,6 +12,7 @@ import uuid
 
 import py
 from kafka.vendor.six.moves import range
+from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError
@@ -220,17 +222,25 @@ class KafkaFixture(Fixture):
     broker_password = 'alice-secret'
 
     @classmethod
-    def instance(cls, broker_id, zookeeper, zk_chroot=None,
-                 host=None, port=None, external=False,
+    def instance(cls, broker_id, zookeeper=None, zk_chroot=None,
+                 host="localhost", port=None, external=False,
                  transport='PLAINTEXT', replicas=1, partitions=4,
                  sasl_mechanism=None, auto_create_topic=True, tmp_dir=None):
 
-        if zk_chroot is None:
-            zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
-        if host is None:
-            host = "localhost"
+        # Kafka requries zookeeper prior to 4.0 release
+        if env_kafka_version() < (4, 0):
+            if zookeeper is None:
+                if "ZOOKEEPER_URI" in os.environ:
+                    parse = urlparse(os.environ["ZOOKEEPER_URI"])
+                    (host, port) = (parse.hostname, parse.port)
+                    zookeeper = ZookeeperFixture.instance(host=host, port=port, external=True)
+                elif not external:
+                    zookeeper = ZookeeperFixture.instance()
+            if zk_chroot is None:
+                zk_chroot = "kafka-python_" + str(uuid.uuid4()).replace("-", "_")
+
         fixture = KafkaFixture(host, port, broker_id,
-                               zookeeper, zk_chroot,
+                               zookeeper=zookeeper, zk_chroot=zk_chroot,
                                external=external,
                                transport=transport,
                                replicas=replicas, partitions=partitions,
@@ -241,15 +251,23 @@ class KafkaFixture(Fixture):
         fixture.open()
         return fixture
 
-    def __init__(self, host, port, broker_id, zookeeper, zk_chroot,
+    def __init__(self, host, port, broker_id, zookeeper=None, zk_chroot=None,
                  replicas=1, partitions=2, transport='PLAINTEXT',
                  sasl_mechanism=None, auto_create_topic=True,
                  tmp_dir=None, external=False):
         super(KafkaFixture, self).__init__()
 
         self.host = host
-        self.port = port
+        self.controller_bootstrap_host = host
+        if port is None:
+            self.auto_port = True
+            self.port = get_open_port()
+        else:
+            self.auto_port = False
+            self.port = port
+        self.controller_port = self.port + 1
 
+        self.cluster_id = self._gen_cluster_id()
         self.broker_id = broker_id
         self.auto_create_topic = auto_create_topic
         self.transport = transport.upper()
@@ -262,15 +280,19 @@ class KafkaFixture(Fixture):
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
         # The logging format changed slightly in 1.0.0
-        self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
-        # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
-        self.scram_pattern = r"Removing Produce quota for user %s" % (self.broker_user)
+        if env_kafka_version() < (4, 0):
+            self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
+            # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
+            self.scram_pattern = r"Removing Produce quota for user %s" % (self.broker_user)
+        else:
+            self.start_pattern = r"\[KafkaRaftServer nodeId=%d\] Kafka Server started" % (broker_id,)
+            self.scram_pattern = r"Replayed UserScramCredentialRecord creating new entry for %s" % (self.broker_user,)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
         # Add the attributes below for the template binding
-        self.zk_host = self.zookeeper.host
-        self.zk_port = self.zookeeper.port
+        self.zk_host = self.zookeeper.host if self.zookeeper else None
+        self.zk_port = self.zookeeper.port if self.zookeeper else None
 
         self.replicas = replicas
         self.partitions = partitions
@@ -288,6 +310,9 @@ class KafkaFixture(Fixture):
 
         self.sasl_config = ''
         self.jaas_config = ''
+
+    def _gen_cluster_id(self):
+        return base64.b64encode(uuid.uuid4().bytes).decode('utf-8').rstrip('=')
 
     def _sasl_config(self):
         if not self.sasl_enabled:
@@ -400,12 +425,11 @@ class KafkaFixture(Fixture):
         backoff = 1
         end_at = time.time() + max_timeout
         tries = 1
-        auto_port = (self.port is None)
         while time.time() < end_at:
             # We have had problems with port conflicts on travis
             # so we will try a different port on each retry
             # unless the fixture was passed a specific port
-            if auto_port:
+            if self.auto_port:
                 self.port = get_open_port()
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
             self.render_template(properties_template, properties, vars(self))
@@ -451,6 +475,9 @@ class KafkaFixture(Fixture):
         self.tmp_dir.ensure(dir=True)
         self.tmp_dir.ensure('logs', dir=True)
         self.tmp_dir.ensure('data', dir=True)
+        properties = self.tmp_dir.join('kafka.properties')
+        properties_template = self.test_resource('kafka.properties')
+        self.render_template(properties_template, properties, vars(self))
 
         self.out("Running local instance...")
         log.info("  host            = %s", self.host)
@@ -458,19 +485,26 @@ class KafkaFixture(Fixture):
         log.info("  transport       = %s", self.transport)
         log.info("  sasl_mechanism  = %s", self.sasl_mechanism)
         log.info("  broker_id       = %s", self.broker_id)
-        log.info("  zk_host         = %s", self.zookeeper.host)
-        log.info("  zk_port         = %s", self.zookeeper.port)
+        log.info("  zk_host         = %s", self.zk_host)
+        log.info("  zk_port         = %s", self.zk_port)
         log.info("  zk_chroot       = %s", self.zk_chroot)
         log.info("  replicas        = %s", self.replicas)
         log.info("  partitions      = %s", self.partitions)
         log.info("  tmp_dir         = %s", self.tmp_dir.strpath)
 
-        self._create_zk_chroot()
+        if self.zookeeper:
+            if self.zk_chroot:
+                self._create_zk_chroot()
+            # add user to zookeeper for the first server
+            if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
+                self._add_scram_user()
+
+        else:
+            # running in KRaft mode
+            self._format_log_dirs()
+
         self.sasl_config = self._sasl_config()
         self.jaas_config = self._jaas_config()
-        # add user to zookeeper for the first server
-        if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
-            self._add_scram_user()
         self.start()
 
         atexit.register(self.close)
@@ -501,6 +535,21 @@ class KafkaFixture(Fixture):
     def dump_logs(self):
         super(KafkaFixture, self).dump_logs()
         self.zookeeper.dump_logs()
+
+    def _format_log_dirs(self):
+        self.out("Formatting log dirs for kraft bootstrapping")
+        args = self.run_script('kafka-storage.sh', 'format', '--standalone', '-t', self.cluster_id, '-c', self.tmp_dir.join("kafka.properties"))
+        if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA"):
+            args.extend(['--add-scram', '{}=[name={},password={}]'.format(self.sasl_mechanism, self.broker_user, self.broker_password)])
+        env = self.kafka_run_class_env()
+        proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            self.out("Failed to format log dirs for kraft bootstrap!")
+            self.out(stdout)
+            self.out(stderr)
+            raise RuntimeError("Failed to format log dirs!")
+        return True
 
     def _send_request(self, request, timeout=None):
         def _failure(error):
@@ -541,8 +590,9 @@ class KafkaFixture(Fixture):
         # Try different methods to create a topic, from the fastest to the slowest
         if self.auto_create_topic and num_partitions == self.partitions and replication_factor == self.replicas:
             self._create_topic_via_metadata(topic_name, timeout_ms)
-        elif env_kafka_version() >= (0, 10, 1, 0):
+        elif env_kafka_version() >= (0, 10, 1, 0) and env_kafka_version() < (4, 0):
             try:
+                # 4.0 brokers dropped support for CreateTopicsRequest v0 (TODO: pick from api_versions)
                 self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
             except InvalidReplicationFactorError:
                 # wait and try again
@@ -686,8 +736,8 @@ def get_api_versions():
 
 def run_brokers():
     logging.basicConfig(level=logging.ERROR)
-    zk = ZookeeperFixture.instance()
-    k = KafkaFixture.instance(0, zk)
+    k = KafkaFixture.instance(0)
+    zk = k.zookeeper
 
     print("Kafka", k.kafka_version, "running on port:", k.port)
     try:
@@ -696,7 +746,8 @@ def run_brokers():
     except KeyboardInterrupt:
         print("Bye!")
         k.close()
-        zk.close()
+        if zk:
+            zk.close()
 
 
 if __name__ == '__main__':

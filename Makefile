@@ -68,6 +68,7 @@ kafka_scala_0_9_0_1=2.11
 kafka_scala_0_10_0_0=2.11
 kafka_scala_0_10_0_1=2.11
 kafka_scala_0_10_1_0=2.11
+kafka_scala_4_0_0=2.13
 scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),2.12))
 
 kafka_artifact_name=kafka_$(call scala_version,$(1))-$(1).$(if $(filter 0.8.0,$(1)),tar.gz,tgz)
