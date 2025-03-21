@@ -282,10 +282,11 @@ class KafkaFixture(Fixture):
         # The logging format changed slightly in 1.0.0
         if env_kafka_version() < (4, 0):
             self.start_pattern = r"\[Kafka ?Server (id=)?%d\],? started" % (broker_id,)
+            # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
+            self.scram_pattern = r"Removing Produce quota for user %s" % (self.broker_user)
         else:
             self.start_pattern = r"\[KafkaRaftServer nodeId=%d\] Kafka Server started" % (broker_id,)
-        # Need to wait until the broker has fetched user configs from zookeeper in case we use scram as sasl mechanism
-        self.scram_pattern = r"Removing Produce quota for user %s" % (self.broker_user)
+            self.scram_pattern = r"Replayed UserScramCredentialRecord creating new entry for %s" % (self.broker_user,)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
@@ -491,17 +492,19 @@ class KafkaFixture(Fixture):
         log.info("  partitions      = %s", self.partitions)
         log.info("  tmp_dir         = %s", self.tmp_dir.strpath)
 
-        if self.zk_chroot:
-            self._create_zk_chroot()
+        if self.zookeeper:
+            if self.zk_chroot:
+                self._create_zk_chroot()
+            # add user to zookeeper for the first server
+            if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
+                self._add_scram_user()
 
-        if env_kafka_version() >= (4, 0):
+        else:
+            # running in KRaft mode
             self._format_log_dirs()
 
         self.sasl_config = self._sasl_config()
         self.jaas_config = self._jaas_config()
-        # add user to zookeeper for the first server
-        if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA") and self.broker_id == 0:
-            self._add_scram_user()
         self.start()
 
         atexit.register(self.close)
@@ -536,6 +539,8 @@ class KafkaFixture(Fixture):
     def _format_log_dirs(self):
         self.out("Formatting log dirs for kraft bootstrapping")
         args = self.run_script('kafka-storage.sh', 'format', '--standalone', '-t', self.cluster_id, '-c', self.tmp_dir.join("kafka.properties"))
+        if self.sasl_enabled and self.sasl_mechanism.startswith("SCRAM-SHA"):
+            args.extend(['--add-scram', '{}=[name={},password={}]'.format(self.sasl_mechanism, self.broker_user, self.broker_password)])
         env = self.kafka_run_class_env()
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
