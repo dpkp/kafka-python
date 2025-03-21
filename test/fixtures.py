@@ -265,7 +265,7 @@ class KafkaFixture(Fixture):
         else:
             self.auto_port = False
             self.port = port
-        self.controller_port = self.port + 1
+        self.controller_port = get_open_port()
 
         self.cluster_id = self._gen_cluster_id()
         self.broker_id = broker_id
