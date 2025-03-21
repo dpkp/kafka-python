@@ -590,8 +590,9 @@ class KafkaFixture(Fixture):
         # Try different methods to create a topic, from the fastest to the slowest
         if self.auto_create_topic and num_partitions == self.partitions and replication_factor == self.replicas:
             self._create_topic_via_metadata(topic_name, timeout_ms)
-        elif env_kafka_version() >= (0, 10, 1, 0):
+        elif env_kafka_version() >= (0, 10, 1, 0) and env_kafka_version() < (4, 0):
             try:
+                # 4.0 brokers dropped support for CreateTopicsRequest v0 (TODO: pick from api_versions)
                 self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
             except InvalidReplicationFactorError:
                 # wait and try again
