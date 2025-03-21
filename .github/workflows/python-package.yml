@@ -41,15 +41,15 @@ jobs:
           #  kafka: "2.6.0"
           #  experimental: true
           - python: "3.8"
-            kafka: "3.9.0"
+            kafka: "4.0.0"
           - python: "3.9"
-            kafka: "3.9.0"
+            kafka: "4.0.0"
           - python: "3.10"
-            kafka: "3.9.0"
+            kafka: "4.0.0"
           - python: "3.11"
-            kafka: "3.9.0"
+            kafka: "4.0.0"
           - python: "3.12"
-            kafka: "3.9.0"
+            kafka: "4.0.0"
 
     steps:
       - uses: actions/checkout@v4
