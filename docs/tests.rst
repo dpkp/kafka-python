@@ -45,7 +45,7 @@ Integration tests
 
 .. code:: bash
 
-    KAFKA_VERSION=3.9.0 make test
+    KAFKA_VERSION=4.0.0 make test
 
 
 Integration tests start Kafka and Zookeeper fixtures. Make will download
