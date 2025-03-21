@@ -737,7 +737,6 @@ DescribeConfigsResponse = [
 class DescribeLogDirsResponse_v0(Response):
     API_KEY = 35
     API_VERSION = 0
-    FLEXIBLE_VERSION = True
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
         ('log_dirs', Array(
@@ -970,6 +969,7 @@ class AlterPartitionReassignmentsResponse_v0(Response):
         )),
         ("tags", TaggedFields)
     )
+    FLEXIBLE_VERSION = True
 
 
 class AlterPartitionReassignmentsRequest_v0(Request):
@@ -1017,6 +1017,7 @@ class ListPartitionReassignmentsResponse_v0(Response):
         )),
         ("tags", TaggedFields)
     )
+    FLEXIBLE_VERSION = True
 
 
 class ListPartitionReassignmentsRequest_v0(Request):
