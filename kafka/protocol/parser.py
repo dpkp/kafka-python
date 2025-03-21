@@ -59,7 +59,7 @@ class KafkaProtocol(object):
         if correlation_id is None:
             correlation_id = self._next_correlation_id()
 
-        header = request.build_request_header(correlation_id=correlation_id, client_id=self._client_id)
+        header = request.build_header(correlation_id=correlation_id, client_id=self._client_id)
         message = b''.join([header.encode(), request.encode()])
         size = Int32.encode(len(message))
         data = size + message
@@ -136,13 +136,14 @@ class KafkaProtocol(object):
         if not self.in_flight_requests:
             raise Errors.CorrelationIdError('No in-flight-request found for server response')
         (correlation_id, request) = self.in_flight_requests.popleft()
-        response_header = request.parse_response_header(read_buffer)
+        response_type = request.RESPONSE_TYPE
+        response_header = response_type.parse_header(read_buffer)
         recv_correlation_id = response_header.correlation_id
         log.debug('Received correlation id: %d', recv_correlation_id)
         # 0.8.2 quirk
         if (recv_correlation_id == 0 and
             correlation_id != 0 and
-            request.RESPONSE_TYPE is FindCoordinatorResponse[0] and
+            response_type is FindCoordinatorResponse[0] and
             (self._api_version == (0, 8, 2) or self._api_version is None)):
             log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
                         ' Correlation ID does not match request. This'
@@ -156,15 +157,15 @@ class KafkaProtocol(object):
                 % (correlation_id, recv_correlation_id))
 
         # decode response
-        log.debug('Processing response %s', request.RESPONSE_TYPE.__name__)
+        log.debug('Processing response %s', response_type.__name__)
         try:
-            response = request.RESPONSE_TYPE.decode(read_buffer)
+            response = response_type.decode(read_buffer)
         except ValueError:
             read_buffer.seek(0)
             buf = read_buffer.read()
             log.error('Response %d [ResponseType: %s Request: %s]:'
                       ' Unable to decode %d-byte buffer: %r',
-                      correlation_id, request.RESPONSE_TYPE,
+                      correlation_id, response_type,
                       request, len(buf), buf)
             raise Errors.KafkaProtocolError('Unable to decode response')
 
