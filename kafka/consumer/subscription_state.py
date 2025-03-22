@@ -151,11 +151,6 @@ class SubscriptionState(object):
         self.subscription = set(topics)
         self._group_subscription.update(topics)
 
-        # Remove any assigned partitions which are no longer subscribed to
-        for tp in set(self.assignment.keys()):
-            if tp.topic not in self.subscription:
-                del self.assignment[tp]
-
     def group_subscribe(self, topics):
         """Add topics to the current group subscription.
 
