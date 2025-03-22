@@ -878,8 +878,15 @@ class ConsumerCoordinator(BaseCoordinator):
                 self.next_auto_commit_deadline = time.time() + self.config['retry_backoff_ms'] / 1000
             elif time.time() > self.next_auto_commit_deadline:
                 self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
-                self.commit_offsets_async(self._subscription.all_consumed_offsets(),
-                                          self._commit_offsets_async_on_complete)
+                self._do_auto_commit_offsets_async()
+
+    def maybe_auto_commit_offsets_now(self):
+        if self.config['enable_auto_commit'] and not self.coordinator_unknown():
+            self._do_auto_commit_offsets_async()
+
+    def _do_auto_commit_offsets_async(self):
+        self.commit_offsets_async(self._subscription.all_consumed_offsets(),
+                                  self._commit_offsets_async_on_complete)
 
 
 class ConsumerCoordinatorMetrics(object):
