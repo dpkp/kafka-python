@@ -43,6 +43,29 @@ def timeout_ms_fn(timeout_ms, error_message):
     return inner_timeout_ms
 
 
+# Taken from: https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java#L29
+TOPIC_MAX_LENGTH = 249
+TOPIC_LEGAL_CHARS = re.compile('^[a-zA-Z0-9._-]+$')
+
+def ensure_valid_topic_name(topic):
+    """ Ensures that the topic name is valid according to the kafka source. """
+
+    # See Kafka Source:
+    # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
+    if topic is None:
+        raise TypeError('All topics must not be None')
+    if not isinstance(topic, six.string_types):
+        raise TypeError('All topics must be strings')
+    if len(topic) == 0:
+        raise ValueError('All topics must be non-empty strings')
+    if topic == '.' or topic == '..':
+        raise ValueError('Topic name cannot be "." or ".."')
+    if len(topic) > TOPIC_MAX_LENGTH:
+        raise ValueError('Topic name is illegal, it can\'t be longer than {0} characters, topic: "{1}"'.format(TOPIC_MAX_LENGTH, topic))
+    if not TOPIC_LEGAL_CHARS.match(topic):
+        raise ValueError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
+
+
 class WeakMethod(object):
     """
     Callable that weakly references a method and the object it is bound to. It

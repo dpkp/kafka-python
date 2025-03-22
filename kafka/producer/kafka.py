@@ -22,6 +22,7 @@ from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
 from kafka.structs import TopicPartition
+from kafka.util import ensure_valid_topic_name
 
 
 log = logging.getLogger(__name__)
@@ -593,11 +594,15 @@ class KafkaProducer(object):
         Raises:
             KafkaTimeoutError: if unable to fetch topic metadata, or unable
                 to obtain memory buffer prior to configured max_block_ms
+            TypeError: if topic is not a string
+            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
+            AssertionError: if KafkaProducer is closed, or key and value are both None
         """
         assert not self._closed, 'KafkaProducer already closed!'
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
+        ensure_valid_topic_name(topic)
         key_bytes = value_bytes = None
         try:
             assigned_partition = None
