@@ -3,7 +3,7 @@ from __future__ import absolute_import
 
 import pytest
 
-from kafka.consumer.subscription_state import SubscriptionState
+from kafka.util import ensure_valid_topic_name
 
 @pytest.mark.parametrize(('topic_name', 'expectation'), [
     (0, pytest.raises(TypeError)),
@@ -20,6 +20,5 @@ from kafka.consumer.subscription_state import SubscriptionState
     ('name+with+plus', pytest.raises(ValueError)),
 ])
 def test_topic_name_validation(topic_name, expectation):
-    state = SubscriptionState()
     with expectation:
-        state._ensure_valid_topic_name(topic_name)
+        ensure_valid_topic_name(topic_name)
