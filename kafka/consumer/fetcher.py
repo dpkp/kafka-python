@@ -581,7 +581,7 @@ class Fetcher(six.Iterator):
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
         version = self._client.api_version(FetchRequest, max_version=10)
-        fetchable = collections.defaultdict(dict)
+        fetchable = collections.defaultdict(collections.OrderedDict)
 
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
@@ -695,8 +695,6 @@ class Fetcher(six.Iterator):
                           for partition_data in partitions])
         metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
 
-        # randomized ordering should improve balance for short-lived consumers
-        random.shuffle(response.topics)
         for topic, partitions in response.topics:
             random.shuffle(partitions)
             for partition_data in partitions:
@@ -757,7 +755,6 @@ class Fetcher(six.Iterator):
                                                            self.config['value_deserializer'],
                                                            self.config['check_crcs'],
                                                            completed_fetch.metric_aggregator)
-                    return parsed_records
                 elif records.size_in_bytes() > 0:
                     # we did not read a single message from a non-empty
                     # buffer because that message's size is larger than
@@ -805,7 +802,9 @@ class Fetcher(six.Iterator):
             if parsed_records is None:
                 completed_fetch.metric_aggregator.record(tp, 0, 0)
 
-        return None
+        if parsed_records is None or parsed_records.bytes_read > 0:
+            self._subscriptions.move_partition_to_end(tp)
+        return parsed_records
 
     def close(self):
         if self._next_partition_records is not None:
@@ -943,6 +942,13 @@ class FetchSessionHandler(object):
         self.session_partitions = {}
 
     def build_next(self, next_partitions):
+        """
+        Arguments:
+            next_partitions (dict): TopicPartition -> TopicPartitionState
+
+        Returns:
+            FetchRequestData
+        """
         if self.next_metadata.is_full:
             log.debug("Built full fetch %s for node %s with %s partition(s).",
                 self.next_metadata, self.node_id, len(next_partitions))
@@ -965,8 +971,8 @@ class FetchSessionHandler(object):
                 altered.add(tp)
 
         log.debug("Built incremental fetch %s for node %s. Added %s, altered %s, removed %s out of %s",
-                self.next_metadata, self.node_id, added, altered, removed, self.session_partitions.keys())
-        to_send = {tp: next_partitions[tp] for tp in (added | altered)}
+                  self.next_metadata, self.node_id, added, altered, removed, self.session_partitions.keys())
+        to_send = collections.OrderedDict({tp: next_partitions[tp] for tp in next_partitions if tp in (added | altered)})
         return FetchRequestData(to_send, removed, self.next_metadata)
 
     def handle_response(self, response):
@@ -1106,18 +1112,11 @@ class FetchRequestData(object):
     @property
     def to_send(self):
         # Return as list of [(topic, [(partition, ...), ...]), ...]
-        # so it an be passed directly to encoder
+        # so it can be passed directly to encoder
         partition_data = collections.defaultdict(list)
         for tp, partition_info in six.iteritems(self._to_send):
             partition_data[tp.topic].append(partition_info)
-        # As of version == 3 partitions will be returned in order as
-        # they are requested, so to avoid starvation with
-        # `fetch_max_bytes` option we need this shuffle
-        # NOTE: we do have partition_data in random order due to usage
-        #       of unordered structures like dicts, but that does not
-        #       guarantee equal distribution, and starting in Python3.6
-        #       dicts retain insert order.
-        return random.sample(list(partition_data.items()), k=len(partition_data))
+        return list(partition_data.items())
 
     @property
     def to_forget(self):
