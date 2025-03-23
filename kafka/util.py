@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import binascii
+import re
 import time
 import weakref
 
