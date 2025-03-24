@@ -38,7 +38,7 @@ def consumer_factory(**kwargs):
     try:
         yield consumer
     finally:
-        consumer.close()
+        consumer.close(timeout_ms=0)
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
