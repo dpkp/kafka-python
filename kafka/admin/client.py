@@ -1496,7 +1496,7 @@ class KafkaAdminClient(object):
             A message future
         """
         version = self._client.api_version(OffsetFetchRequest, max_version=5)
-        if version <= 3:
+        if version <= 5:
             if partitions is None:
                 if version <= 1:
                     raise ValueError(
