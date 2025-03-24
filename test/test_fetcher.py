@@ -148,7 +148,7 @@ def test_update_fetch_positions(fetcher, topic, mocker):
 
 def test__reset_offset(fetcher, mocker):
     tp = TopicPartition("topic", 0)
-    fetcher._subscriptions.subscribe(topics="topic")
+    fetcher._subscriptions.subscribe(topics=["topic"])
     fetcher._subscriptions.assign_from_subscribed([tp])
     fetcher._subscriptions.need_offset_reset(tp)
     mocked = mocker.patch.object(fetcher, '_retrieve_offsets')
