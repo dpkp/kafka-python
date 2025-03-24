@@ -68,7 +68,7 @@ def test_group(kafka_broker, topic):
 
     num_consumers = 4
     for i in range(num_consumers):
-        t = threading.Thread(target=consumer_thread, args=(i,))
+        t = threading.Thread(target=consumer_thread, args=(i,), daemon=True)
         t.start()
         threads[i] = t
 
@@ -129,7 +129,8 @@ def test_group(kafka_broker, topic):
         for c in range(num_consumers):
             logging.info('Stopping consumer %s', c)
             stop[c].set()
-            threads[c].join()
+            threads[c].join(timeout=5)
+            assert not threads[c].is_alive()
             threads[c] = None
 
 
