@@ -470,19 +470,21 @@ class KafkaConsumer(six.Iterator):
         """
         return self._subscription.assigned_partitions()
 
-    def close(self, autocommit=True):
+    def close(self, autocommit=True, timeout_ms=None):
         """Close the consumer, waiting indefinitely for any needed cleanup.
 
         Keyword Arguments:
             autocommit (bool): If auto-commit is configured for this consumer,
                 this optional flag causes the consumer to attempt to commit any
                 pending consumed offsets prior to close. Default: True
+            timeout_ms (num, optional): Milliseconds to wait for auto-commit.
+                Default: None
         """
         if self._closed:
             return
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
-        self._coordinator.close(autocommit=autocommit)
+        self._coordinator.close(autocommit=autocommit, timeout_ms=timeout_ms)
         self._metrics.close()
         self._client.close()
         try:

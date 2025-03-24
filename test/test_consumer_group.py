@@ -62,7 +62,7 @@ def test_group(kafka_broker, topic):
         while not stop[i].is_set():
             for tp, records in six.iteritems(consumers[i].poll(timeout_ms=200)):
                 messages[i][tp].extend(records)
-        consumers[i].close()
+        consumers[i].close(timeout_ms=500)
         consumers[i] = None
         stop[i] = None
 
@@ -179,4 +179,4 @@ def test_heartbeat_thread(kafka_broker, topic):
     assert consumer._coordinator.heartbeat.last_poll == last_poll
     consumer.poll(timeout_ms=100)
     assert consumer._coordinator.heartbeat.last_poll > last_poll
-    consumer.close()
+    consumer.close(timeout_ms=100)
