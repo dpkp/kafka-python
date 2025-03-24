@@ -357,7 +357,8 @@ class SubscriptionState(object):
         self.assignment[partition].resume()
 
     def move_partition_to_end(self, partition):
-        self.assignment.move_to_end(partition)
+        if partition in self.assignment:
+            self.assignment.move_to_end(partition)
 
 
 class TopicPartitionState(object):
