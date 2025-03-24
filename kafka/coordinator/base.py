@@ -776,12 +776,12 @@ class BaseCoordinator(object):
             if self._heartbeat_thread is not None:
                 self._heartbeat_thread.disable()
 
-    def _close_heartbeat_thread(self):
+    def _close_heartbeat_thread(self, timeout_ms=None):
         with self._lock:
             if self._heartbeat_thread is not None:
                 log.info('Stopping heartbeat thread')
                 try:
-                    self._heartbeat_thread.close()
+                    self._heartbeat_thread.close(timeout_ms=timeout_ms)
                 except ReferenceError:
                     pass
                 self._heartbeat_thread = None
@@ -790,13 +790,13 @@ class BaseCoordinator(object):
         if hasattr(self, '_heartbeat_thread'):
             self._close_heartbeat_thread()
 
-    def close(self):
+    def close(self, timeout_ms=None):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        self._close_heartbeat_thread()
-        self.maybe_leave_group()
+        self._close_heartbeat_thread(timeout_ms=timeout_ms)
+        self.maybe_leave_group(timeout_ms=timeout_ms)
 
-    def maybe_leave_group(self):
+    def maybe_leave_group(self, timeout_ms=None):
         """Leave the current group and reset local generation/memberId."""
         with self._client._lock, self._lock:
             if (not self.coordinator_unknown()
@@ -811,7 +811,7 @@ class BaseCoordinator(object):
                 future = self._client.send(self.coordinator_id, request)
                 future.add_callback(self._handle_leave_group_response)
                 future.add_errback(log.error, "LeaveGroup request failed: %s")
-                self._client.poll(future=future)
+                self._client.poll(future=future, timeout_ms=timeout_ms)
 
             self.reset_generation()
 
@@ -957,7 +957,7 @@ class HeartbeatThread(threading.Thread):
             log.debug('Disabling heartbeat thread')
             self.enabled = False
 
-    def close(self):
+    def close(self, timeout_ms=None):
         if self.closed:
             return
         self.closed = True
@@ -972,7 +972,9 @@ class HeartbeatThread(threading.Thread):
             self.coordinator._lock.notify()
 
         if self.is_alive():
-            self.join(self.coordinator.config['heartbeat_interval_ms'] / 1000)
+            if timeout_ms is None:
+                timeout_ms = self.coordinator.config['heartbeat_interval_ms']
+            self.join(timeout_ms / 1000)
         if self.is_alive():
             log.warning("Heartbeat thread did not fully terminate during close")
 

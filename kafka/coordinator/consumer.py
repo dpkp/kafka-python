@@ -449,7 +449,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if autocommit:
                 self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
         finally:
-            super(ConsumerCoordinator, self).close()
+            super(ConsumerCoordinator, self).close(timeout_ms=timeout_ms)
 
     def _invoke_completed_offset_commit_callbacks(self):
         while self.completed_offset_commits:
