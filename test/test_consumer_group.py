@@ -47,7 +47,7 @@ def test_group(kafka_broker, topic):
     consumers = {}
     stop = {}
     threads = {}
-    messages = collections.defaultdict(list)
+    messages = collections.defaultdict(lambda: collections.defaultdict(list))
     group_id = 'test-group-' + random_string(6)
     def consumer_thread(i):
         assert i not in consumers
@@ -60,15 +60,15 @@ def test_group(kafka_broker, topic):
                                      api_version_auto_timeout_ms=5000,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
-            for tp, records in six.itervalues(consumers[i].poll(timeout_ms=200)):
+            for tp, records in six.iteritems(consumers[i].poll(timeout_ms=200)):
                 messages[i][tp].extend(records)
-        consumers[i].close()
+        consumers[i].close(timeout_ms=500)
         consumers[i] = None
         stop[i] = None
 
     num_consumers = 4
     for i in range(num_consumers):
-        t = threading.Thread(target=consumer_thread, args=(i,))
+        t = threading.Thread(target=consumer_thread, args=(i,), daemon=True)
         t.start()
         threads[i] = t
 
@@ -129,7 +129,8 @@ def test_group(kafka_broker, topic):
         for c in range(num_consumers):
             logging.info('Stopping consumer %s', c)
             stop[c].set()
-            threads[c].join()
+            threads[c].join(timeout=5)
+            assert not threads[c].is_alive()
             threads[c] = None
 
 
@@ -179,4 +180,4 @@ def test_heartbeat_thread(kafka_broker, topic):
     assert consumer._coordinator.heartbeat.last_poll == last_poll
     consumer.poll(timeout_ms=100)
     assert consumer._coordinator.heartbeat.last_poll > last_poll
-    consumer.close()
+    consumer.close(timeout_ms=100)
