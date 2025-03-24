@@ -47,7 +47,7 @@ def test_group(kafka_broker, topic):
     consumers = {}
     stop = {}
     threads = {}
-    messages = collections.defaultdict(list)
+    messages = collections.defaultdict(lambda: collections.defaultdict(list))
     group_id = 'test-group-' + random_string(6)
     def consumer_thread(i):
         assert i not in consumers
@@ -60,7 +60,7 @@ def test_group(kafka_broker, topic):
                                      api_version_auto_timeout_ms=5000,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
-            for tp, records in six.itervalues(consumers[i].poll(timeout_ms=200)):
+            for tp, records in six.iteritems(consumers[i].poll(timeout_ms=200)):
                 messages[i][tp].extend(records)
         consumers[i].close()
         consumers[i] = None
