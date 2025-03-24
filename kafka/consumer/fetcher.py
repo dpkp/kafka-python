@@ -561,13 +561,11 @@ class Fetcher(six.Iterator):
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
         # do not fetch a partition if we have a pending fetch response to process
+        discard = {fetch.topic_partition for fetch in self._completed_fetches}
         current = self._next_partition_records
-        pending = copy.copy(self._completed_fetches)
         if current:
-            fetchable.discard(current.topic_partition)
-        for fetch in pending:
-            fetchable.discard(fetch.topic_partition)
-        return fetchable
+            discard.add(current.topic_partition)
+        return [tp for tp in fetchable if tp not in discard]
 
     def _create_fetch_requests(self):
         """Create fetch requests for all assigned partitions, grouped by node.
