@@ -27,7 +27,7 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
-from kafka.util import Dict, WeakMethod
+from kafka.util import Dict, WeakMethod, ensure_valid_topic_name
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
 from kafka.vendor import socketpair # noqa: F401
@@ -909,7 +909,13 @@ class KafkaClient(object):
 
         Returns:
             Future: resolves after metadata request/response
+
+        Raises:
+            TypeError: if topic is not a string
+            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
         """
+        ensure_valid_topic_name(topic)
+
         if topic in self._topics:
             return Future().success(set(self._topics))
 
