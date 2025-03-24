@@ -46,3 +46,12 @@ def test_assign_from_subscribed():
     assert set(s.assignment.keys()) == set([TopicPartition('foo', 0), TopicPartition('foo', 1)])
     assert all([isinstance(s, TopicPartitionState) for s in six.itervalues(s.assignment)])
     assert all([not s.has_valid_position for s in six.itervalues(s.assignment)])
+
+
+def test_change_subscription_after_assignment():
+    s = SubscriptionState()
+    s.subscribe(topics=['foo'])
+    s.assign_from_subscribed([TopicPartition('foo', 0), TopicPartition('foo', 1)])
+    # Changing subscription retains existing assignment until next rebalance
+    s.change_subscription(['bar'])
+    assert set(s.assignment.keys()) == set([TopicPartition('foo', 0), TopicPartition('foo', 1)])
