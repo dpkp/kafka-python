@@ -4,7 +4,6 @@ import collections
 import copy
 import itertools
 import logging
-import random
 import sys
 import time
 
@@ -693,7 +692,6 @@ class Fetcher(six.Iterator):
         metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
 
         for topic, partitions in response.topics:
-            random.shuffle(partitions)
             for partition_data in partitions:
                 tp = TopicPartition(topic, partition_data[0])
                 fetch_offset = fetch_offsets[tp]
