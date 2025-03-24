@@ -378,10 +378,13 @@ class Fetcher(six.Iterator):
             # as long as the partition is still assigned
             position = self._subscriptions.assignment[tp].position
             if part.next_fetch_offset == position.offset:
-                part_records = part.take(max_records)
                 log.debug("Returning fetched records at offset %d for assigned"
                           " partition %s", position.offset, tp)
-                drained[tp].extend(part_records)
+                part_records = part.take(max_records)
+                # list.extend([]) is a noop, but because drained is a defaultdict
+                # we should avoid initializing the default list unless there are records
+                if part_records:
+                    drained[tp].extend(part_records)
                 # We want to increment subscription position if (1) we're using consumer.poll(),
                 # or (2) we didn't return any records (consumer iterator will update position
                 # when each message is yielded). There may be edge cases where we re-fetch records
