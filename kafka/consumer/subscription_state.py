@@ -1,11 +1,13 @@
 from __future__ import absolute_import
 
 import abc
+from collections import defaultdict, OrderedDict
 try:
     from collections import Sequence
 except ImportError:
     from collections.abc import Sequence
 import logging
+import random
 import re
 
 from kafka.vendor import six
@@ -68,7 +70,7 @@ class SubscriptionState(object):
         self.subscribed_pattern = None # regex str or None
         self._group_subscription = set()
         self._user_assignment = set()
-        self.assignment = dict()
+        self.assignment = OrderedDict()
         self.listener = None
 
         # initialize to true for the consumers to fetch offset upon starting up
@@ -200,14 +202,8 @@ class SubscriptionState(object):
 
         if self._user_assignment != set(partitions):
             self._user_assignment = set(partitions)
-
-            for partition in partitions:
-                if partition not in self.assignment:
-                    self._add_assigned_partition(partition)
-
-            for tp in set(self.assignment.keys()) - self._user_assignment:
-                del self.assignment[tp]
-
+            self._set_assignment({partition: self.assignment.get(partition, TopicPartitionState())
+                                  for partition in partitions})
             self.needs_fetch_committed_offsets = True
 
     def assign_from_subscribed(self, assignments):
@@ -229,12 +225,24 @@ class SubscriptionState(object):
             if tp.topic not in self.subscription:
                 raise ValueError("Assigned partition %s for non-subscribed topic." % (tp,))
 
-        # after rebalancing, we always reinitialize the assignment state
-        self.assignment.clear()
-        for tp in assignments:
-            self._add_assigned_partition(tp)
+        # after rebalancing, we always reinitialize the assignment value
+        # randomized ordering should improve balance for short-lived consumers
+        self._set_assignment({partition: TopicPartitionState() for partition in assignments}, randomize=True)
         self.needs_fetch_committed_offsets = True
         log.info("Updated partition assignment: %s", assignments)
+
+    def _set_assignment(self, partition_states, randomize=False):
+        """Batch partition assignment by topic (self.assignment is OrderedDict)"""
+        self.assignment.clear()
+        topics = [tp.topic for tp in six.iterkeys(partition_states)]
+        if randomize:
+            random.shuffle(topics)
+        topic_partitions = OrderedDict({topic: [] for topic in topics})
+        for tp in six.iterkeys(partition_states):
+            topic_partitions[tp.topic].append(tp)
+        for topic in six.iterkeys(topic_partitions):
+            for tp in topic_partitions[topic]:
+                self.assignment[tp] = partition_states[tp]
 
     def unsubscribe(self):
         """Clear all topic subscriptions and partition assignments"""
@@ -283,11 +291,11 @@ class SubscriptionState(object):
                    if self.is_paused(partition))
 
     def fetchable_partitions(self):
-        """Return set of TopicPartitions that should be Fetched."""
-        fetchable = set()
+        """Return ordered list of TopicPartitions that should be Fetched."""
+        fetchable = list()
         for partition, state in six.iteritems(self.assignment):
             if state.is_fetchable():
-                fetchable.add(partition)
+                fetchable.append(partition)
         return fetchable
 
     def partitions_auto_assigned(self):
@@ -348,8 +356,9 @@ class SubscriptionState(object):
     def resume(self, partition):
         self.assignment[partition].resume()
 
-    def _add_assigned_partition(self, partition):
-        self.assignment[partition] = TopicPartitionState()
+    def move_partition_to_end(self, partition):
+        if partition in self.assignment:
+            self.assignment.move_to_end(partition)
 
 
 class TopicPartitionState(object):
