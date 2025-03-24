@@ -1,6 +1,10 @@
 from __future__ import absolute_import
 
 import abc
+try:
+    from collections import Sequence
+except ImportError:
+    from collections.abc import Sequence
 import logging
 import re
 
@@ -114,6 +118,8 @@ class SubscriptionState(object):
             self.subscription = set()
             self.subscribed_pattern = re.compile(pattern)
         else:
+            if isinstance(topics, str) or not isinstance(topics, Sequence):
+                raise TypeError('Topics must be a list (or non-str sequence)')
             self.change_subscription(topics)
 
         if listener and not isinstance(listener, ConsumerRebalanceListener):
