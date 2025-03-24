@@ -68,8 +68,8 @@ def test_kafka_consumer_unsupported_encoding(
 def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
     TIMEOUT_MS = 500
     consumer = kafka_consumer_factory(auto_offset_reset='earliest',
-                                    enable_auto_commit=False,
-                                    consumer_timeout_ms=TIMEOUT_MS)
+                                      enable_auto_commit=False,
+                                      consumer_timeout_ms=TIMEOUT_MS)
 
     # Manual assignment avoids overhead of consumer group mgmt
     consumer.unsubscribe()

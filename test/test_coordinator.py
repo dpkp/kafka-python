@@ -189,6 +189,7 @@ def test_subscription_listener_failure(mocker, coordinator):
 
 
 def test_perform_assignment(mocker, coordinator):
+    coordinator._subscription.subscribe(topics=['foo1'])
     member_metadata = {
         'member-foo': ConsumerProtocolMemberMetadata(0, ['foo1'], b''),
         'member-bar': ConsumerProtocolMemberMetadata(0, ['foo1'], b'')
