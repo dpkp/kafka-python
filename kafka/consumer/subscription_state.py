@@ -1,6 +1,10 @@
 from __future__ import absolute_import
 
 import abc
+try:
+    from collections import Sequence
+except ImportError:
+    from collections.abc import Sequence
 import logging
 import re
 
@@ -114,6 +118,8 @@ class SubscriptionState(object):
             self.subscription = set()
             self.subscribed_pattern = re.compile(pattern)
         else:
+            if isinstance(topics, str) or not isinstance(topics, Sequence):
+                raise TypeError('Topics must be a list (or non-str sequence)')
             self.change_subscription(topics)
 
         if listener and not isinstance(listener, ConsumerRebalanceListener):
@@ -150,11 +156,6 @@ class SubscriptionState(object):
         log.info('Updating subscribed topics to: %s', topics)
         self.subscription = set(topics)
         self._group_subscription.update(topics)
-
-        # Remove any assigned partitions which are no longer subscribed to
-        for tp in set(self.assignment.keys()):
-            if tp.topic not in self.subscription:
-                del self.assignment[tp]
 
     def group_subscribe(self, topics):
         """Add topics to the current group subscription.

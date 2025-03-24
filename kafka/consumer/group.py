@@ -444,8 +444,15 @@ class KafkaConsumer(six.Iterator):
             no rebalance operation triggered when group membership or cluster
             and topic metadata change.
         """
-        self._subscription.assign_from_user(partitions)
-        self._client.set_topics([tp.topic for tp in partitions])
+        if not partitions:
+            self.unsubscribe()
+        else:
+            # make sure the offsets of topic partitions the consumer is unsubscribing from
+            # are committed since there will be no following rebalance
+            self._coordinator.maybe_auto_commit_offsets_now()
+            self._subscription.assign_from_user(partitions)
+            self._client.set_topics([tp.topic for tp in partitions])
+            log.debug("Subscribed to partition(s): %s", partitions)
 
     def assignment(self):
         """Get the TopicPartitions currently assigned to this consumer.
@@ -959,8 +966,11 @@ class KafkaConsumer(six.Iterator):
 
     def unsubscribe(self):
         """Unsubscribe from all topics and clear all assigned partitions."""
+        # make sure the offsets of topic partitions the consumer is unsubscribing from
+        # are committed since there will be no following rebalance
+        self._coordinator.maybe_auto_commit_offsets_now()
         self._subscription.unsubscribe()
-        self._coordinator.close()
+        self._coordinator.maybe_leave_group()
         self._client.cluster.need_all_topic_metadata = False
         self._client.set_topics([])
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
