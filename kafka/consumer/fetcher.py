@@ -57,7 +57,6 @@ class Fetcher(six.Iterator):
         'max_partition_fetch_bytes': 1048576,
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
-        'iterator_refetch_records': 1,  # undocumented -- interface may change
         'metric_group_prefix': 'consumer',
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
