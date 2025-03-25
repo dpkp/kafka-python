@@ -276,6 +276,7 @@ class KafkaClient(object):
             if compatible_version:
                 log.warning('Configured api_version %s not supported; using %s',
                             self.config['api_version'], compatible_version)
+                self.config['api_version'] = compatible_version
                 self._api_versions = BROKER_API_VERSIONS[compatible_version]
             else:
                 raise Errors.UnrecognizedBrokerVersion(self.config['api_version'])
