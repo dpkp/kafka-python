@@ -1,3 +1,25 @@
+# 2.1.3 (Mar 25, 2025)
+
+Fixes
+* Fix crash when switching to closest compatible api_version in KafkaClient (#2567)
+* Fix maximum version to send an OffsetFetchRequest in KafkaAdminClient (#2563)
+* Return empty set from consumer.partitions_for_topic when topic not found (#2556)
+
+Improvements
+* KIP-511: Use ApiVersions v4 on initial connect w/ client_software_name + version (#2558)
+* KIP-74: Manage assigned partition order in consumer (#2562)
+* KIP-70: Auto-commit offsets on consumer.unsubscribe(), defer assignment changes to rejoin  (#2560)
+* Use SubscriptionType to track topics/pattern/user assignment (#2565)
+* Add optional timeout_ms kwarg to consumer.close() (#2564)
+* Move ensure_valid_topic_name to kafka.util; use in client and producer (#2561)
+
+Testing
+* Support KRaft / 4.0 brokers in tests (#2559)
+* Test older pythons against 4.0 broker
+
+Compatibility
+* Add python 3.13 to compatibility list
+
 # 2.1.2 (Mar 17, 2025)
 
 Fixes
