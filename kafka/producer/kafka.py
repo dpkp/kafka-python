@@ -468,7 +468,11 @@ class KafkaProducer(object):
                                                      " producer. Otherwise we cannot guarantee idempotence")
 
         message_version = self._max_usable_produce_magic()
-        self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
+        self._accumulator = RecordAccumulator(
+                transaction_state=self._transaction_state,
+                message_version=message_version,
+                metrics=self._metrics,
+                **self.config)
         self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
