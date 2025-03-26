@@ -448,6 +448,15 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
         self._buffer = bytearray(self.HEADER_STRUCT.size)
 
+    def set_producer_state(self, producer_id, producer_epoch, base_sequence):
+        self._producer_id = producer_id
+        self._producer_epoch = producer_epoch
+        self._base_sequence = base_sequence
+
+    @property
+    def producer_id(self):
+        return self._producer_id
+
     def _get_attributes(self, include_compression_type=True):
         attrs = 0
         if include_compression_type:
