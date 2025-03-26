@@ -11,7 +11,7 @@ NO_PRODUCER_ID = -1
 NO_PRODUCER_EPOCH = -1
 
 
-class PidAndEpoch(object):
+class ProducerIdAndEpoch(object):
     __slots__ = ('producer_id', 'epoch')
 
     def __init__(self, producer_id, epoch):
@@ -23,21 +23,21 @@ class PidAndEpoch(object):
         return NO_PRODUCER_ID < self.producer_id
 
     def __str__(self):
-        return "PidAndEpoch(producer_id={}, epoch={})".format(self.producer_id, self.epoch)
+        return "ProducerIdAndEpoch(producer_id={}, epoch={})".format(self.producer_id, self.epoch)
 
 class TransactionState(object):
-    __slots__ = ('pid_and_epoch', '_sequence_numbers', '_lock')
+    __slots__ = ('producer_id_and_epoch', '_sequence_numbers', '_lock')
 
     def __init__(self):
-        self.pid_and_epoch = PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH)
+        self.producer_id_and_epoch = ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH)
         self._sequence_numbers = collections.defaultdict(lambda: 0)
         self._lock = threading.Condition()
 
     def has_pid(self):
-        return self.pid_and_epoch.is_valid
+        return self.producer_id_and_epoch.is_valid
 
 
-    def await_pid_and_epoch(self, max_wait_time_ms):
+    def await_producer_id_and_epoch(self, max_wait_time_ms):
         """
         A blocking call to get the pid and epoch for the producer. If the PID and epoch has not been set, this method
         will block for at most maxWaitTimeMs. It is expected that this method be called from application thread
@@ -47,7 +47,7 @@ class TransactionState(object):
             max_wait_time_ms (numeric): The maximum time to block.
 
         Returns:
-            PidAndEpoch object. Callers must check the 'is_valid' property of the returned object to ensure that a
+            ProducerIdAndEpoch object. Callers must check the 'is_valid' property of the returned object to ensure that a
                 valid pid and epoch is actually returned.
         """
         with self._lock:
@@ -56,16 +56,16 @@ class TransactionState(object):
             while not self.has_pid() and elapsed < max_wait_time_ms:
                 self._lock.wait(max_wait_time_ms / 1000)
                 elapsed = time.time() - start
-            return self.pid_and_epoch
+            return self.producer_id_and_epoch
 
-    def set_pid_and_epoch(self, producer_id, epoch):
+    def set_producer_id_and_epoch(self, producer_id, epoch):
         """
         Set the pid and epoch atomically. This method will signal any callers blocked on the `pidAndEpoch` method
         once the pid is set. This method will be called on the background thread when the broker responds with the pid.
         """
         with self._lock:
-            self.pid_and_epoch = PidAndEpoch(producer_id, epoch)
-            if self.pid_and_epoch.is_valid:
+            self.producer_id_and_epoch = ProducerIdAndEpoch(producer_id, epoch)
+            if self.producer_id_and_epoch.is_valid:
                 self._lock.notify_all()
 
     def reset_producer_id(self):
@@ -82,7 +82,7 @@ class TransactionState(object):
         messages will return an OutOfOrderSequenceException.
         """
         with self._lock:
-            self.pid_and_epoch = PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH)
+            self.producer_id_and_epoch = ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH)
             self._sequence_numbers.clear()
 
     def sequence_number(self, tp):
