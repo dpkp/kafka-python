@@ -222,7 +222,7 @@ class Sender(threading.Thread):
                 response = self._client.send_and_receive(node_id, request)
                 error_type = Errors.for_code(response.error_code)
                 if error_type is Errors.NoError:
-                    self._transaction_state.set_pid_and_epoch(response.producer_id, response.producer_epoch)
+                    self._transaction_state.set_producer_id_and_epoch(response.producer_id, response.producer_epoch)
                     return
                 elif getattr(error_type, 'retriable', False):
                     log.debug("Retriable error from InitProducerId response: %s", error_type.__name__)
@@ -236,7 +236,7 @@ class Sender(threading.Thread):
             except Errors.RequestTimedOutError:
                 log.debug("InitProducerId request to node %s timed out", node_id)
             time.sleep(self.config['retry_backoff_ms'] / 1000)
-        log.debug("_maybe_wait_for_producer_id: ok: %s", self._transaction_state.pid_and_epoch)
+        log.debug("_maybe_wait_for_producer_id: ok: %s", self._transaction_state.producer_id_and_epoch)
 
     def _failed_produce(self, batches, node_id, error):
         log.error("Error sending produce request to node %d: %s", node_id, error) # trace
@@ -298,7 +298,7 @@ class Sender(threading.Thread):
                             error)
 
                 # If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
-                if not self._transaction_state or self._transaction_state.pid_and_epoch.producer_id == batch.producer_id:
+                if not self._transaction_state or self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
                     log.debug("Retrying batch to topic-partition %s. Sequence number: %s",
                               batch.topic_partition,
                               self._transaction_state.sequence_number(batch.topic_partition) if self._transaction_state else None)
@@ -308,12 +308,12 @@ class Sender(threading.Thread):
                 else:
                     self._transaction_state.reset_producer_id()
                     log.warning("Attempted to retry sending a batch but the producer id changed from %s to %s. This batch will be dropped" % (
-                        batch.producer_id, self._transaction_state.pid_and_epoch.producer_id))
+                        batch.producer_id, self._transaction_state.producer_id_and_epoch.producer_id))
                     batch.done(base_offset, timestamp_ms, error, log_start_offset)
                     if self._sensors:
                         self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
             else:
-                if error is Errors.OutOfOrderSequenceNumberError and batch.producer_id == self._transaction_state.pid_and_epoch.producer_id:
+                if error is Errors.OutOfOrderSequenceNumberError and batch.producer_id == self._transaction_state.producer_id_and_epoch.producer_id:
                     log.error("The broker received an out of order sequence number error for produer_id %s, topic-partition %s"
                               " at offset %s. This indicates data loss on the broker, and should be investigated.",
                               batch.producer_id, batch.topic_partition, base_offset)
@@ -338,7 +338,7 @@ class Sender(threading.Thread):
            batch.done(base_offset, timestamp_ms, error, log_start_offset)
            self._accumulator.deallocate(batch)
 
-           if self._transaction_state and self._transaction_state.pid_and_epoch.producer_id == batch.producer_id:
+           if self._transaction_state and self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
                self._transaction_state.increment_sequence_number(batch.topic_partition, batch.record_count)
                log.debug("Incremented sequence number for topic-partition %s to %s", batch.topic_partition,
                          self._transaction_state.sequence_number(batch.topic_partition))

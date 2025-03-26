@@ -473,16 +473,16 @@ class RecordAccumulator(object):
                                     # single request
                                     break
                                 else:
-                                    pid_and_epoch = None
+                                    producer_id_and_epoch = None
                                     if self._transaction_state:
-                                        pid_and_epoch = self._transaction_state.pid_and_epoch
-                                        if not pid_and_epoch.is_valid:
+                                        producer_id_and_epoch = self._transaction_state.producer_id_and_epoch
+                                        if not producer_id_and_epoch.is_valid:
                                             # we cannot send the batch until we have refreshed the PID
                                             log.debug("Waiting to send ready batches because transaction producer id is not valid")
                                             break
 
                                     batch = dq.popleft()
-                                    if pid_and_epoch and not batch.in_retry():
+                                    if producer_id_and_epoch and not batch.in_retry():
                                         # If the batch is in retry, then we should not change the pid and
                                         # sequence number, since this may introduce duplicates. In particular,
                                         # the previous attempt may actually have been accepted, and if we change
@@ -490,9 +490,9 @@ class RecordAccumulator(object):
                                         # a duplicate.
                                         sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
                                         log.debug("Dest: %s : producer_idd: %s epoch: %s Assigning sequence for %s: %s",
-                                                  node_id, pid_and_epoch.producer_id, pid_and_epoch.epoch,
+                                                  node_id, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
                                                   batch.topic_partition, sequence_number)
-                                        batch.records.set_producer_state(pid_and_epoch.producer_id, pid_and_epoch.epoch, sequence_number)
+                                        batch.records.set_producer_state(producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch, sequence_number)
                                     batch.records.close()
                                     size += batch.records.size_in_bytes()
                                     ready.append(batch)
