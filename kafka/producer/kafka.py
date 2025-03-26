@@ -468,7 +468,7 @@ class KafkaProducer(object):
                 raise Errors.KafkaConfigurationError("Must set 'acks' config to 'all' in order to use the idempotent"
                                                      " producer. Otherwise we cannot guarantee idempotence")
 
-        message_version = self._max_usable_produce_magic()
+        message_version = self.max_usable_produce_magic(self.config['api_version'])
         self._accumulator = RecordAccumulator(
                 transaction_state=self._transaction_state,
                 message_version=message_version,
@@ -592,16 +592,17 @@ class KafkaProducer(object):
         max_wait = self.config['max_block_ms'] / 1000
         return self._wait_on_metadata(topic, max_wait)
 
-    def _max_usable_produce_magic(self):
-        if self.config['api_version'] >= (0, 11):
+    @classmethod
+    def max_usable_produce_magic(cls, api_version):
+        if api_version >= (0, 11):
             return 2
-        elif self.config['api_version'] >= (0, 10, 0):
+        elif api_version >= (0, 10, 0):
             return 1
         else:
             return 0
 
     def _estimate_size_in_bytes(self, key, value, headers=[]):
-        magic = self._max_usable_produce_magic()
+        magic = self.max_usable_produce_magic(self.config['api_version'])
         if magic == 2:
             return DefaultRecordBatchBuilder.estimate_size_in_bytes(
                 key, value, headers)
