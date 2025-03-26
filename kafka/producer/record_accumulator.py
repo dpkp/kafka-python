@@ -52,6 +52,10 @@ class ProducerBatch(object):
     def record_count(self):
         return self.records.next_offset()
 
+    @property
+    def producer_id(self):
+        return self.records.producer_id if self.records else None
+
     def try_append(self, timestamp_ms, key, value, headers):
         metadata = self.records.append(timestamp_ms, key, value, headers)
         if metadata is None:

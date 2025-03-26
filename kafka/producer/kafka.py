@@ -478,6 +478,7 @@ class KafkaProducer(object):
         self._sender = Sender(client, self._metadata,
                               self._accumulator,
                               metrics=self._metrics,
+                              transaction_state=self._transaction_state,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
