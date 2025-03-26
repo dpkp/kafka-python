@@ -161,6 +161,7 @@ class RecordAccumulator(object):
         'compression_attrs': 0,
         'linger_ms': 0,
         'retry_backoff_ms': 100,
+        'transaction_state': None,
         'message_version': 0,
     }
 
@@ -171,6 +172,7 @@ class RecordAccumulator(object):
                 self.config[key] = configs.pop(key)
 
         self._closed = False
+        self._transaction_state = self.config['transaction_state']
         self._flushes_in_progress = AtomicInteger()
         self._appends_in_progress = AtomicInteger()
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [ProducerBatch]
@@ -233,6 +235,10 @@ class RecordAccumulator(object):
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
+                if self._transaction_state and self.config['message_version'] < 2:
+                    raise Errors.UnsupportedVersionError("Attempting to use idempotence with a broker which"
+                                                         " does not support the required message format (v2)."
+                                                         " The broker must be version 0.11 or later.")
                 records = MemoryRecordsBuilder(
                     self.config['message_version'],
                     self.config['compression_attrs'],
@@ -463,7 +469,26 @@ class RecordAccumulator(object):
                                     # single request
                                     break
                                 else:
+                                    pid_and_epoch = None
+                                    if self._transaction_state:
+                                        pid_and_epoch = self._transaction_state.pid_and_epoch
+                                        if not pid_and_epoch.is_valid:
+                                            # we cannot send the batch until we have refreshed the PID
+                                            log.debug("Waiting to send ready batches because transaction producer id is not valid")
+                                            break
+
                                     batch = dq.popleft()
+                                    if pid_and_epoch and not batch.in_retry():
+                                        # If the batch is in retry, then we should not change the pid and
+                                        # sequence number, since this may introduce duplicates. In particular,
+                                        # the previous attempt may actually have been accepted, and if we change
+                                        # the pid and sequence here, this attempt will also be accepted, causing
+                                        # a duplicate.
+                                        sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
+                                        log.debug("Dest: %s : producer_idd: %s epoch: %s Assigning sequence for %s: %s",
+                                                  node_id, pid_and_epoch.producer_id, pid_and_epoch.epoch,
+                                                  batch.topic_partition, sequence_number)
+                                        batch.records.set_producer_state(pid_and_epoch.producer_id, pid_and_epoch.epoch, sequence_number)
                                     batch.records.close()
                                     size += batch.records.size_in_bytes()
                                     ready.append(batch)
