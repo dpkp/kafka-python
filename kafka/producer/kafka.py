@@ -477,6 +477,7 @@ class KafkaProducer(object):
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
                               self._accumulator, self._metrics,
+                              transaction_state=self._transaction_state,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
