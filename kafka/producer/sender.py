@@ -309,7 +309,7 @@ class Sender(threading.Thread):
                     self._transaction_state.reset_producer_id()
                     log.warning("Attempted to retry sending a batch but the producer id changed from %s to %s. This batch will be dropped" % (
                         batch.producer_id, self._transaction_state.producer_id_and_epoch.producer_id))
-                    batch.done(base_offset, timestamp_ms, error, log_start_offset)
+                    batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
                     if self._sensors:
                         self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
             else:
@@ -322,7 +322,7 @@ class Sender(threading.Thread):
                     error = error(batch.topic_partition.topic)
 
                 # tell the user the result of their request
-                batch.done(base_offset, timestamp_ms, error, log_start_offset)
+                batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
                 if self._sensors:
                     self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
 
@@ -335,13 +335,13 @@ class Sender(threading.Thread):
                 self._metadata.request_update()
 
         else:
-           batch.done(base_offset, timestamp_ms, error, log_start_offset)
-           self._accumulator.deallocate(batch)
+            batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+            self._accumulator.deallocate(batch)
 
-           if self._transaction_state and self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
-               self._transaction_state.increment_sequence_number(batch.topic_partition, batch.record_count)
-               log.debug("Incremented sequence number for topic-partition %s to %s", batch.topic_partition,
-                         self._transaction_state.sequence_number(batch.topic_partition))
+            if self._transaction_state and self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
+                self._transaction_state.increment_sequence_number(batch.topic_partition, batch.record_count)
+                log.debug("Incremented sequence number for topic-partition %s to %s", batch.topic_partition,
+                          self._transaction_state.sequence_number(batch.topic_partition))
 
         # Unmute the completed partition.
         if self.config['guarantee_message_order']:
