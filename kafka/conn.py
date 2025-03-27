@@ -747,6 +747,7 @@ class BrokerConnection(object):
             request = SaslAuthenticateRequest[0](sasl_auth_bytes)
             self._send(request, blocking=True)
         else:
+            log.debug('Sending %d raw sasl auth bytes to server', len(sasl_auth_bytes))
             try:
                 self._send_bytes_blocking(Int32.encode(len(sasl_auth_bytes)) + sasl_auth_bytes)
             except (ConnectionError, TimeoutError) as e:
@@ -787,6 +788,7 @@ class BrokerConnection(object):
             return response.auth_bytes
         else:
             # unframed bytes w/ SaslHandhake v0
+            log.debug('Received %d raw sasl auth bytes from server', nbytes)
             return data[4:]
 
     def _sasl_authenticate(self, future):
@@ -930,6 +932,9 @@ class BrokerConnection(object):
             self._update_reconnect_backoff()
             self._api_versions_future = None
             self._sasl_auth_future = None
+            if self._sasl_mechanism is not None:
+                # TODO: should we consider adding a reset() method to all sasl mechanisms?
+                self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
             self._protocol = KafkaProtocol(
                 client_id=self.config['client_id'],
                 api_version=self.config['api_version'])
