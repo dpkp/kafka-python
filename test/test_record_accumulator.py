@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import pytest
 import io
 
+from kafka.errors import KafkaTimeoutError
 from kafka.producer.future import FutureRecordMetadata, RecordMetadata
 from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
 from kafka.record.memory_records import MemoryRecordsBuilder
@@ -58,4 +59,17 @@ def test_producer_batch_retry():
     assert batch.in_retry()
 
 def test_producer_batch_maybe_expire():
-    pass
+    tp = TopicPartition('foo', 0)
+    records = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=100000)
+    batch = ProducerBatch(tp, records, io.BytesIO(), now=1)
+    future = batch.try_append(0, b'key', b'value', [], now=2)
+    request_timeout_ms = 5000
+    retry_backoff_ms = 200
+    linger_ms = 1000
+    is_full = True
+    batch.maybe_expire(request_timeout_ms, retry_backoff_ms, linger_ms, is_full, now=20)
+    assert batch.is_done
+    assert future.is_done
+    assert future.failed()
+    assert isinstance(future.exception, KafkaTimeoutError)
