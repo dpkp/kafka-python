@@ -36,9 +36,9 @@ class AtomicInteger(object):
 
 
 class ProducerBatch(object):
-    def __init__(self, tp, records, buffer):
+    def __init__(self, tp, records, buffer, now=None):
         self.max_record_size = 0
-        now = time.time()
+        now = time.time() if now is None else now
         self.created = now
         self.drained = None
         self.attempts = 0
@@ -58,13 +58,14 @@ class ProducerBatch(object):
     def producer_id(self):
         return self.records.producer_id if self.records else None
 
-    def try_append(self, timestamp_ms, key, value, headers):
+    def try_append(self, timestamp_ms, key, value, headers, now=None):
         metadata = self.records.append(timestamp_ms, key, value, headers)
         if metadata is None:
             return None
 
+        now = time.time() if now is None else now
         self.max_record_size = max(self.max_record_size, metadata.size)
-        self.last_append = time.time()
+        self.last_append = now
         future = FutureRecordMetadata(self.produce_future, metadata.offset,
                                       metadata.timestamp, metadata.crc,
                                       len(key) if key is not None else -1,
@@ -87,7 +88,7 @@ class ProducerBatch(object):
                         log_start_offset, exception)  # trace
             self.produce_future.failure(exception)
 
-    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full):
+    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full, now=None):
         """Expire batches if metadata is not available
 
         A batch whose metadata is not available should be expired if one
@@ -99,7 +100,7 @@ class ProducerBatch(object):
           * the batch is in retry AND request timeout has elapsed after the
             backoff period ended.
         """
-        now = time.time()
+        now = time.time() if now is None else now
         since_append = now - self.last_append
         since_ready = now - (self.created + linger_ms / 1000.0)
         since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
@@ -126,6 +127,10 @@ class ProducerBatch(object):
 
     def set_retry(self):
         self._retry = True
+
+    @property
+    def is_done(self):
+        return self.produce_future.is_done
 
     def buffer(self):
         return self._buffer
@@ -345,9 +350,9 @@ class RecordAccumulator(object):
 
         return expired_batches
 
-    def reenqueue(self, batch):
+    def reenqueue(self, batch, now=None):
         """Re-enqueue the given record batch in the accumulator to retry."""
-        now = time.time()
+        now = time.time() if now is None else now
         batch.attempts += 1
         batch.last_attempt = now
         batch.last_append = now
@@ -358,7 +363,7 @@ class RecordAccumulator(object):
         with self._tp_locks[batch.topic_partition]:
             dq.appendleft(batch)
 
-    def ready(self, cluster):
+    def ready(self, cluster, now=None):
         """
         Get a list of nodes whose partitions are ready to be sent, and the
         earliest time at which any non-sendable partition will be ready;
@@ -392,7 +397,7 @@ class RecordAccumulator(object):
         ready_nodes = set()
         next_ready_check = 9999999.99
         unknown_leaders_exist = False
-        now = time.time()
+        now = time.time() if now is None else now
 
         exhausted = bool(self._free.queued() > 0)
         # several threads are accessing self._batches -- to simplify
@@ -448,7 +453,7 @@ class RecordAccumulator(object):
                     return True
         return False
 
-    def drain(self, cluster, nodes, max_size):
+    def drain(self, cluster, nodes, max_size, now=None):
         """
         Drain all the data for the given nodes and collate them into a list of
         batches that will fit within the specified size on a per-node basis.
@@ -466,7 +471,7 @@ class RecordAccumulator(object):
         if not nodes:
             return {}
 
-        now = time.time()
+        now = time.time() if now is None else now
         batches = {}
         for node_id in nodes:
             size = 0
@@ -515,8 +520,8 @@ class RecordAccumulator(object):
                                         # the pid and sequence here, this attempt will also be accepted, causing
                                         # a duplicate.
                                         sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
-                                        log.debug("Dest: %s : producer_idd: %s epoch: %s Assigning sequence for %s: %s",
-                                                  node_id, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
+                                        log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
+                                                  node_id, batch.topic_partition, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
                                                   batch.topic_partition, sequence_number)
                                         batch.records.set_producer_state(producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch, sequence_number)
                                     batch.records.close()
