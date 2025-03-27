@@ -274,7 +274,6 @@ class BrokerConnection(object):
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
             assert ssl_available, "Python wasn't built with SSL support"
 
-        self._sasl_mechanism = None
         self._init_sasl_mechanism()
 
         # This is not a general lock / this class is not generally thread-safe yet
@@ -314,6 +313,8 @@ class BrokerConnection(object):
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
             self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
+        else:
+            self._sasl_mechanism = None
 
     def _dns_lookup(self):
         self._gai = dns_lookup(self.host, self.port, self.afi)
