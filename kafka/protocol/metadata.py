@@ -172,6 +172,7 @@ class MetadataRequest_v0(Request):
         ('topics', Array(String('utf-8')))
     )
     ALL_TOPICS = [] # Empty Array (len 0) for topics returns all topics
+    NO_TOPICS = [] # v0 does not support a 'no topics' request, so we'll just ask for ALL
 
 
 class MetadataRequest_v1(Request):
