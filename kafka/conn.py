@@ -271,12 +271,11 @@ class BrokerConnection(object):
         assert self.config['security_protocol'] in self.SECURITY_PROTOCOLS, (
             'security_protocol must be in ' + ', '.join(self.SECURITY_PROTOCOLS))
 
-        self._sasl_mechanism = None
         if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
             assert ssl_available, "Python wasn't built with SSL support"
 
-        if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
-            self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
+        self._sasl_mechanism = None
+        self._init_sasl_mechanism()
 
         # This is not a general lock / this class is not generally thread-safe yet
         # However, to avoid pushing responsibility for maintaining
@@ -311,6 +310,10 @@ class BrokerConnection(object):
             self._sensors = BrokerConnectionMetrics(self.config['metrics'],
                                                     self.config['metric_group_prefix'],
                                                     self.node_id)
+
+    def _init_sasl_mechanism(self):
+        if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
+            self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
 
     def _dns_lookup(self):
         self._gai = dns_lookup(self.host, self.port, self.afi)
@@ -932,9 +935,7 @@ class BrokerConnection(object):
             self._update_reconnect_backoff()
             self._api_versions_future = None
             self._sasl_auth_future = None
-            if self._sasl_mechanism is not None:
-                # TODO: should we consider adding a reset() method to all sasl mechanisms?
-                self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
+            self._init_sasl_mechanism()
             self._protocol = KafkaProtocol(
                 client_id=self.config['client_id'],
                 api_version=self.config['api_version'])
