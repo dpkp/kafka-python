@@ -3,9 +3,9 @@ from __future__ import absolute_import
 import abc
 from collections import defaultdict, OrderedDict
 try:
-    from collections import Sequence
-except ImportError:
     from collections.abc import Sequence
+except ImportError:
+    from collections import Sequence
 try:
     # enum in stdlib as of py3.4
     from enum import IntEnum  # pylint: disable=import-error
