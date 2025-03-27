@@ -978,8 +978,10 @@ class KafkaClient(object):
                 topics = list(self.config['bootstrap_topics_filter'])
 
             api_version = self.api_version(MetadataRequest, max_version=7)
-            if self.cluster.need_all_topic_metadata or not topics:
+            if self.cluster.need_all_topic_metadata:
                 topics = MetadataRequest[api_version].ALL_TOPICS
+            elif not topics:
+                topics = MetadataRequest[api_version].NO_TOPICS
             if api_version >= 4:
                 request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'])
             else:
