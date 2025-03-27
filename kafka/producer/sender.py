@@ -136,7 +136,7 @@ class Sender(threading.Thread):
         expired_batches = self._accumulator.abort_expired_batches(
             self.config['request_timeout_ms'], self._metadata)
 
-        # Reset the PID if an expired batch has previously been sent to the broker.
+        # Reset the producer_id if an expired batch has previously been sent to the broker.
         # See the documentation of `TransactionState.reset_producer_id` to understand why
         # we need to reset the producer id here.
         if self._transaction_state and any([batch.in_retry() for batch in expired_batches]):
@@ -201,9 +201,7 @@ class Sender(threading.Thread):
             self.wakeup()
 
     def _maybe_wait_for_producer_id(self):
-        log.debug("_maybe_wait_for_producer_id")
         if not self._transaction_state:
-            log.debug("_maybe_wait_for_producer_id: no transaction_state...")
             return
 
         while not self._transaction_state.has_pid():
@@ -236,7 +234,6 @@ class Sender(threading.Thread):
             except Errors.RequestTimedOutError:
                 log.debug("InitProducerId request to node %s timed out", node_id)
             time.sleep(self.config['retry_backoff_ms'] / 1000)
-        log.debug("_maybe_wait_for_producer_id: ok: %s", self._transaction_state.producer_id_and_epoch)
 
     def _failed_produce(self, batches, node_id, error):
         log.error("Error sending produce request to node %d: %s", node_id, error) # trace
