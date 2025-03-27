@@ -2,7 +2,7 @@
 
 SHELL = bash
 
-export KAFKA_VERSION ?= 2.4.0
+export KAFKA_VERSION ?= 4.0.0
 DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
 
 # Required to support testing old kafka versions on newer java releases
@@ -22,6 +22,9 @@ lint:
 
 test: build-integration
 	pytest $(PYTESTS)
+
+fixture: build-integration
+	python -m test.fixtures kafka
 
 cov-local: build-integration
 	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
