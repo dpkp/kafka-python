@@ -365,7 +365,7 @@ class KafkaClient(object):
                     self._connecting.remove(node_id)
                 try:
                     self._selector.unregister(sock)
-                except KeyError:
+                except (KeyError, ValueError):
                     pass
 
                 if self._sensors:

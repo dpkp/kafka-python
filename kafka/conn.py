@@ -366,6 +366,7 @@ class BrokerConnection(object):
     def connect(self):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
+            self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
             next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
@@ -390,7 +391,6 @@ class BrokerConnection(object):
                 self._sock.setsockopt(*option)
 
             self._sock.setblocking(False)
-            self.state = ConnectionStates.CONNECTING
             self.config['state_change_callback'](self.node_id, self._sock, self)
             log.info('%s: connecting to %s:%d [%s %s]', self, self.host,
                      self.port, self._sock_addr, AFI_NAMES[self._sock_afi])
@@ -412,14 +412,14 @@ class BrokerConnection(object):
                 log.debug('%s: established TCP connection', self)
 
                 if self.config['security_protocol'] in ('SSL', 'SASL_SSL'):
-                    log.debug('%s: initiating SSL handshake', self)
                     self.state = ConnectionStates.HANDSHAKE
+                    log.debug('%s: initiating SSL handshake', self)
                     self.config['state_change_callback'](self.node_id, self._sock, self)
                     # _wrap_ssl can alter the connection state -- disconnects on failure
                     self._wrap_ssl()
                 else:
-                    log.debug('%s: checking broker Api Versions', self)
                     self.state = ConnectionStates.API_VERSIONS_SEND
+                    log.debug('%s: checking broker Api Versions', self)
                     self.config['state_change_callback'](self.node_id, self._sock, self)
 
             # Connection failed
@@ -438,8 +438,8 @@ class BrokerConnection(object):
         if self.state is ConnectionStates.HANDSHAKE:
             if self._try_handshake():
                 log.debug('%s: completed SSL handshake.', self)
-                log.debug('%s: checking broker Api Versions', self)
                 self.state = ConnectionStates.API_VERSIONS_SEND
+                log.debug('%s: checking broker Api Versions', self)
                 self.config['state_change_callback'](self.node_id, self._sock, self)
 
         if self.state in (ConnectionStates.API_VERSIONS_SEND, ConnectionStates.API_VERSIONS_RECV):
@@ -447,13 +447,13 @@ class BrokerConnection(object):
                 # _try_api_versions_check has side-effects: possibly disconnected on socket errors
                 if self.state in (ConnectionStates.API_VERSIONS_SEND, ConnectionStates.API_VERSIONS_RECV):
                     if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
-                        log.debug('%s: initiating SASL authentication', self)
                         self.state = ConnectionStates.AUTHENTICATING
+                        log.debug('%s: initiating SASL authentication', self)
                         self.config['state_change_callback'](self.node_id, self._sock, self)
                     else:
                         # security_protocol PLAINTEXT
-                        log.info('%s: Connection complete.', self)
                         self.state = ConnectionStates.CONNECTED
+                        log.info('%s: Connection complete.', self)
                         self._reset_reconnect_backoff()
                         self.config['state_change_callback'](self.node_id, self._sock, self)
 
@@ -462,8 +462,8 @@ class BrokerConnection(object):
             if self._try_authenticate():
                 # _try_authenticate has side-effects: possibly disconnected on socket errors
                 if self.state is ConnectionStates.AUTHENTICATING:
-                    log.info('%s: Connection complete.', self)
                     self.state = ConnectionStates.CONNECTED
+                    log.info('%s: Connection complete.', self)
                     self._reset_reconnect_backoff()
                     self.config['state_change_callback'](self.node_id, self._sock, self)
 
@@ -956,7 +956,8 @@ class BrokerConnection(object):
 
         # drop lock before state change callback and processing futures
         self.config['state_change_callback'](self.node_id, sock, self)
-        sock.close()
+        if sock:
+            sock.close()
         for (_correlation_id, (future, _timestamp, _timeout)) in ifrs:
             future.failure(error)
 
