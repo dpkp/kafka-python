@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2.1.4 (Mar 28, 2025)
+####################
+
+Fixes
+-----
+* Dont block pending FetchRequests when Metadata update requested (#2576)
+* Fix MetadataRequest for no topics (#2573)
+* Send final error byte x01 on Sasl OAuth failure (#2572)
+* Reset SASL state on disconnect (#2571)
+* Try import new Sequence before old to avoid DeprecationWarning
+
+Improvements
+------------
+* Update Makefile default to 4.0 broker; add make fixture
+* Improve connection state logging (#2574)
+
+
 2.1.3 (Mar 25, 2025)
 ####################
 
