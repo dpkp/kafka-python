@@ -423,6 +423,7 @@ def test_fetched_records(fetcher, topic, mocker):
     ),
 ])
 def test__handle_fetch_response(fetcher, fetch_offsets, fetch_response, num_partitions):
+    fetcher._nodes_with_pending_fetch_requests.add(0)
     fetcher._handle_fetch_response(0, fetch_offsets, time.time(), fetch_response)
     assert len(fetcher._completed_fetches) == num_partitions
 
@@ -438,6 +439,7 @@ def test__handle_fetch_response(fetcher, fetch_offsets, fetch_response, num_part
 )
 ])
 def test__handle_fetch_error(fetcher, caplog, exception, log_level):
+    fetcher._nodes_with_pending_fetch_requests.add(3)
     fetcher._handle_fetch_error(3, exception)
     assert len(caplog.records) == 1
     assert caplog.records[0].levelname == logging.getLevelName(log_level)
