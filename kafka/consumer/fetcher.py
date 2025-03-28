@@ -114,6 +114,7 @@ class Fetcher(six.Iterator):
         self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
         self._isolation_level = READ_UNCOMMITTED
         self._session_handlers = {}
+        self._nodes_with_pending_fetch_requests = set()
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -124,12 +125,12 @@ class Fetcher(six.Iterator):
         """
         futures = []
         for node_id, (request, fetch_offsets) in six.iteritems(self._create_fetch_requests()):
-            if self._client.ready(node_id):
-                log.debug("Sending FetchRequest to node %s", node_id)
-                future = self._client.send(node_id, request, wakeup=False)
-                future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
-                future.add_errback(self._handle_fetch_error, node_id)
-                futures.append(future)
+            log.debug("Sending FetchRequest to node %s", node_id)
+            self._nodes_with_pending_fetch_requests.add(node_id)
+            future = self._client.send(node_id, request, wakeup=False)
+            future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
+            future.add_errback(self._handle_fetch_error, node_id)
+            futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
         return futures
@@ -593,8 +594,20 @@ class Fetcher(six.Iterator):
                           " Requesting metadata update", partition)
                 self._client.cluster.request_update()
 
-            elif self._client.in_flight_request_count(node_id) > 0:
-                log.log(0, "Skipping fetch for partition %s because there is an inflight request to node %s",
+            elif not self._client.connected(node_id) and self._client.connection_delay(node_id) > 0:
+                # If we try to send during the reconnect backoff window, then the request is just
+                # going to be failed anyway before being sent, so skip the send for now
+                log.log(0, "Skipping fetch for partition %s because node %s is awaiting reconnect backoff",
+                        partition, node_id)
+
+            elif self._client.throttle_delay(node_id) > 0:
+                # If we try to send while throttled, then the request is just
+                # going to be failed anyway before being sent, so skip the send for now
+                log.log(0, "Skipping fetch for partition %s because node %s is throttled",
+                        partition, node_id)
+
+            elif node_id in self._nodes_with_pending_fetch_requests:
+                log.log(0, "Skipping fetch for partition %s because there is a pending fetch request to node %s",
                         partition, node_id)
                 continue
 
@@ -707,12 +720,14 @@ class Fetcher(six.Iterator):
                 self._completed_fetches.append(completed_fetch)
 
         self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+        self._nodes_with_pending_fetch_requests.remove(node_id)
 
     def _handle_fetch_error(self, node_id, exception):
         level = logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR
         log.log(level, 'Fetch to node %s failed: %s', node_id, exception)
         if node_id in self._session_handlers:
             self._session_handlers[node_id].handle_error(exception)
+        self._nodes_with_pending_fetch_requests.remove(node_id)
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
