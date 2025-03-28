@@ -319,8 +319,8 @@ class BrokerConnection(object):
     def _dns_lookup(self):
         self._gai = dns_lookup(self.host, self.port, self.afi)
         if not self._gai:
-            log.error('DNS lookup failed for %s:%i (%s)',
-                      self.host, self.port, self.afi)
+            log.error('%s: DNS lookup failed for %s:%i (%s)',
+                      self, self.host, self.port, self.afi)
             return False
         return True
 
@@ -425,7 +425,7 @@ class BrokerConnection(object):
             # Connection failed
             # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
             elif ret not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
-                log.error('Connect attempt to %s returned error %s.'
+                log.error('%s: Connect attempt returned error %s.'
                           ' Disconnecting.', self, ret)
                 errstr = errno.errorcode.get(ret, 'UNKNOWN')
                 self.close(Errors.KafkaConnectionError('{} {}'.format(ret, errstr)))
@@ -472,7 +472,7 @@ class BrokerConnection(object):
             # Connection timed out
             request_timeout = self.config['request_timeout_ms'] / 1000.0
             if time.time() > request_timeout + self.last_attempt:
-                log.error('Connection attempt to %s timed out', self)
+                log.error('%s: Connection attempt timed out', self)
                 self.close(Errors.KafkaConnectionError('timeout'))
                 return self.state
 
@@ -531,7 +531,7 @@ class BrokerConnection(object):
         except (SSLWantReadError, SSLWantWriteError):
             pass
         except (SSLZeroReturnError, ConnectionError, TimeoutError, SSLEOFError):
-            log.warning('SSL connection closed by server during handshake.')
+            log.warning('%s: SSL connection closed by server during handshake.', self)
             self.close(Errors.KafkaConnectionError('SSL connection closed by server during handshake'))
         # Other SSLErrors will be raised to user
 
@@ -611,7 +611,7 @@ class BrokerConnection(object):
             for api_key, min_version, max_version, *rest in response.api_versions
         ])
         self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
-        log.info('Broker version identified as %s', '.'.join(map(str, self._api_version)))
+        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self._api_version)))
         future.success(self._api_version)
         self.connect()
 
@@ -621,7 +621,7 @@ class BrokerConnection(object):
         # after failure connection is closed, so state should already be DISCONNECTED
 
     def _handle_check_version_response(self, future, version, _response):
-        log.info('Broker version identified as %s', '.'.join(map(str, version)))
+        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, version)))
         log.info('Set configuration api_version=%s to skip auto'
                  ' check_version requests on startup', version)
         self._api_versions = BROKER_API_VERSIONS[version]
@@ -751,7 +751,7 @@ class BrokerConnection(object):
             request = SaslAuthenticateRequest[0](sasl_auth_bytes)
             self._send(request, blocking=True)
         else:
-            log.debug('Sending %d raw sasl auth bytes to server', len(sasl_auth_bytes))
+            log.debug('%s: Sending %d raw sasl auth bytes to server', self, len(sasl_auth_bytes))
             try:
                 self._send_bytes_blocking(Int32.encode(len(sasl_auth_bytes)) + sasl_auth_bytes)
             except (ConnectionError, TimeoutError) as e:
@@ -781,7 +781,7 @@ class BrokerConnection(object):
             latency_ms = (time.time() - timestamp) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
-            log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
+            log.debug('%s: Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
 
             error_type = Errors.for_code(response.error_code)
             if error_type is not Errors.NoError:
@@ -792,7 +792,7 @@ class BrokerConnection(object):
             return response.auth_bytes
         else:
             # unframed bytes w/ SaslHandhake v0
-            log.debug('Received %d raw sasl auth bytes from server', nbytes)
+            log.debug('%s: Received %d raw sasl auth bytes from server', self, nbytes)
             return data[4:]
 
     def _sasl_authenticate(self, future):
@@ -1003,7 +1003,7 @@ class BrokerConnection(object):
 
             correlation_id = self._protocol.send_request(request)
 
-            log.debug('%s Request %d (timeout_ms %s): %s', self, correlation_id, request_timeout_ms, request)
+            log.debug('%s: Request %d (timeout_ms %s): %s', self, correlation_id, request_timeout_ms, request)
             if request.expect_response():
                 assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
                 sent_time = time.time()
@@ -1037,7 +1037,7 @@ class BrokerConnection(object):
             return True
 
         except (ConnectionError, TimeoutError) as e:
-            log.exception("Error sending request data to %s", self)
+            log.exception("%s: Error sending request data", self)
             error = Errors.KafkaConnectionError("%s: %s" % (self, e))
             self.close(error=error)
             return False
@@ -1070,7 +1070,7 @@ class BrokerConnection(object):
             return len(self._send_buffer) == 0
 
         except (ConnectionError, TimeoutError, Exception) as e:
-            log.exception("Error sending request data to %s", self)
+            log.exception("%s: Error sending request data", self)
             error = Errors.KafkaConnectionError("%s: %s" % (self, e))
             self.close(error=error)
             return False
@@ -1107,7 +1107,7 @@ class BrokerConnection(object):
         if not responses and self.requests_timed_out():
             timed_out = self.timed_out_ifrs()
             timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
-            log.warning('%s timed out after %s ms. Closing connection.',
+            log.warning('%s: timed out after %s ms. Closing connection.',
                         self, timeout_ms)
             self.close(error=Errors.RequestTimedOutError(
                 'Request timed out after %s ms' %
@@ -1126,7 +1126,7 @@ class BrokerConnection(object):
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
 
-            log.debug('%s Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
+            log.debug('%s: Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
             self._maybe_throttle(response)
             responses[i] = (response, future)
 
@@ -1138,7 +1138,7 @@ class BrokerConnection(object):
         err = None
         with self._lock:
             if not self._can_send_recv():
-                log.warning('%s cannot recv: socket not connected', self)
+                log.warning('%s: cannot recv: socket not connected', self)
                 return ()
 
             while len(recvd) < self.config['sock_chunk_buffer_count']:
