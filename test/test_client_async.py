@@ -32,7 +32,7 @@ def cli(mocker, conn):
 
 def test_bootstrap(mocker, conn):
     conn.state = ConnectionStates.CONNECTED
-    cli = KafkaClient(api_version=(0, 9))
+    cli = KafkaClient(api_version=(2, 1))
     mocker.patch.object(cli, '_selector')
     future = cli.cluster.request_update()
     cli.poll(future=future)
@@ -43,7 +43,7 @@ def test_bootstrap(mocker, conn):
     kwargs.pop('state_change_callback')
     kwargs.pop('node_id')
     assert kwargs == cli.config
-    conn.send.assert_called_once_with(MetadataRequest[0]([]), blocking=False, request_timeout_ms=None)
+    conn.send.assert_called_once_with(MetadataRequest[7]([], True), blocking=False, request_timeout_ms=None)
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
                                          BrokerMetadata(1, 'bar', 34, None)])
@@ -330,6 +330,7 @@ def test_maybe_refresh_metadata_update(mocker, client):
     mocker.patch.object(client, 'least_loaded_node', return_value='foobar')
     mocker.patch.object(client, '_can_send_request', return_value=True)
     send = mocker.patch.object(client, 'send')
+    client.cluster.need_all_topic_metadata = True
 
     client.poll(timeout_ms=12345678)
     client._poll.assert_called_with(9999.999) # request_timeout_ms
