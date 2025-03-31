@@ -129,7 +129,7 @@ class LegacyRecordBase(object):
 
 class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
 
-    __slots__ = ("_buffer", "_magic", "_offset", "_crc", "_timestamp",
+    __slots__ = ("_buffer", "_magic", "_offset", "_length", "_crc", "_timestamp",
                  "_attributes", "_decompressed")
 
     def __init__(self, buffer, magic):
@@ -141,10 +141,19 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
         assert magic == magic_
 
         self._offset = offset
+        self._length = length
         self._crc = crc
         self._timestamp = timestamp
         self._attributes = attrs
         self._decompressed = False
+
+    @property
+    def base_offset(self):
+        return self._offset
+
+    @property
+    def size_in_bytes(self):
+        return self._length + self.LOG_OVERHEAD
 
     @property
     def timestamp_type(self):

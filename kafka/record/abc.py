@@ -111,6 +111,16 @@ class ABCRecordBatch(object):
         """
 
     @abc.abstractproperty
+    def base_offset(self):
+        """ Return base offset for batch
+        """
+
+    @abc.abstractproperty
+    def size_in_bytes(self):
+        """ Return size of batch in bytes (includes header overhead)
+        """
+
+    @abc.abstractproperty
     def magic(self):
         """ Return magic value (0, 1, 2) for batch.
         """
