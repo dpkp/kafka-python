@@ -137,6 +137,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[0]
 
     @property
+    def size_in_bytes(self):
+        return self._header_data[1] + self.AFTER_LEN_OFFSET
+
+    @property
     def leader_epoch(self):
         return self._header_data[2]
 
