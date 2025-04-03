@@ -381,7 +381,11 @@ class SubscriptionState(object):
 
     def move_partition_to_end(self, partition):
         if partition in self.assignment:
-            self.assignment.move_to_end(partition)
+            try:
+                self.assignment.move_to_end(partition)
+            except AttributeError:
+                state = self.assignment.pop(partition)
+                self.assignment[partition] = state
 
 
 class TopicPartitionState(object):
