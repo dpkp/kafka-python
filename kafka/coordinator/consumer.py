@@ -494,7 +494,8 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
-        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
@@ -516,7 +517,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Raises error on failure
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
@@ -573,7 +575,8 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: indicating whether the commit was successful or not
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
@@ -761,7 +764,8 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Unsupported Broker API'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
         if not partitions:
             return Future().success({})
