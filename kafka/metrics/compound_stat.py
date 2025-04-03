@@ -21,6 +21,8 @@ class AbstractCompoundStat(AbstractStat):
 
 
 class NamedMeasurable(object):
+    __slots__ = ('_name', '_stat')
+
     def __init__(self, metric_name, measurable_stat):
         self._name = metric_name
         self._stat = measurable_stat

@@ -7,6 +7,8 @@ class Count(AbstractSampledStat):
     """
     An AbstractSampledStat that maintains a simple count of what it has seen.
     """
+    __slots__ = ('_initial_value', '_samples', '_current')
+
     def __init__(self):
         super(Count, self).__init__(0.0)
 

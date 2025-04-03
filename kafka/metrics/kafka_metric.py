@@ -4,6 +4,8 @@ import time
 
 
 class KafkaMetric(object):
+    __slots__ = ('_metric_name', '_measurable', '_config')
+
     # NOTE java constructor takes a lock instance
     def __init__(self, metric_name, measurable, config):
         if not metric_name:
@@ -33,4 +35,4 @@ class KafkaMetric(object):
     def value(self, time_ms=None):
         if time_ms is None:
             time_ms = time.time() * 1000
-        return self.measurable.measure(self.config, time_ms)
+        return self._measurable.measure(self._config, time_ms)

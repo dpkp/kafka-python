@@ -7,6 +7,8 @@ from kafka.metrics.stats.sampled_stat import AbstractSampledStat
 
 class Min(AbstractSampledStat):
     """An AbstractSampledStat that gives the min over its samples."""
+    __slots__ = ('_initial_value', '_samples', '_current')
+
     def __init__(self):
         super(Min, self).__init__(float(sys.maxsize))
 

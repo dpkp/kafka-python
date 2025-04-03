@@ -4,6 +4,8 @@ import math
 
 
 class Histogram(object):
+    __slots__ = ('_hist', '_count', '_bin_scheme')
+
     def __init__(self, bin_scheme):
         self._hist = [0.0] * bin_scheme.bins
         self._count = 0.0
@@ -40,6 +42,8 @@ class Histogram(object):
         return '{%s}' % ','.join(values)
 
     class ConstantBinScheme(object):
+        __slots__ = ('_min', '_max', '_bins', '_bucket_width')
+
         def __init__(self, bins, min_val, max_val):
             if bins < 2:
                 raise ValueError('Must have at least 2 bins.')
@@ -69,6 +73,8 @@ class Histogram(object):
                 return int(((x - self._min) / self._bucket_width) + 1)
 
     class LinearBinScheme(object):
+        __slots__ = ('_bins', '_max', '_scale')
+
         def __init__(self, num_bins, max_val):
             self._bins = num_bins
             self._max = max_val

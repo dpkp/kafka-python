@@ -13,6 +13,9 @@ class BucketSizing(object):
 
 class Percentiles(AbstractSampledStat, AbstractCompoundStat):
     """A compound stat that reports one or more percentiles"""
+    __slots__ = ('_initial_value', '_samples', '_current',
+                 '_percentiles', '_buckets', '_bin_scheme')
+
     def __init__(self, size_in_bytes, bucketing, max_val, min_val=0.0,
                  percentiles=None):
         super(Percentiles, self).__init__(0.0)
