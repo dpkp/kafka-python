@@ -25,14 +25,25 @@ from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
+@pytest.fixture
+def client(conn, mocker):
+    cli = KafkaClient(api_version=(0, 9))
+    mocker.patch.object(cli, '_init_connect', return_value=True)
+    try:
+        yield cli
+    finally:
+        cli._close()
 
 @pytest.fixture
-def client(conn):
-    return KafkaClient(api_version=(0, 9))
-
-@pytest.fixture
-def coordinator(client):
-    return ConsumerCoordinator(client, SubscriptionState(), Metrics())
+def coordinator(client, mocker):
+    metrics = Metrics()
+    coord = ConsumerCoordinator(client, SubscriptionState(), metrics)
+    try:
+        yield coord
+    finally:
+        mocker.patch.object(coord, 'coordinator_unknown', return_value=True) # avoid attempting to leave group during close()
+        coord.close(timeout_ms=0)
+        metrics.close()
 
 
 def test_init(client, coordinator):
@@ -55,6 +66,7 @@ def test_autocommit_enable_api_version(conn, api_version):
         assert coordinator.config['enable_auto_commit'] is False
     else:
         assert coordinator.config['enable_auto_commit'] is True
+    coordinator.close()
 
 
 def test_protocol_type(coordinator):
@@ -117,6 +129,7 @@ def test_pattern_subscription(conn, api_version):
     else:
         assert set(coordinator._subscription.assignment.keys()) == {TopicPartition('foo1', 0),
                                                                     TopicPartition('foo2', 0)}
+    coordinator.close()
 
 
 def test_lookup_assignor(coordinator):
@@ -398,6 +411,7 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
     assert commit_sync.call_count == (1 if commit_offsets else 0)
     assert mock_warn.call_count == (1 if warn else 0)
     assert mock_exc.call_count == (1 if exc else 0)
+    coordinator.close()
 
 
 @pytest.fixture
