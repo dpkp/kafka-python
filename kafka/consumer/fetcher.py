@@ -56,12 +56,13 @@ class Fetcher(six.Iterator):
         'max_partition_fetch_bytes': 1048576,
         'max_poll_records': sys.maxsize,
         'check_crcs': True,
+        'metrics': None,
         'metric_group_prefix': 'consumer',
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
     }
 
-    def __init__(self, client, subscriptions, metrics, **configs):
+    def __init__(self, client, subscriptions, **configs):
         """Initialize a Kafka Message Fetcher.
 
         Keyword Arguments:
@@ -111,7 +112,10 @@ class Fetcher(six.Iterator):
         self._next_partition_records = None  # Holds a single PartitionRecords until fully consumed
         self._iterator = None
         self._fetch_futures = collections.deque()
-        self._sensors = FetchManagerMetrics(metrics, self.config['metric_group_prefix'])
+        if self.config['metrics']:
+            self._sensors = FetchManagerMetrics(self.config['metrics'], self.config['metric_group_prefix'])
+        else:
+            self._sensors = None
         self._isolation_level = READ_UNCOMMITTED
         self._session_handlers = {}
         self._nodes_with_pending_fetch_requests = set()
@@ -391,7 +395,7 @@ class Fetcher(six.Iterator):
                 # when each message is yielded). There may be edge cases where we re-fetch records
                 # that we'll end up skipping, but for now we'll live with that.
                 highwater = self._subscriptions.assignment[tp].highwater
-                if highwater is not None:
+                if highwater is not None and self._sensors:
                     self._sensors.records_fetch_lag.record(highwater - part.next_fetch_offset)
                 if update_offsets or not part_records:
                     # TODO: save leader_epoch
@@ -705,7 +709,10 @@ class Fetcher(six.Iterator):
         partitions = set([TopicPartition(topic, partition_data[0])
                           for topic, partitions in response.topics
                           for partition_data in partitions])
-        metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
+        if self._sensors:
+            metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
+        else:
+            metric_aggregator = None
 
         for topic, partitions in response.topics:
             for partition_data in partitions:
@@ -719,7 +726,8 @@ class Fetcher(six.Iterator):
                 )
                 self._completed_fetches.append(completed_fetch)
 
-        self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+        if self._sensors:
+            self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
         self._nodes_with_pending_fetch_requests.remove(node_id)
 
     def _handle_fetch_error(self, node_id, exception):
@@ -816,7 +824,7 @@ class Fetcher(six.Iterator):
                 raise error_type('Unexpected error while fetching data')
 
         finally:
-            if parsed_records is None:
+            if parsed_records is None and completed_fetch.metric_aggregator:
                 completed_fetch.metric_aggregator.record(tp, 0, 0)
 
             if error_type is not Errors.NoError:
@@ -873,7 +881,8 @@ class Fetcher(six.Iterator):
         def drain(self):
             if self.record_iterator is not None:
                 self.record_iterator = None
-                self.metric_aggregator.record(self.topic_partition, self.bytes_read, self.records_read)
+                if self.metric_aggregator:
+                    self.metric_aggregator.record(self.topic_partition, self.bytes_read, self.records_read)
                 self.on_drain(self)
 
         def take(self, n=None):

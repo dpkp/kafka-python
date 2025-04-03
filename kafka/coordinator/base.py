@@ -84,10 +84,11 @@ class BaseCoordinator(object):
         'max_poll_interval_ms': 300000,
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
+        'metrics': None,
         'metric_group_prefix': '',
     }
 
-    def __init__(self, client, metrics, **configs):
+    def __init__(self, client, **configs):
         """
         Keyword Arguments:
             group_id (str): name of the consumer group to join for dynamic
@@ -130,8 +131,11 @@ class BaseCoordinator(object):
         self.coordinator_id = None
         self._find_coordinator_future = None
         self._generation = Generation.NO_GENERATION
-        self.sensors = GroupCoordinatorMetrics(self.heartbeat, metrics,
-                                               self.config['metric_group_prefix'])
+        if self.config['metrics']:
+            self._sensors = GroupCoordinatorMetrics(self.heartbeat, self.config['metrics'],
+                                                   self.config['metric_group_prefix'])
+        else:
+            self._sensors = None
 
     @abc.abstractmethod
     def protocol_type(self):
@@ -531,7 +535,8 @@ class BaseCoordinator(object):
         if error_type is Errors.NoError:
             log.debug("Received successful JoinGroup response for group %s: %s",
                       self.group_id, response)
-            self.sensors.join_latency.record((time.time() - send_time) * 1000)
+            if self._sensors:
+                self._sensors.join_latency.record((time.time() - send_time) * 1000)
             with self._lock:
                 if self.state is not MemberState.REBALANCING:
                     # if the consumer was woken up before a rebalance completes,
@@ -650,7 +655,8 @@ class BaseCoordinator(object):
     def _handle_sync_group_response(self, future, send_time, response):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
-            self.sensors.sync_latency.record((time.time() - send_time) * 1000)
+            if self._sensors:
+                self._sensors.sync_latency.record((time.time() - send_time) * 1000)
             future.success(response.member_assignment)
             return
 
@@ -856,7 +862,8 @@ class BaseCoordinator(object):
         return future
 
     def _handle_heartbeat_response(self, future, send_time, response):
-        self.sensors.heartbeat_latency.record((time.time() - send_time) * 1000)
+        if self._sensors:
+            self._sensors.heartbeat_latency.record((time.time() - send_time) * 1000)
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             log.debug("Received successful heartbeat response for group %s",

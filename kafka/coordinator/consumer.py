@@ -39,10 +39,11 @@ class ConsumerCoordinator(BaseCoordinator):
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'exclude_internal_topics': True,
+        'metrics': None,
         'metric_group_prefix': 'consumer'
     }
 
-    def __init__(self, client, subscription, metrics, **configs):
+    def __init__(self, client, subscription, **configs):
         """Initialize the coordination manager.
 
         Keyword Arguments:
@@ -78,7 +79,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 True the only way to receive records from an internal topic is
                 subscribing to it. Requires 0.10+. Default: True
         """
-        super(ConsumerCoordinator, self).__init__(client, metrics, **configs)
+        super(ConsumerCoordinator, self).__init__(client, **configs)
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -120,8 +121,11 @@ class ConsumerCoordinator(BaseCoordinator):
             else:
                 self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
 
-        self.consumer_sensors = ConsumerCoordinatorMetrics(
-            metrics, self.config['metric_group_prefix'], self._subscription)
+        if self.config['metrics']:
+            self._consumer_sensors = ConsumerCoordinatorMetrics(
+                self.config['metrics'], self.config['metric_group_prefix'], self._subscription)
+        else:
+            self._consumer_sensors = None
 
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
@@ -686,7 +690,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_offset_commit_response(self, offsets, future, send_time, response):
         # TODO look at adding request_latency_ms to response (like java kafka)
-        self.consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
+        if self._consumer_sensors:
+            self._consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
         unauthorized_topics = set()
 
         for topic, partitions in response.topics:
