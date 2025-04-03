@@ -972,7 +972,8 @@ class KafkaConsumer(six.Iterator):
         # are committed since there will be no following rebalance
         self._coordinator.maybe_auto_commit_offsets_now()
         self._subscription.unsubscribe()
-        self._coordinator.maybe_leave_group()
+        if self.config['api_version'] >= (0, 9):
+            self._coordinator.maybe_leave_group()
         self._client.cluster.need_all_topic_metadata = False
         self._client.set_topics([])
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
