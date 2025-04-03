@@ -867,6 +867,9 @@ class Fetcher(six.Iterator):
         def __bool__(self):
             return self.record_iterator is not None
 
+        # py2
+        __nonzero__ = __bool__
+
         def drain(self):
             if self.record_iterator is not None:
                 self.record_iterator = None
