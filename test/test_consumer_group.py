@@ -68,7 +68,8 @@ def test_group(kafka_broker, topic):
 
     num_consumers = 4
     for i in range(num_consumers):
-        t = threading.Thread(target=consumer_thread, args=(i,), daemon=True)
+        t = threading.Thread(target=consumer_thread, args=(i,))
+        t.daemon = True
         t.start()
         threads[i] = t
 
