@@ -594,7 +594,8 @@ class BrokerConnection(object):
             future.failure(error_type())
             if error_type is Errors.UnsupportedVersionError:
                 self._api_versions_idx -= 1
-                for api_key, min_version, max_version, *rest in response.api_versions:
+                for api_version_data in response.api_versions:
+                    api_key, min_version, max_version = api_version_data[:3]
                     # If broker provides a lower max_version, skip to that
                     if api_key == response.API_KEY:
                         self._api_versions_idx = min(self._api_versions_idx, max_version)
@@ -607,8 +608,8 @@ class BrokerConnection(object):
                 self.close(error=error_type())
             return
         self._api_versions = dict([
-            (api_key, (min_version, max_version))
-            for api_key, min_version, max_version, *rest in response.api_versions
+            (api_version_data[0], (api_version_data[1], api_version_data[2]))
+            for api_version_data in response.api_versions
         ])
         self._api_version = self._infer_broker_version_from_api_versions(self._api_versions)
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self._api_version)))

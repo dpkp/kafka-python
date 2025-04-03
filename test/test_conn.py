@@ -11,6 +11,7 @@ except ImportError:
 import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
+from kafka.future import Future
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.group import HeartbeatResponse
 from kafka.protocol.metadata import MetadataRequest
@@ -69,8 +70,10 @@ def test_connect(_socket, conn, states):
         assert conn.state is state
 
 
-def test_api_versions_check(_socket):
+def test_api_versions_check(_socket, mocker):
     conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    mocker.patch.object(conn, '_send', return_value=Future())
+    mocker.patch.object(conn, 'recv', return_value=[])
     assert conn._api_versions_future is None
     conn.connect()
     assert conn._api_versions_future is not None

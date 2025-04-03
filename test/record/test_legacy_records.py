@@ -10,6 +10,8 @@ from kafka.record.legacy_records import (
 import kafka.codec
 from kafka.errors import UnsupportedCodecError
 
+from test.testutil import maybe_skip_unsupported_compression
+
 
 @pytest.mark.parametrize("magic", [0, 1])
 def test_read_write_serde_v0_v1_no_compression(magic):
@@ -39,6 +41,7 @@ def test_read_write_serde_v0_v1_no_compression(magic):
 ])
 @pytest.mark.parametrize("magic", [0, 1])
 def test_read_write_serde_v0_v1_with_compression(compression_type, magic):
+    maybe_skip_unsupported_compression(compression_type)
     builder = LegacyRecordBatchBuilder(
         magic=magic, compression_type=compression_type, batch_size=9999999)
     for offset in range(10):
@@ -179,6 +182,7 @@ def test_legacy_batch_size_limit(magic):
 ])
 @pytest.mark.parametrize("magic", [0, 1])
 def test_unavailable_codec(magic, compression_type, name, checker_name):
+    maybe_skip_unsupported_compression(compression_type)
     builder = LegacyRecordBatchBuilder(
         magic=magic, compression_type=compression_type, batch_size=1024)
     builder.append(0, timestamp=None, key=None, value=b"M")
