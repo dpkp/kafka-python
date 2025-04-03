@@ -267,6 +267,7 @@ class KafkaProducer(object):
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
+        metrics_enabled (bool): Whether to track metrics on this instance. Default True.
         metrics_num_samples (int): The number of samples maintained to compute
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
@@ -336,6 +337,7 @@ class KafkaProducer(object):
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'metric_reporters': [],
+        'metrics_enabled': True,
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'selector': selectors.DefaultSelector,
@@ -393,12 +395,15 @@ class KafkaProducer(object):
                         str(self.config['api_version']), deprecated)
 
         # Configure metrics
-        metrics_tags = {'client-id': self.config['client_id']}
-        metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
-                                     time_window_ms=self.config['metrics_sample_window_ms'],
-                                     tags=metrics_tags)
-        reporters = [reporter() for reporter in self.config['metric_reporters']]
-        self._metrics = Metrics(metric_config, reporters)
+        if self.config['metrics_enabled']:
+            metrics_tags = {'client-id': self.config['client_id']}
+            metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
+                                         time_window_ms=self.config['metrics_sample_window_ms'],
+                                         tags=metrics_tags)
+            reporters = [reporter() for reporter in self.config['metric_reporters']]
+            self._metrics = Metrics(metric_config, reporters)
+        else:
+            self._metrics = None
 
         client = self.config['kafka_client'](
             metrics=self._metrics, metric_group_prefix='producer',
@@ -424,11 +429,12 @@ class KafkaProducer(object):
             self.config['compression_attrs'] = compression_attrs
 
         message_version = self._max_usable_produce_magic()
-        self._accumulator = RecordAccumulator(message_version=message_version, metrics=self._metrics, **self.config)
+        self._accumulator = RecordAccumulator(message_version=message_version, **self.config)
         self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
-                              self._accumulator, self._metrics,
+                              self._accumulator,
+                              metrics=self._metrics,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
@@ -524,7 +530,8 @@ class KafkaProducer(object):
                      timeout)
             self._sender.force_close()
 
-        self._metrics.close()
+        if self._metrics:
+            self._metrics.close()
         try:
             self.config['key_serializer'].close()
         except AttributeError:
@@ -773,6 +780,8 @@ class KafkaProducer(object):
             This is an unstable interface. It may change in future
             releases without warning.
         """
+        if not self._metrics:
+            return
         if raw:
             return self._metrics.metrics.copy()
 

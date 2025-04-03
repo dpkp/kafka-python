@@ -29,11 +29,12 @@ class Sender(threading.Thread):
         'acks': 1,
         'retries': 0,
         'request_timeout_ms': 30000,
+        'metrics': None,
         'guarantee_message_order': False,
         'client_id': 'kafka-python-' + __version__,
     }
 
-    def __init__(self, client, metadata, accumulator, metrics, **configs):
+    def __init__(self, client, metadata, accumulator, **configs):
         super(Sender, self).__init__()
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -47,7 +48,10 @@ class Sender(threading.Thread):
         self._running = True
         self._force_close = False
         self._topics_to_add = set()
-        self._sensors = SenderMetrics(metrics, self._client, self._metadata)
+        if self.config['metrics']:
+            self._sensors = SenderMetrics(self.config['metrics'], self._client, self._metadata)
+        else:
+            self._sensors = None
 
     def run(self):
         """The main run loop for the sender thread."""
@@ -123,10 +127,12 @@ class Sender(threading.Thread):
 
         expired_batches = self._accumulator.abort_expired_batches(
             self.config['request_timeout_ms'], self._metadata)
-        for expired_batch in expired_batches:
-            self._sensors.record_errors(expired_batch.topic_partition.topic, expired_batch.record_count)
 
-        self._sensors.update_produce_request_metrics(batches_by_node)
+        if self._sensors:
+            for expired_batch in expired_batches:
+                self._sensors.record_errors(expired_batch.topic_partition.topic, expired_batch.record_count)
+            self._sensors.update_produce_request_metrics(batches_by_node)
+
         requests = self._create_produce_requests(batches_by_node)
         # If we have any nodes that are ready to send + have sendable data,
         # poll with 0 timeout so this can immediately loop and try sending more
@@ -237,7 +243,8 @@ class Sender(threading.Thread):
                         self.config['retries'] - batch.attempts - 1,
                         error)
             self._accumulator.reenqueue(batch)
-            self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
+            if self._sensors:
+                self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
         else:
             if error is Errors.TopicAuthorizationFailedError:
                 error = error(batch.topic_partition.topic)
@@ -245,7 +252,7 @@ class Sender(threading.Thread):
             # tell the user the result of their request
             batch.done(base_offset, timestamp_ms, error, log_start_offset)
             self._accumulator.deallocate(batch)
-            if error is not None:
+            if error is not None and self._sensors:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
 
         if getattr(error, 'invalid_metadata', False):
