@@ -15,7 +15,6 @@ from kafka.consumer.fetcher import (
 from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.list_offsets import ListOffsetsResponse
@@ -43,13 +42,13 @@ def topic():
 
 
 @pytest.fixture
-def fetcher(client, subscription_state, topic):
+def fetcher(client, metrics, subscription_state, topic):
     subscription_state.subscribe(topics=[topic])
     assignment = [TopicPartition(topic, i) for i in range(3)]
     subscription_state.assign_from_subscribed(assignment)
     for tp in assignment:
         subscription_state.seek(tp, 0)
-    return Fetcher(client, subscription_state, Metrics())
+    return Fetcher(client, subscription_state, metrics=metrics)
 
 
 def _build_record_batch(msgs, compression=0, offset=0, magic=2):

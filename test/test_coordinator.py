@@ -16,7 +16,6 @@ from kafka.coordinator.protocol import (
     ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment)
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
@@ -35,15 +34,13 @@ def client(conn, mocker):
         cli._close()
 
 @pytest.fixture
-def coordinator(client, mocker):
-    metrics = Metrics()
-    coord = ConsumerCoordinator(client, SubscriptionState(), metrics)
+def coordinator(client, metrics, mocker):
+    coord = ConsumerCoordinator(client, SubscriptionState(), metrics=metrics)
     try:
         yield coord
     finally:
         mocker.patch.object(coord, 'coordinator_unknown', return_value=True) # avoid attempting to leave group during close()
         coord.close(timeout_ms=0)
-        metrics.close()
 
 
 def test_init(client, coordinator):
@@ -53,10 +50,10 @@ def test_init(client, coordinator):
 
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_autocommit_enable_api_version(conn, api_version):
+def test_autocommit_enable_api_version(conn, metrics, api_version):
     coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
                                       SubscriptionState(),
-                                      Metrics(),
+                                      metrics=metrics,
                                       enable_auto_commit=True,
                                       session_timeout_ms=30000,   # session_timeout_ms and max_poll_interval_ms
                                       max_poll_interval_ms=30000, # should be the same to avoid KafkaConfigurationError
@@ -100,10 +97,10 @@ def test_group_protocols(coordinator):
 
 
 @pytest.mark.parametrize('api_version', [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_pattern_subscription(conn, api_version):
+def test_pattern_subscription(conn, metrics, api_version):
     coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
                                       SubscriptionState(),
-                                      Metrics(),
+                                      metrics=metrics,
                                       api_version=api_version,
                                       session_timeout_ms=10000,
                                       max_poll_interval_ms=10000)
@@ -390,7 +387,6 @@ def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
     mock_exc = mocker.patch('kafka.coordinator.consumer.log.exception')
     client = KafkaClient(api_version=api_version)
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
-                                      Metrics(),
                                       api_version=api_version,
                                       session_timeout_ms=30000,
                                       max_poll_interval_ms=30000,
