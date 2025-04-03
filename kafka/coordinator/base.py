@@ -395,12 +395,16 @@ class BaseCoordinator(object):
 
         Raises: KafkaTimeoutError if timeout_ms is not None
         """
+        if self.config['api_version'] < (0, 9):
+            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to join consumer group')
         self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
         self._start_heartbeat_thread()
         self.join_group(timeout_ms=inner_timeout_ms())
 
     def join_group(self, timeout_ms=None):
+        if self.config['api_version'] < (0, 9):
+            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to join consumer group')
         while self.need_rejoin():
             self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
@@ -763,6 +767,8 @@ class BaseCoordinator(object):
         self.rejoin_needed = True
 
     def _start_heartbeat_thread(self):
+        if self.config['api_version'] < (0, 9):
+            raise Errors.UnsupportedVersionError('Heartbeat APIs require 0.9+ broker')
         with self._lock:
             if self._heartbeat_thread is None:
                 log.info('Starting new heartbeat thread')
@@ -794,10 +800,13 @@ class BaseCoordinator(object):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
         self._close_heartbeat_thread(timeout_ms=timeout_ms)
-        self.maybe_leave_group(timeout_ms=timeout_ms)
+        if self.config['api_version'] >= (0, 9):
+            self.maybe_leave_group(timeout_ms=timeout_ms)
 
     def maybe_leave_group(self, timeout_ms=None):
         """Leave the current group and reset local generation/memberId."""
+        if self.config['api_version'] < (0, 9):
+            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         with self._client._lock, self._lock:
             if (not self.coordinator_unknown()
                 and self.state is not MemberState.UNJOINED
