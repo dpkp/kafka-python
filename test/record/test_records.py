@@ -4,6 +4,8 @@ import pytest
 from kafka.record import MemoryRecords, MemoryRecordsBuilder
 from kafka.errors import CorruptRecordException
 
+from test.testutil import maybe_skip_unsupported_compression
+
 # This is real live data from Kafka 11 broker
 record_batch_data_v2 = [
     # First Batch value == "123"
@@ -179,6 +181,7 @@ def test_memory_records_corrupt():
 @pytest.mark.parametrize("compression_type", [0, 1, 2, 3])
 @pytest.mark.parametrize("magic", [0, 1, 2])
 def test_memory_records_builder(magic, compression_type):
+    maybe_skip_unsupported_compression(compression_type)
     builder = MemoryRecordsBuilder(
         magic=magic, compression_type=compression_type, batch_size=1024 * 10)
     base_size = builder.size_in_bytes()  # V2 has a header before

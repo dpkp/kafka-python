@@ -6,6 +6,10 @@ import re
 import string
 import time
 
+import pytest
+
+import kafka.codec
+
 
 def special_to_underscore(string, _matcher=re.compile(r'[^a-zA-Z0-9_]+')):
     return _matcher.sub('_', string)
@@ -34,6 +38,18 @@ def assert_message_count(messages, num_messages):
     # timestamp, etc are ignored... this could be changed if necessary, but will be more tolerant of dupes.
     unique_messages = {(m.key, m.value) for m in messages}
     assert len(unique_messages) == num_messages, 'Expected %d unique messages, got %d' % (num_messages, len(unique_messages))
+
+
+def maybe_skip_unsupported_compression(compression_type):
+    codecs = {1: 'gzip', 2: 'snappy', 3: 'lz4', 4: 'zstd'}
+    if not compression_type:
+        return
+    elif compression_type in codecs:
+        compression_type = codecs[compression_type]
+
+    checker = getattr(kafka.codec, 'has_' + compression_type, None)
+    if checker and not checker():
+        pytest.skip("Compression libraries not installed for %s" % (compression_type,))
 
 
 class Timer(object):

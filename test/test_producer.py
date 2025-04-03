@@ -8,7 +8,7 @@ import pytest
 
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.producer.buffer import SimpleBufferPool
-from test.testutil import env_kafka_version, random_string
+from test.testutil import env_kafka_version, random_string, maybe_skip_unsupported_compression
 
 
 def test_buffer_pool():
@@ -44,6 +44,7 @@ def consumer_factory(**kwargs):
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_end_to_end(kafka_broker, compression):
+    maybe_skip_unsupported_compression(compression)
     if compression == 'lz4':
         if env_kafka_version() < (0, 8, 2):
             pytest.skip('LZ4 requires 0.8.2')
@@ -104,6 +105,7 @@ def test_kafka_producer_gc_cleanup():
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
+    maybe_skip_unsupported_compression(compression)
     if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
         pytest.skip('zstd requires 2.1.0 or more')
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])

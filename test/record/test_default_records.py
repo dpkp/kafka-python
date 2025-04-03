@@ -11,6 +11,8 @@ from kafka.record.default_records import (
 )
 from kafka.errors import UnsupportedCodecError
 
+from test.testutil import maybe_skip_unsupported_compression
+
 
 @pytest.mark.parametrize("compression_type", [
     DefaultRecordBatch.CODEC_NONE,
@@ -19,6 +21,7 @@ from kafka.errors import UnsupportedCodecError
     DefaultRecordBatch.CODEC_LZ4
 ])
 def test_read_write_serde_v2(compression_type):
+    maybe_skip_unsupported_compression(compression_type)
     builder = DefaultRecordBatchBuilder(
         magic=2, compression_type=compression_type, is_transactional=1,
         producer_id=123456, producer_epoch=123, base_sequence=9999,
@@ -186,6 +189,8 @@ def test_default_batch_size_limit():
 ])
 @pytest.mark.parametrize("magic", [0, 1])
 def test_unavailable_codec(magic, compression_type, name, checker_name):
+    if not getattr(kafka.codec, checker_name)():
+        pytest.skip('%s compression_type not installed' % (compression_type,))
     builder = DefaultRecordBatchBuilder(
         magic=2, compression_type=compression_type, is_transactional=0,
         producer_id=-1, producer_epoch=-1, base_sequence=-1,
