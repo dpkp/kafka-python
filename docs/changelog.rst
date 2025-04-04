@@ -1,6 +1,22 @@
 Changelog
 =========
 
+2.1.5 (Apr 4, 2025)
+###################
+
+Fixes
+------
+* Fix python2.7 errors (#2578)
+
+Improvements
+------------
+* Move benchmark scripts to kafka.benchmarks module (#2584)
+* Use __slots__ for metrics (#2583)
+* Pass `metrics_enabled=False` to disable metrics (#2581)
+* Drop unused kafka.producer.buffer / SimpleBufferPool (#2580)
+* Raise UnsupportedVersionError from coordinator (#2579)
+
+
 2.1.4 (Mar 28, 2025)
 ####################
 
