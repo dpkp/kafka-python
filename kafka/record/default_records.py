@@ -493,10 +493,14 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
 
         self._buffer = bytearray(self.HEADER_STRUCT.size)
 
-    def set_producer_state(self, producer_id, producer_epoch, base_sequence):
+    def set_producer_state(self, producer_id, producer_epoch, base_sequence, is_transactional):
+        assert not is_transactional or producer_id != -1, "Cannot write transactional messages without a valid producer ID"
+        assert producer_id == -1 or producer_epoch != -1, "Invalid negative producer epoch"
+        assert producer_id == -1 or base_sequence != -1, "Invalid negative sequence number"
         self._producer_id = producer_id
         self._producer_epoch = producer_epoch
         self._base_sequence = base_sequence
+        self._is_transactional = is_transactional
 
     @property
     def producer_id(self):
