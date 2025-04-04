@@ -15,7 +15,7 @@ def test_producer_batch_producer_id():
     tp = TopicPartition('foo', 0)
     records = MemoryRecordsBuilder(
         magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records, io.BytesIO())
+    batch = ProducerBatch(tp, records)
     assert batch.producer_id == -1
     batch.records.set_producer_state(123, 456, 789)
     assert batch.producer_id == 123
@@ -27,7 +27,7 @@ def test_producer_batch_try_append(magic):
     tp = TopicPartition('foo', 0)
     records = MemoryRecordsBuilder(
         magic=magic, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records, io.BytesIO())
+    batch = ProducerBatch(tp, records)
     assert batch.record_count == 0
     future = batch.try_append(0, b'key', b'value', [])
     assert isinstance(future, FutureRecordMetadata)
@@ -53,7 +53,7 @@ def test_producer_batch_retry():
     tp = TopicPartition('foo', 0)
     records = MemoryRecordsBuilder(
         magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records, io.BytesIO())
+    batch = ProducerBatch(tp, records)
     assert not batch.in_retry()
     batch.set_retry()
     assert batch.in_retry()
@@ -62,7 +62,7 @@ def test_producer_batch_maybe_expire():
     tp = TopicPartition('foo', 0)
     records = MemoryRecordsBuilder(
         magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records, io.BytesIO(), now=1)
+    batch = ProducerBatch(tp, records, now=1)
     future = batch.try_append(0, b'key', b'value', [], now=2)
     request_timeout_ms = 5000
     retry_backoff_ms = 200
