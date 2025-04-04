@@ -6,6 +6,7 @@ lz4
 mock; python_version < '3.3'
 py
 pylint
+pyperf
 pytest
 pytest-cov
 pytest-mock

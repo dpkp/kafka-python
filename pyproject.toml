@@ -39,6 +39,7 @@ lz4 = ["lz4"]
 snappy = ["python-snappy"]
 zstd = ["zstandard"]
 testing = ["pytest", "mock; python_version < '3.3'", "pytest-mock", "pytest-timeout"]
+benchmarks = ["pyperf"]
 
 [tool.setuptools]
 include-package-data = false
