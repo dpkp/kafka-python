@@ -1,7 +1,13 @@
 from __future__ import absolute_import
 
+import collections
+
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Int8, Int16, Int32, Int64, Schema, String, Bytes
+
+
+AbortedTransaction = collections.namedtuple("AbortedTransaction",
+    ["producer_id", "first_offset"])
 
 
 class FetchResponse_v0(Response):

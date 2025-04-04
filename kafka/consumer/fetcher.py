@@ -12,7 +12,7 @@ from kafka.vendor import six
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.fetch import FetchRequest
+from kafka.protocol.fetch import FetchRequest, AbortedTransaction
 from kafka.protocol.list_offsets import (
     ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
@@ -765,14 +765,21 @@ class Fetcher(six.Iterator):
                     return None
 
                 records = MemoryRecords(completed_fetch.partition_data[-1])
+                aborted_transactions = None
+                if completed_fetch.response_version >= 11:
+                    aborted_transactions = completed_fetch.partition_data[-3]
+                elif completed_fetch.response_version >= 4:
+                    aborted_transactions = completed_fetch.partition_data[-2]
                 log.debug("Preparing to read %s bytes of data for partition %s with offset %d",
                           records.size_in_bytes(), tp, fetch_offset)
                 parsed_records = self.PartitionRecords(fetch_offset, tp, records,
-                                                       self.config['key_deserializer'],
-                                                       self.config['value_deserializer'],
-                                                       self.config['check_crcs'],
-                                                       completed_fetch.metric_aggregator,
-                                                       self._on_partition_records_drain)
+                                                       key_deserializer=self.config['key_deserializer'],
+                                                       value_deserializer=self.config['value_deserializer'],
+                                                       check_crcs=self.config['check_crcs'],
+                                                       isolation_level=self._isolation_level,
+                                                       aborted_transactions=aborted_transactions,
+                                                       metric_aggregator=completed_fetch.metric_aggregator,
+                                                       on_drain=self._on_partition_records_drain)
                 if not records.has_next() and records.size_in_bytes() > 0:
                     if completed_fetch.response_version < 3:
                         # Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
@@ -845,13 +852,22 @@ class Fetcher(six.Iterator):
             self._next_partition_records.drain()
 
     class PartitionRecords(object):
-        def __init__(self, fetch_offset, tp, records, key_deserializer, value_deserializer, check_crcs, metric_aggregator, on_drain):
+        def __init__(self, fetch_offset, tp, records,
+                     key_deserializer=None, value_deserializer=None,
+                     check_crcs=True, isolation_level=READ_UNCOMMITTED,
+                     aborted_transactions=None, # list of (producer_id, first_offset) tuples
+                     metric_aggregator=None, on_drain=lambda x: None):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
             self.leader_epoch = -1
             self.next_fetch_offset = fetch_offset
             self.bytes_read = 0
             self.records_read = 0
+            self.isolation_level = isolation_level
+            self.aborted_producer_ids = set()
+            self.aborted_transactions = collections.deque(
+                [AbortedTransaction(*data) for data in aborted_transactions] if aborted_transactions else []
+            )
             self.metric_aggregator = metric_aggregator
             self.check_crcs = check_crcs
             self.record_iterator = itertools.dropwhile(
@@ -900,18 +916,32 @@ class Fetcher(six.Iterator):
                                 "Record batch for partition %s at offset %s failed crc check" % (
                                     self.topic_partition, batch.base_offset))
 
+
                     # Try DefaultsRecordBatch / message log format v2
-                    # base_offset, last_offset_delta, and control batches
+                    # base_offset, last_offset_delta, aborted transactions, and control batches
                     if batch.magic == 2:
                         self.leader_epoch = batch.leader_epoch
+                        if self.isolation_level == READ_COMMITTED and batch.has_producer_id():
+                            # remove from the aborted transaction queue all aborted transactions which have begun
+                            # before the current batch's last offset and add the associated producerIds to the
+                            # aborted producer set
+                            self._consume_aborted_transactions_up_to(batch.last_offset)
+
+                            producer_id = batch.producer_id
+                            if self._contains_abort_marker(batch):
+                                self.aborted_producer_ids.remove(producer_id)
+                            elif self._is_batch_aborted(batch):
+                                log.debug("Skipping aborted record batch from partition %s with producer_id %s and"
+                                          " offsets %s to %s",
+                                          self.topic_partition, producer_id, batch.base_offset, batch.last_offset)
+                                self.next_fetch_offset = batch.next_offset
+                                batch = records.next_batch()
+                                continue
+
                         # Control batches have a single record indicating whether a transaction
-                        # was aborted or committed.
-                        # When isolation_level is READ_COMMITTED (currently unsupported)
-                        # we should also skip all messages from aborted transactions
-                        # For now we only support READ_UNCOMMITTED and so we ignore the
-                        # abort/commit signal.
+                        # was aborted or committed. These are not returned to the consumer.
                         if batch.is_control_batch:
-                            self.next_fetch_offset = next(batch).offset + 1
+                            self.next_fetch_offset = batch.next_offset
                             batch = records.next_batch()
                             continue
 
@@ -944,7 +974,7 @@ class Fetcher(six.Iterator):
                     # unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
                     # fetching the same batch repeatedly).
                     if last_batch and last_batch.magic == 2:
-                        self.next_fetch_offset = last_batch.base_offset + last_batch.last_offset_delta + 1
+                        self.next_fetch_offset = last_batch.next_offset
                     self.drain()
 
             # If unpacking raises StopIteration, it is erroneously
@@ -960,6 +990,24 @@ class Fetcher(six.Iterator):
             if isinstance(f, Deserializer):
                 return f.deserialize(topic, bytes_)
             return f(bytes_)
+
+        def _consume_aborted_transactions_up_to(self, offset):
+            if not self.aborted_transactions:
+                return
+
+            while self.aborted_transactions and self.aborted_transactions[0].first_offset <= offset:
+                self.aborted_producer_ids.add(self.aborted_transactions.popleft().producer_id)
+
+        def _is_batch_aborted(self, batch):
+            return batch.is_transactional and batch.producer_id in self.aborted_producer_ids
+
+        def _contains_abort_marker(self, batch):
+            if not batch.is_control_batch:
+                return False
+            record = next(batch)
+            if not record:
+                return False
+            return record.abort
 
 
 class FetchSessionHandler(object):

@@ -452,7 +452,7 @@ def test__unpack_records(mocker):
         (None, b"c", None),
     ]
     memory_records = MemoryRecords(_build_record_batch(messages))
-    part_records = Fetcher.PartitionRecords(0, tp, memory_records, None, None, False, mocker.MagicMock(), lambda x: None)
+    part_records = Fetcher.PartitionRecords(0, tp, memory_records)
     records = list(part_records.record_iterator)
     assert len(records) == 3
     assert all(map(lambda x: isinstance(x, ConsumerRecord), records))
@@ -557,7 +557,7 @@ def test_partition_records_offset(mocker):
     tp = TopicPartition('foo', 0)
     messages = [(None, b'msg', None) for i in range(batch_start, batch_end)]
     memory_records = MemoryRecords(_build_record_batch(messages, offset=batch_start))
-    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock(), lambda x: None)
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records)
     assert records
     assert records.next_fetch_offset == fetch_offset
     msgs = records.take(1)
@@ -574,7 +574,7 @@ def test_partition_records_offset(mocker):
 def test_partition_records_empty(mocker):
     tp = TopicPartition('foo', 0)
     memory_records = MemoryRecords(_build_record_batch([]))
-    records = Fetcher.PartitionRecords(0, tp, memory_records, None, None, False, mocker.MagicMock(), lambda x: None)
+    records = Fetcher.PartitionRecords(0, tp, memory_records)
     msgs = records.take()
     assert len(msgs) == 0
     assert not records
@@ -587,7 +587,7 @@ def test_partition_records_no_fetch_offset(mocker):
     tp = TopicPartition('foo', 0)
     messages = [(None, b'msg', None) for i in range(batch_start, batch_end)]
     memory_records = MemoryRecords(_build_record_batch(messages, offset=batch_start))
-    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock(), lambda x: None)
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records)
     msgs = records.take()
     assert len(msgs) == 0
     assert not records
@@ -611,7 +611,7 @@ def test_partition_records_compacted_offset(mocker):
             builder.append(key=None, value=b'msg', timestamp=None, headers=[])
     builder.close()
     memory_records = MemoryRecords(builder.buffer())
-    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records, None, None, False, mocker.MagicMock(), lambda x: None)
+    records = Fetcher.PartitionRecords(fetch_offset, tp, memory_records)
     msgs = records.take()
     assert len(msgs) == batch_end - fetch_offset - 1
     assert msgs[0].offset == fetch_offset + 1
