@@ -7,37 +7,15 @@ import argparse
 import pprint
 import sys
 import threading
+import time
 import traceback
 
 from kafka.vendor.six.moves import range
 
 from kafka import KafkaProducer
-from test.fixtures import KafkaFixture, ZookeeperFixture
-
-
-def start_brokers(n):
-    print('Starting {0} {1}-node cluster...'.format(KafkaFixture.kafka_version, n))
-    print('-> 1 Zookeeper')
-    zk = ZookeeperFixture.instance()
-    print('---> {0}:{1}'.format(zk.host, zk.port))
-    print()
-
-    partitions = min(n, 3)
-    replicas = min(n, 3)
-    print('-> {0} Brokers [{1} partitions / {2} replicas]'.format(n, partitions, replicas))
-    brokers = [
-        KafkaFixture.instance(i, zk, zk_chroot='',
-                              partitions=partitions, replicas=replicas)
-        for i in range(n)
-    ]
-    for broker in brokers:
-        print('---> {0}:{1}'.format(broker.host, broker.port))
-    print()
-    return brokers
 
 
 class ProducerPerformance(object):
-
     @staticmethod
     def run(args):
         try:
@@ -50,18 +28,14 @@ class ProducerPerformance(object):
                     pass
                 if v == 'None':
                     v = None
+                elif v == 'False':
+                    v = False
+                elif v == 'True':
+                    v = True
                 props[k] = v
 
-            if args.brokers:
-                brokers = start_brokers(args.brokers)
-                props['bootstrap_servers'] = ['{0}:{1}'.format(broker.host, broker.port)
-                                              for broker in brokers]
-                print("---> bootstrap_servers={0}".format(props['bootstrap_servers']))
-                print()
-                print('-> OK!')
-                print()
-
             print('Initializing producer...')
+            props['bootstrap_servers'] = args.bootstrap_servers
             record = bytes(bytearray(args.record_size))
             props['metrics_sample_window_ms'] = args.stats_interval * 1000
 
@@ -79,11 +53,29 @@ class ProducerPerformance(object):
             print('-> OK!')
             print()
 
-            for i in range(args.num_records):
-                producer.send(topic=args.topic, value=record)
-            producer.flush()
+            def _benchmark():
+                results = []
+                for i in range(args.num_records):
+                    results.append(producer.send(topic=args.topic, value=record))
+                print("Send complete...")
+                producer.flush()
+                producer.close()
+                count_success, count_failure = 0, 0
+                for r in results:
+                    if r.succeeded():
+                        count_success += 1
+                    elif r.failed():
+                        count_failure += 1
+                    else:
+                        raise ValueError(r)
+                print("%d suceeded, %d failed" % (count_success, count_failure))
 
+            start_time = time.time()
+            _benchmark()
+            end_time = time.time()
             timer_stop.set()
+            timer.join()
+            print('Execution time:', end_time - start_time, 'secs')
 
         except Exception:
             exc_info = sys.exc_info()
@@ -101,6 +93,8 @@ class StatsReporter(threading.Thread):
 
     def print_stats(self):
         metrics = self.producer.metrics()
+        if not metrics:
+            return
         if self.raw_metrics:
             pprint.pprint(metrics)
         else:
@@ -126,28 +120,27 @@ def get_args_parser():
         description='This tool is used to verify the producer performance.')
 
     parser.add_argument(
+        '--bootstrap-servers', type=str, nargs='+', default=(),
+        help='host:port for cluster bootstrap server')
+    parser.add_argument(
         '--topic', type=str,
-        help='Topic name for test',
+        help='Topic name for test (default: kafka-python-benchmark-test)',
         default='kafka-python-benchmark-test')
     parser.add_argument(
         '--num-records', type=int,
-        help='number of messages to produce',
+        help='number of messages to produce (default: 1000000)',
         default=1000000)
     parser.add_argument(
         '--record-size', type=int,
-        help='message size in bytes',
+        help='message size in bytes (default: 100)',
         default=100)
     parser.add_argument(
         '--producer-config', type=str, nargs='+', default=(),
         help='kafka producer related configuaration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(
-        '--brokers', type=int,
-        help='Number of kafka brokers to start',
-        default=0)
-    parser.add_argument(
         '--stats-interval', type=int,
-        help='Interval in seconds for stats reporting to console',
+        help='Interval in seconds for stats reporting to console (default: 5)',
         default=5)
     parser.add_argument(
         '--raw-metrics', action='store_true',

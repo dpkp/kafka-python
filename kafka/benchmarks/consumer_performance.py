@@ -4,43 +4,16 @@
 from __future__ import absolute_import, print_function
 
 import argparse
-import logging
 import pprint
 import sys
 import threading
+import time
 import traceback
 
-from kafka.vendor.six.moves import range
-
-from kafka import KafkaConsumer, KafkaProducer
-from test.fixtures import KafkaFixture, ZookeeperFixture
-
-logging.basicConfig(level=logging.ERROR)
-
-
-def start_brokers(n):
-    print('Starting {0} {1}-node cluster...'.format(KafkaFixture.kafka_version, n))
-    print('-> 1 Zookeeper')
-    zk = ZookeeperFixture.instance()
-    print('---> {0}:{1}'.format(zk.host, zk.port))
-    print()
-
-    partitions = min(n, 3)
-    replicas = min(n, 3)
-    print('-> {0} Brokers [{1} partitions / {2} replicas]'.format(n, partitions, replicas))
-    brokers = [
-        KafkaFixture.instance(i, zk, zk_chroot='',
-                              partitions=partitions, replicas=replicas)
-        for i in range(n)
-    ]
-    for broker in brokers:
-        print('---> {0}:{1}'.format(broker.host, broker.port))
-    print()
-    return brokers
+from kafka import KafkaConsumer
 
 
 class ConsumerPerformance(object):
-
     @staticmethod
     def run(args):
         try:
@@ -53,28 +26,17 @@ class ConsumerPerformance(object):
                     pass
                 if v == 'None':
                     v = None
+                elif v == 'False':
+                    v = False
+                elif v == 'True':
+                    v = True
                 props[k] = v
 
-            if args.brokers:
-                brokers = start_brokers(args.brokers)
-                props['bootstrap_servers'] = ['{0}:{1}'.format(broker.host, broker.port)
-                                              for broker in brokers]
-                print('---> bootstrap_servers={0}'.format(props['bootstrap_servers']))
-                print()
-
-                print('-> Producing records')
-                record = bytes(bytearray(args.record_size))
-                producer = KafkaProducer(compression_type=args.fixture_compression,
-                                         **props)
-                for i in range(args.num_records):
-                    producer.send(topic=args.topic, value=record)
-                producer.flush()
-                producer.close()
-                print('-> OK!')
-                print()
-
             print('Initializing Consumer...')
+            props['bootstrap_servers'] = args.bootstrap_servers
             props['auto_offset_reset'] = 'earliest'
+            if 'group_id' not in props:
+                props['group_id'] = 'kafka-consumer-benchmark'
             if 'consumer_timeout_ms' not in props:
                 props['consumer_timeout_ms'] = 10000
             props['metrics_sample_window_ms'] = args.stats_interval * 1000
@@ -92,14 +54,18 @@ class ConsumerPerformance(object):
             print('-> OK!')
             print()
 
+            start_time = time.time()
             records = 0
             for msg in consumer:
                 records += 1
                 if records >= args.num_records:
                     break
-            print('Consumed {0} records'.format(records))
 
+            end_time = time.time()
             timer_stop.set()
+            timer.join()
+            print('Consumed {0} records'.format(records))
+            print('Execution time:', end_time - start_time, 'secs')
 
         except Exception:
             exc_info = sys.exc_info()
@@ -144,17 +110,16 @@ def get_args_parser():
         description='This tool is used to verify the consumer performance.')
 
     parser.add_argument(
+        '--bootstrap-servers', type=str, nargs='+', default=(),
+        help='host:port for cluster bootstrap servers')
+    parser.add_argument(
         '--topic', type=str,
-        help='Topic for consumer test',
+        help='Topic for consumer test (default: kafka-python-benchmark-test)',
         default='kafka-python-benchmark-test')
     parser.add_argument(
         '--num-records', type=int,
-        help='number of messages to consume',
+        help='number of messages to consume (default: 1000000)',
         default=1000000)
-    parser.add_argument(
-        '--record-size', type=int,
-        help='message size in bytes',
-        default=100)
     parser.add_argument(
         '--consumer-config', type=str, nargs='+', default=(),
         help='kafka consumer related configuration properties like '
@@ -163,12 +128,8 @@ def get_args_parser():
         '--fixture-compression', type=str,
         help='specify a compression type for use with broker fixtures / producer')
     parser.add_argument(
-        '--brokers', type=int,
-        help='Number of kafka brokers to start',
-        default=0)
-    parser.add_argument(
         '--stats-interval', type=int,
-        help='Interval in seconds for stats reporting to console',
+        help='Interval in seconds for stats reporting to console (default: 5)',
         default=5)
     parser.add_argument(
         '--raw-metrics', action='store_true',

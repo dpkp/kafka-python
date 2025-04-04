@@ -76,7 +76,8 @@ def func(loops, magic):
     return res
 
 
-runner = pyperf.Runner()
-runner.bench_time_func('batch_read_v0', func, 0)
-runner.bench_time_func('batch_read_v1', func, 1)
-runner.bench_time_func('batch_read_v2', func, 2)
+if __name__ == '__main__':
+    runner = pyperf.Runner()
+    runner.bench_time_func('batch_read_v0', func, 0)
+    runner.bench_time_func('batch_read_v1', func, 1)
+    runner.bench_time_func('batch_read_v2', func, 2)
