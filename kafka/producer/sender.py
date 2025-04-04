@@ -271,6 +271,17 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, None, -1)
 
+    def _fail_batch(batch, *args, **kwargs):
+        if self._transaction_state and self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
+            # Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+            # about the previously committed message. Note that this will discard the producer id and sequence
+            # numbers for all existing partitions.
+            self._transaction_state.reset_producer_id()
+        batch.done(*args, **kwargs)
+        self._accumulator.deallocate(batch)
+        if self._sensors:
+            self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
+
     def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None):
         """Complete or retry the given batch of records.
 
@@ -303,12 +314,9 @@ class Sender(threading.Thread):
                     if self._sensors:
                         self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
                 else:
-                    self._transaction_state.reset_producer_id()
                     log.warning("Attempted to retry sending a batch but the producer id changed from %s to %s. This batch will be dropped" % (
                         batch.producer_id, self._transaction_state.producer_id_and_epoch.producer_id))
-                    batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
-                    if self._sensors:
-                        self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
+                    self._fail_batch(batch, base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
             else:
                 if error is Errors.OutOfOrderSequenceNumberError and batch.producer_id == self._transaction_state.producer_id_and_epoch.producer_id:
                     log.error("The broker received an out of order sequence number error for produer_id %s, topic-partition %s"
@@ -319,9 +327,7 @@ class Sender(threading.Thread):
                     error = error(batch.topic_partition.topic)
 
                 # tell the user the result of their request
-                batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
-                if self._sensors:
-                    self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
+                self._fail_batch(batch, base_offset=base_offset, timestamp_ms=timestamp_ms, exception=error, log_start_offset=log_start_offset)
 
             if error is Errors.UnknownTopicOrPartitionError:
                 log.warning("Received unknown topic or partition error in produce request on partition %s."
