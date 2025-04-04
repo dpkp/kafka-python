@@ -195,3 +195,26 @@ def send_messages(topic, kafka_producer, request):
         return [msg for (msg, f) in messages_and_futures]
 
     return _send_messages
+
+
+@pytest.fixture
+def metrics():
+    from kafka.metrics import Metrics
+
+    metrics = Metrics()
+    try:
+        yield metrics
+    finally:
+        metrics.close()
+
+
+@pytest.fixture
+def client(conn, mocker):
+    from kafka import KafkaClient
+
+    cli = KafkaClient(api_version=(0, 9))
+    mocker.patch.object(cli, '_init_connect', return_value=True)
+    try:
+        yield cli
+    finally:
+        cli._close()

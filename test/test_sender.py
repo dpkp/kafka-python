@@ -5,7 +5,6 @@ import pytest
 import io
 
 from kafka.client_async import KafkaClient
-from kafka.metrics import Metrics
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.produce import ProduceRequest
 from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
@@ -15,23 +14,13 @@ from kafka.structs import TopicPartition
 
 
 @pytest.fixture
-def client():
-    return KafkaClient(bootstrap_servers=(), api_version=(0, 9))
-
-
-@pytest.fixture
 def accumulator():
     return RecordAccumulator()
 
 
 @pytest.fixture
-def metrics():
-    return Metrics()
-
-
-@pytest.fixture
 def sender(client, accumulator, metrics, mocker):
-    return Sender(client, client.cluster, accumulator, metrics)
+    return Sender(client, client.cluster, accumulator, metrics=metrics)
 
 
 @pytest.mark.parametrize(("api_version", "produce_version"), [

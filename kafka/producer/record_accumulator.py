@@ -162,8 +162,6 @@ class RecordAccumulator(object):
         'linger_ms': 0,
         'retry_backoff_ms': 100,
         'message_version': 0,
-        'metrics': None,
-        'metric_group_prefix': 'producer-metrics',
     }
 
     def __init__(self, **configs):

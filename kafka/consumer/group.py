@@ -234,6 +234,7 @@ class KafkaConsumer(six.Iterator):
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
+        metrics_enabled (bool): Whether to track metrics on this instance. Default True.
         metrics_num_samples (int): The number of samples maintained to compute
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
@@ -315,6 +316,7 @@ class KafkaConsumer(six.Iterator):
         'api_version_auto_timeout_ms': 2000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'metric_reporters': [],
+        'metrics_enabled': True,
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'metric_group_prefix': 'consumer',
@@ -358,13 +360,15 @@ class KafkaConsumer(six.Iterator):
                 "fetch_max_wait_ms ({})."
                 .format(connections_max_idle_ms, request_timeout_ms, fetch_max_wait_ms))
 
-        metrics_tags = {'client-id': self.config['client_id']}
-        metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
-                                     time_window_ms=self.config['metrics_sample_window_ms'],
-                                     tags=metrics_tags)
-        reporters = [reporter() for reporter in self.config['metric_reporters']]
-        self._metrics = Metrics(metric_config, reporters)
-        # TODO _metrics likely needs to be passed to KafkaClient, etc.
+        if self.config['metrics_enabled']:
+            metrics_tags = {'client-id': self.config['client_id']}
+            metric_config = MetricConfig(samples=self.config['metrics_num_samples'],
+                                         time_window_ms=self.config['metrics_sample_window_ms'],
+                                         tags=metrics_tags)
+            reporters = [reporter() for reporter in self.config['metric_reporters']]
+            self._metrics = Metrics(metric_config, reporters)
+        else:
+            self._metrics = None
 
         # api_version was previously a str. Accept old format for now
         if isinstance(self.config['api_version'], str):
@@ -402,9 +406,9 @@ class KafkaConsumer(six.Iterator):
 
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
-            self._client, self._subscription, self._metrics, **self.config)
+            self._client, self._subscription, metrics=self._metrics, **self.config)
         self._coordinator = ConsumerCoordinator(
-            self._client, self._subscription, self._metrics,
+            self._client, self._subscription, metrics=self._metrics,
             assignors=self.config['partition_assignment_strategy'],
             **self.config)
         self._closed = False
@@ -485,7 +489,8 @@ class KafkaConsumer(six.Iterator):
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
         self._coordinator.close(autocommit=autocommit, timeout_ms=timeout_ms)
-        self._metrics.close()
+        if self._metrics:
+            self._metrics.close()
         self._client.close()
         try:
             self.config['key_deserializer'].close()
@@ -989,6 +994,8 @@ class KafkaConsumer(six.Iterator):
             This is an unstable interface. It may change in future
             releases without warning.
         """
+        if not self._metrics:
+            return
         if raw:
             return self._metrics.metrics.copy()
 
