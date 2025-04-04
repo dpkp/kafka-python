@@ -28,6 +28,11 @@ log = logging.getLogger(__name__)
 READ_UNCOMMITTED = 0
 READ_COMMITTED = 1
 
+ISOLATION_LEVEL_CONFIG = {
+    'READ_UNCOMMITTED': READ_UNCOMMITTED,
+    'READ_COMMITTED': READ_COMMITTED,
+}
+
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
      "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
@@ -60,6 +65,7 @@ class Fetcher(six.Iterator):
         'metric_group_prefix': 'consumer',
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
+        'isolation_level': 'READ_UNCOMMITTED',
     }
 
     def __init__(self, client, subscriptions, **configs):
@@ -100,11 +106,17 @@ class Fetcher(six.Iterator):
                 consumed. This ensures no on-the-wire or on-disk corruption to
                 the messages occurred. This check adds some overhead, so it may
                 be disabled in cases seeking extreme performance. Default: True
+            isolation_level (str): Configure KIP-98 transactional consumer by
+                setting to 'READ_COMMITTED'. This will cause the consumer to
+                skip records from aborted tranactions. Default: 'READ_UNCOMMITTED'
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        if self.config['isolation_level'] not in ISOLATION_LEVEL_CONFIG:
+            raise Errors.KafkaConfigurationError('Unrecognized isolation_level')
 
         self._client = client
         self._subscriptions = subscriptions
@@ -116,7 +128,7 @@ class Fetcher(six.Iterator):
             self._sensors = FetchManagerMetrics(self.config['metrics'], self.config['metric_group_prefix'])
         else:
             self._sensors = None
-        self._isolation_level = READ_UNCOMMITTED
+        self._isolation_level = ISOLATION_LEVEL_CONFIG[self.config['isolation_level']]
         self._session_handlers = {}
         self._nodes_with_pending_fetch_requests = set()
 
