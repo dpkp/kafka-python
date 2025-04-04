@@ -6,6 +6,7 @@ import logging
 import socket
 import threading
 import time
+import warnings
 import weakref
 
 from kafka.vendor import six
@@ -71,11 +72,6 @@ class KafkaProducer(object):
     the linger configuration; however setting this to something larger than 0
     can lead to fewer, more efficient requests when not under maximal load at
     the cost of a small amount of latency.
-
-    The buffer_memory controls the total amount of memory available to the
-    producer for buffering. If records are sent faster than they can be
-    transmitted to the server then this buffer space will be exhausted. When
-    the buffer space is exhausted additional send calls will block.
 
     The key_serializer and value_serializer instruct how to turn the key and
     value objects the user provides into bytes.
@@ -166,12 +162,6 @@ class KafkaProducer(object):
             messages with the same key are assigned to the same partition.
             When a key is None, the message is delivered to a random partition
             (filtered to partitions with available leaders only, if possible).
-        buffer_memory (int): The total bytes of memory the producer should use
-            to buffer records waiting to be sent to the server. If records are
-            sent faster than they can be delivered to the server the producer
-            will block up to max_block_ms, raising an exception on timeout.
-            In the current implementation, this setting is an approximation.
-            Default: 33554432 (32MB)
         connections_max_idle_ms: Close idle connections after the number of
             milliseconds specified by this config. The broker closes idle
             connections after connections.max.idle.ms, so this avoids hitting
@@ -319,7 +309,6 @@ class KafkaProducer(object):
         'batch_size': 16384,
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
-        'buffer_memory': 33554432,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'max_block_ms': 60000,
         'max_request_size': 1048576,
@@ -361,6 +350,8 @@ class KafkaProducer(object):
         'kafka_client': KafkaClient,
     }
 
+    DEPRECATED_CONFIGS = ('buffer_memory',)
+
     _COMPRESSORS = {
         'gzip': (has_gzip, LegacyRecordBatchBuilder.CODEC_GZIP),
         'snappy': (has_snappy, LegacyRecordBatchBuilder.CODEC_SNAPPY),
@@ -375,6 +366,11 @@ class KafkaProducer(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
+
+        for key in self.DEPRECATED_CONFIGS:
+            if key in configs:
+                configs.pop(key)
+                warnings.warn('Deprecated Producer config: %s' % (key,), DeprecationWarning)
 
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % (configs,)
@@ -640,9 +636,7 @@ class KafkaProducer(object):
             tp = TopicPartition(topic, partition)
             log.debug("Sending (key=%r value=%r headers=%r) to %s", key, value, headers, tp)
             result = self._accumulator.append(tp, timestamp_ms,
-                                              key_bytes, value_bytes, headers,
-                                              self.config['max_block_ms'],
-                                              estimated_size=message_size)
+                                              key_bytes, value_bytes, headers)
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
                 log.debug("Waking up the sender since %s is either full or"
@@ -697,11 +691,6 @@ class KafkaProducer(object):
                 "The message is %d bytes when serialized which is larger than"
                 " the maximum request size you have configured with the"
                 " max_request_size configuration" % (size,))
-        if size > self.config['buffer_memory']:
-            raise Errors.MessageSizeTooLargeError(
-                "The message is %d bytes when serialized which is larger than"
-                " the total memory buffer you have configured with the"
-                " buffer_memory configuration." % (size,))
 
     def _wait_on_metadata(self, topic, max_wait):
         """

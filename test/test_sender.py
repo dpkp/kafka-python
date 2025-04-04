@@ -42,10 +42,9 @@ def sender(client, accumulator, metrics, mocker):
 def test_produce_request(sender, mocker, api_version, produce_version):
     sender._client._api_versions = BROKER_API_VERSIONS[api_version]
     tp = TopicPartition('foo', 0)
-    buffer = io.BytesIO()
     records = MemoryRecordsBuilder(
         magic=1, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records, buffer)
+    batch = ProducerBatch(tp, records)
     records.close()
     produce_request = sender._produce_request(0, 0, 0, [batch])
     assert isinstance(produce_request, ProduceRequest[produce_version])
