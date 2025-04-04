@@ -121,6 +121,9 @@ class KafkaConsumer(six.Iterator):
             consumed. This ensures no on-the-wire or on-disk corruption to
             the messages occurred. This check adds some overhead, so it may
             be disabled in cases seeking extreme performance. Default: True
+        isolation_level (str): Configure KIP-98 transactional consumer by
+            setting to 'read_committed'. This will cause the consumer to
+            skip records from aborted tranactions. Default: 'read_uncommitted'
         allow_auto_create_topics (bool): Enable/disable auto topic creation
             on metadata request. Only available with api_version >= (0, 11).
             Default: True
@@ -290,6 +293,7 @@ class KafkaConsumer(six.Iterator):
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': lambda offsets, response: True,
         'check_crcs': True,
+        'isolation_level': 'read_uncommitted',
         'allow_auto_create_topics': True,
         'metadata_max_age_ms': 5 * 60 * 1000,
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
