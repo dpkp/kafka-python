@@ -6,6 +6,7 @@ import logging
 import socket
 import threading
 import time
+import warnings
 import weakref
 
 from kafka.vendor import six
@@ -349,6 +350,8 @@ class KafkaProducer(object):
         'kafka_client': KafkaClient,
     }
 
+    DEPRECATED_CONFIGS = ('buffer_memory',)
+
     _COMPRESSORS = {
         'gzip': (has_gzip, LegacyRecordBatchBuilder.CODEC_GZIP),
         'snappy': (has_snappy, LegacyRecordBatchBuilder.CODEC_SNAPPY),
@@ -363,6 +366,11 @@ class KafkaProducer(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
+
+        for key in self.DEPRECATED_CONFIGS:
+            if key in configs:
+                configs.pop(key)
+                warnings.warn('Deprecated Producer config: %s' % (key,), DeprecationWarning)
 
         # Only check for extra config keys in top-level class
         assert not configs, 'Unrecognized configs: %s' % (configs,)
