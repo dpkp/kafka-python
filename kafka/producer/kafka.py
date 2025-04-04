@@ -19,6 +19,7 @@ from kafka.partitioner.default import DefaultPartitioner
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
 from kafka.producer.sender import Sender
+from kafka.producer.transaction_state import TransactionState
 from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
@@ -93,6 +94,19 @@ class KafkaProducer(object):
         value_serializer (callable): used to convert user-supplied message
             values to bytes. If not None, called as f(value), should return
             bytes. Default: None.
+        enable_idempotence (bool): When set to True, the producer will ensure
+            that exactly one copy of each message is written in the stream.
+            If False, producer retries due to broker failures, etc., may write
+            duplicates of the retried message in the stream. Default: False.
+
+            Note that enabling idempotence requires
+            `max_in_flight_requests_per_connection` to be set to 1 and `retries`
+            cannot be zero. Additionally, `acks` must be set to 'all'. If these
+            values are left at their defaults, the producer will override the
+            defaults to be suitable. If the values are set to something
+            incompatible with the idempotent producer, a KafkaConfigurationError
+            will be raised.
+
         acks (0, 1, 'all'): The number of acknowledgments the producer requires
             the leader to have received before considering a request complete.
             This controls the durability of records that are sent. The
@@ -303,6 +317,7 @@ class KafkaProducer(object):
         'client_id': None,
         'key_serializer': None,
         'value_serializer': None,
+        'enable_idempotence': False,
         'acks': 1,
         'bootstrap_topics_filter': set(),
         'compression_type': None,
@@ -365,6 +380,7 @@ class KafkaProducer(object):
     def __init__(self, **configs):
         log.debug("Starting the Kafka producer")  # trace
         self.config = copy.copy(self.DEFAULT_CONFIG)
+        user_provided_configs = set(configs.keys())
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
@@ -428,13 +444,41 @@ class KafkaProducer(object):
             assert checker(), "Libraries for {} compression codec not found".format(ct)
             self.config['compression_attrs'] = compression_attrs
 
-        message_version = self._max_usable_produce_magic()
-        self._accumulator = RecordAccumulator(message_version=message_version, **self.config)
+        self._transaction_state = None
+        if self.config['enable_idempotence']:
+            self._transaction_state = TransactionState()
+            if 'retries' not in user_provided_configs:
+                log.info("Overriding the default 'retries' config to 3 since the idempotent producer is enabled.")
+                self.config['retries'] = 3
+            elif self.config['retries'] == 0:
+                raise Errors.KafkaConfigurationError("Must set 'retries' to non-zero when using the idempotent producer.")
+
+            if 'max_in_flight_requests_per_connection' not in user_provided_configs:
+                log.info("Overriding the default 'max_in_flight_requests_per_connection' to 1 since idempontence is enabled.")
+                self.config['max_in_flight_requests_per_connection'] = 1
+            elif self.config['max_in_flight_requests_per_connection'] != 1:
+                raise Errors.KafkaConfigurationError("Must set 'max_in_flight_requests_per_connection' to 1 in order"
+                                                     " to use the idempotent producer."
+                                                     " Otherwise we cannot guarantee idempotence.")
+
+            if 'acks' not in user_provided_configs:
+                log.info("Overriding the default 'acks' config to 'all' since idempotence is enabled")
+                self.config['acks'] = -1
+            elif self.config['acks'] != -1:
+                raise Errors.KafkaConfigurationError("Must set 'acks' config to 'all' in order to use the idempotent"
+                                                     " producer. Otherwise we cannot guarantee idempotence")
+
+        message_version = self.max_usable_produce_magic(self.config['api_version'])
+        self._accumulator = RecordAccumulator(
+                transaction_state=self._transaction_state,
+                message_version=message_version,
+                **self.config)
         self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
                               self._accumulator,
                               metrics=self._metrics,
+                              transaction_state=self._transaction_state,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
@@ -548,16 +592,17 @@ class KafkaProducer(object):
         max_wait = self.config['max_block_ms'] / 1000
         return self._wait_on_metadata(topic, max_wait)
 
-    def _max_usable_produce_magic(self):
-        if self.config['api_version'] >= (0, 11):
+    @classmethod
+    def max_usable_produce_magic(cls, api_version):
+        if api_version >= (0, 11):
             return 2
-        elif self.config['api_version'] >= (0, 10, 0):
+        elif api_version >= (0, 10, 0):
             return 1
         else:
             return 0
 
     def _estimate_size_in_bytes(self, key, value, headers=[]):
-        magic = self._max_usable_produce_magic()
+        magic = self.max_usable_produce_magic(self.config['api_version'])
         if magic == 2:
             return DefaultRecordBatchBuilder.estimate_size_in_bytes(
                 key, value, headers)

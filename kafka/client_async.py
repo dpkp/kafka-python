@@ -27,7 +27,7 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
-from kafka.util import Dict, WeakMethod, ensure_valid_topic_name
+from kafka.util import Dict, WeakMethod, ensure_valid_topic_name, timeout_ms_fn
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
 from kafka.vendor import socketpair # noqa: F401
@@ -399,6 +399,11 @@ class KafkaClient(object):
                 self.wakeup()
             return True
         return False
+
+    def connection_failed(self, node_id):
+        if node_id not in self._conns:
+            return False
+        return self._conns[node_id].connect_failed()
 
     def _should_recycle_connection(self, conn):
         # Never recycle unless disconnected
@@ -1156,6 +1161,39 @@ class KafkaClient(object):
                 return True
         else:
             return False
+
+    def await_ready(self, node_id, timeout_ms=30000):
+        """
+        Invokes `poll` to discard pending disconnects, followed by `client.ready` and 0 or more `client.poll`
+        invocations until the connection to `node` is ready, the timeoutMs expires or the connection fails.
+
+        It returns `true` if the call completes normally or `false` if the timeoutMs expires. If the connection fails,
+        an `IOException` is thrown instead. Note that if the `NetworkClient` has been configured with a positive
+        connection timeoutMs, it is possible for this method to raise an `IOException` for a previous connection which
+        has recently disconnected.
+
+        This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+        care.
+        """
+        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
+        self.poll(timeout_ms=0)
+        if self.is_ready(node_id):
+            return True
+
+        while not self.is_ready(node_id) and inner_timeout_ms() > 0:
+            if self.connection_failed(node_id):
+                raise Errors.KafkaConnectionError("Connection to %s failed." % (node_id,))
+            self.maybe_connect(node_id)
+            self.poll(timeout_ms=inner_timeout_ms())
+        return self.is_ready(node_id)
+
+    def send_and_receive(self, node_id, request):
+        future = self.send(node_id, request)
+        self.poll(future=future)
+        assert future.is_done
+        if future.failed():
+            raise future.exception
+        return future.value
 
 
 # OrderedDict requires python2.7+
