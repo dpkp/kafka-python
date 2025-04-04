@@ -22,6 +22,8 @@ class AbstractSampledStat(AbstractMeasurableStat):
     Subclasses of this class define different statistics measured
     using this basic pattern.
     """
+    __slots__ = ('_initial_value', '_samples', '_current')
+
     def __init__(self, initial_value):
         self._initial_value = initial_value
         self._samples = []

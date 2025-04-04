@@ -15,6 +15,10 @@ class Sensor(object):
     the `record(double)` api and would maintain a set
     of metrics about request sizes such as the average or max.
     """
+    __slots__ = ('_lock', '_registry', '_name', '_parents', '_metrics',
+                 '_stats', '_config', '_inactive_sensor_expiration_time_ms',
+                 '_last_record_time')
+
     def __init__(self, registry, name, parents, config,
                  inactive_sensor_expiration_time_seconds):
         if not name:

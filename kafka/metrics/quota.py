@@ -3,6 +3,8 @@ from __future__ import absolute_import
 
 class Quota(object):
     """An upper or lower bound for metrics"""
+    __slots__ = ('_bound', '_upper')
+
     def __init__(self, bound, is_upper):
         self._bound = bound
         self._upper = is_upper

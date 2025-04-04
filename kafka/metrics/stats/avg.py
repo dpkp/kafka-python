@@ -7,6 +7,8 @@ class Avg(AbstractSampledStat):
     """
     An AbstractSampledStat that maintains a simple average over its samples.
     """
+    __slots__ = ('_initial_value', '_samples', '_current')
+
     def __init__(self):
         super(Avg, self).__init__(0.0)
 

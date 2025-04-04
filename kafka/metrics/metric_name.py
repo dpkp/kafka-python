@@ -38,6 +38,7 @@ class MetricName(object):
         # as messages are sent we record the sizes
         sensor.record(message_size)
     """
+    __slots__ = ('_name', '_group', '_description', '_tags', '_hash')
 
     def __init__(self, name, group, description=None, tags=None):
         """
