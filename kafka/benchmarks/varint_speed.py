@@ -113,8 +113,6 @@ def encode_varint_1(num):
         raise ValueError("Out of double range")
     return buf[:i + 1]
 
-_assert_valid_enc(encode_varint_1)
-
 
 def encode_varint_2(value, int2byte=six.int2byte):
     value = (value << 1) ^ (value >> 63)
@@ -127,8 +125,6 @@ def encode_varint_2(value, int2byte=six.int2byte):
         bits = value & 0x7f
         value >>= 7
     return res + int2byte(bits)
-
-_assert_valid_enc(encode_varint_2)
 
 
 def encode_varint_3(value, buf):
@@ -143,12 +139,6 @@ def encode_varint_3(value, buf):
         value >>= 7
     append(bits)
     return value
-
-
-for encoded, decoded in test_data:
-    res = bytearray()
-    encode_varint_3(decoded, res)
-    assert res == encoded
 
 
 def encode_varint_4(value, int2byte=six.int2byte):
@@ -185,12 +175,6 @@ def encode_varint_4(value, int2byte=six.int2byte):
         return res + int2byte(bits)
 
 
-_assert_valid_enc(encode_varint_4)
-
-# import dis
-# dis.dis(encode_varint_4)
-
-
 def encode_varint_5(value, buf, pos=0):
     value = (value << 1) ^ (value >> 63)
 
@@ -203,12 +187,6 @@ def encode_varint_5(value, buf, pos=0):
         pos += 1
     buf[pos] = bits
     return pos + 1
-
-for encoded, decoded in test_data:
-    res = bytearray(10)
-    written = encode_varint_5(decoded, res)
-    assert res[:written] == encoded
-
 
 def encode_varint_6(value, buf):
     append = buf.append
@@ -253,12 +231,6 @@ def encode_varint_6(value, buf):
     return i
 
 
-for encoded, decoded in test_data:
-    res = bytearray()
-    encode_varint_6(decoded, res)
-    assert res == encoded
-
-
 def size_of_varint_1(value):
     """ Number of bytes needed to encode an integer in variable-length format.
     """
@@ -270,8 +242,6 @@ def size_of_varint_1(value):
         if value == 0:
             break
     return res
-
-_assert_valid_size(size_of_varint_1)
 
 
 def size_of_varint_2(value):
@@ -297,8 +267,6 @@ def size_of_varint_2(value):
     if value <= 0x7fffffffffffffff:
         return 9
     return 10
-
-_assert_valid_size(size_of_varint_2)
 
 
 if six.PY3:
@@ -351,8 +319,6 @@ def decode_varint_1(buffer, pos=0):
     # Normalize sign
     return (value >> 1) ^ -(value & 1), i + 1
 
-_assert_valid_dec(decode_varint_1)
-
 
 def decode_varint_2(buffer, pos=0):
     result = 0
@@ -367,9 +333,6 @@ def decode_varint_2(buffer, pos=0):
         shift += 7
         if shift >= 64:
             raise ValueError("Out of int64 range")
-
-
-_assert_valid_dec(decode_varint_2)
 
 
 def decode_varint_3(buffer, pos=0):
@@ -393,51 +356,79 @@ def decode_varint_3(buffer, pos=0):
             raise ValueError("Out of int64 range")
 
 
-_assert_valid_dec(decode_varint_3)
+if __name__ == '__main__':
+    _assert_valid_enc(encode_varint_1)
+    _assert_valid_enc(encode_varint_2)
 
-# import dis
-# dis.dis(decode_varint_3)
+    for encoded, decoded in test_data:
+        res = bytearray()
+        encode_varint_3(decoded, res)
+        assert res == encoded
 
-runner = pyperf.Runner()
-# Encode algorithms returning a bytes result
-for bench_func in [
-        encode_varint_1,
-        encode_varint_2,
-        encode_varint_4]:
-    for i, value in enumerate(BENCH_VALUES_ENC):
-        runner.bench_func(
-            '{}_{}byte'.format(bench_func.__name__, i + 1),
-            bench_func, value)
+    _assert_valid_enc(encode_varint_4)
 
-# Encode algorithms writing to the buffer
-for bench_func in [
-        encode_varint_3,
-        encode_varint_5,
-        encode_varint_6]:
-    for i, value in enumerate(BENCH_VALUES_ENC):
-        fname = bench_func.__name__
-        runner.timeit(
-            '{}_{}byte'.format(fname, i + 1),
-            stmt="{}({}, buffer)".format(fname, value),
-            setup="from __main__ import {}; buffer = bytearray(10)".format(
-                fname)
-        )
+    # import dis
+    # dis.dis(encode_varint_4)
 
-# Size algorithms
-for bench_func in [
-        size_of_varint_1,
-        size_of_varint_2]:
-    for i, value in enumerate(BENCH_VALUES_ENC):
-        runner.bench_func(
-            '{}_{}byte'.format(bench_func.__name__, i + 1),
-            bench_func, value)
+    for encoded, decoded in test_data:
+        res = bytearray(10)
+        written = encode_varint_5(decoded, res)
+        assert res[:written] == encoded
 
-# Decode algorithms
-for bench_func in [
-        decode_varint_1,
-        decode_varint_2,
-        decode_varint_3]:
-    for i, value in enumerate(BENCH_VALUES_DEC):
-        runner.bench_func(
-            '{}_{}byte'.format(bench_func.__name__, i + 1),
-            bench_func, value)
+    for encoded, decoded in test_data:
+        res = bytearray()
+        encode_varint_6(decoded, res)
+        assert res == encoded
+
+    _assert_valid_size(size_of_varint_1)
+    _assert_valid_size(size_of_varint_2)
+    _assert_valid_dec(decode_varint_1)
+    _assert_valid_dec(decode_varint_2)
+    _assert_valid_dec(decode_varint_3)
+
+    # import dis
+    # dis.dis(decode_varint_3)
+
+    runner = pyperf.Runner()
+    # Encode algorithms returning a bytes result
+    for bench_func in [
+            encode_varint_1,
+            encode_varint_2,
+            encode_varint_4]:
+        for i, value in enumerate(BENCH_VALUES_ENC):
+            runner.bench_func(
+                '{}_{}byte'.format(bench_func.__name__, i + 1),
+                bench_func, value)
+
+    # Encode algorithms writing to the buffer
+    for bench_func in [
+            encode_varint_3,
+            encode_varint_5,
+            encode_varint_6]:
+        for i, value in enumerate(BENCH_VALUES_ENC):
+            fname = bench_func.__name__
+            runner.timeit(
+                '{}_{}byte'.format(fname, i + 1),
+                stmt="{}({}, buffer)".format(fname, value),
+                setup="from __main__ import {}; buffer = bytearray(10)".format(
+                    fname)
+            )
+
+    # Size algorithms
+    for bench_func in [
+            size_of_varint_1,
+            size_of_varint_2]:
+        for i, value in enumerate(BENCH_VALUES_ENC):
+            runner.bench_func(
+                '{}_{}byte'.format(bench_func.__name__, i + 1),
+                bench_func, value)
+
+    # Decode algorithms
+    for bench_func in [
+            decode_varint_1,
+            decode_varint_2,
+            decode_varint_3]:
+        for i, value in enumerate(BENCH_VALUES_DEC):
+            runner.bench_func(
+                '{}_{}byte'.format(bench_func.__name__, i + 1),
+                bench_func, value)

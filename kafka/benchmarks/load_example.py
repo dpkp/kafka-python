@@ -20,6 +20,7 @@ class Producer(threading.Thread):
             producer.send('my-topic', self.big_msg)
             self.sent += 1
         producer.flush()
+        producer.close()
 
 
 class Consumer(threading.Thread):
