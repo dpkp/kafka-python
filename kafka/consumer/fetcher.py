@@ -29,8 +29,8 @@ READ_UNCOMMITTED = 0
 READ_COMMITTED = 1
 
 ISOLATION_LEVEL_CONFIG = {
-    'READ_UNCOMMITTED': READ_UNCOMMITTED,
-    'READ_COMMITTED': READ_COMMITTED,
+    'read_uncommitted': READ_UNCOMMITTED,
+    'read_committed': READ_COMMITTED,
 }
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
@@ -65,7 +65,7 @@ class Fetcher(six.Iterator):
         'metric_group_prefix': 'consumer',
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
-        'isolation_level': 'READ_UNCOMMITTED',
+        'isolation_level': 'read_uncommitted',
     }
 
     def __init__(self, client, subscriptions, **configs):
@@ -107,8 +107,8 @@ class Fetcher(six.Iterator):
                 the messages occurred. This check adds some overhead, so it may
                 be disabled in cases seeking extreme performance. Default: True
             isolation_level (str): Configure KIP-98 transactional consumer by
-                setting to 'READ_COMMITTED'. This will cause the consumer to
-                skip records from aborted tranactions. Default: 'READ_UNCOMMITTED'
+                setting to 'read_committed'. This will cause the consumer to
+                skip records from aborted tranactions. Default: 'read_uncommitted'
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
