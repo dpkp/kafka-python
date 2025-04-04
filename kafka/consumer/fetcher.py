@@ -867,7 +867,7 @@ class Fetcher(six.Iterator):
         def __init__(self, fetch_offset, tp, records,
                      key_deserializer=None, value_deserializer=None,
                      check_crcs=True, isolation_level=READ_UNCOMMITTED,
-                     aborted_transactions=None, # list of (producer_id, first_offset) tuples
+                     aborted_transactions=None, # raw data from response / list of (producer_id, first_offset) tuples
                      metric_aggregator=None, on_drain=lambda x: None):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
@@ -878,7 +878,8 @@ class Fetcher(six.Iterator):
             self.isolation_level = isolation_level
             self.aborted_producer_ids = set()
             self.aborted_transactions = collections.deque(
-                [AbortedTransaction(*data) for data in aborted_transactions] if aborted_transactions else []
+                sorted([AbortedTransaction(*data) for data in aborted_transactions] if aborted_transactions else [],
+                       key=lambda txn: txn.first_offset)
             )
             self.metric_aggregator = metric_aggregator
             self.check_crcs = check_crcs
