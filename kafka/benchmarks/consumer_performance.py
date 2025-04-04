@@ -4,16 +4,13 @@
 from __future__ import absolute_import, print_function
 
 import argparse
-import logging
 import pprint
 import sys
 import threading
 import time
 import traceback
 
-from kafka.vendor.six.moves import range
-
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer
 
 
 class ConsumerPerformance(object):
