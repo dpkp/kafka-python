@@ -718,7 +718,7 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                coordinator_id = self._client.cluster.add_group_coordinator(self.group_id, response)
+                coordinator_id = self._client.cluster.add_coordinator(response, 'group', self.group_id)
                 if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata

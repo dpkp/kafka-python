@@ -47,7 +47,7 @@ class ClusterMetadata(object):
         self._brokers = {}  # node_id -> BrokerMetadata
         self._partitions = {}  # topic -> partition -> PartitionMetadata
         self._broker_partitions = collections.defaultdict(set)  # node_id -> {TopicPartition...}
-        self._groups = {}  # group_name -> node_id
+        self._coordinators = {}  # (coord_type, coord_key) -> node_id
         self._last_refresh_ms = 0
         self._last_successful_refresh_ms = 0
         self._need_update = True
@@ -167,7 +167,7 @@ class ClusterMetadata(object):
             node_id (int or str) for group coordinator, -1 if coordinator unknown
             None if the group does not exist.
         """
-        return self._groups.get(group)
+        return self._coordinators.get(('group', group))
 
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
@@ -364,24 +364,25 @@ class ClusterMetadata(object):
         """Remove a previously added listener callback"""
         self._listeners.remove(listener)
 
-    def add_group_coordinator(self, group, response):
-        """Update with metadata for a group coordinator
+    def add_coordinator(self, response, coord_type, coord_key):
+        """Update with metadata for a group or txn coordinator
 
         Arguments:
-            group (str): name of group from FindCoordinatorRequest
             response (FindCoordinatorResponse): broker response
+            coord_type (str): 'group' or 'transaction'
+            coord_key (str): consumer_group or transactional_id
 
         Returns:
             string: coordinator node_id if metadata is updated, None on error
         """
-        log.debug("Updating coordinator for %s: %s", group, response)
+        log.debug("Updating coordinator for %s/%s: %s", coord_type, coord_key, response)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             log.error("FindCoordinatorResponse error: %s", error_type)
-            self._groups[group] = -1
+            self._coordinators[(coord_type, coord_key)] = -1
             return
 
-        # Use a coordinator-specific node id so that group requests
+        # Use a coordinator-specific node id so that requests
         # get a dedicated connection
         node_id = 'coordinator-{}'.format(response.coordinator_id)
         coordinator = BrokerMetadata(
@@ -390,9 +391,9 @@ class ClusterMetadata(object):
             response.port,
             None)
 
-        log.info("Group coordinator for %s is %s", group, coordinator)
+        log.info("Coordinator for %s/%s is %s", coord_type, coord_key, coordinator)
         self._coordinator_brokers[node_id] = coordinator
-        self._groups[group] = node_id
+        self._coordinators[(coord_type, coord_key)] = node_id
         return node_id
 
     def with_partitions(self, partitions_to_add):
@@ -401,7 +402,7 @@ class ClusterMetadata(object):
         new_metadata._brokers = copy.deepcopy(self._brokers)
         new_metadata._partitions = copy.deepcopy(self._partitions)
         new_metadata._broker_partitions = copy.deepcopy(self._broker_partitions)
-        new_metadata._groups = copy.deepcopy(self._groups)
+        new_metadata._coordinators = copy.deepcopy(self._coordinators)
         new_metadata.internal_topics = copy.deepcopy(self.internal_topics)
         new_metadata.unauthorized_topics = copy.deepcopy(self.unauthorized_topics)
 
@@ -415,5 +416,5 @@ class ClusterMetadata(object):
         return new_metadata
 
     def __str__(self):
-        return 'ClusterMetadata(brokers: %d, topics: %d, groups: %d)' % \
-               (len(self._brokers), len(self._partitions), len(self._groups))
+        return 'ClusterMetadata(brokers: %d, topics: %d, coordinators: %d)' % \
+               (len(self._brokers), len(self._partitions), len(self._coordinators))
