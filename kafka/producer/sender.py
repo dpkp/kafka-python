@@ -77,7 +77,7 @@ class Sender(threading.Thread):
         # requests in the accumulator or waiting for acknowledgment,
         # wait until these are completed.
         while (not self._force_close
-               and (self._accumulator.has_unsent()
+               and (self._accumulator.has_undrained()
                     or self._client.in_flight_request_count() > 0)):
             try:
                 self.run_once()

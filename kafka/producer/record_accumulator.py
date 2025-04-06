@@ -57,6 +57,10 @@ class ProducerBatch(object):
         return self.records.producer_id if self.records else None
 
     @property
+    def producer_epoch(self):
+        return self.records.producer_epoch if self.records else None
+
+    @property
     def has_sequence(self):
         return self.records.has_sequence if self.records else False
 
@@ -174,7 +178,7 @@ class RecordAccumulator(object):
         'compression_attrs': 0,
         'linger_ms': 0,
         'retry_backoff_ms': 100,
-        'transaction_state': None,
+        'transaction_manager': None,
         'message_version': 0,
     }
 
@@ -185,7 +189,7 @@ class RecordAccumulator(object):
                 self.config[key] = configs.pop(key)
 
         self._closed = False
-        self._transaction_state = self.config['transaction_state']
+        self._transaction_manager = self.config['transaction_manager']
         self._flushes_in_progress = AtomicInteger()
         self._appends_in_progress = AtomicInteger()
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [ProducerBatch]
@@ -248,7 +252,7 @@ class RecordAccumulator(object):
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
-                if self._transaction_state and self.config['message_version'] < 2:
+                if self._transaction_manager and self.config['message_version'] < 2:
                     raise Errors.UnsupportedVersionError("Attempting to use idempotence with a broker which"
                                                          " does not support the required message format (v2)."
                                                          " The broker must be version 0.11 or later.")
@@ -422,8 +426,8 @@ class RecordAccumulator(object):
 
         return ready_nodes, next_ready_check, unknown_leaders_exist
 
-    def has_unsent(self):
-        """Return whether there is any unsent record in the accumulator."""
+    def has_undrained(self):
+        """Check whether there are any batches which haven't been drained"""
         for tp in list(self._batches.keys()):
             with self._tp_locks[tp]:
                 dq = self._batches[tp]
@@ -483,8 +487,8 @@ class RecordAccumulator(object):
                                     break
                                 else:
                                     producer_id_and_epoch = None
-                                    if self._transaction_state:
-                                        producer_id_and_epoch = self._transaction_state.producer_id_and_epoch
+                                    if self._transaction_manager:
+                                        producer_id_and_epoch = self._transaction_manager.producer_id_and_epoch
                                         if not producer_id_and_epoch.is_valid:
                                             # we cannot send the batch until we have refreshed the PID
                                             log.debug("Waiting to send ready batches because transaction producer id is not valid")
@@ -497,11 +501,16 @@ class RecordAccumulator(object):
                                         # the previous attempt may actually have been accepted, and if we change
                                         # the pid and sequence here, this attempt will also be accepted, causing
                                         # a duplicate.
-                                        sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
+                                        sequence_number = self._transaction_manager.sequence_number(batch.topic_partition)
                                         log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
                                                   node_id, batch.topic_partition, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
                                                   sequence_number)
-                                        batch.records.set_producer_state(producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch, sequence_number)
+                                        batch.records.set_producer_state(
+                                            producer_id_and_epoch.producer_id,
+                                            producer_id_and_epoch.epoch,
+                                            sequence_number,
+                                            self._transaction_manager.is_transactional()
+                                        )
                                     batch.records.close()
                                     size += batch.records.size_in_bytes()
                                     ready.append(batch)
@@ -548,6 +557,10 @@ class RecordAccumulator(object):
         finally:
             self._flushes_in_progress.decrement()
 
+    @property
+    def has_incomplete(self):
+        return bool(self._incomplete)
+
     def abort_incomplete_batches(self):
         """
         This function is only called when sender is closed forcefully. It will fail all the
@@ -557,26 +570,40 @@ class RecordAccumulator(object):
         # 1. Avoid losing batches.
         # 2. Free up memory in case appending threads are blocked on buffer full.
         # This is a tight loop but should be able to get through very quickly.
+        error = Errors.IllegalStateError("Producer is closed forcefully.")
         while True:
-            self._abort_batches()
+            self._abort_batches(error)
             if not self._appends_in_progress.get():
                 break
         # After this point, no thread will append any messages because they will see the close
         # flag set. We need to do the last abort after no thread was appending in case the there was a new
         # batch appended by the last appending thread.
-        self._abort_batches()
+        self._abort_batches(error)
         self._batches.clear()
 
-    def _abort_batches(self):
+    def _abort_batches(self, error):
         """Go through incomplete batches and abort them."""
-        error = Errors.IllegalStateError("Producer is closed forcefully.")
         for batch in self._incomplete.all():
             tp = batch.topic_partition
             # Close the batch before aborting
             with self._tp_locks[tp]:
                 batch.records.close()
+                self._batches[tp].remove(batch)
             batch.done(exception=error)
             self.deallocate(batch)
+
+    def abort_undrained_batches(self, error):
+        for batch in self._incomplete.all():
+            tp = batch.topic_partition
+            with self._tp_locks[tp]:
+                aborted = False
+                if (self._transaction_manager and not batch.has_sequence) or (not self._transaction_manager and not batch.is_done):
+                    aborted = True
+                    batch.records.close()
+                    self._batches[tp].remove(batch)
+            if aborted:
+                batch.done(exception=error)
+                self.deallocate(batch)
 
     def close(self):
         """Close this accumulator and force all the record buffers to be drained."""
@@ -604,3 +631,9 @@ class IncompleteProducerBatches(object):
     def all(self):
         with self._lock:
             return list(self._incomplete)
+
+    def __bool__(self):
+        return bool(self._incomplete)
+
+
+    __nonzero__ = __bool__
