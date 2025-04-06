@@ -496,7 +496,7 @@ class RecordAccumulator(object):
                                         sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
                                         log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
                                                   node_id, batch.topic_partition, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
-                                                  batch.topic_partition, sequence_number)
+                                                  sequence_number)
                                         batch.records.set_producer_state(producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch, sequence_number)
                                     batch.records.close()
                                     size += batch.records.size_in_bytes()
