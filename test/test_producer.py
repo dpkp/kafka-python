@@ -100,7 +100,7 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
                           retries=5,
                           max_block_ms=30000,
                           compression_type=compression) as producer:
-        magic = producer._max_usable_produce_magic()
+        magic = producer.max_usable_produce_magic(producer.config['api_version'])
 
         # record headers are supported in 0.11.0
         if env_kafka_version() < (0, 11, 0):

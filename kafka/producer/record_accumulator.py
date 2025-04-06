@@ -35,9 +35,9 @@ class AtomicInteger(object):
 
 
 class ProducerBatch(object):
-    def __init__(self, tp, records):
+    def __init__(self, tp, records, now=None):
         self.max_record_size = 0
-        now = time.time()
+        now = time.time() if now is None else now
         self.created = now
         self.drained = None
         self.attempts = 0
@@ -52,13 +52,18 @@ class ProducerBatch(object):
     def record_count(self):
         return self.records.next_offset()
 
-    def try_append(self, timestamp_ms, key, value, headers):
+    @property
+    def producer_id(self):
+        return self.records.producer_id if self.records else None
+
+    def try_append(self, timestamp_ms, key, value, headers, now=None):
         metadata = self.records.append(timestamp_ms, key, value, headers)
         if metadata is None:
             return None
 
+        now = time.time() if now is None else now
         self.max_record_size = max(self.max_record_size, metadata.size)
-        self.last_append = time.time()
+        self.last_append = now
         future = FutureRecordMetadata(self.produce_future, metadata.offset,
                                       metadata.timestamp, metadata.crc,
                                       len(key) if key is not None else -1,
@@ -81,7 +86,7 @@ class ProducerBatch(object):
                         log_start_offset, exception)  # trace
             self.produce_future.failure(exception)
 
-    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full):
+    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full, now=None):
         """Expire batches if metadata is not available
 
         A batch whose metadata is not available should be expired if one
@@ -93,7 +98,7 @@ class ProducerBatch(object):
           * the batch is in retry AND request timeout has elapsed after the
             backoff period ended.
         """
-        now = time.time()
+        now = time.time() if now is None else now
         since_append = now - self.last_append
         since_ready = now - (self.created + linger_ms / 1000.0)
         since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
@@ -120,6 +125,10 @@ class ProducerBatch(object):
 
     def set_retry(self):
         self._retry = True
+
+    @property
+    def is_done(self):
+        return self.produce_future.is_done
 
     def __str__(self):
         return 'ProducerBatch(topic_partition=%s, record_count=%d)' % (
@@ -161,6 +170,7 @@ class RecordAccumulator(object):
         'compression_attrs': 0,
         'linger_ms': 0,
         'retry_backoff_ms': 100,
+        'transaction_state': None,
         'message_version': 0,
     }
 
@@ -171,6 +181,7 @@ class RecordAccumulator(object):
                 self.config[key] = configs.pop(key)
 
         self._closed = False
+        self._transaction_state = self.config['transaction_state']
         self._flushes_in_progress = AtomicInteger()
         self._appends_in_progress = AtomicInteger()
         self._batches = collections.defaultdict(collections.deque) # TopicPartition: [ProducerBatch]
@@ -233,6 +244,10 @@ class RecordAccumulator(object):
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
+                if self._transaction_state and self.config['message_version'] < 2:
+                    raise Errors.UnsupportedVersionError("Attempting to use idempotence with a broker which"
+                                                         " does not support the required message format (v2)."
+                                                         " The broker must be version 0.11 or later.")
                 records = MemoryRecordsBuilder(
                     self.config['message_version'],
                     self.config['compression_attrs'],
@@ -310,9 +325,9 @@ class RecordAccumulator(object):
 
         return expired_batches
 
-    def reenqueue(self, batch):
+    def reenqueue(self, batch, now=None):
         """Re-enqueue the given record batch in the accumulator to retry."""
-        now = time.time()
+        now = time.time() if now is None else now
         batch.attempts += 1
         batch.last_attempt = now
         batch.last_append = now
@@ -323,7 +338,7 @@ class RecordAccumulator(object):
         with self._tp_locks[batch.topic_partition]:
             dq.appendleft(batch)
 
-    def ready(self, cluster):
+    def ready(self, cluster, now=None):
         """
         Get a list of nodes whose partitions are ready to be sent, and the
         earliest time at which any non-sendable partition will be ready;
@@ -357,7 +372,7 @@ class RecordAccumulator(object):
         ready_nodes = set()
         next_ready_check = 9999999.99
         unknown_leaders_exist = False
-        now = time.time()
+        now = time.time() if now is None else now
 
         # several threads are accessing self._batches -- to simplify
         # concurrent access, we iterate over a snapshot of partitions
@@ -412,7 +427,7 @@ class RecordAccumulator(object):
                     return True
         return False
 
-    def drain(self, cluster, nodes, max_size):
+    def drain(self, cluster, nodes, max_size, now=None):
         """
         Drain all the data for the given nodes and collate them into a list of
         batches that will fit within the specified size on a per-node basis.
@@ -430,7 +445,7 @@ class RecordAccumulator(object):
         if not nodes:
             return {}
 
-        now = time.time()
+        now = time.time() if now is None else now
         batches = {}
         for node_id in nodes:
             size = 0
@@ -463,7 +478,26 @@ class RecordAccumulator(object):
                                     # single request
                                     break
                                 else:
+                                    producer_id_and_epoch = None
+                                    if self._transaction_state:
+                                        producer_id_and_epoch = self._transaction_state.producer_id_and_epoch
+                                        if not producer_id_and_epoch.is_valid:
+                                            # we cannot send the batch until we have refreshed the PID
+                                            log.debug("Waiting to send ready batches because transaction producer id is not valid")
+                                            break
+
                                     batch = dq.popleft()
+                                    if producer_id_and_epoch and not batch.in_retry():
+                                        # If the batch is in retry, then we should not change the pid and
+                                        # sequence number, since this may introduce duplicates. In particular,
+                                        # the previous attempt may actually have been accepted, and if we change
+                                        # the pid and sequence here, this attempt will also be accepted, causing
+                                        # a duplicate.
+                                        sequence_number = self._transaction_state.sequence_number(batch.topic_partition)
+                                        log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
+                                                  node_id, batch.topic_partition, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
+                                                  sequence_number)
+                                        batch.records.set_producer_state(producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch, sequence_number)
                                     batch.records.close()
                                     size += batch.records.size_in_bytes()
                                     ready.append(batch)
