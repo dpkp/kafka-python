@@ -510,6 +510,10 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
     def producer_id(self):
         return self._producer_id
 
+    @property
+    def producer_epoch(self):
+        return self._producer_epoch
+
     def _get_attributes(self, include_compression_type=True):
         attrs = 0
         if include_compression_type:
