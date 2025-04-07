@@ -218,33 +218,28 @@ class NetworkExceptionError(BrokerResponseError):
     invalid_metadata = True
 
 
-class GroupLoadInProgressError(BrokerResponseError):
+class CoordinatorLoadInProgressError(BrokerResponseError):
     errno = 14
-    message = 'OFFSETS_LOAD_IN_PROGRESS'
-    description = ('The broker returns this error code for an offset fetch'
-                   ' request if it is still loading offsets (after a leader'
-                   ' change for that offsets topic partition), or in response'
-                   ' to group membership requests (such as heartbeats) when'
-                   ' group metadata is being loaded by the coordinator.')
+    message = 'COORDINATOR_LOAD_IN_PROGRESS'
+    description = ('The broker returns this error code for txn or group requests,'
+                   ' when the coordinator is loading and hence cant process requests')
     retriable = True
 
 
-class GroupCoordinatorNotAvailableError(BrokerResponseError):
+class CoordinatorNotAvailableError(BrokerResponseError):
     errno = 15
-    message = 'CONSUMER_COORDINATOR_NOT_AVAILABLE'
-    description = ('The broker returns this error code for group coordinator'
-                   ' requests, offset commits, and most group management'
+    message = 'COORDINATOR_NOT_AVAILABLE'
+    description = ('The broker returns this error code for consumer and transaction'
                    ' requests if the offsets topic has not yet been created, or'
-                   ' if the group coordinator is not active.')
+                   ' if the group/txn coordinator is not active.')
     retriable = True
 
 
-class NotCoordinatorForGroupError(BrokerResponseError):
+class NotCoordinatorError(BrokerResponseError):
     errno = 16
-    message = 'NOT_COORDINATOR_FOR_CONSUMER'
-    description = ('The broker returns this error code if it receives an offset'
-                   ' fetch or commit request for a group that it is not a'
-                   ' coordinator for.')
+    message = 'NOT_COORDINATOR'
+    description = ('The broker returns this error code if it is not the correct'
+                   ' coordinator for the specified consumer or transaction group')
     retriable = True
 
 

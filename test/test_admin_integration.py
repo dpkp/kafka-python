@@ -9,7 +9,7 @@ from time import time, sleep
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 from kafka.errors import (
-        BrokerResponseError, KafkaError, NoError, GroupCoordinatorNotAvailableError, NonEmptyGroupError, 
+        BrokerResponseError, KafkaError, NoError, CoordinatorNotAvailableError, NonEmptyGroupError,
         GroupIdNotFoundError, OffsetOutOfRangeError, UnknownTopicOrPartitionError)
 
 
@@ -150,7 +150,7 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 def test_describe_consumer_group_does_not_exist(kafka_admin_client):
     """Tests that the describe consumer group call fails if the group coordinator is not available
     """
-    with pytest.raises(GroupCoordinatorNotAvailableError):
+    with pytest.raises(CoordinatorNotAvailableError):
         kafka_admin_client.describe_consumer_groups(['test'])
 
 

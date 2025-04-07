@@ -590,7 +590,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         node_id = self.coordinator()
         if node_id is None:
-            return Future().failure(Errors.GroupCoordinatorNotAvailableError)
+            return Future().failure(Errors.CoordinatorNotAvailableError)
 
 
         # create the offset commit request
@@ -719,14 +719,14 @@ class ConsumerCoordinator(BaseCoordinator):
                               " %s", self.group_id, tp, error_type.__name__)
                     future.failure(error_type())
                     return
-                elif error_type is Errors.GroupLoadInProgressError:
+                elif error_type is Errors.CoordinatorLoadInProgressError:
                     # just retry
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error_type.__name__)
                     future.failure(error_type(self.group_id))
                     return
-                elif error_type in (Errors.GroupCoordinatorNotAvailableError,
-                                    Errors.NotCoordinatorForGroupError,
+                elif error_type in (Errors.CoordinatorNotAvailableError,
+                                    Errors.NotCoordinatorError,
                                     Errors.RequestTimedOutError):
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error_type.__name__)
@@ -777,7 +777,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         node_id = self.coordinator()
         if node_id is None:
-            return Future().failure(Errors.GroupCoordinatorNotAvailableError)
+            return Future().failure(Errors.CoordinatorNotAvailableError)
 
         # Verify node is ready
         if not self._client.ready(node_id):
@@ -812,10 +812,10 @@ class ConsumerCoordinator(BaseCoordinator):
             error_type = Errors.for_code(response.error_code)
             log.debug("Offset fetch failed: %s", error_type.__name__)
             error = error_type()
-            if error_type is Errors.GroupLoadInProgressError:
+            if error_type is Errors.CoordinatorLoadInProgressError:
                 # Retry
                 future.failure(error)
-            elif error_type is Errors.NotCoordinatorForGroupError:
+            elif error_type is Errors.NotCoordinatorError:
                 # re-discover the coordinator and retry
                 self.coordinator_dead(error)
                 future.failure(error)
@@ -841,10 +841,10 @@ class ConsumerCoordinator(BaseCoordinator):
                     error = error_type()
                     log.debug("Group %s failed to fetch offset for partition"
                               " %s: %s", self.group_id, tp, error)
-                    if error_type is Errors.GroupLoadInProgressError:
+                    if error_type is Errors.CoordinatorLoadInProgressError:
                         # just retry
                         future.failure(error)
-                    elif error_type is Errors.NotCoordinatorForGroupError:
+                    elif error_type is Errors.NotCoordinatorError:
                         # re-discover the coordinator and retry
                         self.coordinator_dead(error)
                         future.failure(error)

@@ -444,7 +444,7 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
     # No coordinator
     ret = patched_coord._send_offset_commit_request(offsets)
     assert ret.failed()
-    assert isinstance(ret.exception, Errors.GroupCoordinatorNotAvailableError)
+    assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
 
 
 @pytest.mark.parametrize('api_version,req_type', [
@@ -497,11 +497,11 @@ def test_send_offset_commit_request_success(mocker, patched_coord, offsets):
     (OffsetCommitResponse[0]([('foobar', [(0, 28), (1, 28)])]),
      Errors.InvalidCommitOffsetSizeError, False),
     (OffsetCommitResponse[0]([('foobar', [(0, 14), (1, 14)])]),
-     Errors.GroupLoadInProgressError, False),
+     Errors.CoordinatorLoadInProgressError, False),
     (OffsetCommitResponse[0]([('foobar', [(0, 15), (1, 15)])]),
-     Errors.GroupCoordinatorNotAvailableError, True),
+     Errors.CoordinatorNotAvailableError, True),
     (OffsetCommitResponse[0]([('foobar', [(0, 16), (1, 16)])]),
-     Errors.NotCoordinatorForGroupError, True),
+     Errors.NotCoordinatorError, True),
     (OffsetCommitResponse[0]([('foobar', [(0, 7), (1, 7)])]),
      Errors.RequestTimedOutError, True),
     (OffsetCommitResponse[0]([('foobar', [(0, 25), (1, 25)])]),
@@ -557,7 +557,7 @@ def test_send_offset_fetch_request_fail(mocker, patched_coord, partitions):
     # No coordinator
     ret = patched_coord._send_offset_fetch_request(partitions)
     assert ret.failed()
-    assert isinstance(ret.exception, Errors.GroupCoordinatorNotAvailableError)
+    assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
 
 
 @pytest.mark.parametrize('api_version,req_type', [
@@ -606,9 +606,9 @@ def test_send_offset_fetch_request_success(patched_coord, partitions):
 
 @pytest.mark.parametrize('response,error,dead', [
     (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 14), (1, 234, '', 14)])]),
-     Errors.GroupLoadInProgressError, False),
+     Errors.CoordinatorLoadInProgressError, False),
     (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 16), (1, 234, '', 16)])]),
-     Errors.NotCoordinatorForGroupError, True),
+     Errors.NotCoordinatorError, True),
     (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 25), (1, 234, '', 25)])]),
      Errors.UnknownMemberIdError, False),
     (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 22), (1, 234, '', 22)])]),
