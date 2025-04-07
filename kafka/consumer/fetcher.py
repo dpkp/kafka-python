@@ -256,7 +256,7 @@ class Fetcher(six.Iterator):
         else:
             raise NoOffsetForPartitionError(partition)
 
-        log.debug("Resetting offset for partition %s to %s offset.",
+        log.debug("Resetting offset for partition %s to offset %s.",
                   partition, strategy)
         offsets = self._retrieve_offsets({partition: timestamp}, timeout_ms=timeout_ms)
 
