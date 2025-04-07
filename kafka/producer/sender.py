@@ -271,7 +271,7 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, None, -1)
 
-    def _fail_batch(batch, *args, **kwargs):
+    def _fail_batch(self, batch, *args, **kwargs):
         if self._transaction_state and self._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id:
             # Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             # about the previously committed message. Note that this will discard the producer id and sequence
