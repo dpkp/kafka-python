@@ -211,6 +211,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[11]
 
     @property
+    def has_sequence(self):
+        return self._header_data[11] != -1 # NO_SEQUENCE
+
+    @property
     def last_sequence(self):
         if self.base_sequence == self.NO_SEQUENCE:
             return self.NO_SEQUENCE
