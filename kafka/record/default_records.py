@@ -104,6 +104,9 @@ class DefaultRecordBase(object):
 
     LOG_APPEND_TIME = 1
     CREATE_TIME = 0
+    NO_PRODUCER_ID = -1
+    NO_SEQUENCE = -1
+    MAX_INT = 2147483647
 
     def _assert_has_codec(self, compression_type):
         if compression_type == self.CODEC_GZIP:
@@ -137,6 +140,10 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         return self._header_data[0]
 
     @property
+    def size_in_bytes(self):
+        return self._header_data[1] + self.AFTER_LEN_OFFSET
+
+    @property
     def leader_epoch(self):
         return self._header_data[2]
 
@@ -155,6 +162,14 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     @property
     def last_offset_delta(self):
         return self._header_data[6]
+
+    @property
+    def last_offset(self):
+        return self.base_offset + self.last_offset_delta
+
+    @property
+    def next_offset(self):
+        return self.last_offset + 1
 
     @property
     def compression_type(self):
@@ -179,6 +194,36 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     @property
     def max_timestamp(self):
         return self._header_data[8]
+
+    @property
+    def producer_id(self):
+        return self._header_data[9]
+
+    def has_producer_id(self):
+        return self.producer_id > self.NO_PRODUCER_ID
+
+    @property
+    def producer_epoch(self):
+        return self._header_data[10]
+
+    @property
+    def base_sequence(self):
+        return self._header_data[11]
+
+    @property
+    def last_sequence(self):
+        if self.base_sequence == self.NO_SEQUENCE:
+            return self.NO_SEQUENCE
+        return self._increment_sequence(self.base_sequence, self.last_offset_delta)
+
+    def _increment_sequence(self, base, increment):
+        if base > (self.MAX_INT - increment):
+            return increment - (self.MAX_INT - base) - 1
+        return base + increment
+
+    @property
+    def records_count(self):
+        return self._header_data[12]
 
     def _maybe_uncompress(self):
         if not self._decompressed:

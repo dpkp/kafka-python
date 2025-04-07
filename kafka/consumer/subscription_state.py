@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 import abc
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
 try:
     from collections.abc import Sequence
 except ImportError:
