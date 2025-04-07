@@ -942,7 +942,10 @@ class Fetcher(six.Iterator):
 
                             producer_id = batch.producer_id
                             if self._contains_abort_marker(batch):
-                                self.aborted_producer_ids.remove(producer_id)
+                                try:
+                                    self.aborted_producer_ids.remove(producer_id)
+                                except KeyError:
+                                    pass
                             elif self._is_batch_aborted(batch):
                                 log.debug("Skipping aborted record batch from partition %s with producer_id %s and"
                                           " offsets %s to %s",
