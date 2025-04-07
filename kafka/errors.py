@@ -85,10 +85,6 @@ class AuthenticationMethodNotSupported(KafkaError):
     pass
 
 
-class AuthenticationFailedError(KafkaError):
-    retriable = False
-
-
 class BrokerResponseError(KafkaError):
     errno = None
     message = None

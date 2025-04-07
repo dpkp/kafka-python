@@ -813,7 +813,7 @@ class BrokerConnection(object):
             log.info('%s: %s', self, self._sasl_mechanism.auth_details())
             return future.success(True)
         else:
-            return future.failure(Errors.AuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))
+            return future.failure(Errors.SaslAuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))
 
     def blacked_out(self):
         """
