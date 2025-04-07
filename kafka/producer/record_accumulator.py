@@ -56,6 +56,10 @@ class ProducerBatch(object):
     def producer_id(self):
         return self.records.producer_id if self.records else None
 
+    @property
+    def has_sequence(self):
+        return self.records.has_sequence if self.records else False
+
     def try_append(self, timestamp_ms, key, value, headers, now=None):
         metadata = self.records.append(timestamp_ms, key, value, headers)
         if metadata is None:
