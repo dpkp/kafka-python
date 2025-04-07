@@ -360,6 +360,17 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
         verify_crc = calc_crc32c(data_view.tobytes())
         return crc == verify_crc
 
+    def __str__(self):
+        return (
+            "DefaultRecordBatch(magic={}, base_offset={}, last_offset_delta={},"
+            " first_timestamp={}, max_timestamp={},"
+            " is_transactional={}, producer_id={}, producer_epoch={}, base_sequence={},"
+            " records_count={})".format(
+                self.magic, self.base_offset, self.last_offset_delta,
+                self.first_timestamp, self.max_timestamp,
+                self.is_transactional, self.producer_id, self.producer_epoch, self.base_sequence,
+                self.records_count))
+
 
 class DefaultRecord(ABCRecord):
 
@@ -717,6 +728,17 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
             cls.HEADER_STRUCT.size + cls.MAX_RECORD_OVERHEAD +
             cls.size_of(key, value, headers)
         )
+
+    def __str__(self):
+        return (
+            "DefaultRecordBatchBuilder(magic={}, base_offset={}, last_offset_delta={},"
+            " first_timestamp={}, max_timestamp={},"
+            " is_transactional={}, producer_id={}, producer_epoch={}, base_sequence={},"
+            " records_count={})".format(
+                self._magic, 0, self._last_offset,
+                self._first_timestamp or 0, self._max_timestamp or 0,
+                self._is_transactional, self._producer_id, self._producer_epoch, self._base_sequence,
+                self._num_records))
 
 
 class DefaultRecordMetadata(object):
