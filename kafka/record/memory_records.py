@@ -113,7 +113,7 @@ class MemoryRecords(ABCRecords):
 class MemoryRecordsBuilder(object):
 
     __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
-                 "_magic", "_bytes_written", "_producer_id")
+                 "_magic", "_bytes_written", "_producer_id", "_producer_epoch")
 
     def __init__(self, magic, compression_type, batch_size, offset=0,
                  transactional=False, producer_id=-1, producer_epoch=-1, base_sequence=-1):
@@ -130,6 +130,7 @@ class MemoryRecordsBuilder(object):
                 producer_epoch=producer_epoch, base_sequence=base_sequence,
                 batch_size=batch_size)
             self._producer_id = producer_id
+            self._producer_epoch = producer_epoch
         else:
             assert not transactional and producer_id == -1, "Idempotent messages are not supported for magic %s" % (magic,)
             self._builder = LegacyRecordBatchBuilder(
@@ -196,6 +197,7 @@ class MemoryRecordsBuilder(object):
             self._buffer = bytes(self._builder.build())
             if self._magic == 2:
                 self._producer_id = self._builder.producer_id
+                self._producer_epoch = self._builder.producer_epoch
             self._builder = None
         self._closed = True
 
