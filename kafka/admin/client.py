@@ -1460,9 +1460,9 @@ class KafkaAdminClient(object):
             list: List of tuples of Consumer Groups.
 
         Raises:
-            GroupCoordinatorNotAvailableError: The coordinator is not
+            CoordinatorNotAvailableError: The coordinator is not
                 available, so cannot process requests.
-            GroupLoadInProgressError: The coordinator is loading and
+            CoordinatorLoadInProgressError: The coordinator is loading and
                 hence can't process requests.
         """
         # While we return a list, internally use a set to prevent duplicates

@@ -478,7 +478,7 @@ class BaseCoordinator(object):
                 group leader
         """
         if self.coordinator_unknown():
-            e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
         elif not self._client.ready(self.coordinator_id, metadata_priority=False):
@@ -555,7 +555,7 @@ class BaseCoordinator(object):
                 else:
                     self._on_join_follower().chain(future)
 
-        elif error_type is Errors.GroupLoadInProgressError:
+        elif error_type is Errors.CoordinatorLoadInProgressError:
             log.debug("Attempt to join group %s rejected since coordinator %s"
                       " is loading the group.", self.group_id, self.coordinator_id)
             # backoff and retry
@@ -567,8 +567,8 @@ class BaseCoordinator(object):
             log.debug("Attempt to join group %s failed due to unknown member id",
                       self.group_id)
             future.failure(error)
-        elif error_type in (Errors.GroupCoordinatorNotAvailableError,
-                            Errors.NotCoordinatorForGroupError):
+        elif error_type in (Errors.CoordinatorNotAvailableError,
+                            Errors.NotCoordinatorError):
             # re-discover the coordinator and retry with backoff
             self.coordinator_dead(error_type())
             log.debug("Attempt to join group %s failed due to obsolete "
@@ -636,7 +636,7 @@ class BaseCoordinator(object):
 
     def _send_sync_group_request(self, request):
         if self.coordinator_unknown():
-            e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
         # We assume that coordinator is ready if we're sending SyncGroup
@@ -674,8 +674,8 @@ class BaseCoordinator(object):
             log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
             self.reset_generation()
             future.failure(error)
-        elif error_type in (Errors.GroupCoordinatorNotAvailableError,
-                            Errors.NotCoordinatorForGroupError):
+        elif error_type in (Errors.CoordinatorNotAvailableError,
+                            Errors.NotCoordinatorError):
             error = error_type()
             log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
             self.coordinator_dead(error)
@@ -732,7 +732,7 @@ class BaseCoordinator(object):
                 self.heartbeat.reset_timeouts()
             future.success(self.coordinator_id)
 
-        elif error_type is Errors.GroupCoordinatorNotAvailableError:
+        elif error_type is Errors.CoordinatorNotAvailableError:
             log.debug("Group Coordinator Not Available; retry")
             future.failure(error_type())
         elif error_type is Errors.GroupAuthorizationFailedError:
@@ -842,7 +842,7 @@ class BaseCoordinator(object):
     def _send_heartbeat_request(self):
         """Send a heartbeat request"""
         if self.coordinator_unknown():
-            e = Errors.GroupCoordinatorNotAvailableError(self.coordinator_id)
+            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
             return Future().failure(e)
 
         elif not self._client.ready(self.coordinator_id, metadata_priority=False):
@@ -869,8 +869,8 @@ class BaseCoordinator(object):
             log.debug("Received successful heartbeat response for group %s",
                       self.group_id)
             future.success(None)
-        elif error_type in (Errors.GroupCoordinatorNotAvailableError,
-                            Errors.NotCoordinatorForGroupError):
+        elif error_type in (Errors.CoordinatorNotAvailableError,
+                            Errors.NotCoordinatorError):
             log.warning("Heartbeat failed for group %s: coordinator (node %s)"
                         " is either not started or not valid", self.group_id,
                         self.coordinator())
