@@ -22,7 +22,7 @@ from __future__ import division
 
 import struct
 
-from kafka.errors import CorruptRecordException, IllegalStateError, UnsupportedVersionError
+from kafka.errors import CorruptRecordError, IllegalStateError, UnsupportedVersionError
 from kafka.record.abc import ABCRecords
 from kafka.record.legacy_records import LegacyRecordBatch, LegacyRecordBatchBuilder
 from kafka.record.default_records import DefaultRecordBatch, DefaultRecordBatchBuilder
@@ -99,7 +99,7 @@ class MemoryRecords(ABCRecords):
         if next_slice is None:
             return None
         if len(next_slice) < _min_slice:
-            raise CorruptRecordException(
+            raise CorruptRecordError(
                 "Record size is less than the minimum record overhead "
                 "({})".format(_min_slice - self.LOG_OVERHEAD))
         self._cache_next()

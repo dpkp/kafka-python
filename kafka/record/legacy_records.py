@@ -52,7 +52,7 @@ from kafka.codec import (
     gzip_decode, snappy_decode, lz4_decode, lz4_decode_old_kafka,
 )
 import kafka.codec as codecs
-from kafka.errors import CorruptRecordException, UnsupportedCodecError
+from kafka.errors import CorruptRecordError, UnsupportedCodecError
 
 
 class LegacyRecordBase(object):
@@ -191,7 +191,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
         value_size = struct.unpack_from(">i", self._buffer, pos)[0]
         pos += self.VALUE_LENGTH
         if value_size == -1:
-            raise CorruptRecordException("Value of compressed message is None")
+            raise CorruptRecordError("Value of compressed message is None")
         else:
             data = self._buffer[pos:pos + value_size]
 

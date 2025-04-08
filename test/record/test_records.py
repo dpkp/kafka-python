@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 import pytest
 from kafka.record import MemoryRecords, MemoryRecordsBuilder
-from kafka.errors import CorruptRecordException
+from kafka.errors import CorruptRecordError
 
 from test.testutil import maybe_skip_unsupported_compression
 
@@ -174,7 +174,7 @@ def test_memory_records_corrupt():
         b"\x00\x00\x00\x03"  # Length=3
         b"\xfe\xb0\x1d",  # Some random bytes
     )
-    with pytest.raises(CorruptRecordException):
+    with pytest.raises(CorruptRecordError):
         records.next_batch()
 
 

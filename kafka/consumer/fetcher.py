@@ -341,7 +341,7 @@ class Fetcher(six.Iterator):
 
         Raises:
             OffsetOutOfRangeError: if no subscription offset_reset_strategy
-            CorruptRecordException: if message crc validation fails (check_crcs
+            CorruptRecordError: if message crc validation fails (check_crcs
                 must be set to True)
             RecordTooLargeError: if a message is larger than the currently
                 configured max_partition_fetch_bytes
@@ -925,7 +925,7 @@ class Fetcher(six.Iterator):
                     last_batch = batch
 
                     if self.check_crcs and not batch.validate_crc():
-                        raise Errors.CorruptRecordException(
+                        raise Errors.CorruptRecordError(
                                 "Record batch for partition %s at offset %s failed crc check" % (
                                     self.topic_partition, batch.base_offset))
 
@@ -963,7 +963,7 @@ class Fetcher(six.Iterator):
 
                     for record in batch:
                         if self.check_crcs and not record.validate_crc():
-                            raise Errors.CorruptRecordException(
+                            raise Errors.CorruptRecordError(
                                     "Record for partition %s at offset %s failed crc check" % (
                                         self.topic_partition, record.offset))
                         key_size = len(record.key) if record.key is not None else -1

@@ -60,7 +60,7 @@ from kafka.record.abc import ABCRecord, ABCRecordBatch, ABCRecordBatchBuilder
 from kafka.record.util import (
     decode_varint, encode_varint, calc_crc32c, size_of_varint
 )
-from kafka.errors import CorruptRecordException, UnsupportedCodecError
+from kafka.errors import CorruptRecordError, UnsupportedCodecError
 from kafka.codec import (
     gzip_encode, snappy_encode, lz4_encode, zstd_encode,
     gzip_decode, snappy_decode, lz4_decode, zstd_decode
@@ -288,14 +288,14 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         header_count, pos = decode_varint(buffer, pos)
         if header_count < 0:
-            raise CorruptRecordException("Found invalid number of record "
+            raise CorruptRecordError("Found invalid number of record "
                                          "headers {}".format(header_count))
         headers = []
         while header_count:
             # Header key is of type String, that can't be None
             h_key_len, pos = decode_varint(buffer, pos)
             if h_key_len < 0:
-                raise CorruptRecordException(
+                raise CorruptRecordError(
                     "Invalid negative header key size {}".format(h_key_len))
             h_key = buffer[pos: pos + h_key_len].decode("utf-8")
             pos += h_key_len
@@ -313,7 +313,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         # validate whether we have read all header bytes in the current record
         if pos - start_pos != length:
-            raise CorruptRecordException(
+            raise CorruptRecordError(
                 "Invalid record size: expected to read {} bytes in record "
                 "payload, but instead read {}".format(length, pos - start_pos))
         self._pos = pos
@@ -332,14 +332,14 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
     def __next__(self):
         if self._next_record_index >= self._num_records:
             if self._pos != len(self._buffer):
-                raise CorruptRecordException(
+                raise CorruptRecordError(
                     "{} unconsumed bytes after all records consumed".format(
                         len(self._buffer) - self._pos))
             raise StopIteration
         try:
             msg = self._read_msg()
         except (ValueError, IndexError) as err:
-            raise CorruptRecordException(
+            raise CorruptRecordError(
                 "Found invalid record structure: {!r}".format(err))
         else:
             self._next_record_index += 1
