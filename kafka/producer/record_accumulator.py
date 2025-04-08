@@ -588,11 +588,14 @@ class IncompleteProducerBatches(object):
 
     def add(self, batch):
         with self._lock:
-            return self._incomplete.add(batch)
+            self._incomplete.add(batch)
 
     def remove(self, batch):
         with self._lock:
-            return self._incomplete.remove(batch)
+            try:
+                self._incomplete.remove(batch)
+            except KeyError:
+                pass
 
     def all(self):
         with self._lock:
