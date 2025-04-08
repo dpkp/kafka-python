@@ -251,12 +251,12 @@ class TransactionManager(object):
             self._transition_to(TransactionState.FATAL_ERROR, error=exc)
 
     # visible for testing
-    def is_partition_added(self, partition):
+    def _test_is_partition_added(self, partition):
         with self._lock:
             return partition in self._partitions_in_transaction
 
     # visible for testing
-    def is_partition_pending_add(self, partition):
+    def _test_is_partition_pending_add(self, partition):
         return partition in self._new_partitions_in_transaction or partition in self._pending_partitions_in_transaction
 
     def has_producer_id_and_epoch(self, producer_id, producer_epoch):
@@ -380,27 +380,25 @@ class TransactionManager(object):
     def has_in_flight_transactional_request(self):
         return self._in_flight_request_correlation_id != self.NO_INFLIGHT_REQUEST_CORRELATION_ID
 
-    # visible for testing.
     def has_fatal_error(self):
         return self._current_state == TransactionState.FATAL_ERROR
 
-    # visible for testing.
     def has_abortable_error(self):
         return self._current_state == TransactionState.ABORTABLE_ERROR
 
     # visible for testing
-    def transaction_contains_partition(self, tp):
+    def _test_transaction_contains_partition(self, tp):
         with self._lock:
             return tp in self._partitions_in_transaction
 
     # visible for testing
-    def has_ongoing_transaction(self):
+    def _test_has_ongoing_transaction(self):
         with self._lock:
             # transactions are considered ongoing once started until completion or a fatal error
             return self._current_state == TransactionState.IN_TRANSACTION or self.is_completing() or self.has_abortable_error()
 
     # visible for testing
-    def is_ready(self):
+    def _test_is_ready(self):
         with self._lock:
             return self.is_transactional() and self._current_state == TransactionState.READY
 
