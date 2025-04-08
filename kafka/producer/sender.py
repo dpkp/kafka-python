@@ -103,17 +103,9 @@ class Sender(threading.Thread):
 
         if self._transaction_manager:
             try:
-                if self._transaction_manager.should_reset_producer_state_after_resolving_sequences():
-                    # Check if the previous run expired batches which requires a reset of the producer state.
-                    self._transaction_manager.reset_producer_id()
                 if not self._transaction_manager.is_transactional():
                     # this is an idempotent producer, so make sure we have a producer id
                     self._maybe_wait_for_producer_id()
-                elif self._transaction_manager.has_unresolved_sequences() and not self._transaction_manager.has_fatal_error():
-                    self._transaction_manager.transition_to_fatal_error(
-                        Errors.KafkaError("The client hasn't received acknowledgment for"
-                                          " some previously sent messages and can no longer retry them."
-                                          " It isn't safe to continue."))
                 elif self._transaction_manager.has_in_flight_transactional_request() or self._maybe_send_transactional_request():
                     # as long as there are outstanding transactional requests, we simply wait for them to return
                     self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
@@ -313,7 +305,6 @@ class Sender(threading.Thread):
                 error_type = Errors.for_code(response.error_code)
                 if error_type is Errors.NoError:
                     self._transaction_manager.set_producer_id_and_epoch(response.producer_id, response.producer_epoch)
-                    return
                 elif getattr(error_type, 'retriable', False):
                     log.debug("Retriable error from InitProducerId response: %s", error_type.__name__)
                     if getattr(error_type, 'invalid_metadata', False):

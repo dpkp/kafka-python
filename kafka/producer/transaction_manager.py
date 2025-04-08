@@ -105,19 +105,9 @@ class TransactionManager(object):
     def __init__(self, transactional_id=None, transaction_timeout_ms=0, retry_backoff_ms=100, api_version=(0, 11), metadata=None):
         self._api_version = api_version
         self._metadata = metadata
-        # Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
-        # we continue to order batches by the sequence numbers even when the responses come back out of order during
-        # leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
-        # (either successfully or through a fatal failure).
-        # use heapq methods to push/pop from queues
-        self._in_flight_batches_by_sequence = collections.defaultdict(list)
-        self._in_flight_batches_sort_id = 0
 
-        # The base sequence of the next batch bound for a given partition.
-        self._next_sequence = collections.defaultdict(lambda: 0)
-        # The sequence of the last record of the last ack'd batch from the given partition. When there are no
-        # in flight requests for a partition, the self._last_acked_sequence(topicPartition) == nextSequence(topicPartition) - 1.
-        self._last_acked_sequence = collections.defaultdict(lambda: -1)
+        self._sequence_numbers = collections.defaultdict(lambda: 0)
+
         self.transactional_id = transactional_id
         self.transaction_timeout_ms = transaction_timeout_ms
         self._transaction_coordinator = None
@@ -136,18 +126,6 @@ class TransactionManager(object):
         self._pending_requests_sort_id = 0
         self._in_flight_request_correlation_id = self.NO_INFLIGHT_REQUEST_CORRELATION_ID
 
-        # If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
-        # to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
-        # for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
-        # successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
-        # responses for the partition once the inflight request count falls to zero, we reset the producer id and
-        # consequently clear this data structure as well.
-        self._partitions_with_unresolved_sequences = set()
-        self._inflight_batches_by_sequence = dict()
-        # We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
-        # responses which are due to the retention period elapsing, and those which are due to actual lost data.
-        self._last_acked_offset = collections.defaultdict(lambda: -1)
-
         # This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
         # For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
         # error for the first AddPartitionsRequest in a transaction.
@@ -159,7 +137,7 @@ class TransactionManager(object):
             self._ensure_transactional()
             self._transition_to(TransactionState.INITIALIZING)
             self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
-            self._next_sequence.clear()
+            self._sequence_numbers.clear()
             handler = InitProducerIdHandler(self, self.transactional_id, self.transaction_timeout_ms)
             self._enqueue_request(handler)
             return handler.result
@@ -319,195 +297,22 @@ class TransactionManager(object):
                     " You must either abort the ongoing transaction or"
                     " reinitialize the transactional producer instead")
             self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
-            self._next_sequence.clear()
-            self._last_acked_sequence.clear()
-            self._inflight_batches_by_sequence.clear()
-            self._partitions_with_unresolved_sequences.clear()
-            self._last_acked_offset.clear()
+            self._sequence_numbers.clear()
 
     def sequence_number(self, tp):
         with self._lock:
-            return self._next_sequence[tp]
+            return self._sequence_numbers[tp]
 
     def increment_sequence_number(self, tp, increment):
         with self._lock:
-            if tp not in self._next_sequence:
+            if tp not in self._sequence_numbers:
                 raise Errors.IllegalStateError("Attempt to increment sequence number for a partition with no current sequence.")
             # Sequence number wraps at java max int
-            base = self._next_sequence[tp]
+            base = self._sequence_numbers[tp]
             if base > (2147483647 - increment):
-              self._next_sequence[tp] = increment - (2147483647 - base) - 1
+              self._sequence_numbers[tp] = increment - (2147483647 - base) - 1
             else:
-                self._next_sequence[tp] += increment
-
-    def _next_in_flight_batches_sort_id(self):
-        self._in_flight_batches_sort_id += 1
-        return self._in_flight_batches_sort_id
-
-    def add_in_flight_batch(self, batch):
-        with self._lock:
-            if not batch.has_sequence():
-                raise Errors.IllegalStateError("Can't track batch for partition %s when sequence is not set." % (batch.topic_partition,))
-            heapq.heappush(
-                self._in_flight_batches_by_sequence[batch.topic_partition],
-                (batch.base_sequence, self._next_in_flight_batches_sort_id(), batch)
-            )
-
-    def first_in_flight_sequence(self, tp):
-        """
-        Returns the first inflight sequence for a given partition. This is the base sequence of an inflight batch with
-        the lowest sequence number.  If there are no inflight requests being tracked for this partition, this method will return -1
-        """
-        with self._lock:
-            if not self._in_flight_batches_by_sequence[tp]:
-                return NO_SEQUENCE
-            else:
-                return self._in_flight_batches_by_sequence[tp][0][2].base_sequence
-
-    def next_batch_by_sequence(self, tp):
-        with self._lock:
-            if not self._in_flight_batches_by_sequence[tp]:
-                return None
-            else:
-                return self._in_flight_batches_by_sequence[tp][0][2]
-
-    def remove_in_flight_batch(self, batch):
-        with self._lock:
-            if not self._in_flight_batches_by_sequence[batch.topic_partition]:
-                return
-            else:
-                try:
-                    # see https://stackoverflow.com/questions/10162679/python-delete-element-from-heap
-                    queue = self._in_flight_batches_by_sequence[batch.topic_partition]
-                    idx = [item[2] for item in queue].index(batch)
-                    queue[idx] = queue[-1]
-                    queue.pop()
-                    heapq.heapify(queue)
-                except ValueError:
-                    pass
-
-    def maybe_update_last_acked_sequence(self, tp, sequence):
-        with self._lock:
-            if sequence > self._last_acked_sequence[tp]:
-                self._last_acked_sequence[tp] = sequence
-
-    def update_last_acked_offset(self, base_offset, batch):
-        if base_offset == -1:
-            return
-        last_offset = base_offset + batch.record_count - 1
-        if last_offset > self._last_acked_offset[batch.topic_partition]:
-            self._last_acked_offset[batch.topic_partition] = last_offset
-        else:
-            log.debug("Partition %s keeps last_offset at %s", batch.topic_partition, last_offset)
-
-    def adjust_sequences_due_to_failed_batch(self, batch):
-        # If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
-        # so that they don't fail with the OutOfOrderSequenceNumberError.
-        #
-        # This method must only be called when we know that the batch in question has been unequivocally failed by the broker,
-        # ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
-        with self._lock:
-            if batch.topic_partition not in self._next_sequence:
-                # Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
-                # reset due to a previous OutOfOrderSequenceNumberError.
-                return
-            log.debug("producer_id: %s, send to partition %s failed fatally. Reducing future sequence numbers by %s",
-                      batch.producer_id, batch.topic_partition, batch.record_count)
-            current_sequence = self.sequence_number(batch.topic_partition)
-            current_sequence -= batch.record_count
-            if current_sequence < 0:
-                raise Errors.IllegalStateError(
-                    "Sequence number for partition %s is going to become negative: %s" % (batch.topic_partition, current_sequence))
-
-            self._set_next_sequence(batch.topic_partition, current_sequence)
-
-            for in_flight_batch in self._in_flight_batches_by_sequence[batch.topic_partition]:
-                if in_flight_batch.base_sequence < batch.base_sequence:
-                    continue
-                new_sequence = in_flight_batch.base_sequence - batch.record_count
-                if new_sequence < 0:
-                    raise Errors.IllegalStateError(
-                        "Sequence number for batch with sequence %s for partition %s is going to become negative: %s" % (
-                            in_flight_batch.base_sequence, batch.topic_partition, new_sequence))
-
-                log.info("Resetting sequence number of batch with current sequence %s for partition %s to %s",
-                         in_flight_batch.base_sequence(), batch.topic_partition, new_sequence)
-                in_flight_batch.reset_producer_state(
-                    ProducerIdAndEpoch(in_flight_batch.producer_id, in_flight_batch.producer_epoch),
-                    new_sequence,
-                    in_flight_batch.is_transactional())
-
-    def _start_sequences_at_beginning(self, tp):
-        with self._lock:
-            sequence = 0
-            for in_flight_batch in self._in_flight_batches_by_sequence[tp]:
-                log.info("Resetting sequence number of batch with current sequence %s for partition %s to %s",
-                        in_flight_batch.base_sequence, in_flight_batch.topic_partition, sequence)
-                in_flight_batch.reset_producer_state(
-                    ProducerIdAndEpoch(in_flight_batch.producer_id, in_flight_batch.producer_epoch),
-                    sequence,
-                    in_flight_batch.is_transactional())
-                sequence += in_flight_batch.record_count
-            self._set_next_sequence(tp, sequence)
-            try:
-                del self._last_acked_sequence[tp]
-            except KeyError:
-                pass
-
-    def has_in_flight_batches(self, tp):
-        with self._lock:
-            return len(self._in_flight_batches_by_sequence[tp]) > 0
-
-    def has_unresolved_sequences(self):
-        with self._lock:
-            return len(self._partitions_with_unresolved_sequences) > 0
-
-    def has_unresolved_sequence(self, tp):
-        with self._lock:
-            return tp in self._partitions_with_unresolved_sequences
-
-    def mark_sequence_unresolved(self, tp):
-        with self._lock:
-            log.debug("Marking partition %s unresolved", tp)
-            self._partitions_with_unresolved_sequences.add(tp)
-
-    # Checks if there are any partitions with unresolved partitions which may now be resolved. Returns True if
-    # the producer id needs a reset, False otherwise.
-    def should_reset_producer_state_after_resolving_sequences(self):
-        with self._lock:
-            try:
-                remove = set()
-                if self.is_transactional():
-                    # We should not reset producer state if we are transactional. We will transition to a fatal error instead.
-                    return False
-                for tp in self._partitions_with_unresolved_sequences:
-                    if not self.has_in_flight_batches(tp):
-                        # The partition has been fully drained. At this point, the last ack'd sequence should be once less than
-                        # next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
-                        # reset the sequence number if necessary.
-                        if self.is_next_sequence(tp, self.sequence_number(tp)):
-                            # This would happen when a batch was expired, but subsequent batches succeeded.
-                            remove.add(tp)
-                        else:
-                            # We would enter this branch if all in flight batches were ultimately expired in the producer.
-                            log.info("No inflight batches remaining for %s, last ack'd sequence for partition is %s, next sequence is %s."
-                                     " Going to reset producer state.", tp, self._last_acked_sequence(tp), self.sequence_number(tp))
-                            return True
-                return False
-            finally:
-                self._partitions_with_unresolved_sequences -= remove
-
-    def is_next_sequence(self, tp, sequence):
-        with self._lock:
-            return sequence - self._last_acked_sequence(tp) == 1
-
-    def _set_next_sequence(self, tp, sequence):
-        with self._lock:
-            if tp not in self._next_sequence and sequence != 0:
-                raise Errors.IllegalStateError(
-                    "Trying to set the sequence number for %s to %s but the sequence number was never set for this partition." % (
-                        tp, sequence))
-            self._next_sequence[tp] = sequence
+                self._sequence_numbers[tp] += increment
 
     def next_request_handler(self, has_incomplete_batches):
         with self._lock:
@@ -584,7 +389,7 @@ class TransactionManager(object):
         return self._current_state == TransactionState.ABORTABLE_ERROR
 
     # visible for testing
-    def transactionContainsPartition(self, tp):
+    def transaction_contains_partition(self, tp):
         with self._lock:
             return tp in self._partitions_in_transaction
 
@@ -593,50 +398,6 @@ class TransactionManager(object):
         with self._lock:
             # transactions are considered ongoing once started until completion or a fatal error
             return self._current_state == TransactionState.IN_TRANSACTION or self.is_completing() or self.has_abortable_error()
-
-    def can_retry(self, batch, error, log_start_offset):
-        with self._lock:
-            if not self.has_producer_id(batch.producer_id):
-                return False
-
-            elif (
-                    error is Errors.OutOfOrderSequenceNumberError
-                    and not self.has_unresolved_sequence(batch.topic_partition)
-                    and (batch.sequence_has_been_reset() or not self.is_next_sequence(batch.topic_partition, batch.base_sequence))
-                ):
-                # We should retry the OutOfOrderSequenceNumberError if the batch is _not_ the next batch, ie. its base
-                # sequence isn't the self._last_acked_sequence + 1. However, if the first in flight batch fails fatally, we will
-                # adjust the sequences of the other inflight batches to account for the 'loss' of the sequence range in
-                # the batch which failed. In this case, an inflight batch will have a base sequence which is
-                # the self._last_acked_sequence + 1 after adjustment. When this batch fails with an OutOfOrderSequenceNumberError, we want to retry it.
-                # To account for the latter case, we check whether the sequence has been reset since the last drain.
-                # If it has, we will retry it anyway.
-                return True
-
-            elif error is Errors.UnknownProducerIdError:
-                if log_start_offset == -1:
-                    # We don't know the log start offset with this response. We should just retry the request until we get it.
-                    # The UNKNOWN_PRODUCER_ID error code was added along with the new ProduceResponse which includes the
-                    # logStartOffset. So the '-1' sentinel is not for backward compatibility. Instead, it is possible for
-                    # a broker to not know the logStartOffset at when it is returning the response because the partition
-                    # may have moved away from the broker from the time the error was initially raised to the time the
-                    # response was being constructed. In these cases, we should just retry the request: we are guaranteed
-                    # to eventually get a logStartOffset once things settle down.
-                    return True
-
-                if batch.sequence_has_been_reset():
-                    # When the first inflight batch fails due to the truncation case, then the sequences of all the other
-                    # in flight batches would have been restarted from the beginning. However, when those responses
-                    # come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
-                    # reset the sequence numbers to the beginning.
-                    return True
-                elif self._last_acked_offset(batch.topic_partition) < log_start_offset:
-                    # The head of the log has been removed, probably due to the retention time elapsing. In this case,
-                    # we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
-                    # and retry them.
-                    self._start_sequences_at_beginning(batch.topic_partition)
-                    return True
-            return False
 
     # visible for testing
     def is_ready(self):
