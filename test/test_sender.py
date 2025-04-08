@@ -11,13 +11,14 @@ from unittest.mock import call
 from kafka.vendor import six
 
 from kafka.client_async import KafkaClient
+from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.producer.kafka import KafkaProducer
 from kafka.protocol.produce import ProduceRequest
 from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
 from kafka.producer.sender import Sender
-from kafka.producer.transaction_state import TransactionState
+from kafka.producer.transaction_manager import TransactionManager
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition
 
@@ -40,6 +41,16 @@ def producer_batch(topic='foo', partition=0, magic=2):
     batch.try_append(0, None, b'msg', [])
     batch.records.close()
     return batch
+
+
+@pytest.fixture
+def transaction_manager():
+    return TransactionManager(
+        transactional_id=None,
+        transaction_timeout_ms=60000,
+        retry_backoff_ms=100,
+        api_version=(2, 1),
+        metadata=ClusterMetadata())
 
 
 @pytest.mark.parametrize(("api_version", "produce_version"), [
@@ -85,16 +96,16 @@ def test_complete_batch_success(sender):
     assert batch.produce_future.value == (0, 123, 456)
 
 
-def test_complete_batch_transaction(sender):
-    sender._transaction_state = TransactionState()
+def test_complete_batch_transaction(sender, transaction_manager):
+    sender._transaction_manager = transaction_manager
     batch = producer_batch()
-    assert sender._transaction_state.sequence_number(batch.topic_partition) == 0
-    assert sender._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id
+    assert sender._transaction_manager.sequence_number(batch.topic_partition) == 0
+    assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
 
     # No error, base_offset 0
     sender._complete_batch(batch, None, 0)
     assert batch.is_done
-    assert sender._transaction_state.sequence_number(batch.topic_partition) == batch.record_count
+    assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
 
 
 @pytest.mark.parametrize(("error", "refresh_metadata"), [
@@ -164,8 +175,8 @@ def test_complete_batch_retry(sender, accumulator, mocker, error, retry):
         assert isinstance(batch.produce_future.exception, error)
 
 
-def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, mocker):
-    sender._transaction_state = TransactionState()
+def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, transaction_manager, mocker):
+    sender._transaction_manager = transaction_manager
     sender.config['retries'] = 1
     mocker.spy(sender, '_fail_batch')
     mocker.patch.object(accumulator, 'reenqueue')
@@ -175,21 +186,21 @@ def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, mocker
     assert not batch.is_done
     accumulator.reenqueue.assert_called_with(batch)
     batch.records._producer_id = 123 # simulate different producer_id
-    assert batch.producer_id != sender._transaction_state.producer_id_and_epoch.producer_id
+    assert batch.producer_id != sender._transaction_manager.producer_id_and_epoch.producer_id
     sender._complete_batch(batch, error, -1)
     assert batch.is_done
     assert isinstance(batch.produce_future.exception, error)
 
 
-def test_fail_batch(sender, accumulator, mocker):
-    sender._transaction_state = TransactionState()
-    mocker.patch.object(TransactionState, 'reset_producer_id')
+def test_fail_batch(sender, accumulator, transaction_manager, mocker):
+    sender._transaction_manager = transaction_manager
+    mocker.patch.object(TransactionManager, 'reset_producer_id')
     batch = producer_batch()
     mocker.patch.object(batch, 'done')
-    assert sender._transaction_state.producer_id_and_epoch.producer_id == batch.producer_id
+    assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Exception('error')
     sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
-    sender._transaction_state.reset_producer_id.assert_called_once()
+    sender._transaction_manager.reset_producer_id.assert_called_once()
     batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
 
 
