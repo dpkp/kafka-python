@@ -194,11 +194,22 @@ def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, transa
 
 def test_fail_batch(sender, accumulator, transaction_manager, mocker):
     sender._transaction_manager = transaction_manager
-    mocker.patch.object(TransactionManager, 'reset_producer_id')
     batch = producer_batch()
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Exception('error')
+    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
+    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
+
+
+def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, transaction_manager, mocker):
+    sender._transaction_manager = transaction_manager
+    assert transaction_manager.transactional_id is None # this test is for idempotent producer only
+    mocker.patch.object(TransactionManager, 'reset_producer_id')
+    batch = producer_batch()
+    mocker.patch.object(batch, 'done')
+    assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
+    error = Errors.OutOfOrderSequenceNumberError()
     sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
     sender._transaction_manager.reset_producer_id.assert_called_once()
     batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
