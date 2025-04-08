@@ -488,6 +488,8 @@ class RecordAccumulator(object):
                                 else:
                                     producer_id_and_epoch = None
                                     if self._transaction_manager:
+                                        if not self._transaction_manager.is_send_to_partition_allowed(tp):
+                                            break
                                         producer_id_and_epoch = self._transaction_manager.producer_id_and_epoch
                                         if not producer_id_and_epoch.is_valid:
                                             # we cannot send the batch until we have refreshed the PID
