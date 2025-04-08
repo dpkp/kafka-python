@@ -164,17 +164,30 @@ class Sender(threading.Thread):
         expired_batches = self._accumulator.abort_expired_batches(
             self.config['request_timeout_ms'], self._metadata)
 
+        if expired_batches:
+            log.debug("Expired %s batches in accumulator", len(expired_batches))
+
         # Reset the producer_id if an expired batch has previously been sent to the broker.
         # See the documentation of `TransactionState.reset_producer_id` to understand why
         # we need to reset the producer id here.
         if self._transaction_manager and any([batch.in_retry() for batch in expired_batches]):
-            self._transaction_manager.reset_producer_id()
-            return 0
+            needs_transaction_state_reset = True
+        else:
+            needs_transaction_state_reset = False
+
+        for expired_batch in expired_batches:
+            error = Errors.KafkaTimeoutError(
+                "Expiring %d record(s) for %s: %s ms has passed since batch creation" % (
+                    expired_batch.record_count, expired_batch.topic_partition,
+                    int((time.time() - expired_batch.created) * 1000)))
+            self._fail_batch(expired_batch, error, base_offset=-1)
 
         if self._sensors:
-            for expired_batch in expired_batches:
-                self._sensors.record_errors(expired_batch.topic_partition.topic, expired_batch.record_count)
             self._sensors.update_produce_request_metrics(batches_by_node)
+
+        if needs_transaction_state_reset:
+            self._transaction_manager.reset_producer_id()
+            return 0
 
         requests = self._create_produce_requests(batches_by_node)
         # If we have any nodes that are ready to send + have sendable data,
@@ -356,7 +369,7 @@ class Sender(threading.Thread):
                 self._complete_batch(batch, None, -1)
 
     def _fail_batch(self, batch, exception, base_offset=None, timestamp_ms=None, log_start_offset=None):
-        log.exception(exception)
+        exception = exception if type(exception) is not type else exception()
         if self._transaction_manager:
             if isinstance(exception, Errors.OutOfOrderSequenceNumberError) and \
                     not self._transaction_manager.is_transactional() and \
@@ -417,13 +430,13 @@ class Sender(threading.Thread):
                     log.warning("Attempted to retry sending a batch but the producer id/epoch changed from %s/%s to %s/%s. This batch will be dropped" % (
                         batch.producer_id, batch.producer_epoch,
                         self._transaction_manager.producer_id_and_epoch.producer_id, self._transaction_manager.producer_id_and_epoch.epoch))
-                    self._fail_batch(batch, error(), base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+                    self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
             else:
                 if error is Errors.TopicAuthorizationFailedError:
                     error = error(batch.topic_partition.topic)
 
                 # tell the user the result of their request
-                self._fail_batch(batch, error(), base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+                self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
 
             if error is Errors.UnknownTopicOrPartitionError:
                 log.warning("Received unknown topic or partition error in produce request on partition %s."
