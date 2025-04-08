@@ -597,7 +597,7 @@ class RecordAccumulator(object):
             tp = batch.topic_partition
             with self._tp_locks[tp]:
                 aborted = False
-                if (self._transaction_manager and not batch.has_sequence) or (not self._transaction_manager and not batch.is_done):
+                if not batch.is_done:
                     aborted = True
                     batch.records.close()
                     self._batches[tp].remove(batch)
