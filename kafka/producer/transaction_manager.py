@@ -404,7 +404,7 @@ class TransactionManager(object):
         # If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
         # so that they don't fail with the OutOfOrderSequenceNumberError.
         #
-        # This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
+        # This method must only be called when we know that the batch in question has been unequivocally failed by the broker,
         # ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
         with self._lock:
             if batch.topic_partition not in self._next_sequence:
