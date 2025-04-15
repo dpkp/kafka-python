@@ -456,6 +456,8 @@ class KafkaProducer(object):
             self.config['enable_idempotence'] = True
 
         if self.config['enable_idempotence']:
+            assert self.config['api_version'] >= (0, 11), "Transactional/Idempotent producer requires >= Kafka 0.11 Brokers"
+
             self._transaction_manager = TransactionManager(
                 transactional_id=self.config['transactional_id'],
                 transaction_timeout_ms=self.config['transaction_timeout_ms'],
