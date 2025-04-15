@@ -481,9 +481,10 @@ class Sender(threading.Thread):
         """
         requests = {}
         for node_id, batches in six.iteritems(collated):
-            requests[node_id] = self._produce_request(
-                node_id, self.config['acks'],
-                self.config['request_timeout_ms'], batches)
+            if batches:
+                requests[node_id] = self._produce_request(
+                    node_id, self.config['acks'],
+                    self.config['request_timeout_ms'], batches)
         return requests
 
     def _produce_request(self, node_id, acks, timeout, batches):
@@ -682,8 +683,9 @@ class SenderMetrics(object):
                 records += batch.record_count
                 total_bytes += batch.records.size_in_bytes()
 
-            self.records_per_request_sensor.record(records)
-            self.byte_rate_sensor.record(total_bytes)
+            if node_batch:
+                self.records_per_request_sensor.record(records)
+                self.byte_rate_sensor.record(total_bytes)
 
     def record_retries(self, topic, count):
         self.retry_sensor.record(count)
