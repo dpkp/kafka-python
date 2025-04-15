@@ -24,14 +24,6 @@ from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
-@pytest.fixture
-def client(conn, mocker):
-    cli = KafkaClient(api_version=(0, 9))
-    mocker.patch.object(cli, '_init_connect', return_value=True)
-    try:
-        yield cli
-    finally:
-        cli._close()
 
 @pytest.fixture
 def coordinator(client, metrics, mocker):

@@ -27,11 +27,6 @@ from kafka.structs import OffsetAndMetadata, OffsetAndTimestamp, TopicPartition
 
 
 @pytest.fixture
-def client():
-    return KafkaClient(bootstrap_servers=(), api_version=(0, 9))
-
-
-@pytest.fixture
 def subscription_state():
     return SubscriptionState()
 

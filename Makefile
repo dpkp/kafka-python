@@ -24,7 +24,7 @@ test: build-integration
 	pytest $(PYTESTS)
 
 fixture: build-integration
-	python -m test.fixtures kafka
+	python -m test.integration.fixtures kafka
 
 cov-local: build-integration
 	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
@@ -99,7 +99,7 @@ servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dis
 	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
 
 servers/%/api_versions: servers/$$*/kafka-bin
-	KAFKA_VERSION=$* python -m test.fixtures get_api_versions >$@
+	KAFKA_VERSION=$* python -m test.integration.fixtures get_api_versions >$@
 
 servers/%/messages: servers/$$*/kafka-bin
 	cd servers/$*/ && jar xvf kafka-bin/libs/kafka-clients-$*.jar common/message/
