@@ -250,13 +250,11 @@ class TransactionManager(object):
         with self._lock:
             self._transition_to(TransactionState.FATAL_ERROR, error=exc)
 
-    # visible for testing
-    def _test_is_partition_added(self, partition):
+    def is_partition_added(self, partition):
         with self._lock:
             return partition in self._partitions_in_transaction
 
-    # visible for testing
-    def _test_is_partition_pending_add(self, partition):
+    def is_partition_pending_add(self, partition):
         return partition in self._new_partitions_in_transaction or partition in self._pending_partitions_in_transaction
 
     def has_producer_id_and_epoch(self, producer_id, producer_epoch):
@@ -652,7 +650,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
                 self.transaction_manager._lookup_coordinator('transaction', self.transactiona_id)
                 self.reenqueue()
                 return
-            elif error is Errors.ConcurrentTransactionError:
+            elif error is Errors.ConcurrentTransactionsError:
                 self.maybe_override_retry_backoff_ms()
                 self.reenqueue()
                 return
@@ -704,7 +702,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         #
         # This is only a temporary fix, the long term solution is being tracked in
         # https://issues.apache.org/jira/browse/KAFKA-5482
-        if not self._partitions_in_transaction:
+        if not self.transaction_manager._partitions_in_transaction:
             self.retry_backoff_ms = min(self.transaction_manager.ADD_PARTITIONS_RETRY_BACKOFF_MS, self.retry_backoff_ms)
 
 
