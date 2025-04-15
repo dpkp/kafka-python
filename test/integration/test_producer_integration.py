@@ -133,3 +133,14 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
             partition=0)
         record = future.get(timeout=5)
         assert abs(record.timestamp - send_time) <= 1000  # Allow 1s deviation
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_idempotent_producer(kafka_broker):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    producer = KafkaProducer(bootstrap_servers=connect_str, enable_idempotence=True)
+    try:
+        for _ in range(10):
+            producer.send('foo', value=b'idempotent_msg').get(timeout=1)
+    finally:
+        producer.close()
