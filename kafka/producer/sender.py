@@ -11,6 +11,7 @@ from kafka.vendor import six
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
+from kafka.producer.transaction_manager import ProducerIdAndEpoch
 from kafka.protocol.init_producer_id import InitProducerIdRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import TopicPartition
@@ -317,7 +318,7 @@ class Sender(threading.Thread):
                 response = self._client.send_and_receive(node_id, request)
                 error_type = Errors.for_code(response.error_code)
                 if error_type is Errors.NoError:
-                    self._transaction_manager.set_producer_id_and_epoch(response.producer_id, response.producer_epoch)
+                    self._transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(response.producer_id, response.producer_epoch))
                 elif getattr(error_type, 'retriable', False):
                     log.debug("Retriable error from InitProducerId response: %s", error_type.__name__)
                     if getattr(error_type, 'invalid_metadata', False):
