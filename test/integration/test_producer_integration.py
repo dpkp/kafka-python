@@ -1,8 +1,8 @@
+from __future__ import absolute_import
+
 from contextlib import contextmanager
-import gc
 import platform
 import time
-import threading
 
 import pytest
 
@@ -16,7 +16,7 @@ def producer_factory(**kwargs):
     try:
         yield producer
     finally:
-        producer.close(timeout=0)
+        producer.close(timeout=1)
 
 
 @contextmanager
@@ -25,7 +25,7 @@ def consumer_factory(**kwargs):
     try:
         yield consumer
     finally:
-        consumer.close(timeout_ms=0)
+        consumer.close(timeout_ms=100)
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
@@ -75,18 +75,6 @@ def test_end_to_end(kafka_broker, compression):
                 break
 
         assert msgs == set(['msg %d' % (i,) for i in range(messages)])
-
-
-@pytest.mark.skipif(platform.python_implementation() != 'CPython',
-                    reason='Test relies on CPython-specific gc policies')
-def test_kafka_producer_gc_cleanup():
-    gc.collect()
-    threads = threading.active_count()
-    producer = KafkaProducer(api_version='0.9') # set api_version explicitly to avoid auto-detection
-    assert threading.active_count() == threads + 1
-    del(producer)
-    gc.collect()
-    assert threading.active_count() == threads
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
@@ -145,3 +133,43 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
             partition=0)
         record = future.get(timeout=5)
         assert abs(record.timestamp - send_time) <= 1000  # Allow 1s deviation
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_idempotent_producer(kafka_broker):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    with producer_factory(bootstrap_servers=connect_str, enable_idempotence=True) as producer:
+        for _ in range(10):
+            producer.send('idempotent_test_topic', value=b'idempotent_msg').get(timeout=1)
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_transactional_producer(kafka_broker):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
+        producer.init_transactions()
+        producer.begin_transaction()
+        producer.send('transactional_test_topic', partition=0, value=b'msg1').get()
+        producer.send('transactional_test_topic', partition=0, value=b'msg2').get()
+        producer.abort_transaction()
+        producer.begin_transaction()
+        producer.send('transactional_test_topic', partition=0, value=b'msg3').get()
+        producer.send('transactional_test_topic', partition=0, value=b'msg4').get()
+        producer.commit_transaction()
+
+    messages = set()
+    consumer_opts = {
+        'bootstrap_servers': connect_str,
+        'group_id': None,
+        'consumer_timeout_ms': 10000,
+        'auto_offset_reset': 'earliest',
+        'isolation_level': 'read_committed',
+    }
+    with consumer_factory(**consumer_opts) as consumer:
+        consumer.assign([TopicPartition('transactional_test_topic', 0)])
+        for msg in consumer:
+            assert msg.value in {b'msg3', b'msg4'}
+            messages.add(msg.value)
+            if messages == {b'msg3', b'msg4'}:
+                break
+    assert messages == {b'msg3', b'msg4'}

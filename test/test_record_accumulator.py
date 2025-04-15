@@ -17,7 +17,7 @@ def test_producer_batch_producer_id():
         magic=2, compression_type=0, batch_size=100000)
     batch = ProducerBatch(tp, records)
     assert batch.producer_id == -1
-    batch.records.set_producer_state(123, 456, 789)
+    batch.records.set_producer_state(123, 456, 789, False)
     assert batch.producer_id == 123
     records.close()
     assert batch.producer_id == 123

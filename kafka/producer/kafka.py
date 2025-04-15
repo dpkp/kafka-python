@@ -19,7 +19,7 @@ from kafka.partitioner.default import DefaultPartitioner
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
 from kafka.producer.sender import Sender
-from kafka.producer.transaction_state import TransactionState
+from kafka.producer.transaction_manager import TransactionManager
 from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
@@ -318,6 +318,8 @@ class KafkaProducer(object):
         'key_serializer': None,
         'value_serializer': None,
         'enable_idempotence': False,
+        'transactional_id': None,
+        'transaction_timeout_ms': 60000,
         'acks': 1,
         'bootstrap_topics_filter': set(),
         'compression_type': None,
@@ -444,9 +446,30 @@ class KafkaProducer(object):
             assert checker(), "Libraries for {} compression codec not found".format(ct)
             self.config['compression_attrs'] = compression_attrs
 
-        self._transaction_state = None
+        self._metadata = client.cluster
+        self._transaction_manager = None
+        self._init_transactions_result = None
+        if 'enable_idempotence' in user_provided_configs and not self.config['enable_idempotence'] and self.config['transactional_id']:
+            raise Errors.KafkaConfigurationError("Cannot set transactional_id without enable_idempotence.")
+
+        if self.config['transactional_id']:
+            self.config['enable_idempotence'] = True
+
         if self.config['enable_idempotence']:
-            self._transaction_state = TransactionState()
+            assert self.config['api_version'] >= (0, 11), "Transactional/Idempotent producer requires >= Kafka 0.11 Brokers"
+
+            self._transaction_manager = TransactionManager(
+                transactional_id=self.config['transactional_id'],
+                transaction_timeout_ms=self.config['transaction_timeout_ms'],
+                retry_backoff_ms=self.config['retry_backoff_ms'],
+                api_version=self.config['api_version'],
+                metadata=self._metadata,
+            )
+            if self._transaction_manager.is_transactional():
+                log.info("Instantiated a transactional producer.")
+            else:
+                log.info("Instantiated an idempotent producer.")
+
             if 'retries' not in user_provided_configs:
                 log.info("Overriding the default 'retries' config to 3 since the idempotent producer is enabled.")
                 self.config['retries'] = 3
@@ -470,15 +493,14 @@ class KafkaProducer(object):
 
         message_version = self.max_usable_produce_magic(self.config['api_version'])
         self._accumulator = RecordAccumulator(
-                transaction_state=self._transaction_state,
+                transaction_manager=self._transaction_manager,
                 message_version=message_version,
                 **self.config)
-        self._metadata = client.cluster
         guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
         self._sender = Sender(client, self._metadata,
                               self._accumulator,
                               metrics=self._metrics,
-                              transaction_state=self._transaction_state,
+                              transaction_manager=self._transaction_manager,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
         self._sender.daemon = True
@@ -610,6 +632,84 @@ class KafkaProducer(object):
             return LegacyRecordBatchBuilder.estimate_size_in_bytes(
                 magic, self.config['compression_type'], key, value)
 
+    def init_transactions(self):
+        """
+        Needs to be called before any other methods when the transactional.id is set in the configuration.
+
+        This method does the following:
+          1. Ensures any transactions initiated by previous instances of the producer with the same
+             transactional_id are completed. If the previous instance had failed with a transaction in
+             progress, it will be aborted. If the last transaction had begun completion,
+             but not yet finished, this method awaits its completion.
+          2. Gets the internal producer id and epoch, used in all future transactional
+             messages issued by the producer.
+
+        Note that this method will raise KafkaTimeoutError if the transactional state cannot
+        be initialized before expiration of `max_block_ms`.
+
+        Retrying after a KafkaTimeoutError will continue to wait for the prior request to succeed or fail.
+        Retrying after any other exception will start a new initialization attempt.
+        Retrying after a successful initialization will do nothing.
+
+        Raises:
+            IllegalStateError: if no transactional_id has been configured
+            AuthorizationError: fatal error indicating that the configured
+                transactional_id is not authorized.
+            KafkaError: if the producer has encountered a previous fatal error or for any other unexpected error
+            KafkaTimeoutError: if the time taken for initialize the transaction has surpassed `max.block.ms`.
+        """
+        if not self._transaction_manager:
+            raise Errors.IllegalStateError("Cannot call init_transactions without setting a transactional_id.")
+        if self._init_transactions_result is None:
+            self._init_transactions_result = self._transaction_manager.initialize_transactions()
+            self._sender.wakeup()
+
+        try:
+            if not self._init_transactions_result.wait(timeout_ms=self.config['max_block_ms']):
+                raise Errors.KafkaTimeoutError("Timeout expired while initializing transactional state in %s ms." % (self.config['max_block_ms'],))
+        finally:
+            if self._init_transactions_result.failed:
+                self._init_transactions_result = None
+
+    def begin_transaction(self):
+        """ Should be called before the start of each new transaction.
+
+        Note that prior to the first invocation of this method,
+        you must invoke `init_transactions()` exactly one time.
+
+        Raises:
+            ProducerFencedError if another producer is with the same
+                transactional_id is active.
+        """
+        # Set the transactional bit in the producer.
+        if not self._transaction_manager:
+            raise Errors.IllegalStateError("Cannot use transactional methods without enabling transactions")
+        self._transaction_manager.begin_transaction()
+
+    def commit_transaction(self):
+        """ Commits the ongoing transaction.
+
+        Raises: ProducerFencedError if another producer with the same
+                transactional_id is active.
+        """
+        if not self._transaction_manager:
+            raise Errors.IllegalStateError("Cannot commit transaction since transactions are not enabled")
+        result = self._transaction_manager.begin_commit()
+        self._sender.wakeup()
+        result.wait()
+
+    def abort_transaction(self):
+        """ Aborts the ongoing transaction.
+
+        Raises: ProducerFencedError if another producer with the same
+                transactional_id is active.
+        """
+        if not self._transaction_manager:
+            raise Errors.IllegalStateError("Cannot abort transaction since transactions are not enabled.")
+        result = self._transaction_manager.begin_abort()
+        self._sender.wakeup()
+        result.wait()
+
     def send(self, topic, value=None, key=None, headers=None, partition=None, timestamp_ms=None):
         """Publish a message to a topic.
 
@@ -687,6 +787,10 @@ class KafkaProducer(object):
 
             tp = TopicPartition(topic, partition)
             log.debug("Sending (key=%r value=%r headers=%r) to %s", key, value, headers, tp)
+
+            if self._transaction_manager and self._transaction_manager.is_transactional():
+                self._transaction_manager.maybe_add_partition_to_transaction(tp)
+
             result = self._accumulator.append(tp, timestamp_ms,
                                               key_bytes, value_bytes, headers)
             future, batch_is_full, new_batch_created = result
