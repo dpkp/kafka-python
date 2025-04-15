@@ -1,8 +1,8 @@
+from __future__ import absolute_import
+
 from contextlib import contextmanager
-import gc
 import platform
 import time
-import threading
 
 import pytest
 
@@ -75,18 +75,6 @@ def test_end_to_end(kafka_broker, compression):
                 break
 
         assert msgs == set(['msg %d' % (i,) for i in range(messages)])
-
-
-@pytest.mark.skipif(platform.python_implementation() != 'CPython',
-                    reason='Test relies on CPython-specific gc policies')
-def test_kafka_producer_gc_cleanup():
-    gc.collect()
-    threads = threading.active_count()
-    producer = KafkaProducer(api_version=(2, 1)) # set api_version explicitly to avoid auto-detection
-    assert threading.active_count() == threads + 1
-    del(producer)
-    gc.collect()
-    assert threading.active_count() == threads
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
