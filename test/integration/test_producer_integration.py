@@ -16,7 +16,7 @@ def producer_factory(**kwargs):
     try:
         yield producer
     finally:
-        producer.close(timeout=0)
+        producer.close(timeout=1)
 
 
 @contextmanager
@@ -25,7 +25,7 @@ def consumer_factory(**kwargs):
     try:
         yield consumer
     finally:
-        consumer.close(timeout_ms=0)
+        consumer.close(timeout_ms=100)
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
@@ -82,7 +82,7 @@ def test_end_to_end(kafka_broker, compression):
 def test_kafka_producer_gc_cleanup():
     gc.collect()
     threads = threading.active_count()
-    producer = KafkaProducer(api_version='0.9') # set api_version explicitly to avoid auto-detection
+    producer = KafkaProducer(api_version=(2, 1)) # set api_version explicitly to avoid auto-detection
     assert threading.active_count() == threads + 1
     del(producer)
     gc.collect()
