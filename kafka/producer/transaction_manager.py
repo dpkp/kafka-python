@@ -498,7 +498,15 @@ class TransactionalRequestResult(object):
 
     @property
     def succeeded(self):
-        return self._error is None and self._latch.is_set()
+        return self._latch.is_set() and self._error is None
+
+    @property
+    def failed(self):
+        return self._latch.is_set() and self._error is not None
+
+    @property
+    def exception(self):
+        return self._error
 
 
 @six.add_metaclass(abc.ABCMeta)

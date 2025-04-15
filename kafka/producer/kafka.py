@@ -645,8 +645,11 @@ class KafkaProducer(object):
              messages issued by the producer.
 
         Note that this method will raise KafkaTimeoutError if the transactional state cannot
-        be initialized before expiration of `max_block_ms`. It is safe to retry, but once the
-        transactional state has been successfully initialized, this method should no longer be used.
+        be initialized before expiration of `max_block_ms`.
+
+        Retrying after a KafkaTimeoutError will continue to wait for the prior request to succeed or fail.
+        Retrying after any other exception will start a new initialization attempt.
+        Retrying after a successful initialization will do nothing.
 
         Raises:
             IllegalStateError: if no transactional_id has been configured
@@ -661,10 +664,12 @@ class KafkaProducer(object):
             self._init_transactions_result = self._transaction_manager.initialize_transactions()
             self._sender.wakeup()
 
-        if self._init_transactions_result.wait(timeout_ms=self.config['max_block_ms']):
-            self._init_transactions_result = None
-        else:
-            raise Errors.KafkaTimeoutError("Timeout expired while initializing transactional state in %s ms." % (self.config['max_block_ms'],))
+        try:
+            if not self._init_transactions_result.wait(timeout_ms=self.config['max_block_ms']):
+                raise Errors.KafkaTimeoutError("Timeout expired while initializing transactional state in %s ms." % (self.config['max_block_ms'],))
+        finally:
+            if self._init_transactions_result.failed:
+                self._init_transactions_result = None
 
     def begin_transaction(self):
         """ Should be called before the start of each new transaction.
