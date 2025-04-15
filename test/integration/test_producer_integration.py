@@ -138,9 +138,38 @@ def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
 def test_idempotent_producer(kafka_broker):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
-    producer = KafkaProducer(bootstrap_servers=connect_str, enable_idempotence=True)
-    try:
+    with producer_factory(bootstrap_servers=connect_str, enable_idempotence=True) as producer:
         for _ in range(10):
-            producer.send('foo', value=b'idempotent_msg').get(timeout=1)
-    finally:
-        producer.close()
+            producer.send('idempotent_test_topic', value=b'idempotent_msg').get(timeout=1)
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_transactional_producer(kafka_broker):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
+        producer.init_transactions()
+        producer.begin_transaction()
+        producer.send('transactional_test_topic', partition=0, value=b'msg1').get()
+        producer.send('transactional_test_topic', partition=0, value=b'msg2').get()
+        producer.abort_transaction()
+        producer.begin_transaction()
+        producer.send('transactional_test_topic', partition=0, value=b'msg3').get()
+        producer.send('transactional_test_topic', partition=0, value=b'msg4').get()
+        producer.commit_transaction()
+
+    messages = set()
+    consumer_opts = {
+        'bootstrap_servers': connect_str,
+        'group_id': None,
+        'consumer_timeout_ms': 10000,
+        'auto_offset_reset': 'earliest',
+        'isolation_level': 'read_committed',
+    }
+    with consumer_factory(**consumer_opts) as consumer:
+        consumer.assign([TopicPartition('transactional_test_topic', 0)])
+        for msg in consumer:
+            assert msg.value in {b'msg3', b'msg4'}
+            messages.add(msg.value)
+            if messages == {b'msg3', b'msg4'}:
+                break
+    assert messages == {b'msg3', b'msg4'}
