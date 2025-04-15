@@ -19,23 +19,6 @@ def time_keeper():
     return TimeKeeper()
 
 
-@pytest.fixture
-def config():
-    return MetricConfig()
-
-
-@pytest.fixture
-def reporter():
-    return DictReporter()
-
-
-@pytest.fixture
-def metrics(request, config, reporter):
-    metrics = Metrics(config, [reporter], enable_expiration=True)
-    yield metrics
-    metrics.close()
-
-
 def test_MetricName():
     # The Java test only cover the differences between the deprecated
     # constructors, so I'm skipping them but doing some other basic testing.
@@ -82,8 +65,9 @@ def test_MetricName():
     assert name.tags == tags
 
 
-def test_simple_stats(mocker, time_keeper, config, metrics):
+def test_simple_stats(mocker, time_keeper, metrics):
     mocker.patch('time.time', side_effect=time_keeper.time)
+    config = metrics._config
 
     measurable = ConstantMeasurable()
 
