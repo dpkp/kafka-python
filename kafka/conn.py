@@ -934,7 +934,8 @@ class BrokerConnection(object):
             if self.state is ConnectionStates.DISCONNECTED:
                 return
             log.log(logging.ERROR if error else logging.INFO, '%s: Closing connection. %s', self, error or '')
-            self._update_reconnect_backoff()
+            if error:
+                self._update_reconnect_backoff()
             self._api_versions_future = None
             self._sasl_auth_future = None
             self._init_sasl_mechanism()
