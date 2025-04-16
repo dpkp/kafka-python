@@ -141,7 +141,7 @@ class TransactionManager(object):
             self._transition_to(TransactionState.INITIALIZING)
             self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
             self._sequence_numbers.clear()
-            handler = InitProducerIdHandler(self, self.transactional_id, self.transaction_timeout_ms)
+            handler = InitProducerIdHandler(self, self.transaction_timeout_ms)
             self._enqueue_request(handler)
             return handler.result
 
@@ -172,7 +172,7 @@ class TransactionManager(object):
     def _begin_completing_transaction(self, committed):
         if self._new_partitions_in_transaction:
             self._enqueue_request(self._add_partitions_to_transaction_handler())
-        handler = EndTxnHandler(self, self.transactional_id, self.producer_id_and_epoch, committed)
+        handler = EndTxnHandler(self, committed)
         self._enqueue_request(handler)
         return handler.result
 
@@ -184,7 +184,7 @@ class TransactionManager(object):
                 raise Errors.KafkaError("Cannot send offsets to transaction because the producer is not in an active transaction")
 
             log.debug("Begin adding offsets %s for consumer group %s to transaction", offsets, consumer_group_id)
-            handler = AddOffsetsToTxnHandler(self, self.transactional_id, self.producer_id_and_epoch, consumer_group_id, offsets)
+            handler = AddOffsetsToTxnHandler(self, consumer_group_id, offsets)
             self._enqueue_request(handler)
             return handler.result
 
@@ -492,7 +492,7 @@ class TransactionManager(object):
         with self._lock:
             self._pending_partitions_in_transaction.update(self._new_partitions_in_transaction)
             self._new_partitions_in_transaction.clear()
-            return AddPartitionsToTxnHandler(self, self.transactional_id, self.producer_id_and_epoch, self._pending_partitions_in_transaction)
+            return AddPartitionsToTxnHandler(self, self._pending_partitions_in_transaction)
 
 
 class TransactionalRequestResult(object):
@@ -536,6 +536,18 @@ class TxnRequestHandler(object):
         self.request = None
         self._result = result or TransactionalRequestResult()
         self._is_retry = False
+
+    @property
+    def transactional_id(self):
+        return self.transaction_manager.transactional_id
+
+    @property
+    def producer_id(self):
+        return self.transaction_manager.producer_id_and_epoch.producer_id
+
+    @property
+    def producer_epoch(self):
+        return self.transaction_manager.producer_id_and_epoch.epoch
 
     def fatal_error(self, exc):
         self.transaction_manager._transition_to_fatal_error(exc)
@@ -604,16 +616,15 @@ class TxnRequestHandler(object):
 
 
 class InitProducerIdHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transactional_id, transaction_timeout_ms):
+    def __init__(self, transaction_manager, transaction_timeout_ms):
         super(InitProducerIdHandler, self).__init__(transaction_manager)
 
-        self.transactional_id = transactional_id
         if transaction_manager._api_version >= (2, 0):
             version = 1
         else:
             version = 0
         self.request = InitProducerIdRequest[version](
-            transactional_id=transactional_id,
+            transactional_id=self.transactional_id,
             transaction_timeout_ms=transaction_timeout_ms)
 
     @property
@@ -638,10 +649,9 @@ class InitProducerIdHandler(TxnRequestHandler):
             self.fatal_error(Errors.KafkaError("Unexpected error in InitProducerIdResponse: %s" % (error())))
 
 class AddPartitionsToTxnHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transactional_id, producer_id_and_epoch, topic_partitions):
+    def __init__(self, transaction_manager, topic_partitions):
         super(AddPartitionsToTxnHandler, self).__init__(transaction_manager)
 
-        self.transactional_id = transactional_id
         if transaction_manager._api_version >= (2, 7):
             version = 2
         elif transaction_manager._api_version >= (2, 0):
@@ -652,9 +662,9 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         for tp in topic_partitions:
             topic_data[tp.topic].append(tp.partition)
         self.request = AddPartitionsToTxnRequest[version](
-            transactional_id=transactional_id,
-            producer_id=producer_id_and_epoch.producer_id,
-            producer_epoch=producer_id_and_epoch.epoch,
+            transactional_id=self.transactional_id,
+            producer_id=self.producer_id,
+            producer_epoch=self.producer_epoch,
             topics=list(topic_data.items()))
 
     @property
@@ -790,10 +800,9 @@ class FindCoordinatorHandler(TxnRequestHandler):
 
 
 class EndTxnHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transactional_id, producer_id_and_epoch, committed):
+    def __init__(self, transaction_manager, committed):
         super(EndTxnHandler, self).__init__(transaction_manager)
 
-        self.transactional_id = transactional_id
         if self.transaction_manager._api_version >= (2, 7):
             version = 2
         elif self.transaction_manager._api_version >= (2, 0):
@@ -801,9 +810,9 @@ class EndTxnHandler(TxnRequestHandler):
         else:
             version = 0
         self.request = EndTxnRequest[version](
-            transactional_id=transactional_id,
-            producer_id=producer_id_and_epoch.producer_id,
-            producer_epoch=producer_id_and_epoch.epoch,
+            transactional_id=self.transactional_id,
+            producer_id=self.producer_id,
+            producer_epoch=self.producer_epoch,
             committed=committed)
 
     @property
@@ -832,11 +841,9 @@ class EndTxnHandler(TxnRequestHandler):
 
 
 class AddOffsetsToTxnHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transactional_id, producer_id_and_epoch, consumer_group_id, offsets):
+    def __init__(self, transaction_manager, consumer_group_id, offsets):
         super(AddOffsetsToTxnHandler, self).__init__(transaction_manager)
 
-        self.transactional_id = transactional_id
-        self.producer_id_and_epoch = producer_id_and_epoch
         self.consumer_group_id = consumer_group_id
         self.offsets = offsets
         if self.transaction_manager._api_version >= (2, 7):
@@ -846,9 +853,9 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
         else:
             version = 0
         self.request = AddOffsetsToTxnRequest[version](
-            transactional_id=transactional_id,
-            producer_id=producer_id_and_epoch.producer_id,
-            producer_epoch=producer_id_and_epoch.epoch,
+            transactional_id=self.transactional_id,
+            producer_id=self.producer_id,
+            producer_epoch=self.producer_epoch,
             group_id=consumer_group_id)
 
     @property
@@ -864,8 +871,8 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             # note the result is not completed until the TxnOffsetCommit returns
             for tp, offset in six.iteritems(self.offsets):
                 self.transaction_manager._pending_txn_offset_commits[tp] = offset
-            handler = TxnOffsetCommitHandler(self.transaction_manager, self.transactional_id, self.producer_id_and_epoch,
-                                             self.consumer_group_id, self.transaction_manager._pending_txn_offset_commits, self._result)
+            handler = TxnOffsetCommitHandler(self.transaction_manager, self.consumer_group_id,
+                                             self.transaction_manager._pending_txn_offset_commits, self._result)
             self.transaction_manager._enqueue_request(handler)
             self.transaction_manager._transaction_started = True
         elif error in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
@@ -884,12 +891,10 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
 
 
 class TxnOffsetCommitHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transactional_id, producer_id_and_epoch, consumer_group_id, offsets, result):
+    def __init__(self, transaction_manager, consumer_group_id, offsets, result):
         super(TxnOffsetCommitHandler, self).__init__(transaction_manager, result=result)
 
-        self.transactional_id = transactional_id
         self.consumer_group_id = consumer_group_id
-        self.producer_id_and_epoch = producer_id_and_epoch
         self.offsets = offsets
         self.request = self._build_request()
 
@@ -912,8 +917,8 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
         return TxnOffsetCommitRequest[version](
             transactional_id=self.transactional_id,
             group_id=self.consumer_group_id,
-            producer_id=self.producer_id_and_epoch.producer_id,
-            producer_epoch=self.producer_id_and_epoch.epoch,
+            producer_id=self.producer_id,
+            producer_epoch=self.producer_epoch,
             topics=list(topic_data.items()))
 
     @property
