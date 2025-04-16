@@ -6,7 +6,10 @@ import io
 import time
 
 import pytest
-from unittest.mock import call
+try:
+    from unittest.mock import call
+except ImportError:
+    from mock import call
 
 from kafka.vendor import six
 
