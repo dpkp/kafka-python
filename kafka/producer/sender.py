@@ -319,6 +319,7 @@ class Sender(threading.Thread):
                 error_type = Errors.for_code(response.error_code)
                 if error_type is Errors.NoError:
                     self._transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(response.producer_id, response.producer_epoch))
+                    break
                 elif getattr(error_type, 'retriable', False):
                     log.debug("Retriable error from InitProducerId response: %s", error_type.__name__)
                     if getattr(error_type, 'invalid_metadata', False):
