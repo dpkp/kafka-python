@@ -187,7 +187,12 @@ def test_transactional_producer_messages(kafka_broker):
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
 def test_transactional_producer_offsets(kafka_broker):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
-    offsets = {TopicPartition('transactional_test_topic', 0): OffsetAndMetadata(0, 'metadata', 0)}
+    # Setting leader_epoch only supported in 2.1+
+    if env_kafka_version() >= (2, 1):
+        leader_epoch = 0
+    else:
+        leader_epoch = -1
+    offsets = {TopicPartition('transactional_test_topic', 0): OffsetAndMetadata(0, 'metadata', leader_epoch)}
     with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
         producer.init_transactions()
         producer.begin_transaction()
