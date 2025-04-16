@@ -686,6 +686,36 @@ class KafkaProducer(object):
             raise Errors.IllegalStateError("Cannot use transactional methods without enabling transactions")
         self._transaction_manager.begin_transaction()
 
+    def send_offsets_to_transaction(self, offsets, consumer_group_id):
+        """
+        Sends a list of consumed offsets to the consumer group coordinator, and also marks
+        those offsets as part of the current transaction. These offsets will be considered
+        consumed only if the transaction is committed successfully.
+
+        This method should be used when you need to batch consumed and produced messages
+        together, typically in a consume-transform-produce pattern.
+
+        Arguments:
+            offsets ({TopicPartition: OffsetAndMetadata}): map of topic-partition -> offsets to commit
+                as part of current transaction.
+            consumer_group_id (str): Name of consumer group for offsets commit.
+
+        Raises:
+            IllegalStateError: if no transactional_id, or transaction has not been started.
+            ProducerFencedError: fatal error indicating another producer with the same transactional_id is active.
+            UnsupportedVersionError: fatal error indicating the broker does not support transactions (i.e. if < 0.11).
+            UnsupportedForMessageFormatError: fatal error indicating the message format used for the offsets
+                topic on the broker does not support transactions.
+            AuthorizationError: fatal error indicating that the configured transactional_id is not authorized.
+            KafkaErro:r if the producer has encountered a previous fatal or abortable error, or for any
+                other unexpected error
+        """
+        if not self._transaction_manager:
+            raise Errors.IllegalStateError("Cannot use transactional methods without enabling transactions")
+        result = self._transaction_manager.send_offsets_to_transaction(offsets, consumer_group_id)
+        self._sender.wakeup()
+        result.wait()
+
     def commit_transaction(self):
         """ Commits the ongoing transaction.
 

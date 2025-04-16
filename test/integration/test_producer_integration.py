@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from kafka import KafkaConsumer, KafkaProducer, TopicPartition
+from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer, TopicPartition, OffsetAndMetadata
 from test.testutil import env_kafka_version, random_string, maybe_skip_unsupported_compression
 
 
@@ -26,6 +26,15 @@ def consumer_factory(**kwargs):
         yield consumer
     finally:
         consumer.close(timeout_ms=100)
+
+
+@contextmanager
+def admin_factory(**kwargs):
+    admin = KafkaAdminClient(**kwargs)
+    try:
+        yield admin
+    finally:
+        admin.close()
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
@@ -144,7 +153,7 @@ def test_idempotent_producer(kafka_broker):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
-def test_transactional_producer(kafka_broker):
+def test_transactional_producer_messages(kafka_broker):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
         producer.init_transactions()
@@ -173,3 +182,26 @@ def test_transactional_producer(kafka_broker):
             if messages == {b'msg3', b'msg4'}:
                 break
     assert messages == {b'msg3', b'msg4'}
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_transactional_producer_offsets(kafka_broker):
+    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+    # Setting leader_epoch only supported in 2.1+
+    if env_kafka_version() >= (2, 1):
+        leader_epoch = 0
+    else:
+        leader_epoch = -1
+    offsets = {TopicPartition('transactional_test_topic', 0): OffsetAndMetadata(0, 'metadata', leader_epoch)}
+    with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
+        producer.init_transactions()
+        producer.begin_transaction()
+        producer.send_offsets_to_transaction(offsets, 'txn-test-group')
+        producer.commit_transaction()
+
+        producer.begin_transaction()
+        producer.send_offsets_to_transaction({TopicPartition('transactional_test_topic', 1): OffsetAndMetadata(1, 'bad', 1)}, 'txn-test-group')
+        producer.abort_transaction()
+
+    with admin_factory(bootstrap_servers=connect_str) as admin:
+        assert admin.list_consumer_group_offsets('txn-test-group') == offsets
