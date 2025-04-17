@@ -760,7 +760,8 @@ class KafkaConsumer(six.Iterator):
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
         position = self._subscription.assignment[partition].position
         if position is None:
-            self._update_fetch_positions([partition], timeout_ms=timeout_ms)
+            # batch update fetch positions for any partitions without a valid position
+            self._update_fetch_positions(self._subscription.assigned_partitions(), timeout_ms=timeout_ms)
             position = self._subscription.assignment[partition].position
         return position.offset if position else None
 

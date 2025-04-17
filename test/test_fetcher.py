@@ -109,38 +109,38 @@ def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
 
 
 def test_update_fetch_positions(fetcher, topic, mocker):
-    mocker.patch.object(fetcher, '_reset_offset')
+    mocker.patch.object(fetcher, '_reset_offsets')
     partition = TopicPartition(topic, 0)
 
     # unassigned partition
     fetcher.update_fetch_positions([TopicPartition('fizzbuzz', 0)])
-    assert fetcher._reset_offset.call_count == 0
+    assert fetcher._reset_offsets.call_count == 0
 
     # fetchable partition (has offset, not paused)
     fetcher.update_fetch_positions([partition])
-    assert fetcher._reset_offset.call_count == 0
+    assert fetcher._reset_offsets.call_count == 0
 
     # partition needs reset, no committed offset
     fetcher._subscriptions.need_offset_reset(partition)
     fetcher._subscriptions.assignment[partition].awaiting_reset = False
     fetcher.update_fetch_positions([partition])
-    fetcher._reset_offset.assert_called_with(partition, timeout_ms=None)
+    fetcher._reset_offsets.assert_called_with(set([partition]), timeout_ms=None)
     assert fetcher._subscriptions.assignment[partition].awaiting_reset is True
     fetcher.update_fetch_positions([partition])
-    fetcher._reset_offset.assert_called_with(partition, timeout_ms=None)
+    fetcher._reset_offsets.assert_called_with(set([partition]), timeout_ms=None)
 
     # partition needs reset, has committed offset
-    fetcher._reset_offset.reset_mock()
+    fetcher._reset_offsets.reset_mock()
     fetcher._subscriptions.need_offset_reset(partition)
     fetcher._subscriptions.assignment[partition].awaiting_reset = False
     fetcher._subscriptions.assignment[partition].committed = OffsetAndMetadata(123, '', -1)
     mocker.patch.object(fetcher._subscriptions, 'seek')
     fetcher.update_fetch_positions([partition])
-    assert fetcher._reset_offset.call_count == 0
+    assert fetcher._reset_offsets.call_count == 0
     fetcher._subscriptions.seek.assert_called_with(partition, 123)
 
 
-def test__reset_offset(fetcher, mocker):
+def test__reset_offsets(fetcher, mocker):
     tp = TopicPartition("topic", 0)
     fetcher._subscriptions.subscribe(topics=["topic"])
     fetcher._subscriptions.assign_from_subscribed([tp])
@@ -148,7 +148,7 @@ def test__reset_offset(fetcher, mocker):
     mocked = mocker.patch.object(fetcher, '_retrieve_offsets')
 
     mocked.return_value = {tp: OffsetAndTimestamp(1001, None, -1)}
-    fetcher._reset_offset(tp)
+    fetcher._reset_offsets([tp])
     assert not fetcher._subscriptions.assignment[tp].awaiting_reset
     assert fetcher._subscriptions.assignment[tp].position.offset == 1001
 
