@@ -194,13 +194,7 @@ class Fetcher(six.Iterator):
         inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout updating fetch positions')
         # reset the fetch position to the committed position
         for tp in partitions:
-            if not self._subscriptions.is_assigned(tp):
-                log.warning("partition %s is not assigned - skipping offset"
-                            " update", tp)
-                continue
-            elif self._subscriptions.is_fetchable(tp):
-                log.warning("partition %s is still fetchable -- skipping offset"
-                            " update", tp)
+            if not self._subscriptions.is_assigned(tp) or self._subscriptions.has_valid_position(tp):
                 continue
 
             if self._subscriptions.is_offset_reset_needed(tp):

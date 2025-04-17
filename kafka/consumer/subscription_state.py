@@ -351,9 +351,11 @@ class SubscriptionState(object):
     def is_offset_reset_needed(self, partition):
         return self.assignment[partition].awaiting_reset
 
-    def has_all_fetch_positions(self):
-        for state in self.assignment.values():
-            if not state.has_valid_position:
+    def has_all_fetch_positions(self, partitions=None):
+        if partitions is None:
+            partitions = self.assigned_partitions()
+        for tp in partitions:
+            if not self.has_valid_position(tp):
                 return False
         return True
 
@@ -363,6 +365,9 @@ class SubscriptionState(object):
             if not state.has_valid_position:
                 missing.add(partition)
         return missing
+
+    def has_valid_position(self, partition):
+        return partition in self.assignment and self.assignment[partition].has_valid_position
 
     def is_assigned(self, partition):
         return partition in self.assignment
@@ -386,6 +391,9 @@ class SubscriptionState(object):
             except AttributeError:
                 state = self.assignment.pop(partition)
                 self.assignment[partition] = state
+
+    def position(self, partition):
+        return self.assignment[partition].position
 
 
 class TopicPartitionState(object):
