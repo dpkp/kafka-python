@@ -393,6 +393,7 @@ class Fetcher(six.Iterator):
         except Exception as e:
             if not drained:
                 raise e
+            # To be thrown in the next call of this method
             self._next_in_line_exception_metadata = ExceptionMetadata(fetched_partition, fetched_offset, e)
         return dict(drained), bool(self._completed_fetches)
 
@@ -910,6 +911,7 @@ class Fetcher(six.Iterator):
                 self._maybe_skip_record,
                 self._unpack_records(tp, records, key_deserializer, value_deserializer))
             self.on_drain = on_drain
+            self._next_inline_exception = None
 
         def _maybe_skip_record(self, record):
             # When fetching an offset that is in the middle of a
@@ -933,12 +935,28 @@ class Fetcher(six.Iterator):
         def drain(self):
             if self.record_iterator is not None:
                 self.record_iterator = None
+                self._next_inline_exception = None
                 if self.metric_aggregator:
                     self.metric_aggregator.record(self.topic_partition, self.bytes_read, self.records_read)
                 self.on_drain(self)
 
+        def _maybe_raise_next_inline_exception(self):
+            if self._next_inline_exception:
+                exc, self._next_inline_exception = self._next_inline_exception, None
+                raise exc
+
         def take(self, n=None):
-            return list(itertools.islice(self.record_iterator, 0, n))
+            self._maybe_raise_next_inline_exception()
+            records = []
+            try:
+                # Note that records.extend(iter) will extend partially when exception raised mid-stream
+                records.extend(itertools.islice(self.record_iterator, 0, n))
+            except Exception as e:
+                if not records:
+                    raise e
+                # To be thrown in the next call of this method
+                self._next_inline_exception = e
+            return records
 
         def _unpack_records(self, tp, records, key_deserializer, value_deserializer):
             try:
