@@ -658,3 +658,84 @@ def test_update_fetch_positions_paused_with_valid(subscription_state, client, mo
     assert not subscription_state.is_fetchable(tp) # because tp is paused
     assert subscription_state.has_valid_position(tp)
     assert subscription_state.position(tp) == OffsetAndMetadata(10, '', -1)
+
+
+def test_fetch_position_after_exception(client, mocker):
+    subscription_state = SubscriptionState(offset_reset_strategy='NONE')
+    fetcher = Fetcher(client, subscription_state)
+
+    tp0 = TopicPartition('foo', 0)
+    tp1 = TopicPartition('foo', 1)
+    # verify the advancement in the next fetch offset equals to the number of fetched records when
+    # some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
+    subscription_state.assign_from_user([tp0, tp1])
+    subscription_state.seek(tp0, 1)
+    subscription_state.seek(tp1, 1)
+
+    assert len(fetcher._fetchable_partitions()) == 2
+
+    empty_records = _build_record_batch([], offset=1)
+    three_records = _build_record_batch([(None, b'msg', None) for _ in range(3)], offset=1)
+    fetcher._completed_fetches.append(
+        CompletedFetch(tp1, 1, 0, [0, 100, three_records], mocker.MagicMock()))
+    fetcher._completed_fetches.append(
+        CompletedFetch(tp0, 1, 0, [1, 100, empty_records], mocker.MagicMock()))
+    records, partial = fetcher.fetched_records()
+
+    assert len(records) == 1
+    assert tp1 in records
+    assert tp0 not in records
+    assert len(records[tp1]) == 3
+    assert subscription_state.position(tp1).offset == 4
+
+    exceptions = []
+    try:
+        records, partial = fetcher.fetched_records()
+    except Errors.OffsetOutOfRangeError as e:
+        exceptions.append(e)
+
+    assert len(exceptions) == 1
+    assert isinstance(exceptions[0], Errors.OffsetOutOfRangeError)
+    assert exceptions[0].args == ({tp0: 1},)
+
+
+def test_seek_before_exception(client, mocker):
+    subscription_state = SubscriptionState(offset_reset_strategy='NONE')
+    fetcher = Fetcher(client, subscription_state, max_poll_records=2)
+
+    tp0 = TopicPartition('foo', 0)
+    tp1 = TopicPartition('foo', 1)
+    subscription_state.assign_from_user([tp0])
+    subscription_state.seek(tp0, 1)
+
+    assert len(fetcher._fetchable_partitions()) == 1
+
+    three_records = _build_record_batch([(None, b'msg', None) for _ in range(3)], offset=1)
+    fetcher._completed_fetches.append(
+        CompletedFetch(tp0, 1, 0, [0, 100, three_records], mocker.MagicMock()))
+    records, partial = fetcher.fetched_records()
+
+    assert len(records) == 1
+    assert tp0 in records
+    assert len(records[tp0]) == 2
+    assert subscription_state.position(tp0).offset == 3
+
+    subscription_state.assign_from_user([tp0, tp1])
+    subscription_state.seek(tp1, 1)
+
+    assert len(fetcher._fetchable_partitions()) == 1
+
+    empty_records = _build_record_batch([], offset=1)
+    fetcher._completed_fetches.append(
+        CompletedFetch(tp1, 1, 0, [1, 100, empty_records], mocker.MagicMock()))
+    records, partial = fetcher.fetched_records()
+
+    assert len(records) == 1
+    assert tp0 in records
+    assert len(records[tp0]) == 1
+    assert subscription_state.position(tp0).offset == 4
+
+    subscription_state.seek(tp1, 10)
+    # Should not throw OffsetOutOfRangeError after the seek
+    records, partial = fetcher.fetched_records()
+    assert len(records) == 0

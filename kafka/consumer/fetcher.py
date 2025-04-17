@@ -43,6 +43,10 @@ CompletedFetch = collections.namedtuple("CompletedFetch",
      "partition_data", "metric_aggregator"])
 
 
+ExceptionMetadata = collections.namedtuple("ExceptionMetadata",
+    ["partition", "fetched_offset", "exception"])
+
+
 class NoOffsetForPartitionError(Errors.KafkaError):
     pass
 
@@ -131,6 +135,7 @@ class Fetcher(six.Iterator):
         self._isolation_level = ISOLATION_LEVEL_CONFIG[self.config['isolation_level']]
         self._session_handlers = {}
         self._nodes_with_pending_fetch_requests = set()
+        self._next_in_line_exception_metadata = None
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -356,20 +361,39 @@ class Fetcher(six.Iterator):
             max_records = self.config['max_poll_records']
         assert max_records > 0
 
+        if self._next_in_line_exception_metadata is not None:
+            exc_meta = self._next_in_line_exception_metadata
+            self._next_in_line_exception_metadata = None
+            tp = exc_meta.partition
+            if self._subscriptions.is_fetchable(tp) and self._subscriptions.position(tp).offset == exc_meta.fetched_offset:
+                raise exc_meta.exception
+
         drained = collections.defaultdict(list)
         records_remaining = max_records
+        # Needed to construct ExceptionMetadata if any exception is found when processing completed_fetch
+        fetched_partition = None
+        fetched_offset = -1
 
-        while records_remaining > 0:
-            if not self._next_partition_records:
-                if not self._completed_fetches:
-                    break
-                completion = self._completed_fetches.popleft()
-                self._next_partition_records = self._parse_fetched_data(completion)
-            else:
-                records_remaining -= self._append(drained,
-                                                  self._next_partition_records,
-                                                  records_remaining,
-                                                  update_offsets)
+        try:
+            while records_remaining > 0:
+                if not self._next_partition_records:
+                    if not self._completed_fetches:
+                        break
+                    completion = self._completed_fetches.popleft()
+                    fetched_partition = completion.topic_partition
+                    fetched_offset = completion.fetched_offset
+                    self._next_partition_records = self._parse_fetched_data(completion)
+                else:
+                    fetched_partition = self._next_partition_records.topic_partition
+                    fetched_offset = self._next_partition_records.next_fetch_offset
+                    records_remaining -= self._append(drained,
+                                                      self._next_partition_records,
+                                                      records_remaining,
+                                                      update_offsets)
+        except Exception as e:
+            if not drained:
+                raise e
+            self._next_in_line_exception_metadata = ExceptionMetadata(fetched_partition, fetched_offset, e)
         return dict(drained), bool(self._completed_fetches)
 
     def _append(self, drained, part, max_records, update_offsets):
@@ -860,6 +884,7 @@ class Fetcher(six.Iterator):
     def close(self):
         if self._next_partition_records is not None:
             self._next_partition_records.drain()
+        self._next_in_line_exception_metadata = None
 
     class PartitionRecords(object):
         def __init__(self, fetch_offset, tp, records,
