@@ -409,9 +409,9 @@ class KafkaProducer(object):
             else:
                 self.config['api_version'] = tuple(map(int, deprecated.split('.')))
             log.warning('%s: use api_version=%s [tuple] -- "%s" as str is deprecated',
-                        self, str(self.config['api_version']), deprecated)
+                        str(self), str(self.config['api_version']), deprecated)
 
-        log.debug("%s: Starting Kafka producer", self)
+        log.debug("%s: Starting Kafka producer", str(self))
 
         # Configure metrics
         if self.config['metrics_enabled']:
@@ -467,18 +467,18 @@ class KafkaProducer(object):
                 metadata=self._metadata,
             )
             if self._transaction_manager.is_transactional():
-                log.info("%s: Instantiated a transactional producer.", self)
+                log.info("%s: Instantiated a transactional producer.", str(self))
             else:
-                log.info("%s: Instantiated an idempotent producer.", self)
+                log.info("%s: Instantiated an idempotent producer.", str(self))
 
             if 'retries' not in user_provided_configs:
-                log.info("%s: Overriding the default 'retries' config to 3 since the idempotent producer is enabled.", self)
+                log.info("%s: Overriding the default 'retries' config to 3 since the idempotent producer is enabled.", str(self))
                 self.config['retries'] = 3
             elif self.config['retries'] == 0:
                 raise Errors.KafkaConfigurationError("Must set 'retries' to non-zero when using the idempotent producer.")
 
             if 'max_in_flight_requests_per_connection' not in user_provided_configs:
-                log.info("%s: Overriding the default 'max_in_flight_requests_per_connection' to 1 since idempontence is enabled.", self)
+                log.info("%s: Overriding the default 'max_in_flight_requests_per_connection' to 1 since idempontence is enabled.", str(self))
                 self.config['max_in_flight_requests_per_connection'] = 1
             elif self.config['max_in_flight_requests_per_connection'] != 1:
                 raise Errors.KafkaConfigurationError("Must set 'max_in_flight_requests_per_connection' to 1 in order"
@@ -486,7 +486,7 @@ class KafkaProducer(object):
                                                      " Otherwise we cannot guarantee idempotence.")
 
             if 'acks' not in user_provided_configs:
-                log.info("%s: Overriding the default 'acks' config to 'all' since idempotence is enabled", self)
+                log.info("%s: Overriding the default 'acks' config to 'all' since idempotence is enabled", str(self))
                 self.config['acks'] = -1
             elif self.config['acks'] != -1:
                 raise Errors.KafkaConfigurationError("Must set 'acks' config to 'all' in order to use the idempotent"
@@ -510,7 +510,7 @@ class KafkaProducer(object):
 
         self._cleanup = self._cleanup_factory()
         atexit.register(self._cleanup)
-        log.debug("%s: Kafka producer started", self)
+        log.debug("%s: Kafka producer started", str(self))
 
     def bootstrap_connected(self):
         """Return True if the bootstrap is connected."""
@@ -565,7 +565,7 @@ class KafkaProducer(object):
         self._unregister_cleanup()
 
         if not hasattr(self, '_closed') or self._closed:
-            log.info('%s: Kafka producer closed', self)
+            log.info('%s: Kafka producer closed', str(self))
             return
         if timeout is None:
             # threading.TIMEOUT_MAX is available in Python3.3+
@@ -575,7 +575,7 @@ class KafkaProducer(object):
         else:
             assert timeout >= 0
 
-        log.info("%s: Closing the Kafka producer with %s secs timeout.", self, timeout)
+        log.info("%s: Closing the Kafka producer with %s secs timeout.", str(self), timeout)
         self.flush(timeout)
         invoked_from_callback = bool(threading.current_thread() is self._sender)
         if timeout > 0:
@@ -584,7 +584,7 @@ class KafkaProducer(object):
                             " prevent useless blocking due to self-join. This"
                             " means you have incorrectly invoked close with a"
                             " non-zero timeout from the producer call-back.",
-                            self, timeout)
+                            str(self), timeout)
             else:
                 # Try to close gracefully.
                 if self._sender is not None:
@@ -594,7 +594,7 @@ class KafkaProducer(object):
         if self._sender is not None and self._sender.is_alive():
             log.info("%s: Proceeding to force close the producer since pending"
                      " requests could not be completed within timeout %s.",
-                     self, timeout)
+                     str(self), timeout)
             self._sender.force_close()
 
         if self._metrics:
@@ -608,7 +608,7 @@ class KafkaProducer(object):
         except AttributeError:
             pass
         self._closed = True
-        log.debug("%s: The Kafka producer has closed.", self)
+        log.debug("%s: The Kafka producer has closed.", str(self))
 
     def partitions_for(self, topic):
         """Returns set of all known partitions for the topic."""
@@ -817,7 +817,7 @@ class KafkaProducer(object):
             self._ensure_valid_record_size(message_size)
 
             tp = TopicPartition(topic, partition)
-            log.debug("%s: Sending (key=%r value=%r headers=%r) to %s", self, key, value, headers, tp)
+            log.debug("%s: Sending (key=%r value=%r headers=%r) to %s", str(self), key, value, headers, tp)
 
             if self._transaction_manager and self._transaction_manager.is_transactional():
                 self._transaction_manager.maybe_add_partition_to_transaction(tp)
@@ -827,7 +827,7 @@ class KafkaProducer(object):
             future, batch_is_full, new_batch_created = result
             if batch_is_full or new_batch_created:
                 log.debug("%s: Waking up the sender since %s is either full or"
-                          " getting a new batch", self, tp)
+                          " getting a new batch", str(self), tp)
                 self._sender.wakeup()
 
             return future
@@ -835,7 +835,7 @@ class KafkaProducer(object):
             # for API exceptions return them in the future,
             # for other exceptions raise directly
         except Errors.BrokerResponseError as e:
-            log.error("%s: Exception occurred during message send: %s", self, e)
+            log.error("%s: Exception occurred during message send: %s", str(self), e)
             return FutureRecordMetadata(
                 FutureProduceResult(TopicPartition(topic, partition)),
                 -1, None, None,
@@ -866,7 +866,7 @@ class KafkaProducer(object):
             KafkaTimeoutError: failure to flush buffered records within the
                 provided timeout
         """
-        log.debug("%s: Flushing accumulated records in producer.", self)
+        log.debug("%s: Flushing accumulated records in producer.", str(self))
         self._accumulator.begin_flush()
         self._sender.wakeup()
         self._accumulator.await_flush_completion(timeout=timeout)
@@ -912,7 +912,7 @@ class KafkaProducer(object):
             if not metadata_event:
                 metadata_event = threading.Event()
 
-            log.debug("%s: Requesting metadata update for topic %s", self, topic)
+            log.debug("%s: Requesting metadata update for topic %s", str(self), topic)
 
             metadata_event.clear()
             future = self._metadata.request_update()
@@ -926,7 +926,7 @@ class KafkaProducer(object):
                 raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
                 elapsed = time.time() - begin
-                log.debug("%s: _wait_on_metadata woke after %s secs.", self, elapsed)
+                log.debug("%s: _wait_on_metadata woke after %s secs.", str(self), elapsed)
 
     def _serialize(self, f, topic, data):
         if not f:

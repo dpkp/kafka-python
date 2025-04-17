@@ -11,15 +11,11 @@ from kafka.cluster import ClusterMetadata
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
 
 
-@pytest.mark.skipif(platform.python_implementation() != 'CPython',
-                    reason='Test relies on CPython-specific gc policies')
-def test_kafka_producer_gc_cleanup():
-    gc.collect()
+def test_kafka_producer_thread_close():
     threads = threading.active_count()
     producer = KafkaProducer(api_version=(2, 1)) # set api_version explicitly to avoid auto-detection
     assert threading.active_count() == threads + 1
-    del(producer)
-    gc.collect()
+    producer.close()
     assert threading.active_count() == threads
 
 

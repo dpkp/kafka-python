@@ -62,17 +62,17 @@ class Sender(threading.Thread):
 
     def run(self):
         """The main run loop for the sender thread."""
-        log.debug("%s: Starting Kafka producer I/O thread.", self)
+        log.debug("%s: Starting Kafka producer I/O thread.", str(self))
 
         # main loop, runs until close is called
         while self._running:
             try:
                 self.run_once()
             except Exception:
-                log.exception("%s: Uncaught error in kafka producer I/O thread", self)
+                log.exception("%s: Uncaught error in kafka producer I/O thread", str(self))
 
         log.debug("%s: Beginning shutdown of Kafka producer I/O thread, sending"
-                  " remaining records.", self)
+                  " remaining records.", str(self))
 
         # okay we stopped accepting requests but there may still be
         # requests in the accumulator or waiting for acknowledgment,
@@ -83,7 +83,7 @@ class Sender(threading.Thread):
             try:
                 self.run_once()
             except Exception:
-                log.exception("%s: Uncaught error in kafka producer I/O thread", self)
+                log.exception("%s: Uncaught error in kafka producer I/O thread", str(self))
 
         if self._force_close:
             # We need to fail all the incomplete batches and wake up the
@@ -93,9 +93,9 @@ class Sender(threading.Thread):
         try:
             self._client.close()
         except Exception:
-            log.exception("%s: Failed to close network client", self)
+            log.exception("%s: Failed to close network client", str(self))
 
-        log.debug("%s: Shutdown of Kafka producer I/O thread has completed.", self)
+        log.debug("%s: Shutdown of Kafka producer I/O thread has completed.", str(self))
 
     def run_once(self):
         """Run a single iteration of sending."""
@@ -125,7 +125,7 @@ class Sender(threading.Thread):
 
             except Errors.SaslAuthenticationFailedError as e:
                 # This is already logged as error, but propagated here to perform any clean ups.
-                log.debug("%s: Authentication exception while processing transactional request: %s", self, e)
+                log.debug("%s: Authentication exception while processing transactional request: %s", str(self), e)
                 self._transaction_manager.authentication_failed(e)
 
         poll_timeout_ms = self._send_producer_data()
@@ -139,7 +139,7 @@ class Sender(threading.Thread):
         # if there are any partitions whose leaders are not known yet, force
         # metadata update
         if unknown_leaders_exist:
-            log.debug('%s: Unknown leaders exist, requesting metadata update', self)
+            log.debug('%s: Unknown leaders exist, requesting metadata update', str(self))
             self._metadata.request_update()
 
         # remove any nodes we aren't ready to send to
@@ -147,7 +147,7 @@ class Sender(threading.Thread):
         for node in list(ready_nodes):
             if not self._client.is_ready(node):
                 node_delay_ms = self._client.connection_delay(node)
-                log.debug('%s: Node %s not ready; delaying produce of accumulated batch (%f ms)', self, node, node_delay_ms)
+                log.debug('%s: Node %s not ready; delaying produce of accumulated batch (%f ms)', str(self), node, node_delay_ms)
                 self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
                 not_ready_timeout_ms = min(not_ready_timeout_ms, node_delay_ms)
@@ -166,7 +166,7 @@ class Sender(threading.Thread):
             self.config['request_timeout_ms'], self._metadata)
 
         if expired_batches:
-            log.debug("%s: Expired %s batches in accumulator", self, len(expired_batches))
+            log.debug("%s: Expired %s batches in accumulator", str(self), len(expired_batches))
 
         # Reset the producer_id if an expired batch has previously been sent to the broker.
         # See the documentation of `TransactionState.reset_producer_id` to understand why
@@ -200,8 +200,8 @@ class Sender(threading.Thread):
         # looping.
         poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout_ms)
         if ready_nodes:
-            log.debug("%s: Nodes with data ready to send: %s", self, ready_nodes) # trace
-            log.debug("%s: Created %d produce requests: %s", self, len(requests), requests) # trace
+            log.debug("%s: Nodes with data ready to send: %s", str(self), ready_nodes) # trace
+            log.debug("%s: Created %d produce requests: %s", str(self), len(requests), requests) # trace
             # if some partitions are already ready to be sent, the select time
             # would be 0; otherwise if some partition already has some data
             # accumulated but not ready yet, the select time will be the time
@@ -212,7 +212,7 @@ class Sender(threading.Thread):
 
         for node_id, request in six.iteritems(requests):
             batches = batches_by_node[node_id]
-            log.debug('%s: Sending Produce Request: %r', self, request)
+            log.debug('%s: Sending Produce Request: %r', str(self), request)
             (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
                      self._handle_produce_response, node_id, time.time(), batches)
@@ -235,7 +235,7 @@ class Sender(threading.Thread):
         if next_request_handler is None:
             return False
 
-        log.debug("%s: Sending transactional request %s", self, next_request_handler.request)
+        log.debug("%s: Sending transactional request %s", str(self), next_request_handler.request)
         while not self._force_close:
             target_node = None
             try:
@@ -262,7 +262,7 @@ class Sender(threading.Thread):
                     return True
 
             except Exception as e:
-                log.warn("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", self, e)
+                log.warn("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", str(self), e)
                 if next_request_handler.needs_coordinator():
                     self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
                     break
@@ -277,7 +277,7 @@ class Sender(threading.Thread):
 
     def _maybe_abort_batches(self, exc):
         if self._accumulator.has_incomplete:
-            log.error("%s: Aborting producer batches due to fatal error: %s", self, exc)
+            log.error("%s: Aborting producer batches due to fatal error: %s", str(self), exc)
             self._accumulator.abort_batches(exc)
 
     def initiate_close(self):
@@ -307,7 +307,7 @@ class Sender(threading.Thread):
                 node_id = self._client.least_loaded_node()
                 if node_id is None or not self._client.await_ready(node_id):
                     log.debug("%s, Could not find an available broker to send InitProducerIdRequest to." +
-                              " Will back off and try again.", self)
+                              " Will back off and try again.", str(self))
                     time.sleep(self._client.least_loaded_node_refresh_ms() / 1000)
                     continue
                 version = self._client.api_version(InitProducerIdRequest, max_version=1)
@@ -321,28 +321,28 @@ class Sender(threading.Thread):
                     self._transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(response.producer_id, response.producer_epoch))
                     break
                 elif getattr(error_type, 'retriable', False):
-                    log.debug("%s: Retriable error from InitProducerId response: %s", self, error_type.__name__)
+                    log.debug("%s: Retriable error from InitProducerId response: %s", str(self), error_type.__name__)
                     if getattr(error_type, 'invalid_metadata', False):
                         self._metadata.request_update()
                 else:
                     self._transaction_manager.transition_to_fatal_error(error_type())
                     break
             except Errors.KafkaConnectionError:
-                log.debug("%s: Broker %s disconnected while awaiting InitProducerId response", self, node_id)
+                log.debug("%s: Broker %s disconnected while awaiting InitProducerId response", str(self), node_id)
             except Errors.RequestTimedOutError:
-                log.debug("%s: InitProducerId request to node %s timed out", self, node_id)
-            log.debug("%s: Retry InitProducerIdRequest in %sms.", self, self.config['retry_backoff_ms'])
+                log.debug("%s: InitProducerId request to node %s timed out", str(self), node_id)
+            log.debug("%s: Retry InitProducerIdRequest in %sms.", str(self), self.config['retry_backoff_ms'])
             time.sleep(self.config['retry_backoff_ms'] / 1000)
 
     def _failed_produce(self, batches, node_id, error):
-        log.error("%s: Error sending produce request to node %d: %s", self, node_id, error) # trace
+        log.error("%s: Error sending produce request to node %d: %s", str(self), node_id, error) # trace
         for batch in batches:
             self._complete_batch(batch, error, -1)
 
     def _handle_produce_response(self, node_id, send_time, batches, response):
         """Handle a produce response."""
         # if we have a response, parse it
-        log.debug('%s: Parsing produce response: %r', self, response)
+        log.debug('%s: Parsing produce response: %r', str(self), response)
         if response:
             batches_by_partition = dict([(batch.topic_partition, batch)
                                          for batch in batches])
@@ -378,7 +378,7 @@ class Sender(threading.Thread):
                     self._transaction_manager.has_producer_id(batch.producer_id):
                 log.error("%s: The broker received an out of order sequence number for topic-partition %s"
                           " at offset %s. This indicates data loss on the broker, and should be investigated.",
-                          self, batch.topic_partition, base_offset)
+                          str(self), batch.topic_partition, base_offset)
 
                 # Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
                 # about the previously committed message. Note that this will discard the producer id and sequence
@@ -416,21 +416,21 @@ class Sender(threading.Thread):
                 # retry
                 log.warning("%s: Got error produce response on topic-partition %s,"
                             " retrying (%d attempts left). Error: %s",
-                            self, batch.topic_partition,
+                            str(self), batch.topic_partition,
                             self.config['retries'] - batch.attempts - 1,
                             error)
 
                 # If idempotence is enabled only retry the request if the batch matches our current producer id and epoch
                 if not self._transaction_manager or self._transaction_manager.producer_id_and_epoch.match(batch):
                     log.debug("%s: Retrying batch to topic-partition %s. Sequence number: %s",
-                              self, batch.topic_partition,
+                              str(self), batch.topic_partition,
                               self._transaction_manager.sequence_number(batch.topic_partition) if self._transaction_manager else None)
                     self._accumulator.reenqueue(batch)
                     if self._sensors:
                         self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
                 else:
                     log.warning("%s: Attempted to retry sending a batch but the producer id/epoch changed from %s/%s to %s/%s. This batch will be dropped",
-                                self, batch.producer_id, batch.producer_epoch,
+                                str(self), batch.producer_id, batch.producer_epoch,
                                 self._transaction_manager.producer_id_and_epoch.producer_id,
                                 self._transaction_manager.producer_id_and_epoch.epoch)
                     self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
@@ -444,7 +444,7 @@ class Sender(threading.Thread):
             if error is Errors.UnknownTopicOrPartitionError:
                 log.warning("%s: Received unknown topic or partition error in produce request on partition %s."
                             " The topic/partition may not exist or the user may not have Describe access to it",
-                            self, batch.topic_partition)
+                            str(self), batch.topic_partition)
 
             if getattr(error, 'invalid_metadata', False):
                 self._metadata.request_update()
@@ -455,7 +455,7 @@ class Sender(threading.Thread):
 
             if self._transaction_manager and self._transaction_manager.producer_id_and_epoch.match(batch):
                 self._transaction_manager.increment_sequence_number(batch.topic_partition, batch.record_count)
-                log.debug("%s: Incremented sequence number for topic-partition %s to %s", self, batch.topic_partition,
+                log.debug("%s: Incremented sequence number for topic-partition %s to %s", str(self), batch.topic_partition,
                           self._transaction_manager.sequence_number(batch.topic_partition))
 
         # Unmute the completed partition.
@@ -517,7 +517,7 @@ class Sender(threading.Thread):
             )
         else:
             if transactional_id is not None:
-                log.warning('%s: Broker does not support ProduceRequest v3+, required for transactional_id', self)
+                log.warning('%s: Broker does not support ProduceRequest v3+, required for transactional_id', str(self))
             return ProduceRequest[version](
                 required_acks=acks,
                 timeout=timeout,
