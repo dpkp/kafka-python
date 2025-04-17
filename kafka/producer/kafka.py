@@ -380,7 +380,6 @@ class KafkaProducer(object):
     }
 
     def __init__(self, **configs):
-        log.debug("%s: Starting the Kafka producer", self)
         self.config = copy.copy(self.DEFAULT_CONFIG)
         user_provided_configs = set(configs.keys())
         for key in self.config:
@@ -411,6 +410,8 @@ class KafkaProducer(object):
                 self.config['api_version'] = tuple(map(int, deprecated.split('.')))
             log.warning('%s: use api_version=%s [tuple] -- "%s" as str is deprecated',
                         self, str(self.config['api_version']), deprecated)
+
+        log.debug("%s: Starting Kafka producer", self)
 
         # Configure metrics
         if self.config['metrics_enabled']:
