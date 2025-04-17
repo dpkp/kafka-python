@@ -459,6 +459,23 @@ def test__unpack_records(mocker):
     assert records[2].offset == 2
 
 
+def test__unpack_records_corrupted(mocker):
+    tp = TopicPartition('foo', 0)
+    messages = [
+        (None, b"a", None),
+        (None, b"b", None),
+        (None, b"c", None),
+    ]
+    memory_records = MemoryRecords(_build_record_batch(messages))
+    from kafka.record.default_records import DefaultRecord
+    mocker.patch.object(DefaultRecord, 'validate_crc', side_effect=[True, True, False])
+    part_records = Fetcher.PartitionRecords(0, tp, memory_records)
+    records = part_records.take(10)
+    assert len(records) == 2
+    with pytest.raises(Errors.CorruptRecordError):
+        part_records.take(10)
+
+
 def test__parse_fetched_data(fetcher, topic, mocker):
     fetcher.config['check_crcs'] = False
     tp = TopicPartition(topic, 0)
