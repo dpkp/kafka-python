@@ -161,11 +161,13 @@ class Fetcher(six.Iterator):
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout resetting offsets')
+        needs_offset_reset = set()
         for tp in partitions:
-            # TODO: If there are several offsets to reset, we could submit offset requests in parallel
             if self._subscriptions.is_assigned(tp) and self._subscriptions.is_offset_reset_needed(tp):
-                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
+                needs_offset_reset.add(tp)
+
+        if needs_offset_reset:
+            self._reset_offsets(needs_offset_reset, timeout_ms=timeout_ms)
 
     def _clean_done_fetch_futures(self):
         while True:
@@ -191,24 +193,27 @@ class Fetcher(six.Iterator):
                 partition and no reset policy is available
             KafkaTimeoutError if timeout_ms provided.
         """
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout updating fetch positions')
+        needs_offset_reset = set()
         # reset the fetch position to the committed position
         for tp in partitions:
             if not self._subscriptions.is_assigned(tp) or self._subscriptions.has_valid_position(tp):
                 continue
 
             if self._subscriptions.is_offset_reset_needed(tp):
-                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
+                needs_offset_reset.add(tp)
             elif self._subscriptions.assignment[tp].committed is None:
                 # there's no committed position, so we need to reset with the
                 # default strategy
                 self._subscriptions.need_offset_reset(tp)
-                self._reset_offset(tp, timeout_ms=inner_timeout_ms())
+                needs_offset_reset.add(tp)
             else:
                 committed = self._subscriptions.assignment[tp].committed.offset
                 log.debug("Resetting offset for partition %s to the committed"
                           " offset %s", tp, committed)
                 self._subscriptions.seek(tp, committed)
+
+        if needs_offset_reset:
+            self._reset_offsets(needs_offset_reset, timeout_ms=timeout_ms)
 
     def get_offsets_by_times(self, timestamps, timeout_ms):
         offsets = self._retrieve_offsets(timestamps, timeout_ms)
@@ -232,37 +237,36 @@ class Fetcher(six.Iterator):
             offsets[tp] = offsets[tp].offset
         return offsets
 
-    def _reset_offset(self, partition, timeout_ms=None):
-        """Reset offsets for the given partition using the offset reset strategy.
+    def _reset_offsets(self, partitions, timeout_ms=None):
+        """Reset offsets for the given partitions using the offset reset strategy.
 
         Arguments:
-            partition (TopicPartition): the partition that needs reset offset
+            partitions ([TopicPartition]): the partitions that need offsets reset
 
         Raises:
             NoOffsetForPartitionError: if no offset reset strategy is defined
             KafkaTimeoutError if timeout_ms provided
         """
-        timestamp = self._subscriptions.assignment[partition].reset_strategy
-        if timestamp is OffsetResetStrategy.EARLIEST:
-            strategy = 'earliest'
-        elif timestamp is OffsetResetStrategy.LATEST:
-            strategy = 'latest'
-        else:
-            raise NoOffsetForPartitionError(partition)
+        offset_resets = dict()
+        for tp in partitions:
+            ts = self._subscriptions.assignment[tp].reset_strategy
+            if not ts:
+                raise NoOffsetForPartitionError(tp)
+            offset_resets[tp] = ts
 
-        log.debug("Resetting offset for partition %s to offset %s.",
-                  partition, strategy)
-        offsets = self._retrieve_offsets({partition: timestamp}, timeout_ms=timeout_ms)
+        offsets = self._retrieve_offsets(offset_resets, timeout_ms=timeout_ms)
 
-        if partition in offsets:
-            offset = offsets[partition].offset
+        for partition in partitions:
+            if partition not in offsets:
+                raise NoOffsetForPartitionError(partition)
 
             # we might lose the assignment while fetching the offset,
             # so check it is still active
             if self._subscriptions.is_assigned(partition):
+                offset = offsets[partition].offset
+                log.debug("Resetting offset for partition %s to offset %s.",
+                          partition, offset)
                 self._subscriptions.seek(partition, offset)
-        else:
-            log.debug("Could not find offset for partition %s since it is probably deleted" % (partition,))
 
     def _retrieve_offsets(self, timestamps, timeout_ms=None):
         """Fetch offset for each partition passed in ``timestamps`` map.

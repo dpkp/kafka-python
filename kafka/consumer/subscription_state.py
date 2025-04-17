@@ -402,7 +402,7 @@ class TopicPartitionState(object):
         self.has_valid_position = False # whether we have valid position
         self.paused = False # whether this partition has been paused by the user
         self.awaiting_reset = False # whether we are awaiting reset
-        self.reset_strategy = None # the reset strategy if awaitingReset is set
+        self.reset_strategy = None # the reset strategy if awaiting_reset is set
         self._position = None # OffsetAndMetadata exposed to the user
         self.highwater = None
         self.drop_pending_record_batch = False
