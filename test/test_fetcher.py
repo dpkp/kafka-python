@@ -8,7 +8,6 @@ from collections import OrderedDict
 import itertools
 import time
 
-from kafka.client_async import KafkaClient
 from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher
 )
