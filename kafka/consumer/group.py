@@ -1144,9 +1144,9 @@ class KafkaConsumer(six.Iterator):
             # their own offsets).
             self._fetcher.reset_offsets_if_needed(partitions, timeout_ms=inner_timeout_ms())
 
-            if not self._subscription.has_all_fetch_positions():
-                # if we still don't have offsets for all partitions, then we should either seek
-                # to the last committed position or reset using the auto reset policy
+            if not self._subscription.has_all_fetch_positions(partitions):
+                # if we still don't have offsets for the given partitions, then we should either
+                # seek to the last committed position or reset using the auto reset policy
                 if (self.config['api_version'] >= (0, 8, 1) and
                     self.config['group_id'] is not None):
                     # first refresh commits for all assigned partitions

@@ -17,7 +17,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.fetch import FetchRequest, FetchResponse
-from kafka.protocol.list_offsets import ListOffsetsResponse
+from kafka.protocol.list_offsets import ListOffsetsResponse, OffsetResetStrategy
 from kafka.errors import (
     StaleMetadata, LeaderNotAvailableError, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError
@@ -610,3 +610,51 @@ def test_partition_records_compacted_offset(mocker):
     msgs = records.take()
     assert len(msgs) == batch_end - fetch_offset - 1
     assert msgs[0].offset == fetch_offset + 1
+
+
+def test_update_fetch_positions_paused(subscription_state, client, mocker):
+    fetcher = Fetcher(client, subscription_state)
+    tp = TopicPartition('foo', 0)
+    subscription_state.assign_from_user([tp])
+    subscription_state.pause(tp) # paused partition does not have a valid position
+    subscription_state.need_offset_reset(tp, OffsetResetStrategy.LATEST)
+
+    mocker.patch.object(fetcher, '_retrieve_offsets', return_value={tp: OffsetAndTimestamp(10, 1, -1)})
+    fetcher.update_fetch_positions([tp])
+
+    assert not subscription_state.is_offset_reset_needed(tp)
+    assert not subscription_state.is_fetchable(tp) # because tp is paused
+    assert subscription_state.has_valid_position(tp)
+    assert subscription_state.position(tp) == OffsetAndMetadata(10, '', -1)
+
+
+def test_update_fetch_positions_paused_without_valid(subscription_state, client, mocker):
+    fetcher = Fetcher(client, subscription_state)
+    tp = TopicPartition('foo', 0)
+    subscription_state.assign_from_user([tp])
+    subscription_state.pause(tp) # paused partition does not have a valid position
+
+    mocker.patch.object(fetcher, '_retrieve_offsets', return_value={tp: OffsetAndTimestamp(0, 1, -1)})
+    fetcher.update_fetch_positions([tp])
+
+    assert not subscription_state.is_offset_reset_needed(tp)
+    assert not subscription_state.is_fetchable(tp) # because tp is paused
+    assert subscription_state.has_valid_position(tp)
+    assert subscription_state.position(tp) == OffsetAndMetadata(0, '', -1)
+
+
+def test_update_fetch_positions_paused_with_valid(subscription_state, client, mocker):
+    fetcher = Fetcher(client, subscription_state)
+    tp = TopicPartition('foo', 0)
+    subscription_state.assign_from_user([tp])
+    subscription_state.assignment[tp].committed = OffsetAndMetadata(0, '', -1)
+    subscription_state.seek(tp, 10)
+    subscription_state.pause(tp) # paused partition already has a valid position
+
+    mocker.patch.object(fetcher, '_retrieve_offsets', return_value={tp: OffsetAndTimestamp(0, 1, -1)})
+    fetcher.update_fetch_positions([tp])
+
+    assert not subscription_state.is_offset_reset_needed(tp)
+    assert not subscription_state.is_fetchable(tp) # because tp is paused
+    assert subscription_state.has_valid_position(tp)
+    assert subscription_state.position(tp) == OffsetAndMetadata(10, '', -1)
