@@ -47,6 +47,9 @@ class ProducerIdAndEpoch(object):
     def match(self, batch):
         return self.producer_id == batch.producer_id and self.epoch == batch.producer_epoch
 
+    def __eq__(self, other):
+        return isinstance(other, ProducerIdAndEpoch) and self.producer_id == other.producer_id and self.epoch == other.epoch
+
     def __str__(self):
         return "ProducerIdAndEpoch(producer_id={}, epoch={})".format(self.producer_id, self.epoch)
 
@@ -304,7 +307,7 @@ class TransactionManager(object):
         it's best to return the produce error to the user and let them abort the transaction and close the producer explicitly.
         """
         with self._lock:
-            if self.is_transactional:
+            if self.is_transactional():
                 raise Errors.IllegalStateError( 
                     "Cannot reset producer state for a transactional producer."
                     " You must either abort the ongoing transaction or"
