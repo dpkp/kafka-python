@@ -1115,7 +1115,7 @@ class KafkaClient(object):
         return version
 
     def wakeup(self):
-        if self._waking or self._wake_w is None:
+        if self._closed or self._waking or self._wake_w is None:
             return
         with self._wake_lock:
             try:
