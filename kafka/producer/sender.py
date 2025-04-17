@@ -302,7 +302,7 @@ class Sender(threading.Thread):
             self.wakeup()
 
     def _maybe_wait_for_producer_id(self):
-        while True:
+        while not self._transaction_manager.has_producer_id():
             try:
                 node_id = self._client.least_loaded_node()
                 if node_id is None or not self._client.await_ready(node_id):
