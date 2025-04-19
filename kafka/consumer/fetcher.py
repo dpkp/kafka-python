@@ -231,6 +231,7 @@ class Fetcher(six.Iterator):
 
         inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout fetching offsets')
         timestamps = copy.copy(timestamps)
+        fetched_offsets = dict()
         while True:
             if not timestamps:
                 return {}
@@ -243,9 +244,13 @@ class Fetcher(six.Iterator):
                 break
 
             if future.succeeded():
+                fetched_offsets.update(future.value[0])
+                if not future.value[1]:
+                    return fetched_offsets
 
-                return future.value
-            if not future.retriable():
+                timestamps = {tp: timestamps[tp] for tp in future.value[1]}
+
+            elif not future.retriable():
                 raise future.exception  # pylint: disable-msg=raising-bad-type
 
             if future.exception.invalid_metadata or self._client.cluster.need_update:
@@ -254,15 +259,6 @@ class Fetcher(six.Iterator):
 
                 if not future.is_done:
                     break
-
-                # Issue #1780
-                # Recheck partition existence after after a successful metadata refresh
-                if refresh_future.succeeded() and isinstance(future.exception, Errors.StaleMetadata):
-                    log.debug("Stale metadata was raised, and we now have an updated metadata. Rechecking partition existence")
-                    unknown_partition = future.exception.args[0]  # TopicPartition from StaleMetadata
-                    if self._client.cluster.leader_for_partition(unknown_partition) is None:
-                        log.debug("Removed partition %s from offsets retrieval" % (unknown_partition, ))
-                        timestamps.pop(unknown_partition)
             else:
                 time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
 
