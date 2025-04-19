@@ -634,17 +634,17 @@ class Fetcher(six.Iterator):
             elif not self._client.connected(node_id) and self._client.connection_delay(node_id) > 0:
                 # If we try to send during the reconnect backoff window, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
-                log.log(0, "Skipping fetch for partition %s because node %s is awaiting reconnect backoff",
+                log.debug("Skipping fetch for partition %s because node %s is awaiting reconnect backoff",
                         partition, node_id)
 
             elif self._client.throttle_delay(node_id) > 0:
                 # If we try to send while throttled, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
-                log.log(0, "Skipping fetch for partition %s because node %s is throttled",
+                log.debug("Skipping fetch for partition %s because node %s is throttled",
                         partition, node_id)
 
             elif node_id in self._nodes_with_pending_fetch_requests:
-                log.log(0, "Skipping fetch for partition %s because there is a pending fetch request to node %s",
+                log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",
                         partition, node_id)
                 continue
 
