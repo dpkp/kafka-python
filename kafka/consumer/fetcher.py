@@ -411,13 +411,14 @@ class Fetcher(six.Iterator):
         timestamps_by_node = self._group_list_offset_requests(timestamps)
 
         for node_id, timestamps_and_epochs in six.iteritems(timestamps_by_node):
+            if not self._client.ready(node_id):
+                continue
             partitions = set(timestamps_and_epochs.keys())
             expire_at = time.time() + self.config['request_timeout_ms'] / 1000
             self._subscriptions.set_reset_pending(partitions, expire_at)
 
             def on_success(result):
                 fetched_offsets, partitions_to_retry = result
-                log.debug('_reset_offsets_async result: %s, %s', fetched_offsets, partitions_to_retry)
                 if partitions_to_retry:
                     self._subscriptions.reset_failed(partitions_to_retry, time.time() + self.config['retry_backoff_ms'] / 1000)
                     self._client.cluster.request_update()
@@ -462,7 +463,6 @@ class Fetcher(six.Iterator):
         remaining_responses = [len(timestamps_by_node)] # list for mutable / 2.7 hack
 
         def on_success(remaining_responses, value):
-            log.debug('processing list_offsets_response: %s, %s', value[0], value[1])
             remaining_responses[0] -= 1 # noqa: F823
             fetched_offsets.update(value[0])
             partitions_to_retry.update(value[1])

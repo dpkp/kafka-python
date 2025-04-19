@@ -138,6 +138,7 @@ def test__reset_offsets_async(fetcher, mocker):
     fetcher._subscriptions.assign_from_subscribed([tp])
     fetcher._subscriptions.request_offset_reset(tp)
     fetched_offsets = {tp: OffsetAndTimestamp(1001, None, -1)}
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request',
                         return_value=Future().success((fetched_offsets, set())))
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
@@ -630,6 +631,7 @@ def test_reset_offsets_paused(subscription_state, client, mocker):
     subscription_state.request_offset_reset(tp, OffsetResetStrategy.LATEST)
 
     fetched_offsets = {tp: OffsetAndTimestamp(10, 1, -1)}
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request',
                         return_value=Future().success((fetched_offsets, set())))
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
@@ -649,6 +651,7 @@ def test_reset_offsets_paused_without_valid(subscription_state, client, mocker):
     subscription_state.reset_missing_positions()
 
     fetched_offsets = {tp: OffsetAndTimestamp(0, 1, -1)}
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request',
                         return_value=Future().success((fetched_offsets, set())))
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
