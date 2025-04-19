@@ -9,7 +9,7 @@ import pytest
 from kafka.vendor.six.moves import range
 
 import kafka.codec
-from kafka.errors import UnsupportedCodecError, UnsupportedVersionError
+from kafka.errors import KafkaTimeoutError, UnsupportedCodecError, UnsupportedVersionError
 from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
@@ -300,4 +300,5 @@ def test_kafka_consumer_offsets_for_times_errors(kafka_consumer_factory, topic):
     with pytest.raises(ValueError):
         consumer.offsets_for_times({tp: -1})
 
-    assert consumer.offsets_for_times({bad_tp: 0}) == {bad_tp: None}
+    with pytest.raises(KafkaTimeoutError):
+        consumer.offsets_for_times({bad_tp: 0})

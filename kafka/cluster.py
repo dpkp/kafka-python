@@ -202,6 +202,10 @@ class ClusterMetadata(object):
                 self._future = Future()
             return self._future
 
+    @property
+    def need_update(self):
+        return self._need_update
+
     def topics(self, exclude_internal_topics=True):
         """Get set of known topics.
 

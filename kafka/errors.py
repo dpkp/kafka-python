@@ -77,6 +77,10 @@ class NoBrokersAvailable(KafkaError):
     invalid_metadata = True
 
 
+class NoOffsetForPartitionError(KafkaError):
+    pass
+
+
 class NodeNotReadyError(KafkaError):
     retriable = True
 

@@ -229,10 +229,6 @@ class ConsumerCoordinator(BaseCoordinator):
 
         assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
 
-        # set the flag to refresh last committed offsets
-        self._subscription.needs_fetch_committed_offsets = True
-
-        # update partition assignment
         try:
             self._subscription.assign_from_subscribed(assignment.partitions())
         except ValueError as e:
@@ -253,13 +249,13 @@ class ConsumerCoordinator(BaseCoordinator):
                  assigned, self.group_id)
 
         # execute the user's callback after rebalance
-        if self._subscription.listener:
+        if self._subscription.rebalance_listener:
             try:
-                self._subscription.listener.on_partitions_assigned(assigned)
+                self._subscription.rebalance_listener.on_partitions_assigned(assigned)
             except Exception:
-                log.exception("User provided listener %s for group %s"
+                log.exception("User provided rebalance listener %s for group %s"
                               " failed on partition assignment: %s",
-                              self._subscription.listener, self.group_id,
+                              self._subscription.rebalance_listener, self.group_id,
                               assigned)
 
     def poll(self, timeout_ms=None):
@@ -360,14 +356,14 @@ class ConsumerCoordinator(BaseCoordinator):
         # execute the user's callback before rebalance
         log.info("Revoking previously assigned partitions %s for group %s",
                  self._subscription.assigned_partitions(), self.group_id)
-        if self._subscription.listener:
+        if self._subscription.rebalance_listener:
             try:
                 revoked = set(self._subscription.assigned_partitions())
-                self._subscription.listener.on_partitions_revoked(revoked)
+                self._subscription.rebalance_listener.on_partitions_revoked(revoked)
             except Exception:
-                log.exception("User provided subscription listener %s"
+                log.exception("User provided subscription rebalance listener %s"
                               " for group %s failed on_partitions_revoked",
-                              self._subscription.listener, self.group_id)
+                              self._subscription.rebalance_listener, self.group_id)
 
         self._is_leader = False
         self._subscription.reset_group_subscription()
@@ -398,13 +394,11 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
-        if self._subscription.needs_fetch_committed_offsets:
-            offsets = self.fetch_committed_offsets(self._subscription.assigned_partitions(), timeout_ms=timeout_ms)
-            for partition, offset in six.iteritems(offsets):
-                # verify assignment is still active
-                if self._subscription.is_assigned(partition):
-                    self._subscription.assignment[partition].committed = offset
-            self._subscription.needs_fetch_committed_offsets = False
+        missing_fetch_positions = set(self._subscription.missing_fetch_positions())
+        offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
+        for partition, offset in six.iteritems(offsets):
+            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset);
+            self._subscription.seek(partition, offset.offset)
 
     def fetch_committed_offsets(self, partitions, timeout_ms=None):
         """Fetch the current committed offsets for specified partitions
@@ -505,7 +499,6 @@ class ConsumerCoordinator(BaseCoordinator):
                        offsets.values()))
         if callback is None:
             callback = self.config['default_offset_commit_callback']
-        self._subscription.needs_fetch_committed_offsets = True
         future = self._send_offset_commit_request(offsets)
         future.add_both(lambda res: self.completed_offset_commits.appendleft((callback, offsets, res)))
         return future
@@ -703,8 +696,6 @@ class ConsumerCoordinator(BaseCoordinator):
                 if error_type is Errors.NoError:
                     log.debug("Group %s committed offset %s for partition %s",
                               self.group_id, offset, tp)
-                    if self._subscription.is_assigned(tp):
-                        self._subscription.assignment[tp].committed = offset
                 elif error_type is Errors.GroupAuthorizationFailedError:
                     log.error("Not authorized to commit offsets for group %s",
                               self.group_id)
