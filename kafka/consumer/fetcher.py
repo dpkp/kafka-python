@@ -171,7 +171,7 @@ class Fetcher(six.Iterator):
         self._clean_done_fetch_futures()
         return bool(self._fetch_futures)
 
-    def reset_offsets_if_needed(self, timeout_ms=None):
+    def reset_offsets_if_needed(self):
         """Reset offsets for the given partitions using the offset reset strategy.
 
         Arguments:
