@@ -397,7 +397,7 @@ class ConsumerCoordinator(BaseCoordinator):
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
         offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
         for partition, offset in six.iteritems(offsets):
-            log.debug("Setting offset for partition %s to the committed offset %s", tp, offset.offset);
+            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset);
             self._subscription.seek(partition, offset.offset)
 
     def fetch_committed_offsets(self, partitions, timeout_ms=None):

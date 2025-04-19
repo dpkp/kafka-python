@@ -1059,7 +1059,7 @@ class KafkaConsumer(six.Iterator):
                 raise ValueError(
                     "The target time for partition {} is {}. The target time "
                     "cannot be negative.".format(tp, ts))
-        return self._fetcher.get_offsets_by_times(
+        return self._fetcher.offsets_by_times(
             timestamps, self.config['request_timeout_ms'])
 
     def beginning_offsets(self, partitions):
