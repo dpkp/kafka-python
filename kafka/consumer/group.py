@@ -1160,7 +1160,7 @@ class KafkaConsumer(six.Iterator):
 
             # Finally send an asynchronous request to lookup and update the positions of any
             # partitions which are awaiting reset.
-            self._fetcher.reset_offsets_if_needed(timeout_ms=inner_timeout_ms())
+            self._fetcher.reset_offsets_if_needed()
             return True
 
         except KafkaTimeoutError:
