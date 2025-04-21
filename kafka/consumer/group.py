@@ -572,9 +572,8 @@ class KafkaConsumer(six.Iterator):
         This offset will be used as the position for the consumer
         in the event of a failure.
 
-        This call may block to do a remote call if the partition in question
-        isn't assigned to this consumer or if the consumer hasn't yet
-        initialized its cache of committed offsets.
+        This call will block to do a remote call to get the latest committed
+        offsets from the server.
 
         Arguments:
             partition (TopicPartition): The partition to check.
@@ -586,28 +585,16 @@ class KafkaConsumer(six.Iterator):
 
         Raises:
             KafkaTimeoutError if timeout_ms provided
+            BrokerResponseErrors if OffsetFetchRequest raises an error.
         """
         assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
         assert self.config['group_id'] is not None, 'Requires group_id'
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
-        if self._subscription.is_assigned(partition):
-            committed = self._subscription.assignment[partition].committed
-            if committed is None:
-                self._coordinator.refresh_committed_offsets_if_needed(timeout_ms=timeout_ms)
-                committed = self._subscription.assignment[partition].committed
-        else:
-            commit_map = self._coordinator.fetch_committed_offsets([partition], timeout_ms=timeout_ms)
-            if partition in commit_map:
-                committed = commit_map[partition]
-            else:
-                committed = None
-
-        if committed is not None:
-            if metadata:
-                return committed
-            else:
-                return committed.offset
+        committed = self._coordinator.fetch_committed_offsets([partition], timeout_ms=timeout_ms)
+        if partition not in committed:
+            return None
+        return committed[partition] if metadata else committed[partition].offset
 
     def _fetch_all_topic_metadata(self):
         """A blocking call that fetches topic metadata for all topics in the
