@@ -15,7 +15,7 @@ from kafka.client_async import KafkaClient, selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
 import kafka.errors as Errors
 from kafka.errors import (
-    IncompatibleBrokerVersion, KafkaConfigurationError, NotControllerError, UnknownTopicOrPartitionError,
+    IncompatibleBrokerVersion, KafkaConfigurationError, UnknownTopicOrPartitionError,
     UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
@@ -411,7 +411,7 @@ class KafkaAdminClient(object):
         # extra values (usually the error_message)
         for topic, error_code in map(lambda e: e[:2], topic_error_tuples):
             error_type = Errors.for_code(error_code)
-            if tries and error_type is NotControllerError:
+            if tries and error_type is Errors.NotControllerError:
                 # No need to inspect the rest of the errors for
                 # non-retriable errors because NotControllerError should
                 # either be thrown for all errors or no errors.
@@ -431,13 +431,13 @@ class KafkaAdminClient(object):
         for topic, partition_results in response.replication_election_results:
             for partition_id, error_code in map(lambda e: e[:2], partition_results):
                 error_type = Errors.for_code(error_code)
-                if tries and error_type is NotControllerError:
+                if tries and error_type is Errors.NotControllerError:
                     # No need to inspect the rest of the errors for
                     # non-retriable errors because NotControllerError should
                     # either be thrown for all errors or no errors.
                     self._refresh_controller_id()
                     return False
-                elif error_type not in [Errors.NoError, Errors.ElectionNotNeeded]:
+                elif error_type not in (Errors.NoError, Errors.ElectionNotNeededError):
                     raise error_type(
                         "Request '{}' failed with response '{}'."
                         .format(request, response))
