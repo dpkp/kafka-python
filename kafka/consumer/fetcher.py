@@ -208,7 +208,7 @@ class Fetcher(six.Iterator):
             timestamps: {TopicPartition: int} dict with timestamps to fetch
                 offsets by. -1 for the latest available, -2 for the earliest
                 available. Otherwise timestamp is treated as epoch milliseconds.
-            timeout_ms
+            timeout_ms (int, optional): The maximum time in milliseconds to block.
 
         Returns:
             {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
