@@ -231,17 +231,23 @@ def test_need_rejoin(coordinator):
 
 
 def test_refresh_committed_offsets_if_needed(mocker, coordinator):
+    tp0 = TopicPartition('foobar', 0)
+    tp1 = TopicPartition('foobar', 1)
     mocker.patch.object(ConsumerCoordinator, 'fetch_committed_offsets',
                         return_value = {
-                            TopicPartition('foobar', 0): OffsetAndMetadata(123, '', -1),
-                            TopicPartition('foobar', 1): OffsetAndMetadata(234, '', -1)})
-    coordinator._subscription.assign_from_user([TopicPartition('foobar', 0)])
-    assert coordinator._subscription.needs_fetch_committed_offsets is True
+                            tp0: OffsetAndMetadata(123, '', -1),
+                            tp1: OffsetAndMetadata(234, '', -1)})
+    coordinator._subscription.assign_from_user([tp0, tp1])
+    coordinator._subscription.request_offset_reset(tp0)
+    coordinator._subscription.request_offset_reset(tp1)
+    assert coordinator._subscription.is_offset_reset_needed(tp0)
+    assert coordinator._subscription.is_offset_reset_needed(tp1)
     coordinator.refresh_committed_offsets_if_needed()
     assignment = coordinator._subscription.assignment
-    assert assignment[TopicPartition('foobar', 0)].committed == OffsetAndMetadata(123, '', -1)
-    assert TopicPartition('foobar', 1) not in assignment
-    assert coordinator._subscription.needs_fetch_committed_offsets is False
+    assert assignment[tp0].position == OffsetAndMetadata(123, '', -1)
+    assert assignment[tp1].position == OffsetAndMetadata(234, '', -1)
+    assert not coordinator._subscription.is_offset_reset_needed(tp0)
+    assert not coordinator._subscription.is_offset_reset_needed(tp1)
 
 
 def test_fetch_committed_offsets(mocker, coordinator):
