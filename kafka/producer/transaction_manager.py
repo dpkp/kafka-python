@@ -211,7 +211,7 @@ class TransactionManager(object):
             if self.is_transactional():
                 if not self.has_producer_id():
                     raise Errors.IllegalStateError(
-                            "Cannot perform a 'send' before completing a call to initTransactions"
+                            "Cannot perform a 'send' before completing a call to init_transactions"
                             " when transactions are enabled.")
 
                 if self._current_state != TransactionState.IN_TRANSACTION:
