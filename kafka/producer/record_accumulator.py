@@ -84,14 +84,11 @@ class ProducerBatch(object):
             log.warning('Batch is already closed -- ignoring batch.done()')
             return
         elif exception is None:
-            log.debug("Produced messages to topic-partition %s with base offset"
-                      " %s log start offset %s.", self.topic_partition, base_offset,
-                      log_start_offset)  # trace
-            self.produce_future.success((base_offset, timestamp_ms, log_start_offset))
+            log.debug("Produced messages to topic-partition %s with base offset %s", self.topic_partition, base_offset)
+            self.produce_future.success((base_offset, timestamp_ms))
         else:
             log.warning("Failed to produce messages to topic-partition %s with base offset"
-                        " %s log start offset %s and error %s.", self.topic_partition, base_offset,
-                        log_start_offset, exception)  # trace
+                        " %s: %s", self.topic_partition, base_offset, exception)
             self.produce_future.failure(exception)
 
     def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full, now=None):

@@ -38,7 +38,7 @@ class FutureRecordMetadata(Future):
         produce_future.add_errback(self.failure)
 
     def _produce_success(self, offset_and_timestamp):
-        offset, produce_timestamp_ms, log_start_offset = offset_and_timestamp
+        offset, produce_timestamp_ms = offset_and_timestamp
 
         # Unpacking from args tuple is minor speed optimization
         (relative_offset, timestamp_ms, checksum,
@@ -51,7 +51,7 @@ class FutureRecordMetadata(Future):
         if offset != -1 and relative_offset is not None:
             offset += relative_offset
         tp = self._produce_future.topic_partition
-        metadata = RecordMetadata(tp[0], tp[1], tp, offset, timestamp_ms, log_start_offset,
+        metadata = RecordMetadata(tp[0], tp[1], tp, offset, timestamp_ms,
                                   checksum, serialized_key_size,
                                   serialized_value_size, serialized_header_size)
         self.success(metadata)
@@ -67,5 +67,5 @@ class FutureRecordMetadata(Future):
 
 
 RecordMetadata = collections.namedtuple(
-    'RecordMetadata', ['topic', 'partition', 'topic_partition', 'offset', 'timestamp', 'log_start_offset',
+    'RecordMetadata', ['topic', 'partition', 'topic_partition', 'offset', 'timestamp',
                        'checksum', 'serialized_key_size', 'serialized_value_size', 'serialized_header_size'])

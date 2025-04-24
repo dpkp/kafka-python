@@ -349,28 +349,27 @@ class Sender(threading.Thread):
 
             for topic, partitions in response.topics:
                 for partition_info in partitions:
-                    log_start_offset = None
                     if response.API_VERSION < 2:
                         partition, error_code, offset = partition_info
                         ts = None
                     elif 2 <= response.API_VERSION <= 4:
                         partition, error_code, offset, ts = partition_info
                     elif 5 <= response.API_VERSION <= 7:
-                        partition, error_code, offset, ts, log_start_offset = partition_info
+                        partition, error_code, offset, ts, _log_start_offset = partition_info
                     else:
                         # Currently unused / TODO: KIP-467
-                        partition, error_code, offset, ts, log_start_offset, _record_errors, _global_error = partition_info
+                        partition, error_code, offset, ts, _log_start_offset, _record_errors, _global_error = partition_info
                     tp = TopicPartition(topic, partition)
                     error = Errors.for_code(error_code)
                     batch = batches_by_partition[tp]
-                    self._complete_batch(batch, error, offset, timestamp_ms=ts, log_start_offset=log_start_offset)
+                    self._complete_batch(batch, error, offset, timestamp_ms=ts)
 
         else:
             # this is the acks = 0 case, just complete all requests
             for batch in batches:
                 self._complete_batch(batch, None, -1)
 
-    def _fail_batch(self, batch, exception, base_offset=None, timestamp_ms=None, log_start_offset=None):
+    def _fail_batch(self, batch, exception, base_offset=None, timestamp_ms=None):
         exception = exception if type(exception) is not type else exception()
         if self._transaction_manager:
             if isinstance(exception, Errors.OutOfOrderSequenceNumberError) and \
@@ -392,12 +391,12 @@ class Sender(threading.Thread):
             elif self._transaction_manager.is_transactional():
                 self._transaction_manager.transition_to_abortable_error(exception)
 
-        batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=exception, log_start_offset=log_start_offset)
+        batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=exception)
         self._accumulator.deallocate(batch)
         if self._sensors:
             self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
 
-    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None, log_start_offset=None):
+    def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
         """Complete or retry the given batch of records.
 
         Arguments:
@@ -405,7 +404,6 @@ class Sender(threading.Thread):
             error (Exception): The error (or None if none)
             base_offset (int): The base offset assigned to the records if successful
             timestamp_ms (int, optional): The timestamp returned by the broker for this batch
-            log_start_offset (int, optional): The start offset of the log at the time this produce response was created
         """
         # Standardize no-error to None
         if error is Errors.NoError:
@@ -433,13 +431,13 @@ class Sender(threading.Thread):
                                 str(self), batch.producer_id, batch.producer_epoch,
                                 self._transaction_manager.producer_id_and_epoch.producer_id,
                                 self._transaction_manager.producer_id_and_epoch.epoch)
-                    self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+                    self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms)
             else:
                 if error is Errors.TopicAuthorizationFailedError:
                     error = error(batch.topic_partition.topic)
 
                 # tell the user the result of their request
-                self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+                self._fail_batch(batch, error, base_offset=base_offset, timestamp_ms=timestamp_ms)
 
             if error is Errors.UnknownTopicOrPartitionError:
                 log.warning("%s: Received unknown topic or partition error in produce request on partition %s."
@@ -450,7 +448,7 @@ class Sender(threading.Thread):
                 self._metadata.request_update()
 
         else:
-            batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, log_start_offset=log_start_offset)
+            batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms)
             self._accumulator.deallocate(batch)
 
             if self._transaction_manager and self._transaction_manager.producer_id_and_epoch.match(batch):
