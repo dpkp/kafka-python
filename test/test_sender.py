@@ -92,11 +92,11 @@ def test_complete_batch_success(sender):
     assert not batch.produce_future.is_done
 
     # No error, base_offset 0
-    sender._complete_batch(batch, None, 0, timestamp_ms=123, log_start_offset=456)
+    sender._complete_batch(batch, None, 0, timestamp_ms=123)
     assert batch.is_done
     assert batch.produce_future.is_done
     assert batch.produce_future.succeeded()
-    assert batch.produce_future.value == (0, 123, 456)
+    assert batch.produce_future.value == (0, 123)
 
 
 def test_complete_batch_transaction(sender, transaction_manager):
@@ -201,8 +201,8 @@ def test_fail_batch(sender, accumulator, transaction_manager, mocker):
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Exception('error')
-    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
-    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
+    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error)
+    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error)
 
 
 def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, transaction_manager, mocker):
@@ -213,9 +213,9 @@ def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, tra
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Errors.OutOfOrderSequenceNumberError()
-    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
+    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error)
     sender._transaction_manager.reset_producer_id.assert_called_once()
-    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error, log_start_offset=None)
+    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error)
 
 
 def test_handle_produce_response():

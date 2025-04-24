@@ -32,7 +32,7 @@ def test_producer_batch_try_append(magic):
     future = batch.try_append(0, b'key', b'value', [])
     assert isinstance(future, FutureRecordMetadata)
     assert not future.is_done
-    batch.done(base_offset=123, timestamp_ms=456, log_start_offset=0)
+    batch.done(base_offset=123, timestamp_ms=456)
     assert future.is_done
     # record-level checksum only provided in v0/v1 formats; payload includes magic-byte
     if magic == 0:
@@ -44,8 +44,7 @@ def test_producer_batch_try_append(magic):
 
     expected_metadata = RecordMetadata(
         topic=tp[0], partition=tp[1], topic_partition=tp,
-        offset=123, timestamp=456, log_start_offset=0,
-        checksum=checksum,
+        offset=123, timestamp=456, checksum=checksum,
         serialized_key_size=3, serialized_value_size=5, serialized_header_size=-1)
     assert future.value == expected_metadata
 
