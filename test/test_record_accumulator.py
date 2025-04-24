@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import pytest
 import io
 
-from kafka.errors import KafkaTimeoutError
+from kafka.errors import IllegalStateError, KafkaError, KafkaTimeoutError
 from kafka.producer.future import FutureRecordMetadata, RecordMetadata
 from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
 from kafka.record.memory_records import MemoryRecordsBuilder
@@ -72,3 +72,54 @@ def test_producer_batch_maybe_expire():
     assert future.is_done
     assert future.failed()
     assert isinstance(future.exception, KafkaTimeoutError)
+
+def test_batch_abort():
+    tp = TopicPartition('foo', 0)
+    records = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=100000)
+    batch = ProducerBatch(tp, records)
+    future = batch.try_append(123, None, b'msg', [])
+
+    batch.abort(KafkaError())
+    assert future.is_done
+
+    # subsequent completion should be ignored
+    batch.done(500, 2342342341)
+    batch.done(exception=KafkaError())
+
+    assert future.is_done
+    with pytest.raises(KafkaError):
+        future.get()
+
+def test_batch_cannot_abort_twice():
+    tp = TopicPartition('foo', 0)
+    records = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=100000)
+    batch = ProducerBatch(tp, records)
+    future = batch.try_append(123, None, b'msg', [])
+
+    batch.abort(KafkaError())
+
+    with pytest.raises(IllegalStateError):
+        batch.abort(KafkaError())
+
+    assert future.is_done
+    with pytest.raises(KafkaError):
+        future.get()
+
+def test_batch_cannot_complete_twice():
+    tp = TopicPartition('foo', 0)
+    records = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=100000)
+    batch = ProducerBatch(tp, records)
+    future = batch.try_append(123, None, b'msg', [])
+
+    batch.done(500, 10, None)
+
+    with pytest.raises(IllegalStateError):
+        batch.done(1000, 20, None)
+
+    record_metadata = future.get()
+
+    assert record_metadata.offset == 500
+    assert record_metadata.timestamp == 10

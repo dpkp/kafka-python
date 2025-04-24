@@ -6,6 +6,13 @@ import logging
 import threading
 import time
 
+try:
+    # enum in stdlib as of py3.4
+    from enum import IntEnum  # pylint: disable=import-error
+except ImportError:
+    # vendored backport module
+    from kafka.vendor.enum34 import IntEnum
+
 import kafka.errors as Errors
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.record.memory_records import MemoryRecordsBuilder
@@ -34,6 +41,12 @@ class AtomicInteger(object):
         return self._val
 
 
+class FinalState(IntEnum):
+    ABORTED = 0
+    FAILED = 1
+    SUCCEEDED = 2
+
+
 class ProducerBatch(object):
     def __init__(self, tp, records, now=None):
         self.max_record_size = 0
@@ -47,6 +60,7 @@ class ProducerBatch(object):
         self.topic_partition = tp
         self.produce_future = FutureProduceResult(tp)
         self._retry = False
+        self._final_state = None
 
     @property
     def record_count(self):
@@ -79,10 +93,29 @@ class ProducerBatch(object):
                                       sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
         return future
 
-    def done(self, base_offset=None, timestamp_ms=None, exception=None, log_start_offset=None):
-        if self.produce_future.is_done:
-            log.warning('Batch is already closed -- ignoring batch.done()')
+    def abort(self, exception):
+        """Abort the batch and complete the future and callbacks."""
+        if self._final_state is not None:
+            raise Errors.IllegalStateError("Batch has already been completed in final state: %s" % self._final_state)
+        self._final_state = FinalState.ABORTED
+
+        log.debug("Aborting batch for partition %s: %s", self.topic_partition, exception)
+        self._complete_future(-1, -1, exception)
+
+    def done(self, base_offset=None, timestamp_ms=None, exception=None):
+        if self._final_state is None:
+            self._final_state = FinalState.SUCCEEDED if exception is None else FinalState.FAILED
+        elif self._final_state is FinalState.ABORTED:
+            log.debug("ProduceResponse returned for %s after batch had already been aborted.", self.topic_partition)
             return
+        else:
+            raise Errors.IllegalStateError("Batch has already been completed in final state %s" % self._final_state)
+
+        self._complete_future(base_offset, timestamp_ms, exception)
+
+    def _complete_future(self, base_offset, timestamp_ms, exception):
+        if self.produce_future.is_done:
+            raise Errors.IllegalStateError('Batch is already closed!')
         elif exception is None:
             log.debug("Produced messages to topic-partition %s with base offset %s", self.topic_partition, base_offset)
             self.produce_future.success((base_offset, timestamp_ms))
@@ -588,7 +621,7 @@ class RecordAccumulator(object):
             with self._tp_locks[tp]:
                 batch.records.close()
                 self._batches[tp].remove(batch)
-            batch.done(exception=error)
+            batch.abort(error)
             self.deallocate(batch)
 
     def abort_undrained_batches(self, error):
@@ -601,7 +634,7 @@ class RecordAccumulator(object):
                     batch.records.close()
                     self._batches[tp].remove(batch)
             if aborted:
-                batch.done(exception=error)
+                batch.abort(error)
                 self.deallocate(batch)
 
     def close(self):
