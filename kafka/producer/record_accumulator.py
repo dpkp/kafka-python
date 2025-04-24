@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import collections
 import copy
@@ -138,9 +138,9 @@ class ProducerBatch(object):
         """
         now = time.time() if now is None else now
         since_append = now - self.last_append
-        since_ready = now - (self.created + linger_ms / 1000.0)
-        since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000.0)
-        timeout = request_timeout_ms / 1000.0
+        since_ready = now - (self.created + linger_ms / 1000)
+        since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000)
+        timeout = request_timeout_ms / 1000
 
         error = None
         if not self.in_retry() and is_full and timeout < since_append:
@@ -431,10 +431,10 @@ class RecordAccumulator(object):
                 if not dq:
                     continue
                 batch = dq[0]
-                retry_backoff = self.config['retry_backoff_ms'] / 1000.0
-                linger = self.config['linger_ms'] / 1000.0
-                backing_off = bool(batch.attempts > 0 and
-                                   batch.last_attempt + retry_backoff > now)
+                retry_backoff = self.config['retry_backoff_ms'] / 1000
+                linger = self.config['linger_ms'] / 1000
+                backing_off = bool(batch.attempts > 0
+                                   and (batch.last_attempt + retry_backoff) > now)
                 waited_time = now - batch.last_attempt
                 time_to_wait = retry_backoff if backing_off else linger
                 time_left = max(time_to_wait - waited_time, 0)
@@ -499,12 +499,8 @@ class RecordAccumulator(object):
                         dq = self._batches[tp]
                         if dq:
                             first = dq[0]
-                            backoff = (
-                                bool(first.attempts > 0) and
-                                bool(first.last_attempt +
-                                     self.config['retry_backoff_ms'] / 1000.0
-                                     > now)
-                            )
+                            backoff = bool(first.attempts > 0 and
+                                           first.last_attempt + self.config['retry_backoff_ms'] / 1000 > now)
                             # Only drain the batch if it is not during backoff
                             if not backoff:
                                 if (size + first.records.size_in_bytes() > max_size
