@@ -304,7 +304,7 @@ def test_close(mocker, coordinator):
     coordinator._handle_leave_group_response.assert_called_with('foobar')
 
     assert coordinator.generation() is None
-    assert coordinator._generation is Generation.NO_GENERATION
+    assert coordinator._generation == Generation.NO_GENERATION
     assert coordinator.state is MemberState.UNJOINED
     assert coordinator.rejoin_needed is True
 
