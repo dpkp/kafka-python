@@ -33,6 +33,16 @@ class Generation(object):
         self.member_id = member_id
         self.protocol = protocol
 
+    @property
+    def is_valid(self):
+        return self.generation_id != DEFAULT_GENERATION_ID
+
+    def __eq__(self, other):
+        return (self.generation_id == other.generation_id and
+                self.member_id == other.member_id and
+                self.protocol == other.protocol)
+
+
 Generation.NO_GENERATION = Generation(DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, None)
 
 
@@ -461,7 +471,8 @@ class BaseCoordinator(object):
                 exception = future.exception
                 if isinstance(exception, (Errors.UnknownMemberIdError,
                                           Errors.RebalanceInProgressError,
-                                          Errors.IllegalGenerationError)):
+                                          Errors.IllegalGenerationError,
+                                          Errors.MemberIdRequiredError)):
                     continue
                 elif not future.retriable():
                     raise exception  # pylint: disable-msg=raising-bad-type
@@ -491,7 +502,7 @@ class BaseCoordinator(object):
             (protocol, metadata if isinstance(metadata, bytes) else metadata.encode())
             for protocol, metadata in self.group_protocols()
         ]
-        version = self._client.api_version(JoinGroupRequest, max_version=3)
+        version = self._client.api_version(JoinGroupRequest, max_version=4)
         if version == 0:
             request = JoinGroupRequest[version](
                 self.group_id,
@@ -585,6 +596,11 @@ class BaseCoordinator(object):
             future.failure(error)
         elif error_type is Errors.GroupAuthorizationFailedError:
             future.failure(error_type(self.group_id))
+        elif error_type is Errors.MemberIdRequiredError:
+            # Broker requires a concrete member id to be allowed to join the group. Update member id
+            # and send another join group request in next cycle.
+            self.reset_generation(response.member_id)
+            future.failure(error_type())
         else:
             # unexpected error, throw the exception
             error = error_type()
@@ -762,10 +778,10 @@ class BaseCoordinator(object):
                 return None
             return self._generation
 
-    def reset_generation(self):
-        """Reset the generation and memberId because we have fallen out of the group."""
+    def reset_generation(self, member_id=UNKNOWN_MEMBER_ID):
+        """Reset the generation and member_id because we have fallen out of the group."""
         with self._lock:
-            self._generation = Generation.NO_GENERATION
+            self._generation = Generation(DEFAULT_GENERATION_ID, member_id, None)
             self.rejoin_needed = True
             self.state = MemberState.UNJOINED
 
@@ -799,8 +815,10 @@ class BaseCoordinator(object):
                 self._heartbeat_thread = None
 
     def __del__(self):
-        if hasattr(self, '_heartbeat_thread'):
+        try:
             self._close_heartbeat_thread()
+        except (TypeError, AttributeError):
+            pass
 
     def close(self, timeout_ms=None):
         """Close the coordinator, leave the current group,
@@ -816,7 +834,7 @@ class BaseCoordinator(object):
         with self._client._lock, self._lock:
             if (not self.coordinator_unknown()
                 and self.state is not MemberState.UNJOINED
-                and self._generation is not Generation.NO_GENERATION):
+                and self._generation.is_valid):
 
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
