@@ -57,8 +57,8 @@ def test_written_bytes_equals_size_in_bytes_v2():
         producer_id=-1, producer_epoch=-1, base_sequence=-1,
         batch_size=999999)
 
-    size_in_bytes = builder.size_in_bytes(
-        0, timestamp=9999999, key=key, value=value, headers=headers)
+    size_in_bytes = DefaultRecordBatchBuilder.size_in_bytes(
+        offset_delta=0, timestamp_delta=0, key=key, value=value, headers=headers)
 
     pos = builder.size()
     meta = builder.append(
