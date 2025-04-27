@@ -49,8 +49,8 @@ class FinalState(IntEnum):
 
 class ProducerBatch(object):
     def __init__(self, tp, records, now=None):
-        self.max_record_size = 0
         now = time.time() if now is None else now
+        self.max_record_size = 0
         self.created = now
         self.drained = None
         self.attempts = 0
@@ -61,6 +61,10 @@ class ProducerBatch(object):
         self.produce_future = FutureProduceResult(tp)
         self._retry = False
         self._final_state = None
+
+    @property
+    def final_state(self):
+        return self._final_state
 
     @property
     def record_count(self):
@@ -86,11 +90,14 @@ class ProducerBatch(object):
         now = time.time() if now is None else now
         self.max_record_size = max(self.max_record_size, metadata.size)
         self.last_append = now
-        future = FutureRecordMetadata(self.produce_future, metadata.offset,
-                                      metadata.timestamp, metadata.crc,
-                                      len(key) if key is not None else -1,
-                                      len(value) if value is not None else -1,
-                                      sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
+        future = FutureRecordMetadata(
+            self.produce_future,
+            metadata.offset,
+            metadata.timestamp,
+            metadata.crc,
+            len(key) if key is not None else -1,
+            len(value) if value is not None else -1,
+            sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
         return future
 
     def abort(self, exception):
@@ -103,66 +110,66 @@ class ProducerBatch(object):
         self._complete_future(-1, -1, exception)
 
     def done(self, base_offset=None, timestamp_ms=None, exception=None):
-        if self._final_state is None:
-            self._final_state = FinalState.SUCCEEDED if exception is None else FinalState.FAILED
-        elif self._final_state is FinalState.ABORTED:
-            log.debug("ProduceResponse returned for %s after batch had already been aborted.", self.topic_partition)
-            return
-        else:
-            raise Errors.IllegalStateError("Batch has already been completed in final state %s" % self._final_state)
+        """
+        Finalize the state of a batch. Final state, once set, is immutable. This function may be called
+        once or twice on a batch. It may be called twice if
+            1. An inflight batch expires before a response from the broker is received. The batch's final
+            state is set to FAILED. But it could succeed on the broker and second time around batch.done() may
+            try to set SUCCEEDED final state.
 
-        self._complete_future(base_offset, timestamp_ms, exception)
+            2. If a transaction abortion happens or if the producer is closed forcefully, the final state is
+            ABORTED but again it could succeed if broker responds with a success.
+
+        Attempted transitions from [FAILED | ABORTED] --> SUCCEEDED are logged.
+        Attempted transitions from one failure state to the same or a different failed state are ignored.
+        Attempted transitions from SUCCEEDED to the same or a failed state throw an exception.
+        """
+        final_state = FinalState.SUCCEEDED if exception is None else FinalState.FAILED
+        if self._final_state is None:
+            self._final_state = final_state
+            if final_state is FinalState.SUCCEEDED:
+                log.debug("Successfully produced messages to %s with base offset %s", self.topic_partition, base_offset)
+            else:
+                log.warning("Failed to produce messages to topic-partition %s with base offset %s: %s",
+                            self.topic_partition, base_offset, exception)
+            self._complete_future(base_offset, timestamp_ms, exception)
+            return True
+
+        elif self._final_state is not FinalState.SUCCEEDED:
+            if final_state is FinalState.SUCCEEDED:
+                # Log if a previously unsuccessful batch succeeded later on.
+                log.debug("ProduceResponse returned %s for %s after batch with base offset %s had already been %s.",
+                          final_state, self.topic_partition, base_offset, self._final_state)
+            else:
+                # FAILED --> FAILED and ABORTED --> FAILED transitions are ignored.
+                log.debug("Ignored state transition %s -> %s for %s batch with base offset %s",
+                          self._final_state, final_state, self.topic_partition, base_offset)
+        else:
+            # A SUCCESSFUL batch must not attempt another state change.
+            raise Errors.IllegalStateError("A %s batch must not attempt another state change to %s" % (self._final_state, final_state))
+        return False
 
     def _complete_future(self, base_offset, timestamp_ms, exception):
         if self.produce_future.is_done:
             raise Errors.IllegalStateError('Batch is already closed!')
         elif exception is None:
-            log.debug("Produced messages to topic-partition %s with base offset %s", self.topic_partition, base_offset)
             self.produce_future.success((base_offset, timestamp_ms))
         else:
-            log.warning("Failed to produce messages to topic-partition %s with base offset"
-                        " %s: %s", self.topic_partition, base_offset, exception)
             self.produce_future.failure(exception)
 
-    def maybe_expire(self, request_timeout_ms, retry_backoff_ms, linger_ms, is_full, now=None):
-        """Expire batches if metadata is not available
-
-        A batch whose metadata is not available should be expired if one
-        of the following is true:
-
-          * the batch is not in retry AND request timeout has elapsed after
-            it is ready (full or linger.ms has reached).
-
-          * the batch is in retry AND request timeout has elapsed after the
-            backoff period ended.
-        """
+    def has_reached_delivery_timeout(self, delivery_timeout_ms, now=None):
         now = time.time() if now is None else now
-        since_append = now - self.last_append
-        since_ready = now - (self.created + linger_ms / 1000)
-        since_backoff = now - (self.last_attempt + retry_backoff_ms / 1000)
-        timeout = request_timeout_ms / 1000
-
-        error = None
-        if not self.in_retry() and is_full and timeout < since_append:
-            error = "%d seconds have passed since last append" % (since_append,)
-        elif not self.in_retry() and timeout < since_ready:
-            error = "%d seconds have passed since batch creation plus linger time" % (since_ready,)
-        elif self.in_retry() and timeout < since_backoff:
-            error = "%d seconds have passed since last attempt plus backoff time" % (since_backoff,)
-
-        if error:
-            self.records.close()
-            self.done(base_offset=-1, exception=Errors.KafkaTimeoutError(
-                "Batch for %s containing %s record(s) expired: %s" % (
-                self.topic_partition, self.records.next_offset(), error)))
-            return True
-        return False
+        return delivery_timeout_ms / 1000 <= now - self.created
 
     def in_retry(self):
         return self._retry
 
-    def set_retry(self):
+    def retry(self, now=None):
+        now = time.time() if now is None else now
         self._retry = True
+        self.attempts += 1
+        self.last_attempt = now
+        self.last_append = now
 
     @property
     def is_done(self):
@@ -207,9 +214,11 @@ class RecordAccumulator(object):
         'batch_size': 16384,
         'compression_attrs': 0,
         'linger_ms': 0,
+        'request_timeout_ms': 30000,
+        'delivery_timeout_ms': 120000,
         'retry_backoff_ms': 100,
         'transaction_manager': None,
-        'message_version': 0,
+        'message_version': 2,
     }
 
     def __init__(self, **configs):
@@ -229,8 +238,20 @@ class RecordAccumulator(object):
         # so we don't need to protect them w/ locking.
         self.muted = set()
         self._drain_index = 0
+        self._next_batch_expiry_time_ms = float('inf')
 
-    def append(self, tp, timestamp_ms, key, value, headers):
+        if self.config['delivery_timeout_ms'] < self.config['linger_ms'] + self.config['request_timeout_ms']:
+            raise Errors.KafkaConfigurationError("Must set delivery_timeout_ms higher than linger_ms + request_timeout_ms")
+
+    @property
+    def delivery_timeout_ms(self):
+        return self.config['delivery_timeout_ms']
+
+    @property
+    def next_expiry_time_ms(self):
+        return self._next_batch_expiry_time_ms
+
+    def append(self, tp, timestamp_ms, key, value, headers, now=None):
         """Add a record to the accumulator, return the append result.
 
         The append result will contain the future metadata, and flag for
@@ -249,6 +270,7 @@ class RecordAccumulator(object):
         """
         assert isinstance(tp, TopicPartition), 'not TopicPartition'
         assert not self._closed, 'RecordAccumulator is closed'
+        now = time.time() if now is None else now
         # We keep track of the number of appending thread to make sure we do
         # not miss batches in abortIncompleteBatches().
         self._appends_in_progress.increment()
@@ -263,7 +285,7 @@ class RecordAccumulator(object):
                 dq = self._batches[tp]
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(timestamp_ms, key, value, headers)
+                    future = last.try_append(timestamp_ms, key, value, headers, now=now)
                     if future is not None:
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
@@ -275,7 +297,7 @@ class RecordAccumulator(object):
 
                 if dq:
                     last = dq[-1]
-                    future = last.try_append(timestamp_ms, key, value, headers)
+                    future = last.try_append(timestamp_ms, key, value, headers, now=now)
                     if future is not None:
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
@@ -292,8 +314,8 @@ class RecordAccumulator(object):
                     self.config['batch_size']
                 )
 
-                batch = ProducerBatch(tp, records)
-                future = batch.try_append(timestamp_ms, key, value, headers)
+                batch = ProducerBatch(tp, records, now=now)
+                future = batch.try_append(timestamp_ms, key, value, headers, now=now)
                 if not future:
                     raise Exception()
 
@@ -304,72 +326,36 @@ class RecordAccumulator(object):
         finally:
             self._appends_in_progress.decrement()
 
-    def abort_expired_batches(self, request_timeout_ms, cluster):
-        """Abort the batches that have been sitting in RecordAccumulator for
-        more than the configured request_timeout due to metadata being
-        unavailable.
+    def maybe_update_next_batch_expiry_time(self, batch):
+        self._next_batch_expiry_time_ms = min(self._next_batch_expiry_time_ms, batch.created * 1000 + self.delivery_timeout_ms)
 
-        Arguments:
-            request_timeout_ms (int): milliseconds to timeout
-            cluster (ClusterMetadata): current metadata for kafka cluster
-
-        Returns:
-            list of ProducerBatch that were expired
-        """
+    def expired_batches(self, now=None):
+        """Get a list of batches which have been sitting in the accumulator too long and need to be expired."""
         expired_batches = []
-        to_remove = []
-        count = 0
         for tp in list(self._batches.keys()):
             assert tp in self._tp_locks, 'TopicPartition not in locks dict'
-
-            # We only check if the batch should be expired if the partition
-            # does not have a batch in flight. This is to avoid the later
-            # batches get expired when an earlier batch is still in progress.
-            # This protection only takes effect when user sets
-            # max.in.flight.request.per.connection=1. Otherwise the expiration
-            # order is not guranteed.
-            if tp in self.muted:
-                continue
-
             with self._tp_locks[tp]:
                 # iterate over the batches and expire them if they have stayed
                 # in accumulator for more than request_timeout_ms
                 dq = self._batches[tp]
-                for batch in dq:
-                    is_full = bool(bool(batch != dq[-1]) or batch.records.is_full())
-                    # check if the batch is expired
-                    if batch.maybe_expire(request_timeout_ms,
-                                          self.config['retry_backoff_ms'],
-                                          self.config['linger_ms'],
-                                          is_full):
+                while dq:
+                    batch = dq[0]
+                    if batch.has_reached_delivery_timeout(self.delivery_timeout_ms, now=now):
+                        dq.popleft()
+                        batch.records.close()
                         expired_batches.append(batch)
-                        to_remove.append(batch)
-                        count += 1
-                        self.deallocate(batch)
                     else:
                         # Stop at the first batch that has not expired.
+                        self.maybe_update_next_batch_expiry_time(batch)
                         break
-
-                # Python does not allow us to mutate the dq during iteration
-                # Assuming expired batches are infrequent, this is better than
-                # creating a new copy of the deque for iteration on every loop
-                if to_remove:
-                    for batch in to_remove:
-                        dq.remove(batch)
-                    to_remove = []
-
-        if expired_batches:
-            log.warning("Expired %d batches in accumulator", count) # trace
-
         return expired_batches
 
     def reenqueue(self, batch, now=None):
-        """Re-enqueue the given record batch in the accumulator to retry."""
-        now = time.time() if now is None else now
-        batch.attempts += 1
-        batch.last_attempt = now
-        batch.last_append = now
-        batch.set_retry()
+        """
+        Re-enqueue the given record batch in the accumulator. In Sender.completeBatch method, we check
+        whether the batch has reached deliveryTimeoutMs or not. Hence we do not do the delivery timeout check here.
+        """
+        batch.retry(now=now)
         assert batch.topic_partition in self._tp_locks, 'TopicPartition not in locks dict'
         assert batch.topic_partition in self._batches, 'TopicPartition not in batches'
         dq = self._batches[batch.topic_partition]
@@ -465,6 +451,88 @@ class RecordAccumulator(object):
                     return True
         return False
 
+    def _should_stop_drain_batches_for_partition(self, first, tp):
+        if self._transaction_manager:
+            if not self._transaction_manager.is_send_to_partition_allowed(tp):
+                return True
+            if not self._transaction_manager.producer_id_and_epoch.is_valid:
+                # we cannot send the batch until we have refreshed the PID
+                log.debug("Waiting to send ready batches because transaction producer id is not valid")
+                return True
+        return False
+
+    def drain_batches_for_one_node(self, cluster, node_id, max_size, now=None):
+        now = time.time() if now is None else now
+        size = 0
+        ready = []
+        partitions = list(cluster.partitions_for_broker(node_id))
+        if not partitions:
+            return ready
+        # to make starvation less likely this loop doesn't start at 0
+        self._drain_index %= len(partitions)
+        start = None
+        while start != self._drain_index:
+            tp = partitions[self._drain_index]
+            if start is None:
+                start = self._drain_index
+            self._drain_index += 1
+            self._drain_index %= len(partitions)
+
+            # Only proceed if the partition has no in-flight batches.
+            if tp in self.muted:
+                continue
+
+            if tp not in self._batches:
+                continue
+
+            with self._tp_locks[tp]:
+                dq = self._batches[tp]
+                if len(dq) == 0:
+                    continue
+                first = dq[0]
+                backoff = bool(first.attempts > 0 and
+                               first.last_attempt + self.config['retry_backoff_ms'] / 1000 > now)
+                # Only drain the batch if it is not during backoff
+                if backoff:
+                    continue
+
+                if (size + first.records.size_in_bytes() > max_size
+                    and len(ready) > 0):
+                    # there is a rare case that a single batch
+                    # size is larger than the request size due
+                    # to compression; in this case we will
+                    # still eventually send this batch in a
+                    # single request
+                    break
+                else:
+                    if self._should_stop_drain_batches_for_partition(first, tp):
+                        break
+
+                    batch = dq.popleft()
+                    if self._transaction_manager and not batch.in_retry():
+                        # If the batch is in retry, then we should not change the pid and
+                        # sequence number, since this may introduce duplicates. In particular,
+                        # the previous attempt may actually have been accepted, and if we change
+                        # the pid and sequence here, this attempt will also be accepted, causing
+                        # a duplicate.
+                        sequence_number = self._transaction_manager.sequence_number(batch.topic_partition)
+                        log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
+                                  node_id, batch.topic_partition,
+                                  self._transaction_manager.producer_id_and_epoch.producer_id,
+                                  self._transaction_manager.producer_id_and_epoch.epoch,
+                                  sequence_number)
+                        batch.records.set_producer_state(
+                            self._transaction_manager.producer_id_and_epoch.producer_id,
+                            self._transaction_manager.producer_id_and_epoch.epoch,
+                            sequence_number,
+                            self._transaction_manager.is_transactional()
+                        )
+                    batch.records.close()
+                    size += batch.records.size_in_bytes()
+                    ready.append(batch)
+                    batch.drained = now
+        return ready
+
     def drain(self, cluster, nodes, max_size, now=None):
         """
         Drain all the data for the given nodes and collate them into a list of
@@ -486,70 +554,7 @@ class RecordAccumulator(object):
         now = time.time() if now is None else now
         batches = {}
         for node_id in nodes:
-            size = 0
-            partitions = list(cluster.partitions_for_broker(node_id))
-            ready = []
-            # to make starvation less likely this loop doesn't start at 0
-            self._drain_index %= len(partitions)
-            start = self._drain_index
-            while True:
-                tp = partitions[self._drain_index]
-                if tp in self._batches and tp not in self.muted:
-                    with self._tp_locks[tp]:
-                        dq = self._batches[tp]
-                        if dq:
-                            first = dq[0]
-                            backoff = bool(first.attempts > 0 and
-                                           first.last_attempt + self.config['retry_backoff_ms'] / 1000 > now)
-                            # Only drain the batch if it is not during backoff
-                            if not backoff:
-                                if (size + first.records.size_in_bytes() > max_size
-                                    and len(ready) > 0):
-                                    # there is a rare case that a single batch
-                                    # size is larger than the request size due
-                                    # to compression; in this case we will
-                                    # still eventually send this batch in a
-                                    # single request
-                                    break
-                                else:
-                                    producer_id_and_epoch = None
-                                    if self._transaction_manager:
-                                        if not self._transaction_manager.is_send_to_partition_allowed(tp):
-                                            break
-                                        producer_id_and_epoch = self._transaction_manager.producer_id_and_epoch
-                                        if not producer_id_and_epoch.is_valid:
-                                            # we cannot send the batch until we have refreshed the PID
-                                            log.debug("Waiting to send ready batches because transaction producer id is not valid")
-                                            break
-
-                                    batch = dq.popleft()
-                                    if producer_id_and_epoch and not batch.in_retry():
-                                        # If the batch is in retry, then we should not change the pid and
-                                        # sequence number, since this may introduce duplicates. In particular,
-                                        # the previous attempt may actually have been accepted, and if we change
-                                        # the pid and sequence here, this attempt will also be accepted, causing
-                                        # a duplicate.
-                                        sequence_number = self._transaction_manager.sequence_number(batch.topic_partition)
-                                        log.debug("Dest: %s: %s producer_id=%s epoch=%s sequence=%s",
-                                                  node_id, batch.topic_partition, producer_id_and_epoch.producer_id, producer_id_and_epoch.epoch,
-                                                  sequence_number)
-                                        batch.records.set_producer_state(
-                                            producer_id_and_epoch.producer_id,
-                                            producer_id_and_epoch.epoch,
-                                            sequence_number,
-                                            self._transaction_manager.is_transactional()
-                                        )
-                                    batch.records.close()
-                                    size += batch.records.size_in_bytes()
-                                    ready.append(batch)
-                                    batch.drained = now
-
-                self._drain_index += 1
-                self._drain_index %= len(partitions)
-                if start == self._drain_index:
-                    break
-
-            batches[node_id] = ready
+            batches[node_id] = self.drain_batches_for_one_node(cluster, node_id, max_size, now=now)
         return batches
 
     def deallocate(self, batch):

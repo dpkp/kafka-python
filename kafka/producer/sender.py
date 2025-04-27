@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import collections
 import copy
+import heapq
 import logging
 import threading
 import time
@@ -59,6 +60,45 @@ class Sender(threading.Thread):
         else:
             self._sensors = None
         self._transaction_manager = self.config['transaction_manager']
+        # A per-partition queue of batches ordered by creation time for tracking the in-flight batches
+        self._in_flight_batches = collections.defaultdict(list)
+
+    def _maybe_remove_from_inflight_batches(self, batch):
+        try:
+            queue = self._in_flight_batches[batch.topic_partition]
+        except KeyError:
+            return
+        try:
+            idx = queue.index((batch.created, batch))
+        except ValueError:
+            return
+        # https://stackoverflow.com/questions/10162679/python-delete-element-from-heap
+        queue[idx] = queue[-1]
+        queue.pop()
+        heapq.heapify(queue)
+
+    def _get_expired_inflight_batches(self):
+        """Get the in-flight batches that has reached delivery timeout."""
+        expired_batches = []
+        to_remove = []
+        for tp, queue in six.iteritems(self._in_flight_batches):
+            while queue:
+                _created_at, batch = queue[0]
+                if batch.has_reached_delivery_timeout(self._accumulator.delivery_timeout_ms):
+                    heapq.heappop(queue)
+                    if batch.final_state is None:
+                        expired_batches.append(batch)
+                    else:
+                        raise Errors.IllegalStateError("%s batch created at %s gets unexpected final state %s" % (batch.topic_partition, batch.created, batch.final_state))
+                else:
+                    self._accumulator.maybe_update_next_batch_expiry_time(batch)
+                    break
+            else:
+                # Avoid mutating in_flight_batches during iteration
+                to_remove.append(tp)
+        for tp in to_remove:
+            del self._in_flight_batches[tp]
+        return expired_batches
 
     def run(self):
         """The main run loop for the sender thread."""
@@ -131,7 +171,8 @@ class Sender(threading.Thread):
         poll_timeout_ms = self._send_producer_data()
         self._client.poll(timeout_ms=poll_timeout_ms)
 
-    def _send_producer_data(self):
+    def _send_producer_data(self, now=None):
+        now = time.time() if now is None else now
         # get the list of partitions with data ready to send
         result = self._accumulator.ready(self._metadata)
         ready_nodes, next_ready_check_delay, unknown_leaders_exist = result
@@ -156,14 +197,20 @@ class Sender(threading.Thread):
         batches_by_node = self._accumulator.drain(
             self._metadata, ready_nodes, self.config['max_request_size'])
 
+        for batch_list in six.itervalues(batches_by_node):
+            for batch in batch_list:
+                item = (batch.created, batch)
+                queue = self._in_flight_batches[batch.topic_partition]
+                heapq.heappush(queue, item)
+
         if self.config['guarantee_message_order']:
             # Mute all the partitions drained
             for batch_list in six.itervalues(batches_by_node):
                 for batch in batch_list:
                     self._accumulator.muted.add(batch.topic_partition)
 
-        expired_batches = self._accumulator.abort_expired_batches(
-            self.config['request_timeout_ms'], self._metadata)
+        expired_batches = self._accumulator.expired_batches()
+        expired_batches.extend(self._get_expired_inflight_batches())
 
         if expired_batches:
             log.debug("%s: Expired %s batches in accumulator", str(self), len(expired_batches))
@@ -193,12 +240,18 @@ class Sender(threading.Thread):
         requests = self._create_produce_requests(batches_by_node)
         # If we have any nodes that are ready to send + have sendable data,
         # poll with 0 timeout so this can immediately loop and try sending more
-        # data. Otherwise, the timeout is determined by nodes that have
-        # partitions with data that isn't yet sendable (e.g. lingering, backing
-        # off). Note that this specifically does not include nodes with
+        # data. Otherwise, the timeout will be the smaller value between next
+        # batch expiry time, and the delay time for checking data availability.
+        # Note that the nodes may have data that isn't yet sendable due to
+        # lingering, backing off, etc. This specifically does not include nodes with
         # sendable data that aren't ready to send since they would cause busy
         # looping.
-        poll_timeout_ms = min(next_ready_check_delay * 1000, not_ready_timeout_ms)
+        poll_timeout_ms = min(next_ready_check_delay * 1000,
+                              not_ready_timeout_ms,
+                              self._accumulator.next_expiry_time_ms - now * 1000)
+        if poll_timeout_ms < 0:
+            poll_timeout_ms = 0
+
         if ready_nodes:
             log.debug("%s: Nodes with data ready to send: %s", str(self), ready_nodes) # trace
             log.debug("%s: Created %d produce requests: %s", str(self), len(requests), requests) # trace
@@ -391,10 +444,12 @@ class Sender(threading.Thread):
             elif self._transaction_manager.is_transactional():
                 self._transaction_manager.transition_to_abortable_error(exception)
 
-        batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=exception)
-        self._accumulator.deallocate(batch)
         if self._sensors:
             self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
+
+        if batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms, exception=exception):
+            self._maybe_remove_from_inflight_batches(batch)
+            self._accumulator.deallocate(batch)
 
     def _complete_batch(self, batch, error, base_offset, timestamp_ms=None):
         """Complete or retry the given batch of records.
@@ -424,6 +479,7 @@ class Sender(threading.Thread):
                               str(self), batch.topic_partition,
                               self._transaction_manager.sequence_number(batch.topic_partition) if self._transaction_manager else None)
                     self._accumulator.reenqueue(batch)
+                    self._maybe_remove_from_inflight_batches(batch)
                     if self._sensors:
                         self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
                 else:
@@ -448,8 +504,9 @@ class Sender(threading.Thread):
                 self._metadata.request_update()
 
         else:
-            batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms)
-            self._accumulator.deallocate(batch)
+            if batch.done(base_offset=base_offset, timestamp_ms=timestamp_ms):
+                self._maybe_remove_from_inflight_batches(batch)
+                self._accumulator.deallocate(batch)
 
             if self._transaction_manager and self._transaction_manager.producer_id_and_epoch.match(batch):
                 self._transaction_manager.increment_sequence_number(batch.topic_partition, batch.record_count)
@@ -465,8 +522,10 @@ class Sender(threading.Thread):
         We can retry a send if the error is transient and the number of
         attempts taken is fewer than the maximum allowed
         """
-        return (batch.attempts < self.config['retries']
-                and getattr(error, 'retriable', False))
+        return (not batch.has_reached_delivery_timeout(self._accumulator.delivery_timeout_ms) and
+                batch.attempts < self.config['retries'] and
+                batch.final_state is None and
+                getattr(error, 'retriable', False))
 
     def _create_produce_requests(self, collated):
         """
