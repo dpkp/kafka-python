@@ -143,7 +143,7 @@ class KafkaProducer(object):
             Compression is of full batches of data, so the efficacy of batching
             will also impact the compression ratio (more batching means better
             compression). Default: None.
-        retries (int): Setting a value greater than zero will cause the client
+        retries (numeric): Setting a value greater than zero will cause the client
             to resend any record whose send fails with a potentially transient
             error. Note that this retry is no different than if the client
             resent the record upon receiving the error. Allowing retries
@@ -156,7 +156,7 @@ class KafkaProducer(object):
             configured by delivery_timeout_ms expires first before successful
             acknowledgement. Users should generally prefer to leave this config
             unset and instead use delivery_timeout_ms to control retry behavior.
-            Default: 2147483647 (java max int).
+            Default: float('inf') (infinite)
         batch_size (int): Requests sent to brokers will contain multiple
             batches, one for each partition with data available to be sent.
             A small batch size will make batching less common and may reduce
@@ -337,7 +337,7 @@ class KafkaProducer(object):
         'acks': 1,
         'bootstrap_topics_filter': set(),
         'compression_type': None,
-        'retries': 2147483647,
+        'retries': float('inf'),
         'batch_size': 16384,
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
@@ -485,10 +485,7 @@ class KafkaProducer(object):
             else:
                 log.info("%s: Instantiated an idempotent producer.", str(self))
 
-            if 'retries' not in user_provided_configs:
-                log.info("%s: Overriding the default 'retries' config to 3 since the idempotent producer is enabled.", str(self))
-                self.config['retries'] = 3
-            elif self.config['retries'] == 0:
+            if self.config['retries'] == 0:
                 raise Errors.KafkaConfigurationError("Must set 'retries' to non-zero when using the idempotent producer.")
 
             if 'max_in_flight_requests_per_connection' not in user_provided_configs:
