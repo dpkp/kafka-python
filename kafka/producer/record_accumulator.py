@@ -251,6 +251,13 @@ class RecordAccumulator(object):
     def next_expiry_time_ms(self):
         return self._next_batch_expiry_time_ms
 
+    def _tp_lock(self, tp):
+        if tp not in self._tp_locks:
+            with self._tp_locks[None]:
+                if tp not in self._tp_locks:
+                    self._tp_locks[tp] = threading.Lock()
+        return self._tp_locks[tp]
+
     def append(self, tp, timestamp_ms, key, value, headers, now=None):
         """Add a record to the accumulator, return the append result.
 
@@ -275,12 +282,7 @@ class RecordAccumulator(object):
         # not miss batches in abortIncompleteBatches().
         self._appends_in_progress.increment()
         try:
-            if tp not in self._tp_locks:
-                with self._tp_locks[None]:
-                    if tp not in self._tp_locks:
-                        self._tp_locks[tp] = threading.Lock()
-
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 # check if we have an in-progress batch
                 dq = self._batches[tp]
                 if dq:
@@ -290,7 +292,7 @@ class RecordAccumulator(object):
                         batch_is_full = len(dq) > 1 or last.records.is_full()
                         return future, batch_is_full, False
 
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 # Need to check if producer is closed again after grabbing the
                 # dequeue lock.
                 assert not self._closed, 'RecordAccumulator is closed'
@@ -333,8 +335,7 @@ class RecordAccumulator(object):
         """Get a list of batches which have been sitting in the accumulator too long and need to be expired."""
         expired_batches = []
         for tp in list(self._batches.keys()):
-            assert tp in self._tp_locks, 'TopicPartition not in locks dict'
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 # iterate over the batches and expire them if they have stayed
                 # in accumulator for more than request_timeout_ms
                 dq = self._batches[tp]
@@ -352,14 +353,12 @@ class RecordAccumulator(object):
 
     def reenqueue(self, batch, now=None):
         """
-        Re-enqueue the given record batch in the accumulator. In Sender.completeBatch method, we check
-        whether the batch has reached deliveryTimeoutMs or not. Hence we do not do the delivery timeout check here.
+        Re-enqueue the given record batch in the accumulator. In Sender._complete_batch method, we check
+        whether the batch has reached delivery_timeout_ms or not. Hence we do not do the delivery timeout check here.
         """
         batch.retry(now=now)
-        assert batch.topic_partition in self._tp_locks, 'TopicPartition not in locks dict'
-        assert batch.topic_partition in self._batches, 'TopicPartition not in batches'
-        dq = self._batches[batch.topic_partition]
-        with self._tp_locks[batch.topic_partition]:
+        with self._tp_lock(batch.topic_partition):
+            dq = self._batches[batch.topic_partition]
             dq.appendleft(batch)
 
     def ready(self, cluster, now=None):
@@ -412,7 +411,7 @@ class RecordAccumulator(object):
             elif tp in self.muted:
                 continue
 
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 dq = self._batches[tp]
                 if not dq:
                     continue
@@ -445,7 +444,7 @@ class RecordAccumulator(object):
     def has_undrained(self):
         """Check whether there are any batches which haven't been drained"""
         for tp in list(self._batches.keys()):
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 dq = self._batches[tp]
                 if len(dq):
                     return True
@@ -485,7 +484,7 @@ class RecordAccumulator(object):
             if tp not in self._batches:
                 continue
 
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 dq = self._batches[tp]
                 if len(dq) == 0:
                     continue
@@ -619,7 +618,7 @@ class RecordAccumulator(object):
         for batch in self._incomplete.all():
             tp = batch.topic_partition
             # Close the batch before aborting
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 batch.records.close()
                 self._batches[tp].remove(batch)
             batch.abort(error)
@@ -628,7 +627,7 @@ class RecordAccumulator(object):
     def abort_undrained_batches(self, error):
         for batch in self._incomplete.all():
             tp = batch.topic_partition
-            with self._tp_locks[tp]:
+            with self._tp_lock(tp):
                 aborted = False
                 if not batch.is_done:
                     aborted = True
