@@ -106,7 +106,16 @@ class KafkaProducer(object):
             defaults to be suitable. If the values are set to something
             incompatible with the idempotent producer, a KafkaConfigurationError
             will be raised.
-
+        delivery_timeout_ms (float): An upper bound on the time to report success
+            or failure after producer.send() returns. This limits the total time
+            that a record will be delayed prior to sending, the time to await
+            acknowledgement from the broker (if expected), and the time allowed
+            for retriable send failures. The producer may report failure to send
+            a record earlier than this config if either an unrecoverable error is
+            encountered, the retries have been exhausted, or the record is added
+            to a batch which reached an earlier delivery expiration deadline.
+            The value of this config should be greater than or equal to the
+            sum of (request_timeout_ms + linger_ms). Default: 120000.
         acks (0, 1, 'all'): The number of acknowledgments the producer requires
             the leader to have received before considering a request complete.
             This controls the durability of records that are sent. The
@@ -142,8 +151,12 @@ class KafkaProducer(object):
             potentially change the ordering of records because if two batches
             are sent to a single partition, and the first fails and is retried
             but the second succeeds, then the records in the second batch may
-            appear first.
-            Default: 0.
+            appear first. Note additionally that produce requests will be
+            failed before the number of retries has been exhausted if the timeout
+            configured by delivery_timeout_ms expires first before successful
+            acknowledgement. Users should generally prefer to leave this config
+            unset and instead use delivery_timeout_ms to control retry behavior.
+            Default: 2147483647 (java max int).
         batch_size (int): Requests sent to brokers will contain multiple
             batches, one for each partition with data available to be sent.
             A small batch size will make batching less common and may reduce
@@ -320,10 +333,11 @@ class KafkaProducer(object):
         'enable_idempotence': False,
         'transactional_id': None,
         'transaction_timeout_ms': 60000,
+        'delivery_timeout_ms': 120000,
         'acks': 1,
         'bootstrap_topics_filter': set(),
         'compression_type': None,
-        'retries': 0,
+        'retries': 2147483647,
         'batch_size': 16384,
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
