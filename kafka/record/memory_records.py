@@ -109,6 +109,16 @@ class MemoryRecords(ABCRecords):
         else:
             return DefaultRecordBatch(next_slice)
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if not self.has_next():
+            raise StopIteration
+        return self.next_batch()
+
+    next = __next__
+
 
 class MemoryRecordsBuilder(object):
 
@@ -185,6 +195,10 @@ class MemoryRecordsBuilder(object):
     @property
     def producer_epoch(self):
         return self._producer_epoch
+
+    def records(self):
+        assert self._closed
+        return MemoryRecords(self._buffer)
 
     def close(self):
         # This method may be called multiple times on the same batch
