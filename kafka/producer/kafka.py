@@ -37,8 +37,8 @@ class KafkaProducer(object):
     The producer is thread safe and sharing a single producer instance across
     threads will generally be faster than having multiple instances.
 
-    The producer consists of a pool of buffer space that holds records that
-    haven't yet been transmitted to the server as well as a background I/O
+    The producer consists of a RecordAccumulator which holds records that
+    haven't yet been transmitted to the server, and a Sender background I/O
     thread that is responsible for turning these records into requests and
     transmitting them to the cluster.
 
@@ -76,6 +76,47 @@ class KafkaProducer(object):
 
     The key_serializer and value_serializer instruct how to turn the key and
     value objects the user provides into bytes.
+
+    From Kafka 0.11, the KafkaProducer supports two additional modes:
+    the idempotent producer and the transactional producer.
+    The idempotent producer strengthens Kafka's delivery semantics from
+    at least once to exactly once delivery. In particular, producer retries
+    will no longer introduce duplicates. The transactional producer allows an
+    application to send messages to multiple partitions (and topics!)
+    atomically.
+
+    To enable idempotence, the `enable_idempotence` configuration must be set
+    to True. If set, the `retries` config will default to `float('inf')` and
+    the `acks` config will default to 'all'. There are no API changes for the
+    idempotent producer, so existing applications will not need to be modified
+    to take advantage of this feature.
+
+    To take advantage of the idempotent producer, it is imperative to avoid
+    application level re-sends since these cannot be de-duplicated. As such, if
+    an application enables idempotence, it is recommended to leave the
+    `retries` config unset, as it will be defaulted to `float('inf')`.
+    Additionally, if a :meth:`~kafka.KafkaProducer.send` returns an error even
+    with infinite retries (for instance if the message expires in the buffer
+    before being sent), then it is recommended to shut down the producer and
+    check the contents of the last produced message to ensure that it is not
+    duplicated. Finally, the producer can only guarantee idempotence for
+    messages sent within a single session.
+
+    To use the transactional producer and the attendant APIs, you must set the
+    `transactional_id` configuration property. If the `transactional_id` is
+    set, idempotence is automatically enabled along with the producer configs
+    which idempotence depends on. Further, topics which are included in
+    transactions should be configured for durability. In particular, the
+    `replication.factor` should be at least `3`, and the `min.insync.replicas`
+    for these topics should be set to 2. Finally, in order for transactional
+    guarantees to be realized from end-to-end, the consumers must be
+    configured to read only committed messages as well.
+
+    The purpose of the `transactional_id` is to enable transaction recovery
+    across multiple sessions of a single producer instance. It would typically
+    be derived from the shard identifier in a partitioned, stateful,
+    application. As such, it should be unique to each producer instance running
+    within a partitioned application.
 
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
