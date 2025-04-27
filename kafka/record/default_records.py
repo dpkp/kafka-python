@@ -679,14 +679,15 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
         """
         return len(self._buffer)
 
-    def size_in_bytes(self, offset, timestamp, key, value, headers):
-        if self._first_timestamp is not None:
-            timestamp_delta = timestamp - self._first_timestamp
-        else:
-            timestamp_delta = 0
+    @classmethod
+    def header_size_in_bytes(self):
+        return self.HEADER_STRUCT.size
+
+    @classmethod
+    def size_in_bytes(self, offset_delta, timestamp_delta, key, value, headers):
         size_of_body = (
             1 +  # Attrs
-            size_of_varint(offset) +
+            size_of_varint(offset_delta) +
             size_of_varint(timestamp_delta) +
             self.size_of(key, value, headers)
         )
