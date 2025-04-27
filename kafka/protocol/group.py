@@ -52,6 +52,12 @@ class JoinGroupResponse_v3(Response):
     SCHEMA = JoinGroupResponse_v2.SCHEMA
 
 
+class JoinGroupResponse_v4(Response):
+    API_KEY = 11
+    API_VERSION = 4
+    SCHEMA = JoinGroupResponse_v3.SCHEMA
+
+
 class JoinGroupRequest_v0(Request):
     API_KEY = 11
     API_VERSION = 0
@@ -95,14 +101,22 @@ class JoinGroupRequest_v3(Request):
     API_VERSION = 3
     RESPONSE_TYPE = JoinGroupResponse_v3
     SCHEMA = JoinGroupRequest_v2.SCHEMA
-    UNKNOWN_MEMBER_ID = ''
+
+
+class JoinGroupRequest_v4(Request):
+    API_KEY = 11
+    API_VERSION = 4
+    RESPONSE_TYPE = JoinGroupResponse_v4
+    SCHEMA = JoinGroupRequest_v3.SCHEMA
 
 
 JoinGroupRequest = [
-    JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2, JoinGroupRequest_v3
+    JoinGroupRequest_v0, JoinGroupRequest_v1, JoinGroupRequest_v2,
+    JoinGroupRequest_v3, JoinGroupRequest_v4,
 ]
 JoinGroupResponse = [
-    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2, JoinGroupResponse_v3
+    JoinGroupResponse_v0, JoinGroupResponse_v1, JoinGroupResponse_v2,
+    JoinGroupResponse_v3, JoinGroupResponse_v4,
 ]
 
 
