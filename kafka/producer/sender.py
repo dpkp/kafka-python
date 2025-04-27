@@ -30,7 +30,7 @@ class Sender(threading.Thread):
     DEFAULT_CONFIG = {
         'max_request_size': 1048576,
         'acks': 1,
-        'retries': 0,
+        'retries': float('inf'),
         'request_timeout_ms': 30000,
         'retry_backoff_ms': 100,
         'metrics': None,
@@ -468,7 +468,7 @@ class Sender(threading.Thread):
             if self._can_retry(batch, error):
                 # retry
                 log.warning("%s: Got error produce response on topic-partition %s,"
-                            " retrying (%d attempts left). Error: %s",
+                            " retrying (%s attempts left). Error: %s",
                             str(self), batch.topic_partition,
                             self.config['retries'] - batch.attempts - 1,
                             error)

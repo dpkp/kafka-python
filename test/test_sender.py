@@ -131,6 +131,7 @@ def test_complete_batch_transaction(sender, transaction_manager):
 def test_complete_batch_error(sender, error, refresh_metadata):
     sender._client.cluster._last_successful_refresh_ms = (time.time() - 10) * 1000
     sender._client.cluster._need_update = False
+    sender.config['retries'] = 0
     assert sender._client.cluster.ttl() > 0
     batch = producer_batch()
     sender._complete_batch(batch, error, -1)
