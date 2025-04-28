@@ -59,6 +59,12 @@ class OffsetCommitResponse_v6(Response):
     SCHEMA = OffsetCommitResponse_v5.SCHEMA
 
 
+class OffsetCommitResponse_v7(Response):
+    API_KEY = 8
+    API_VERSION = 7
+    SCHEMA = OffsetCommitResponse_v6.SCHEMA
+
+
 class OffsetCommitRequest_v0(Request):
     API_KEY = 8
     API_VERSION = 0  # Zookeeper-backed storage
@@ -162,17 +168,34 @@ class OffsetCommitRequest_v6(Request):
     )
 
 
+class OffsetCommitRequest_v7(Request):
+    API_KEY = 8
+    API_VERSION = 7
+    RESPONSE_TYPE = OffsetCommitResponse_v6
+    SCHEMA = Schema(
+        ('group_id', String('utf-8')),
+        ('generation_id', Int32),
+        ('member_id', String('utf-8')),
+        ('group_instance_id', String('utf-8')), # added for static membership / kip-345
+        ('topics', Array(
+            ('topic', String('utf-8')),
+            ('partitions', Array(
+                ('partition', Int32),
+                ('offset', Int64),
+                ('leader_epoch', Int32),
+                ('metadata', String('utf-8'))))))
+    )
+
+
 OffsetCommitRequest = [
-    OffsetCommitRequest_v0, OffsetCommitRequest_v1,
-    OffsetCommitRequest_v2, OffsetCommitRequest_v3,
-    OffsetCommitRequest_v4, OffsetCommitRequest_v5,
-    OffsetCommitRequest_v6,
+    OffsetCommitRequest_v0, OffsetCommitRequest_v1, OffsetCommitRequest_v2,
+    OffsetCommitRequest_v3, OffsetCommitRequest_v4, OffsetCommitRequest_v5,
+    OffsetCommitRequest_v6, OffsetCommitRequest_v7,
 ]
 OffsetCommitResponse = [
-    OffsetCommitResponse_v0, OffsetCommitResponse_v1,
-    OffsetCommitResponse_v2, OffsetCommitResponse_v3,
-    OffsetCommitResponse_v4, OffsetCommitResponse_v5,
-    OffsetCommitResponse_v6,
+    OffsetCommitResponse_v0, OffsetCommitResponse_v1, OffsetCommitResponse_v2,
+    OffsetCommitResponse_v3, OffsetCommitResponse_v4, OffsetCommitResponse_v5,
+    OffsetCommitResponse_v6, OffsetCommitResponse_v7,
 ]
 
 

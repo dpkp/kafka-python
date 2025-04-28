@@ -35,9 +35,12 @@ class Generation(object):
         self.member_id = member_id
         self.protocol = protocol
 
-    @property
-    def is_valid(self):
-        return self.generation_id != DEFAULT_GENERATION_ID
+    def has_member_id(self):
+        """
+        True if this generation has a valid member id, False otherwise.
+        A member might have an id before it becomes part of a group generation.
+        """
+        return self.member_id != UNKNOWN_MEMBER_ID
 
     def __eq__(self, other):
         return (self.generation_id == other.generation_id and
@@ -94,6 +97,7 @@ class BaseCoordinator(object):
 
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
+        'group_instance_id': None,
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
@@ -135,7 +139,6 @@ class BaseCoordinator(object):
                                                      "and session_timeout_ms")
 
         self._client = client
-        self.group_id = self.config['group_id']
         self.heartbeat = Heartbeat(**self.config)
         self._heartbeat_thread = None
         self._lock = threading.Condition()
@@ -151,6 +154,14 @@ class BaseCoordinator(object):
                                                    self.config['metric_group_prefix'])
         else:
             self._sensors = None
+
+    @property
+    def group_id(self):
+        return self.config['group_id']
+
+    @property
+    def group_instance_id(self):
+        return self.config['group_instance_id']
 
     @abc.abstractmethod
     def protocol_type(self):
@@ -205,7 +216,7 @@ class BaseCoordinator(object):
         Arguments:
             leader_id (str): The id of the leader (which is this member)
             protocol (str): the chosen group protocol (assignment strategy)
-            members (list): [(member_id, metadata_bytes)] from
+            members (list): [(member_id, group_instance_id, metadata_bytes)] from
                 JoinGroupResponse. metadata_bytes are associated with the chosen
                 group protocol, and the Coordinator subclass is responsible for
                 decoding metadata_bytes based on that protocol.
@@ -534,11 +545,19 @@ class BaseCoordinator(object):
             (protocol, metadata if isinstance(metadata, bytes) else metadata.encode())
             for protocol, metadata in self.group_protocols()
         ]
-        version = self._client.api_version(JoinGroupRequest, max_version=4)
+        version = self._client.api_version(JoinGroupRequest, max_version=5)
         if version == 0:
             request = JoinGroupRequest[version](
                 self.group_id,
                 self.config['session_timeout_ms'],
+                self._generation.member_id,
+                self.protocol_type(),
+                member_metadata)
+        elif version <= 4:
+            request = JoinGroupRequest[version](
+                self.group_id,
+                self.config['session_timeout_ms'],
+                self.config['max_poll_interval_ms'],
                 self._generation.member_id,
                 self.protocol_type(),
                 member_metadata)
@@ -548,6 +567,7 @@ class BaseCoordinator(object):
                 self.config['session_timeout_ms'],
                 self.config['max_poll_interval_ms'],
                 self._generation.member_id,
+                self.group_instance_id,
                 self.protocol_type(),
                 member_metadata)
 
@@ -621,16 +641,17 @@ class BaseCoordinator(object):
             future.failure(error_type())
         elif error_type in (Errors.InconsistentGroupProtocolError,
                             Errors.InvalidSessionTimeoutError,
-                            Errors.InvalidGroupIdError):
+                            Errors.InvalidGroupIdError,
+                            Errors.GroupAuthorizationFailedError,
+                            Errors.GroupMaxSizeReachedError,
+                            Errors.FencedInstanceIdError):
             # log the error and re-throw the exception
-            error = error_type(response)
             log.error("Attempt to join group %s failed due to fatal error: %s",
-                      self.group_id, error)
-            future.failure(error)
-        elif error_type is Errors.GroupAuthorizationFailedError:
-            log.error("Attempt to join group %s failed due to group authorization error",
-                      self.group_id)
-            future.failure(error_type(self.group_id))
+                      self.group_id, error_type.__name__)
+            if error_type in (Errors.GroupAuthorizationFailedError, Errors.GroupMaxSizeReachedError):
+                future.failure(error_type(self.group_id))
+            else:
+                future.failure(error_type())
         elif error_type is Errors.MemberIdRequiredError:
             # Broker requires a concrete member id to be allowed to join the group. Update member id
             # and send another join group request in next cycle.
@@ -651,12 +672,20 @@ class BaseCoordinator(object):
 
     def _on_join_follower(self):
         # send follower's sync group with an empty assignment
-        version = self._client.api_version(SyncGroupRequest, max_version=2)
-        request = SyncGroupRequest[version](
-            self.group_id,
-            self._generation.generation_id,
-            self._generation.member_id,
-            {})
+        version = self._client.api_version(SyncGroupRequest, max_version=3)
+        if version <= 2:
+            request = SyncGroupRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+                [])
+        else:
+            request = SyncGroupRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+                self.group_instance_id,
+                [])
         log.debug("Sending follower SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
         return self._send_sync_group_request(request)
@@ -676,18 +705,27 @@ class BaseCoordinator(object):
             group_assignment = self._perform_assignment(response.leader_id,
                                                         response.group_protocol,
                                                         response.members)
+            for member_id, assignment in six.iteritems(group_assignment):
+                if not isinstance(assignment, bytes):
+                    group_assignment[member_id] = assignment.encode()
+
         except Exception as e:
             return Future().failure(e)
 
-        version = self._client.api_version(SyncGroupRequest, max_version=2)
-        request = SyncGroupRequest[version](
-            self.group_id,
-            self._generation.generation_id,
-            self._generation.member_id,
-            [(member_id,
-              assignment if isinstance(assignment, bytes) else assignment.encode())
-             for member_id, assignment in six.iteritems(group_assignment)])
-
+        version = self._client.api_version(SyncGroupRequest, max_version=3)
+        if version <= 2:
+            request = SyncGroupRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+                group_assignment.items())
+        else:
+            request = SyncGroupRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+                self.group_instance_id,
+                group_assignment.items())
         log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
         return self._send_sync_group_request(request)
@@ -727,6 +765,10 @@ class BaseCoordinator(object):
             log.info("SyncGroup for group %s failed due to coordinator"
                      " rebalance", self.group_id)
             future.failure(error_type(self.group_id))
+        elif error_type is Errors.FencedInstanceIdError:
+            log.error("SyncGroup for group %s failed due to fenced id error: %s",
+                      self.group_id, self.group_instance_id)
+            future.failure(error_type((self.group_id, self.group_instance_id)))
         elif error_type in (Errors.UnknownMemberIdError,
                             Errors.IllegalGenerationError):
             error = error_type()
@@ -879,20 +921,28 @@ class BaseCoordinator(object):
         if self.config['api_version'] >= (0, 9):
             self.maybe_leave_group(timeout_ms=timeout_ms)
 
+    def is_dynamic_member(self):
+        return self.group_instance_id is None or self.config['api_version'] < (2, 3)
+
     def maybe_leave_group(self, timeout_ms=None):
         """Leave the current group and reset local generation/memberId."""
         if self.config['api_version'] < (0, 9):
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         with self._client._lock, self._lock:
-            if (not self.coordinator_unknown()
-                and self.state is not MemberState.UNJOINED
-                and self._generation.is_valid):
+            # Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
+            # consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
+            # and the membership expiration is only controlled by session timeout.
+            if (self.is_dynamic_member() and not self.coordinator_unknown()
+                and self.state is not MemberState.UNJOINED and self._generation.has_member_id()):
 
                 # this is a minimal effort attempt to leave the group. we do not
                 # attempt any resending if the request fails or times out.
-                log.info('Leaving consumer group (%s).', self.group_id)
-                version = self._client.api_version(LeaveGroupRequest, max_version=2)
-                request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
+                log.info('Leaving consumer group %s (member %s).', self.group_id, self._generation.member_id)
+                version = self._client.api_version(LeaveGroupRequest, max_version=3)
+                if version <= 2:
+                    request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
+                else:
+                    request = LeaveGroupRequest[version](self.group_id, [(self._generation.member_id, self.group_instance_id)])
                 log.debug('Sending LeaveGroupRequest to %s: %s', self.coordinator_id, request)
                 future = self._client.send(self.coordinator_id, request)
                 future.add_callback(self._handle_leave_group_response)
@@ -910,6 +960,15 @@ class BaseCoordinator(object):
         else:
             log.error("LeaveGroup request for group %s failed with error: %s",
                       self.group_id, error_type())
+        if response.API_VERSION >= 3:
+            for member_id, group_instance_id, error_code in response.members:
+                error_type = Errors.for_code(error_code)
+                if error_type is Errors.NoError:
+                    log.debug("LeaveGroup request for member %s / group instance %s returned successfully",
+                              member_id, group_instance_id)
+                else:
+                    log.error("LeaveGroup request for member %s / group instance %s failed with error: %s",
+                              member_id, group_instance_id, error_type())
 
     def _send_heartbeat_request(self):
         """Send a heartbeat request"""
@@ -922,10 +981,20 @@ class BaseCoordinator(object):
             e = Errors.NodeNotReadyError(self.coordinator_id)
             return Future().failure(e)
 
-        version = self._client.api_version(HeartbeatRequest, max_version=2)
-        request = HeartbeatRequest[version](self.group_id,
-                                            self._generation.generation_id,
-                                            self._generation.member_id)
+        version = self._client.api_version(HeartbeatRequest, max_version=3)
+        if version <=2:
+            request = HeartbeatRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+            )
+        else:
+            request = HeartbeatRequest[version](
+                self.group_id,
+                self._generation.generation_id,
+                self._generation.member_id,
+                self.group_instance_id,
+            )
         heartbeat_log.debug("Sending HeartbeatRequest to %s: %s", self.coordinator_id, request)
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
@@ -959,6 +1028,10 @@ class BaseCoordinator(object):
                                   " current.", self.group_id)
             self.reset_generation()
             future.failure(error_type())
+        elif error_type is Errors.FencedInstanceIdError:
+            heartbeat_log.error("Heartbeat failed for group %s due to fenced id error: %s",
+                                self.group_id, self.group_instance_id)
+            future.failure(error_type((self.group_id, self.group_instance_id)))
         elif error_type is Errors.UnknownMemberIdError:
             heartbeat_log.warning("Heartbeat: local member_id was not recognized;"
                                   " this consumer needs to re-join")
@@ -1178,6 +1251,11 @@ class HeartbeatThread(threading.Thread):
                 # then the session timeout may expire before we can rejoin.
                 heartbeat_log.debug('Treating RebalanceInProgressError as successful heartbeat')
                 self.coordinator.heartbeat.received_heartbeat()
+            elif isinstance(exception, Errors.FencedInstanceIdError):
+                heartbeat_log.error("Heartbeat thread caught fenced group_instance_id %s error",
+                                    self.coordinator.group_instance_id)
+                self.failed = exception
+                self.disable()
             else:
                 heartbeat_log.debug('Heartbeat failure: %s', exception)
                 self.coordinator.heartbeat.fail_heartbeat()
