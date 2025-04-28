@@ -96,6 +96,14 @@ that expose basic message attributes: topic, partition, offset, key, and value:
 
 .. code-block:: python
 
+    # Read only committed messages from transactional topic
+    consumer = KafkaConsumer(isolation_level='read_committed')
+    consumer.subscribe(['txn_topic'])
+    for msg in consumer:
+        print(msg)
+
+.. code-block:: python
+
     # Get consumer metrics
     metrics = consumer.metrics()
 
@@ -152,6 +160,21 @@ for more details.
     producer = KafkaProducer(compression_type='gzip')
     for i in range(1000):
         producer.send('foobar', b'msg %d' % i)
+
+.. code-block:: python
+
+    # Use transactions
+    producer = KafkaProducer(transactional_id='fizzbuzz')
+    producer.init_transactions()
+    producer.begin_transaction()
+    future = producer.send('txn_topic', value=b'yes')
+    future.get() # wait for successful produce
+    producer.commit_transaction() # commit the transaction
+
+    producer.begin_transaction()
+    future = producer.send('txn_topic', value=b'no')
+    future.get() # wait for successful produce
+    producer.abort_transaction() # abort the transaction
 
 .. code-block:: python
 
