@@ -1,6 +1,60 @@
 Changelog
 =========
 
+2.2.0 (Apr 28, 2025)
+####################
+
+KafkaProducer
+-------------
+* KIP-98: Add idempotent producer support (#2569)
+* KIP-98: Transactional Producer (#2587)
+* KIP-98: Add offsets support to transactional KafkaProducer (#2590)
+* Prefix producer logs w/ client id and transactional id (#2591)
+* KAFKA-5429: Ignore produce response if batch was previously aborted
+* KIP-91: KafkaProducer `delivery_timeout_ms`
+* Default retries -> infinite
+* Expand KafkaProducer docstring w/ idempotent and transactional notes
+* RecordAccumulator: Use helper method to get/set `_tp_locks`; get dq with lock in reenqueue()
+
+KafkaConsumer
+-------------
+* KIP-98: Add Consumer support for `READ_COMMITTED` (#2582)
+* KIP-394: handle `MEMBER_ID_REQUIRED` error w/ second join group request (#2598)
+* KAFKA-5078: Defer fetch record exception if iterator has already moved across a valid record
+* KAFKA-5075: Defer consumer fetcher exception if fetch position has already increased
+* KAFKA-4937: Batch offset fetches in the Consumer
+* KAFKA-4547: Avoid resetting paused partitions to committed offsets
+* KAFKA-6397: Consumer should not block setting positions of unavailable partitions (#2593)
+
+Potentially Breaking Changes (internal)
+---------------------------------------
+* Rename CorruptRecordException -> CorruptRecordError
+* Rename Coordinator errors to generic not group (#2585)
+* Rename `ClusterMetadata.add_group_coordinator` -> `add_coordinator` + support txn type
+* Use SaslAuthenticationFailedError in kafka.conn connection failure; Drop unused AuthenticationFailedError
+* Remove old/unused errors; reorder; KafkaTimeout -> retriable
+* Drop `log_start_offset` from producer RecordMetadata
+
+Internal
+--------
+* MemoryRecords iterator; MemoryRecordsBuilder records() helper
+* Convert `DefaultRecordsBuilder.size_in_bytes` to classmethod
+
+Fixes
+-----
+* Resolve datetime deprecation warnings (#2589)
+* Avoid self refcount in log messages; test thread close on all pythons
+* Fix client.wakeup() race from producer/sender close
+* Fix ElectionNotNeededError handling in admin client
+
+Tests
+-----
+* Move integration tests and fixtures to test/integration/; simplify unit fixtures (#2588)
+* Expand Sender test coverage (#2586)
+* py2 test fixups
+* Drop unused KafkaClient import from `test_fetcher`
+
+
 2.1.5 (Apr 4, 2025)
 ###################
 
