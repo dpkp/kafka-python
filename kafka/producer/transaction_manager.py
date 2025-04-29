@@ -260,7 +260,7 @@ class TransactionManager(object):
         with self._lock:
             if self._current_state == TransactionState.ABORTING_TRANSACTION:
                 log.debug("Skipping transition to abortable error state since the transaction is already being "
-                          " aborted. Underlying exception: ", exc)
+                          " aborted. Underlying exception: %s", exc)
                 return
             self._transition_to(TransactionState.ABORTABLE_ERROR, error=exc)
 
@@ -687,7 +687,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
             if error is Errors.NoError:
                 continue
             elif error in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
-                self.transaction_manager._lookup_coordinator('transaction', self.transactiona_id)
+                self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
                 self.reenqueue()
                 return
             elif error is Errors.ConcurrentTransactionsError:
@@ -726,7 +726,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         self.transaction_manager._pending_partitions_in_transaction -= partitions
 
         if unauthorized_topics:
-            self.abortable_error(Errors.TopicAuthorizationError(unauthorized_topics))
+            self.abortable_error(Errors.TopicAuthorizationFailedError(unauthorized_topics))
         elif has_partition_errors:
             self.abortable_error(Errors.KafkaError("Could not add partitions to transaction due to errors: %s" % (results)))
         else:
@@ -795,7 +795,7 @@ class FindCoordinatorHandler(TxnRequestHandler):
         elif error is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error())
         elif error is Errors.GroupAuthorizationFailedError:
-            self.abortable_error(Errors.GroupAuthorizationError(self._coord_key))
+            self.abortable_error(error(self._coord_key))
         else:
             self.fatal_error(Errors.KafkaError(
                 "Could not find a coordinator with type %s with key %s due to"
@@ -888,7 +888,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
         elif error is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error())
         elif error is Errors.GroupAuthorizationFailedError:
-            self.abortable_error(Errors.GroupAuthorizationError(self.consumer_group_id))
+            self.abortable_error(error(self.consumer_group_id))
         else:
             self.fatal_error(Errors.KafkaError("Unexpected error in AddOffsetsToTxnResponse: %s" % (error())))
 
@@ -955,7 +955,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
             elif error is Errors.UnknownTopicOrPartitionError:
                 retriable_failure = True
             elif error is Errors.GroupAuthorizationFailedError:
-                self.abortable_error(Errors.GroupAuthorizationError(self.consumer_group_id))
+                self.abortable_error(error(self.consumer_group_id))
                 return
             elif error in (Errors.TransactionalIdAuthorizationFailedError,
                            Errors.InvalidProducerEpochError,

@@ -117,6 +117,8 @@ class DefaultRecordBase(object):
             checker, name = codecs.has_lz4, "lz4"
         elif compression_type == self.CODEC_ZSTD:
             checker, name = codecs.has_zstd, "zstd"
+        else:
+            raise UnsupportedCodecError("Unrecognized compression type: %s" % (compression_type,))
         if not checker():
             raise UnsupportedCodecError(
                 "Libraries for {} compression codec not found".format(name))

@@ -315,7 +315,7 @@ class Sender(threading.Thread):
                     return True
 
             except Exception as e:
-                log.warn("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", str(self), e)
+                log.warn("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry: %s", str(self), e)
                 if next_request_handler.needs_coordinator():
                     self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
                     break

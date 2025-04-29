@@ -274,7 +274,7 @@ class KafkaAdminClient(object):
                 self._controller_id = controller_id
                 return
             else:
-                raise Errors.NodeNotAvailableError('controller')
+                raise Errors.NodeNotReadyError('controller')
         else:
             raise UnrecognizedBrokerVersion(
                 "Kafka Admin interface cannot determine the controller using MetadataRequest_v{}."
