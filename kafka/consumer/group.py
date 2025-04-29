@@ -877,7 +877,7 @@ class KafkaConsumer(six.Iterator):
 
         for tp in partitions:
             log.debug("Seeking to beginning of partition %s", tp)
-            self._subscription.need_offset_reset(tp, OffsetResetStrategy.EARLIEST)
+            self._subscription.request_offset_reset(tp, OffsetResetStrategy.EARLIEST)
         self._iterator = None
 
     def seek_to_end(self, *partitions):
@@ -902,7 +902,7 @@ class KafkaConsumer(six.Iterator):
 
         for tp in partitions:
             log.debug("Seeking to end of partition %s", tp)
-            self._subscription.need_offset_reset(tp, OffsetResetStrategy.LATEST)
+            self._subscription.request_offset_reset(tp, OffsetResetStrategy.LATEST)
         self._iterator = None
 
     def subscribe(self, topics=(), pattern=None, listener=None):
