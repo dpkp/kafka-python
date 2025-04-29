@@ -618,7 +618,13 @@ class BrokerConnection(object):
 
     def _handle_api_versions_failure(self, future, ex):
         future.failure(ex)
-        self._check_version_idx = 0
+        # Modern brokers should not disconnect on unrecognized api-versions request,
+        # but in case they do we always want to try v0 as a fallback
+        # otherwise switch to check_version probe.
+        if self._api_versions_idx > 0:
+            self._api_versions_idx = 0
+        else:
+            self._check_version_idx = 0
         # after failure connection is closed, so state should already be DISCONNECTED
 
     def _handle_check_version_response(self, future, version, _response):
