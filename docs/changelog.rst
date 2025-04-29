@@ -1,6 +1,19 @@
 Changelog
 =========
 
+2.2.1 (Apr 29, 2025)
+####################
+
+Fixes
+-----
+* Always try ApiVersionsRequest v0, even on broker disconnect (#2603)
+* Fix SubscriptionState AttributeError in KafkaConsumer (#2599)
+
+Documentation
+-------------
+* Add transactional examples to docs
+
+
 2.2.0 (Apr 28, 2025)
 ####################
 
