@@ -1,3 +1,8 @@
+# 2.2.2 (Apr 30, 2025)
+
+Fixes
+* Fix lint errors
+
 # 2.2.1 (Apr 29, 2025)
 
 Fixes
