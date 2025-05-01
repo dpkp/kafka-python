@@ -643,36 +643,42 @@ class Fetcher(six.Iterator):
                 log.debug("Skipping fetch for partition %s because node %s is throttled",
                         partition, node_id)
 
+            elif not self._client.ready(node_id):
+                # Until we support send request queues, any attempt to send to a not-ready node will be
+                # immediately failed with NodeNotReadyError.
+                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet")
+
             elif node_id in self._nodes_with_pending_fetch_requests:
                 log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",
                         partition, node_id)
-                continue
 
-            if version < 5:
-                partition_info = (
-                    partition.partition,
-                    position.offset,
-                    self.config['max_partition_fetch_bytes']
-                )
-            elif version <= 8:
-                partition_info = (
-                    partition.partition,
-                    position.offset,
-                    -1, # log_start_offset is used internally by brokers / replicas only
-                    self.config['max_partition_fetch_bytes'],
-                )
             else:
-                partition_info = (
-                    partition.partition,
-                    position.leader_epoch,
-                    position.offset,
-                    -1, # log_start_offset is used internally by brokers / replicas only
-                    self.config['max_partition_fetch_bytes'],
-                )
+                # Leader is connected and does not have a pending fetch request
+                if version < 5:
+                    partition_info = (
+                        partition.partition,
+                        position.offset,
+                        self.config['max_partition_fetch_bytes']
+                    )
+                elif version <= 8:
+                    partition_info = (
+                        partition.partition,
+                        position.offset,
+                        -1, # log_start_offset is used internally by brokers / replicas only
+                        self.config['max_partition_fetch_bytes'],
+                    )
+                else:
+                    partition_info = (
+                        partition.partition,
+                        position.leader_epoch,
+                        position.offset,
+                        -1, # log_start_offset is used internally by brokers / replicas only
+                        self.config['max_partition_fetch_bytes'],
+                    )
 
-            fetchable[node_id][partition] = partition_info
-            log.debug("Adding fetch request for partition %s at offset %d",
-                      partition, position.offset)
+                fetchable[node_id][partition] = partition_info
+                log.debug("Adding fetch request for partition %s at offset %d",
+                          partition, position.offset)
 
         requests = {}
         for node_id, next_partitions in six.iteritems(fetchable):
