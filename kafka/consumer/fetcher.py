@@ -153,6 +153,7 @@ class Fetcher(six.Iterator):
             future = self._client.send(node_id, request, wakeup=False)
             future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
             future.add_errback(self._handle_fetch_error, node_id)
+            future.add_both(self._clear_pending_fetch_request, node_id)
             futures.append(future)
         self._fetch_futures.extend(futures)
         self._clean_done_fetch_futures()
@@ -767,14 +768,18 @@ class Fetcher(six.Iterator):
 
         if self._sensors:
             self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
-        self._nodes_with_pending_fetch_requests.remove(node_id)
 
     def _handle_fetch_error(self, node_id, exception):
         level = logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR
         log.log(level, 'Fetch to node %s failed: %s', node_id, exception)
         if node_id in self._session_handlers:
             self._session_handlers[node_id].handle_error(exception)
-        self._nodes_with_pending_fetch_requests.remove(node_id)
+
+    def _clear_pending_fetch_request(self, node_id, _):
+        try:
+            self._nodes_with_pending_fetch_requests.remove(node_id)
+        except KeyError:
+            pass
 
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
