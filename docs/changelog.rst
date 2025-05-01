@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2.2.3 (May 1, 2025)
+###################
+
+Fixes
+-----
+* Ignore leading SECURITY_PROTOCOL:// in bootstrap_servers (#2608)
+* Only create fetch requests for ready nodes (#2607)
+
+
 2.2.2 (Apr 30, 2025)
 ####################
 
