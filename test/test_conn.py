@@ -10,7 +10,7 @@ except ImportError:
     import mock
 import pytest
 
-from kafka.conn import BrokerConnection, ConnectionStates, collect_hosts
+from kafka.conn import BrokerConnection, ConnectionStates
 from kafka.future import Future
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.group import HeartbeatResponse
@@ -278,54 +278,6 @@ def test_recv(_socket, conn):
 
 def test_close(conn):
     pass # TODO
-
-
-def test_collect_hosts__happy_path():
-    hosts = "127.0.0.1:1234,127.0.0.1"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('127.0.0.1', 1234, socket.AF_INET),
-        ('127.0.0.1', 9092, socket.AF_INET),
-    ])
-
-
-def test_collect_hosts__ipv6():
-    hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_INET6),
-        ('2001:1000:2000::1', 9092, socket.AF_INET6),
-        ('2001:1000:2000::1', 1234, socket.AF_INET6),
-    ])
-
-
-def test_collect_hosts__string_list():
-    hosts = [
-        'localhost:1234',
-        'localhost',
-        '[localhost]',
-        '2001::1',
-        '[2001::1]',
-        '[2001::1]:1234',
-    ]
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_INET6),
-        ('2001::1', 9092, socket.AF_INET6),
-        ('2001::1', 9092, socket.AF_INET6),
-        ('2001::1', 1234, socket.AF_INET6),
-    ])
-
-
-def test_collect_hosts__with_spaces():
-    hosts = "localhost:1234, localhost"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_UNSPEC),
-    ])
 
 
 def test_lookup_on_connect():

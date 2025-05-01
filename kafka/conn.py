@@ -4,7 +4,7 @@ import copy
 import errno
 import io
 import logging
-from random import shuffle, uniform
+from random import uniform
 
 # selectors in stdlib as of py3.4
 try:
@@ -1494,32 +1494,6 @@ def get_ip_port_afi(host_and_port_str):
 
             af = _address_family(host)
             return host, port, af
-
-
-def collect_hosts(hosts, randomize=True):
-    """
-    Collects a comma-separated set of hosts (host:port) and optionally
-    randomize the returned list.
-    """
-
-    if isinstance(hosts, six.string_types):
-        hosts = hosts.strip().split(',')
-
-    result = []
-    afi = socket.AF_INET
-    for host_port in hosts:
-
-        host, port, afi = get_ip_port_afi(host_port)
-
-        if port < 0:
-            port = DEFAULT_KAFKA_PORT
-
-        result.append((host, port, afi))
-
-    if randomize:
-        shuffle(result)
-
-    return result
 
 
 def is_inet_4_or_6(gai):

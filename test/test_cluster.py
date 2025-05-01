@@ -1,7 +1,9 @@
 # pylint: skip-file
 from __future__ import absolute_import
 
-from kafka.cluster import ClusterMetadata
+import socket
+
+from kafka.cluster import ClusterMetadata, collect_hosts
 from kafka.protocol.metadata import MetadataResponse
 
 
@@ -132,3 +134,60 @@ def test_metadata_v7():
     assert cluster.cluster_id == 'cluster-foo'
     assert cluster._partitions['topic-1'][0].offline_replicas == [12]
     assert cluster._partitions['topic-1'][0].leader_epoch == 0
+
+
+def test_collect_hosts__happy_path():
+    hosts = "127.0.0.1:1234,127.0.0.1"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('127.0.0.1', 1234, socket.AF_INET),
+        ('127.0.0.1', 9092, socket.AF_INET),
+    ])
+
+
+def test_collect_hosts__ipv6():
+    hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_INET6),
+        ('2001:1000:2000::1', 9092, socket.AF_INET6),
+        ('2001:1000:2000::1', 1234, socket.AF_INET6),
+    ])
+
+
+def test_collect_hosts__string_list():
+    hosts = [
+        'localhost:1234',
+        'localhost',
+        '[localhost]',
+        '2001::1',
+        '[2001::1]',
+        '[2001::1]:1234',
+    ]
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_INET6),
+        ('2001::1', 9092, socket.AF_INET6),
+        ('2001::1', 9092, socket.AF_INET6),
+        ('2001::1', 1234, socket.AF_INET6),
+    ])
+
+
+def test_collect_hosts__with_spaces():
+    hosts = "localhost:1234, localhost"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('localhost', 1234, socket.AF_UNSPEC),
+        ('localhost', 9092, socket.AF_UNSPEC),
+    ])
+
+
+def test_collect_hosts__protocol():
+    hosts = "SASL_SSL://foo.bar:1234,SASL_SSL://fizz.buzz:5678"
+    results = collect_hosts(hosts)
+    assert set(results) == set([
+        ('foo.bar', 1234, socket.AF_UNSPEC),
+        ('fizz.buzz', 5678, socket.AF_UNSPEC),
+    ])

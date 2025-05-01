@@ -3,13 +3,15 @@ from __future__ import absolute_import
 import collections
 import copy
 import logging
+import random
+import re
 import threading
 import time
 
 from kafka.vendor import six
 
 from kafka import errors as Errors
-from kafka.conn import collect_hosts
+from kafka.conn import get_ip_port_afi
 from kafka.future import Future
 from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
 
@@ -422,3 +424,24 @@ class ClusterMetadata(object):
     def __str__(self):
         return 'ClusterMetadata(brokers: %d, topics: %d, coordinators: %d)' % \
                (len(self._brokers), len(self._partitions), len(self._coordinators))
+
+
+def collect_hosts(hosts, randomize=True):
+    """
+    Collects a comma-separated set of hosts (host:port) and optionally
+    randomize the returned list.
+    """
+
+    if isinstance(hosts, six.string_types):
+        hosts = hosts.strip().split(',')
+
+    result = []
+    for host_port in hosts:
+        # ignore leading SECURITY_PROTOCOL:// to mimic java client
+        host_port = re.sub('^.*://', '', host_port)
+        host, port, afi = get_ip_port_afi(host_port)
+        result.append((host, port, afi))
+
+    if randomize:
+        random.shuffle(result)
+    return result
