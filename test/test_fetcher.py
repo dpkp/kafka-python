@@ -103,6 +103,7 @@ def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
     fetcher._client._api_versions = BROKER_API_VERSIONS[api_version]
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
+    mocker.patch.object(fetcher._client, "ready", return_value=True)
     by_node = fetcher._create_fetch_requests()
     requests_and_offsets = by_node.values()
     assert set([r.API_VERSION for (r, _offsets) in requests_and_offsets]) == set([fetch_version])
