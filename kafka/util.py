@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import binascii
 import re
@@ -28,14 +28,19 @@ else:
 def timeout_ms_fn(timeout_ms, error_message):
     elapsed = 0.0 # noqa: F841
     begin = time.time()
+    raise_next = False
     def inner_timeout_ms(fallback=None):
+        nonlocal elapsed, begin, raise_next
         if timeout_ms is None:
             return fallback
         elapsed = (time.time() - begin) * 1000
         if elapsed >= timeout_ms:
-            if error_message is not None:
+            if error_message is None:
+                return 0
+            elif raise_next:
                 raise KafkaTimeoutError(error_message)
             else:
+                raise_next = True
                 return 0
         ret = max(0, timeout_ms - elapsed)
         if fallback is not None:
@@ -43,6 +48,41 @@ def timeout_ms_fn(timeout_ms, error_message):
         return ret
     return inner_timeout_ms
 
+
+class Timer:
+    __slots__ = ('_start_at', '_expire_at', '_timeout_ms', '_error_message')
+
+    def __init__(self, timeout_ms, error_message=None, start_at=None):
+        self._timeout_ms = timeout_ms
+        self._start_at = start_at or time.time()
+        if timeout_ms is not None:
+            self._expire_at = self._start_at + timeout_ms / 1000
+        else:
+            self._expire_at = float('inf')
+        self._error_message = error_message
+
+    @property
+    def expired(self):
+        return time.time() >= self._expire_at
+
+    @property
+    def timeout_ms(self):
+        if self._timeout_ms is None:
+            return None
+        elif self._expire_at == float('inf'):
+            return float('inf')
+        remaining = self._expire_at - time.time()
+        if remaining < 0:
+            return 0
+        else:
+            return int(remaining * 1000)
+
+    def maybe_raise(self):
+        if self.expired:
+            raise KafkaTimeoutError(self._error_message)
+
+    def __str__(self):
+        return "Timer(%s ms remaining)" % (self.timeout_ms)
 
 # Taken from: https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java#L29
 TOPIC_MAX_LENGTH = 249
