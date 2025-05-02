@@ -85,6 +85,14 @@ Tests
 * Drop unused KafkaClient import from `test_fetcher`
 
 
+2.1.6 (May 2, 2025)
+###################
+
+Fixes
+-----
+* Only create fetch requests for ready nodes (#2607)
+
+
 2.1.5 (Apr 4, 2025)
 ###################
 
