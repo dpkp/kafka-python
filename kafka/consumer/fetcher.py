@@ -19,7 +19,7 @@ from kafka.protocol.list_offsets import (
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
 from kafka.structs import TopicPartition, OffsetAndMetadata, OffsetAndTimestamp
-from kafka.util import timeout_ms_fn
+from kafka.util import Timer
 
 log = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class Fetcher(six.Iterator):
         if not timestamps:
             return {}
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout fetching offsets')
+        timer = Timer(timeout_ms, "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
         timestamps = copy.copy(timestamps)
         fetched_offsets = dict()
         while True:
@@ -238,7 +238,7 @@ class Fetcher(six.Iterator):
                 return {}
 
             future = self._send_list_offsets_requests(timestamps)
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
             # Timeout w/o future completion
             if not future.is_done:
@@ -256,12 +256,17 @@ class Fetcher(six.Iterator):
 
             if future.exception.invalid_metadata or self._client.cluster.need_update:
                 refresh_future = self._client.cluster.request_update()
-                self._client.poll(future=refresh_future, timeout_ms=inner_timeout_ms())
+                self._client.poll(future=refresh_future, timeout_ms=timer.timeout_ms)
 
                 if not future.is_done:
                     break
             else:
-                time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+                if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                    time.sleep(self.config['retry_backoff_ms'] / 1000)
+                else:
+                    time.sleep(timer.timeout_ms / 1000)
+
+            timer.maybe_raise()
 
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))

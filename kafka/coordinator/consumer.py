@@ -19,7 +19,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.commit import OffsetCommitRequest, OffsetFetchRequest
 from kafka.structs import OffsetAndMetadata, TopicPartition
-from kafka.util import timeout_ms_fn, Timer, WeakMethod
+from kafka.util import Timer, WeakMethod
 
 
 log = logging.getLogger(__name__)
@@ -405,7 +405,7 @@ class ConsumerCoordinator(BaseCoordinator):
         except Errors.KafkaTimeoutError:
             return False
         for partition, offset in six.iteritems(offsets):
-            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset);
+            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset)
             self._subscription.seek(partition, offset.offset)
         return True
 
@@ -424,32 +424,35 @@ class ConsumerCoordinator(BaseCoordinator):
         if not partitions:
             return {}
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
+        future_key = frozenset(partitions)
+        timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
 
             # contact coordinator to fetch committed offsets
-            future_key = frozenset(partitions)
             if future_key in self._offset_fetch_futures:
                 future = self._offset_fetch_futures[future_key]
             else:
                 future = self._send_offset_fetch_request(partitions)
                 self._offset_fetch_futures[future_key] = future
 
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
-            if not future.is_done:
-                raise Errors.KafkaTimeoutError()
-            else:
+            if future.is_done:
                 del self._offset_fetch_futures[future_key]
 
-            if future.succeeded():
-                return future.value
+                if future.succeeded():
+                    return future.value
 
-            if not future.retriable():
-                raise future.exception # pylint: disable-msg=raising-bad-type
+                elif not future.retriable():
+                    raise future.exception # pylint: disable-msg=raising-bad-type
 
-            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+            # future failed but is retriable, or is not done yet
+            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                time.sleep(self.config['retry_backoff_ms'] / 1000)
+            else:
+                time.sleep(timer.timeout_ms / 1000)
+            timer.maybe_raise()
 
     def close(self, autocommit=True, timeout_ms=None):
         """Close the coordinator, leave the current group,
@@ -540,23 +543,26 @@ class ConsumerCoordinator(BaseCoordinator):
         if not offsets:
             return
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
+        timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
 
             future = self._send_offset_commit_request(offsets)
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
-            if not future.is_done:
-                raise Errors.KafkaTimeoutError()
+            if future.is_done:
+                if future.succeeded():
+                    return future.value
 
-            if future.succeeded():
-                return future.value
+                elif not future.retriable():
+                    raise future.exception # pylint: disable-msg=raising-bad-type
 
-            if not future.retriable():
-                raise future.exception # pylint: disable-msg=raising-bad-type
-
-            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+            # future failed but is retriable, or it is still pending
+            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                time.sleep(self.config['retry_backoff_ms'] / 1000)
+            else:
+                time.sleep(timer.timeout_ms / 1000)
+            timer.maybe_raise()
 
     def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):
         if self.config['enable_auto_commit']:

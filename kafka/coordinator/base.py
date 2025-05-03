@@ -16,7 +16,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
-from kafka.util import timeout_ms_fn, Timer
+from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -293,7 +293,10 @@ class BaseCoordinator(object):
                             if not metadata_update.is_done:
                                 return False
                         else:
-                            time.sleep(min(timer.timeout_ms, self.config['retry_backoff_ms']) / 1000)
+                            if timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                                time.sleep(self.config['retry_backoff_ms'] / 1000)
+                            else:
+                                time.sleep(timer.timeout_ms / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
                 if timer.expired:
@@ -458,7 +461,8 @@ class BaseCoordinator(object):
             while not self.coordinator_unknown():
                 if not self._client.in_flight_request_count(self.coordinator_id):
                     break
-                self._client.poll(timeout_ms=min(timer.timeout_ms, 200))
+                poll_timeout_ms = 200 if timer.timeout_ms is None or timer.timeout_ms > 200 else timer.timeout_ms
+                self._client.poll(timeout_ms=poll_timeout_ms)
                 if timer.expired:
                     return False
             else:
@@ -491,7 +495,10 @@ class BaseCoordinator(object):
                 elif timer.expired:
                     return False
                 else:
-                    time.sleep(min(timer.timeout_ms, self.config['retry_backoff_ms']) / 1000)
+                    if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                        time.sleep(self.config['retry_backoff_ms'] / 1000)
+                    else:
+                        time.sleep(timer.timeout_ms / 1000)
 
     def _send_join_group_request(self):
         """Join the group and return the assignment for the next generation.

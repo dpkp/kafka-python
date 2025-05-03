@@ -5,7 +5,6 @@ import copy
 import logging
 import socket
 import threading
-import time
 import warnings
 import weakref
 
@@ -24,7 +23,7 @@ from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
 from kafka.structs import TopicPartition
-from kafka.util import ensure_valid_topic_name
+from kafka.util import Timer, ensure_valid_topic_name
 
 
 log = logging.getLogger(__name__)
@@ -664,8 +663,7 @@ class KafkaProducer(object):
 
     def partitions_for(self, topic):
         """Returns set of all known partitions for the topic."""
-        max_wait = self.config['max_block_ms'] / 1000
-        return self._wait_on_metadata(topic, max_wait)
+        return self._wait_on_metadata(topic, self.config['max_block_ms'])
 
     @classmethod
     def max_usable_produce_magic(cls, api_version):
@@ -835,14 +833,11 @@ class KafkaProducer(object):
         assert not (value is None and key is None), 'Need at least one: key or value'
         ensure_valid_topic_name(topic)
         key_bytes = value_bytes = None
+        timer = Timer(self.config['max_block_ms'], "Failed to assign partition for message in max_block_ms.")
         try:
             assigned_partition = None
-            elapsed = 0.0
-            begin = time.time()
-            timeout = self.config['max_block_ms'] / 1000
-            while assigned_partition is None and elapsed < timeout:
-                elapsed = time.time() - begin
-                self._wait_on_metadata(topic, timeout - elapsed)
+            while assigned_partition is None and not timer.expired:
+                self._wait_on_metadata(topic, timer.timeout_ms)
 
                 key_bytes = self._serialize(
                     self.config['key_serializer'],
@@ -856,7 +851,7 @@ class KafkaProducer(object):
                 assigned_partition = self._partition(topic, partition, key, value,
                                                      key_bytes, value_bytes)
             if assigned_partition is None:
-                raise Errors.KafkaTimeoutError("Failed to assign partition for message after %s secs." % timeout)
+                raise Errors.KafkaTimeoutError("Failed to assign partition for message after %s secs." % timer.elapsed_ms / 1000)
             else:
                 partition = assigned_partition
 
@@ -931,7 +926,7 @@ class KafkaProducer(object):
                 " the maximum request size you have configured with the"
                 " max_request_size configuration" % (size,))
 
-    def _wait_on_metadata(self, topic, max_wait):
+    def _wait_on_metadata(self, topic, max_wait_ms):
         """
         Wait for cluster metadata including partitions for the given topic to
         be available.
@@ -949,36 +944,29 @@ class KafkaProducer(object):
         """
         # add topic to metadata topic list if it is not there already.
         self._sender.add_topic(topic)
-        begin = time.time()
-        elapsed = 0.0
+        timer = Timer(max_wait_ms, "Failed to update metadata after %.1f secs." % (max_wait_ms * 1000,))
         metadata_event = None
         while True:
             partitions = self._metadata.partitions_for_topic(topic)
             if partitions is not None:
                 return partitions
-
-            if elapsed >= max_wait:
-                raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %.1f secs." % (max_wait,))
-
+            timer.maybe_raise()
             if not metadata_event:
                 metadata_event = threading.Event()
 
             log.debug("%s: Requesting metadata update for topic %s", str(self), topic)
-
             metadata_event.clear()
             future = self._metadata.request_update()
             future.add_both(lambda e, *args: e.set(), metadata_event)
             self._sender.wakeup()
-            metadata_event.wait(max_wait - elapsed)
+            metadata_event.wait(timer.timeout_ms / 1000)
             if not metadata_event.is_set():
                 raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %.1f secs." % (max_wait,))
+                    "Failed to update metadata after %.1f secs." % (max_wait_ms * 1000,))
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
-                elapsed = time.time() - begin
-                log.debug("%s: _wait_on_metadata woke after %s secs.", str(self), elapsed)
+                log.debug("%s: _wait_on_metadata woke after %s secs.", str(self), timer.elapsed_ms / 1000)
 
     def _serialize(self, f, topic, data):
         if not f:

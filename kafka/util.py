@@ -25,30 +25,6 @@ else:
     from binascii import crc32 # noqa: F401
 
 
-def timeout_ms_fn(timeout_ms, error_message):
-    elapsed = 0.0 # noqa: F841
-    begin = time.time()
-    raise_next = False
-    def inner_timeout_ms(fallback=None):
-        nonlocal elapsed, begin, raise_next
-        if timeout_ms is None:
-            return fallback
-        elapsed = (time.time() - begin) * 1000
-        if elapsed >= timeout_ms:
-            if error_message is None:
-                return 0
-            elif raise_next:
-                raise KafkaTimeoutError(error_message)
-            else:
-                raise_next = True
-                return 0
-        ret = max(0, timeout_ms - elapsed)
-        if fallback is not None:
-            return min(ret, fallback)
-        return ret
-    return inner_timeout_ms
-
-
 class Timer:
     __slots__ = ('_start_at', '_expire_at', '_timeout_ms', '_error_message')
 
@@ -76,6 +52,10 @@ class Timer:
             return 0
         else:
             return int(remaining * 1000)
+
+    @property
+    def elapsed_ms(self):
+        return int(1000 * (time.time() - self._start_at))
 
     def maybe_raise(self):
         if self.expired:
