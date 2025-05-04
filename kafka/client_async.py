@@ -27,7 +27,7 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
-from kafka.util import Dict, WeakMethod, ensure_valid_topic_name, timeout_ms_fn
+from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
 # Although this looks unused, it actually monkey-patches socket.socketpair()
 # and should be left in as long as we're using socket.socketpair() in this file
 from kafka.vendor import socketpair # noqa: F401
@@ -645,12 +645,8 @@ class KafkaClient(object):
         """
         if not isinstance(timeout_ms, (int, float, type(None))):
             raise TypeError('Invalid type for timeout: %s' % type(timeout_ms))
+        timer = Timer(timeout_ms)
 
-        begin = time.time()
-        if timeout_ms is not None:
-            timeout_at = begin + (timeout_ms / 1000)
-        else:
-            timeout_at = begin + (self.config['request_timeout_ms'] / 1000)
         # Loop for futures, break after first loop if None
         responses = []
         while True:
@@ -675,7 +671,7 @@ class KafkaClient(object):
                 if future is not None and future.is_done:
                     timeout = 0
                 else:
-                    user_timeout_ms = 1000 * max(0, timeout_at - time.time())
+                    user_timeout_ms = timer.timeout_ms if timeout_ms is not None else self.config['request_timeout_ms']
                     idle_connection_timeout_ms = self._idle_expiry_manager.next_check_ms()
                     request_timeout_ms = self._next_ifr_request_timeout_ms()
                     log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", user_timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
@@ -698,7 +694,7 @@ class KafkaClient(object):
                 break
             elif future.is_done:
                 break
-            elif timeout_ms is not None and time.time() >= timeout_at:
+            elif timeout_ms is not None and timer.expired:
                 break
 
         return responses
@@ -1175,16 +1171,16 @@ class KafkaClient(object):
         This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
         care.
         """
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
+        timer = Timer(timeout_ms)
         self.poll(timeout_ms=0)
         if self.is_ready(node_id):
             return True
 
-        while not self.is_ready(node_id) and inner_timeout_ms() > 0:
+        while not self.is_ready(node_id) and not timer.expired:
             if self.connection_failed(node_id):
                 raise Errors.KafkaConnectionError("Connection to %s failed." % (node_id,))
             self.maybe_connect(node_id)
-            self.poll(timeout_ms=inner_timeout_ms())
+            self.poll(timeout_ms=timer.timeout_ms)
         return self.is_ready(node_id)
 
     def send_and_receive(self, node_id, request):

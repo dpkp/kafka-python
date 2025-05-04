@@ -19,7 +19,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.commit import OffsetCommitRequest, OffsetFetchRequest
 from kafka.structs import OffsetAndMetadata, TopicPartition
-from kafka.util import timeout_ms_fn, WeakMethod
+from kafka.util import Timer, WeakMethod
 
 
 log = logging.getLogger(__name__)
@@ -95,6 +95,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self.auto_commit_interval = self.config['auto_commit_interval_ms'] / 1000
         self.next_auto_commit_deadline = None
         self.completed_offset_commits = collections.deque()
+        self._offset_fetch_futures = dict()
 
         if self.config['default_offset_commit_callback'] is None:
             self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
@@ -269,10 +270,11 @@ class ConsumerCoordinator(BaseCoordinator):
         if self.group_id is None:
             return True
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
+        timer = Timer(timeout_ms)
         try:
             self._invoke_completed_offset_commit_callbacks()
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+                return False
 
             if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
                 if self.need_rejoin():
@@ -289,9 +291,12 @@ class ConsumerCoordinator(BaseCoordinator):
                     # description of the problem.
                     if self._subscription.subscribed_pattern:
                         metadata_update = self._client.cluster.request_update()
-                        self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
+                        self._client.poll(future=metadata_update, timeout_ms=timer.timeout_ms)
+                        if not metadata_update.is_done:
+                            return False
 
-                    self.ensure_active_group(timeout_ms=inner_timeout_ms())
+                    if not self.ensure_active_group(timeout_ms=timer.timeout_ms):
+                        return False
 
                 self.poll_heartbeat()
 
@@ -395,10 +400,14 @@ class ConsumerCoordinator(BaseCoordinator):
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
-        offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
+        try:
+            offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
+        except Errors.KafkaTimeoutError:
+            return False
         for partition, offset in six.iteritems(offsets):
-            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset);
+            log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset)
             self._subscription.seek(partition, offset.offset)
+        return True
 
     def fetch_committed_offsets(self, partitions, timeout_ms=None):
         """Fetch the current committed offsets for specified partitions
@@ -415,24 +424,35 @@ class ConsumerCoordinator(BaseCoordinator):
         if not partitions:
             return {}
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.fetch_committed_offsets')
+        future_key = frozenset(partitions)
+        timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
 
             # contact coordinator to fetch committed offsets
-            future = self._send_offset_fetch_request(partitions)
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            if future_key in self._offset_fetch_futures:
+                future = self._offset_fetch_futures[future_key]
+            else:
+                future = self._send_offset_fetch_request(partitions)
+                self._offset_fetch_futures[future_key] = future
 
-            if not future.is_done:
-                raise Errors.KafkaTimeoutError()
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
-            if future.succeeded():
-                return future.value
+            if future.is_done:
+                del self._offset_fetch_futures[future_key]
 
-            if not future.retriable():
-                raise future.exception # pylint: disable-msg=raising-bad-type
+                if future.succeeded():
+                    return future.value
 
-            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+                elif not future.retriable():
+                    raise future.exception # pylint: disable-msg=raising-bad-type
+
+            # future failed but is retriable, or is not done yet
+            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                time.sleep(self.config['retry_backoff_ms'] / 1000)
+            else:
+                time.sleep(timer.timeout_ms / 1000)
+            timer.maybe_raise()
 
     def close(self, autocommit=True, timeout_ms=None):
         """Close the coordinator, leave the current group,
@@ -523,23 +543,26 @@ class ConsumerCoordinator(BaseCoordinator):
         if not offsets:
             return
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout in coordinator.poll')
+        timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
 
             future = self._send_offset_commit_request(offsets)
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
-            if not future.is_done:
-                raise Errors.KafkaTimeoutError()
+            if future.is_done:
+                if future.succeeded():
+                    return future.value
 
-            if future.succeeded():
-                return future.value
+                elif not future.retriable():
+                    raise future.exception # pylint: disable-msg=raising-bad-type
 
-            if not future.retriable():
-                raise future.exception # pylint: disable-msg=raising-bad-type
-
-            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+            # future failed but is retriable, or it is still pending
+            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                time.sleep(self.config['retry_backoff_ms'] / 1000)
+            else:
+                time.sleep(timer.timeout_ms / 1000)
+            timer.maybe_raise()
 
     def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):
         if self.config['enable_auto_commit']:

@@ -18,7 +18,7 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.list_offsets import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata, TopicPartition
-from kafka.util import timeout_ms_fn
+from kafka.util import Timer
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
@@ -679,41 +679,40 @@ class KafkaConsumer(six.Iterator):
         assert not self._closed, 'KafkaConsumer is closed'
 
         # Poll for new data until the timeout expires
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
+        timer = Timer(timeout_ms)
         while not self._closed:
-            records = self._poll_once(inner_timeout_ms(), max_records, update_offsets=update_offsets)
+            records = self._poll_once(timer, max_records, update_offsets=update_offsets)
             if records:
                 return records
-
-            if inner_timeout_ms() <= 0:
+            elif timer.expired:
                 break
-
         return {}
 
-    def _poll_once(self, timeout_ms, max_records, update_offsets=True):
+    def _poll_once(self, timer, max_records, update_offsets=True):
         """Do one round of polling. In addition to checking for new data, this does
         any needed heart-beating, auto-commits, and offset updates.
 
         Arguments:
-            timeout_ms (int): The maximum time in milliseconds to block.
+            timer (Timer): The maximum time in milliseconds to block.
 
         Returns:
             dict: Map of topic to list of records (may be empty).
         """
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, None)
-        if not self._coordinator.poll(timeout_ms=inner_timeout_ms()):
+        if not self._coordinator.poll(timeout_ms=timer.timeout_ms):
             return {}
 
-        has_all_fetch_positions = self._update_fetch_positions(timeout_ms=inner_timeout_ms())
+        has_all_fetch_positions = self._update_fetch_positions(timeout_ms=timer.timeout_ms)
 
         # If data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
         records, partial = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
+        log.debug('Fetched records: %s, %s', records, partial)
         # Before returning the fetched records, we can send off the
         # next round of fetches and avoid block waiting for their
         # responses to enable pipelining while the user is handling the
         # fetched records.
         if not partial:
+            log.debug("Sending fetches")
             futures = self._fetcher.send_fetches()
             if len(futures):
                 self._client.poll(timeout_ms=0)
@@ -723,7 +722,7 @@ class KafkaConsumer(six.Iterator):
 
         # We do not want to be stuck blocking in poll if we are missing some positions
         # since the offset lookup may be backing off after a failure
-        poll_timeout_ms = inner_timeout_ms(self._coordinator.time_to_next_poll() * 1000)
+        poll_timeout_ms = min(timer.timeout_ms, self._coordinator.time_to_next_poll() * 1000)
         if not has_all_fetch_positions:
             poll_timeout_ms = min(poll_timeout_ms, self.config['retry_backoff_ms'])
 
@@ -749,15 +748,14 @@ class KafkaConsumer(six.Iterator):
             raise TypeError('partition must be a TopicPartition namedtuple')
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
 
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout retrieving partition position')
+        timer = Timer(timeout_ms)
         position = self._subscription.assignment[partition].position
-        try:
-            while position is None:
-                # batch update fetch positions for any partitions without a valid position
-                self._update_fetch_positions(timeout_ms=inner_timeout_ms())
+        while position is None:
+            # batch update fetch positions for any partitions without a valid position
+            if self._update_fetch_positions(timeout_ms=timer.timeout_ms):
                 position = self._subscription.assignment[partition].position
-        except KafkaTimeoutError:
-            return None
+            elif timer.expired:
+                return None
         else:
             return position.offset
 

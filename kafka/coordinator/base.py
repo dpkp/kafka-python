@@ -16,7 +16,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
-from kafka.util import timeout_ms_fn
+from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
 
@@ -256,9 +256,9 @@ class BaseCoordinator(object):
             timeout_ms (numeric, optional): Maximum number of milliseconds to
                 block waiting to find coordinator. Default: None.
 
-        Raises: KafkaTimeoutError if timeout_ms is not None
+        Returns: True is coordinator found before timeout_ms, else False
         """
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to find group coordinator')
+        timer = Timer(timeout_ms)
         with self._client._lock, self._lock:
             while self.coordinator_unknown():
 
@@ -272,27 +272,37 @@ class BaseCoordinator(object):
                     else:
                         self.coordinator_id = maybe_coordinator_id
                         self._client.maybe_connect(self.coordinator_id)
-                        continue
+                        if timer.expired:
+                            return False
+                        else:
+                            continue
                 else:
                     future = self.lookup_coordinator()
 
-                self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+                self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
                 if not future.is_done:
-                    raise Errors.KafkaTimeoutError()
+                    return False
 
                 if future.failed():
                     if future.retriable():
                         if getattr(future.exception, 'invalid_metadata', False):
                             log.debug('Requesting metadata for group coordinator request: %s', future.exception)
                             metadata_update = self._client.cluster.request_update()
-                            self._client.poll(future=metadata_update, timeout_ms=inner_timeout_ms())
+                            self._client.poll(future=metadata_update, timeout_ms=timer.timeout_ms)
                             if not metadata_update.is_done:
-                                raise Errors.KafkaTimeoutError()
+                                return False
                         else:
-                            time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+                            if timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                                time.sleep(self.config['retry_backoff_ms'] / 1000)
+                            else:
+                                time.sleep(timer.timeout_ms / 1000)
                     else:
                         raise future.exception  # pylint: disable-msg=raising-bad-type
+                if timer.expired:
+                    return False
+            else:
+                return True
 
     def _reset_find_coordinator_future(self, result):
         self._find_coordinator_future = None
@@ -407,21 +417,23 @@ class BaseCoordinator(object):
             timeout_ms (numeric, optional): Maximum number of milliseconds to
                 block waiting to join group. Default: None.
 
-        Raises: KafkaTimeoutError if timeout_ms is not None
+        Returns: True if group initialized before timeout_ms, else False
         """
         if self.config['api_version'] < (0, 9):
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to join consumer group')
-        self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+        timer = Timer(timeout_ms)
+        if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+            return False
         self._start_heartbeat_thread()
-        self.join_group(timeout_ms=inner_timeout_ms())
+        return self.join_group(timeout_ms=timer.timeout_ms)
 
     def join_group(self, timeout_ms=None):
         if self.config['api_version'] < (0, 9):
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
-        inner_timeout_ms = timeout_ms_fn(timeout_ms, 'Timeout attempting to join consumer group')
+        timer = Timer(timeout_ms)
         while self.need_rejoin():
-            self.ensure_coordinator_ready(timeout_ms=inner_timeout_ms())
+            if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+                return False
 
             # call on_join_prepare if needed. We set a flag
             # to make sure that we do not call it a second
@@ -434,7 +446,7 @@ class BaseCoordinator(object):
             if not self.rejoining:
                 self._on_join_prepare(self._generation.generation_id,
                                       self._generation.member_id,
-                                      timeout_ms=inner_timeout_ms())
+                                      timeout_ms=timer.timeout_ms)
                 self.rejoining = True
 
             # fence off the heartbeat thread explicitly so that it cannot
@@ -449,16 +461,19 @@ class BaseCoordinator(object):
             while not self.coordinator_unknown():
                 if not self._client.in_flight_request_count(self.coordinator_id):
                     break
-                self._client.poll(timeout_ms=inner_timeout_ms(200))
+                poll_timeout_ms = 200 if timer.timeout_ms is None or timer.timeout_ms > 200 else timer.timeout_ms
+                self._client.poll(timeout_ms=poll_timeout_ms)
+                if timer.expired:
+                    return False
             else:
                 continue
 
             future = self._initiate_join_group()
-            self._client.poll(future=future, timeout_ms=inner_timeout_ms())
+            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
             if future.is_done:
                 self._reset_join_group_future()
             else:
-                raise Errors.KafkaTimeoutError()
+                return False
 
             if future.succeeded():
                 self.rejoining = False
@@ -467,6 +482,7 @@ class BaseCoordinator(object):
                                        self._generation.member_id,
                                        self._generation.protocol,
                                        future.value)
+                return True
             else:
                 exception = future.exception
                 if isinstance(exception, (Errors.UnknownMemberIdError,
@@ -476,7 +492,13 @@ class BaseCoordinator(object):
                     continue
                 elif not future.retriable():
                     raise exception  # pylint: disable-msg=raising-bad-type
-                time.sleep(inner_timeout_ms(self.config['retry_backoff_ms']) / 1000)
+                elif timer.expired:
+                    return False
+                else:
+                    if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
+                        time.sleep(self.config['retry_backoff_ms'] / 1000)
+                    else:
+                        time.sleep(timer.timeout_ms / 1000)
 
     def _send_join_group_request(self):
         """Join the group and return the assignment for the next generation.
