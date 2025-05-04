@@ -134,18 +134,27 @@ def test_reset_offsets_if_needed(fetcher, topic, mocker):
 
 
 def test__reset_offsets_async(fetcher, mocker):
-    tp = TopicPartition("topic", 0)
+    tp0 = TopicPartition("topic", 0)
+    tp1 = TopicPartition("topic", 1)
     fetcher._subscriptions.subscribe(topics=["topic"])
-    fetcher._subscriptions.assign_from_subscribed([tp])
-    fetcher._subscriptions.request_offset_reset(tp)
-    fetched_offsets = {tp: OffsetAndTimestamp(1001, None, -1)}
+    fetcher._subscriptions.assign_from_subscribed([tp0, tp1])
+    fetcher._subscriptions.request_offset_reset(tp0)
+    fetcher._subscriptions.request_offset_reset(tp1)
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", side_effect=[0, 1])
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
-    mocker.patch.object(fetcher, '_send_list_offsets_request',
-                        return_value=Future().success((fetched_offsets, set())))
-    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    fetcher._reset_offsets_async({tp: OffsetResetStrategy.EARLIEST})
-    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
-    assert fetcher._subscriptions.assignment[tp].position.offset == 1001
+    future1 = Future()
+    future2 = Future()
+    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=[future1, future2])
+    fetcher._reset_offsets_async({
+        tp0: OffsetResetStrategy.EARLIEST,
+        tp1: OffsetResetStrategy.EARLIEST,
+    })
+    future1.success(({tp0: OffsetAndTimestamp(1001, None, -1)}, set())),
+    future2.success(({tp1: OffsetAndTimestamp(1002, None, -1)}, set())),
+    assert not fetcher._subscriptions.assignment[tp0].awaiting_reset
+    assert not fetcher._subscriptions.assignment[tp1].awaiting_reset
+    assert fetcher._subscriptions.assignment[tp0].position.offset == 1001
+    assert fetcher._subscriptions.assignment[tp1].position.offset == 1002
 
 
 def test__send_list_offsets_requests(fetcher, mocker):
