@@ -418,7 +418,7 @@ class Fetcher(six.Iterator):
             expire_at = time.time() + self.config['request_timeout_ms'] / 1000
             self._subscriptions.set_reset_pending(partitions, expire_at)
 
-            def on_success(result):
+            def on_success(timestamps_and_epochs, result):
                 fetched_offsets, partitions_to_retry = result
                 if partitions_to_retry:
                     self._subscriptions.reset_failed(partitions_to_retry, time.time() + self.config['retry_backoff_ms'] / 1000)
@@ -428,7 +428,7 @@ class Fetcher(six.Iterator):
                     ts, _epoch = timestamps_and_epochs[partition]
                     self._reset_offset_if_needed(partition, ts, offset.offset)
 
-            def on_failure(error):
+            def on_failure(partitions, error):
                 self._subscriptions.reset_failed(partitions, time.time() + self.config['retry_backoff_ms'] / 1000)
                 self._client.cluster.request_update()
 
@@ -439,8 +439,8 @@ class Fetcher(six.Iterator):
                         log.error("Discarding error in ListOffsetResponse because another error is pending: %s", error)
 
             future = self._send_list_offsets_request(node_id, timestamps_and_epochs)
-            future.add_callback(on_success)
-            future.add_errback(on_failure)
+            future.add_callback(on_success, timestamps_and_epochs)
+            future.add_errback(on_failure, partitions)
 
     def _send_list_offsets_requests(self, timestamps):
         """Fetch offsets for each partition in timestamps dict. This may send
