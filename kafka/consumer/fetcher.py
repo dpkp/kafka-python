@@ -414,8 +414,8 @@ class Fetcher(six.Iterator):
         for node_id, timestamps_and_epochs in six.iteritems(timestamps_by_node):
             if not self._client.ready(node_id):
                 continue
-            expire_at = time.time() + self.config['request_timeout_ms'] / 1000
             partitions = set(timestamps_and_epochs.keys())
+            expire_at = time.time() + self.config['request_timeout_ms'] / 1000
             self._subscriptions.set_reset_pending(partitions, expire_at)
 
             def on_success(timestamps_and_epochs, result):
