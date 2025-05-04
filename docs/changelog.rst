@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.2.4 (May 3, 2025)
+###################
+
+Fixes
+-----
+* Do not `reset_generation` after RebalanceInProgressError; improve CommitFailed error messages (#2614)
+* Fix KafkaConsumer.poll() with zero timeout (#2613)
+* Fix Fetch._reset_offsets_async() KeyError when fetching from multiple nodes (#2612)
+
+
 2.2.3 (May 1, 2025)
 ###################
 
