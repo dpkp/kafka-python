@@ -645,11 +645,7 @@ class KafkaClient(object):
         """
         if not isinstance(timeout_ms, (int, float, type(None))):
             raise TypeError('Invalid type for timeout: %s' % type(timeout_ms))
-
-        if timeout_ms is not None:
-            timer = Timer(timeout_ms)
-        else:
-            timer = Timer(self.config['request_timeout_ms'])
+        timer = Timer(timeout_ms)
 
         # Loop for futures, break after first loop if None
         responses = []
@@ -675,11 +671,12 @@ class KafkaClient(object):
                 if future is not None and future.is_done:
                     timeout = 0
                 else:
+                    user_timeout_ms = timer.timeout_ms if timeout_ms is not None else self.config['request_timeout_ms']
                     idle_connection_timeout_ms = self._idle_expiry_manager.next_check_ms()
                     request_timeout_ms = self._next_ifr_request_timeout_ms()
-                    log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", timer.timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
+                    log.debug("Timeouts: user %f, metadata %f, idle connection %f, request %f", user_timeout_ms, metadata_timeout_ms, idle_connection_timeout_ms, request_timeout_ms)
                     timeout = min(
-                        timer.timeout_ms,
+                        user_timeout_ms,
                         metadata_timeout_ms,
                         idle_connection_timeout_ms,
                         request_timeout_ms)
