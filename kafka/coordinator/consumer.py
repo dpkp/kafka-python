@@ -614,7 +614,8 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp, offset in six.iteritems(offsets):
             offset_data[tp.topic][tp.partition] = offset
 
-        if self._subscription.partitions_auto_assigned():
+        version = self._client.api_version(OffsetCommitRequest, max_version=6)
+        if version > 1 and self._subscription.partitions_auto_assigned():
             generation = self.generation()
         else:
             generation = Generation.NO_GENERATION
@@ -622,8 +623,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # if the generation is None, we are not part of an active group
         # (and we expect to be). The only thing we can do is fail the commit
         # and let the user rejoin the group in poll()
-        version = self._client.api_version(OffsetCommitRequest, max_version=6)
-        if version > 0 and generation is None:
+        if generation is None:
             log.info("Failing OffsetCommit request since the consumer is not part of an active group")
             return Future().failure(Errors.CommitFailedError('Group rebalance in progress'))
 
