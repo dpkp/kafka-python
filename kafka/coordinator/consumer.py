@@ -615,17 +615,18 @@ class ConsumerCoordinator(BaseCoordinator):
             offset_data[tp.topic][tp.partition] = offset
 
         if self._subscription.partitions_auto_assigned():
-            generation = self.generation() or Generation.NO_GENERATION
+            generation = self.generation()
         else:
             generation = Generation.NO_GENERATION
 
         # if the generation is None, we are not part of an active group
         # (and we expect to be). The only thing we can do is fail the commit
         # and let the user rejoin the group in poll()
-        if self.config['api_version'] >= (0, 9) and generation is None:
-            return Future().failure(Errors.CommitFailedError())
-
         version = self._client.api_version(OffsetCommitRequest, max_version=6)
+        if version > 0 and generation is None:
+            log.info("Failing OffsetCommit request since the consumer is not part of an active group")
+            return Future().failure(Errors.CommitFailedError('Group rebalance in progress'))
+
         if version == 0:
             request = OffsetCommitRequest[version](
                 self.group_id,
@@ -747,13 +748,22 @@ class ConsumerCoordinator(BaseCoordinator):
                     self.coordinator_dead(error_type())
                     future.failure(error_type(self.group_id))
                     return
+                elif error_type is Errors.RebalanceInProgressError:
+                    # Consumer never tries to commit offset in between join-group and sync-group,
+                    # and hence on broker-side it is not expected to see a commit offset request
+                    # during CompletingRebalance phase; if it ever happens then broker would return
+                    # this error. In this case we should just treat as a fatal CommitFailed exception.
+                    # However, we do not need to reset generations and just request re-join, such that
+                    # if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                    self.request_rejoin()
+                    future.failure(Errors.CommitFailedError('Group rebalance in progress'))
+                    return
                 elif error_type in (Errors.UnknownMemberIdError,
-                                    Errors.IllegalGenerationError,
-                                    Errors.RebalanceInProgressError):
-                    # need to re-join group
+                                    Errors.IllegalGenerationError):
+                    # need reset generation and re-join group
                     error = error_type(self.group_id)
-                    log.debug("OffsetCommit for group %s failed: %s",
-                              self.group_id, error)
+                    log.warning("OffsetCommit for group %s failed: %s",
+                                self.group_id, error)
                     self.reset_generation()
                     future.failure(Errors.CommitFailedError())
                     return
