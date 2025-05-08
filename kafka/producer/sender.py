@@ -209,6 +209,7 @@ class Sender(threading.Thread):
                 for batch in batch_list:
                     self._accumulator.muted.add(batch.topic_partition)
 
+        self._accumulator.reset_next_batch_expiry_time()
         expired_batches = self._accumulator.expired_batches(now=now)
         expired_batches.extend(self._get_expired_inflight_batches(now=now))
 
