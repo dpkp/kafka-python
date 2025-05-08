@@ -140,7 +140,8 @@ def test__reset_offsets_async(fetcher, mocker):
     fetcher._subscriptions.assign_from_subscribed([tp0, tp1])
     fetcher._subscriptions.request_offset_reset(tp0)
     fetcher._subscriptions.request_offset_reset(tp1)
-    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", side_effect=[0, 1])
+    leaders = {tp0: 0, tp1: 1}
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", side_effect=lambda tp: leaders[tp])
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     future1 = Future()
     future2 = Future()
