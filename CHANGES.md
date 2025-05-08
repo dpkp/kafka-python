@@ -1,3 +1,8 @@
+# 2.2.6 (May 8, 2025)
+
+Fixes
+* Only disable heartbeat thread once at beginning of join-group (#2617)
+
 # 2.2.5 (May 8, 2025)
 
 Fixes
