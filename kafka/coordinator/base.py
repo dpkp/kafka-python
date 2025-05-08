@@ -450,11 +450,12 @@ class BaseCoordinator(object):
                                       timeout_ms=timer.timeout_ms)
                 self.rejoining = True
 
-            # fence off the heartbeat thread explicitly so that it cannot
-            # interfere with the join group.  # Note that this must come after
-            # the call to onJoinPrepare since we must be able to continue
-            # sending heartbeats if that callback takes some time.
-            self._disable_heartbeat_thread()
+                # fence off the heartbeat thread explicitly so that it cannot
+                # interfere with the join group.  # Note that this must come after
+                # the call to onJoinPrepare since we must be able to continue
+                # sending heartbeats if that callback takes some time.
+                log.debug("Disabling heartbeat thread during join-group")
+                self._disable_heartbeat_thread()
 
             # ensure that there are no pending requests to the coordinator.
             # This is important in particular to avoid resending a pending
