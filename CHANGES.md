@@ -1,3 +1,9 @@
+# 2.2.5 (May 8, 2025)
+
+Fixes
+* Fix producer busy loop with no pending batches (#2616)
+* Fixup py27 fetcher test failure
+
 # 2.2.4 (May 3, 2025)
 
 Fixes
