@@ -77,7 +77,7 @@ class Sender(threading.Thread):
         queue.pop()
         heapq.heapify(queue)
 
-    def _get_expired_inflight_batches(self):
+    def _get_expired_inflight_batches(self, now=None):
         """Get the in-flight batches that has reached delivery timeout."""
         expired_batches = []
         to_remove = []
@@ -174,7 +174,7 @@ class Sender(threading.Thread):
     def _send_producer_data(self, now=None):
         now = time.time() if now is None else now
         # get the list of partitions with data ready to send
-        result = self._accumulator.ready(self._metadata)
+        result = self._accumulator.ready(self._metadata, now=now)
         ready_nodes, next_ready_check_delay, unknown_leaders_exist = result
 
         # if there are any partitions whose leaders are not known yet, force
@@ -195,7 +195,7 @@ class Sender(threading.Thread):
 
         # create produce requests
         batches_by_node = self._accumulator.drain(
-            self._metadata, ready_nodes, self.config['max_request_size'])
+            self._metadata, ready_nodes, self.config['max_request_size'], now=now)
 
         for batch_list in six.itervalues(batches_by_node):
             for batch in batch_list:
@@ -209,8 +209,9 @@ class Sender(threading.Thread):
                 for batch in batch_list:
                     self._accumulator.muted.add(batch.topic_partition)
 
-        expired_batches = self._accumulator.expired_batches()
-        expired_batches.extend(self._get_expired_inflight_batches())
+        self._accumulator.reset_next_batch_expiry_time()
+        expired_batches = self._accumulator.expired_batches(now=now)
+        expired_batches.extend(self._get_expired_inflight_batches(now=now))
 
         if expired_batches:
             log.debug("%s: Expired %s batches in accumulator", str(self), len(expired_batches))

@@ -240,3 +240,16 @@ def test_maybe_wait_for_producer_id():
 
 def test_run_once():
     pass
+
+
+def test__send_producer_data_expiry_time_reset(sender, accumulator, mocker):
+    now = time.time()
+    tp = TopicPartition('foo', 0)
+    mocker.patch.object(sender, '_failed_produce')
+    result = accumulator.append(tp, 0, b'key', b'value', [], now=now)
+    poll_timeout_ms = sender._send_producer_data(now=now)
+    assert poll_timeout_ms == accumulator.config['delivery_timeout_ms']
+    sender._failed_produce.assert_not_called()
+    now += accumulator.config['delivery_timeout_ms']
+    poll_timeout_ms = sender._send_producer_data(now=now)
+    assert poll_timeout_ms > 0

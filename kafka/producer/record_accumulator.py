@@ -328,6 +328,9 @@ class RecordAccumulator(object):
         finally:
             self._appends_in_progress.decrement()
 
+    def reset_next_batch_expiry_time(self):
+        self._next_batch_expiry_time_ms = float('inf')
+
     def maybe_update_next_batch_expiry_time(self, batch):
         self._next_batch_expiry_time_ms = min(self._next_batch_expiry_time_ms, batch.created * 1000 + self.delivery_timeout_ms)
 
