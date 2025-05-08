@@ -780,7 +780,7 @@ class BaseCoordinator(object):
             future.failure(error)
         else:
             error = error_type()
-            log.error("Group coordinator lookup for group %s failed: %s",
+            log.error("Group Coordinator lookup for group %s failed: %s",
                       self.group_id, error)
             future.failure(error)
 
