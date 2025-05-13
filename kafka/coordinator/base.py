@@ -1038,14 +1038,14 @@ class HeartbeatThread(threading.Thread):
 
     def run(self):
         try:
-            heartbeat_log.debug('Heartbeat thread started')
+            heartbeat_log.debug('Heartbeat thread started: %s', self.coordinator.heartbeat)
             while not self.closed:
                 self._run_once()
 
         except ReferenceError:
             heartbeat_log.debug('Heartbeat thread closed due to coordinator gc')
 
-        except RuntimeError as e:
+        except Exception as e:
             heartbeat_log.error("Heartbeat thread for group %s failed due to unexpected error: %s",
                       self.coordinator.group_id, e)
             self.failed = e

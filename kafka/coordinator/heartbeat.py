@@ -1,7 +1,12 @@
 from __future__ import absolute_import, division
 
 import copy
+import logging
 import time
+
+from kafka.errors import KafkaConfigurationError
+
+log = logging.getLogger(__name__)
 
 
 class Heartbeat(object):
@@ -20,9 +25,13 @@ class Heartbeat(object):
                 self.config[key] = configs[key]
 
         if self.config['group_id'] is not None:
-            assert (self.config['heartbeat_interval_ms']
-                    <= self.config['session_timeout_ms']), (
-                    'Heartbeat interval must be lower than the session timeout')
+            if self.config['heartbeat_interval_ms'] >= self.config['session_timeout_ms']:
+                raise KafkaConfigurationError('Heartbeat interval must be lower than the session timeout (%s v %s)' % (
+                    self.config['heartbeat_interval_ms'], self.config['session_timeout_ms']))
+            if self.config['heartbeat_interval_ms'] > (self.config['session_timeout_ms'] / 3):
+                log.warning('heartbeat_interval_ms is high relative to session_timeout_ms (%s v %s).'
+                            ' Recommend heartbeat interval less than 1/3rd of session timeout',
+                            self.config['heartbeat_interval_ms'], self.config['session_timeout_ms'])
 
         self.last_send = -1 * float('inf')
         self.last_receive = -1 * float('inf')
@@ -66,3 +75,10 @@ class Heartbeat(object):
 
     def poll_timeout_expired(self):
         return (time.time() - self.last_poll) > (self.config['max_poll_interval_ms'] / 1000)
+
+    def __str__(self):
+        return ("<Heartbeat group_id={group_id}"
+                " heartbeat_interval_ms={heartbeat_interval_ms}"
+                " session_timeout_ms={session_timeout_ms}"
+                " max_poll_interval_ms={max_poll_interval_ms}"
+                " retry_backoff_ms={retry_backoff_ms}>").format(**self.config)
