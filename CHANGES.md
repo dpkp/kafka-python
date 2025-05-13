@@ -1,3 +1,8 @@
+# 2.2.7 (May 13, 2025)
+
+Fixes
+* Minor Heartbeat updates: catch more exceptions / log configuration / raise KafkaConfigurationError (#2618)
+
 # 2.2.6 (May 8, 2025)
 
 Fixes
