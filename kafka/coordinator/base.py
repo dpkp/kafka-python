@@ -909,28 +909,28 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             heartbeat_log.debug("Received successful heartbeat response for group %s",
-                      self.group_id)
+                                self.group_id)
             future.success(None)
         elif error_type in (Errors.CoordinatorNotAvailableError,
                             Errors.NotCoordinatorError):
             heartbeat_log.warning("Heartbeat failed for group %s: coordinator (node %s)"
-                        " is either not started or not valid", self.group_id,
+                                  " is either not started or not valid", self.group_id,
                         self.coordinator())
             self.coordinator_dead(error_type())
             future.failure(error_type())
         elif error_type is Errors.RebalanceInProgressError:
             heartbeat_log.warning("Heartbeat failed for group %s because it is"
-                        " rebalancing", self.group_id)
+                                  " rebalancing", self.group_id)
             self.request_rejoin()
             future.failure(error_type())
         elif error_type is Errors.IllegalGenerationError:
             heartbeat_log.warning("Heartbeat failed for group %s: generation id is not "
-                        " current.", self.group_id)
+                                  " current.", self.group_id)
             self.reset_generation()
             future.failure(error_type())
         elif error_type is Errors.UnknownMemberIdError:
             heartbeat_log.warning("Heartbeat: local member_id was not recognized;"
-                        " this consumer needs to re-join")
+                                  " this consumer needs to re-join")
             self.reset_generation()
             future.failure(error_type)
         elif error_type is Errors.GroupAuthorizationFailedError:
@@ -1038,16 +1038,16 @@ class HeartbeatThread(threading.Thread):
 
     def run(self):
         try:
-            heartbeat_log.debug('Heartbeat thread started')
+            heartbeat_log.debug('Heartbeat thread started: %s', self.coordinator.heartbeat)
             while not self.closed:
                 self._run_once()
 
         except ReferenceError:
             heartbeat_log.debug('Heartbeat thread closed due to coordinator gc')
 
-        except RuntimeError as e:
-            heartbeat_log.error("Heartbeat thread for group %s failed due to unexpected error: %s",
-                      self.coordinator.group_id, e)
+        except Exception as e:
+            heartbeat_log.exception("Heartbeat thread for group %s failed due to unexpected error: %s",
+                                    self.coordinator.group_id, e)
             self.failed = e
 
         finally:
