@@ -1,0 +1,72 @@
+# Derived from https://github.com/actions/starter-workflows/blob/main/ci/python-package.yml
+#
+name: Python Package
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  FORCE_COLOR: "1"  # Make tools pretty.
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    name: "Test: python ${{ matrix.python }} / kafka ${{ matrix.kafka }}"
+    continue-on-error: ${{ matrix.experimental || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka:
+          - "4.0.0"
+        python:
+          - "3.12"
+        include:
+          #- python: "pypy3.9"
+          #  kafka: "2.6.0"
+          #  experimental: true
+          #- python: "~3.13.0-0"
+          #  kafka: "2.6.0"
+          #  experimental: true
+          - python: "3.8"
+            kafka: "4.0.0"
+          - python: "3.9"
+            kafka: "4.0.0"
+          - python: "3.10"
+            kafka: "4.0.0"
+          - python: "3.11"
+            kafka: "4.0.0"            
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          sudo apt install -y libsnappy-dev libzstd-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install tox-gh-actions
+      - name: Pylint
+        run: pylint --recursive=y --errors-only --exit-zero kafka test
+      - name: Setup java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 23
+      - name: Pull Kafka release
+        run: make servers/${{ matrix.kafka }}/kafka-bin
+      - name: Pytest
+        run: make test
+        env:
+          KAFKA_VERSION: ${{ matrix.kafka }}
