@@ -608,6 +608,11 @@ class ConsumerCoordinator(BaseCoordinator):
         if node_id is None:
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
+        # Verify node is ready
+        if not self._client.ready(node_id, metadata_priority=False):
+            log.debug("Node %s not ready -- failing offset commit request",
+                      node_id)
+            return Future().failure(Errors.NodeNotReadyError)
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -616,7 +621,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         version = self._client.api_version(OffsetCommitRequest, max_version=6)
         if version > 1 and self._subscription.partitions_auto_assigned():
-            generation = self.generation()
+            generation = self.generation_if_stable()
         else:
             generation = Generation.NO_GENERATION
 
@@ -625,7 +630,18 @@ class ConsumerCoordinator(BaseCoordinator):
         # and let the user rejoin the group in poll()
         if generation is None:
             log.info("Failing OffsetCommit request since the consumer is not part of an active group")
-            return Future().failure(Errors.CommitFailedError('Group rebalance in progress'))
+            if self.rebalance_in_progress():
+                # if the client knows it is already rebalancing, we can use RebalanceInProgressError instead of
+                # CommitFailedError to indicate this is not a fatal error
+                return Future().failure(Errors.RebalanceInProgressError(
+                    "Offset commit cannot be completed since the"
+                    " consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance"
+                    " by calling poll() and then retry the operation."))
+            else:
+                return Future().failure(Errors.CommitFailedError(
+                    "Offset commit cannot be completed since the"
+                    " consumer is not part of an active group for auto partition assignment; it is likely that the consumer"
+                    " was kicked out of the group."))
 
         if version == 0:
             request = OffsetCommitRequest[version](
@@ -756,7 +772,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     # However, we do not need to reset generations and just request re-join, such that
                     # if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
                     self.request_rejoin()
-                    future.failure(Errors.CommitFailedError('Group rebalance in progress'))
+                    future.failure(Errors.CommitFailedError(error_type()))
                     return
                 elif error_type in (Errors.UnknownMemberIdError,
                                     Errors.IllegalGenerationError):
@@ -765,7 +781,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.warning("OffsetCommit for group %s failed: %s",
                                 self.group_id, error)
                     self.reset_generation()
-                    future.failure(Errors.CommitFailedError())
+                    future.failure(Errors.CommitFailedError(error_type()))
                     return
                 else:
                     log.error("Group %s failed to commit partition %s at offset"
@@ -804,7 +820,7 @@ class ConsumerCoordinator(BaseCoordinator):
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
         # Verify node is ready
-        if not self._client.ready(node_id):
+        if not self._client.ready(node_id, metadata_priority=False):
             log.debug("Node %s not ready -- failing offset fetch request",
                       node_id)
             return Future().failure(Errors.NodeNotReadyError)

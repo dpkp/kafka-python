@@ -5,6 +5,7 @@ import copy
 import logging
 import threading
 import time
+import warnings
 import weakref
 
 from kafka.vendor import six
@@ -797,7 +798,7 @@ class BaseCoordinator(object):
                         self.coordinator_id, self.group_id, error)
             self.coordinator_id = None
 
-    def generation(self):
+    def generation_if_stable(self):
         """Get the current generation state if the group is stable.
 
         Returns: the current generation or None if the group is unjoined/rebalancing
@@ -806,6 +807,15 @@ class BaseCoordinator(object):
             if self.state is not MemberState.STABLE:
                 return None
             return self._generation
+
+    # deprecated
+    def generation(self):
+        warnings.warn("Function coordinator.generation() has been renamed to generation_if_stable()",
+                      DeprecationWarning, stacklevel=2)
+        return self.generation_if_stable()
+
+    def rebalance_in_progress(self):
+        return self.state is MemberState.REBALANCING
 
     def reset_generation(self, member_id=UNKNOWN_MEMBER_ID):
         """Reset the generation and member_id because we have fallen out of the group."""
