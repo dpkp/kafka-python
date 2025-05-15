@@ -568,10 +568,9 @@ class BaseCoordinator(object):
         future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
+        log.debug("Received JoinGroup response: %s", response)
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
-            log.debug("Received successful JoinGroup response for group %s: %s",
-                      self.group_id, response)
             if self._sensors:
                 self._sensors.join_latency.record((time.time() - send_time) * 1000)
             with self._lock:
