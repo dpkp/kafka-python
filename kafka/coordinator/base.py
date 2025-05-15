@@ -1064,28 +1064,28 @@ class HeartbeatThread(threading.Thread):
         self.coordinator._client._lock.acquire()
         self.coordinator._lock.acquire()
         try:
-            if self.enabled and self.coordinator.state is MemberState.STABLE:
-                # TODO: When consumer.wakeup() is implemented, we need to
-                # disable here to prevent propagating an exception to this
-                # heartbeat thread
-                # must get client._lock, or maybe deadlock at heartbeat 
-                # failure callback in consumer poll
-                self.coordinator._client.poll(timeout_ms=0)
-
             if not self.enabled:
                 heartbeat_log.debug('Heartbeat disabled. Waiting')
                 self.coordinator._client._lock.release()
                 self.coordinator._lock.wait()
-                heartbeat_log.debug('Heartbeat re-enabled.')
+                if self.enabled:
+                    heartbeat_log.debug('Heartbeat re-enabled.')
+                return
 
-            elif self.coordinator.state is not MemberState.STABLE:
+            if self.coordinator.state is not MemberState.STABLE:
                 # the group is not stable (perhaps because we left the
                 # group or because the coordinator kicked us out), so
                 # disable heartbeats and wait for the main thread to rejoin.
                 heartbeat_log.debug('Group state is not stable, disabling heartbeats')
                 self.disable()
+                return
 
-            elif self.coordinator.coordinator_unknown():
+            # TODO: When consumer.wakeup() is implemented, we need to
+            # disable here to prevent propagating an exception to this
+            # heartbeat thread
+            self.coordinator._client.poll(timeout_ms=0)
+
+            if self.coordinator.coordinator_unknown():
                 future = self.coordinator.lookup_coordinator()
                 if not future.is_done or future.failed():
                     # the immediate future check ensures that we backoff
