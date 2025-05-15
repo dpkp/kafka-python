@@ -723,19 +723,19 @@ class BaseCoordinator(object):
         if error_type is Errors.GroupAuthorizationFailedError:
             future.failure(error_type(self.group_id))
         elif error_type is Errors.RebalanceInProgressError:
-            log.debug("SyncGroup for group %s failed due to coordinator"
-                      " rebalance", self.group_id)
+            log.info("SyncGroup for group %s failed due to coordinator"
+                     " rebalance", self.group_id)
             future.failure(error_type(self.group_id))
         elif error_type in (Errors.UnknownMemberIdError,
                             Errors.IllegalGenerationError):
             error = error_type()
-            log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
+            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
             self.reset_generation()
             future.failure(error)
         elif error_type in (Errors.CoordinatorNotAvailableError,
                             Errors.NotCoordinatorError):
             error = error_type()
-            log.debug("SyncGroup for group %s failed due to %s", self.group_id, error)
+            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
             self.coordinator_dead(error)
             future.failure(error)
         else:
