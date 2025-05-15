@@ -658,6 +658,7 @@ def test_heartbeat(mocker, patched_coord):
     heartbeat.enable()
     patched_coord.state = MemberState.STABLE
     mocker.spy(patched_coord, '_send_heartbeat_request')
+    mocker.patch.object(patched_coord, 'connected', return_value=True)
     mocker.patch.object(patched_coord.heartbeat, 'should_heartbeat', return_value=True)
     heartbeat._run_once()
     assert patched_coord._send_heartbeat_request.call_count == 1
