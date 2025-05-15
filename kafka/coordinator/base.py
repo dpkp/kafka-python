@@ -5,6 +5,7 @@ import copy
 import logging
 import threading
 import time
+import warnings
 import weakref
 
 from kafka.vendor import six
@@ -801,6 +802,12 @@ class BaseCoordinator(object):
             if self.state is not MemberState.STABLE:
                 return None
             return self._generation
+
+    # deprecated
+    def generation(self):
+        warnings.warn("Function coordinator.generation() has been renamed to generation_if_stable()",
+                      DeprecationWarning, stacklevel=2)
+        return self.generation_if_stable()
 
     def rebalance_in_progress(self):
         return self.state is MemberState.REBALANCING
