@@ -401,8 +401,6 @@ class BaseCoordinator(object):
         # will be invoked even if the consumer is woken up before
         # finishing the rebalance
         with self._lock:
-            log.info("Successfully joined group %s %s",
-                     self.group_id, self._generation)
             self.state = MemberState.STABLE
             if self._heartbeat_thread:
                 self._heartbeat_thread.enable()
@@ -587,6 +585,7 @@ class BaseCoordinator(object):
                                                   response.member_id,
                                                   response.group_protocol)
 
+                log.info("Successfully joined group %s %s", self.group_id, self._generation)
                 if response.leader_id == response.member_id:
                     log.info("Elected group leader -- performing partition"
                              " assignments using %s", self._generation.protocol)
@@ -595,24 +594,24 @@ class BaseCoordinator(object):
                     self._on_join_follower().chain(future)
 
         elif error_type is Errors.CoordinatorLoadInProgressError:
-            log.debug("Attempt to join group %s rejected since coordinator %s"
-                      " is loading the group.", self.group_id, self.coordinator_id)
+            log.info("Attempt to join group %s rejected since coordinator %s"
+                     " is loading the group.", self.group_id, self.coordinator_id)
             # backoff and retry
             future.failure(error_type(response))
         elif error_type is Errors.UnknownMemberIdError:
             # reset the member id and retry immediately
             error = error_type(self._generation.member_id)
             self.reset_generation()
-            log.debug("Attempt to join group %s failed due to unknown member id",
-                      self.group_id)
+            log.info("Attempt to join group %s failed due to unknown member id",
+                     self.group_id)
             future.failure(error)
         elif error_type in (Errors.CoordinatorNotAvailableError,
                             Errors.NotCoordinatorError):
             # re-discover the coordinator and retry with backoff
             self.coordinator_dead(error_type())
-            log.debug("Attempt to join group %s failed due to obsolete "
-                      "coordinator information: %s", self.group_id,
-                      error_type.__name__)
+            log.info("Attempt to join group %s failed due to obsolete "
+                     "coordinator information: %s", self.group_id,
+                     error_type.__name__)
             future.failure(error_type())
         elif error_type in (Errors.InconsistentGroupProtocolError,
                             Errors.InvalidSessionTimeoutError,
@@ -623,7 +622,7 @@ class BaseCoordinator(object):
                       self.group_id, error)
             future.failure(error)
         elif error_type is Errors.GroupAuthorizationFailedError:
-            log.debug("Attempt to join group %s failed due to group authorization error",
+            log.error("Attempt to join group %s failed due to group authorization error",
                       self.group_id)
             future.failure(error_type(self.group_id))
         elif error_type is Errors.MemberIdRequiredError:
@@ -632,6 +631,11 @@ class BaseCoordinator(object):
             log.info("Received member id %s for group %s; will retry join-group",
                      response.member_id, self.group_id)
             self.reset_generation(response.member_id)
+            future.failure(error_type())
+        elif error_type is Errors.RebalanceInProgressError:
+            log.info("Attempt to join group %s failed due to RebalanceInProgressError,"
+                     " which could indicate a replication timeout on the broker. Will retry.",
+                     self.group_id)
             future.failure(error_type())
         else:
             # unexpected error, throw the exception
