@@ -125,6 +125,20 @@ def test_group(kafka_broker, topic):
             for partition in range(num_partitions)])
         logging.info('Assignment looks good!')
 
+        logging.info('Verifying heartbeats')
+        while True:
+            for c in range(num_consumers):
+                heartbeat = consumers[c]._coordinator.heartbeat
+                last_hb = time.time() - 0.5
+                if (heartbeat.heartbeat_failed or
+                    heartbeat.last_receive < last_hb or
+                    heartbeat.last_reset > last_hb):
+                    time.sleep(0.1)
+                    continue
+            else:
+                break
+        logging.info('Heartbeats look good')
+
     finally:
         logging.info('Shutting down %s consumers', num_consumers)
         for c in range(num_consumers):
@@ -163,18 +177,28 @@ def test_heartbeat_thread(kafka_broker, topic):
                              heartbeat_interval_ms=500)
 
     # poll until we have joined group / have assignment
+    start = time.time()
     while not consumer.assignment():
         consumer.poll(timeout_ms=100)
 
     assert consumer._coordinator.state is MemberState.STABLE
     last_poll = consumer._coordinator.heartbeat.last_poll
-    last_beat = consumer._coordinator.heartbeat.last_send
+
+    # wait until we receive first heartbeat
+    while consumer._coordinator.heartbeat.last_receive < start:
+        time.sleep(0.1)
+
+    last_send = consumer._coordinator.heartbeat.last_send
+    last_recv = consumer._coordinator.heartbeat.last_receive
+    assert last_poll > start
+    assert last_send > start
+    assert last_recv > start
 
     timeout = time.time() + 30
     while True:
         if time.time() > timeout:
             raise RuntimeError('timeout waiting for heartbeat')
-        if consumer._coordinator.heartbeat.last_send > last_beat:
+        if consumer._coordinator.heartbeat.last_receive > last_recv:
             break
         time.sleep(0.5)
 
