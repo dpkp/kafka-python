@@ -253,8 +253,7 @@ class BaseCoordinator(object):
     def connected(self):
         """Return True iff the coordinator node is connected"""
         with self._lock:
-            if self.coordinator_id is not None and self._client.connected(self.coordinator_id):
-                return True
+            return self.coordinator_id is not None and self._client.connected(self.coordinator_id)
 
     def ensure_coordinator_ready(self, timeout_ms=None):
         """Block until the coordinator for this group is known.
