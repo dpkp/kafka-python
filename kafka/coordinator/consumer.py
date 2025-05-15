@@ -608,6 +608,11 @@ class ConsumerCoordinator(BaseCoordinator):
         if node_id is None:
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
+        # Verify node is ready
+        if not self._client.ready(node_id, metadata_priority=False):
+            log.debug("Node %s not ready -- failing offset commit request",
+                      node_id)
+            return Future().failure(Errors.NodeNotReadyError)
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -804,7 +809,7 @@ class ConsumerCoordinator(BaseCoordinator):
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
         # Verify node is ready
-        if not self._client.ready(node_id):
+        if not self._client.ready(node_id, metadata_priority=False):
             log.debug("Node %s not ready -- failing offset fetch request",
                       node_id)
             return Future().failure(Errors.NodeNotReadyError)
