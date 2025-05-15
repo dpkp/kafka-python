@@ -250,6 +250,12 @@ class BaseCoordinator(object):
         else:
             return self.coordinator_id
 
+    def connected(self):
+        """Return True iff the coordinator node is connected"""
+        with self._lock:
+            if self.coordinator_id is not None and self._client.connected(self.coordinator_id):
+                return True
+
     def ensure_coordinator_ready(self, timeout_ms=None):
         """Block until the coordinator for this group is known.
 
@@ -1088,6 +1094,10 @@ class HeartbeatThread(threading.Thread):
                     self.coordinator._client._lock.release()
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
+            elif not self.coordinator.connected():
+                self.coordinator._client._lock.release()
+                self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
+
             elif self.coordinator.heartbeat.session_timeout_expired():
                 # the session timeout has expired without seeing a
                 # successful heartbeat, so we should probably make sure
@@ -1103,11 +1113,10 @@ class HeartbeatThread(threading.Thread):
                 self.coordinator.maybe_leave_group()
 
             elif not self.coordinator.heartbeat.should_heartbeat():
-                # poll again after waiting for the retry backoff in case
-                # the heartbeat failed or the coordinator disconnected
-                heartbeat_log.log(0, 'Not ready to heartbeat, waiting')
+                next_hb = self.coordinator.heartbeat.time_to_next_heartbeat()
+                heartbeat_log.debug('Waiting %0.1f secs to send next heartbeat', next_hb)
                 self.coordinator._client._lock.release()
-                self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
+                self.coordinator._lock.wait(next_hb)
 
             else:
                 self.coordinator.heartbeat.sent_heartbeat()
