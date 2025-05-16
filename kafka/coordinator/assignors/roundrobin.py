@@ -67,9 +67,14 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         # construct {member_id: {topic: [partition, ...]}}
         assignment = collections.defaultdict(lambda: collections.defaultdict(list))
 
-        member_iter = itertools.cycle(sorted(group_subscriptions.keys()))
+        # Sort static and dynamic members separately to maintain stable static assignments
+        ungrouped = [(subscription.group_instance_id, member_id) for member_id, subscription in six.iteritems(group_subscriptions)]
+        grouped = {k: list(g) for k, g in itertools.groupby(ungrouped, key=lambda ids: ids[0] is not None)}
+        member_list = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
+        member_iter = itertools.cycle(member_list)
+
         for partition in all_topic_partitions:
-            member_id = next(member_iter)
+            _group_instance_id, member_id = next(member_iter)
 
             # Because we constructed all_topic_partitions from the set of
             # member subscribed topics, we should be safe assuming that
