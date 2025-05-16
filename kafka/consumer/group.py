@@ -2,6 +2,7 @@ from __future__ import absolute_import, division
 
 import copy
 import logging
+import re
 import socket
 import time
 
@@ -57,6 +58,14 @@ class KafkaConsumer(six.Iterator):
             committing offsets. If None, auto-partition assignment (via
             group coordinator) and offset commits are disabled.
             Default: None
+        group_instance_id (str): A unique identifier of the consumer instance
+            provided by end user. Only non-empty strings are permitted. If set,
+            the consumer is treated as a static member, which means that only
+            one instance with this ID is allowed in the consumer group at any
+            time. This can be used in combination with a larger session timeout
+            to avoid group rebalances caused by transient unavailability (e.g.
+            process restarts). If not set, the consumer will join the group as
+            a dynamic member, which is the traditional behavior. Default: None
         key_deserializer (callable): Any callable that takes a
             raw message key and returns a deserialized key.
         value_deserializer (callable): Any callable that takes a
@@ -276,6 +285,7 @@ class KafkaConsumer(six.Iterator):
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'group_id': None,
+        'group_instance_id': None,
         'key_deserializer': None,
         'value_deserializer': None,
         'enable_incremental_fetch_sessions': True,
@@ -408,6 +418,10 @@ class KafkaConsumer(six.Iterator):
                     "Request timeout (%s) must be larger than session timeout (%s)" %
                     (self.config['request_timeout_ms'], self.config['session_timeout_ms']))
 
+        if self.config['group_instance_id'] is not None:
+            if self.config['group_id'] is None:
+                raise KafkaConfigurationError("group_instance_id requires group_id")
+
         self._subscription = SubscriptionState(self.config['auto_offset_reset'])
         self._fetcher = Fetcher(
             self._client, self._subscription, metrics=self._metrics, **self.config)
@@ -422,6 +436,16 @@ class KafkaConsumer(six.Iterator):
         if topics:
             self._subscription.subscribe(topics=topics)
             self._client.set_topics(topics)
+
+    def _validate_group_instance_id(self, group_instance_id):
+        if not group_instance_id or not isinstance(group_instance_id, str):
+            raise KafkaConfigurationError("group_instance_id must be non-empty string")
+        if group_instance_id in (".", ".."):
+            raise KafkaConfigurationError("group_instance_id cannot be \".\" or \"..\"")
+        if len(group_instance_id) > 249:
+            raise KafkaConfigurationError("group_instance_id can't be longer than 249 characters")
+        if not re.match(r'^[A-Za-z0-9\.\_\-]+$', group_instance_id):
+            raise KafkaConfigurationError("group_instance_id is illegal: it contains a character other than ASCII alphanumerics, '.', '_' and '-'")
 
     def bootstrap_connected(self):
         """Return True if the bootstrap is connected."""
