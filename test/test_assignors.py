@@ -10,7 +10,7 @@ from kafka.structs import TopicPartition
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment
+from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment_v0
 from kafka.vendor import six
 
 
@@ -42,9 +42,9 @@ def test_assignor_roundrobin(mocker):
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
     ret = assignor.assign(cluster, member_metadata)
     expected = {
-        'C0': ConsumerProtocolMemberAssignment(
+        'C0': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [0, 2]), ('t1', [1])], b''),
-        'C1': ConsumerProtocolMemberAssignment(
+        'C1': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [1]), ('t1', [0, 2])], b'')
     }
     assert ret == expected
@@ -64,9 +64,9 @@ def test_assignor_range(mocker):
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
     ret = assignor.assign(cluster, member_metadata)
     expected = {
-        'C0': ConsumerProtocolMemberAssignment(
+        'C0': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [0, 1]), ('t1', [0, 1])], b''),
-        'C1': ConsumerProtocolMemberAssignment(
+        'C1': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [2]), ('t1', [2])], b'')
     }
     assert ret == expected
@@ -102,9 +102,9 @@ def test_sticky_assignor1(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C0': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t0', [0]), ('t1', [1]), ('t3', [0])], b''),
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t0', [1]), ('t2', [0]), ('t3', [1])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0]), ('t2', [1])], b''),
+        'C0': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t0', [0]), ('t1', [1]), ('t3', [0])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t0', [1]), ('t2', [0]), ('t3', [1])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0]), ('t2', [1])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -115,10 +115,10 @@ def test_sticky_assignor1(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C0': ConsumerProtocolMemberAssignment(
+        'C0': ConsumerProtocolMemberAssignment_v0(
             StickyPartitionAssignor.version, [('t0', [0]), ('t1', [1]), ('t2', [0]), ('t3', [0])], b''
         ),
-        'C2': ConsumerProtocolMemberAssignment(
+        'C2': ConsumerProtocolMemberAssignment_v0(
             StickyPartitionAssignor.version, [('t0', [1]), ('t1', [0]), ('t2', [1]), ('t3', [1])], b''
         ),
     }
@@ -158,9 +158,9 @@ def test_sticky_assignor2(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C0': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t0', [0])], b''),
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0, 1])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t2', [0, 1, 2])], b''),
+        'C0': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t0', [0])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0, 1])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t2', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -171,8 +171,8 @@ def test_sticky_assignor2(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t0', [0]), ('t1', [0, 1])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t2', [0, 1, 2])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t0', [0]), ('t1', [0, 1])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t2', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -187,7 +187,7 @@ def test_sticky_one_consumer_no_topic(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -202,7 +202,7 @@ def test_sticky_one_consumer_nonexisting_topic(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -217,7 +217,7 @@ def test_sticky_one_consumer_one_topic(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -232,7 +232,7 @@ def test_sticky_should_only_assign_partitions_from_subscribed_topics(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -247,7 +247,7 @@ def test_sticky_one_consumer_multiple_topics(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0, 1, 2]), ('t2', [0, 1, 2])], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0, 1, 2]), ('t2', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -263,8 +263,8 @@ def test_sticky_two_consumers_one_topic_one_partition(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -280,8 +280,8 @@ def test_sticky_two_consumers_one_topic_two_partitions(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [1])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [1])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -299,9 +299,9 @@ def test_sticky_multiple_consumers_mixed_topic_subscriptions(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0, 2])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t2', [0, 1])], b''),
-        'C3': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [1])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0, 2])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t2', [0, 1])], b''),
+        'C3': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [1])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -316,7 +316,7 @@ def test_sticky_add_remove_consumer_one_topic(mocker):
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
     }
     assert_assignment(assignment, expected_assignment)
 
@@ -356,8 +356,8 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0, 2])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [1])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0, 2])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [1])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -371,8 +371,8 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0, 2]), ('t2', [1])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [1]), ('t2', [0, 2])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0, 2]), ('t2', [1])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [1]), ('t2', [0, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -386,8 +386,8 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C1': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t2', [1])], b''),
-        'C2': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t2', [0, 2])], b''),
+        'C1': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t2', [1])], b''),
+        'C2': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t2', [0, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -601,7 +601,7 @@ def test_assignment_updated_for_deleted_topic(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t1', [0]), ('t3', list(range(100)))], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t1', [0]), ('t3', list(range(100)))], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -616,7 +616,7 @@ def test_no_exceptions_when_only_subscribed_topic_is_deleted(mocker):
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [('t', [0, 1, 2])], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 
@@ -630,7 +630,7 @@ def test_no_exceptions_when_only_subscribed_topic_is_deleted(mocker):
     cluster = create_cluster(mocker, topics={}, topics_partitions={})
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     expected_assignment = {
-        'C': ConsumerProtocolMemberAssignment(StickyPartitionAssignor.version, [], b''),
+        'C': ConsumerProtocolMemberAssignment_v0(StickyPartitionAssignor.version, [], b''),
     }
     assert_assignment(sticky_assignment, expected_assignment)
 

@@ -13,7 +13,7 @@ from kafka.vendor import six
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType
 from kafka.client_async import KafkaClient, selectors
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment, ConsumerProtocol
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0, ConsumerProtocol_v0
 import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, UnknownTopicOrPartitionError,
@@ -1242,7 +1242,7 @@ class KafkaAdminClient(object):
                     for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
                         if group_information_name == 'protocol_type':
                             protocol_type = described_group_information
-                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol.PROTOCOL_TYPE or not protocol_type)
+                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol_v0.PROTOCOL_TYPE or not protocol_type)
                         if isinstance(group_information_field, Array):
                             member_information_list = []
                             member_schema = group_information_field.array_of
@@ -1251,9 +1251,9 @@ class KafkaAdminClient(object):
                                 for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
                                     if protocol_type_is_consumer:
                                         if member_name == 'member_metadata' and member:
-                                            member_information.append(ConsumerProtocolMemberMetadata.decode(member))
+                                            member_information.append(ConsumerProtocolMemberMetadata_v0.decode(member))
                                         elif member_name == 'member_assignment' and member:
-                                            member_information.append(ConsumerProtocolMemberAssignment.decode(member))
+                                            member_information.append(ConsumerProtocolMemberAssignment_v0.decode(member))
                                         else:
                                             member_information.append(member)
                                 member_info_tuple = MemberInformation._make(member_information)

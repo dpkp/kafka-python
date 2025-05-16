@@ -5,7 +5,7 @@ from copy import deepcopy
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.assignors.sticky.partition_movements import PartitionMovements
 from kafka.coordinator.assignors.sticky.sorted_set import SortedSet
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
 from kafka.coordinator.protocol import Schema
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import String, Array, Int32
@@ -603,7 +603,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
 
         assignment = {}
         for member_id in members:
-            assignment[member_id] = ConsumerProtocolMemberAssignment(
+            assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version, sorted(executor.get_final_assignment(member_id)), b''
             )
         return assignment
@@ -661,7 +661,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
             data = StickyAssignorUserDataV1(list(partitions_by_topic.items()), generation)
             user_data = data.encode()
-        return ConsumerProtocolMemberMetadata(cls.version, list(topics), user_data)
+        return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), user_data)
 
     @classmethod
     def on_assignment(cls, assignment):

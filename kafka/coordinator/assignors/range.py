@@ -6,7 +6,7 @@ import logging
 from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
 
         protocol_assignment = {}
         for member_id in member_metadata:
-            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment(
+            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version,
                 sorted(assignment[member_id].items()),
                 b'')
@@ -70,7 +70,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
 
     @classmethod
     def metadata(cls, topics):
-        return ConsumerProtocolMemberMetadata(cls.version, list(topics), b'')
+        return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), b'')
 
     @classmethod
     def on_assignment(cls, assignment):
