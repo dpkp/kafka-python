@@ -11,6 +11,7 @@ from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment_v0
+from kafka.coordinator.subscription import Subscription
 from kafka.vendor import six
 
 
@@ -34,13 +35,13 @@ def create_cluster(mocker, topics, topics_partitions=None, topic_partitions_lamb
 def test_assignor_roundrobin(mocker):
     assignor = RoundRobinPartitionAssignor
 
-    member_metadata = {
-        'C0': assignor.metadata({'t0', 't1'}),
-        'C1': assignor.metadata({'t0', 't1'}),
+    group_subscriptions = {
+        'C0': Subscription(assignor.metadata({'t0', 't1'}), None),
+        'C1': Subscription(assignor.metadata({'t0', 't1'}), None),
     }
 
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
-    ret = assignor.assign(cluster, member_metadata)
+    ret = assignor.assign(cluster, group_subscriptions)
     expected = {
         'C0': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [0, 2]), ('t1', [1])], b''),
@@ -56,13 +57,13 @@ def test_assignor_roundrobin(mocker):
 def test_assignor_range(mocker):
     assignor = RangePartitionAssignor
 
-    member_metadata = {
-        'C0': assignor.metadata({'t0', 't1'}),
-        'C1': assignor.metadata({'t0', 't1'}),
+    group_subscriptions = {
+        'C0': Subscription(assignor.metadata({'t0', 't1'}), None),
+        'C1': Subscription(assignor.metadata({'t0', 't1'}), None),
     }
 
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
-    ret = assignor.assign(cluster, member_metadata)
+    ret = assignor.assign(cluster, group_subscriptions)
     expected = {
         'C0': ConsumerProtocolMemberAssignment_v0(
             assignor.version, [('t0', [0, 1]), ('t1', [0, 1])], b''),

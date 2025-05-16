@@ -49,10 +49,10 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     version = 0
 
     @classmethod
-    def assign(cls, cluster, member_metadata):
+    def assign(cls, cluster, group_subscriptions):
         all_topics = set()
-        for metadata in six.itervalues(member_metadata):
-            all_topics.update(metadata.subscription)
+        for subscription in six.itervalues(group_subscriptions):
+            all_topics.update(subscription.subscription)
 
         all_topic_partitions = []
         for topic in all_topics:
@@ -67,7 +67,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         # construct {member_id: {topic: [partition, ...]}}
         assignment = collections.defaultdict(lambda: collections.defaultdict(list))
 
-        member_iter = itertools.cycle(sorted(member_metadata.keys()))
+        member_iter = itertools.cycle(sorted(group_subscriptions.keys()))
         for partition in all_topic_partitions:
             member_id = next(member_iter)
 
@@ -75,12 +75,12 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
             # member subscribed topics, we should be safe assuming that
             # each topic in all_topic_partitions is in at least one member
             # subscription; otherwise this could yield an infinite loop
-            while partition.topic not in member_metadata[member_id].subscription:
+            while partition.topic not in group_subscriptions[member_id].subscription:
                 member_id = next(member_iter)
             assignment[member_id][partition.topic].append(partition.partition)
 
         protocol_assignment = {}
-        for member_id in member_metadata:
+        for member_id in group_subscriptions:
             protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version,
                 sorted(assignment[member_id].items()),
