@@ -14,6 +14,7 @@ from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
     ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0)
+from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
@@ -192,9 +193,9 @@ def test_subscription_listener_failure(mocker, coordinator):
 
 def test_perform_assignment(mocker, coordinator):
     coordinator._subscription.subscribe(topics=['foo1'])
-    member_metadata = {
-        'member-foo': ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b''),
-        'member-bar': ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b'')
+    group_subscriptions = {
+        'member-foo': Subscription(ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b''), None),
+        'member-bar': Subscription(ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b''), None),
     }
     assignments = {
         'member-foo': ConsumerProtocolMemberAssignment_v0(
@@ -208,12 +209,12 @@ def test_perform_assignment(mocker, coordinator):
 
     ret = coordinator._perform_assignment(
         'member-foo', 'roundrobin',
-        [(member, metadata.encode())
-         for member, metadata in member_metadata.items()])
+        [(member, subscription.encode())
+         for member, subscription in group_subscriptions.items()])
 
     assert RoundRobinPartitionAssignor.assign.call_count == 1
     RoundRobinPartitionAssignor.assign.assert_called_with(
-        coordinator._client.cluster, member_metadata)
+        coordinator._client.cluster, group_subscriptions)
     assert ret == assignments
 
 

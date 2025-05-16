@@ -13,6 +13,7 @@ from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
+from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
@@ -333,7 +334,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
         assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
-        member_metadata = {}
+        member_subscriptions = {}
         all_subscribed_topics = set()
         for member in members:
             if len(member) == 3:
@@ -341,9 +342,12 @@ class ConsumerCoordinator(BaseCoordinator):
             else:
                 member_id, metadata_bytes = member
                 group_instance_id = None
-            metadata = ConsumerProtocol[0].METADATA.decode(metadata_bytes),
-            member_metadata[member_id] = metadata
-            all_subscribed_topics.update(metadata.subscription) # pylint: disable-msg=no-member
+            subscription = Subscription(
+                ConsumerProtocol[0].METADATA.decode(metadata_bytes),
+                group_instance_id
+            )
+            member_subscriptions[member_id] = subscription
+            all_subscribed_topics.update(subscription.subscription)
 
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes
@@ -361,9 +365,9 @@ class ConsumerCoordinator(BaseCoordinator):
 
         log.debug("Performing assignment for group %s using strategy %s"
                   " with subscriptions %s", self.group_id, assignor.name,
-                  member_metadata)
+                  member_subscriptions)
 
-        assignments = assignor.assign(self._cluster, member_metadata)
+        assignments = assignor.assign(self._cluster, member_subscriptions)
 
         log.debug("Finished assignment for group %s: %s", self.group_id, assignments)
 
