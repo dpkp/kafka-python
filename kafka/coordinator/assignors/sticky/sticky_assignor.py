@@ -66,6 +66,7 @@ class StickyAssignorUserDataV1(Struct):
 
 class StickyAssignmentExecutor:
     def __init__(self, cluster, members):
+        # a mapping of member_id => StickyAssignorMemberMetadataV1
         self.members = members
         # a mapping between consumers and their assigned partitions that is updated during assignment procedure
         self.current_assignment = defaultdict(list)
@@ -630,9 +631,9 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
 
         try:
             decoded_user_data = StickyAssignorUserDataV1.decode(user_data)
-        except Exception as e:
+        except Exception:
             # ignore the consumer's previous assignment if it cannot be parsed
-            log.error("Could not parse member data", e)     # pylint: disable=logging-too-many-args
+            log.exception("Could not parse member data")
             return StickyAssignorMemberMetadataV1(
                 partitions=[], generation=cls.DEFAULT_GENERATION_ID, subscription=metadata.topics
             )
