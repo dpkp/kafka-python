@@ -342,7 +342,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 member.group_instance_id
             )
             member_subscriptions[member.member_id] = subscription
-            all_subscribed_topics.update(subscription.subscription)
+            all_subscribed_topics.update(subscription.topics)
 
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes

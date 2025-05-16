@@ -35,7 +35,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
     def assign(cls, cluster, group_subscriptions):
         consumers_per_topic = collections.defaultdict(list)
         for member, subscription in six.iteritems(group_subscriptions):
-            for topic in subscription.subscription:
+            for topic in subscription.topics:
                 consumers_per_topic[topic].append(member)
 
         # construct {member_id: {topic: [partition, ...]}}

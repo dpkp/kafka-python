@@ -625,7 +625,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
         user_data = metadata.user_data
         if not user_data:
             return StickyAssignorMemberMetadataV1(
-                partitions=[], generation=cls.DEFAULT_GENERATION_ID, subscription=metadata.subscription
+                partitions=[], generation=cls.DEFAULT_GENERATION_ID, subscription=metadata.topics
             )
 
         try:
@@ -634,7 +634,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             # ignore the consumer's previous assignment if it cannot be parsed
             log.error("Could not parse member data", e)     # pylint: disable=logging-too-many-args
             return StickyAssignorMemberMetadataV1(
-                partitions=[], generation=cls.DEFAULT_GENERATION_ID, subscription=metadata.subscription
+                partitions=[], generation=cls.DEFAULT_GENERATION_ID, subscription=metadata.topics
             )
 
         member_partitions = []
@@ -642,7 +642,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             member_partitions.extend([TopicPartition(topic, partition) for partition in partitions])
         return StickyAssignorMemberMetadataV1(
             # pylint: disable=no-member
-            partitions=member_partitions, generation=decoded_user_data.generation, subscription=metadata.subscription
+            partitions=member_partitions, generation=decoded_user_data.generation, subscription=metadata.topics
         )
 
     @classmethod

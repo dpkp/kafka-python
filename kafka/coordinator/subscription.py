@@ -16,8 +16,11 @@ class Subscription(object):
         return self._metadata.user_data
 
     @property
-    def subscription(self):
-        return self._metadata.subscription
+    def topics(self):
+        return self._metadata.topics
+
+    # Alias for old interface / name
+    subscription = topics
 
     @property
     def group_instance_id(self):

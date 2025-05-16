@@ -8,7 +8,7 @@ from kafka.structs import TopicPartition
 class ConsumerProtocolMemberMetadata_v0(Struct):
     SCHEMA = Schema(
         ('version', Int16),
-        ('subscription', Array(String('utf-8'))),
+        ('topics', Array(String('utf-8'))),
         ('user_data', Bytes))
 
 
