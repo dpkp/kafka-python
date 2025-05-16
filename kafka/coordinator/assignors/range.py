@@ -32,10 +32,10 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
     version = 0
 
     @classmethod
-    def assign(cls, cluster, member_metadata):
+    def assign(cls, cluster, group_subscriptions):
         consumers_per_topic = collections.defaultdict(list)
-        for member, metadata in six.iteritems(member_metadata):
-            for topic in metadata.subscription:
+        for member, subscription in six.iteritems(group_subscriptions):
+            for topic in subscription.subscription:
                 consumers_per_topic[topic].append(member)
 
         # construct {member_id: {topic: [partition, ...]}}
@@ -61,7 +61,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
                 assignment[member][topic] = partitions[start:start+length]
 
         protocol_assignment = {}
-        for member_id in member_metadata:
+        for member_id in group_subscriptions:
             protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version,
                 sorted(assignment[member_id].items()),
