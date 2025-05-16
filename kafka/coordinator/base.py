@@ -16,7 +16,10 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
-from kafka.protocol.group import HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest, DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
+from kafka.protocol.group import (
+    HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
+    DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, GroupMember,
+)
 from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
@@ -216,10 +219,10 @@ class BaseCoordinator(object):
         Arguments:
             leader_id (str): The id of the leader (which is this member)
             protocol (str): the chosen group protocol (assignment strategy)
-            members (list): [(member_id, group_instance_id, metadata_bytes)] from
-                JoinGroupResponse. metadata_bytes are associated with the chosen
-                group protocol, and the Coordinator subclass is responsible for
-                decoding metadata_bytes based on that protocol.
+            members (list): [GroupMember] from JoinGroupResponse.
+                metadata_bytes are associated with the chosen group protocol,
+                and the Coordinator subclass is responsible for decoding
+                metadata_bytes based on that protocol.
 
         Returns:
             dict: {member_id: assignment}; assignment must either be bytes
@@ -702,9 +705,11 @@ class BaseCoordinator(object):
             Future: resolves to member assignment encoded-bytes
         """
         try:
+            members = [GroupMember(*member) if response.API_VERSION >= 5 else GroupMember(member[0], None, member[1])
+                       for member in response.members]
             group_assignment = self._perform_assignment(response.leader_id,
                                                         response.group_protocol,
-                                                        response.members)
+                                                        members)
             for member_id, assignment in six.iteritems(group_assignment):
                 if not isinstance(assignment, bytes):
                     group_assignment[member_id] = assignment.encode()

@@ -337,16 +337,11 @@ class ConsumerCoordinator(BaseCoordinator):
         member_subscriptions = {}
         all_subscribed_topics = set()
         for member in members:
-            if len(member) == 3:
-                member_id, group_instance_id, metadata_bytes = member
-            else:
-                member_id, metadata_bytes = member
-                group_instance_id = None
             subscription = Subscription(
-                ConsumerProtocol[0].METADATA.decode(metadata_bytes),
-                group_instance_id
+                ConsumerProtocol[0].METADATA.decode(member.metadata_bytes),
+                member.group_instance_id
             )
-            member_subscriptions[member_id] = subscription
+            member_subscriptions[member.member_id] = subscription
             all_subscribed_topics.update(subscription.subscription)
 
         # the leader will begin watching for changes to any of the topics

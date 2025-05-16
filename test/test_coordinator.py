@@ -21,6 +21,7 @@ from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
+from kafka.protocol.group import GroupMember
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
@@ -209,7 +210,7 @@ def test_perform_assignment(mocker, coordinator):
 
     ret = coordinator._perform_assignment(
         'member-foo', 'roundrobin',
-        [(member, subscription.encode())
+        [GroupMember(member, None, subscription.encode())
          for member, subscription in group_subscriptions.items()])
 
     assert RoundRobinPartitionAssignor.assign.call_count == 1
