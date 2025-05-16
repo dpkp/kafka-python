@@ -52,7 +52,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     def assign(cls, cluster, group_subscriptions):
         all_topics = set()
         for subscription in six.itervalues(group_subscriptions):
-            all_topics.update(subscription.subscription)
+            all_topics.update(subscription.topics)
 
         all_topic_partitions = []
         for topic in all_topics:
@@ -75,7 +75,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
             # member subscribed topics, we should be safe assuming that
             # each topic in all_topic_partitions is in at least one member
             # subscription; otherwise this could yield an infinite loop
-            while partition.topic not in group_subscriptions[member_id].subscription:
+            while partition.topic not in group_subscriptions[member_id].topics:
                 member_id = next(member_iter)
             assignment[member_id][partition.topic].append(partition.partition)
 
