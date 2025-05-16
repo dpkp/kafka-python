@@ -150,7 +150,7 @@ class ConsumerCoordinator(BaseCoordinator):
         super(ConsumerCoordinator, self).__del__()
 
     def protocol_type(self):
-        return ConsumerProtocol.PROTOCOL_TYPE
+        return ConsumerProtocol[0].PROTOCOL_TYPE
 
     def group_protocols(self):
         """Returns list of preferred (protocols, metadata)"""
@@ -238,7 +238,7 @@ class ConsumerCoordinator(BaseCoordinator):
         assignor = self._lookup_assignor(protocol)
         assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
-        assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
+        assignment = ConsumerProtocol[0].ASSIGNMENT.decode(member_assignment_bytes)
 
         try:
             self._subscription.assign_from_subscribed(assignment.partitions())
@@ -341,7 +341,7 @@ class ConsumerCoordinator(BaseCoordinator):
             else:
                 member_id, metadata_bytes = member
                 group_instance_id = None
-            metadata = ConsumerProtocol.METADATA.decode(metadata_bytes)
+            metadata = ConsumerProtocol[0].METADATA.decode(metadata_bytes),
             member_metadata[member_id] = metadata
             all_subscribed_topics.update(metadata.subscription) # pylint: disable-msg=no-member
 
