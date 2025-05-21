@@ -944,7 +944,7 @@ class KafkaProducer(object):
         """
         # add topic to metadata topic list if it is not there already.
         self._sender.add_topic(topic)
-        timer = Timer(max_wait_ms, "Failed to update metadata after %.1f secs." % (max_wait_ms * 1000,))
+        timer = Timer(max_wait_ms, "Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
         metadata_event = None
         while True:
             partitions = self._metadata.partitions_for_topic(topic)
@@ -962,7 +962,7 @@ class KafkaProducer(object):
             metadata_event.wait(timer.timeout_ms / 1000)
             if not metadata_event.is_set():
                 raise Errors.KafkaTimeoutError(
-                    "Failed to update metadata after %.1f secs." % (max_wait_ms * 1000,))
+                    "Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
