@@ -274,6 +274,7 @@ class ConsumerCoordinator(BaseCoordinator):
         try:
             self._invoke_completed_offset_commit_callbacks()
             if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+                log.debug('coordinator.poll: timeout in ensure_coordinator_ready; returning early')
                 return False
 
             if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
@@ -293,9 +294,11 @@ class ConsumerCoordinator(BaseCoordinator):
                         metadata_update = self._client.cluster.request_update()
                         self._client.poll(future=metadata_update, timeout_ms=timer.timeout_ms)
                         if not metadata_update.is_done:
+                            log.debug('coordinator.poll: timeout updating metadata; returning early')
                             return False
 
                     if not self.ensure_active_group(timeout_ms=timer.timeout_ms):
+                        log.debug('coordinator.poll: timeout in ensure_active_group; returning early')
                         return False
 
                 self.poll_heartbeat()
@@ -723,6 +726,7 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_commit_response(self, offsets, future, send_time, response):
+        log.debug("Received OffsetCommitResponse: %s", response)
         # TODO look at adding request_latency_ms to response (like java kafka)
         if self._consumer_sensors:
             self._consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
@@ -849,6 +853,7 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _handle_offset_fetch_response(self, future, response):
+        log.debug("Received OffsetFetchResponse: %s", response)
         if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
             error_type = Errors.for_code(response.error_code)
             log.debug("Offset fetch failed: %s", error_type.__name__)
