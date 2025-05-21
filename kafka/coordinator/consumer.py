@@ -427,7 +427,8 @@ class ConsumerCoordinator(BaseCoordinator):
         future_key = frozenset(partitions)
         timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
+            if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+                timer.maybe_raise()
 
             # contact coordinator to fetch committed offsets
             if future_key in self._offset_fetch_futures:

@@ -178,6 +178,9 @@ class Fetcher(six.Iterator):
         Arguments:
             partitions ([TopicPartition]): the partitions that need offsets reset
 
+        Returns:
+            bool: True if any partitions need reset; otherwise False (no reset pending)
+
         Raises:
             NoOffsetForPartitionError: if no offset reset strategy is defined
             KafkaTimeoutError if timeout_ms provided
@@ -189,7 +192,8 @@ class Fetcher(six.Iterator):
 
         partitions = self._subscriptions.partitions_needing_reset()
         if not partitions:
-            return
+            return False
+        log.debug('Resetting offsets for %s', partitions)
 
         offset_resets = dict()
         for tp in partitions:
@@ -198,6 +202,7 @@ class Fetcher(six.Iterator):
                 offset_resets[tp] = ts
 
         self._reset_offsets_async(offset_resets)
+        return True
 
     def offsets_by_times(self, timestamps, timeout_ms=None):
         """Fetch offset for each partition passed in ``timestamps`` map.

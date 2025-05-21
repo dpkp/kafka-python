@@ -1124,7 +1124,7 @@ class KafkaConsumer(six.Iterator):
             partitions (List[TopicPartition]): The partitions that need
                 updating fetch positions.
 
-        Returns True if fetch positions updated, False if timeout
+        Returns True if fetch positions updated, False if timeout or async reset is pending
 
         Raises:
             NoOffsetForPartitionError: If no offset is stored for a given
@@ -1135,15 +1135,13 @@ class KafkaConsumer(six.Iterator):
 
         if (self.config['api_version'] >= (0, 8, 1) and
             self.config['group_id'] is not None):
-            try:
-                # If there are any partitions which do not have a valid position and are not
-                # awaiting reset, then we need to fetch committed offsets. We will only do a
-                # coordinator lookup if there are partitions which have missing positions, so
-                # a consumer with manually assigned partitions can avoid a coordinator dependence
-                # by always ensuring that assigned partitions have an initial position.
-                self._coordinator.refresh_committed_offsets_if_needed(timeout_ms=timeout_ms)
-            except KafkaTimeoutError:
-                pass
+            # If there are any partitions which do not have a valid position and are not
+            # awaiting reset, then we need to fetch committed offsets. We will only do a
+            # coordinator lookup if there are partitions which have missing positions, so
+            # a consumer with manually assigned partitions can avoid a coordinator dependence
+            # by always ensuring that assigned partitions have an initial position.
+            if not self._coordinator.refresh_committed_offsets_if_needed(timeout_ms=timeout_ms):
+                return False
 
         # If there are partitions still needing a position and a reset policy is defined,
         # request reset using the default policy. If no reset strategy is defined and there
@@ -1152,8 +1150,7 @@ class KafkaConsumer(six.Iterator):
 
         # Finally send an asynchronous request to lookup and update the positions of any
         # partitions which are awaiting reset.
-        self._fetcher.reset_offsets_if_needed()
-        return False
+        return not self._fetcher.reset_offsets_if_needed()
 
     def _message_generator_v2(self):
         timeout_ms = 1000 * max(0, self._consumer_timeout - time.time())
