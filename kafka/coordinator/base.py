@@ -562,8 +562,9 @@ class BaseCoordinator(object):
 
     def _failed_request(self, node_id, request, future, error):
         # Marking coordinator dead
-        # unless the error is caused by internal client pipelining
+        # unless the error is caused by internal client pipelining or throttling
         if not isinstance(error, (Errors.NodeNotReadyError,
+                                  Errors.ThrottlingQuotaExceededError,
                                   Errors.TooManyInFlightRequests)):
             log.error('Error sending %s to node %s [%s]',
                       request.__class__.__name__, node_id, error)
