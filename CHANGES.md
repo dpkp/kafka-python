@@ -1,3 +1,11 @@
+# 2.2.9 (May 21, 2025)
+
+Fixes
+* Do not reset fetch positions if offset commit fetch times out (#2629)
+
+Logging / Error Messages
+* More / updated debug logging for coordinator / consumer (#2630)
+
 # 2.2.8 (May 20, 2025)
 
 Fixes
