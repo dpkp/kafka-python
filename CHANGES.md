@@ -1,3 +1,15 @@
+# 2.2.8 (May 20, 2025)
+
+Fixes
+* Wait for next heartbeat in thread loop; check for connected coordinator (#2622)
+* Acquire client lock in heartbeat thread before sending requests (#2620)
+
+Logging / Error Messages
+* Log all SyncGroupResponse errors as info+
+* More coordinator / heartbeat logging (#2621)
+* Fix timeout seconds error message in KafkaProducer (#2627)
+* Update offset commit error handling; use RebalanceInProgressError if applicable (#2623)
+
 # 2.2.7 (May 13, 2025)
 
 Fixes
