@@ -26,14 +26,15 @@ class SaslMechanismGSSAPI(SaslMechanism):
             raise ValueError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
         self._is_done = False
         self._is_authenticated = False
+        self.gssapi_name = None
         if config.get('sasl_kerberos_name', None) is not None:
             self.auth_id = str(config['sasl_kerberos_name'])
+            if isinstance(config['sasl_kerberos_name'], gssapi.Name):
+                self.gssapi_name = config['sasl_kerberos_name']
         else:
             kerberos_domain_name = config.get('sasl_kerberos_domain_name', '') or config.get('host', '')
             self.auth_id = config['sasl_kerberos_service_name'] + '@' + kerberos_domain_name
-        if isinstance(config.get('sasl_kerberos_name', None), gssapi.Name):
-            self.gssapi_name = config['sasl_kerberos_name']
-        else:
+        if self.gssapi_name is None:
             self.gssapi_name = gssapi.Name(self.auth_id, name_type=gssapi.NameType.hostbased_service).canonicalize(gssapi.MechType.kerberos)
         self._client_ctx = gssapi.SecurityContext(name=self.gssapi_name, usage='initiate')
         self._next_token = self._client_ctx.step(None)
@@ -43,9 +44,8 @@ class SaslMechanismGSSAPI(SaslMechanism):
         # so mark is_done after the final auth_bytes are provided
         # in practice we'll still receive a response when using SaslAuthenticate
         # but not when using the prior unframed approach.
-        if self._client_ctx.complete:
+        if self._is_authenticated:
             self._is_done = True
-            self._is_authenticated = True
         return self._next_token or b''
 
     def receive(self, auth_bytes):
@@ -74,6 +74,13 @@ class SaslMechanismGSSAPI(SaslMechanism):
             ]
             # add authorization identity to the response, and GSS-wrap
             self._next_token = self._client_ctx.wrap(b''.join(message_parts), False).message
+            # We need to identify the last token in auth_bytes();
+            # we can't rely on client_ctx.complete because it becomes True after generating
+            # the second-to-last token (after calling .step(auth_bytes) for the final time)
+            # We could introduce an additional state variable (i.e., self._final_token),
+            # but instead we just set _is_authenticated. Since the plugin interface does
+            # not read is_authenticated() until after is_done() is True, this should be fine.
+            self._is_authenticated = True
 
     def is_done(self):
         return self._is_done
