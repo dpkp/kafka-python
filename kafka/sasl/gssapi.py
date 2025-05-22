@@ -40,6 +40,10 @@ class SaslMechanismGSSAPI(SaslMechanism):
         self._next_token = self._client_ctx.step(None)
 
     def auth_bytes(self):
+        # GSSAPI Auth does not have a final broker->client message
+        # so mark is_done after the final auth_bytes are provided
+        # in practice we'll still receive a response when using SaslAuthenticate
+        # but not when using the prior unframed approach.
         if self._is_authenticated:
             self._is_done = True
         return self._next_token or b''
@@ -70,12 +74,12 @@ class SaslMechanismGSSAPI(SaslMechanism):
             ]
             # add authorization identity to the response, and GSS-wrap
             self._next_token = self._client_ctx.wrap(b''.join(message_parts), False).message
-            # GSSAPI Auth does not have a final broker->client message
-            # so we need to be able to identify when the final token is generated
-            # here we set _is_authenticated after receiving the final response,
-            # but wait until the final send (auth_bytes() call) to set _is_done.
-            # in practice we'll still receive a response when using SaslAuthenticate
-            # but not when using the prior unframed approach.
+            # We need to identify the last token in auth_bytes();
+            # we can't rely on client_ctx.complete because it becomes True after generating
+            # the second-to-last token (after calling .step(auth_bytes) for the final time)
+            # We could introduce an additional state variable (i.e., self._final_token),
+            # but instead we just set _is_authenticated. Since the plugin interface does
+            # not read is_authenticated() until after is_done() is True, this should be fine.
             self._is_authenticated = True
 
     def is_done(self):
