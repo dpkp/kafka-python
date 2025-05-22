@@ -256,7 +256,6 @@ class BrokerConnection(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
-        self.config['host'] = host
 
         self.node_id = self.config.pop('node_id')
 
@@ -314,7 +313,7 @@ class BrokerConnection(object):
 
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
-            self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(**self.config)
+            self._sasl_mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(host=self.host, **self.config)
         else:
             self._sasl_mechanism = None
 
