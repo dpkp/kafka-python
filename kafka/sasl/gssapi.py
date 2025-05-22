@@ -40,12 +40,7 @@ class SaslMechanismGSSAPI(SaslMechanism):
         self._next_token = self._client_ctx.step(None)
 
     def auth_bytes(self):
-        # GSSAPI Auth does not have a final broker->client message
-        # so mark is_done after the final auth_bytes are provided
-        # in practice we'll still receive a response when using SaslAuthenticate
-        # but not when using the prior unframed approach.
-        if self._client_ctx.complete:
-            self._is_done = True
+        if self._is_done:
             self._is_authenticated = True
         return self._next_token or b''
 
@@ -75,6 +70,11 @@ class SaslMechanismGSSAPI(SaslMechanism):
             ]
             # add authorization identity to the response, and GSS-wrap
             self._next_token = self._client_ctx.wrap(b''.join(message_parts), False).message
+            # GSSAPI Auth does not have a final broker->client message
+            # so mark is_done after the final token is generated
+            # in practice we'll still receive a response when using SaslAuthenticate
+            # but not when using the prior unframed approach.
+            self._is_done = True
 
     def is_done(self):
         return self._is_done
