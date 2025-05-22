@@ -1,3 +1,9 @@
+# 2.2.10 (May 22, 2025)
+
+Fixes
+* Set the current host in the SASL configs (#2633)
+* Fix sasl gssapi plugin: do not rely on `client_ctx.complete` in `auth_bytes()` (#2631)
+
 # 2.2.9 (May 21, 2025)
 
 Fixes
