@@ -256,6 +256,7 @@ class BrokerConnection(object):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+        self.config['host'] = host
 
         self.node_id = self.config.pop('node_id')
 
