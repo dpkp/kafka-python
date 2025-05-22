@@ -386,3 +386,13 @@ def test_maybe_throttle(conn):
 
         time.return_value = 3000
         assert not conn.throttled()
+
+
+def test_host_in_sasl_config():
+    hostname = 'example.org'
+    port = 9092
+    for security_protocol in ('SASL_PLAINTEXT', 'SASL_SSL'):
+        with mock.patch("kafka.conn.get_sasl_mechanism") as get_sasl_mechanism:
+            BrokerConnection(hostname, port, socket.AF_UNSPEC, security_protocol=security_protocol)
+            call_config = get_sasl_mechanism.mock_calls[1].kwargs
+            assert call_config['host'] == hostname
