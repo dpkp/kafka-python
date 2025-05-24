@@ -3,8 +3,8 @@ Tests
 
 .. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
     :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
-.. image:: https://travis-ci.org/dpkp/kafka-python.svg?branch=master
-    :target: https://travis-ci.org/dpkp/kafka-python
+.. image:: https://img.shields.io/github/actions/workflow/status/dpkp/kafka-python/python-package.yml
+    :target: https://github.com/dpkp/kafka-python/actions/workflows/python-package.yml
 
 The test suite is run via pytest.
 
