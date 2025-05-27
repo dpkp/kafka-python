@@ -129,3 +129,10 @@ class Dict(dict):
     See: https://docs.python.org/2/library/weakref.html
     """
     pass
+
+
+def synchronized(func):
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return func(self, *args, **kwargs)
+    return wrapper
