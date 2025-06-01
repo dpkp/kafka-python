@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division
 
 import binascii
+import functools
 import re
 import time
 import weakref
@@ -129,3 +130,11 @@ class Dict(dict):
     See: https://docs.python.org/2/library/weakref.html
     """
     pass
+
+
+def synchronized(func):
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return func(self, *args, **kwargs)
+    functools.update_wrapper(wrapper, func)
+    return wrapper
