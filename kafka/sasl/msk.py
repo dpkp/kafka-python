@@ -45,7 +45,7 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def receive(self, auth_bytes):
         self._is_done = True
         self._is_authenticated = auth_bytes != b''
-        self._auth = auth_bytes.deode('utf-8')
+        self._auth = auth_bytes.decode('utf-8')
 
     def is_done(self):
         return self._is_done
