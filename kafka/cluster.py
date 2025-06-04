@@ -347,7 +347,7 @@ class ClusterMetadata(object):
             if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:
                 error_code, topic = metadata.topics[0][:2]
                 error = Errors.for_code(error_code)(topic)
-                return f.failure(error)
+                f.failure(error)
             else:
                 f.success(self)
 
