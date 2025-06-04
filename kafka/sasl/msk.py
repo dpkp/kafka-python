@@ -27,16 +27,19 @@ class SaslMechanismAwsMskIam(SaslMechanism):
         self._is_done = False
         self._is_authenticated = False
 
-    def auth_bytes(self):
+    def _build_client(self):
         session = BotoSession()
         credentials = session.get_credentials().get_frozen_credentials()
-        client = AwsMskIamClient(
+        return AwsMskIamClient(
             host=self.host,
             access_key=credentials.access_key,
             secret_key=credentials.secret_key,
             region=session.get_config_variable('region'),
             token=credentials.token,
         )
+
+    def auth_bytes(self):
+        client = self._build_client()
         return client.first_message()
 
     def receive(self, auth_bytes):
