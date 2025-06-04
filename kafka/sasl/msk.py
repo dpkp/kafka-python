@@ -4,6 +4,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import logging
 import string
 
 # needed for AWS_MSK_IAM authentication:
@@ -15,6 +16,9 @@ except ImportError:
 
 from kafka.sasl.abc import SaslMechanism
 from kafka.vendor.six.moves import urllib
+
+
+log = logging.getLogger(__name__)
 
 
 class SaslMechanismAwsMskIam(SaslMechanism):
@@ -40,6 +44,7 @@ class SaslMechanismAwsMskIam(SaslMechanism):
 
     def auth_bytes(self):
         client = self._build_client()
+        log.debug("Generating auth token for MSK scope: %s", client._scope)
         return client.first_message()
 
     def receive(self, auth_bytes):
