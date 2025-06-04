@@ -4,6 +4,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import logging
 import string
 
 # needed for AWS_MSK_IAM authentication:
@@ -13,8 +14,12 @@ except ImportError:
     # no botocore available, will disable AWS_MSK_IAM mechanism
     BotoSession = None
 
+from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
 from kafka.vendor.six.moves import urllib
+
+
+log = logging.getLogger(__name__)
 
 
 class SaslMechanismAwsMskIam(SaslMechanism):
@@ -27,22 +32,28 @@ class SaslMechanismAwsMskIam(SaslMechanism):
         self._is_done = False
         self._is_authenticated = False
 
-    def auth_bytes(self):
+    def _build_client(self):
         session = BotoSession()
         credentials = session.get_credentials().get_frozen_credentials()
-        client = AwsMskIamClient(
+        if not session.get_config_variable('region'):
+            raise KafkaConfigurationError('Unable to determine region for AWS MSK cluster. Is AWS_DEFAULT_REGION set?')
+        return AwsMskIamClient(
             host=self.host,
             access_key=credentials.access_key,
             secret_key=credentials.secret_key,
             region=session.get_config_variable('region'),
             token=credentials.token,
         )
+
+    def auth_bytes(self):
+        client = self._build_client()
+        log.debug("Generating auth token for MSK scope: %s", client._scope)
         return client.first_message()
 
     def receive(self, auth_bytes):
         self._is_done = True
         self._is_authenticated = auth_bytes != b''
-        self._auth = auth_bytes.deode('utf-8')
+        self._auth = auth_bytes.decode('utf-8')
 
     def is_done(self):
         return self._is_done

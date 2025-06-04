@@ -2,7 +2,7 @@ import datetime
 import json
 import sys
 
-from kafka.sasl.msk import AwsMskIamClient
+from kafka.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
 
 try:
     from unittest import mock
@@ -69,3 +69,17 @@ def test_aws_msk_iam_client_temporary_credentials():
         'x-amz-security-token': 'XXXXX',
     }
     assert actual == expected
+
+
+def test_aws_msk_iam_sasl_mechanism():
+    with mock.patch('kafka.sasl.msk.BotoSession'):
+        sasl = SaslMechanismAwsMskIam(security_protocol='SASL_SSL', host='localhost')
+        with mock.patch.object(sasl, '_build_client', return_value=client_factory(token=None)):
+            assert sasl.auth_bytes() != b''
+            assert not sasl.is_done()
+            assert not sasl.is_authenticated()
+            sasl.receive(b'foo')
+            assert sasl._auth == 'foo'
+            assert sasl.is_done()
+            assert sasl.is_authenticated()
+            assert sasl.auth_details()
