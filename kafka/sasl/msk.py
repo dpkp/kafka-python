@@ -14,6 +14,7 @@ except ImportError:
     # no botocore available, will disable AWS_MSK_IAM mechanism
     BotoSession = None
 
+from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
 from kafka.vendor.six.moves import urllib
 
@@ -34,6 +35,8 @@ class SaslMechanismAwsMskIam(SaslMechanism):
     def _build_client(self):
         session = BotoSession()
         credentials = session.get_credentials().get_frozen_credentials()
+        if not session.get_config_variable('region'):
+            raise KafkaConfigurationError('Unable to determine region for AWS MSK cluster. Is AWS_DEFAULT_REGION set?')
         return AwsMskIamClient(
             host=self.host,
             access_key=credentials.access_key,
