@@ -136,6 +136,21 @@ def test_metadata_v7():
     assert cluster._partitions['topic-1'][0].leader_epoch == 0
 
 
+def test_unauthorized_topic():
+    cluster = ClusterMetadata()
+    assert len(cluster.brokers()) == 0
+
+    cluster.update_metadata(MetadataResponse[0](
+        [(0, 'foo', 12), (1, 'bar', 34)],
+        [(29, 'unauthorized-topic', [])]))  # single topic w/ unauthorized error
+
+    # broker metadata should get updated
+    assert len(cluster.brokers()) == 2
+
+    # topic should be added to unauthorized list
+    assert 'unauthorized-topic' in cluster.unauthorized_topics
+
+
 def test_collect_hosts__happy_path():
     hosts = "127.0.0.1:1234,127.0.0.1"
     results = collect_hosts(hosts)

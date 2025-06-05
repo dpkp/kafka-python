@@ -245,13 +245,6 @@ class ClusterMetadata(object):
 
         Returns: None
         """
-        # In the common case where we ask for a single topic and get back an
-        # error, we should fail the future
-        if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:
-            error_code, topic = metadata.topics[0][:2]
-            error = Errors.for_code(error_code)(topic)
-            return self.failed_update(error)
-
         if not metadata.brokers:
             log.warning("No broker metadata found in MetadataResponse -- ignoring.")
             return self.failed_update(Errors.MetadataEmptyBrokerList(metadata))
@@ -349,7 +342,15 @@ class ClusterMetadata(object):
         self._last_successful_refresh_ms = now
 
         if f:
-            f.success(self)
+            # In the common case where we ask for a single topic and get back an
+            # error, we should fail the future
+            if len(metadata.topics) == 1 and metadata.topics[0][0] != Errors.NoError.errno:
+                error_code, topic = metadata.topics[0][:2]
+                error = Errors.for_code(error_code)(topic)
+                f.failure(error)
+            else:
+                f.success(self)
+
         log.debug("Updated cluster metadata to %s", self)
 
         for listener in self._listeners:
