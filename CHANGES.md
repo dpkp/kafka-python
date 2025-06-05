@@ -1,3 +1,11 @@
+# 2.2.11 (June 5, 2025)
+
+Fixes
+* Do not ignore metadata response for single topic with error (#2640)
+* Fix decoding bug in AWS_MSK_IAM mechanism (#2639)
+* Add synchronized decorator; add lock to subscription state (#2636)
+* Update build links in documentation (#2634)
+
 # 2.2.10 (May 22, 2025)
 
 Fixes
