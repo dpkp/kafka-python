@@ -960,9 +960,11 @@ class KafkaProducer(object):
             future.add_both(lambda e, *args: e.set(), metadata_event)
             self._sender.wakeup()
             metadata_event.wait(timer.timeout_ms / 1000)
-            if not metadata_event.is_set():
+            if not future.is_done:
                 raise Errors.KafkaTimeoutError(
                     "Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
+            elif future.failed() and not future.retriable():
+                raise future.exception
             elif topic in self._metadata.unauthorized_topics:
                 raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
