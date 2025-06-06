@@ -7,7 +7,7 @@ import logging
 from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
 from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
@@ -49,10 +49,10 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     version = 0
 
     @classmethod
-    def assign(cls, cluster, member_metadata):
+    def assign(cls, cluster, group_subscriptions):
         all_topics = set()
-        for metadata in six.itervalues(member_metadata):
-            all_topics.update(metadata.subscription)
+        for subscription in six.itervalues(group_subscriptions):
+            all_topics.update(subscription.topics)
 
         all_topic_partitions = []
         for topic in all_topics:
@@ -67,21 +67,26 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         # construct {member_id: {topic: [partition, ...]}}
         assignment = collections.defaultdict(lambda: collections.defaultdict(list))
 
-        member_iter = itertools.cycle(sorted(member_metadata.keys()))
+        # Sort static and dynamic members separately to maintain stable static assignments
+        ungrouped = [(subscription.group_instance_id, member_id) for member_id, subscription in six.iteritems(group_subscriptions)]
+        grouped = {k: list(g) for k, g in itertools.groupby(ungrouped, key=lambda ids: ids[0] is not None)}
+        member_list = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
+        member_iter = itertools.cycle(member_list)
+
         for partition in all_topic_partitions:
-            member_id = next(member_iter)
+            _group_instance_id, member_id = next(member_iter)
 
             # Because we constructed all_topic_partitions from the set of
             # member subscribed topics, we should be safe assuming that
             # each topic in all_topic_partitions is in at least one member
             # subscription; otherwise this could yield an infinite loop
-            while partition.topic not in member_metadata[member_id].subscription:
+            while partition.topic not in group_subscriptions[member_id].topics:
                 member_id = next(member_iter)
             assignment[member_id][partition.topic].append(partition.partition)
 
         protocol_assignment = {}
-        for member_id in member_metadata:
-            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment(
+        for member_id in group_subscriptions:
+            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version,
                 sorted(assignment[member_id].items()),
                 b'')
@@ -89,7 +94,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
 
     @classmethod
     def metadata(cls, topics):
-        return ConsumerProtocolMemberMetadata(cls.version, list(topics), b'')
+        return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), b'')
 
     @classmethod
     def on_assignment(cls, assignment):
