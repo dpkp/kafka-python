@@ -303,7 +303,7 @@ def test_close(mocker, coordinator):
     assert coordinator._maybe_auto_commit_offsets_sync.call_count == 1
     coordinator._handle_leave_group_response.assert_called_with('foobar')
 
-    assert coordinator.generation() is None
+    assert coordinator.generation_if_stable() is None
     assert coordinator._generation == Generation.NO_GENERATION
     assert coordinator.state is MemberState.UNJOINED
     assert coordinator.rejoin_needed is True

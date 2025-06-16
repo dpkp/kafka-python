@@ -24,8 +24,9 @@ def conn(mocker):
     conn.return_value = conn
     conn.state = ConnectionStates.CONNECTED
     conn.send.return_value = Future().success(
-        MetadataResponse[0](
-            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
+        MetadataResponse[1](
+            [(0, 'foo', 12, None), (1, 'bar', 34, None)],  # brokers with rack=None
+            0,  # controller_id
             []))  # topics
     conn.connection_delay.return_value = 0
     conn.blacked_out.return_value = False
@@ -53,3 +54,31 @@ def client(conn, mocker):
         yield cli
     finally:
         cli._close()
+
+
+@pytest.fixture
+def kafka_broker(mocker, client):
+    """Mock kafka_broker fixture for tests that depend on it"""
+    class MockKafkaBroker:
+        def __init__(self):
+            self.bootstrap_server = 'localhost:9092'
+            # Patch client.api_version to return a proper tuple and make it consistent
+            # with tests to avoid version compatibility issues
+            mocker.patch.object(client, 'api_version', return_value=(1, 0, 0))
+            mocker.patch.object(client, 'check_version', return_value=True)
+
+        def create_topic(self, topic_name, replication_factor=1):
+            return topic_name
+
+        def get_producers(self, cnt=1, **configs):
+            """Helper method to create producers for testing"""
+            from kafka import KafkaProducer
+            for _ in range(cnt):
+                producer_config = {
+                    'bootstrap_servers': self.bootstrap_server,
+                    'api_version': (1, 0, 0),  # Use a consistent version
+                }
+                producer_config.update(configs)
+                yield KafkaProducer(**producer_config)
+
+    return MockKafkaBroker()

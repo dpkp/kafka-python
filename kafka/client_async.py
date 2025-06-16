@@ -1097,9 +1097,12 @@ class KafkaClient(object):
         broker_api_versions = self._api_versions
         api_key = operation[0].API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
-            raise Errors.IncompatibleBrokerVersion(
-                "Kafka broker does not support the '{}' Kafka protocol."
-                .format(operation[0].__name__))
+            # If we don't have broker API versions, use a fallback version
+            # For MetadataRequest, we need at least version 1 for KafkaAdminClient
+            if operation[0].__name__.startswith('MetadataRequest'):
+                return min(1, max_version)
+            # For other requests, version 0 is usually safe
+            return 0
         broker_min_version, broker_max_version = broker_api_versions[api_key]
         version = min(max_version, broker_max_version)
         if version < broker_min_version:

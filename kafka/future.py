@@ -8,8 +8,6 @@ log = logging.getLogger(__name__)
 
 
 class Future(object):
-    error_on_callbacks = False # and errbacks
-
     def __init__(self):
         self.is_done = False
         self.value = None
@@ -17,6 +15,7 @@ class Future(object):
         self._callbacks = []
         self._errbacks = []
         self._lock = threading.Lock()
+        self.error_on_callbacks = False # Initialize as instance attribute
 
     def succeeded(self):
         return self.is_done and not bool(self.exception)

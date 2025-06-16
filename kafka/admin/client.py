@@ -362,10 +362,18 @@ class KafkaAdminClient(object):
         Raises:
             The exception if the message could not be sent.
         """
+        max_attempts = 3  # Limit number of attempts to avoid infinite loop
+        attempts = 0
+
         while not self._client.ready(node_id):
             # poll until the connection to broker is ready, otherwise send()
             # will fail with NodeNotReadyError
             self._client.poll(timeout_ms=200)
+            attempts += 1
+
+            # Check if the node is still part of the cluster
+            if attempts >= max_attempts and not self._client.cluster.broker_metadata(node_id):
+                raise Errors.NodeNotReadyError(f"Node {node_id} is no longer part of the cluster")
         return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
@@ -541,6 +549,9 @@ class KafkaAdminClient(object):
         """
         topics == None means "get all topics"
         """
+        import time
+        from kafka.errors import BrokerNotAvailableError
+
         version = self._client.api_version(MetadataRequest, max_version=5)
         if version <= 3:
             if auto_topic_creation:
@@ -556,12 +567,18 @@ class KafkaAdminClient(object):
                 allow_auto_topic_creation=auto_topic_creation
             )
 
-        future = self._send_request_to_node(
-            self._client.least_loaded_node(),
-            request
-        )
-        self._wait_for_futures([future])
-        return future.value
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                node_id = self._client.least_loaded_node()
+                future = self._send_request_to_node(node_id, request)
+                self._wait_for_futures([future])
+                return future.value
+            except BrokerNotAvailableError:
+                if attempt == max_attempts - 1:
+                    raise
+                self._client.poll()  # Refresh metadata
+                time.sleep(0.5)  # Brief delay before retry
 
     def list_topics(self):
         """Retrieve a list of all topic names in the cluster.
