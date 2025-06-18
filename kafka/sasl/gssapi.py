@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import struct
+
 # needed for SASL_GSSAPI authentication:
 try:
     import gssapi
@@ -68,8 +70,8 @@ class SaslMechanismGSSAPI(SaslMechanism):
             client_flags = self.SASL_QOP_AUTH
             server_flags = msg[0]
             message_parts = [
-                bytes(client_flags & server_flags),
-                msg[:1],
+                struct.Struct('>b').pack(client_flags & server_flags),
+                msg[1:],
                 self.auth_id.encode('utf-8'),
             ]
             # add authorization identity to the response, and GSS-wrap

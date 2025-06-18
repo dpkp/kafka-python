@@ -32,7 +32,7 @@ def test_gssapi():
     while not gssapi.is_done():
         send_token = gssapi.auth_bytes()
         receive_token = send_token # not realistic, but enough for testing
-        if send_token == b'\x00cbar@foo': # final wrapped message
+        if send_token == b'\x01ompletebar@foo': # final wrapped message
             receive_token = b'' # final message gets an empty response
         gssapi.receive(receive_token)
         if client_ctx.step.call_count == 3:
