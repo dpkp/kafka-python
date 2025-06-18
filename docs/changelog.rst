@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.2.12 (June 18, 2025)
+######################
+
+Fixes
+-----
+* Fix construction of final GSSAPI authentication message (#2647)
+* Avoid RuntimeError on mutated `_completed_fetches` deque in consumer fetcher (#2646)
+* Throw exception on invalid bucket type (#2642)
+
+
 2.2.11 (June 5, 2025)
 #####################
 
