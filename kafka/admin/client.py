@@ -17,6 +17,7 @@ import kafka.errors as Errors
 from kafka.errors import (
     IncompatibleBrokerVersion, KafkaConfigurationError, UnknownTopicOrPartitionError,
     UnrecognizedBrokerVersion, IllegalArgumentError)
+from kafka.future import Future
 from kafka.metrics import MetricConfig, Metrics
 from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
@@ -358,14 +359,11 @@ class KafkaAdminClient(object):
 
         Returns:
             A future object that may be polled for status and results.
-
-        Raises:
-            The exception if the message could not be sent.
         """
-        while not self._client.ready(node_id):
-            # poll until the connection to broker is ready, otherwise send()
-            # will fail with NodeNotReadyError
-            self._client.poll(timeout_ms=200)
+        try:
+            self._client.await_ready(node_id)
+        except Errors.KafkaConnectionError as e:
+            return Future().failure(e)
         return self._client.send(node_id, request, wakeup)
 
     def _send_request_to_controller(self, request):
