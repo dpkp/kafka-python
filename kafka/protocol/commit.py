@@ -171,7 +171,7 @@ class OffsetCommitRequest_v6(Request):
 class OffsetCommitRequest_v7(Request):
     API_KEY = 8
     API_VERSION = 7
-    RESPONSE_TYPE = OffsetCommitResponse_v6
+    RESPONSE_TYPE = OffsetCommitResponse_v7
     SCHEMA = Schema(
         ('group_id', String('utf-8')),
         ('generation_id', Int32),
