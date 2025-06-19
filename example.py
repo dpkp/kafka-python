@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import threading, time
+import threading
+import time
 
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
