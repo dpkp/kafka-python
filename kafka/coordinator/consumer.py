@@ -489,7 +489,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _invoke_completed_offset_commit_callbacks(self):
         if self._async_commit_fenced:
-            raise Errors.FencedInstanceIdError("Get fenced exception for group_instance_id %s", self.group_instance_id)
+            raise Errors.FencedInstanceIdError("Got fenced exception for group_instance_id %s", self.group_instance_id)
         while self.completed_offset_commits:
             callback, offsets, res_or_exc = self.completed_offset_commits.popleft()
             callback(offsets, res_or_exc)
