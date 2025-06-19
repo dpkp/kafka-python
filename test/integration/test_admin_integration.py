@@ -383,6 +383,3 @@ def test_delete_records_with_errors(kafka_admin_client, topic, send_messages):
         kafka_admin_client.delete_records({p0: 1000})
     with pytest.raises(BrokerResponseError):
         kafka_admin_client.delete_records({p0: 1000, p1: 1000})
-
-
-
