@@ -1,3 +1,12 @@
+# 2.2.13 (June 20, 2025)
+
+Fixes
+* Use client.await_ready() to simplify blocking wait and add timeout to admin client (#2648)
+* Fixup import style in example.py
+
+Documentation
+* update README kafka version badge to include 4.0
+
 # 2.2.12 (June 18, 2025)
 
 Fixes
