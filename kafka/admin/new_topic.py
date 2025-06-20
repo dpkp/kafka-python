@@ -1,7 +1,5 @@
 from __future__ import absolute_import
 
-from kafka.errors import IllegalArgumentError
-
 
 class NewTopic(object):
     """ A class for new topic creation
@@ -16,17 +14,14 @@ class NewTopic(object):
         topic_configs (dict of str: str): A mapping of config key
             and value for the topic.
     """
-
     def __init__(
             self,
             name,
-            num_partitions,
-            replication_factor,
+            num_partitions=-1,
+            replication_factor=-1,
             replica_assignments=None,
             topic_configs=None,
     ):
-        if not (num_partitions == -1 or replication_factor == -1) ^ (replica_assignments is None):
-            raise IllegalArgumentError('either num_partitions/replication_factor or replica_assignment must be specified')
         self.name = name
         self.num_partitions = num_partitions
         self.replication_factor = replication_factor
