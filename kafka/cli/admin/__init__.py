@@ -15,11 +15,14 @@ from .topics import TopicsSubCommand
 def main_parser():
     parser = argparse.ArgumentParser(
         prog='python -m kafka.admin',
-        description='Kafka admin client', 
+        description='Kafka admin client',
     )
     parser.add_argument(
         '-b', '--bootstrap-servers', type=str, action='append', required=True,
         help='host:port for cluster bootstrap servers')
+    parser.add_argument(
+        '-c', '--extra-config', type=str, action='append',
+        help='additional configuration properties for admin client')
     parser.add_argument(
         '-l', '--log-level', type=str,
         help='logging level, passed to logging.basicConfig')
@@ -30,6 +33,24 @@ def main_parser():
 
 
 _LOGGING_LEVELS = {'NOTSET': 0, 'DEBUG': 10, 'INFO': 20, 'WARNING': 30, 'ERROR': 40, 'CRITICAL': 50}
+
+
+def build_kwargs(props):
+    kwargs = {}
+    for prop in props or []:
+        k, v = prop.split('=')
+        try:
+            v = int(v)
+        except ValueError:
+            pass
+        if v == 'None':
+            v = None
+        elif v == 'False':
+            v = False
+        elif v == 'True':
+            v = True
+        kwargs[k] = v
+    return kwargs
 
 
 def run_cli(args=None):
@@ -44,8 +65,10 @@ def run_cli(args=None):
         logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
     if config.format not in ('raw', 'json'):
         raise ValueError('Unrecognized format: %s' % config.format)
+    logger = logging.getLogger(__name__)
 
-    client = KafkaAdminClient(bootstrap_servers=config.bootstrap_servers)
+    kwargs = build_kwargs(config.extra_config)
+    client = KafkaAdminClient(bootstrap_servers=config.bootstrap_servers, **kwargs)
     try:
         result = config.command(client, config)
         if config.format == 'raw':
@@ -57,7 +80,7 @@ def run_cli(args=None):
         parser.print_help()
         return 2
     except Exception:
-        logging.exception('Error!')
+        logger.exception('Error!')
         return 1
 
 if __name__ == '__main__':
