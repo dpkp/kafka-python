@@ -82,7 +82,7 @@ def run_cli(args=None):
     except KafkaError as e:
         logger.error(e)
         return 1
-    except Exception as e:
+    except Exception:
         logger.exception('Error!')
         return 1
     finally:

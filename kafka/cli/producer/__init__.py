@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function
 
 import argparse
 import logging
+import sys
 
 from kafka import KafkaProducer
 
@@ -73,7 +74,12 @@ def run_cli(args=None):
 
     try:
         while True:
-            value = input_py23()
+            try:
+                value = input_py23()
+            except EOFError:
+                value = sys.stdin.read().rstrip('\n')
+                if not value:
+                    return 0
             producer.send(config.topic, value=value.encode(config.encoding)).add_both(log_result)
     except KeyboardInterrupt:
         logger.info('Bye!')
