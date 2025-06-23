@@ -6,7 +6,7 @@ import logging
 import kafka.errors as Errors
 from kafka.protocol.find_coordinator import FindCoordinatorResponse
 from kafka.protocol.frame import KafkaBytes
-from kafka.protocol.types import Int32, TaggedFields
+from kafka.protocol.types import Int32
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)

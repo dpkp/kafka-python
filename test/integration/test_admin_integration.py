@@ -9,7 +9,7 @@ from time import time, sleep
 from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType, ResourcePattern, ResourceType, ACL, ConfigResource, ConfigResourceType)
 from kafka.errors import (
-        BrokerResponseError, KafkaError, NoError, CoordinatorNotAvailableError, NonEmptyGroupError,
+        BrokerResponseError, NoError, CoordinatorNotAvailableError, NonEmptyGroupError,
         GroupIdNotFoundError, OffsetOutOfRangeError, UnknownTopicOrPartitionError)
 
 

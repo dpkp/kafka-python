@@ -5,7 +5,7 @@ import logging
 import socket
 import time
 
-from kafka.errors import KafkaConfigurationError, KafkaTimeoutError, UnsupportedVersionError
+from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
 
 from kafka.vendor import six
 
