@@ -41,7 +41,7 @@ def run_cli(args=None):
 
     config = parser.parse_args(args)
     if config.log_level:
-        logging.basicConfig(level=_LOGGING_LEVELS[config.log_level])
+        logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
     if config.format not in ('raw', 'json'):
         raise ValueError('Unrecognized format: %s' % config.format)
 
@@ -80,14 +80,11 @@ if __name__ == '__main__':
     # alter-reassignments (AlterPartitionReassignments - not supported yet)
     # list-reassignments (ListPartitionReassignments - not supported yet)
 
-    # records
-    # delete_records
+    # [records]
+    # delete
 
     # [consumer-groups]
-    # describe
-    # delete
     # remove-members (not supported yet)
-    # list-offsets
     # delete-offsets (not supported yet)
     # alter-offsets (not supported yet)
 
