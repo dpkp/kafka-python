@@ -6,63 +6,15 @@ import logging
 from pprint import pprint
 
 from kafka.admin.client import KafkaAdminClient
-from .describe_cluster import DescribeCluster
-from .describe_log_dirs import DescribeLogDirs
-from .create_topic import CreateTopic
-from .delete_topic import DeleteTopic
-from .describe_topics import DescribeTopics
-from .list_topics import ListTopics
-from .describe_configs import DescribeConfigs
-
-    # describe_acls
-    # create_acls
-    # delete_acls
-
-    # alter_configs
-    # IncrementalAlterConfigs (not supported yet)
-
-    # create_partitions
-    # AlterPartitionReassignments (not supported yet)
-    # ListPartitionReassignments (not supported yet)
-
-    # delete_records
-    # OffsetDelete (not supported yet)
-
-    # describe_consumer_groups
-    # list_consumer_groups
-    # list_consumer_group_offsets
-    # delete_consumer_groups
-    # delete_consumer_group_offsets (not supported yet)
-    # remove_members_from_consumer_group (not supported yet)
-    # alter_consumer_group_offsets (not supported yet)
-
-    # list_offsets (not supported yet)
-
-    # perform_leader_election
-
-    # describe_log_dirs (currently broken)
-    # AlterReplicaLogDirs (not supported yet)
-
-    # DescribeClientQuotas (not supported yet)
-    # AlterClientQuotas (not supported yet)
-
-    # DescribeQuorum (not supported yet)
-
-    # DescribeProducers (not supported yet)
-    # DescribeTransactions (not supported yet)
-    # ListTransactions (not supported yet)
-    # abort_transactin (not supported yet)
-
-    # DescribeTopicPartitions (not supported yet)
-    # DescribeFeatures (not supported yet)
-    # UpdateFeatures (not supported yet)
-
-    # api_versions
-
+from .cluster import ClusterSubCommand
+from .configs import ConfigsSubCommand
+from .consumer_groups import ConsumerGroupsSubCommand
+from .log_dirs import LogDirsSubCommand
+from .topics import TopicsSubCommand
 
 def main_parser():
     parser = argparse.ArgumentParser(
-        prog='kafka-admin-client',
+        prog='python -m kafka.admin',
         description='Kafka admin client', 
     )
     parser.add_argument(
@@ -83,7 +35,8 @@ _LOGGING_LEVELS = {'NOTSET': 0, 'DEBUG': 10, 'INFO': 20, 'WARNING': 30, 'ERROR':
 def run_cli(args=None):
     parser = main_parser()
     subparsers = parser.add_subparsers(help='subcommands')
-    for cmd in [DescribeCluster, DescribeConfigs, DescribeLogDirs, ListTopics, DescribeTopics, CreateTopic, DeleteTopic]:
+    for cmd in [ClusterSubCommand, ConfigsSubCommand, LogDirsSubCommand,
+                TopicsSubCommand, ConsumerGroupsSubCommand]:
         cmd.add_subparser(subparsers)
 
     config = parser.parse_args(args)
@@ -100,6 +53,9 @@ def run_cli(args=None):
         elif config.format == 'json':
             print(json.dumps(result))
         return 0
+    except AttributeError:
+        parser.print_help()
+        return 2
     except Exception:
         logging.exception('Error!')
         return 1
@@ -107,3 +63,67 @@ def run_cli(args=None):
 if __name__ == '__main__':
     import sys
     sys.exit(run_cli())
+
+
+# Commands TODO:
+    # [acls]
+    # describe
+    # create
+    # delete
+
+    # [configs]
+    # alter
+    # IncrementalAlterConfigs (not supported yet)
+
+    # [partitions]
+    # create
+    # alter-reassignments (AlterPartitionReassignments - not supported yet)
+    # list-reassignments (ListPartitionReassignments - not supported yet)
+
+    # records
+    # delete_records
+
+    # [consumer-groups]
+    # describe
+    # delete
+    # remove-members (not supported yet)
+    # list-offsets
+    # delete-offsets (not supported yet)
+    # alter-offsets (not supported yet)
+
+    # [offsets]
+    # list (not supported yet)
+    # delete (OffsetDelete - not supported yet)
+
+    # leader-election
+    # perform_leader_election
+
+    # [log-dirs]
+    # describe (currently broken)
+    # alter (AlterReplicaLogDirs - not supported yet)
+
+    # [client-quotas]
+    # describe (DescribeClientQuotas - not supported yet)
+    # alter (AlterClientQuotas - not supported yet)
+
+    # DescribeQuorum (not supported yet)
+
+    # [producers]
+    # describe (DescribeProducers - not supported yet)
+
+    # [transactions]
+    # describe (DescribeTransactions - not supported yet)
+    # list (ListTransactions - not supported yet)
+    # abort (not supported yet)
+
+    # [topics]
+    # describe-partitions (DescribeTopicPartitions - not supported yet)
+
+    # [cluster]
+    # describe-features (DescribeFeatures - not supported yet)
+    # update-features (UpdateFeatures - not supported yet)
+    # version
+    # api-versions
+
+
+

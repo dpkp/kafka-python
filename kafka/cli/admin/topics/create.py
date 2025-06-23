@@ -7,7 +7,7 @@ class CreateTopic:
 
     @classmethod
     def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('create-topic', help='Create a Kafka Topic')
+        parser = subparsers.add_parser('create', help='Create a Kafka Topic')
         parser.add_argument('-t', '--topic', type=str, required=True)
         parser.add_argument('--num-partitions', type=int, default=-1)
         parser.add_argument('--replication-factor', type=int, default=-1)
