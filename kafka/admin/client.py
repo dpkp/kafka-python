@@ -292,10 +292,6 @@ class KafkaAdminClient(object):
             request = FindCoordinatorRequest[version](group_id)
         elif version <= 2:
             request = FindCoordinatorRequest[version](group_id, 0)
-        else:
-            raise NotImplementedError(
-                "Support for FindCoordinatorRequest_v{} has not yet been added to KafkaAdminClient."
-                .format(version))
         return request
 
     def _find_coordinator_id_process_response(self, response):
@@ -518,10 +514,6 @@ class KafkaAdminClient(object):
                 timeout=timeout_ms,
                 validate_only=validate_only
             )
-        else:
-            raise NotImplementedError(
-                "Support for CreateTopics v{} has not yet been added to KafkaAdminClient."
-                .format(version))
         # TODO convert structs to a more pythonic interface
         # TODO raise exceptions if errors
         return self._send_request_to_controller(request)
@@ -685,12 +677,6 @@ class KafkaAdminClient(object):
                 permission_type=acl_filter.permission_type
 
             )
-        else:
-            raise NotImplementedError(
-                "Support for DescribeAcls v{} has not yet been added to KafkaAdmin."
-                    .format(version)
-            )
-
         response = self.send_request(request)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
@@ -804,12 +790,6 @@ class KafkaAdminClient(object):
             request = CreateAclsRequest[version](
                 creations=[self._convert_create_acls_resource_request_v1(acl) for acl in acls]
             )
-        else:
-            raise NotImplementedError(
-                "Support for CreateAcls v{} has not yet been added to KafkaAdmin."
-                    .format(version)
-            )
-
         response = self.send_request(request)
         return self._convert_create_acls_response_to_acls(acls, response)
 
@@ -924,12 +904,6 @@ class KafkaAdminClient(object):
             request = DeleteAclsRequest[version](
                 filters=[self._convert_delete_acls_resource_request_v1(acl) for acl in acl_filters]
             )
-        else:
-            raise NotImplementedError(
-                "Support for DeleteAcls v{} has not yet been added to KafkaAdmin."
-                    .format(version)
-            )
-
         response = self.send_request(request)
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 
@@ -1044,14 +1018,9 @@ class KafkaAdminClient(object):
             Appropriate version of AlterConfigsResponse class.
         """
         version = self._client.api_version(AlterConfigsRequest, max_version=1)
-        if version <= 1:
-            request = AlterConfigsRequest[version](
-                resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
-            )
-        else:
-            raise NotImplementedError(
-                "Support for AlterConfigs v{} has not yet been added to KafkaAdminClient."
-                .format(version))
+        request = AlterConfigsRequest[version](
+            resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
+        )
         # TODO the Java client has the note:
         # // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         # // and send the request to that specific broker. Other resources are grouped together into
@@ -1102,16 +1071,11 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(CreatePartitionsRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version <= 1:
-            request = CreatePartitionsRequest[version](
-                topic_partitions=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
-                timeout=timeout_ms,
-                validate_only=validate_only
-            )
-        else:
-            raise NotImplementedError(
-                "Support for CreatePartitions v{} has not yet been added to KafkaAdminClient."
-                .format(version))
+        request = CreatePartitionsRequest[version](
+            topic_partitions=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
+            timeout=timeout_ms,
+            validate_only=validate_only
+        )
         return self._send_request_to_controller(request)
 
     def _get_leader_for_partitions(self, partitions, timeout_ms=None):
@@ -1263,10 +1227,6 @@ class KafkaAdminClient(object):
                 groups=(group_id,),
                 include_authorized_operations=include_authorized_operations
             )
-        else:
-            raise NotImplementedError(
-                "Support for DescribeGroupsRequest_v{} has not yet been added to KafkaAdminClient."
-                .format(version))
         return request
 
     def _describe_consumer_groups_process_response(self, response):
