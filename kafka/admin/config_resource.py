@@ -34,3 +34,9 @@ class ConfigResource(object):
         self.resource_type = resource_type
         self.name = name
         self.configs = configs
+
+    def __str__(self):
+        return "ConfigResource %s=%s" % (self.resource_type, self.name)
+
+    def __repr__(self):
+        return "ConfigResource(%s, %s, %s)" % (self.resource_type, self.name, self.configs)
