@@ -58,18 +58,34 @@ def test_acl_resource():
         )
 
 def test_new_topic():
-    with pytest.raises(IllegalArgumentError):
-        _bad_topic = kafka.admin.NewTopic('foo', -1, -1)
-    with pytest.raises(IllegalArgumentError):
-        _bad_topic = kafka.admin.NewTopic('foo', 1, -1)
-    with pytest.raises(IllegalArgumentError):
-        _bad_topic = kafka.admin.NewTopic('foo', 1, 1, {1: [1, 1, 1]})
+    good_topic = kafka.admin.NewTopic('foo')
+    assert good_topic.name == 'foo'
+    assert good_topic.num_partitions == -1
+    assert good_topic.replication_factor == -1
+    assert good_topic.replica_assignments == {}
+    assert good_topic.topic_configs == {}
+
+    good_topic = kafka.admin.NewTopic('foo', 1)
+    assert good_topic.name == 'foo'
+    assert good_topic.num_partitions == 1
+    assert good_topic.replication_factor == -1
+    assert good_topic.replica_assignments == {}
+    assert good_topic.topic_configs == {}
+
+    good_topic = kafka.admin.NewTopic('foo', 1, 1, {1: [1, 1, 1]})
+    assert good_topic.name == 'foo'
+    assert good_topic.num_partitions == 1
+    assert good_topic.replication_factor == 1
+    assert good_topic.replica_assignments == {1: [1, 1, 1]}
+    assert good_topic.topic_configs == {}
+
     good_topic = kafka.admin.NewTopic('foo', 1, 2)
     assert good_topic.name == 'foo'
     assert good_topic.num_partitions == 1
     assert good_topic.replication_factor == 2
     assert good_topic.replica_assignments == {}
     assert good_topic.topic_configs == {}
+
     good_topic = kafka.admin.NewTopic('bar', -1, -1, {1: [1, 2, 3]}, {'key': 'value'})
     assert good_topic.name == 'bar'
     assert good_topic.num_partitions == -1
