@@ -4,6 +4,7 @@ import argparse
 import logging
 
 from kafka import KafkaConsumer
+from kafka.errors import KafkaError
 
 
 def main_parser():
@@ -78,7 +79,10 @@ def run_cli(args=None):
     except KeyboardInterrupt:
         logger.info('Bye!')
         return 0
-    except Exception:
+    except KafkaError as e:
+        logger.error(e)
+        return 1
+    except Exception as e:
         logger.exception('Error!')
         return 1
     finally:

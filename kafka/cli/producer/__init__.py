@@ -67,8 +67,13 @@ def run_cli(args=None):
             logger.info("Message produced: %s", res_or_err)
 
     try:
+        input_py23 = raw_input
+    except NameError:
+        input_py23 = input
+
+    try:
         while True:
-            value = input()
+            value = input_py23()
             producer.send(config.topic, value=value.encode(config.encoding)).add_both(log_result)
     except KeyboardInterrupt:
         logger.info('Bye!')
