@@ -231,7 +231,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
             else:
                 assert(len(consumer_group.members) == 1)
             for member in consumer_group.members:
-                    assert(member.member_metadata.subscription[0] == topic)
+                    assert(member.member_metadata.topics[0] == topic)
                     assert(member.member_assignment.assignment[0][0] == topic)
             consumer_groups.add(consumer_group.group)
         assert(sorted(list(consumer_groups)) == group_id_list)

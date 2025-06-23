@@ -13,6 +13,7 @@ from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocol
+from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
@@ -29,6 +30,7 @@ class ConsumerCoordinator(BaseCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
+        'group_instance_id': None,
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
@@ -50,6 +52,14 @@ class ConsumerCoordinator(BaseCoordinator):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
+            group_instance_id (str): A unique identifier of the consumer instance
+                provided by end user. Only non-empty strings are permitted. If set,
+                the consumer is treated as a static member, which means that only
+                one instance with this ID is allowed in the consumer group at any
+                time. This can be used in combination with a larger session timeout
+                to avoid group rebalances caused by transient unavailability (e.g.
+                process restarts). If not set, the consumer will join the group as
+                a dynamic member, which is the traditional behavior. Default: None
             enable_auto_commit (bool): If true the consumer's offset will be
                 periodically committed in the background. Default: True.
             auto_commit_interval_ms (int): milliseconds between automatic
@@ -96,6 +106,7 @@ class ConsumerCoordinator(BaseCoordinator):
         self.next_auto_commit_deadline = None
         self.completed_offset_commits = collections.deque()
         self._offset_fetch_futures = dict()
+        self._async_commit_fenced = False
 
         if self.config['default_offset_commit_callback'] is None:
             self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
@@ -140,7 +151,7 @@ class ConsumerCoordinator(BaseCoordinator):
         super(ConsumerCoordinator, self).__del__()
 
     def protocol_type(self):
-        return ConsumerProtocol.PROTOCOL_TYPE
+        return ConsumerProtocol[0].PROTOCOL_TYPE
 
     def group_protocols(self):
         """Returns list of preferred (protocols, metadata)"""
@@ -228,7 +239,7 @@ class ConsumerCoordinator(BaseCoordinator):
         assignor = self._lookup_assignor(protocol)
         assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
-        assignment = ConsumerProtocol.ASSIGNMENT.decode(member_assignment_bytes)
+        assignment = ConsumerProtocol[0].ASSIGNMENT.decode(member_assignment_bytes)
 
         try:
             self._subscription.assign_from_subscribed(assignment.partitions())
@@ -323,12 +334,15 @@ class ConsumerCoordinator(BaseCoordinator):
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
         assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
-        member_metadata = {}
+        member_subscriptions = {}
         all_subscribed_topics = set()
-        for member_id, metadata_bytes in members:
-            metadata = ConsumerProtocol.METADATA.decode(metadata_bytes)
-            member_metadata[member_id] = metadata
-            all_subscribed_topics.update(metadata.subscription) # pylint: disable-msg=no-member
+        for member in members:
+            subscription = Subscription(
+                ConsumerProtocol[0].METADATA.decode(member.metadata_bytes),
+                member.group_instance_id
+            )
+            member_subscriptions[member.member_id] = subscription
+            all_subscribed_topics.update(subscription.topics)
 
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes
@@ -346,9 +360,9 @@ class ConsumerCoordinator(BaseCoordinator):
 
         log.debug("Performing assignment for group %s using strategy %s"
                   " with subscriptions %s", self.group_id, assignor.name,
-                  member_metadata)
+                  member_subscriptions)
 
-        assignments = assignor.assign(self._cluster, member_metadata)
+        assignments = assignor.assign(self._cluster, member_subscriptions)
 
         log.debug("Finished assignment for group %s: %s", self.group_id, assignments)
 
@@ -474,6 +488,8 @@ class ConsumerCoordinator(BaseCoordinator):
             super(ConsumerCoordinator, self).close(timeout_ms=timeout_ms)
 
     def _invoke_completed_offset_commit_callbacks(self):
+        if self._async_commit_fenced:
+            raise Errors.FencedInstanceIdError("Got fenced exception for group_instance_id %s" % (self.group_instance_id,))
         while self.completed_offset_commits:
             callback, offsets, res_or_exc = self.completed_offset_commits.popleft()
             callback(offsets, res_or_exc)
@@ -525,6 +541,10 @@ class ConsumerCoordinator(BaseCoordinator):
             callback = self.config['default_offset_commit_callback']
         future = self._send_offset_commit_request(offsets)
         future.add_both(lambda res: self.completed_offset_commits.appendleft((callback, offsets, res)))
+        def _maybe_set_async_commit_fenced(exc):
+            if isinstance(exc, Errors.FencedInstanceIdError):
+                self._async_commit_fenced = True
+        future.add_errback(_maybe_set_async_commit_fenced)
         return future
 
     def commit_offsets_sync(self, offsets, timeout_ms=None):
@@ -623,7 +643,7 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp, offset in six.iteritems(offsets):
             offset_data[tp.topic][tp.partition] = offset
 
-        version = self._client.api_version(OffsetCommitRequest, max_version=6)
+        version = self._client.api_version(OffsetCommitRequest, max_version=7)
         if version > 1 and self._subscription.partitions_auto_assigned():
             generation = self.generation_if_stable()
         else:
@@ -701,11 +721,26 @@ class ConsumerCoordinator(BaseCoordinator):
                     ) for partition, offset in six.iteritems(partitions)]
                 ) for topic, partitions in six.iteritems(offset_data)]
             )
+        elif version <= 6:
+            request = OffsetCommitRequest[version](
+                self.group_id,
+                generation.generation_id,
+                generation.member_id,
+                [(
+                    topic, [(
+                        partition,
+                        offset.offset,
+                        offset.leader_epoch,
+                        offset.metadata
+                    ) for partition, offset in six.iteritems(partitions)]
+                ) for topic, partitions in six.iteritems(offset_data)]
+            )
         else:
             request = OffsetCommitRequest[version](
                 self.group_id,
                 generation.generation_id,
                 generation.member_id,
+                self.group_instance_id,
                 [(
                     topic, [(
                         partition,
@@ -778,6 +813,11 @@ class ConsumerCoordinator(BaseCoordinator):
                     # if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
                     self.request_rejoin()
                     future.failure(Errors.CommitFailedError(error_type()))
+                    return
+                elif error_type is Errors.FencedInstanceIdError:
+                    log.error("OffsetCommit for group %s failed due to fenced id error: %s",
+                              self.group_id, self.group_instance_id)
+                    future.failure(error_type())
                     return
                 elif error_type in (Errors.UnknownMemberIdError,
                                     Errors.IllegalGenerationError):

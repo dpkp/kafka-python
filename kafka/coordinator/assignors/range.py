@@ -1,12 +1,13 @@
 from __future__ import absolute_import
 
 import collections
+import itertools
 import logging
 
 from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment
+from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
 
 log = logging.getLogger(__name__)
 
@@ -32,14 +33,19 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
     version = 0
 
     @classmethod
-    def assign(cls, cluster, member_metadata):
+    def assign(cls, cluster, group_subscriptions):
         consumers_per_topic = collections.defaultdict(list)
-        for member, metadata in six.iteritems(member_metadata):
-            for topic in metadata.subscription:
-                consumers_per_topic[topic].append(member)
+        for member_id, subscription in six.iteritems(group_subscriptions):
+            for topic in subscription.topics:
+                consumers_per_topic[topic].append((subscription.group_instance_id, member_id))
 
         # construct {member_id: {topic: [partition, ...]}}
         assignment = collections.defaultdict(dict)
+
+        for topic in consumers_per_topic:
+            # group by static members (True) v dynamic members (False)
+            grouped = {k: list(g) for k, g in itertools.groupby(consumers_per_topic[topic], key=lambda ids: ids[0] is not None)}
+            consumers_per_topic[topic] = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
 
         for topic, consumers_for_topic in six.iteritems(consumers_per_topic):
             partitions = cluster.partitions_for_topic(topic)
@@ -47,22 +53,21 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
                 log.warning('No partition metadata for topic %s', topic)
                 continue
             partitions = sorted(partitions)
-            consumers_for_topic.sort()
 
             partitions_per_consumer = len(partitions) // len(consumers_for_topic)
             consumers_with_extra = len(partitions) % len(consumers_for_topic)
 
-            for i, member in enumerate(consumers_for_topic):
+            for i, (_group_instance_id, member_id) in enumerate(consumers_for_topic):
                 start = partitions_per_consumer * i
                 start += min(i, consumers_with_extra)
                 length = partitions_per_consumer
                 if not i + 1 > consumers_with_extra:
                     length += 1
-                assignment[member][topic] = partitions[start:start+length]
+                assignment[member_id][topic] = partitions[start:start+length]
 
         protocol_assignment = {}
-        for member_id in member_metadata:
-            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment(
+        for member_id in group_subscriptions:
+            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
                 cls.version,
                 sorted(assignment[member_id].items()),
                 b'')
@@ -70,7 +75,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
 
     @classmethod
     def metadata(cls, topics):
-        return ConsumerProtocolMemberMetadata(cls.version, list(topics), b'')
+        return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), b'')
 
     @classmethod
     def on_assignment(cls, assignment):

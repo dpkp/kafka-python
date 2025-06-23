@@ -13,13 +13,15 @@ from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAs
 from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.protocol import (
-    ConsumerProtocolMemberMetadata, ConsumerProtocolMemberAssignment)
+    ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0)
+from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.commit import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse)
+from kafka.protocol.group import GroupMember
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
@@ -73,15 +75,15 @@ def test_group_protocols(coordinator):
 
     coordinator._subscription.subscribe(topics=['foobar'])
     assert coordinator.group_protocols() == [
-        ('range', ConsumerProtocolMemberMetadata(
+        ('range', ConsumerProtocolMemberMetadata_v0(
             RangePartitionAssignor.version,
             ['foobar'],
             b'')),
-        ('roundrobin', ConsumerProtocolMemberMetadata(
+        ('roundrobin', ConsumerProtocolMemberMetadata_v0(
             RoundRobinPartitionAssignor.version,
             ['foobar'],
             b'')),
-        ('sticky', ConsumerProtocolMemberMetadata(
+        ('sticky', ConsumerProtocolMemberMetadata_v0(
             StickyPartitionAssignor.version,
             ['foobar'],
             b'')),
@@ -134,7 +136,7 @@ def test_join_complete(mocker, coordinator):
     coordinator.config['assignors'] = (assignor,)
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
-    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
     coordinator._on_join_complete(0, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment)
@@ -148,7 +150,7 @@ def test_join_complete_with_sticky_assignor(mocker, coordinator):
     mocker.spy(assignor, 'on_generation_assignment')
     assert assignor.on_assignment.call_count == 0
     assert assignor.on_generation_assignment.call_count == 0
-    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
     coordinator._on_join_complete(0, 'member-foo', 'sticky', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assert assignor.on_generation_assignment.call_count == 1
@@ -166,7 +168,7 @@ def test_subscription_listener(mocker, coordinator):
     assert listener.on_partitions_revoked.call_count == 1
     listener.on_partitions_revoked.assert_called_with(set([]))
 
-    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
     coordinator._on_join_complete(
         0, 'member-foo', 'roundrobin', assignment.encode())
     assert listener.on_partitions_assigned.call_count == 1
@@ -184,7 +186,7 @@ def test_subscription_listener_failure(mocker, coordinator):
     coordinator._on_join_prepare(0, 'member-foo')
     assert listener.on_partitions_revoked.call_count == 1
 
-    assignment = ConsumerProtocolMemberAssignment(0, [('foobar', [0, 1])], b'')
+    assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
     coordinator._on_join_complete(
         0, 'member-foo', 'roundrobin', assignment.encode())
     assert listener.on_partitions_assigned.call_count == 1
@@ -192,14 +194,14 @@ def test_subscription_listener_failure(mocker, coordinator):
 
 def test_perform_assignment(mocker, coordinator):
     coordinator._subscription.subscribe(topics=['foo1'])
-    member_metadata = {
-        'member-foo': ConsumerProtocolMemberMetadata(0, ['foo1'], b''),
-        'member-bar': ConsumerProtocolMemberMetadata(0, ['foo1'], b'')
+    group_subscriptions = {
+        'member-foo': Subscription(ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b''), None),
+        'member-bar': Subscription(ConsumerProtocolMemberMetadata_v0(0, ['foo1'], b''), None),
     }
     assignments = {
-        'member-foo': ConsumerProtocolMemberAssignment(
+        'member-foo': ConsumerProtocolMemberAssignment_v0(
             0, [('foo1', [0])], b''),
-        'member-bar': ConsumerProtocolMemberAssignment(
+        'member-bar': ConsumerProtocolMemberAssignment_v0(
             0, [('foo1', [1])], b'')
     }
 
@@ -208,12 +210,12 @@ def test_perform_assignment(mocker, coordinator):
 
     ret = coordinator._perform_assignment(
         'member-foo', 'roundrobin',
-        [(member, metadata.encode())
-         for member, metadata in member_metadata.items()])
+        [GroupMember(member, None, subscription.encode())
+         for member, subscription in group_subscriptions.items()])
 
     assert RoundRobinPartitionAssignor.assign.call_count == 1
     RoundRobinPartitionAssignor.assign.assert_called_with(
-        coordinator._client.cluster, member_metadata)
+        coordinator._client.cluster, group_subscriptions)
     assert ret == assignments
 
 
