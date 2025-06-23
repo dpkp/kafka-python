@@ -9,8 +9,8 @@ import pytest
 from kafka.structs import TopicPartition
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
-from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor, StickyAssignorUserDataV1
-from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment, ConsumerProtocolMemberMetadata
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
+from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment
 from kafka.vendor import six
 
 
