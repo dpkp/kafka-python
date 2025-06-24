@@ -21,7 +21,7 @@ class TestObjectConversion:
         assert tc.get_item('myobject') == 0
         with pytest.raises(KeyError):
             tc.get_item('does-not-exist')
-        
+
     def test_with_empty_schema(self, superclass):
         class TestClass(superclass):
             API_KEY = 0
@@ -86,7 +86,7 @@ class TestObjectConversion:
                     ('subobject', Int16),
                     ('othersubobject', String('utf-8')))),
                 ('notarray', Int16))
-        
+
         tc = TestClass(
             myarray=[[10, 'hello']],
             notarray=42
@@ -185,7 +185,6 @@ def test_with_metadata_response():
         ]]
     )
     tc.encode()  # Make sure this object encodes successfully
-    
 
     obj = tc.to_object()
 

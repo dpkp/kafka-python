@@ -1236,7 +1236,7 @@ class KafkaAdminClient(object):
             for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
                 if isinstance(response_field, Array):
                     described_groups_field_schema = response_field.array_of
-                    described_group = response.__dict__[response_name][0]
+                    described_group = getattr(response, response_name)[0]
                     described_group_information_list = []
                     protocol_type_is_consumer = False
                     for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
