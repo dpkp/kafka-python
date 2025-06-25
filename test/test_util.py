@@ -3,7 +3,7 @@ from __future__ import absolute_import
 
 import pytest
 
-from kafka.util import ensure_valid_topic_name
+from kafka.util import ensure_valid_topic_name, from_32_bit_field, to_32_bit_field
 
 @pytest.mark.parametrize(('topic_name', 'expectation'), [
     (0, pytest.raises(TypeError)),
@@ -22,3 +22,11 @@ from kafka.util import ensure_valid_topic_name
 def test_topic_name_validation(topic_name, expectation):
     with expectation:
         ensure_valid_topic_name(topic_name)
+
+
+@pytest.mark.parametrize(('test_set',), [
+    (set([0, 1, 5, 10, 31]),),
+    (set(range(32)),),
+])
+def test_32_bit_field(test_set):
+    assert from_32_bit_field(to_32_bit_field(test_set)) == test_set
