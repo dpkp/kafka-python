@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from kafka.errors import IllegalArgumentError
 
 # enum in stdlib as of py3.4
 try:
@@ -7,6 +6,9 @@ try:
 except ImportError:
     # vendored backport module
     from kafka.vendor.enum34 import IntEnum
+
+from kafka.errors import IllegalArgumentError
+from kafka.util import from_32_bit_field
 
 
 class ResourceType(IntEnum):
@@ -247,3 +249,7 @@ class ResourcePattern(ResourcePatternFilter):
             raise IllegalArgumentError(
                 "pattern_type cannot be {} on a concrete ResourcePattern".format(self.pattern_type.name)
             )
+
+
+def valid_acl_operations(int_val):
+     return set([ACLOperation(v) for v in from_32_bit_field(int_val) if v not in (0, 1, 2)])
