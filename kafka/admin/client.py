@@ -1214,7 +1214,7 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
-    def _describe_consumer_groups_request(self, group_id, include_authorized_operations=False):
+    def _describe_consumer_groups_request(self, group_id):
         """Send a DescribeGroupsRequest to the group's coordinator.
 
         Arguments:
@@ -1225,74 +1225,69 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(DescribeGroupsRequest, max_version=3)
         if version <= 2:
-            if include_authorized_operations:
-                raise IncompatibleBrokerVersion(
-                    "include_authorized_operations requests "
-                    "DescribeGroupsRequest >= v3, which is not "
-                    "supported by Kafka {}".format(version)
-                )
             # Note: KAFKA-6788 A potential optimization is to group the
             # request per coordinator and send one request with a list of
             # all consumer groups. Java still hasn't implemented this
             # because the error checking is hard to get right when some
             # groups error and others don't.
             request = DescribeGroupsRequest[version](groups=(group_id,))
-        elif version <= 3:
+        else:
             request = DescribeGroupsRequest[version](
                 groups=(group_id,),
-                include_authorized_operations=include_authorized_operations
+                include_authorized_operations=True
             )
         return request
 
     def _describe_consumer_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
-        if response.API_VERSION <= 3:
-            assert len(response.groups) == 1
-            for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
-                if isinstance(response_field, Array):
-                    described_groups_field_schema = response_field.array_of
-                    described_group = getattr(response, response_name)[0]
-                    described_group_information_list = []
-                    protocol_type_is_consumer = False
-                    for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
-                        if group_information_name == 'protocol_type':
-                            protocol_type = described_group_information
-                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol_v0.PROTOCOL_TYPE or not protocol_type)
-                        if isinstance(group_information_field, Array):
-                            member_information_list = []
-                            member_schema = group_information_field.array_of
-                            for members in described_group_information:
-                                member_information = []
-                                for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
-                                    if protocol_type_is_consumer:
-                                        if member_name == 'member_metadata' and member:
-                                            member_information.append(ConsumerProtocolMemberMetadata_v0.decode(member))
-                                        elif member_name == 'member_assignment' and member:
-                                            member_information.append(ConsumerProtocolMemberAssignment_v0.decode(member))
-                                        else:
-                                            member_information.append(member)
-                                member_info_tuple = MemberInformation._make(member_information)
-                                member_information_list.append(member_info_tuple)
-                            described_group_information_list.append(member_information_list)
-                        else:
-                            described_group_information_list.append(described_group_information)
-                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
-                    # This will cause the namedtuple to fail.
-                    # Therefore, appending a placeholder of None in it.
-                    if response.API_VERSION <=2:
-                        described_group_information_list.append(None)
-                    group_description = GroupInformation._make(described_group_information_list)
-            error_code = group_description.error_code
-            error_type = Errors.for_code(error_code)
-            # Java has the note: KAFKA-6789, we can retry based on the error code
-            if error_type is not Errors.NoError:
-                raise error_type(
-                    "DescribeGroupsResponse failed with response '{}'."
-                    .format(response))
-        else:
+        if response.API_VERSION > 3:
             raise NotImplementedError(
                 "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
+
+        assert len(response.groups) == 1
+        for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
+            if isinstance(response_field, Array):
+                described_groups_field_schema = response_field.array_of
+                described_group = getattr(response, response_name)[0]
+                described_group_information_list = []
+                protocol_type_is_consumer = False
+                for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
+                    if group_information_name == 'protocol_type':
+                        protocol_type = described_group_information
+                        protocol_type_is_consumer = (protocol_type == ConsumerProtocol_v0.PROTOCOL_TYPE or not protocol_type)
+                    if isinstance(group_information_field, Array):
+                        member_information_list = []
+                        member_schema = group_information_field.array_of
+                        for members in described_group_information:
+                            member_information = []
+                            for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
+                                if protocol_type_is_consumer:
+                                    if member_name == 'member_metadata' and member:
+                                        member_information.append(ConsumerProtocolMemberMetadata_v0.decode(member))
+                                    elif member_name == 'member_assignment' and member:
+                                        member_information.append(ConsumerProtocolMemberAssignment_v0.decode(member))
+                                    else:
+                                        member_information.append(member)
+                            member_info_tuple = MemberInformation._make(member_information)
+                            member_information_list.append(member_info_tuple)
+                        described_group_information_list.append(member_information_list)
+                    else:
+                        described_group_information_list.append(described_group_information)
+                # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
+                if response.API_VERSION >= 3:
+                    described_group_information_list[-1] = list(map(lambda acl: acl.name, valid_acl_operations(described_group_information_list[-1])))
+                else:
+                    # TODO: Fix GroupInformation defaults
+                    described_group_information_list.append([])
+                group_description = GroupInformation._make(described_group_information_list)
+        error_code = group_description.error_code
+        error_type = Errors.for_code(error_code)
+        # Java has the note: KAFKA-6789, we can retry based on the error code
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "DescribeGroupsResponse failed with response '{}'."
+                .format(response))
         return group_description
 
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
@@ -1311,9 +1306,6 @@ class KafkaAdminClient(object):
                 useful for avoiding extra network round trips if you already know
                 the group coordinator. This is only useful when all the group_ids
                 have the same coordinator, otherwise it will error. Default: None.
-            include_authorized_operations (bool, optional): Whether or not to include
-                information about the operations a group is allowed to perform.
-                Only supported on API version >= v3. Default: False.
 
         Returns:
             A list of group descriptions. For now the group descriptions
@@ -1327,7 +1319,7 @@ class KafkaAdminClient(object):
             groups_coordinators = self._find_coordinator_ids(group_ids)
 
         requests = [
-            (self._describe_consumer_groups_request(group_id, include_authorized_operations), coordinator_id)
+            (self._describe_consumer_groups_request(group_id), coordinator_id)
             for group_id, coordinator_id in groups_coordinators.items()
         ]
         return self.send_requests(requests, response_fn=self._describe_consumer_groups_process_response)
