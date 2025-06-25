@@ -11,7 +11,7 @@ from . import ConfigResourceType
 from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
-    ACLResourcePatternType
+    ACLResourcePatternType, valid_acl_operations
 from kafka.client_async import KafkaClient, selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0, ConsumerProtocol_v0
 import kafka.errors as Errors
@@ -252,30 +252,32 @@ class KafkaAdminClient(object):
 
     def _refresh_controller_id(self, timeout_ms=30000):
         """Determine the Kafka cluster controller."""
-        version = self._client.api_version(MetadataRequest, max_version=6)
-        if 1 <= version <= 6:
-            timeout_at = time.time() + timeout_ms / 1000
-            while time.time() < timeout_at:
-                response = self.send_request(MetadataRequest[version]())
-                controller_id = response.controller_id
-                if controller_id == -1:
-                    log.warning("Controller ID not available, got -1")
-                    time.sleep(1)
-                    continue
-                # verify the controller is new enough to support our requests
-                controller_version = self._client.check_version(node_id=controller_id)
-                if controller_version < (0, 10, 0):
-                    raise IncompatibleBrokerVersion(
-                        "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
-                        .format(controller_version))
-                self._controller_id = controller_id
-                return
-            else:
-                raise Errors.NodeNotReadyError('controller')
-        else:
+        version = self._client.api_version(MetadataRequest, max_version=8)
+        if version == 0:
             raise UnrecognizedBrokerVersion(
                 "Kafka Admin interface cannot determine the controller using MetadataRequest_v{}."
                 .format(version))
+        # use defaults for allow_auto_topic_creation / include_authorized_operations in v6+
+        request = MetadataRequest[version]()
+
+        timeout_at = time.time() + timeout_ms / 1000
+        while time.time() < timeout_at:
+            response = self.send_request(request)
+            controller_id = response.controller_id
+            if controller_id == -1:
+                log.warning("Controller ID not available, got -1")
+                time.sleep(1)
+                continue
+            # verify the controller is new enough to support our requests
+            controller_version = self._client.check_version(node_id=controller_id)
+            if controller_version < (0, 10, 0):
+                raise IncompatibleBrokerVersion(
+                    "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
+                    .format(controller_version))
+            self._controller_id = controller_id
+            return
+        else:
+            raise Errors.NodeNotReadyError('controller')
 
     def _find_coordinator_id_request(self, group_id):
         """Send a FindCoordinatorRequest to a broker.
@@ -540,11 +542,20 @@ class KafkaAdminClient(object):
             )
         )
 
+    def _process_metadata_response(self, metadata_response):
+        obj = metadata_response.to_object()
+        if 'authorized_operations' in obj:
+            obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
+        for t in obj['topics']:
+            if 'authorized_operations' in t:
+                t['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(t['authorized_operations'])))
+        return obj
+
     def _get_cluster_metadata(self, topics=None, auto_topic_creation=False):
         """
         topics == None means "get all topics"
         """
-        version = self._client.api_version(MetadataRequest, max_version=5)
+        version = self._client.api_version(MetadataRequest, max_version=8)
         if version <= 3:
             if auto_topic_creation:
                 raise IncompatibleBrokerVersion(
@@ -553,13 +564,20 @@ class KafkaAdminClient(object):
                     .format(self.config['api_version']))
 
             request = MetadataRequest[version](topics=topics)
-        elif version <= 5:
+        elif version <= 7:
             request = MetadataRequest[version](
                 topics=topics,
                 allow_auto_topic_creation=auto_topic_creation
             )
+        else:
+            request = MetadataRequest[version](
+                topics=topics,
+                allow_auto_topic_creation=auto_topic_creation,
+                include_cluster_authorized_operations=True,
+                include_topic_authorized_operations=True,
+            )
 
-        return self.send_request(request)
+        return self._process_metadata_response(self.send_request(request))
 
     def list_topics(self):
         """Retrieve a list of all topic names in the cluster.
@@ -568,8 +586,7 @@ class KafkaAdminClient(object):
             A list of topic name strings.
         """
         metadata = self._get_cluster_metadata(topics=None)
-        obj = metadata.to_object()
-        return [t['topic'] for t in obj['topics']]
+        return [t['topic'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
         """Fetch metadata for the specified topics or all topics if None.
@@ -582,8 +599,7 @@ class KafkaAdminClient(object):
             A list of dicts describing each topic (including partition info).
         """
         metadata = self._get_cluster_metadata(topics=topics)
-        obj = metadata.to_object()
-        return obj['topics']
+        return metadata['topics']
 
     def describe_cluster(self):
         """
@@ -595,9 +611,8 @@ class KafkaAdminClient(object):
             A dict with cluster-wide metadata, excluding topic details.
         """
         metadata = self._get_cluster_metadata()
-        obj = metadata.to_object()
-        obj.pop('topics')  # We have 'describe_topics' for this
-        return obj
+        metadata.pop('topics')  # We have 'describe_topics' for this
+        return metadata
 
     @staticmethod
     def _convert_describe_acls_response_to_acls(describe_response):
@@ -1094,11 +1109,11 @@ class KafkaAdminClient(object):
         partitions = set(partitions)
         topics = set(tp.topic for tp in partitions)
 
-        response = self._get_cluster_metadata(topics=topics).to_object()
+        metadata = self._get_cluster_metadata(topics=topics)
 
         leader2partitions = defaultdict(list)
         valid_partitions = set()
-        for topic in response.get("topics", ()):
+        for topic in metadata.get("topics", ()):
             for partition in topic.get("partitions", ()):
                 t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
                 if t2p in partitions:
