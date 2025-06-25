@@ -337,8 +337,8 @@ class DescribeGroupsResponse_v3(Response):
                 ('client_id', String('utf-8')),
                 ('client_host', String('utf-8')),
                 ('member_metadata', Bytes),
-                ('member_assignment', Bytes)))),
-            ('authorized_operations', Int32))
+                ('member_assignment', Bytes))),
+            ('authorized_operations', Int32)))
     )
 
 
@@ -368,7 +368,7 @@ class DescribeGroupsRequest_v2(Request):
 class DescribeGroupsRequest_v3(Request):
     API_KEY = 15
     API_VERSION = 3
-    RESPONSE_TYPE = DescribeGroupsResponse_v2
+    RESPONSE_TYPE = DescribeGroupsResponse_v3
     SCHEMA = Schema(
         ('groups', Array(String('utf-8'))),
         ('include_authorized_operations', Boolean)
