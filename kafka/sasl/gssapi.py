@@ -68,10 +68,10 @@ class SaslMechanismGSSAPI(SaslMechanism):
             # simply set QoP to 'auth' only (first octet). We reuse the max message size proposed
             # by the server
             client_flags = self.SASL_QOP_AUTH
-            server_flags = msg[0]
+            server_flags = struct.Struct('>b').unpack(msg[0:1])[0]
             message_parts = [
                 struct.Struct('>b').pack(client_flags & server_flags),
-                msg[1:],
+                msg[1:], # always agree to max message size from server
                 self.auth_id.encode('utf-8'),
             ]
             # add authorization identity to the response, and GSS-wrap
