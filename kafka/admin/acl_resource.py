@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from kafka.errors import IllegalArgumentError
 
 # enum in stdlib as of py3.4
 try:
@@ -7,6 +6,8 @@ try:
 except ImportError:
     # vendored backport module
     from kafka.vendor.enum34 import IntEnum
+
+from kafka.errors import IllegalArgumentError
 
 
 class ResourceType(IntEnum):
@@ -30,6 +31,7 @@ class ACLOperation(IntEnum):
     The ANY value is only valid in a filter context
     """
 
+    UNKNOWN = 0,
     ANY = 1,
     ALL = 2,
     READ = 3,
@@ -41,7 +43,9 @@ class ACLOperation(IntEnum):
     CLUSTER_ACTION = 9,
     DESCRIBE_CONFIGS = 10,
     ALTER_CONFIGS = 11,
-    IDEMPOTENT_WRITE = 12
+    IDEMPOTENT_WRITE = 12,
+    CREATE_TOKENS = 13,
+    DESCRIBE_TOKENS = 13
 
 
 class ACLPermissionType(IntEnum):
@@ -50,6 +54,7 @@ class ACLPermissionType(IntEnum):
     The ANY value is only valid in a filter context
     """
 
+    UNKNOWN = 0,
     ANY = 1,
     DENY = 2,
     ALLOW = 3
@@ -63,6 +68,7 @@ class ACLResourcePatternType(IntEnum):
     https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs
     """
 
+    UNKNOWN = 0,
     ANY = 1,
     MATCH = 2,
     LITERAL = 3,
@@ -242,3 +248,7 @@ class ResourcePattern(ResourcePatternFilter):
             raise IllegalArgumentError(
                 "pattern_type cannot be {} on a concrete ResourcePattern".format(self.pattern_type.name)
             )
+
+
+def valid_acl_operations(int_vals):
+     return set([ACLOperation(v) for v in int_vals if v not in (0, 1, 2)])

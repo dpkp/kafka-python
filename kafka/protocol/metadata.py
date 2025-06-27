@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Int16, Int32, Schema, String
+from kafka.protocol.types import Array, Boolean, Int16, Int32, Schema, String, BitField
 
 
 class MetadataResponse_v0(Response):
@@ -164,6 +164,36 @@ class MetadataResponse_v7(Response):
     )
 
 
+class MetadataResponse_v8(Response):
+    """v8 adds authorized_operations fields"""
+    API_KEY = 3
+    API_VERSION = 8
+    SCHEMA = Schema(
+        ('throttle_time_ms', Int32),
+        ('brokers', Array(
+            ('node_id', Int32),
+            ('host', String('utf-8')),
+            ('port', Int32),
+            ('rack', String('utf-8')))),
+        ('cluster_id', String('utf-8')),
+        ('controller_id', Int32),
+        ('topics', Array(
+            ('error_code', Int16),
+            ('topic', String('utf-8')),
+            ('is_internal', Boolean),
+            ('partitions', Array(
+                ('error_code', Int16),
+                ('partition', Int32),
+                ('leader', Int32),
+                ('leader_epoch', Int32),
+                ('replicas', Array(Int32)),
+                ('isr', Array(Int32)),
+                ('offline_replicas', Array(Int32)))),
+            ('authorized_operations', BitField))),
+        ('authorized_operations', BitField)
+    )
+
+
 class MetadataRequest_v0(Request):
     API_KEY = 3
     API_VERSION = 0
@@ -245,13 +275,27 @@ class MetadataRequest_v7(Request):
     NO_TOPICS = []
 
 
+class MetadataRequest_v8(Request):
+    API_KEY = 3
+    API_VERSION = 8
+    RESPONSE_TYPE = MetadataResponse_v8
+    SCHEMA = Schema(
+        ('topics', Array(String('utf-8'))),
+        ('allow_auto_topic_creation', Boolean),
+        ('include_cluster_authorized_operations', Boolean),
+        ('include_topic_authorized_operations', Boolean)
+    )
+    ALL_TOPICS = None
+    NO_TOPICS = []
+
+
 MetadataRequest = [
     MetadataRequest_v0, MetadataRequest_v1, MetadataRequest_v2,
     MetadataRequest_v3, MetadataRequest_v4, MetadataRequest_v5,
-    MetadataRequest_v6, MetadataRequest_v7,
+    MetadataRequest_v6, MetadataRequest_v7, MetadataRequest_v8,
 ]
 MetadataResponse = [
     MetadataResponse_v0, MetadataResponse_v1, MetadataResponse_v2,
     MetadataResponse_v3, MetadataResponse_v4, MetadataResponse_v5,
-    MetadataResponse_v6, MetadataResponse_v7,
+    MetadataResponse_v6, MetadataResponse_v7, MetadataResponse_v8,
 ]

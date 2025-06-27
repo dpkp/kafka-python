@@ -363,3 +363,34 @@ class CompactArray(Array):
             return None
         return [self.array_of.decode(data) for _ in range(length)]
 
+
+class BitField(AbstractType):
+    @classmethod
+    def decode(cls, data):
+        return cls.from_32_bit_field(Int32.decode(data))
+
+    @classmethod
+    def encode(cls, vals):
+        # to_32_bit_field returns unsigned val, so we need to
+        # encode >I to avoid crash if/when byte 31 is set
+        # (note that decode as signed still works fine)
+        return struct.Struct('>I').pack(cls.to_32_bit_field(vals))
+
+    @classmethod
+    def to_32_bit_field(cls, vals):
+        value = 0
+        for b in vals:
+            assert 0 <= b < 32
+            value |= 1 << b
+        return value
+
+    @classmethod
+    def from_32_bit_field(cls, value):
+        result = set()
+        count = 0
+        while value != 0:
+            if (value & 1) != 0:
+                result.add(count)
+            count += 1
+            value = (value & 0xFFFFFFFF) >> 1
+        return result

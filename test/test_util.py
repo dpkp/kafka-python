@@ -22,3 +22,4 @@ from kafka.util import ensure_valid_topic_name
 def test_topic_name_validation(topic_name, expectation):
     with expectation:
         ensure_valid_topic_name(topic_name)
+

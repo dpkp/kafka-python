@@ -11,7 +11,7 @@ from . import ConfigResourceType
 from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
-    ACLResourcePatternType
+    ACLResourcePatternType, valid_acl_operations
 from kafka.client_async import KafkaClient, selectors
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0, ConsumerProtocol_v0
 import kafka.errors as Errors
@@ -252,30 +252,32 @@ class KafkaAdminClient(object):
 
     def _refresh_controller_id(self, timeout_ms=30000):
         """Determine the Kafka cluster controller."""
-        version = self._client.api_version(MetadataRequest, max_version=6)
-        if 1 <= version <= 6:
-            timeout_at = time.time() + timeout_ms / 1000
-            while time.time() < timeout_at:
-                response = self.send_request(MetadataRequest[version]())
-                controller_id = response.controller_id
-                if controller_id == -1:
-                    log.warning("Controller ID not available, got -1")
-                    time.sleep(1)
-                    continue
-                # verify the controller is new enough to support our requests
-                controller_version = self._client.check_version(node_id=controller_id)
-                if controller_version < (0, 10, 0):
-                    raise IncompatibleBrokerVersion(
-                        "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
-                        .format(controller_version))
-                self._controller_id = controller_id
-                return
-            else:
-                raise Errors.NodeNotReadyError('controller')
-        else:
+        version = self._client.api_version(MetadataRequest, max_version=8)
+        if version == 0:
             raise UnrecognizedBrokerVersion(
                 "Kafka Admin interface cannot determine the controller using MetadataRequest_v{}."
                 .format(version))
+        # use defaults for allow_auto_topic_creation / include_authorized_operations in v6+
+        request = MetadataRequest[version]()
+
+        timeout_at = time.time() + timeout_ms / 1000
+        while time.time() < timeout_at:
+            response = self.send_request(request)
+            controller_id = response.controller_id
+            if controller_id == -1:
+                log.warning("Controller ID not available, got -1")
+                time.sleep(1)
+                continue
+            # verify the controller is new enough to support our requests
+            controller_version = self._client.check_version(node_id=controller_id)
+            if controller_version < (0, 10, 0):
+                raise IncompatibleBrokerVersion(
+                    "The controller appears to be running Kafka {}. KafkaAdminClient requires brokers >= 0.10.0.0."
+                    .format(controller_version))
+            self._controller_id = controller_id
+            return
+        else:
+            raise Errors.NodeNotReadyError('controller')
 
     def _find_coordinator_id_request(self, group_id):
         """Send a FindCoordinatorRequest to a broker.
@@ -540,11 +542,20 @@ class KafkaAdminClient(object):
             )
         )
 
+    def _process_metadata_response(self, metadata_response):
+        obj = metadata_response.to_object()
+        if 'authorized_operations' in obj:
+            obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
+        for t in obj['topics']:
+            if 'authorized_operations' in t:
+                t['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(t['authorized_operations'])))
+        return obj
+
     def _get_cluster_metadata(self, topics=None, auto_topic_creation=False):
         """
         topics == None means "get all topics"
         """
-        version = self._client.api_version(MetadataRequest, max_version=5)
+        version = self._client.api_version(MetadataRequest, max_version=8)
         if version <= 3:
             if auto_topic_creation:
                 raise IncompatibleBrokerVersion(
@@ -553,13 +564,20 @@ class KafkaAdminClient(object):
                     .format(self.config['api_version']))
 
             request = MetadataRequest[version](topics=topics)
-        elif version <= 5:
+        elif version <= 7:
             request = MetadataRequest[version](
                 topics=topics,
                 allow_auto_topic_creation=auto_topic_creation
             )
+        else:
+            request = MetadataRequest[version](
+                topics=topics,
+                allow_auto_topic_creation=auto_topic_creation,
+                include_cluster_authorized_operations=True,
+                include_topic_authorized_operations=True,
+            )
 
-        return self.send_request(request)
+        return self._process_metadata_response(self.send_request(request))
 
     def list_topics(self):
         """Retrieve a list of all topic names in the cluster.
@@ -568,8 +586,7 @@ class KafkaAdminClient(object):
             A list of topic name strings.
         """
         metadata = self._get_cluster_metadata(topics=None)
-        obj = metadata.to_object()
-        return [t['topic'] for t in obj['topics']]
+        return [t['topic'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
         """Fetch metadata for the specified topics or all topics if None.
@@ -582,8 +599,7 @@ class KafkaAdminClient(object):
             A list of dicts describing each topic (including partition info).
         """
         metadata = self._get_cluster_metadata(topics=topics)
-        obj = metadata.to_object()
-        return obj['topics']
+        return metadata['topics']
 
     def describe_cluster(self):
         """
@@ -595,9 +611,8 @@ class KafkaAdminClient(object):
             A dict with cluster-wide metadata, excluding topic details.
         """
         metadata = self._get_cluster_metadata()
-        obj = metadata.to_object()
-        obj.pop('topics')  # We have 'describe_topics' for this
-        return obj
+        metadata.pop('topics')  # We have 'describe_topics' for this
+        return metadata
 
     @staticmethod
     def _convert_describe_acls_response_to_acls(describe_response):
@@ -1094,11 +1109,11 @@ class KafkaAdminClient(object):
         partitions = set(partitions)
         topics = set(tp.topic for tp in partitions)
 
-        response = self._get_cluster_metadata(topics=topics).to_object()
+        metadata = self._get_cluster_metadata(topics=topics)
 
         leader2partitions = defaultdict(list)
         valid_partitions = set()
-        for topic in response.get("topics", ()):
+        for topic in metadata.get("topics", ()):
             for partition in topic.get("partitions", ()):
                 t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
                 if t2p in partitions:
@@ -1199,7 +1214,7 @@ class KafkaAdminClient(object):
     # describe delegation_token protocol not yet implemented
     # Note: send the request to the least_loaded_node()
 
-    def _describe_consumer_groups_request(self, group_id, include_authorized_operations=False):
+    def _describe_consumer_groups_request(self, group_id):
         """Send a DescribeGroupsRequest to the group's coordinator.
 
         Arguments:
@@ -1210,74 +1225,69 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(DescribeGroupsRequest, max_version=3)
         if version <= 2:
-            if include_authorized_operations:
-                raise IncompatibleBrokerVersion(
-                    "include_authorized_operations requests "
-                    "DescribeGroupsRequest >= v3, which is not "
-                    "supported by Kafka {}".format(version)
-                )
             # Note: KAFKA-6788 A potential optimization is to group the
             # request per coordinator and send one request with a list of
             # all consumer groups. Java still hasn't implemented this
             # because the error checking is hard to get right when some
             # groups error and others don't.
             request = DescribeGroupsRequest[version](groups=(group_id,))
-        elif version <= 3:
+        else:
             request = DescribeGroupsRequest[version](
                 groups=(group_id,),
-                include_authorized_operations=include_authorized_operations
+                include_authorized_operations=True
             )
         return request
 
     def _describe_consumer_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
-        if response.API_VERSION <= 3:
-            assert len(response.groups) == 1
-            for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
-                if isinstance(response_field, Array):
-                    described_groups_field_schema = response_field.array_of
-                    described_group = getattr(response, response_name)[0]
-                    described_group_information_list = []
-                    protocol_type_is_consumer = False
-                    for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
-                        if group_information_name == 'protocol_type':
-                            protocol_type = described_group_information
-                            protocol_type_is_consumer = (protocol_type == ConsumerProtocol_v0.PROTOCOL_TYPE or not protocol_type)
-                        if isinstance(group_information_field, Array):
-                            member_information_list = []
-                            member_schema = group_information_field.array_of
-                            for members in described_group_information:
-                                member_information = []
-                                for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
-                                    if protocol_type_is_consumer:
-                                        if member_name == 'member_metadata' and member:
-                                            member_information.append(ConsumerProtocolMemberMetadata_v0.decode(member))
-                                        elif member_name == 'member_assignment' and member:
-                                            member_information.append(ConsumerProtocolMemberAssignment_v0.decode(member))
-                                        else:
-                                            member_information.append(member)
-                                member_info_tuple = MemberInformation._make(member_information)
-                                member_information_list.append(member_info_tuple)
-                            described_group_information_list.append(member_information_list)
-                        else:
-                            described_group_information_list.append(described_group_information)
-                    # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
-                    # This will cause the namedtuple to fail.
-                    # Therefore, appending a placeholder of None in it.
-                    if response.API_VERSION <=2:
-                        described_group_information_list.append(None)
-                    group_description = GroupInformation._make(described_group_information_list)
-            error_code = group_description.error_code
-            error_type = Errors.for_code(error_code)
-            # Java has the note: KAFKA-6789, we can retry based on the error code
-            if error_type is not Errors.NoError:
-                raise error_type(
-                    "DescribeGroupsResponse failed with response '{}'."
-                    .format(response))
-        else:
+        if response.API_VERSION > 3:
             raise NotImplementedError(
                 "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
+
+        assert len(response.groups) == 1
+        for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
+            if isinstance(response_field, Array):
+                described_groups_field_schema = response_field.array_of
+                described_group = getattr(response, response_name)[0]
+                described_group_information_list = []
+                protocol_type_is_consumer = False
+                for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
+                    if group_information_name == 'protocol_type':
+                        protocol_type = described_group_information
+                        protocol_type_is_consumer = (protocol_type == ConsumerProtocol_v0.PROTOCOL_TYPE or not protocol_type)
+                    if isinstance(group_information_field, Array):
+                        member_information_list = []
+                        member_schema = group_information_field.array_of
+                        for members in described_group_information:
+                            member_information = []
+                            for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
+                                if protocol_type_is_consumer:
+                                    if member_name == 'member_metadata' and member:
+                                        member_information.append(ConsumerProtocolMemberMetadata_v0.decode(member))
+                                    elif member_name == 'member_assignment' and member:
+                                        member_information.append(ConsumerProtocolMemberAssignment_v0.decode(member))
+                                    else:
+                                        member_information.append(member)
+                            member_info_tuple = MemberInformation._make(member_information)
+                            member_information_list.append(member_info_tuple)
+                        described_group_information_list.append(member_information_list)
+                    else:
+                        described_group_information_list.append(described_group_information)
+                # Version 3 of the DescribeGroups API introduced the "authorized_operations" field.
+                if response.API_VERSION >= 3:
+                    described_group_information_list[-1] = list(map(lambda acl: acl.name, valid_acl_operations(described_group_information_list[-1])))
+                else:
+                    # TODO: Fix GroupInformation defaults
+                    described_group_information_list.append([])
+                group_description = GroupInformation._make(described_group_information_list)
+        error_code = group_description.error_code
+        error_type = Errors.for_code(error_code)
+        # Java has the note: KAFKA-6789, we can retry based on the error code
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "DescribeGroupsResponse failed with response '{}'."
+                .format(response))
         return group_description
 
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
@@ -1296,9 +1306,6 @@ class KafkaAdminClient(object):
                 useful for avoiding extra network round trips if you already know
                 the group coordinator. This is only useful when all the group_ids
                 have the same coordinator, otherwise it will error. Default: None.
-            include_authorized_operations (bool, optional): Whether or not to include
-                information about the operations a group is allowed to perform.
-                Only supported on API version >= v3. Default: False.
 
         Returns:
             A list of group descriptions. For now the group descriptions
@@ -1312,7 +1319,7 @@ class KafkaAdminClient(object):
             groups_coordinators = self._find_coordinator_ids(group_ids)
 
         requests = [
-            (self._describe_consumer_groups_request(group_id, include_authorized_operations), coordinator_id)
+            (self._describe_consumer_groups_request(group_id), coordinator_id)
             for group_id, coordinator_id in groups_coordinators.items()
         ]
         return self.send_requests(requests, response_fn=self._describe_consumer_groups_process_response)
