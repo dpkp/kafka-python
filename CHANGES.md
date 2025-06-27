@@ -1,3 +1,9 @@
+# 2.2.14 (June 27, 2025)
+
+Fixes
+* python2 fixups (#2655)
+* Fix coordinator lock contention during close() (#2652)
+
 # 2.2.13 (June 20, 2025)
 
 Fixes
