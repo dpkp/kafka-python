@@ -139,20 +139,3 @@ def synchronized(func):
     functools.update_wrapper(wrapper, func)
     return wrapper
 
-
-def to_32_bit_field(vals):
-    value = 0
-    for b in vals:
-        assert 0 <= b < 32
-        value |= 1 << b
-    return value
-
-def from_32_bit_field(value):
-    result = set()
-    count = 0
-    while value != 0:
-        if (value & 1) != 0:
-            result.add(count)
-        count += 1
-        value = (value & 0xFFFFFFFF) >> 1
-    return result

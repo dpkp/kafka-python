@@ -8,7 +8,7 @@ except ImportError:
     from kafka.vendor.enum34 import IntEnum
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields
+from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields, BitField
 
 
 class CreateTopicsResponse_v0(Response):
@@ -338,7 +338,7 @@ class DescribeGroupsResponse_v3(Response):
                 ('client_host', String('utf-8')),
                 ('member_metadata', Bytes),
                 ('member_assignment', Bytes))),
-            ('authorized_operations', Int32)))
+            ('authorized_operations', BitField)))
     )
 
 

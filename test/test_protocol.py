@@ -2,12 +2,14 @@
 import io
 import struct
 
+import pytest
+
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.fetch import FetchRequest, FetchResponse
 from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.message import Message, MessageSet, PartialMessage
 from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.types import Int16, Int32, Int64, String, UnsignedVarInt32, CompactString, CompactArray, CompactBytes
+from kafka.protocol.types import Int16, Int32, Int64, String, UnsignedVarInt32, CompactString, CompactArray, CompactBytes, BitField
 
 
 def test_create_message():
@@ -332,3 +334,11 @@ def test_compact_data_structs():
     assert CompactBytes.decode(io.BytesIO(b'\x01')) == b''
     enc = CompactBytes.encode(b'foo')
     assert CompactBytes.decode(io.BytesIO(enc)) == b'foo'
+
+
+@pytest.mark.parametrize(('test_set',), [
+    (set([0, 1, 5, 10, 31]),),
+    (set(range(32)),),
+])
+def test_bit_field(test_set):
+    assert BitField.decode(io.BytesIO(BitField.encode(test_set))) == test_set

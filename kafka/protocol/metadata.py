@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from kafka.protocol.api import Request, Response
-from kafka.protocol.types import Array, Boolean, Int16, Int32, Schema, String
+from kafka.protocol.types import Array, Boolean, Int16, Int32, Schema, String, BitField
 
 
 class MetadataResponse_v0(Response):
@@ -189,8 +189,8 @@ class MetadataResponse_v8(Response):
                 ('replicas', Array(Int32)),
                 ('isr', Array(Int32)),
                 ('offline_replicas', Array(Int32)))),
-            ('authorized_operations', Int32))),
-        ('authorized_operations', Int32)
+            ('authorized_operations', BitField))),
+        ('authorized_operations', BitField)
     )
 
 

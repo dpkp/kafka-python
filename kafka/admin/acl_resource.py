@@ -8,7 +8,6 @@ except ImportError:
     from kafka.vendor.enum34 import IntEnum
 
 from kafka.errors import IllegalArgumentError
-from kafka.util import from_32_bit_field
 
 
 class ResourceType(IntEnum):
@@ -251,5 +250,5 @@ class ResourcePattern(ResourcePatternFilter):
             )
 
 
-def valid_acl_operations(int_val):
-     return set([ACLOperation(v) for v in from_32_bit_field(int_val) if v not in (0, 1, 2)])
+def valid_acl_operations(int_vals):
+     return set([ACLOperation(v) for v in int_vals if v not in (0, 1, 2)])
