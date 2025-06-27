@@ -279,8 +279,10 @@ class ClusterMetadata(object):
             if metadata.API_VERSION == 0:
                 error_code, topic, partitions = topic_data
                 is_internal = False
-            else:
+            elif metadata.API_VERSION <= 7:
                 error_code, topic, is_internal, partitions = topic_data
+            else:
+                error_code, topic, is_internal, partitions, _authorized_operations = topic_data
             if is_internal:
                 _new_internal_topics.add(topic)
             error_type = Errors.for_code(error_code)
