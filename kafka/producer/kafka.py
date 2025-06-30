@@ -818,7 +818,12 @@ class KafkaProducer(object):
                 to use as the message timestamp. Defaults to current time.
 
         Returns:
-            FutureRecordMetadata: resolves to RecordMetadata
+            FutureRecordMetadata: resolves to RecordMetadata. The returned future 
+                provides methods to handle the send result:
+            
+                - get(timeout=None): block until send completes and return the RecordMetadata
+                - add_callback(fn): add a callback for successful sends
+                - add_errback(fn): add a callback for failed sends
 
         Raises:
             KafkaTimeoutError: if unable to fetch topic metadata, or unable
