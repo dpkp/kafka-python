@@ -15,6 +15,9 @@ class KafkaError(RuntimeError):
         return '{0}: {1}'.format(self.__class__.__name__,
                                super(KafkaError, self).__str__())
 
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ and self.args == other.args
+
 
 class Cancelled(KafkaError):
     retriable = True
