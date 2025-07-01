@@ -553,11 +553,11 @@ class TxnRequestHandler(object):
         return self.transaction_manager.producer_id_and_epoch.epoch
 
     def fatal_error(self, exc):
-        self.transaction_manager._transition_to_fatal_error(exc)
+        self.transaction_manager.transition_to_fatal_error(exc)
         self._result.done(error=exc)
 
     def abortable_error(self, exc):
-        self.transaction_manager._transition_to_abortable_error(exc)
+        self.transaction_manager.transition_to_abortable_error(exc)
         self._result.done(error=exc)
 
     def fail(self, exc):
