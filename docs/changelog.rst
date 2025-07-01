@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2.2.15 (July 1, 2025)
+#####################
+
+Fixes
+-----
+* Fix KafkaProducer broken method names (llk89 / #2660)
+* Fix spelling mistake in KafkaConsumer docs (Xeus-CC / #2659)
+
+
+2.2.14 (June 27, 2025)
+######################
+
+Fixes
+* python2 fixups (#2655)
+* Fix coordinator lock contention during close() (#2652)
+
+
 2.2.13 (June 20, 2025)
 ######################
 
