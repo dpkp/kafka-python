@@ -123,7 +123,7 @@ class KafkaConsumer(six.Iterator):
             be disabled in cases seeking extreme performance. Default: True
         isolation_level (str): Configure KIP-98 transactional consumer by
             setting to 'read_committed'. This will cause the consumer to
-            skip records from aborted tranactions. Default: 'read_uncommitted'
+            skip records from aborted transactions. Default: 'read_uncommitted'
         allow_auto_create_topics (bool): Enable/disable auto topic creation
             on metadata request. Only available with api_version >= (0, 11).
             Default: True
