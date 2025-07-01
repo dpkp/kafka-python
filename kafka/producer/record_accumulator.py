@@ -430,7 +430,7 @@ class RecordAccumulator(object):
                 expired = bool(waited_time >= time_to_wait)
 
                 sendable = (full or expired or self._closed or
-                            self._flush_in_progress())
+                            self.flush_in_progress())
 
                 if sendable and not backing_off:
                     ready_nodes.add(leader)
@@ -563,7 +563,7 @@ class RecordAccumulator(object):
         """Deallocate the record batch."""
         self._incomplete.remove(batch)
 
-    def _flush_in_progress(self):
+    def flush_in_progress(self):
         """Are there any threads currently waiting on a flush?"""
         return self._flushes_in_progress.get() > 0
 
