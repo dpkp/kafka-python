@@ -6,7 +6,8 @@ import pytest
 from kafka.cluster import ClusterMetadata
 from kafka.errors import IllegalStateError, KafkaError
 from kafka.producer.future import FutureRecordMetadata, RecordMetadata
-from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
+from kafka.producer.producer_batch import ProducerBatch
+from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition

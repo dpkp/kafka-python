@@ -19,7 +19,8 @@ import kafka.errors as Errors
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.producer.kafka import KafkaProducer
 from kafka.protocol.produce import ProduceRequest
-from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
+from kafka.producer.producer_batch import ProducerBatch
+from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.producer.sender import PartitionResponse, Sender
 from kafka.producer.transaction_manager import TransactionManager
 from kafka.record.memory_records import MemoryRecordsBuilder
