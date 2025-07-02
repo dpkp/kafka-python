@@ -29,32 +29,35 @@ class FutureProduceResult(Future):
 
 
 class FutureRecordMetadata(Future):
-    def __init__(self, produce_future, relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
+    def __init__(self, produce_future, batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
         super(FutureRecordMetadata, self).__init__()
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
-        self.args = (relative_offset, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)
+        self.args = (batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)
         produce_future.add_callback(self._produce_success)
         produce_future.add_errback(self.failure)
 
-    def _produce_success(self, offset_and_timestamp):
-        offset, produce_timestamp_ms = offset_and_timestamp
+    def _produce_success(self, result):
+        offset, produce_timestamp_ms, record_exceptions_fn = result
 
         # Unpacking from args tuple is minor speed optimization
-        (relative_offset, timestamp_ms, checksum,
+        (batch_index, timestamp_ms, checksum,
          serialized_key_size, serialized_value_size, serialized_header_size) = self.args
 
-        # None is when Broker does not support the API (<0.10) and
-        # -1 is when the broker is configured for CREATE_TIME timestamps
-        if produce_timestamp_ms is not None and produce_timestamp_ms != -1:
-            timestamp_ms = produce_timestamp_ms
-        if offset != -1 and relative_offset is not None:
-            offset += relative_offset
-        tp = self._produce_future.topic_partition
-        metadata = RecordMetadata(tp[0], tp[1], tp, offset, timestamp_ms,
-                                  checksum, serialized_key_size,
-                                  serialized_value_size, serialized_header_size)
-        self.success(metadata)
+        if record_exceptions_fn is not None:
+            self.failure(record_exceptions_fn(batch_index))
+        else:
+            # None is when Broker does not support the API (<0.10) and
+            # -1 is when the broker is configured for CREATE_TIME timestamps
+            if produce_timestamp_ms is not None and produce_timestamp_ms != -1:
+                timestamp_ms = produce_timestamp_ms
+            if offset != -1 and batch_index is not None:
+                offset += batch_index
+            tp = self._produce_future.topic_partition
+            metadata = RecordMetadata(tp[0], tp[1], tp, offset, timestamp_ms,
+                                      checksum, serialized_key_size,
+                                      serialized_value_size, serialized_header_size)
+            self.success(metadata)
 
     def get(self, timeout=None):
         if not self.is_done and not self._produce_future.wait(timeout):

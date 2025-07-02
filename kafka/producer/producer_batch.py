@@ -83,9 +83,37 @@ class ProducerBatch(object):
         self._final_state = FinalState.ABORTED
 
         log.debug("Aborting batch for partition %s: %s", self.topic_partition, exception)
-        self._complete_future(-1, -1, exception)
+        self._complete_future(-1, -1, lambda _: exception)
 
-    def done(self, base_offset=None, timestamp_ms=None, exception=None):
+    def complete(self, base_offset, log_append_time):
+        """Complete the batch successfully.
+
+        Arguments:
+            base_offset (int): The base offset of the messages assigned by the server
+            log_append_time (int): The log append time or -1 if CreateTime is being used
+
+        Returns: True if the batch was completed as a result of this call, and False
+            if it had been completed previously.
+        """
+        return self.done(base_offset=base_offset, timestamp_ms=log_append_time)
+
+    def complete_exceptionally(self, top_level_exception, record_exceptions_fn):
+        """
+        Complete the batch exceptionally. The provided top-level exception will be used
+        for each record future contained in the batch.
+
+        Arguments:
+            top_level_exception (Exception): top-level partition error.
+            record_exceptions_fn (callable int -> Exception): Record exception function mapping
+                batch_index to the respective record exception.
+        Returns: True if the batch was completed as a result of this call, and False
+            if it had been completed previously.
+        """
+        assert isinstance(top_level_exception, Exception)
+        assert callable(record_exceptions_fn)
+        return self.done(top_level_exception=top_level_exception, record_exceptions_fn=record_exceptions_fn)
+
+    def done(self, base_offset=None, timestamp_ms=None, top_level_exception=None, record_exceptions_fn=None):
         """
         Finalize the state of a batch. Final state, once set, is immutable. This function may be called
         once or twice on a batch. It may be called twice if
@@ -100,15 +128,15 @@ class ProducerBatch(object):
         Attempted transitions from one failure state to the same or a different failed state are ignored.
         Attempted transitions from SUCCEEDED to the same or a failed state throw an exception.
         """
-        final_state = FinalState.SUCCEEDED if exception is None else FinalState.FAILED
+        final_state = FinalState.SUCCEEDED if top_level_exception is None else FinalState.FAILED
         if self._final_state is None:
             self._final_state = final_state
             if final_state is FinalState.SUCCEEDED:
                 log.debug("Successfully produced messages to %s with base offset %s", self.topic_partition, base_offset)
             else:
                 log.warning("Failed to produce messages to topic-partition %s with base offset %s: %s",
-                            self.topic_partition, base_offset, exception)
-            self._complete_future(base_offset, timestamp_ms, exception)
+                            self.topic_partition, base_offset, top_level_exception)
+            self._complete_future(base_offset, timestamp_ms, record_exceptions_fn)
             return True
 
         elif self._final_state is not FinalState.SUCCEEDED:
@@ -125,13 +153,10 @@ class ProducerBatch(object):
             raise Errors.IllegalStateError("A %s batch must not attempt another state change to %s" % (self._final_state, final_state))
         return False
 
-    def _complete_future(self, base_offset, timestamp_ms, exception):
+    def _complete_future(self, base_offset, timestamp_ms, record_exceptions_fn):
         if self.produce_future.is_done:
             raise Errors.IllegalStateError('Batch is already closed!')
-        elif exception is None:
-            self.produce_future.success((base_offset, timestamp_ms))
-        else:
-            self.produce_future.failure(exception)
+        self.produce_future.success((base_offset, timestamp_ms, record_exceptions_fn))
 
     def has_reached_delivery_timeout(self, delivery_timeout_ms, now=None):
         now = time.time() if now is None else now

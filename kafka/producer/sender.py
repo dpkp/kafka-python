@@ -436,6 +436,23 @@ class Sender(threading.Thread):
             for batch in batches:
                 self._complete_batch(batch, PartitionResponse())
 
+    def _record_exceptions_fn(self, top_level_exception, record_errors, error_message):
+        """Returns a fn mapping batch_index to exception"""
+        # When no record_errors, all batches resolve to top-level exception
+        if not record_errors:
+            return lambda _: top_level_exception
+
+        record_errors_dict = dict(record_errors)
+        def record_exceptions_fn(batch_index):
+            if batch_index not in record_errors_dict:
+                return Errors.KafkaError(
+                    "Failed to append record because it was part of a batch which had one more more invalid records")
+            record_error = record_errors_dict[batch_index]
+            err_msg = record_error or error_message or top_level_exception.description
+            exc = top_level_exception.__class__ if len(record_errors) == 1 else Errors.InvalidRecordError
+            return exc(err_msg)
+        return record_exceptions_fn
+
     def _fail_batch(self, batch, partition_response):
         if partition_response.error is Errors.TopicAuthorizationFailedError:
             exception = Errors.TopicAuthorizationFailedError(batch.topic_partition.topic)
@@ -467,7 +484,8 @@ class Sender(threading.Thread):
         if self._sensors:
             self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
 
-        if batch.done(base_offset=partition_response.base_offset, timestamp_ms=partition_response.log_append_time, exception=exception):
+        record_exceptions_fn = self._record_exceptions_fn(exception, partition_response.record_errors, partition_response.error_message)
+        if batch.complete_exceptionally(exception, record_exceptions_fn):
             self._maybe_remove_from_inflight_batches(batch)
             self._accumulator.deallocate(batch)
 
@@ -520,7 +538,7 @@ class Sender(threading.Thread):
                 self._metadata.request_update()
 
         else:
-            if batch.done(base_offset=partition_response.base_offset, timestamp_ms=partition_response.log_append_time):
+            if batch.complete(partition_response.base_offset, partition_response.log_append_time):
                 self._maybe_remove_from_inflight_batches(batch)
                 self._accumulator.deallocate(batch)
 
