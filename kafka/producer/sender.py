@@ -410,7 +410,7 @@ class Sender(threading.Thread):
                     log_append_time = -1
                     log_start_offset = -1
                     record_errors = ()
-                    global_error = None
+                    error_message = None
                     if response.API_VERSION < 2:
                         partition, error_code, base_offset = partition_info
                     elif 2 <= response.API_VERSION <= 4:
@@ -418,7 +418,7 @@ class Sender(threading.Thread):
                     elif 5 <= response.API_VERSION <= 7:
                         partition, error_code, base_offset, log_append_time, log_start_offset = partition_info
                     else:
-                        partition, error_code, base_offset, log_append_time, log_start_offset, record_errors, global_error = partition_info
+                        partition, error_code, base_offset, log_append_time, log_start_offset, record_errors, error_message = partition_info
                     tp = TopicPartition(topic, partition)
                     batch = batches_by_partition[tp]
                     partition_response = PartitionResponse(
@@ -428,7 +428,7 @@ class Sender(threading.Thread):
                         log_append_time=log_append_time,
                         log_start_offset=log_start_offset,
                         record_errors=record_errors,
-                        error_message=global_error,
+                        error_message=error_message,
                     )
                     self._complete_batch(batch, partition_response)
         else:
