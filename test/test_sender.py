@@ -19,8 +19,10 @@ import kafka.errors as Errors
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.producer.kafka import KafkaProducer
 from kafka.protocol.produce import ProduceRequest
-from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
-from kafka.producer.sender import Sender
+from kafka.producer.future import FutureRecordMetadata
+from kafka.producer.producer_batch import ProducerBatch
+from kafka.producer.record_accumulator import RecordAccumulator
+from kafka.producer.sender import PartitionResponse, Sender
 from kafka.producer.transaction_manager import TransactionManager
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition
@@ -92,11 +94,11 @@ def test_complete_batch_success(sender):
     assert not batch.produce_future.is_done
 
     # No error, base_offset 0
-    sender._complete_batch(batch, None, 0, timestamp_ms=123)
+    sender._complete_batch(batch, PartitionResponse(base_offset=0, log_append_time=123))
     assert batch.is_done
     assert batch.produce_future.is_done
     assert batch.produce_future.succeeded()
-    assert batch.produce_future.value == (0, 123)
+    assert batch.produce_future.value == (0, 123, None)
 
 
 def test_complete_batch_transaction(sender, transaction_manager):
@@ -106,7 +108,7 @@ def test_complete_batch_transaction(sender, transaction_manager):
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
 
     # No error, base_offset 0
-    sender._complete_batch(batch, None, 0)
+    sender._complete_batch(batch, PartitionResponse(base_offset=0))
     assert batch.is_done
     assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
 
@@ -134,14 +136,15 @@ def test_complete_batch_error(sender, error, refresh_metadata):
     sender.config['retries'] = 0
     assert sender._client.cluster.ttl() > 0
     batch = producer_batch()
-    sender._complete_batch(batch, error, -1)
+    future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
+    sender._complete_batch(batch, PartitionResponse(error=error))
     if refresh_metadata:
         assert sender._client.cluster.ttl() == 0
     else:
         assert sender._client.cluster.ttl() > 0
     assert batch.is_done
-    assert batch.produce_future.failed()
-    assert isinstance(batch.produce_future.exception, error)
+    assert future.failed()
+    assert isinstance(future.exception, error)
 
 
 @pytest.mark.parametrize(("error", "retry"), [
@@ -163,37 +166,40 @@ def test_complete_batch_error(sender, error, refresh_metadata):
 ])
 def test_complete_batch_retry(sender, accumulator, mocker, error, retry):
     sender.config['retries'] = 1
-    mocker.spy(sender, '_fail_batch')
     mocker.patch.object(accumulator, 'reenqueue')
     batch = producer_batch()
-    sender._complete_batch(batch, error, -1)
+    future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
+    sender._complete_batch(batch, PartitionResponse(error=error))
     if retry:
         assert not batch.is_done
         accumulator.reenqueue.assert_called_with(batch)
         batch.attempts += 1 # normally handled by accumulator.reenqueue, but it's mocked
-        sender._complete_batch(batch, error, -1)
+        sender._complete_batch(batch, PartitionResponse(error=error))
         assert batch.is_done
-        assert isinstance(batch.produce_future.exception, error)
+        assert future.failed()
+        assert isinstance(future.exception, error)
     else:
         assert batch.is_done
-        assert isinstance(batch.produce_future.exception, error)
+        assert future.failed()
+        assert isinstance(future.exception, error)
 
 
 def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, transaction_manager, mocker):
     sender._transaction_manager = transaction_manager
     sender.config['retries'] = 1
-    mocker.spy(sender, '_fail_batch')
     mocker.patch.object(accumulator, 'reenqueue')
     error = Errors.NotLeaderForPartitionError
     batch = producer_batch()
-    sender._complete_batch(batch, error, -1)
+    future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
+    sender._complete_batch(batch, PartitionResponse(error=error))
     assert not batch.is_done
     accumulator.reenqueue.assert_called_with(batch)
     batch.records._producer_id = 123 # simulate different producer_id
     assert batch.producer_id != sender._transaction_manager.producer_id_and_epoch.producer_id
-    sender._complete_batch(batch, error, -1)
+    sender._complete_batch(batch, PartitionResponse(error=error))
     assert batch.is_done
-    assert isinstance(batch.produce_future.exception, error)
+    assert future.failed()
+    assert isinstance(future.exception, error)
 
 
 def test_fail_batch(sender, accumulator, transaction_manager, mocker):
@@ -201,9 +207,9 @@ def test_fail_batch(sender, accumulator, transaction_manager, mocker):
     batch = producer_batch()
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
-    error = Exception('error')
-    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error)
-    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error)
+    error = Errors.KafkaError
+    sender._fail_batch(batch, PartitionResponse(error=error))
+    batch.done.assert_called_with(top_level_exception=error(None), record_exceptions_fn=mocker.ANY)
 
 
 def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, transaction_manager, mocker):
@@ -213,10 +219,10 @@ def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, tra
     batch = producer_batch()
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
-    error = Errors.OutOfOrderSequenceNumberError()
-    sender._fail_batch(batch, base_offset=0, timestamp_ms=None, exception=error)
+    error = Errors.OutOfOrderSequenceNumberError
+    sender._fail_batch(batch, PartitionResponse(base_offset=0, log_append_time=None, error=error))
     sender._transaction_manager.reset_producer_id.assert_called_once()
-    batch.done.assert_called_with(base_offset=0, timestamp_ms=None, exception=error)
+    batch.done.assert_called_with(top_level_exception=error(None), record_exceptions_fn=mocker.ANY)
 
 
 def test_handle_produce_response():
@@ -228,9 +234,9 @@ def test_failed_produce(sender, mocker):
     mock_batches = ['foo', 'bar', 'fizzbuzz']
     sender._failed_produce(mock_batches, 0, 'error')
     sender._complete_batch.assert_has_calls([
-        call('foo', 'error', -1),
-        call('bar', 'error', -1),
-        call('fizzbuzz', 'error', -1),
+        call('foo', PartitionResponse(error='error')),
+        call('bar', PartitionResponse(error='error')),
+        call('fizzbuzz', PartitionResponse(error='error')),
     ])
 
 
@@ -253,3 +259,14 @@ def test__send_producer_data_expiry_time_reset(sender, accumulator, mocker):
     now += accumulator.config['delivery_timeout_ms']
     poll_timeout_ms = sender._send_producer_data(now=now)
     assert poll_timeout_ms > 0
+
+
+def test__record_exceptions_fn(sender):
+    record_exceptions_fn = sender._record_exceptions_fn(Errors.KafkaError('top-level'), [(0, 'err-0'), (3, 'err-3')], 'message')
+    assert record_exceptions_fn(0) == Errors.InvalidRecordError('err-0')
+    assert record_exceptions_fn(1) == Errors.KafkaError('Failed to append record because it was part of a batch which had one more more invalid records')
+    assert record_exceptions_fn(2) == Errors.KafkaError('Failed to append record because it was part of a batch which had one more more invalid records')
+    assert record_exceptions_fn(3) == Errors.InvalidRecordError('err-3')
+
+    record_exceptions_fn = sender._record_exceptions_fn(Errors.KafkaError('top-level'), [(0, 'err-0')], 'message')
+    assert record_exceptions_fn(0) == Errors.KafkaError('err-0')

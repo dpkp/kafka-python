@@ -4,11 +4,8 @@ from __future__ import absolute_import, division
 import pytest
 
 from kafka.cluster import ClusterMetadata
-from kafka.errors import IllegalStateError, KafkaError
-from kafka.producer.future import FutureRecordMetadata, RecordMetadata
-from kafka.producer.record_accumulator import RecordAccumulator, ProducerBatch
+from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.record.default_records import DefaultRecordBatchBuilder
-from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition
 
 
@@ -22,103 +19,6 @@ def cluster(tp, mocker):
     mocker.patch.object(metadata, 'leader_for_partition', return_value=0)
     mocker.patch.object(metadata, 'partitions_for_broker', return_value=[tp])
     return metadata
-
-def test_producer_batch_producer_id():
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    assert batch.producer_id == -1
-    batch.records.set_producer_state(123, 456, 789, False)
-    assert batch.producer_id == 123
-    records.close()
-    assert batch.producer_id == 123
-
-@pytest.mark.parametrize("magic", [0, 1, 2])
-def test_producer_batch_try_append(magic):
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=magic, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    assert batch.record_count == 0
-    future = batch.try_append(0, b'key', b'value', [])
-    assert isinstance(future, FutureRecordMetadata)
-    assert not future.is_done
-    batch.done(base_offset=123, timestamp_ms=456)
-    assert future.is_done
-    # record-level checksum only provided in v0/v1 formats; payload includes magic-byte
-    if magic == 0:
-        checksum = 592888119
-    elif magic == 1:
-        checksum = 213653215
-    else:
-        checksum = None
-
-    expected_metadata = RecordMetadata(
-        topic=tp[0], partition=tp[1], topic_partition=tp,
-        offset=123, timestamp=456, checksum=checksum,
-        serialized_key_size=3, serialized_value_size=5, serialized_header_size=-1)
-    assert future.value == expected_metadata
-
-def test_producer_batch_retry():
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    assert not batch.in_retry()
-    batch.retry()
-    assert batch.in_retry()
-
-def test_batch_abort():
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    future = batch.try_append(123, None, b'msg', [])
-
-    batch.abort(KafkaError())
-    assert future.is_done
-
-    # subsequent completion should be ignored
-    batch.done(500, 2342342341)
-    batch.done(exception=KafkaError())
-
-    assert future.is_done
-    with pytest.raises(KafkaError):
-        future.get()
-
-def test_batch_cannot_abort_twice():
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    future = batch.try_append(123, None, b'msg', [])
-
-    batch.abort(KafkaError())
-
-    with pytest.raises(IllegalStateError):
-        batch.abort(KafkaError())
-
-    assert future.is_done
-    with pytest.raises(KafkaError):
-        future.get()
-
-def test_batch_cannot_complete_twice():
-    tp = TopicPartition('foo', 0)
-    records = MemoryRecordsBuilder(
-        magic=2, compression_type=0, batch_size=100000)
-    batch = ProducerBatch(tp, records)
-    future = batch.try_append(123, None, b'msg', [])
-
-    batch.done(500, 10, None)
-
-    with pytest.raises(IllegalStateError):
-        batch.done(1000, 20, None)
-
-    record_metadata = future.get()
-
-    assert record_metadata.offset == 500
-    assert record_metadata.timestamp == 10
 
 def test_linger(tp, cluster):
     now = 0

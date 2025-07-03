@@ -112,12 +112,12 @@ class ProduceResponse_v8(Response):
                 ('error_code', Int16),
                 ('offset', Int64),
                 ('timestamp', Int64),
-                ('log_start_offset', Int64)),
+                ('log_start_offset', Int64),
                 ('record_errors', (Array(
                     ('batch_index', Int32),
                     ('batch_index_error_message', String('utf-8'))
                  ))),
-                ('error_message', String('utf-8'))
+                ('error_message', String('utf-8')))
              ))),
         ('throttle_time_ms', Int32)
     )
