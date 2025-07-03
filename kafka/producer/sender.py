@@ -473,6 +473,13 @@ class Sender(threading.Thread):
                 # about the previously committed message. Note that this will discard the producer id and sequence
                 # numbers for all existing partitions.
                 self._transaction_manager.reset_producer_id()
+            elif isinstance(exception, Errors.UnknownProducerIdError):
+                # If we get an UnknownProducerId for a partition, then the broker has no state for that producer. It will
+                # therefore accept a write with sequence number 0. We reset the sequence number for the partition here so
+                # that the producer can continue after aborting the transaction. All inflight-requests to this partition
+                # will also fail with an UnknownProducerId error, so the sequence will remain at 0. Note that if the
+                # broker supports bumping the epoch, we will later reset all sequence numbers after calling InitProducerId
+                self._transaction_manager.reset_sequence_for_partition(batch.topic_partition)
             elif isinstance(exception, (Errors.ClusterAuthorizationFailedError,
                                         Errors.TransactionalIdAuthorizationFailedError,
                                         Errors.ProducerFencedError,
