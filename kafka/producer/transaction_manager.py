@@ -330,6 +330,10 @@ class TransactionManager(object):
             else:
                 self._sequence_numbers[tp] += increment
 
+    def reset_sequence_for_partition(self, tp):
+        with self._lock:
+            self._sequence_numbers.pop(tp, None)
+
     def next_request_handler(self, has_incomplete_batches):
         with self._lock:
             if self._new_partitions_in_transaction:
