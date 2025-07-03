@@ -102,6 +102,10 @@ class UnsupportedCodecError(KafkaError):
     pass
 
 
+class TransactionAbortedError(KafkaError):
+    pass
+
+
 class BrokerResponseError(KafkaError):
     errno = None
     message = None

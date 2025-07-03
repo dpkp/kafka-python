@@ -166,7 +166,11 @@ class Sender(threading.Thread):
                     self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
                     return
                 elif self._transaction_manager.has_abortable_error():
-                    self._accumulator.abort_undrained_batches(self._transaction_manager.last_error)
+                    # Attempt to get the last error that caused this abort.
+                    # If there was no error, but we are still aborting,
+                    # then this is most likely a case where there was no fatal error.
+                    exception = self._transaction_manager.last_error or Errors.TransactionAbortedError()
+                    self._accumulator.abort_undrained_batches(exception)
 
             except Errors.SaslAuthenticationFailedError as e:
                 # This is already logged as error, but propagated here to perform any clean ups.
