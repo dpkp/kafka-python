@@ -1075,6 +1075,13 @@ class BrokerConnection(object):
                     total_bytes = self._send_bytes(self._send_buffer)
                     self._send_buffer = self._send_buffer[total_bytes:]
 
+                # If all data was sent, we need to get the new data from the protocol now, otherwise
+                # this function would return True, indicating that there are no more pending
+                # requests. This could cause the calling thread to wait indefinitely as it won't
+                # know that there is still buffered data to send.
+                if not self._send_buffer:
+                    self._send_buffer = self._protocol.send_bytes()
+
             if self._sensors:
                 self._sensors.bytes_sent.record(total_bytes)
             # Return True iff send buffer is empty
