@@ -661,7 +661,8 @@ class Fetcher(six.Iterator):
             elif not self._client.ready(node_id):
                 # Until we support send request queues, any attempt to send to a not-ready node will be
                 # immediately failed with NodeNotReadyError.
-                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet")
+                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet",
+                        partition)
 
             elif node_id in self._nodes_with_pending_fetch_requests:
                 log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",
