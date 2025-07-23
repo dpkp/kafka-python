@@ -64,6 +64,9 @@ class Socks5Wrapper:
             log.warning("DNS lookup failed for proxy %s:%d, %r", host, port, ex)
             return []
 
+    def use_remote_lookup(self):
+        return self._proxy_url.scheme == 'socks5h'
+
     def socket(self, family, sock_type):
         """Open and record a socket.
 
@@ -187,7 +190,10 @@ class Socks5Wrapper:
                 return errno.ECONNREFUSED
 
         if self._state == ProxyConnectionStates.REQUEST_SUBMIT:
-            if self._target_afi == socket.AF_INET:
+            if self.use_remote_lookup():
+                addr_type = 3
+                addr_len = len(addr[0])
+            elif self._target_afi == socket.AF_INET:
                 addr_type = 1
                 addr_len = 4
             elif self._target_afi == socket.AF_INET6:
@@ -199,15 +205,27 @@ class Socks5Wrapper:
                 self._sock.close()
                 return errno.ECONNREFUSED
 
-            self._buffer_out = struct.pack(
-                "!bbbb{}sh".format(addr_len),
-                5,  # version
-                1,  # command: connect
-                0,  # reserved
-                addr_type,  # 1 for ipv4, 4 for ipv6 address
-                socket.inet_pton(self._target_afi, addr[0]),  # either 4 or 16 bytes of actual address
-                addr[1],  # port
-            )
+            if self.use_remote_lookup():
+                self._buffer_out = struct.pack(
+                    "!bbbbb{}sh".format(addr_len),
+                    5,  # version
+                    1,  # command: connect
+                    0,  # reserved
+                    addr_type,  # 1 for ipv4, 4 for ipv6 address, 3 for domain name
+                    addr_len,
+                    addr[0].encode('ascii'),  # host
+                    addr[1],  # port
+                )
+            else:
+                self._buffer_out = struct.pack(
+                    "!bbbb{}sh".format(addr_len),
+                    5,  # version
+                    1,  # command: connect
+                    0,  # reserved
+                    addr_type,  # 1 for ipv4, 4 for ipv6 address, 3 for domain name
+                    socket.inet_pton(self._target_afi, addr[0]),  # either 4 or 16 bytes of actual address
+                    addr[1],  # port
+                )
             self._state = ProxyConnectionStates.REQUESTING
 
         if self._state == ProxyConnectionStates.REQUESTING:
