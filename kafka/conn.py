@@ -366,26 +366,33 @@ class BrokerConnection(object):
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
+        if self.config["socks5_proxy"] is not None and self._socks5_proxy is None:
+            self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
+
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
-            next_lookup = self._next_afi_sockaddr()
-            if not next_lookup:
-                self.close(Errors.KafkaConnectionError('DNS failure'))
-                return self.state
-            else:
+            if self.config["socks5_proxy"] is None or not self._socks5_proxy.use_remote_lookup():
+                next_lookup = self._next_afi_sockaddr()
+                if not next_lookup:
+                    self.close(Errors.KafkaConnectionError('DNS failure'))
+                    return self.state
+
                 log.debug('%s: creating new socket', self)
                 assert self._sock is None
                 self._sock_afi, self._sock_addr = next_lookup
                 try:
                     if self.config["socks5_proxy"] is not None:
-                        self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
                         self._sock = self._socks5_proxy.socket(self._sock_afi, socket.SOCK_STREAM)
                     else:
                         self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
                 except (socket.error, OSError) as e:
                     self.close(e)
                     return self.state
+            else:
+                self._sock = self._socks5_proxy.socket(None, socket.SOCK_STREAM)
+                self._sock_afi = None
+                self._sock_addr = [self.host.encode('ascii'), self.port]
 
             for option in self.config['socket_options']:
                 log.debug('%s: setting socket option %s', self, option)
@@ -393,8 +400,12 @@ class BrokerConnection(object):
 
             self._sock.setblocking(False)
             self.config['state_change_callback'](self.node_id, self._sock, self)
+            if self._sock_afi != None:
+                family_str = AFI_NAMES[self._sock_afi]
+            else:
+                family_str = "n.a."
             log.info('%s: connecting to %s:%d [%s %s]', self, self.host,
-                     self.port, self._sock_addr, AFI_NAMES[self._sock_afi])
+                     self.port, self._sock_addr, family_str)
 
         if self.state is ConnectionStates.CONNECTING:
             # in non-blocking mode, use repeated calls to socket.connect_ex
@@ -862,7 +873,7 @@ class BrokerConnection(object):
         large number to handle slow/stalled connections.
         """
         if self.disconnected() or self.connecting():
-            if len(self._gai) > 0:
+            if len(self._gai) > 0 or self._socks5_proxy.use_remote_lookup():
                 return 0
             else:
                 time_waited = time.time() - self.last_attempt
@@ -1291,9 +1302,13 @@ class BrokerConnection(object):
             return self._api_version
 
     def __str__(self):
+        if self._sock_afi != None:
+            family_str = AFI_NAMES[self._sock_afi]
+        else:
+            family_str = "n.a."
         return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
             self.config['client_id'], self.node_id, self.host, self.port, self.state,
-            AFI_NAMES[self._sock_afi], self._sock_addr)
+            family_str, self._sock_addr)
 
 
 class BrokerConnectionMetrics(object):
