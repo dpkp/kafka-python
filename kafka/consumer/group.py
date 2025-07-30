@@ -781,7 +781,7 @@ class KafkaConsumer(six.Iterator):
             # batch update fetch positions for any partitions without a valid position
             if self._update_fetch_positions(timeout_ms=timer.timeout_ms):
                 position = self._subscription.assignment[partition].position
-            elif timer.expired:
+            if timer.expired:
                 return None
         else:
             return position.offset
