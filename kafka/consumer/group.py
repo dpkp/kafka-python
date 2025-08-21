@@ -726,6 +726,10 @@ class KafkaConsumer(six.Iterator):
             log.debug('poll: timeout during coordinator.poll(); returning early')
             return {}
 
+        node_id = self._coordinator.coordinator()
+        if node_id is None or not self._client.ready(node_id, metadata_priority=False):
+            return {}
+
         has_all_fetch_positions = self._update_fetch_positions(timeout_ms=timer.timeout_ms)
 
         # If data is available already, e.g. from a previous network client
