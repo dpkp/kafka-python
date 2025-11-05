@@ -227,7 +227,7 @@ class KafkaFixture(Fixture):
                  transport='PLAINTEXT', replicas=1, partitions=4,
                  sasl_mechanism=None, auto_create_topic=True, tmp_dir=None):
 
-        # Kafka requries zookeeper prior to 4.0 release
+        # Kafka requires zookeeper prior to 4.0 release
         if env_kafka_version() < (4, 0):
             if zookeeper is None:
                 if "ZOOKEEPER_URI" in os.environ:
