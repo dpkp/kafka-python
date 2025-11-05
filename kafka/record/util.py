@@ -14,7 +14,7 @@ def encode_varint(value, write):
 
         Arguments:
             value (int): Value to encode
-            write (function): Called per byte that needs to be writen
+            write (function): Called per byte that needs to be written
 
         Returns:
             int: Number of bytes written
