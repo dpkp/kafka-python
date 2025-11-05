@@ -68,7 +68,7 @@ class ProducerPerformance(object):
                         count_failure += 1
                     else:
                         raise ValueError(r)
-                print("%d suceeded, %d failed" % (count_success, count_failure))
+                print("%d succeeded, %d failed" % (count_success, count_failure))
 
             start_time = time.time()
             _benchmark()
@@ -136,7 +136,7 @@ def get_args_parser():
         default=100)
     parser.add_argument(
         '--producer-config', type=str, nargs='+', default=(),
-        help='kafka producer related configuaration properties like '
+        help='kafka producer related configuration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(
         '--stats-interval', type=int,
