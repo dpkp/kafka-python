@@ -1192,7 +1192,7 @@ class KafkaAdminClient(object):
                 )
             else:
                 raise Errors.BrokerResponseError(
-                    "The following errors occured when trying to delete records: " +
+                    "The following errors occurred when trying to delete records: " +
                     ", ".join(
                         "%s(partition=%d): %s" %
                         (partition.topic, partition.partition, Errors.for_code(error).__name__)
@@ -1597,7 +1597,7 @@ class KafkaAdminClient(object):
     def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None):
         """Perform leader election on the topic partitions.
 
-        :param election_type: Type of election to attempt. 0 for Perferred, 1 for Unclean
+        :param election_type: Type of election to attempt. 0 for Preferred, 1 for Unclean
         :param topic_partitions: A map of topic name strings to partition ids list.
             By default, will run on all topic partitions
         :param timeout_ms: Milliseconds to wait for the leader election process to complete
