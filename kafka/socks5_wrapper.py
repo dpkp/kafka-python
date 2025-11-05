@@ -178,7 +178,7 @@ class Socks5Wrapper:
             self._flush_buf()
             buf = self._read_buf(2)
             if buf == b"\x01\x00":
-                # Authentication succesful
+                # Authentication successful
                 self._state = ProxyConnectionStates.REQUEST_SUBMIT
             else:
                 log.error("Socks5 proxy authentication failure")
