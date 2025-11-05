@@ -113,7 +113,7 @@ class Fetcher(six.Iterator):
                 be disabled in cases seeking extreme performance. Default: True
             isolation_level (str): Configure KIP-98 transactional consumer by
                 setting to 'read_committed'. This will cause the consumer to
-                skip records from aborted tranactions. Default: 'read_uncommitted'
+                skip records from aborted transactions. Default: 'read_uncommitted'
         """
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -1289,7 +1289,7 @@ class FetchRequestData(object):
 
     @property
     def to_forget(self):
-        # Return as list of [(topic, (partiiton, ...)), ...]
+        # Return as list of [(topic, (partition, ...)), ...]
         # so it an be passed directly to encoder
         partition_data = collections.defaultdict(list)
         for tp in self._to_forget:
