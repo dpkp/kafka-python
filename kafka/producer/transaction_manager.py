@@ -79,7 +79,7 @@ class TransactionState(IntEnum):
         elif target == cls.ABORTABLE_ERROR:
             return source in (cls.IN_TRANSACTION, cls.COMMITTING_TRANSACTION, cls.ABORTABLE_ERROR)
         elif target == cls.UNINITIALIZED:
-            # Disallow transitions to UNITIALIZED
+            # Disallow transitions to UNINITIALIZED
             return False
         elif target == cls.FATAL_ERROR:
             # We can transition to FATAL_ERROR unconditionally.
