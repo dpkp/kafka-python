@@ -109,7 +109,7 @@ def encode_varint_1(num):
         if num == 0:
             break
     else:
-        # Max size of endcoded double is 10 bytes for unsigned values
+        # Max size of encoded double is 10 bytes for unsigned values
         raise ValueError("Out of double range")
     return buf[:i + 1]
 
@@ -314,7 +314,7 @@ def decode_varint_1(buffer, pos=0):
             value |= byte << shift
             break
     else:
-        # Max size of endcoded double is 10 bytes for unsigned values
+        # Max size of encoded double is 10 bytes for unsigned values
         raise ValueError("Out of double range")
     # Normalize sign
     return (value >> 1) ^ -(value & 1), i + 1
