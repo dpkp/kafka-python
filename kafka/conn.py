@@ -326,8 +326,9 @@ class BrokerConnection(object):
         return True
 
     def _next_afi_sockaddr(self):
-        if self._socks5_proxy.use_remote_lookup():
+        if self._socks5_proxy and self._socks5_proxy.use_remote_lookup():
             return (socket.AF_UNSPEC, (self.host, self.port))
+
         if not self._gai:
             if not self._dns_lookup():
                 return
@@ -368,9 +369,6 @@ class BrokerConnection(object):
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
-        if self.config["socks5_proxy"] is not None and self._socks5_proxy is None:
-            self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
-
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.state = ConnectionStates.CONNECTING
             self.last_attempt = time.time()
@@ -384,6 +382,7 @@ class BrokerConnection(object):
                 self._sock_afi, self._sock_addr = next_lookup
                 try:
                     if self.config["socks5_proxy"] is not None:
+                        self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
                         self._sock = self._socks5_proxy.socket(self._sock_afi, socket.SOCK_STREAM)
                     else:
                         self._sock = socket.socket(self._sock_afi, socket.SOCK_STREAM)
@@ -866,7 +865,9 @@ class BrokerConnection(object):
         large number to handle slow/stalled connections.
         """
         if self.disconnected() or self.connecting():
-            if len(self._gai) > 0 or (self._socks5_proxy is not None and self._socks5_proxy.use_remote_lookup()):
+            if len(self._gai) > 0:
+                return 0
+            elif self._socks5_proxy and self._socks5_proxy.use_remote_lookup():
                 return 0
             else:
                 time_waited = time.time() - self.last_attempt
@@ -968,6 +969,7 @@ class BrokerConnection(object):
             # the socket fd from selectors cleanly.
             sock = self._sock
             self._sock = None
+            self._socks5_proxy = None
 
         # drop lock before state change callback and processing futures
         self.config['state_change_callback'](self.node_id, sock, self)
