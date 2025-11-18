@@ -134,10 +134,14 @@ class KafkaProducer(object):
         value_serializer (callable): used to convert user-supplied message
             values to bytes. If not None, called as f(value), should return
             bytes. Default: None.
+        transactional_id (str): Enable transactional producer with a unique
+            identifier. This will be used to identify the same producer
+            instance across process restarts. Default: None.
         enable_idempotence (bool): When set to True, the producer will ensure
             that exactly one copy of each message is written in the stream.
             If False, producer retries due to broker failures, etc., may write
-            duplicates of the retried message in the stream. Default: False.
+            duplicates of the retried message in the stream.
+            Default: True if `transactional_id` is provided, otherwise False.
 
             Note that enabling idempotence requires
             `max_in_flight_requests_per_connection` to be set to 1 and `retries`
