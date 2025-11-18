@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2.2.16 (Nov 18, 2025)
+#####################
+
+Fixes
+-----
+* Fix thread not waking up when there is still data to be sent (gqmelo / #2670)
+* Ensure timeout is checked after each fetch position update in `Consumer.position()` (k61n / #2668)
+
+
 2.2.15 (July 1, 2025)
 #####################
 
