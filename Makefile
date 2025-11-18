@@ -97,6 +97,7 @@ servers/%/kafka-bin: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dis
 	mkdir -p $@
 	tar xzvf $< -C $@ --strip-components 1
 	if [[ "$*" < "1" ]]; then make servers/patch-libs/$*; fi
+	if [[ -f "/etc/NIXOS" ]]; then make servers/patch-nixos-shebang/$*; fi
 
 servers/%/api_versions: servers/$$*/kafka-bin
 	KAFKA_VERSION=$* python -m test.integration.fixtures get_api_versions >$@
@@ -108,6 +109,9 @@ servers/%/messages: servers/$$*/kafka-bin
 
 servers/patch-libs/%: servers/dist/jakarta.xml.bind-api-2.3.3.jar | servers/$$*/kafka-bin
 	cp $< servers/$*/kafka-bin/libs/
+
+servers/patch-nixos-shebang/%:
+	for f in $$(ls servers/$*/kafka-bin/bin/*.sh); do if (head -1 $$f | grep '#!/bin/bash' >/dev/null); then echo $$f; sed -i '1s|/bin/bash|/run/current-system/sw/bin/bash|' $$f; fi; done;
 
 servers/download/%: servers/dist/$$(call kafka_artifact_name,$$*) | servers/dist ;
 
