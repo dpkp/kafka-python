@@ -46,6 +46,7 @@ def _socket(mocker):
     mocker.patch('socket.socket', return_value=socket)
     return socket
 
+@pytest.fixture
 def metrics(mocker):
     metrics = mocker.MagicMock(Metrics)
     metrics.mocked_sensors = {}
@@ -57,8 +58,8 @@ def metrics(mocker):
     return metrics
 
 @pytest.fixture
-def conn(_socket, dns_lookup, mocker):
-    conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+def conn(_socket, dns_lookup, metrics, mocker):
+    conn = BrokerConnection('localhost', 9092, socket.AF_INET, metrics=metrics)
     mocker.patch.object(conn, '_try_api_versions_check', return_value=True)
     return conn
 
