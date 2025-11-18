@@ -326,7 +326,7 @@ class BrokerConnection(object):
         return True
 
     def _next_afi_sockaddr(self):
-        if self._socks5_proxy and self._socks5_proxy.use_remote_lookup():
+        if self.config["socks5_proxy"] and Socks5Wrapper.use_remote_lookup(self.config["socks5_proxy"]):
             return (socket.AF_UNSPEC, (self.host, self.port))
 
         if not self._gai:
@@ -382,6 +382,7 @@ class BrokerConnection(object):
                 self._sock_afi, self._sock_addr = next_lookup
                 try:
                     if self.config["socks5_proxy"] is not None:
+                        log.debug('%s: initializing Socks5 proxy at %s', self, self.config["socks5_proxy"])
                         self._socks5_proxy = Socks5Wrapper(self.config["socks5_proxy"], self.afi)
                         self._sock = self._socks5_proxy.socket(self._sock_afi, socket.SOCK_STREAM)
                     else:
@@ -867,7 +868,7 @@ class BrokerConnection(object):
         if self.disconnected() or self.connecting():
             if len(self._gai) > 0:
                 return 0
-            elif self._socks5_proxy and self._socks5_proxy.use_remote_lookup():
+            elif Socks5Wrapper.use_remote_lookup(self.config["socks5_proxy"]):
                 return 0
             else:
                 time_waited = time.time() - self.last_attempt

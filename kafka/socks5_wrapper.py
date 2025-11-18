@@ -64,7 +64,11 @@ class Socks5Wrapper:
             log.warning("DNS lookup failed for proxy %s:%d, %r", host, port, ex)
             return []
 
-    def use_remote_lookup(self):
+    @classmethod
+    def use_remote_lookup(cls, proxy_url):
+        return urlparse(proxy_url).scheme == 'socks5h'
+
+    def _use_remote_lookup(self):
         return self._proxy_url.scheme == 'socks5h'
 
     def socket(self, family, sock_type):
@@ -190,7 +194,7 @@ class Socks5Wrapper:
                 return errno.ECONNREFUSED
 
         if self._state == ProxyConnectionStates.REQUEST_SUBMIT:
-            if self.use_remote_lookup():
+            if self._use_remote_lookup():
                 addr_type = 3
                 addr_len = len(addr[0])
             elif self._target_afi == socket.AF_INET:
@@ -205,27 +209,29 @@ class Socks5Wrapper:
                 self._sock.close()
                 return errno.ECONNREFUSED
 
-            if self.use_remote_lookup():
-                self._buffer_out = struct.pack(
-                    "!bbbbb{}sh".format(addr_len),
-                    5,  # version
-                    1,  # command: connect
-                    0,  # reserved
-                    addr_type,  # 1 for ipv4, 4 for ipv6 address, 3 for domain name
+            self._buffer_out = struct.pack(
+                "!bbbb",
+                5,  # version
+                1,  # command: connect
+                0,  # reserved
+                addr_type,  # 1 for ipv4, 4 for ipv6 address, 3 for domain name
+            )
+            # Addr format depends on type
+            if addr_type == 3:
+                # len + domain name (no null terminator)
+                self._buffer_out += struct.pack(
+                    "!b{}s".format(addr_len),
                     addr_len,
-                    addr[0].encode('ascii'),  # host
-                    addr[1],  # port
+                    addr[0].encode('ascii'),
                 )
             else:
-                self._buffer_out = struct.pack(
-                    "!bbbb{}sh".format(addr_len),
-                    5,  # version
-                    1,  # command: connect
-                    0,  # reserved
-                    addr_type,  # 1 for ipv4, 4 for ipv6 address, 3 for domain name
-                    socket.inet_pton(self._target_afi, addr[0]),  # either 4 or 16 bytes of actual address
-                    addr[1],  # port
+                # either 4 (type 1) or 16 (type 4) bytes of actual address
+                self._buffer_out += struct.pack(
+                    "!{}s".format(addr_len),
+                    socket.inet_pton(self._target_afi, addr[0]),
                 )
+            self._buffer_out += struct.pack("!H", addr[1])  # port
+
             self._state = ProxyConnectionStates.REQUESTING
 
         if self._state == ProxyConnectionStates.REQUESTING:
