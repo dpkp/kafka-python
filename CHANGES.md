@@ -1,3 +1,41 @@
+# 2.3.0 (unreleased)
+
+Producer
+* KIP-654: Abort transaction with pending data with TransactionAbortedError (#2662)
+* KafkaProducer: Handle UnknownProducerIdError (#2663)
+* KIP-467: Augment ProduceResponse error messaging for specific culprit records (#2661)
+* Add `transactional_id` to KafkaProducer Keyword Arguments docstring
+
+Consumer
+* KIP-345: Consumer group static membership (#2625)
+* KIP-207: Add ListOffsetsRequest v5 / handle OffsetNotAvailableError (#2657)
+* Fetcher: Add missing argument in debug log (#2665)
+
+AdminClient
+* KIP-430: Return Authorized Operations in Describe Responses (#2656)
+* Add `send_request()` and `send_requests()` to KafkaAdminClient (#2649)
+
+CLI
+* python -m cli interfaces for kafka.admin, kafka.consumer, kafka.producer (#2650)
+
+Maintenance
+* Remove old/unused kafka.protocol.pickle (#2653)
+* Switch protocol code to getattr/setattr from __dict__ (#2654)
+* Drop unused imports (#2651)
+
+Project Infra
+* Bump github/codeql-action from 3 to 4 (#2678)
+* Bump actions/setup-python from 5 to 6 (#2674)
+* Bump actions/setup-java from 4 to 5 (#2673)
+* Bump actions/checkout from 4 to 5 (#2669)
+* NixOS helpers
+
+# 2.2.16 (Nov 18, 2025)
+
+Fixes
+* Fix thread not waking up when there is still data to be sent (gqmelo / #2670)
+* Ensure timeout is checked after each fetch position update in `Consumer.position()` (k61n / #2668)
+
 # 2.2.15 (July 1, 2025)
 
 Fixes
