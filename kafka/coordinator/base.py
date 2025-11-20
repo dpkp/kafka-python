@@ -1198,6 +1198,7 @@ class HeartbeatThread(threading.Thread):
                     self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
             elif not self.coordinator.connected():
+                self.coordinator._client.maybe_connect(self.coordinator.coordinator_id)
                 self.coordinator._client._lock.release()
                 self.coordinator._lock.wait(self.coordinator.config['retry_backoff_ms'] / 1000)
 
