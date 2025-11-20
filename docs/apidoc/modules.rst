@@ -2,6 +2,7 @@ kafka-python API
 ****************
 
 .. toctree::
+   :maxdepth: 1
 
    KafkaConsumer
    KafkaProducer
