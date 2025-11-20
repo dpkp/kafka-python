@@ -868,7 +868,7 @@ class BrokerConnection(object):
         if self.disconnected() or self.connecting():
             if len(self._gai) > 0:
                 return 0
-            elif Socks5Wrapper.use_remote_lookup(self.config["socks5_proxy"]):
+            elif self.config["socks5_proxy"] and Socks5Wrapper.use_remote_lookup(self.config["socks5_proxy"]):
                 return 0
             else:
                 time_waited = time.time() - self.last_attempt

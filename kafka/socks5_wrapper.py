@@ -66,6 +66,8 @@ class Socks5Wrapper:
 
     @classmethod
     def use_remote_lookup(cls, proxy_url):
+        if proxy_url is None:
+            return False
         return urlparse(proxy_url).scheme == 'socks5h'
 
     def _use_remote_lookup(self):
