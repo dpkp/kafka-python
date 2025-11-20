@@ -83,10 +83,6 @@ def run_cli(args=None):
         logger.exception('Error!')
         return 1
 
-if __name__ == '__main__':
-    import sys
-    sys.exit(run_cli())
-
 
 # Commands TODO:
     # [acls]

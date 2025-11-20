@@ -180,6 +180,14 @@ client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
     metrics = producer.metrics()
 
 
+Module CLI Interface
+********************
+
+kafka-python also provides simple command-line interfaces for consumer, producer, and admin clients.
+Access via ``python -m kafka.consumer``, ``python -m kafka.producer``, and ``python -m kafka.admin``.
+See `Usage <usage.html>`_ for more details.
+
+
 Thread safety
 *************
 

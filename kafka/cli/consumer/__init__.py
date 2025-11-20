@@ -87,8 +87,3 @@ def run_cli(args=None):
         return 1
     finally:
         consumer.close()
-
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(run_cli())
