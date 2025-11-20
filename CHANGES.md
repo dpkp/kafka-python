@@ -4,7 +4,6 @@ Producer
 * KIP-654: Abort transaction with pending data with TransactionAbortedError (#2662)
 * KafkaProducer: Handle UnknownProducerIdError (#2663)
 * KIP-467: Augment ProduceResponse error messaging for specific culprit records (#2661)
-* Add `transactional_id` to KafkaProducer Keyword Arguments docstring
 
 Consumer
 * KIP-345: Consumer group static membership (#2625)
@@ -29,6 +28,18 @@ Project Infra
 * Bump actions/setup-java from 4 to 5 (#2673)
 * Bump actions/checkout from 4 to 5 (#2669)
 * NixOS helpers
+
+# 2.2.17 (Nov 20, 2025)
+
+Fixes
+* Add internal poll to consumer.position() (#2696)
+* Initiate Coordinator Reconnect w/ Backoff from Heartbeat Thread (#2695)
+
+Networking
+* SOCKS5: support looking up names remotely (jschwartzenberg / #2666)
+
+Documentation
+* Add `transactional_id` to KafkaProducer Keyword Arguments docstring
 
 # 2.2.16 (Nov 18, 2025)
 
@@ -63,7 +74,6 @@ Fixes
 * Fix construction of final GSSAPI authentication message (#2647)
 * Avoid RuntimeError on mutated `_completed_fetches` deque in consumer fetcher (#2646)
 * Throw exception on invalid bucket type (#2642)
-
 
 # 2.2.11 (June 5, 2025)
 
