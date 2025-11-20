@@ -779,13 +779,12 @@ class KafkaConsumer(six.Iterator):
 
         timer = Timer(timeout_ms)
         position = self._subscription.assignment[partition].position
-        while position is None:
+        while position is None and not timer.expired:
             # batch update fetch positions for any partitions without a valid position
-            if self._update_fetch_positions(timeout_ms=timer.timeout_ms):
-                position = self._subscription.assignment[partition].position
-            if timer.expired:
-                return None
-        else:
+            self._update_fetch_positions(timeout_ms=timer.timeout_ms)
+            self._client.poll(timeout_ms=timer.timeout_ms)
+            position = self._subscription.assignment[partition].position
+        if position is not None:
             return position.offset
 
     def highwater(self, partition):

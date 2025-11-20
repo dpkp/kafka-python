@@ -302,3 +302,25 @@ def test_kafka_consumer_offsets_for_times_errors(kafka_consumer_factory, topic):
 
     with pytest.raises(KafkaTimeoutError):
         consumer.offsets_for_times({bad_tp: 0})
+
+
+@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
+def test_kafka_consumer_position_after_seek_to_end(kafka_consumer_factory, topic, send_messages):
+    send_messages(range(0, 10), partition=0)
+
+    # Start a consumer with manual partition assignment.
+    consumer = kafka_consumer_factory(
+        topics=(),
+        group_id=None,
+        enable_auto_commit=False,
+    )
+    tp = TopicPartition(topic, 0)
+    consumer.assign([tp])
+
+    # Seek to the end of the partition, and call position() to synchronize the
+    # partition's offset without calling poll().
+    consumer.seek_to_end(tp)
+    position = consumer.position(tp, timeout_ms=1000)
+
+    # Verify we got the expected position
+    assert position == 10, f"Expected position 10, got {position}"
