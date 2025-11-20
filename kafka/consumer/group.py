@@ -723,7 +723,9 @@ class KafkaConsumer(six.Iterator):
 
         # We do not want to be stuck blocking in poll if we are missing some positions
         # since the offset lookup may be backing off after a failure
-        poll_timeout_ms = min(timer.timeout_ms, self._coordinator.time_to_next_poll() * 1000)
+        poll_timeout_ms = timer.timeout_ms
+        if self.config['group_id'] is not None:
+            poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
         if not has_all_fetch_positions:
             log.debug('poll: do not have all fetch positions...')
             poll_timeout_ms = min(poll_timeout_ms, self.config['retry_backoff_ms'])
