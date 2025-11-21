@@ -13,8 +13,8 @@ Because the kafka server protocol is backwards compatible, kafka-python is
 expected to work with newer broker releases as well.
 
 Although kafka-python is tested and expected to work on recent broker versions,
-not all features are supported. Specifically, transactional producer/consumer
-support is not fully implemented. PRs welcome!
+not all features are supported. Please see github open issues for feature tracking.
+PRs welcome!
 
 kafka-python is tested on python 2.7, and 3.8-3.13.
 

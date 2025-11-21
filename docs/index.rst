@@ -16,20 +16,10 @@ Python client for the Apache Kafka distributed stream processing system.
 kafka-python is designed to function much like the official java client, with a
 sprinkling of pythonic interfaces (e.g., consumer iterators).
 
-kafka-python is best used with newer brokers (0.9+), but is backwards-compatible with
-older versions (to 0.8.0). Some features will only be enabled on newer brokers.
-For example, fully coordinated consumer groups -- i.e., dynamic
-partition assignment to multiple consumers in the same group -- requires use of
-0.9 kafka brokers. Supporting this feature for earlier broker releases would
-require writing and maintaining custom leadership election and membership /
-health check code (perhaps using zookeeper or consul). For older brokers, you
-can achieve something similar by manually assigning different partitions to
-each consumer instance with config management tools like chef, ansible, etc.
-This approach will work fine, though it does not support rebalancing on
-failures.  See `Compatibility <compatibility.html>`_ for more details.
-
 Please note that the master branch may contain unreleased features. For release
 documentation, please see readthedocs and/or python's inline help.
+
+New in 2.3 release: python -m kafka.* interfaces for quick scripts and testing.
 
 .. code:: bash
 
