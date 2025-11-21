@@ -1,13 +1,9 @@
 import datetime
 import json
 import sys
+from unittest import mock
 
 from kafka.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
-
-try:
-    from unittest import mock
-except ImportError:
-    import mock
 
 
 def client_factory(token=None):

@@ -4,12 +4,9 @@ from __future__ import absolute_import
 import collections
 import io
 import time
+from unittest.mock import call
 
 import pytest
-try:
-    from unittest.mock import call
-except ImportError:
-    from mock import call
 
 from kafka.client_async import KafkaClient
 from kafka.cluster import ClusterMetadata

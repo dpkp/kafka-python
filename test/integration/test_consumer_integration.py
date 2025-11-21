@@ -1,10 +1,7 @@
 import logging
 import time
+from unittest.mock import patch, ANY
 
-try:
-    from unittest.mock import patch, ANY
-except ImportError:
-    from mock import patch, ANY
 import pytest
 
 import kafka.codec
