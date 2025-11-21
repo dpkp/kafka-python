@@ -2,16 +2,10 @@ from __future__ import absolute_import, division
 
 import abc 
 import collections
+from enum import IntEnum
 import heapq
 import logging
 import threading
-
-try:
-    # enum in stdlib as of py3.4
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
 
 import kafka.errors as Errors
 from kafka.protocol.add_offsets_to_txn import AddOffsetsToTxnRequest

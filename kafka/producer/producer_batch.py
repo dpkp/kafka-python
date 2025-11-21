@@ -1,14 +1,8 @@
 from __future__ import absolute_import, division
 
+from enum import IntEnum
 import logging
 import time
-
-try:
-    # enum in stdlib as of py3.4
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
 
 import kafka.errors as Errors
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult

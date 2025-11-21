@@ -6,12 +6,7 @@ try:
     from collections.abc import Sequence
 except ImportError:
     from collections import Sequence
-try:
-    # enum in stdlib as of py3.4
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
+from enum import IntEnum
 import logging
 import random
 import re

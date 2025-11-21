@@ -1,11 +1,6 @@
 from __future__ import absolute_import
 
-# enum in stdlib as of py3.4
-try:
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
+from enum import IntEnum
 
 from kafka.protocol.api import Request, Response
 from kafka.protocol.types import Array, Boolean, Bytes, Int8, Int16, Int32, Int64, Schema, String, Float64, CompactString, CompactArray, TaggedFields, BitField
