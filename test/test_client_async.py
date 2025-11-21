@@ -1,12 +1,6 @@
 from __future__ import absolute_import, division
 
-# selectors in stdlib as of py3.4
-try:
-    import selectors # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    import kafka.vendor.selectors34 as selectors
-
+import selectors
 import socket
 import time
 

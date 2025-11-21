@@ -5,14 +5,7 @@ import errno
 import io
 import logging
 from random import uniform
-
-# selectors in stdlib as of py3.4
-try:
-    import selectors  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor import selectors34 as selectors
-
+import selectors
 import socket
 import threading
 import time
