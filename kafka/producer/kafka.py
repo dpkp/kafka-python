@@ -579,19 +579,7 @@ class KafkaProducer(object):
 
     def _unregister_cleanup(self):
         if getattr(self, '_cleanup', None):
-            if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup)  # pylint: disable=no-member
-
-            # py2 requires removing from private attribute...
-            else:
-
-                # ValueError on list.remove() if the exithandler no longer exists
-                # but that is fine here
-                try:
-                    atexit._exithandlers.remove(  # pylint: disable=no-member
-                        (self._cleanup, (), {}))
-                except ValueError:
-                    pass
+            atexit.unregister(self._cleanup)
         self._cleanup = None
 
     def __del__(self):

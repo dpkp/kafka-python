@@ -417,11 +417,7 @@ class KafkaAdminClient(object):
         raise RuntimeError("This should never happen, please file a bug with full stacktrace if encountered")
 
     def _parse_topic_request_response(self, topic_error_tuples, request, response, tries):
-        # Also small py2/py3 compatibility -- py3 can ignore extra values
-        # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
-        # So for now we have to map across the list and explicitly drop any
-        # extra values (usually the error_message)
-        for topic, error_code in map(lambda e: e[:2], topic_error_tuples):
+        for topic, error_code, *_ in topic_error_tuples:
             error_type = Errors.for_code(error_code)
             if tries and error_type is Errors.NotControllerError:
                 # No need to inspect the rest of the errors for
@@ -436,12 +432,8 @@ class KafkaAdminClient(object):
         return True
 
     def _parse_topic_partition_request_response(self, request, response, tries):
-        # Also small py2/py3 compatibility -- py3 can ignore extra values
-        # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
-        # So for now we have to map across the list and explicitly drop any
-        # extra values (usually the error_message)
         for topic, partition_results in response.replication_election_results:
-            for partition_id, error_code in map(lambda e: e[:2], partition_results):
+            for partition_id, error_code, *_ in partition_results:
                 error_type = Errors.for_code(error_code)
                 if tries and error_type is Errors.NotControllerError:
                     # No need to inspect the rest of the errors for
