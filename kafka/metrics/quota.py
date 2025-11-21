@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 class Quota(object):
     """An upper or lower bound for metrics"""
     __slots__ = ('_bound', '_upper')

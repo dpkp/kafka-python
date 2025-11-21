@@ -3,7 +3,6 @@ crc32c
 docker-py
 flake8
 lz4
-mock; python_version < '3.3'
 py
 pylint
 pyperf

@@ -1,22 +1,12 @@
-from __future__ import absolute_import, division
-
 import collections
 import copy
 import logging
 import random
+import selectors
 import socket
 import threading
 import time
 import weakref
-
-# selectors in stdlib as of py3.4
-try:
-    import selectors  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor import selectors34 as selectors
-
-from kafka.vendor import six
 
 from kafka.cluster import ClusterMetadata
 from kafka.conn import BrokerConnection, ConnectionStates, get_ip_port_afi
@@ -28,13 +18,7 @@ from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
-# Although this looks unused, it actually monkey-patches socket.socketpair()
-# and should be left in as long as we're using socket.socketpair() in this file
-from kafka.vendor import socketpair # noqa: F401
 from kafka.version import __version__
-
-if six.PY2:
-    ConnectionError = None
 
 
 log = logging.getLogger('kafka.client')
@@ -787,7 +771,7 @@ class KafkaClient(object):
                 if conn not in processed and conn.connected() and conn._sock.pending():
                     self._pending_completion.extend(conn.recv())
 
-        for conn in six.itervalues(self._conns):
+        for conn in self._conns.values():
             if conn.requests_timed_out():
                 timed_out = conn.timed_out_ifrs()
                 timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
@@ -926,7 +910,7 @@ class KafkaClient(object):
 
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
-            return min([conn.next_ifr_request_timeout_ms() for conn in six.itervalues(self._conns)])
+            return min([conn.next_ifr_request_timeout_ms() for conn in self._conns.values()])
         else:
             return float('inf')
 
@@ -1194,14 +1178,6 @@ class KafkaClient(object):
         return future.value
 
 
-# OrderedDict requires python2.7+
-try:
-    from collections import OrderedDict
-except ImportError:
-    # If we dont have OrderedDict, we'll fallback to dict with O(n) priority reads
-    OrderedDict = dict
-
-
 class IdleConnectionManager(object):
     def __init__(self, connections_max_idle_ms):
         if connections_max_idle_ms > 0:
@@ -1210,7 +1186,7 @@ class IdleConnectionManager(object):
             self.connections_max_idle = float('inf')
         self.next_idle_close_check_time = None
         self.update_next_idle_close_check_time(time.time())
-        self.lru_connections = OrderedDict()
+        self.lru_connections = collections.OrderedDict()
 
     def update(self, conn_id):
         # order should reflect last-update
@@ -1248,13 +1224,7 @@ class IdleConnectionManager(object):
 
         oldest_conn_id = None
         oldest_ts = None
-        if OrderedDict is dict:
-            for conn_id, ts in self.lru_connections.items():
-                if oldest_conn_id is None or ts < oldest_ts:
-                    oldest_conn_id = conn_id
-                    oldest_ts = ts
-        else:
-            (oldest_conn_id, oldest_ts) = next(iter(self.lru_connections.items()))
+        (oldest_conn_id, oldest_ts) = next(iter(self.lru_connections.items()))
 
         self.update_next_idle_close_check_time(oldest_ts)
 

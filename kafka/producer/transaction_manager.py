@@ -1,19 +1,9 @@
-from __future__ import absolute_import, division
-
 import abc 
 import collections
+from enum import IntEnum
 import heapq
 import logging
 import threading
-
-from kafka.vendor import six
-
-try:
-    # enum in stdlib as of py3.4
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
 
 import kafka.errors as Errors
 from kafka.protocol.add_offsets_to_txn import AddOffsetsToTxnRequest
@@ -535,8 +525,7 @@ class TransactionalRequestResult(object):
         return self._error
 
 
-@six.add_metaclass(abc.ABCMeta)
-class TxnRequestHandler(object):
+class TxnRequestHandler(object, metaclass=abc.ABCMeta):
     def __init__(self, transaction_manager, result=None):
         self.transaction_manager = transaction_manager
         self.retry_backoff_ms = transaction_manager.retry_backoff_ms
@@ -687,7 +676,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
                    for topic, partition_data in response.results
                    for partition, error_code in partition_data}
 
-        for tp, error in six.iteritems(results):
+        for tp, error in results.items():
             if error is Errors.NoError:
                 continue
             elif error in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
@@ -876,7 +865,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             log.debug("Successfully added partition for consumer group %s to transaction", self.consumer_group_id)
 
             # note the result is not completed until the TxnOffsetCommit returns
-            for tp, offset in six.iteritems(self.offsets):
+            for tp, offset in self.offsets.items():
                 self.transaction_manager._pending_txn_offset_commits[tp] = offset
             handler = TxnOffsetCommitHandler(self.transaction_manager, self.consumer_group_id,
                                              self.transaction_manager._pending_txn_offset_commits, self._result)
@@ -914,7 +903,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
             version = 0
 
         topic_data = collections.defaultdict(list)
-        for tp, offset in six.iteritems(self.offsets):
+        for tp, offset in self.offsets.items():
             if version >= 2:
                 partition_data = (tp.partition, offset.offset, offset.leader_epoch, offset.metadata)
             else:
@@ -948,7 +937,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                   for topic, partition_data in response.topics
                   for partition, error_code in partition_data}
 
-        for tp, error in six.iteritems(errors):
+        for tp, error in errors.items():
             if error is Errors.NoError:
                 log.debug("Successfully added offsets for %s from consumer group %s to transaction.",
                           tp, self.consumer_group_id)

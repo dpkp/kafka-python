@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import copy
 import logging
 import re
@@ -7,8 +5,6 @@ import socket
 import time
 
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
-
-from kafka.vendor import six
 
 from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher
@@ -25,7 +21,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaConsumer(six.Iterator):
+class KafkaConsumer(object):
     """Consume records from a Kafka cluster.
 
     The consumer will transparently handle the failure of servers in the Kafka
@@ -205,8 +201,7 @@ class KafkaConsumer(six.Iterator):
         ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            Default: None.
+            this CRL. Default: None.
         ssl_ciphers (str): optionally set the available ciphers for ssl
             connections. It should be a string in the OpenSSL cipher list
             format. If no cipher can be selected (because compile-time options
@@ -1027,7 +1022,7 @@ class KafkaConsumer(six.Iterator):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:
@@ -1072,7 +1067,7 @@ class KafkaConsumer(six.Iterator):
             raise UnsupportedVersionError(
                 "offsets_for_times API not supported for cluster version {}"
                 .format(self.config['api_version']))
-        for tp, ts in six.iteritems(timestamps):
+        for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
@@ -1183,7 +1178,7 @@ class KafkaConsumer(six.Iterator):
     def _message_generator_v2(self):
         timeout_ms = 1000 * max(0, self._consumer_timeout - time.time())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
-        for tp, records in six.iteritems(record_map):
+        for tp, records in record_map.items():
             # Generators are stateful, and it is possible that the tp / records
             # here may become stale during iteration -- i.e., we seek to a
             # different offset, pause consumption, or lose assignment.

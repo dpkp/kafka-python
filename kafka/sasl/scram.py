@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import base64
 import hashlib
 import hmac
@@ -8,18 +6,13 @@ import uuid
 
 
 from kafka.sasl.abc import SaslMechanism
-from kafka.vendor import six
 
 
 log = logging.getLogger(__name__)
 
 
-if six.PY2:
-    def xor_bytes(left, right):
-        return bytearray(ord(lb) ^ ord(rb) for lb, rb in zip(left, right))
-else:
-    def xor_bytes(left, right):
-        return bytes(lb ^ rb for lb, rb in zip(left, right))
+def xor_bytes(left, right):
+    return bytes(lb ^ rb for lb, rb in zip(left, right))
 
 
 class SaslMechanismScram(SaslMechanism):

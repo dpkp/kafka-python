@@ -1,13 +1,9 @@
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
-
 import errno
 import logging
 import random
 import socket
 import struct
+from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
 

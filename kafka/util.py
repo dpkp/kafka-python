@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import binascii
 import functools
 import re
@@ -7,23 +5,18 @@ import time
 import weakref
 
 from kafka.errors import KafkaTimeoutError
-from kafka.vendor import six
 
 
-if six.PY3:
-    MAX_INT = 2 ** 31
-    TO_SIGNED = 2 ** 32
+MAX_INT = 2 ** 31
+TO_SIGNED = 2 ** 32
 
-    def crc32(data):
-        crc = binascii.crc32(data)
-        # py2 and py3 behave a little differently
-        # CRC is encoded as a signed int in kafka protocol
-        # so we'll convert the py3 unsigned result to signed
-        if crc >= MAX_INT:
-            crc -= TO_SIGNED
-        return crc
-else:
-    from binascii import crc32 # noqa: F401
+def crc32(data):
+    crc = binascii.crc32(data)
+    # CRC is encoded as a signed int in kafka protocol
+    # so we'll convert the unsigned result to signed
+    if crc >= MAX_INT:
+        crc -= TO_SIGNED
+    return crc
 
 
 class Timer:
@@ -76,7 +69,7 @@ def ensure_valid_topic_name(topic):
     # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
     if topic is None:
         raise TypeError('All topics must not be None')
-    if not isinstance(topic, six.string_types):
+    if not isinstance(topic, str):
         raise TypeError('All topics must be strings')
     if len(topic) == 0:
         raise ValueError('All topics must be non-empty strings')

@@ -18,7 +18,6 @@
 #
 # So we can iterate over batches just by knowing offsets of Length. Magic is
 # used to construct the correct class for Batch itself.
-from __future__ import division
 
 import struct
 

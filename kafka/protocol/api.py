@@ -1,11 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import Int16, Int32, String, Schema, Array, TaggedFields
-
-from kafka.vendor.six import add_metaclass
 
 
 class RequestHeader(Struct):
@@ -51,8 +47,7 @@ class ResponseHeaderV2(Struct):
     )
 
 
-@add_metaclass(abc.ABCMeta)
-class Request(Struct):
+class Request(Struct, metaclass=abc.ABCMeta):
     FLEXIBLE_VERSION = False
 
     @abc.abstractproperty
@@ -88,8 +83,7 @@ class Request(Struct):
         return RequestHeader(self, correlation_id=correlation_id, client_id=client_id)
 
 
-@add_metaclass(abc.ABCMeta)
-class Response(Struct):
+class Response(Struct, metaclass=abc.ABCMeta):
     FLEXIBLE_VERSION = False
 
     @abc.abstractproperty

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from kafka.admin.config_resource import ConfigResource, ConfigResourceType
 from kafka.admin.client import KafkaAdminClient
 from kafka.admin.acl_resource import (ACL, ACLFilter, ResourcePattern, ResourcePatternFilter, ACLOperation,

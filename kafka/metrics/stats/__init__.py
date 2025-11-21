@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from kafka.metrics.stats.avg import Avg
 from kafka.metrics.stats.count import Count
 from kafka.metrics.stats.histogram import Histogram

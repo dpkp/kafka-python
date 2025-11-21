@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 class NewPartitions(object):
     """A class for new partition creation on existing topics.  Note that the length of new_assignments, if specified,
     must be the difference between the new total number of partitions and the existing number of partitions.

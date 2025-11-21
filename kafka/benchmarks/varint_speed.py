@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import pyperf
-from kafka.vendor import six
 
 
 test_data = [
@@ -114,7 +112,10 @@ def encode_varint_1(num):
     return buf[:i + 1]
 
 
-def encode_varint_2(value, int2byte=six.int2byte):
+def int2byte(i):
+    return bytes((i,))
+
+def encode_varint_2(value):
     value = (value << 1) ^ (value >> 63)
 
     bits = value & 0x7f
@@ -141,7 +142,7 @@ def encode_varint_3(value, buf):
     return value
 
 
-def encode_varint_4(value, int2byte=six.int2byte):
+def encode_varint_4(value):
     value = (value << 1) ^ (value >> 63)
 
     if value <= 0x7f:  # 1 byte
@@ -269,22 +270,13 @@ def size_of_varint_2(value):
     return 10
 
 
-if six.PY3:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
+def _read_byte(memview, pos):
+    """ Read a byte from memoryview as an integer
 
-            Raises:
-                IndexError: if position is out of bounds
-        """
-        return memview[pos]
-else:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
-
-            Raises:
-                IndexError: if position is out of bounds
-        """
-        return ord(memview[pos])
+        Raises:
+            IndexError: if position is out of bounds
+    """
+    return memview[pos]
 
 
 def decode_varint_1(buffer, pos=0):

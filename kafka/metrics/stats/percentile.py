@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 class Percentile(object):
     __slots__ = ('_metric_name', '_percentile')
 

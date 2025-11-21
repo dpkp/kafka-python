@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import atexit
 import copy
 import logging
@@ -7,8 +5,6 @@ import socket
 import threading
 import warnings
 import weakref
-
-from kafka.vendor import six
 
 import kafka.errors as Errors
 from kafka.client_async import KafkaClient, selectors
@@ -296,21 +292,20 @@ class KafkaProducer(object):
             will be ignored. Default: None.
         ssl_check_hostname (bool): flag to configure whether ssl handshake
             should verify that the certificate matches the brokers hostname.
-            default: true.
+            Default: True.
         ssl_cafile (str): optional filename of ca file to use in certificate
-            verification. default: none.
+            verification. Default: None.
         ssl_certfile (str): optional filename of file in pem format containing
             the client certificate, as well as any ca certificates needed to
-            establish the certificate's authenticity. default: none.
+            establish the certificate's authenticity. Default: None.
         ssl_keyfile (str): optional filename containing the client private key.
-            default: none.
+            Default: None.
         ssl_password (str): optional password to be used when loading the
-            certificate chain. default: none.
+            certificate chain. Default: None.
         ssl_crlfile (str): optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            default: none.
+            this CRL. Default: None.
         ssl_ciphers (str): optionally set the available ciphers for ssl
             connections. It should be a string in the OpenSSL cipher list
             format. If no cipher can be selected (because compile-time options
@@ -583,19 +578,7 @@ class KafkaProducer(object):
 
     def _unregister_cleanup(self):
         if getattr(self, '_cleanup', None):
-            if hasattr(atexit, 'unregister'):
-                atexit.unregister(self._cleanup)  # pylint: disable=no-member
-
-            # py2 requires removing from private attribute...
-            else:
-
-                # ValueError on list.remove() if the exithandler no longer exists
-                # but that is fine here
-                try:
-                    atexit._exithandlers.remove(  # pylint: disable=no-member
-                        (self._cleanup, (), {}))
-                except ValueError:
-                    pass
+            atexit.unregister(self._cleanup)
         self._cleanup = None
 
     def __del__(self):
@@ -1012,7 +995,7 @@ class KafkaProducer(object):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:

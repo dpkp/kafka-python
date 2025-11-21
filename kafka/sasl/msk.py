@@ -1,11 +1,10 @@
-from __future__ import absolute_import
-
 import datetime
 import hashlib
 import hmac
 import json
 import logging
 import string
+import urllib
 
 # needed for AWS_MSK_IAM authentication:
 try:
@@ -16,7 +15,6 @@ except ImportError:
 
 from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
-from kafka.vendor.six.moves import urllib
 
 
 log = logging.getLogger(__name__)

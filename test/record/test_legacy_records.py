@@ -1,9 +1,7 @@
-from __future__ import unicode_literals
+from unittest.mock import patch
+
 import pytest
-try:
-    from unittest.mock import patch
-except ImportError:
-    from mock import patch
+
 from kafka.record.legacy_records import (
     LegacyRecordBatch, LegacyRecordBatchBuilder
 )

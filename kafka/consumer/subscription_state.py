@@ -1,24 +1,12 @@
-from __future__ import absolute_import
-
 import abc
 from collections import OrderedDict
-try:
-    from collections.abc import Sequence
-except ImportError:
-    from collections import Sequence
-try:
-    # enum in stdlib as of py3.4
-    from enum import IntEnum  # pylint: disable=import-error
-except ImportError:
-    # vendored backport module
-    from kafka.vendor.enum34 import IntEnum
+from collections.abc import Sequence
+from enum import IntEnum
 import logging
 import random
 import re
 import threading
 import time
-
-from kafka.vendor import six
 
 import kafka.errors as Errors
 from kafka.protocol.list_offsets import OffsetResetStrategy
@@ -167,7 +155,7 @@ class SubscriptionState(object):
         if not self.partitions_auto_assigned():
             raise Errors.IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
-        if isinstance(topics, six.string_types):
+        if isinstance(topics, str):
             topics = [topics]
 
         if self.subscription == set(topics):
@@ -256,13 +244,13 @@ class SubscriptionState(object):
     def _set_assignment(self, partition_states, randomize=False):
         """Batch partition assignment by topic (self.assignment is OrderedDict)"""
         self.assignment.clear()
-        topics = [tp.topic for tp in six.iterkeys(partition_states)]
+        topics = [tp.topic for tp in partition_states]
         if randomize:
             random.shuffle(topics)
         topic_partitions = OrderedDict({topic: [] for topic in topics})
-        for tp in six.iterkeys(partition_states):
+        for tp in partition_states:
             topic_partitions[tp.topic].append(tp)
-        for topic in six.iterkeys(topic_partitions):
+        for topic in topic_partitions:
             for tp in topic_partitions[topic]:
                 self.assignment[tp] = partition_states[tp]
 
@@ -324,7 +312,7 @@ class SubscriptionState(object):
     def fetchable_partitions(self):
         """Return ordered list of TopicPartitions that should be Fetched."""
         fetchable = list()
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if state.is_fetchable():
                 fetchable.append(partition)
         return fetchable
@@ -338,7 +326,7 @@ class SubscriptionState(object):
     def all_consumed_offsets(self):
         """Returns consumed offsets as {TopicPartition: OffsetAndMetadata}"""
         all_consumed = {}
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if state.has_valid_position:
                 all_consumed[partition] = state.position
         return all_consumed
@@ -371,7 +359,7 @@ class SubscriptionState(object):
 
     @synchronized
     def has_all_fetch_positions(self):
-        for state in six.itervalues(self.assignment):
+        for state in self.assignment.values():
             if not state.has_valid_position:
                 return False
         return True
@@ -379,7 +367,7 @@ class SubscriptionState(object):
     @synchronized
     def missing_fetch_positions(self):
         missing = set()
-        for partition, state in six.iteritems(self.assignment):
+        for partition, state in self.assignment.items():
             if state.is_missing_position():
                 missing.add(partition)
         return missing
@@ -391,7 +379,7 @@ class SubscriptionState(object):
     @synchronized
     def reset_missing_positions(self):
         partitions_with_no_offsets = set()
-        for tp, state in six.iteritems(self.assignment):
+        for tp, state in self.assignment.items():
             if state.is_missing_position():
                 if self._default_offset_reset_strategy == OffsetResetStrategy.NONE:
                     partitions_with_no_offsets.add(tp)
@@ -404,7 +392,7 @@ class SubscriptionState(object):
     @synchronized
     def partitions_needing_reset(self):
         partitions = set()
-        for tp, state in six.iteritems(self.assignment):
+        for tp, state in self.assignment.items():
             if state.awaiting_reset and state.is_reset_allowed():
                 partitions.add(tp)
         return partitions
@@ -509,8 +497,7 @@ class TopicPartitionState(object):
         return not self.paused and self.has_valid_position
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ConsumerRebalanceListener(object):
+class ConsumerRebalanceListener(object, metaclass=abc.ABCMeta):
     """
     A callback interface that the user can implement to trigger custom actions
     when the set of partitions assigned to the consumer changes.

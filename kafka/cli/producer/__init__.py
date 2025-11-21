@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import argparse
 import logging
 import sys
@@ -68,14 +66,9 @@ def run_cli(args=None):
             logger.info("Message produced: %s", res_or_err)
 
     try:
-        input_py23 = raw_input
-    except NameError:
-        input_py23 = input
-
-    try:
         while True:
             try:
-                value = input_py23()
+                value = input()
             except EOFError:
                 value = sys.stdin.read().rstrip('\n')
                 if not value:

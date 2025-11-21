@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import atexit
 import base64
 import logging
@@ -8,11 +6,10 @@ import os.path
 import socket
 import subprocess
 import time
+from urllib.parse import urlparse
 import uuid
 
 import py
-from kafka.vendor.six.moves import range
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError

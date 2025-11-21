@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import collections
 import copy
 import logging
@@ -7,8 +5,6 @@ import random
 import re
 import threading
 import time
-
-from kafka.vendor import six
 
 from kafka import errors as Errors
 from kafka.conn import get_ip_port_afi
@@ -133,7 +129,7 @@ class ClusterMetadata(object):
         if topic not in self._partitions:
             return None
         return set([partition for partition, metadata
-                              in six.iteritems(self._partitions[topic])
+                              in self._partitions[topic].items()
                               if metadata.leader != -1])
 
     def leader_for_partition(self, partition):
@@ -435,7 +431,7 @@ def collect_hosts(hosts, randomize=True):
     randomize the returned list.
     """
 
-    if isinstance(hosts, six.string_types):
+    if isinstance(hosts, str):
         hosts = hosts.strip().split(',')
 
     result = []

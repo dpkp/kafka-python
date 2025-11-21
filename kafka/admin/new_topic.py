@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 class NewTopic(object):
     """ A class for new topic creation
     Arguments:

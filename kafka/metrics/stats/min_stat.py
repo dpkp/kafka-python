@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import sys
 
 from kafka.metrics.stats.sampled_stat import AbstractSampledStat

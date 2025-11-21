@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import platform
 
 from kafka.sasl.gssapi import SaslMechanismGSSAPI

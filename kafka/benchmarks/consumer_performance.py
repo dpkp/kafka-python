@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # Adapted from https://github.com/mrafayaleem/kafka-jython
 
-from __future__ import absolute_import, print_function
-
 import argparse
 import pprint
 import sys
