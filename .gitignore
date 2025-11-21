@@ -17,3 +17,4 @@ tests-env/
 .pytest_cache/
 .envrc
 shell.nix
+.venv*/
