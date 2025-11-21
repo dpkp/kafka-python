@@ -4,7 +4,6 @@ import platform
 import struct
 
 import pytest
-from kafka.vendor.six.moves import range
 
 from kafka.codec import (
     has_snappy, has_lz4, has_zstd,

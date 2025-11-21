@@ -16,7 +16,6 @@ except ImportError:
 
 from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
-from kafka.vendor.six.moves import urllib
 
 
 log = logging.getLogger(__name__)

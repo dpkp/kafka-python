@@ -10,8 +10,6 @@ import threading
 import time
 import traceback
 
-from kafka.vendor.six.moves import range
-
 from kafka import KafkaProducer
 
 

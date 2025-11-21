@@ -6,7 +6,6 @@ try:
 except ImportError:
     from mock import patch, ANY
 import pytest
-from kafka.vendor.six.moves import range
 
 import kafka.codec
 from kafka.errors import KafkaTimeoutError, UnsupportedCodecError, UnsupportedVersionError

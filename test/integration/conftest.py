@@ -1,11 +1,11 @@
 from __future__ import absolute_import
 
 import os
+from urllib.parse import urlparse
 import uuid
 
 import pytest
 
-from kafka.vendor.six.moves.urllib.parse import urlparse  # pylint: disable=E0611,F0401
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import KafkaFixture, ZookeeperFixture
 
