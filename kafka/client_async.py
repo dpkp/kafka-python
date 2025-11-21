@@ -1180,14 +1180,6 @@ class KafkaClient(object):
         return future.value
 
 
-# OrderedDict requires python2.7+
-try:
-    from collections import OrderedDict
-except ImportError:
-    # If we dont have OrderedDict, we'll fallback to dict with O(n) priority reads
-    OrderedDict = dict
-
-
 class IdleConnectionManager(object):
     def __init__(self, connections_max_idle_ms):
         if connections_max_idle_ms > 0:
@@ -1196,7 +1188,7 @@ class IdleConnectionManager(object):
             self.connections_max_idle = float('inf')
         self.next_idle_close_check_time = None
         self.update_next_idle_close_check_time(time.time())
-        self.lru_connections = OrderedDict()
+        self.lru_connections = collections.OrderedDict()
 
     def update(self, conn_id):
         # order should reflect last-update
@@ -1234,13 +1226,7 @@ class IdleConnectionManager(object):
 
         oldest_conn_id = None
         oldest_ts = None
-        if OrderedDict is dict:
-            for conn_id, ts in self.lru_connections.items():
-                if oldest_conn_id is None or ts < oldest_ts:
-                    oldest_conn_id = conn_id
-                    oldest_ts = ts
-        else:
-            (oldest_conn_id, oldest_ts) = next(iter(self.lru_connections.items()))
+        (oldest_conn_id, oldest_ts) = next(iter(self.lru_connections.items()))
 
         self.update_next_idle_close_check_time(oldest_ts)
 
