@@ -16,6 +16,7 @@ Although kafka-python is tested and expected to work on recent broker versions,
 not all features are supported. Please see github open issues for feature tracking.
 PRs welcome!
 
-kafka-python is tested on python 2.7, and 3.8-3.13.
+kafka-python is tested on python 3.8-3.14.
+python 2.7 was supported through kafka-python release 2.3.
 
 Builds and tests via Github Actions Workflows.  See https://github.com/dpkp/kafka-python/actions

@@ -201,8 +201,7 @@ class KafkaConsumer(object):
         ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            Default: None.
+            this CRL. Default: None.
         ssl_ciphers (str): optionally set the available ciphers for ssl
             connections. It should be a string in the OpenSSL cipher list
             format. If no cipher can be selected (because compile-time options

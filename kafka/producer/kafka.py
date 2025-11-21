@@ -292,21 +292,20 @@ class KafkaProducer(object):
             will be ignored. Default: None.
         ssl_check_hostname (bool): flag to configure whether ssl handshake
             should verify that the certificate matches the brokers hostname.
-            default: true.
+            Default: True.
         ssl_cafile (str): optional filename of ca file to use in certificate
-            verification. default: none.
+            verification. Default: None.
         ssl_certfile (str): optional filename of file in pem format containing
             the client certificate, as well as any ca certificates needed to
-            establish the certificate's authenticity. default: none.
+            establish the certificate's authenticity. Default: None.
         ssl_keyfile (str): optional filename containing the client private key.
-            default: none.
+            Default: None.
         ssl_password (str): optional password to be used when loading the
-            certificate chain. default: none.
+            certificate chain. Default: None.
         ssl_crlfile (str): optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            default: none.
+            this CRL. Default: None.
         ssl_ciphers (str): optionally set the available ciphers for ssl
             connections. It should be a string in the OpenSSL cipher list
             format. If no cipher can be selected (because compile-time options

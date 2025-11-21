@@ -119,8 +119,7 @@ class KafkaAdminClient(object):
         ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            Default: None.
+            this CRL. Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set
             to None, KafkaClient will attempt to infer the broker version by
             probing various APIs. Example: (0, 10, 2). Default: None
