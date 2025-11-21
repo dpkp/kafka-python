@@ -20,9 +20,6 @@ from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
-# Although this looks unused, it actually monkey-patches socket.socketpair()
-# and should be left in as long as we're using socket.socketpair() in this file
-from kafka.vendor import socketpair # noqa: F401
 from kafka.version import __version__
 
 
