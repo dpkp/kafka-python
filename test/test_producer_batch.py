@@ -134,3 +134,18 @@ def test_complete_exceptionally_with_null_record_errors(batch):
 
     with pytest.raises(AssertionError):
         _test_complete_exceptionally(batch, record_count, top_level_exception, None)
+
+
+def test_producer_batch_lt(tp, memory_records_builder):
+    b1 = ProducerBatch(tp, memory_records_builder, now=1)
+    b2 = ProducerBatch(tp, memory_records_builder, now=2)
+
+    assert b1 < b2
+    assert not b1 < b1
+
+    import heapq
+    q = []
+    heapq.heappush(q, b2)
+    heapq.heappush(q, b1)
+    assert q[0] == b1
+    assert q[1] == b2
