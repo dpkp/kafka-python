@@ -323,4 +323,4 @@ def test_kafka_consumer_position_after_seek_to_end(kafka_consumer_factory, topic
     position = consumer.position(tp, timeout_ms=1000)
 
     # Verify we got the expected position
-    assert position == 10, f"Expected position 10, got {position}"
+    assert position == 10, "Expected position 10, got {}".format(position)
