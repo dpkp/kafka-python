@@ -2,10 +2,7 @@ from __future__ import absolute_import
 
 import abc
 from collections import OrderedDict
-try:
-    from collections.abc import Sequence
-except ImportError:
-    from collections import Sequence
+from collections.abc import Sequence
 from enum import IntEnum
 import logging
 import random
