@@ -1,5 +1,4 @@
 # pylint: skip-file
-from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket

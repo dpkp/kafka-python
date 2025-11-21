@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from unittest import mock
 
 from kafka.sasl import get_sasl_mechanism

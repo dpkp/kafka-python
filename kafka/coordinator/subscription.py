@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 class Subscription(object):
     __slots__ = ('_metadata', '_group_instance_id')
     def __init__(self, metadata, group_instance_id):

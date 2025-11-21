@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import selectors
 import socket
 import time

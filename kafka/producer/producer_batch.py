@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 from enum import IntEnum
 import logging
 import time
