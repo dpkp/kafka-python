@@ -1,8 +1,12 @@
 Changelog
 =========
 
-2.3.0 (unreleased)
-##################
+2.3.0 (Nov 20, 2025)
+####################
+
+CLI
+---
+* python -m cli interfaces for kafka.admin, kafka.consumer, kafka.producer (#2650)
 
 Producer
 --------
@@ -22,10 +26,6 @@ AdminClient
 * KIP-430: Return Authorized Operations in Describe Responses (#2656)
 * Add send_request() and send_requests() to KafkaAdminClient (#2649)
 
-CLI
----
-* python -m cli interfaces for kafka.admin, kafka.consumer, kafka.producer (#2650)
-
 Maintenance
 -----------
 * Remove old/unused kafka.protocol.pickle (#2653)
@@ -38,7 +38,16 @@ Project Infra
 * Bump actions/setup-python from 5 to 6 (#2674)
 * Bump actions/setup-java from 4 to 5 (#2673)
 * Bump actions/checkout from 4 to 5 (#2669)
+* Bump actions/checkout from 5 to 6 (#2694)
 * NixOS helpers
+
+
+2.2.18 (Nov 20, 2025)
+#####################
+
+Fixes
+-----
+* Add ProducerBatch.__lt__ for heapq (#2698)
 
 
 2.2.17 (Nov 20, 2025)
