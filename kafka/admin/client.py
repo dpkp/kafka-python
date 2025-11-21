@@ -8,7 +8,6 @@ import socket
 import time
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType, valid_acl_operations
@@ -1418,7 +1417,7 @@ class KafkaAdminClient(object):
             topics_partitions_dict = defaultdict(set)
             for topic, partition in partitions:
                 topics_partitions_dict[topic].add(partition)
-            topics_partitions = list(six.iteritems(topics_partitions_dict))
+            topics_partitions = list(topics_partitions_dict.items())
         return OffsetFetchRequest[version](group_id, topics_partitions)
 
     def _list_consumer_group_offsets_process_response(self, response):

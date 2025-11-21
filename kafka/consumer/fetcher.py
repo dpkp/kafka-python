@@ -7,8 +7,6 @@ import logging
 import sys
 import time
 
-from kafka.vendor import six
-
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
@@ -55,7 +53,7 @@ class RecordTooLargeError(Errors.KafkaError):
     pass
 
 
-class Fetcher(six.Iterator):
+class Fetcher(object):
     DEFAULT_CONFIG = {
         'key_deserializer': None,
         'value_deserializer': None,
@@ -147,7 +145,7 @@ class Fetcher(six.Iterator):
             List of Futures: each future resolves to a FetchResponse
         """
         futures = []
-        for node_id, (request, fetch_offsets) in six.iteritems(self._create_fetch_requests()):
+        for node_id, (request, fetch_offsets) in self._create_fetch_requests().items():
             log.debug("Sending FetchRequest to node %s", node_id)
             self._nodes_with_pending_fetch_requests.add(node_id)
             future = self._client.send(node_id, request, wakeup=False)
@@ -421,7 +419,7 @@ class Fetcher(six.Iterator):
     def _reset_offsets_async(self, timestamps):
         timestamps_by_node = self._group_list_offset_requests(timestamps)
 
-        for node_id, timestamps_and_epochs in six.iteritems(timestamps_by_node):
+        for node_id, timestamps_and_epochs in timestamps_by_node.items():
             if not self._client.ready(node_id):
                 continue
             partitions = set(timestamps_and_epochs.keys())
@@ -434,7 +432,7 @@ class Fetcher(six.Iterator):
                     self._subscriptions.reset_failed(partitions_to_retry, time.time() + self.config['retry_backoff_ms'] / 1000)
                     self._client.cluster.request_update()
 
-                for partition, offset in six.iteritems(fetched_offsets):
+                for partition, offset in fetched_offsets.items():
                     ts, _epoch = timestamps_and_epochs[partition]
                     self._reset_offset_if_needed(partition, ts, offset.offset)
 
@@ -484,7 +482,7 @@ class Fetcher(six.Iterator):
             if not list_offsets_future.is_done:
                 list_offsets_future.failure(err)
 
-        for node_id, timestamps in six.iteritems(timestamps_by_node):
+        for node_id, timestamps in timestamps_by_node.items():
             _f = self._send_list_offsets_request(node_id, timestamps)
             _f.add_callback(on_success, remaining_responses)
             _f.add_errback(on_fail)
@@ -492,7 +490,7 @@ class Fetcher(six.Iterator):
 
     def _group_list_offset_requests(self, timestamps):
         timestamps_by_node = collections.defaultdict(dict)
-        for partition, timestamp in six.iteritems(timestamps):
+        for partition, timestamp in timestamps.items():
             node_id = self._client.cluster.leader_for_partition(partition)
             if node_id is None:
                 self._client.add_topic(partition.topic)
@@ -512,7 +510,7 @@ class Fetcher(six.Iterator):
         if self.config['isolation_level'] == 'read_committed' and version < 2:
             raise Errors.UnsupportedVersionError('read_committed isolation level requires ListOffsetsRequest >= v2')
         by_topic = collections.defaultdict(list)
-        for tp, (timestamp, leader_epoch) in six.iteritems(timestamps_and_epochs):
+        for tp, (timestamp, leader_epoch) in timestamps_and_epochs.items():
             if version >= 4:
                 data = (tp.partition, leader_epoch, timestamp)
             elif version >= 1:
@@ -525,11 +523,11 @@ class Fetcher(six.Iterator):
             request = ListOffsetsRequest[version](
                     -1,
                     self._isolation_level,
-                    list(six.iteritems(by_topic)))
+                    list(by_topic.items()))
         else:
             request = ListOffsetsRequest[version](
                     -1,
-                    list(six.iteritems(by_topic)))
+                    list(by_topic.items()))
 
         # Client returns a future that only fails on network issues
         # so create a separate future and attach a callback to update it
@@ -697,7 +695,7 @@ class Fetcher(six.Iterator):
                           partition, position.offset)
 
         requests = {}
-        for node_id, next_partitions in six.iteritems(fetchable):
+        for node_id, next_partitions in fetchable.items():
             if version >= 7 and self.config['enable_incremental_fetch_sessions']:
                 if node_id not in self._session_handlers:
                     self._session_handlers[node_id] = FetchSessionHandler(node_id)
@@ -741,7 +739,7 @@ class Fetcher(six.Iterator):
                     session.to_forget)
 
             fetch_offsets = {}
-            for tp, partition_data in six.iteritems(next_partitions):
+            for tp, partition_data in next_partitions.items():
                 if version <= 8:
                     offset = partition_data[1]
                 else:
@@ -1283,7 +1281,7 @@ class FetchRequestData(object):
         # Return as list of [(topic, [(partition, ...), ...]), ...]
         # so it can be passed directly to encoder
         partition_data = collections.defaultdict(list)
-        for tp, partition_info in six.iteritems(self._to_send):
+        for tp, partition_info in self._to_send.items():
             partition_data[tp.topic].append(partition_info)
         return list(partition_data.items())
 
@@ -1334,7 +1332,7 @@ class FetchResponseMetricAggregator(object):
         if not self.unrecorded_partitions:
             self.sensors.bytes_fetched.record(self.fetch_metrics.total_bytes)
             self.sensors.records_fetched.record(self.fetch_metrics.total_records)
-            for topic, metrics in six.iteritems(self.topic_fetch_metrics):
+            for topic, metrics in self.topic_fetch_metrics.items():
                 self.sensors.record_topic_fetch_metrics(topic, metrics.total_bytes, metrics.total_records)
 
 

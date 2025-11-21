@@ -7,8 +7,6 @@ import logging
 import threading
 import time
 
-from kafka.vendor import six
-
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
@@ -86,7 +84,7 @@ class Sender(threading.Thread):
         """Get the in-flight batches that has reached delivery timeout."""
         expired_batches = []
         to_remove = []
-        for tp, queue in six.iteritems(self._in_flight_batches):
+        for tp, queue in self._in_flight_batches.items():
             while queue:
                 _created_at, batch = queue[0]
                 if batch.has_reached_delivery_timeout(self._accumulator.delivery_timeout_ms):
@@ -206,7 +204,7 @@ class Sender(threading.Thread):
         batches_by_node = self._accumulator.drain(
             self._metadata, ready_nodes, self.config['max_request_size'], now=now)
 
-        for batch_list in six.itervalues(batches_by_node):
+        for batch_list in batches_by_node.values():
             for batch in batch_list:
                 item = (batch.created, batch)
                 queue = self._in_flight_batches[batch.topic_partition]
@@ -214,7 +212,7 @@ class Sender(threading.Thread):
 
         if self.config['guarantee_message_order']:
             # Mute all the partitions drained
-            for batch_list in six.itervalues(batches_by_node):
+            for batch_list in batches_by_node.values():
                 for batch in batch_list:
                     self._accumulator.muted.add(batch.topic_partition)
 
@@ -272,7 +270,7 @@ class Sender(threading.Thread):
             # metadata expiry time
             poll_timeout_ms = 0
 
-        for node_id, request in six.iteritems(requests):
+        for node_id, request in requests.items():
             batches = batches_by_node[node_id]
             log.debug('%s: Sending Produce Request: %r', str(self), request)
             (self._client.send(node_id, request, wakeup=False)
@@ -584,7 +582,7 @@ class Sender(threading.Thread):
             dict: {node_id: ProduceRequest} (version depends on client api_versions)
         """
         requests = {}
-        for node_id, batches in six.iteritems(collated):
+        for node_id, batches in collated.items():
             if batches:
                 requests[node_id] = self._produce_request(
                     node_id, self.config['acks'],
@@ -608,7 +606,7 @@ class Sender(threading.Thread):
         version = self._client.api_version(ProduceRequest, max_version=8)
         topic_partition_data = [
             (topic, list(partition_info.items()))
-            for topic, partition_info in six.iteritems(produce_records_by_partition)]
+            for topic, partition_info in produce_records_by_partition.items()]
         transactional_id = self._transaction_manager.transactional_id if self._transaction_manager else None
         if version >= 3:
             return ProduceRequest[version](

@@ -16,8 +16,6 @@ except ImportError:
     # vendored backport module
     from kafka.vendor import selectors34 as selectors
 
-from kafka.vendor import six
-
 from kafka.cluster import ClusterMetadata
 from kafka.conn import BrokerConnection, ConnectionStates, get_ip_port_afi
 from kafka import errors as Errors
@@ -784,7 +782,7 @@ class KafkaClient(object):
                 if conn not in processed and conn.connected() and conn._sock.pending():
                     self._pending_completion.extend(conn.recv())
 
-        for conn in six.itervalues(self._conns):
+        for conn in self._conns.values():
             if conn.requests_timed_out():
                 timed_out = conn.timed_out_ifrs()
                 timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
@@ -923,7 +921,7 @@ class KafkaClient(object):
 
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
-            return min([conn.next_ifr_request_timeout_ms() for conn in six.itervalues(self._conns)])
+            return min([conn.next_ifr_request_timeout_ms() for conn in self._conns.values()])
         else:
             return float('inf')
 

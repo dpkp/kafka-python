@@ -11,8 +11,6 @@ try:
 except ImportError:
     from mock import call
 
-from kafka.vendor import six
-
 from kafka.client_async import KafkaClient
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors

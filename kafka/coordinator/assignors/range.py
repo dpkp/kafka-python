@@ -4,8 +4,6 @@ import collections
 import itertools
 import logging
 
-from kafka.vendor import six
-
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
 
@@ -35,7 +33,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
     @classmethod
     def assign(cls, cluster, group_subscriptions):
         consumers_per_topic = collections.defaultdict(list)
-        for member_id, subscription in six.iteritems(group_subscriptions):
+        for member_id, subscription in group_subscriptions.items():
             for topic in subscription.topics:
                 consumers_per_topic[topic].append((subscription.group_instance_id, member_id))
 
@@ -47,7 +45,7 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
             grouped = {k: list(g) for k, g in itertools.groupby(consumers_per_topic[topic], key=lambda ids: ids[0] is not None)}
             consumers_per_topic[topic] = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
 
-        for topic, consumers_for_topic in six.iteritems(consumers_per_topic):
+        for topic, consumers_for_topic in consumers_per_topic.items():
             partitions = cluster.partitions_for_topic(topic)
             if partitions is None:
                 log.warning('No partition metadata for topic %s', topic)

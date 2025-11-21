@@ -8,8 +8,6 @@ import threading
 import warnings
 import weakref
 
-from kafka.vendor import six
-
 import kafka.errors as Errors
 from kafka.client_async import KafkaClient, selectors
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd
@@ -1012,7 +1010,7 @@ class KafkaProducer(object):
             return self._metrics.metrics.copy()
 
         metrics = {}
-        for k, v in six.iteritems(self._metrics.metrics.copy()):
+        for k, v in self._metrics.metrics.copy().items():
             if k.group not in metrics:
                 metrics[k.group] = {}
             if k.name not in metrics[k.group]:

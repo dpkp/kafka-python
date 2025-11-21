@@ -7,7 +7,6 @@ import time
 import weakref
 
 from kafka.errors import KafkaTimeoutError
-from kafka.vendor import six
 
 
 MAX_INT = 2 ** 31
@@ -72,7 +71,7 @@ def ensure_valid_topic_name(topic):
     # https://github.com/apache/kafka/blob/39eb31feaeebfb184d98cc5d94da9148c2319d81/clients/src/main/java/org/apache/kafka/common/internals/Topic.java
     if topic is None:
         raise TypeError('All topics must not be None')
-    if not isinstance(topic, six.string_types):
+    if not isinstance(topic, str):
         raise TypeError('All topics must be strings')
     if len(topic) == 0:
         raise ValueError('All topics must be non-empty strings')

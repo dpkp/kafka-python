@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import string
+import urllib
 
 # needed for AWS_MSK_IAM authentication:
 try:

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import pyperf
-from kafka.vendor import six
 
 
 test_data = [
@@ -114,7 +113,10 @@ def encode_varint_1(num):
     return buf[:i + 1]
 
 
-def encode_varint_2(value, int2byte=six.int2byte):
+def int2byte(i):
+    return bytes((i,))
+
+def encode_varint_2(value):
     value = (value << 1) ^ (value >> 63)
 
     bits = value & 0x7f
@@ -141,7 +143,7 @@ def encode_varint_3(value, buf):
     return value
 
 
-def encode_varint_4(value, int2byte=six.int2byte):
+def encode_varint_4(value):
     value = (value << 1) ^ (value >> 63)
 
     if value <= 0x7f:  # 1 byte
