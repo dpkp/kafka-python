@@ -179,6 +179,10 @@ class ProducerBatch(object):
         return 'ProducerBatch(topic_partition=%s, record_count=%d)' % (
             self.topic_partition, self.records.next_offset())
 
+    # for heapq
+    def __lt__(self, other):
+        return self.created < other.created
+
 
 class RecordAccumulator(object):
     """

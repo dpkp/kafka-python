@@ -120,6 +120,22 @@ def test_batch_cannot_complete_twice():
     assert record_metadata.offset == 500
     assert record_metadata.timestamp == 10
 
+def test_producer_batch_lt(tp):
+    records = MemoryRecordsBuilder(
+        magic=2, compression_type=0, batch_size=100000)
+    b1 = ProducerBatch(tp, records, now=1)
+    b2 = ProducerBatch(tp, records, now=2)
+
+    assert b1 < b2
+    assert not b1 < b1
+
+    import heapq
+    q = []
+    heapq.heappush(q, b2)
+    heapq.heappush(q, b1)
+    assert q[0] == b1
+    assert q[1] == b2
+
 def test_linger(tp, cluster):
     now = 0
     accum = RecordAccumulator(linger_ms=10)
