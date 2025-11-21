@@ -33,9 +33,6 @@ from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
 from kafka.vendor import socketpair # noqa: F401
 from kafka.version import __version__
 
-if six.PY2:
-    ConnectionError = None
-
 
 log = logging.getLogger('kafka.client')
 

@@ -22,13 +22,6 @@ from kafka.protocol.produce import ProduceRequest
 
 import kafka.errors as Errors
 
-from kafka.vendor import six
-
-if six.PY2:
-    ConnectionError = socket.error
-    TimeoutError = socket.error
-    BlockingIOError = Exception
-
 
 @pytest.fixture
 def dns_lookup(mocker):

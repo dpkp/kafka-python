@@ -269,22 +269,13 @@ def size_of_varint_2(value):
     return 10
 
 
-if six.PY3:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
+def _read_byte(memview, pos):
+    """ Read a byte from memoryview as an integer
 
-            Raises:
-                IndexError: if position is out of bounds
-        """
-        return memview[pos]
-else:
-    def _read_byte(memview, pos):
-        """ Read a byte from memoryview as an integer
-
-            Raises:
-                IndexError: if position is out of bounds
-        """
-        return ord(memview[pos])
+        Raises:
+            IndexError: if position is out of bounds
+    """
+    return memview[pos]
 
 
 def decode_varint_1(buffer, pos=0):

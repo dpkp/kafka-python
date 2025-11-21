@@ -17,8 +17,6 @@ import socket
 import threading
 import time
 
-from kafka.vendor import six
-
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
@@ -39,11 +37,6 @@ from kafka.sasl import get_sasl_mechanism
 from kafka.socks5_wrapper import Socks5Wrapper
 from kafka.version import __version__
 
-
-if six.PY2:
-    ConnectionError = socket.error
-    TimeoutError = socket.error
-    BlockingIOError = Exception
 
 log = logging.getLogger(__name__)
 
@@ -720,13 +713,9 @@ class BrokerConnection(object):
             except (SSLWantReadError, SSLWantWriteError):
                 break
             except (ConnectionError, TimeoutError) as e:
-                if six.PY2 and e.errno == errno.EWOULDBLOCK:
-                    break
                 raise
             except BlockingIOError:
-                if six.PY3:
-                    break
-                raise
+                break
         return total_sent
 
     def _send_bytes_blocking(self, data):
@@ -1183,17 +1172,12 @@ class BrokerConnection(object):
                 except (SSLWantReadError, SSLWantWriteError):
                     break
                 except (ConnectionError, TimeoutError) as e:
-                    if six.PY2 and e.errno == errno.EWOULDBLOCK:
-                        break
                     log.exception('%s: Error receiving network data'
                                   ' closing socket', self)
                     err = Errors.KafkaConnectionError(e)
                     break
                 except BlockingIOError:
-                    if six.PY3:
-                        break
-                    # For PY2 this is a catchall and should be re-raised
-                    raise
+                    break
 
             # Only process bytes if there was no connection exception
             if err is None:
