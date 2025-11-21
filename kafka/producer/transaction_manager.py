@@ -535,8 +535,7 @@ class TransactionalRequestResult(object):
         return self._error
 
 
-@six.add_metaclass(abc.ABCMeta)
-class TxnRequestHandler(object):
+class TxnRequestHandler(object, metaclass=abc.ABCMeta):
     def __init__(self, transaction_manager, result=None):
         self.transaction_manager = transaction_manager
         self.retry_backoff_ms = transaction_manager.retry_backoff_ms

@@ -3,11 +3,9 @@ from __future__ import absolute_import
 import abc
 
 from kafka.metrics.measurable_stat import AbstractMeasurableStat
-from kafka.vendor.six import add_metaclass
 
 
-@add_metaclass(abc.ABCMeta)
-class AbstractSampledStat(AbstractMeasurableStat):
+class AbstractSampledStat(AbstractMeasurableStat, metaclass=abc.ABCMeta):
     """
     An AbstractSampledStat records a single scalar value measured over
     one or more samples. Each sample is recorded over a configurable

@@ -2,11 +2,8 @@ from __future__ import absolute_import
 
 import abc
 
-from kafka.vendor.six import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class AbstractType(object):
+class AbstractType(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def encode(cls, value): # pylint: disable=no-self-argument
         pass

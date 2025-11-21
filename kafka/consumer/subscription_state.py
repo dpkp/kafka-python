@@ -509,8 +509,7 @@ class TopicPartitionState(object):
         return not self.paused and self.has_valid_position
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ConsumerRebalanceListener(object):
+class ConsumerRebalanceListener(object, metaclass=abc.ABCMeta):
     """
     A callback interface that the user can implement to trigger custom actions
     when the set of partitions assigned to the consumer changes.
