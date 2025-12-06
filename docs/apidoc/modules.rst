@@ -10,3 +10,5 @@ kafka-python API
    KafkaClient
    BrokerConnection
    ClusterMetadata
+   OffsetAndMetadata
+   TopicPartition
