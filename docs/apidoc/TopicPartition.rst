@@ -1,0 +1,2 @@
+.. autoclass:: kafka.TopicPartition
+    :members:

@@ -223,6 +223,18 @@ method that probes a kafka broker and
 attempts to identify which version it is running (0.8.0 to 2.6+).
 
 
+Debugging
+*********
+
+Use python's `logging` module to view internal operational events.
+See https://docs.python.org/3/howto/logging.html for overview / howto.
+
+.. code-block:: python
+
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+
+
 .. toctree::
    :hidden:
    :maxdepth: 2

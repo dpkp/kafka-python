@@ -1,0 +1,2 @@
+.. autoclass:: kafka.OffsetAndMetadata
+    :members:
