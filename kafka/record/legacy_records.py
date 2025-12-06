@@ -122,6 +122,9 @@ class LegacyRecordBase(object):
             checker, name = codecs.has_snappy, "snappy"
         elif compression_type == self.CODEC_LZ4:
             checker, name = codecs.has_lz4, "lz4"
+        else:
+            raise UnsupportedCodecError(
+                "Unrecognized compression type")
         if not checker():
             raise UnsupportedCodecError(
                 "Libraries for {} compression codec not found".format(name))
@@ -206,7 +209,7 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
                 uncompressed = lz4_decode_old_kafka(data.tobytes())
             else:
                 uncompressed = lz4_decode(data.tobytes())
-        return uncompressed
+        return uncompressed  # pylint: disable=E0606
 
     def _read_header(self, pos):
         if self._magic == 0:
@@ -483,7 +486,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
                 else:
                     compressed = lz4_encode(data)
             size = self.size_in_bytes(
-                0, timestamp=0, key=None, value=compressed)
+                0, timestamp=0, key=None, value=compressed)  # pylint: disable=E0606
             # We will try to reuse the same buffer if we have enough space
             if size > len(self._buffer):
                 self._buffer = bytearray(size)

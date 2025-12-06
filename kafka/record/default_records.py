@@ -245,7 +245,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
                     uncompressed = lz4_decode(data.tobytes())
                 if compression_type == self.CODEC_ZSTD:
                     uncompressed = zstd_decode(data.tobytes())
-                self._buffer = bytearray(uncompressed)
+                self._buffer = bytearray(uncompressed)  # pylint: disable=E0606
                 self._pos = 0
         self._decompressed = True
 
@@ -658,7 +658,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 compressed = lz4_encode(data)
             elif self._compression_type == self.CODEC_ZSTD:
                 compressed = zstd_encode(data)
-            compressed_size = len(compressed)
+            compressed_size = len(compressed)  # pylint: disable=E0606
             if len(data) <= compressed_size:
                 # We did not get any benefit from compression, lets send
                 # uncompressed

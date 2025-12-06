@@ -68,7 +68,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Pylint
-        run: pylint --recursive=y --errors-only --exit-zero kafka test
+        run: pylint --recursive=y --errors-only kafka test
       - name: Setup java
         uses: actions/setup-java@v5
         with:

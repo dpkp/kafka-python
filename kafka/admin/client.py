@@ -290,7 +290,7 @@ class KafkaAdminClient(object):
             request = FindCoordinatorRequest[version](group_id)
         elif version <= 2:
             request = FindCoordinatorRequest[version](group_id, 0)
-        return request
+        return request  # pylint: disable=E0606
 
     def _find_coordinator_id_process_response(self, response):
         """Process a FindCoordinatorResponse.
@@ -506,7 +506,7 @@ class KafkaAdminClient(object):
             )
         # TODO convert structs to a more pythonic interface
         # TODO raise exceptions if errors
-        return self._send_request_to_controller(request)
+        return self._send_request_to_controller(request)  # pylint: disable=E0606
 
     def delete_topics(self, topics, timeout_ms=None):
         """Delete topics from the cluster.
@@ -680,7 +680,7 @@ class KafkaAdminClient(object):
                 permission_type=acl_filter.permission_type
 
             )
-        response = self.send_request(request)
+        response = self.send_request(request)  # pylint: disable=E0606
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             # optionally we could retry if error_type.retriable
@@ -793,7 +793,7 @@ class KafkaAdminClient(object):
             request = CreateAclsRequest[version](
                 creations=[self._convert_create_acls_resource_request_v1(acl) for acl in acls]
             )
-        response = self.send_request(request)
+        response = self.send_request(request)  # pylint: disable=E0606
         return self._convert_create_acls_response_to_acls(acls, response)
 
     @staticmethod
@@ -907,7 +907,7 @@ class KafkaAdminClient(object):
             request = DeleteAclsRequest[version](
                 filters=[self._convert_delete_acls_resource_request_v1(acl) for acl in acl_filters]
             )
-        response = self.send_request(request)
+        response = self.send_request(request)  # pylint: disable=E0606
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 
     @staticmethod
@@ -1269,14 +1269,15 @@ class KafkaAdminClient(object):
                     # TODO: Fix GroupInformation defaults
                     described_group_information_list.append([])
                 group_description = GroupInformation._make(described_group_information_list)
-        error_code = group_description.error_code
-        error_type = Errors.for_code(error_code)
-        # Java has the note: KAFKA-6789, we can retry based on the error code
-        if error_type is not Errors.NoError:
-            raise error_type(
-                "DescribeGroupsResponse failed with response '{}'."
-                .format(response))
-        return group_description
+                error_code = group_description.error_code
+                error_type = Errors.for_code(error_code)
+                # Java has the note: KAFKA-6789, we can retry based on the error code
+                if error_type is not Errors.NoError:
+                    raise error_type(
+                        "DescribeGroupsResponse failed with response '{}'."
+                        .format(response))
+                return group_description
+        assert False, "DescribeGroupsResponse parsing failed"
 
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
