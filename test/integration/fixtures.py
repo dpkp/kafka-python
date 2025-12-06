@@ -299,7 +299,7 @@ class KafkaFixture(Fixture):
 
         if self.external:
             self.child = ExternalService(self.host, self.port)
-            (self._client,) = self.get_clients(1, client_id='_internal_client')
+            self._client = next(self.get_clients(1, client_id='_internal_client'))
             self.running = True
         else:
             self._client = None
@@ -447,7 +447,7 @@ class KafkaFixture(Fixture):
         else:
             raise RuntimeError('Failed to start KafkaInstance before max_timeout')
 
-        (self._client,) = self.get_clients(1, client_id='_internal_client')
+        self._client = next(self.get_clients(1, client_id='_internal_client'))
 
         self.out("Done!")
         self.running = True
