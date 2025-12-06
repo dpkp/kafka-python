@@ -4,7 +4,6 @@ import threading
 import time
 
 import pytest
-from kafka.vendor import six
 
 from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
@@ -60,7 +59,7 @@ def test_group(kafka_broker, topic):
                                      api_version_auto_timeout_ms=5000,
                                      heartbeat_interval_ms=500)
         while not stop[i].is_set():
-            for tp, records in six.iteritems(consumers[i].poll(timeout_ms=200)):
+            for tp, records in consumers[i].poll(timeout_ms=200).items():
                 messages[i][tp].extend(records)
         consumers[i].close(timeout_ms=500)
         consumers[i] = None
@@ -84,7 +83,7 @@ def test_group(kafka_broker, topic):
                 time.sleep(1)
                 continue
 
-            unassigned_consumers = {c for c, consumer in six.iteritems(consumers) if not consumer.assignment()}
+            unassigned_consumers = {c for c, consumer in consumers.items() if not consumer.assignment()}
             if unassigned_consumers:
                 logging.info('Waiting for consumer assignments: %s', unassigned_consumers)
                 time.sleep(1)
@@ -95,14 +94,14 @@ def test_group(kafka_broker, topic):
             # Verify all consumers are in the same generation
             # then log state and break while loop
             generations = set([consumer._coordinator._generation.generation_id
-                               for consumer in six.itervalues(consumers)])
+                               for consumer in consumers.values()])
 
             # New generation assignment is not complete until
             # coordinator.rejoining = False
-            rejoining = set([c for c, consumer in six.iteritems(consumers) if consumer._coordinator.rejoining])
+            rejoining = set([c for c, consumer in consumers.items() if consumer._coordinator.rejoining])
 
             if not rejoining and len(generations) == 1:
-                for c, consumer in six.iteritems(consumers):
+                for c, consumer in consumers.items():
                     logging.info("[%s] %s %s: %s", c,
                                  consumer._coordinator._generation.generation_id,
                                  consumer._coordinator._generation.member_id,

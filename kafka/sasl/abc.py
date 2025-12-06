@@ -1,12 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
-from kafka.vendor.six import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class SaslMechanism(object):
+class SaslMechanism(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __init__(self, **config):
         pass

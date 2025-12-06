@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-
-
 API_KEYS = {
     0: 'Produce',
     1: 'Fetch',

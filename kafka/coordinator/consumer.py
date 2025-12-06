@@ -1,12 +1,8 @@
-from __future__ import absolute_import, division
-
 import collections
 import copy
 import functools
 import logging
 import time
-
-from kafka.vendor import six
 
 from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
@@ -367,7 +363,7 @@ class ConsumerCoordinator(BaseCoordinator):
         log.debug("Finished assignment for group %s: %s", self.group_id, assignments)
 
         group_assignment = {}
-        for member_id, assignment in six.iteritems(assignments):
+        for member_id, assignment in assignments.items():
             group_assignment[member_id] = assignment
         return group_assignment
 
@@ -421,7 +417,7 @@ class ConsumerCoordinator(BaseCoordinator):
             offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
         except Errors.KafkaTimeoutError:
             return False
-        for partition, offset in six.iteritems(offsets):
+        for partition, offset in offsets.items():
             log.debug("Setting offset for partition %s to the committed offset %s", partition, offset.offset)
             self._subscription.seek(partition, offset.offset)
         return True
@@ -640,7 +636,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
-        for tp, offset in six.iteritems(offsets):
+        for tp, offset in offsets.items():
             offset_data[tp.topic][tp.partition] = offset
 
         version = self._client.api_version(OffsetCommitRequest, max_version=7)
@@ -675,8 +671,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         partition,
                         offset.offset,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif version == 1:
             request = OffsetCommitRequest[version](
@@ -691,8 +687,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         offset.offset,
                         -1, # timestamp, unused
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif version <= 4:
             request = OffsetCommitRequest[version](
@@ -705,8 +701,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         partition,
                         offset.offset,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif version <= 5:
             request = OffsetCommitRequest[version](
@@ -718,8 +714,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         partition,
                         offset.offset,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         elif version <= 6:
             request = OffsetCommitRequest[version](
@@ -732,8 +728,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         offset.offset,
                         offset.leader_epoch,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
         else:
             request = OffsetCommitRequest[version](
@@ -747,8 +743,8 @@ class ConsumerCoordinator(BaseCoordinator):
                         offset.offset,
                         offset.leader_epoch,
                         offset.metadata
-                    ) for partition, offset in six.iteritems(partitions)]
-                ) for topic, partitions in six.iteritems(offset_data)]
+                    ) for partition, offset in partitions.items()]
+                ) for topic, partitions in offset_data.items()]
             )
 
         log.debug("Sending offset-commit request with %s for group %s to %s",

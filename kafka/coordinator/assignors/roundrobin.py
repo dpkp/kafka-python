@@ -1,10 +1,6 @@
-from __future__ import absolute_import
-
 import collections
 import itertools
 import logging
-
-from kafka.vendor import six
 
 from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
@@ -51,7 +47,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     @classmethod
     def assign(cls, cluster, group_subscriptions):
         all_topics = set()
-        for subscription in six.itervalues(group_subscriptions):
+        for subscription in group_subscriptions.values():
             all_topics.update(subscription.topics)
 
         all_topic_partitions = []
@@ -68,7 +64,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         assignment = collections.defaultdict(lambda: collections.defaultdict(list))
 
         # Sort static and dynamic members separately to maintain stable static assignments
-        ungrouped = [(subscription.group_instance_id, member_id) for member_id, subscription in six.iteritems(group_subscriptions)]
+        ungrouped = [(subscription.group_instance_id, member_id) for member_id, subscription in group_subscriptions.items()]
         grouped = {k: list(g) for k, g in itertools.groupby(ungrouped, key=lambda ids: ids[0] is not None)}
         member_list = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
         member_iter = itertools.cycle(member_list)

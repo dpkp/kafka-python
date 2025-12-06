@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 # Adapted from https://github.com/mrafayaleem/kafka-jython
 
-from __future__ import absolute_import, print_function
-
 import argparse
 import pprint
 import sys
 import threading
 import time
 import traceback
-
-from kafka.vendor.six.moves import range
 
 from kafka import KafkaProducer
 

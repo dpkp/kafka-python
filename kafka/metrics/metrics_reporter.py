@@ -1,12 +1,7 @@
-from __future__ import absolute_import
-
 import abc
 
-from kafka.vendor.six import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class AbstractMetricsReporter(object):
+class AbstractMetricsReporter(object, metaclass=abc.ABCMeta):
     """
     An abstract class to allow things to listen as new metrics
     are created so they can be reported.

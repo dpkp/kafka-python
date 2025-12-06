@@ -1,5 +1,4 @@
 # pylint: skip-file
-from __future__ import absolute_import
 
 from collections import defaultdict
 from random import randint, sample
@@ -12,7 +11,6 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.protocol import ConsumerProtocolMemberAssignment_v0
 from kafka.coordinator.subscription import Subscription
-from kafka.vendor import six
 
 
 @pytest.fixture(autouse=True)
@@ -111,7 +109,7 @@ def test_sticky_assignor1(mocker):
 
     del subscriptions['C1']
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -154,7 +152,7 @@ def test_sticky_assignor2(mocker):
         'C2': {'t0', 't1', 't2'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -167,7 +165,7 @@ def test_sticky_assignor2(mocker):
 
     del subscriptions['C0']
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -326,7 +324,7 @@ def test_sticky_add_remove_consumer_one_topic(mocker):
         'C2': {'t'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(
             topics, assignment[member].partitions() if member in assignment else []
         )
@@ -338,7 +336,7 @@ def test_sticky_add_remove_consumer_one_topic(mocker):
         'C2': {'t'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -367,7 +365,7 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
         'C2': {'t1', 't2'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -382,7 +380,7 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
         'C2': {'t2'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -413,7 +411,7 @@ def test_sticky_reassignment_after_one_consumer_leaves(mocker):
 
     del subscriptions['C10']
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -435,7 +433,7 @@ def test_sticky_reassignment_after_one_consumer_added(mocker):
 
     subscriptions['C10'] = {'t'}
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(
             topics, assignment[member].partitions() if member in assignment else []
         )
@@ -452,7 +450,7 @@ def test_sticky_same_subscriptions(mocker):
 
     subscriptions = defaultdict(set)
     for i in range(1, 9):
-        for j in range(1, len(six.viewkeys(partitions)) + 1):
+        for j in range(1, len(partitions) + 1):
             subscriptions['C{}'.format(i)].add('t{}'.format(j))
 
     member_metadata = make_member_metadata(subscriptions)
@@ -462,7 +460,7 @@ def test_sticky_same_subscriptions(mocker):
 
     del subscriptions['C5']
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     verify_validity_and_balance(subscriptions, assignment)
@@ -488,7 +486,7 @@ def test_sticky_large_assignment_with_multiple_consumers_leaving(mocker):
     verify_validity_and_balance(subscriptions, assignment)
 
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
     for i in range(50):
@@ -517,7 +515,7 @@ def test_new_subscription(mocker):
 
     subscriptions['C0'].add('t1')
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -540,7 +538,7 @@ def test_move_existing_assignments(mocker):
     }
 
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, member_assignments[member])
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -560,7 +558,7 @@ def test_stickiness(mocker):
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     verify_validity_and_balance(subscriptions, assignment)
     partitions_assigned = {}
-    for consumer, consumer_assignment in six.iteritems(assignment):
+    for consumer, consumer_assignment in assignment.items():
         assert (
             len(consumer_assignment.partitions()) <= 1
         ), 'Consumer {} is assigned more topic partitions than expected.'.format(consumer)
@@ -570,14 +568,14 @@ def test_stickiness(mocker):
     # removing the potential group leader
     del subscriptions['C1']
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
-    for consumer, consumer_assignment in six.iteritems(assignment):
+    for consumer, consumer_assignment in assignment.items():
         assert (
             len(consumer_assignment.partitions()) <= 1
         ), 'Consumer {} is assigned more topic partitions than expected.'.format(consumer)
@@ -625,7 +623,7 @@ def test_no_exceptions_when_only_subscribed_topic_is_deleted(mocker):
         'C': {},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     cluster = create_cluster(mocker, topics={}, topics_partitions={})
@@ -644,7 +642,7 @@ def test_conflicting_previous_assignments(mocker):
         'C2': {'t'},
     }
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         # assume both C1 and C2 have partition 1 assigned to them in generation 1
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [TopicPartition('t', 0), TopicPartition('t', 0)], 1)
 
@@ -676,7 +674,7 @@ def test_reassignment_with_random_subscriptions_and_changes(mocker, execution_nu
         subscriptions['C{}'.format(i)].update(topics_sample)
 
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -778,7 +776,7 @@ def test_assignment_with_conflicting_previous_generations(mocker, execution_numb
         'C3': 2,
     }
     member_metadata = {}
-    for member in six.iterkeys(member_assignments):
+    for member in member_assignments:
         member_metadata[member] = StickyPartitionAssignor._metadata({'t'}, member_assignments[member], member_generations[member])
 
     assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
@@ -788,7 +786,7 @@ def test_assignment_with_conflicting_previous_generations(mocker, execution_numb
 
 def make_member_metadata(subscriptions):
     member_metadata = {}
-    for member, topics in six.iteritems(subscriptions):
+    for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
     return member_metadata
 
@@ -813,9 +811,9 @@ def verify_validity_and_balance(subscriptions, assignment):
     :param subscriptions  topic subscriptions of each consumer
     :param assignment: given assignment for balance check
     """
-    assert six.viewkeys(subscriptions) == six.viewkeys(assignment)
+    assert subscriptions.keys() == assignment.keys()
 
-    consumers = sorted(six.viewkeys(assignment))
+    consumers = sorted(assignment.keys())
     for i in range(len(consumers)):
         consumer = consumers[i]
         partitions = assignment[consumer].partitions()
@@ -846,7 +844,7 @@ def verify_validity_and_balance(subscriptions, assignment):
             assignments_by_topic = group_partitions_by_topic(partitions)
             other_assignments_by_topic = group_partitions_by_topic(other_partitions)
             if len(partitions) > len(other_partitions):
-                for topic in six.iterkeys(assignments_by_topic):
+                for topic in assignments_by_topic:
                     assert topic not in other_assignments_by_topic, (
                         'Error: Some partitions can be moved from {} ({} partitions) '
                         'to {} ({} partitions) '
@@ -855,7 +853,7 @@ def verify_validity_and_balance(subscriptions, assignment):
                         'Assignments: {}'.format(consumer, len(partitions), other_consumer, len(other_partitions), subscriptions, assignment)
                     )
             if len(other_partitions) > len(partitions):
-                for topic in six.iterkeys(other_assignments_by_topic):
+                for topic in other_assignments_by_topic:
                     assert topic not in assignments_by_topic, (
                         'Error: Some partitions can be moved from {} ({} partitions) '
                         'to {} ({} partitions) '

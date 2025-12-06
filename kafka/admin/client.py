@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 from collections import defaultdict
 import copy
 import itertools
@@ -8,7 +6,6 @@ import socket
 import time
 
 from . import ConfigResourceType
-from kafka.vendor import six
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType, valid_acl_operations
@@ -122,8 +119,7 @@ class KafkaAdminClient(object):
         ssl_crlfile (str): Optional filename containing the CRL to check for
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
-            this CRL. The CRL can only be checked with Python 3.4+ or 2.7.9+.
-            Default: None.
+            this CRL. Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set
             to None, KafkaClient will attempt to infer the broker version by
             probing various APIs. Example: (0, 10, 2). Default: None
@@ -420,11 +416,7 @@ class KafkaAdminClient(object):
         raise RuntimeError("This should never happen, please file a bug with full stacktrace if encountered")
 
     def _parse_topic_request_response(self, topic_error_tuples, request, response, tries):
-        # Also small py2/py3 compatibility -- py3 can ignore extra values
-        # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
-        # So for now we have to map across the list and explicitly drop any
-        # extra values (usually the error_message)
-        for topic, error_code in map(lambda e: e[:2], topic_error_tuples):
+        for topic, error_code, *_ in topic_error_tuples:
             error_type = Errors.for_code(error_code)
             if tries and error_type is Errors.NotControllerError:
                 # No need to inspect the rest of the errors for
@@ -439,12 +431,8 @@ class KafkaAdminClient(object):
         return True
 
     def _parse_topic_partition_request_response(self, request, response, tries):
-        # Also small py2/py3 compatibility -- py3 can ignore extra values
-        # during unpack via: for x, y, *rest in list_of_values. py2 cannot.
-        # So for now we have to map across the list and explicitly drop any
-        # extra values (usually the error_message)
         for topic, partition_results in response.replication_election_results:
-            for partition_id, error_code in map(lambda e: e[:2], partition_results):
+            for partition_id, error_code, *_ in partition_results:
                 error_type = Errors.for_code(error_code)
                 if tries and error_type is Errors.NotControllerError:
                     # No need to inspect the rest of the errors for
@@ -1418,7 +1406,7 @@ class KafkaAdminClient(object):
             topics_partitions_dict = defaultdict(set)
             for topic, partition in partitions:
                 topics_partitions_dict[topic].add(partition)
-            topics_partitions = list(six.iteritems(topics_partitions_dict))
+            topics_partitions = list(topics_partitions_dict.items())
         return OffsetFetchRequest[version](group_id, topics_partitions)
 
     def _list_consumer_group_offsets_process_response(self, response):

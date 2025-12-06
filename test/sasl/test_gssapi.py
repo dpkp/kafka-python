@@ -1,9 +1,4 @@
-from __future__ import absolute_import
-
-try:
-    from unittest import mock
-except ImportError:
-    import mock
+from unittest import mock
 
 from kafka.sasl import get_sasl_mechanism
 import kafka.sasl.gssapi

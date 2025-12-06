@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division
-
 import abc
 import copy
 import logging
@@ -7,8 +5,6 @@ import threading
 import time
 import warnings
 import weakref
-
-from kafka.vendor import six
 
 from kafka.coordinator.heartbeat import Heartbeat
 from kafka import errors as Errors
@@ -710,7 +706,7 @@ class BaseCoordinator(object):
             group_assignment = self._perform_assignment(response.leader_id,
                                                         response.group_protocol,
                                                         members)
-            for member_id, assignment in six.iteritems(group_assignment):
+            for member_id, assignment in group_assignment.items():
                 if not isinstance(assignment, bytes):
                     group_assignment[member_id] = assignment.encode()
 

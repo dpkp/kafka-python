@@ -1,13 +1,9 @@
 # pylint: skip-file
-from __future__ import absolute_import
 
 from errno import EALREADY, EINPROGRESS, EISCONN, ECONNRESET
 import socket
+from unittest import mock
 
-try:
-    from unittest import mock
-except ImportError:
-    import mock
 import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates
@@ -21,13 +17,6 @@ from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 
 import kafka.errors as Errors
-
-from kafka.vendor import six
-
-if six.PY2:
-    ConnectionError = socket.error
-    TimeoutError = socket.error
-    BlockingIOError = Exception
 
 
 @pytest.fixture
