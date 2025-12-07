@@ -1,3 +1,4 @@
+import abc
 from io import BytesIO
 
 from kafka.protocol.abstract import AbstractType
@@ -6,8 +7,12 @@ from kafka.protocol.types import Schema
 from kafka.util import WeakMethod
 
 
-class Struct(AbstractType):
-    SCHEMA = Schema()
+class Struct(AbstractType, metaclass=abc.ABCMeta):
+
+    @abc.abstractproperty
+    def SCHEMA(self):
+        """An instance of Schema() representing the structure"""
+        pass
 
     def __init__(self, *args, **kwargs):
         if len(args) == len(self.SCHEMA.fields):
@@ -30,10 +35,7 @@ class Struct(AbstractType):
 
     @classmethod
     def encode(cls, item):  # pylint: disable=E0202
-        bits = []
-        for i, field in enumerate(cls.SCHEMA.fields):
-            bits.append(field.encode(item[i]))
-        return b''.join(bits)
+        return cls.SCHEMA.encode(item)
 
     def _encode_self(self):
         return self.SCHEMA.encode(
@@ -44,7 +46,7 @@ class Struct(AbstractType):
     def decode(cls, data):
         if isinstance(data, bytes):
             data = BytesIO(data)
-        return cls(*[field.decode(data) for field in cls.SCHEMA.fields])
+        return cls(*cls.SCHEMA.decode(data))
 
     def get_item(self, name):
         if name not in self.SCHEMA.names:

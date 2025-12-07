@@ -61,11 +61,6 @@ class Request(Struct, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractproperty
-    def SCHEMA(self):
-        """An instance of Schema() representing the request structure"""
-        pass
-
-    @abc.abstractproperty
     def RESPONSE_TYPE(self):
         """The Response class associated with the api request"""
         pass
@@ -94,11 +89,6 @@ class Response(Struct, metaclass=abc.ABCMeta):
     @abc.abstractproperty
     def API_VERSION(self):
         """Integer of api request/response version"""
-        pass
-
-    @abc.abstractproperty
-    def SCHEMA(self):
-        """An instance of Schema() representing the response structure"""
         pass
 
     def to_object(self):
