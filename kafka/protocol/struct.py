@@ -15,7 +15,7 @@ class Struct(metaclass=abc.ABCMeta):
         pass
 
     def __init__(self, *args, **kwargs):
-        if len(args) == len(self.SCHEMA.fields):
+        if len(args) == len(self.SCHEMA):
             for i, name in enumerate(self.SCHEMA.names):
                 setattr(self, name, args[i])
         elif len(args) > 0:
