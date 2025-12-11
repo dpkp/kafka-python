@@ -158,6 +158,7 @@ JoinGroupResponse = [
 ]
 
 
+# Currently unused -- see kafka.coordinator.protocol
 class ProtocolMetadata(Struct):
     SCHEMA = Schema(
         ('version', Int16),
@@ -250,6 +251,7 @@ SyncGroupResponse = [
 ]
 
 
+# Currently unused -- see kafka.coordinator.protocol
 class MemberAssignment(Struct):
     SCHEMA = Schema(
         ('version', Int16),
