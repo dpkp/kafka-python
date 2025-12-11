@@ -58,7 +58,10 @@ class StickyAssignorUserDataV1(Struct):
     """
 
     SCHEMA = Schema(
-        ("previous_assignment", Array(("topic", String("utf-8")), ("partitions", Array(Int32)))), ("generation", Int32)
+        ("previous_assignment", Array(
+            ("topic", String("utf-8")),
+            ("partitions", Array(Int32)))),
+        ("generation", Int32)
     )
 
 
