@@ -90,6 +90,8 @@ class Float64(AbstractType):
 
 
 class UUID(AbstractType):
+    ZERO_UUID = uuid.UUID(int=0)
+
     @classmethod
     def encode(cls, value):
         if isinstance(value, uuid.UUID):
