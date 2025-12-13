@@ -1,3 +1,4 @@
+import abc
 from io import BytesIO
 
 from kafka.protocol.abstract import AbstractType
@@ -6,11 +7,15 @@ from kafka.protocol.types import Schema
 from kafka.util import WeakMethod
 
 
-class Struct(AbstractType):
-    SCHEMA = Schema()
+class Struct(metaclass=abc.ABCMeta):
+
+    @abc.abstractproperty
+    def SCHEMA(self):
+        """An instance of Schema() representing the structure"""
+        pass
 
     def __init__(self, *args, **kwargs):
-        if len(args) == len(self.SCHEMA.fields):
+        if len(args) == len(self.SCHEMA):
             for i, name in enumerate(self.SCHEMA.names):
                 setattr(self, name, args[i])
         elif len(args) > 0:
@@ -23,19 +28,7 @@ class Struct(AbstractType):
                                  % (list(self.SCHEMA.names),
                                     ', '.join(kwargs.keys())))
 
-        # overloading encode() to support both class and instance
-        # Without WeakMethod() this creates circular ref, which
-        # causes instances to "leak" to garbage
-        self.encode = WeakMethod(self._encode_self)
-
-    @classmethod
-    def encode(cls, item):  # pylint: disable=E0202
-        bits = []
-        for i, field in enumerate(cls.SCHEMA.fields):
-            bits.append(field.encode(item[i]))
-        return b''.join(bits)
-
-    def _encode_self(self):
+    def encode(self):
         return self.SCHEMA.encode(
             [getattr(self, name) for name in self.SCHEMA.names]
         )
@@ -44,7 +37,7 @@ class Struct(AbstractType):
     def decode(cls, data):
         if isinstance(data, bytes):
             data = BytesIO(data)
-        return cls(*[field.decode(data) for field in cls.SCHEMA.fields])
+        return cls(*cls.SCHEMA.decode(data))
 
     def get_item(self, name):
         if name not in self.SCHEMA.names:

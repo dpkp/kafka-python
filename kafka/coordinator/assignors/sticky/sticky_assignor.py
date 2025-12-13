@@ -6,9 +6,8 @@ from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
 from kafka.coordinator.assignors.sticky.partition_movements import PartitionMovements
 from kafka.coordinator.assignors.sticky.sorted_set import SortedSet
 from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
-from kafka.coordinator.protocol import Schema
 from kafka.protocol.struct import Struct
-from kafka.protocol.types import String, Array, Int32
+from kafka.protocol.types import Array, Int32, Schema, String
 from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
@@ -59,7 +58,10 @@ class StickyAssignorUserDataV1(Struct):
     """
 
     SCHEMA = Schema(
-        ("previous_assignment", Array(("topic", String("utf-8")), ("partitions", Array(Int32)))), ("generation", Int32)
+        ("previous_assignment", Array(
+            ("topic", String("utf-8")),
+            ("partitions", Array(Int32)))),
+        ("generation", Int32)
     )
 
 
