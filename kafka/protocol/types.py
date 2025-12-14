@@ -228,6 +228,17 @@ class Array(AbstractType):
 class UnsignedVarInt32(AbstractType):
     @classmethod
     def decode(cls, data):
+        value = VarInt32.decode(data)
+        return (value << 1) ^ (value >> 31)
+
+    @classmethod
+    def encode(cls, value):
+        return VarInt32.encode((value >> 1) ^ -(value & 1))
+
+
+class VarInt32(AbstractType):
+    @classmethod
+    def decode(cls, data):
         value, i = 0, 0
         while True:
             b, = struct.unpack('B', data.read(1))
@@ -238,10 +249,12 @@ class UnsignedVarInt32(AbstractType):
             if i > 28:
                 raise ValueError('Invalid value {}'.format(value))
         value |= b << i
-        return value
+        return (value >> 1) ^ -(value & 1)
 
     @classmethod
     def encode(cls, value):
+        # bring it in line with the java binary repr
+        value = (value << 1) ^ (value >> 31)
         value &= 0xffffffff
         ret = b''
         while (value & 0xffffff80) != 0:
@@ -252,25 +265,12 @@ class UnsignedVarInt32(AbstractType):
         return ret
 
 
-class VarInt32(AbstractType):
-    @classmethod
-    def decode(cls, data):
-        value = UnsignedVarInt32.decode(data)
-        return (value >> 1) ^ -(value & 1)
-
-    @classmethod
-    def encode(cls, value):
-        # bring it in line with the java binary repr
-        value &= 0xffffffff
-        return UnsignedVarInt32.encode((value << 1) ^ (value >> 31))
-
-
 class VarInt64(AbstractType):
     @classmethod
     def decode(cls, data):
         value, i = 0, 0
         while True:
-            b = data.read(1)
+            b, = struct.unpack('B', data.read(1))
             if not (b & 0x80):
                 break
             value |= (b & 0x7f) << i
@@ -283,14 +283,14 @@ class VarInt64(AbstractType):
     @classmethod
     def encode(cls, value):
         # bring it in line with the java binary repr
+        value = (value << 1) ^ (value >> 63)
         value &= 0xffffffffffffffff
-        v = (value << 1) ^ (value >> 63)
         ret = b''
-        while (v & 0xffffffffffffff80) != 0:
+        while (value & 0xffffffffffffff80) != 0:
             b = (value & 0x7f) | 0x80
             ret += struct.pack('B', b)
-            v >>= 7
-        ret += struct.pack('B', v)
+            value >>= 7
+        ret += struct.pack('B', value)
         return ret
 
 
