@@ -66,6 +66,3 @@ def test_decode_fetch_response_partial():
     #    partitions[0][3], bytes_to_read=len(partitions[0][3]))
     #assert len(m1) == 2
     #assert m1[1] == (None, None, PartialMessage())
-
-
-
