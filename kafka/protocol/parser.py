@@ -22,7 +22,8 @@ class KafkaProtocol(object):
             Currently only used to check for 0.8.2 protocol quirks, but
             may be used for more in the future.
     """
-    def __init__(self, client_id=None, api_version=None):
+    def __init__(self, client_id=None, api_version=None, ident=''):
+        self._ident = ident
         if client_id is None:
             client_id = self._gen_client_id()
         self._client_id = client_id
@@ -53,7 +54,7 @@ class KafkaProtocol(object):
         Returns:
             correlation_id
         """
-        log.debug('Sending request %s', request)
+        log.debug('Sending request %s', request.__class__.__name__)
         if correlation_id is None:
             correlation_id = self._next_correlation_id()
 
@@ -71,6 +72,8 @@ class KafkaProtocol(object):
         """Retrieve all pending bytes to send on the network"""
         data = b''.join(self.bytes_to_send)
         self.bytes_to_send = []
+        if data:
+            log.debug('%s Send: %r', self._ident, data)
         return data
 
     def receive_bytes(self, data):
@@ -92,6 +95,8 @@ class KafkaProtocol(object):
         i = 0
         n = len(data)
         responses = []
+        if data:
+            log.debug('%s Recv: %r', self._ident, data)
         while i < n:
 
             # Not receiving is the state of reading the payload header

@@ -274,9 +274,7 @@ class BrokerConnection(object):
         # can use a simple dictionary of correlation_id => request data
         self.in_flight_requests = dict()
 
-        self._protocol = KafkaProtocol(
-            client_id=self.config['client_id'],
-            api_version=self.config['api_version'])
+        self._protocol = self._new_protocol_parser()
         self.state = ConnectionStates.DISCONNECTED
         self._reset_reconnect_backoff()
         self._sock = None
@@ -294,6 +292,12 @@ class BrokerConnection(object):
             self._sensors = BrokerConnectionMetrics(self.config['metrics'],
                                                     self.config['metric_group_prefix'],
                                                     self.node_id)
+
+    def _new_protocol_parser(self):
+        return KafkaProtocol(
+            ident='%s:%d' % (self.host, self.port),
+            client_id=self.config['client_id'],
+            api_version=self.config['api_version'])
 
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
@@ -934,9 +938,7 @@ class BrokerConnection(object):
             self._api_versions_future = None
             self._sasl_auth_future = None
             self._init_sasl_mechanism()
-            self._protocol = KafkaProtocol(
-                client_id=self.config['client_id'],
-                api_version=self.config['api_version'])
+            self._protocol = self._new_protocol_parser()
             self._send_buffer = b''
             if error is None:
                 error = Errors.Cancelled(str(self))
