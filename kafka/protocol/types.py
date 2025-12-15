@@ -5,6 +5,13 @@ import uuid
 from kafka.protocol.abstract import AbstractType
 
 
+__all__ = [
+    'Int8', 'Int16', 'Int32', 'Int64', 'Float64', 'UnsignedVarInt32', 'VarInt32', 'VarInt64',
+    'UUID', 'String', 'CompactString', 'Bytes', 'CompactBytes', 'Boolean', 'Schema',
+    'Array', 'CompactArray', 'TaggedFields', 'BitField'
+]
+
+
 def _pack(f, value):
     try:
         return f(value)
