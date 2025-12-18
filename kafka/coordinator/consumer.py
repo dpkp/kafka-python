@@ -453,7 +453,8 @@ class ConsumerCoordinator(BaseCoordinator):
             self._client.poll(future=future, timeout_ms=timer.timeout_ms)
 
             if future.is_done:
-                del self._offset_fetch_futures[future_key]
+                if future_key in self._offset_fetch_futures:
+                    del self._offset_fetch_futures[future_key]
 
                 if future.succeeded():
                     return future.value
