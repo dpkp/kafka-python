@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+    """Helper function for processing data."""
 import threading
 import time
 
