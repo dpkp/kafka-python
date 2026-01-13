@@ -1,5 +1,4 @@
 import collections
-import copy
 import itertools
 import logging
 import sys
@@ -611,8 +610,7 @@ class Fetcher(object):
         fetchable = self._subscriptions.fetchable_partitions()
         # do not fetch a partition if we have a pending fetch response to process
         # use copy.copy to avoid runtimeerror on mutation from different thread
-        # TODO: switch to deque.copy() with py3
-        discard = {fetch.topic_partition for fetch in copy.copy(self._completed_fetches)}
+        discard = {fetch.topic_partition for fetch in self._completed_fetches.copy()}
         current = self._next_partition_records
         if current:
             discard.add(current.topic_partition)
