@@ -1176,7 +1176,7 @@ class KafkaConsumer(object):
         return not self._fetcher.reset_offsets_if_needed()
 
     def _message_generator_v2(self):
-        timeout_ms = 1000 * max(0, self._consumer_timeout - time.time())
+        timeout_ms = 1000 * max(0, self._consumer_timeout - time.monotonic())
         record_map = self.poll(timeout_ms=timeout_ms, update_offsets=False)
         for tp, records in record_map.items():
             # Generators are stateful, and it is possible that the tp / records
@@ -1201,7 +1201,7 @@ class KafkaConsumer(object):
         if self._closed:
             raise StopIteration('KafkaConsumer closed')
         self._set_consumer_timeout()
-        while time.time() < self._consumer_timeout:
+        while time.monotonic() < self._consumer_timeout:
             if not self._iterator:
                 self._iterator = self._message_generator_v2()
             try:
@@ -1213,5 +1213,5 @@ class KafkaConsumer(object):
     def _set_consumer_timeout(self):
         # consumer_timeout_ms can be used to stop iteration early
         if self.config['consumer_timeout_ms'] >= 0:
-            self._consumer_timeout = time.time() + (
+            self._consumer_timeout = time.monotonic() + (
                 self.config['consumer_timeout_ms'] / 1000.0)

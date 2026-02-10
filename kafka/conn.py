@@ -326,7 +326,7 @@ class BrokerConnection(object):
     def connect_blocking(self, timeout=float('inf')):
         if self.connected():
             return True
-        timeout += time.time()
+        timeout += time.monotonic()
         # First attempt to perform dns lookup
         # note that the underlying interface, socket.getaddrinfo,
         # has no explicit timeout so we may exceed the user-specified timeout
@@ -335,7 +335,7 @@ class BrokerConnection(object):
         # Loop once over all returned dns entries
         selector = None
         while self._gai:
-            while time.time() < timeout:
+            while time.monotonic() < timeout:
                 self.connect()
                 if self.connected():
                     if selector is not None:
@@ -359,7 +359,7 @@ class BrokerConnection(object):
         """Attempt to connect and return ConnectionState"""
         if self.state is ConnectionStates.DISCONNECTED and not self.blacked_out():
             self.state = ConnectionStates.CONNECTING
-            self.last_attempt = time.time()
+            self.last_attempt = time.monotonic()
             next_lookup = self._next_afi_sockaddr()
             if not next_lookup:
                 self.close(Errors.KafkaConnectionError('DNS failure'))
@@ -464,7 +464,7 @@ class BrokerConnection(object):
                               ConnectionStates.DISCONNECTED):
             # Connection timed out
             request_timeout = self.config['request_timeout_ms'] / 1000.0
-            if time.time() > request_timeout + self.last_attempt:
+            if time.monotonic() > request_timeout + self.last_attempt:
                 log.error('%s: Connection attempt timed out', self)
                 self.close(Errors.KafkaConnectionError('timeout'))
                 return self.state
@@ -776,7 +776,7 @@ class BrokerConnection(object):
         if version == 1:
             ((correlation_id, response),) = self._protocol.receive_bytes(data)
             (future, timestamp, _timeout) = self.in_flight_requests.pop(correlation_id)
-            latency_ms = (time.time() - timestamp) * 1000
+            latency_ms = (time.monotonic() - timestamp) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
             log.debug('%s: Response %d (%s ms): %s', self, correlation_id, latency_ms, response)
@@ -834,7 +834,7 @@ class BrokerConnection(object):
         Return the number of milliseconds to wait until connection is no longer throttled.
         """
         if self._throttle_time is not None:
-            remaining_ms = (self._throttle_time - time.time()) * 1000
+            remaining_ms = (self._throttle_time - time.monotonic()) * 1000
             if remaining_ms > 0:
                 return remaining_ms
             else:
@@ -855,7 +855,7 @@ class BrokerConnection(object):
             elif self.config["socks5_proxy"] and Socks5Wrapper.use_remote_lookup(self.config["socks5_proxy"]):
                 return 0
             else:
-                time_waited = time.time() - self.last_attempt
+                time_waited = time.monotonic() - self.last_attempt
                 return max(self._reconnect_backoff - time_waited, 0) * 1000
         else:
             # When connecting or connected, we should be able to delay
@@ -1006,7 +1006,7 @@ class BrokerConnection(object):
             log.debug('%s: Request %d (timeout_ms %s): %s', self, correlation_id, request_timeout_ms, request)
             if request.expect_response():
                 assert correlation_id not in self.in_flight_requests, 'Correlation ID already in-flight!'
-                sent_time = time.time()
+                sent_time = time.monotonic()
                 timeout_at = sent_time + (request_timeout_ms / 1000)
                 self.in_flight_requests[correlation_id] = (future, sent_time, timeout_at)
             else:
@@ -1093,7 +1093,7 @@ class BrokerConnection(object):
         # Client side throttling enabled in v2.0 brokers
         # prior to that throttling (if present) was managed broker-side
         if self.config['api_version'] is not None and self.config['api_version'] >= (2, 0):
-            throttle_time = time.time() + throttle_time_ms / 1000
+            throttle_time = time.monotonic() + throttle_time_ms / 1000
             self._throttle_time = max(throttle_time, self._throttle_time or 0)
         log.warning("%s: %s throttled by broker (%d ms)", self,
                     response.__class__.__name__, throttle_time_ms)
@@ -1129,7 +1129,7 @@ class BrokerConnection(object):
             except KeyError:
                 self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
                 return ()
-            latency_ms = (time.time() - timestamp) * 1000
+            latency_ms = (time.monotonic() - timestamp) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
 
@@ -1193,7 +1193,7 @@ class BrokerConnection(object):
         return self.next_ifr_request_timeout_ms() == 0
 
     def timed_out_ifrs(self):
-        now = time.time()
+        now = time.monotonic()
         ifrs = sorted(self.in_flight_requests.values(), reverse=True, key=lambda ifr: ifr[2])
         return list(filter(lambda ifr: ifr[2] <= now, ifrs))
 
@@ -1204,7 +1204,7 @@ class BrokerConnection(object):
                     return v[2]
                 next_timeout = min(map(get_timeout,
                                    self.in_flight_requests.values()))
-                return max(0, (next_timeout - time.time()) * 1000)
+                return max(0, (next_timeout - time.monotonic()) * 1000)
             else:
                 return float('inf')
 
@@ -1275,8 +1275,8 @@ class BrokerConnection(object):
 
         Raises: NodeNotReadyError on timeout
         """
-        timeout_at = time.time() + timeout
-        if not self.connect_blocking(timeout_at - time.time()):
+        timeout_at = time.monotonic() + timeout
+        if not self.connect_blocking(timeout_at - time.monotonic()):
             raise Errors.NodeNotReadyError()
         else:
             return self._api_version
