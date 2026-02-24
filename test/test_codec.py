@@ -121,3 +121,14 @@ def test_zstd():
         b1 = random_string(100).encode('utf-8')
         b2 = zstd_decode(zstd_encode(b1))
         assert b1 == b2
+
+
+@pytest.mark.skipif(not has_zstd(), reason="Zstd not available")
+def test_zstd_multi_frame():
+    """Test that zstd_decode handles multiple concatenated zstd frames."""
+    frame1_data = b'some payload data ' * 100
+    frame2_data = b'another frame of data ' * 100
+    # Concatenate two independently compressed zstd frames
+    multi_frame_payload = zstd_encode(frame1_data) + zstd_encode(frame2_data)
+    result = zstd_decode(multi_frame_payload)
+    assert result == frame1_data + frame2_data
