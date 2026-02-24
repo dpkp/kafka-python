@@ -201,7 +201,7 @@ def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
     req = ProduceRequest[0](required_acks=0, timeout=0, topics=())
-    header = RequestHeader(req, client_id=conn.config['client_id'])
+    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
     remainder = payload_bytes % 3
@@ -218,7 +218,7 @@ def test_send_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
     req = MetadataRequest[0]([])
-    header = RequestHeader(req, client_id=conn.config['client_id'])
+    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     third = payload_bytes // 3
     remainder = payload_bytes % 3
@@ -237,10 +237,10 @@ def test_send_async_request_while_other_request_is_already_in_buffer(_socket, co
     bytes_sent_sensor = metrics.mocked_sensors['node-0.bytes-sent']
 
     req1 = MetadataRequest[0](topics='foo')
-    header1 = RequestHeader(req1, client_id=conn.config['client_id'])
+    header1 = RequestHeader(req1.API_KEY, req1.API_VERSION, 0, conn.config['client_id'])
     payload_bytes1 = len(header1.encode()) + len(req1.encode())
     req2 = MetadataRequest[0]([])
-    header2 = RequestHeader(req2, client_id=conn.config['client_id'])
+    header2 = RequestHeader(req2.API_KEY, req2.API_VERSION, 0, conn.config['client_id'])
     payload_bytes2 = len(header2.encode()) + len(req2.encode())
 
     # The first call to the socket will raise a transient SSL exception. This will make the first
@@ -299,7 +299,7 @@ def test_recv_disconnected(_socket, conn):
     assert conn.connected()
 
     req = MetadataRequest[0]([])
-    header = RequestHeader(req, client_id=conn.config['client_id'])
+    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
     payload_bytes = len(header.encode()) + len(req.encode())
     _socket.send.side_effect = [4, payload_bytes]
     conn.send(req)

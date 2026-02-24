@@ -18,7 +18,7 @@ def test_encode_message_header():
     ])
 
     req = FindCoordinatorRequest[0]('foo')
-    header = RequestHeader(req, correlation_id=4, client_id='client3')
+    header = RequestHeader(api_key=req.API_KEY, api_version=req.API_VERSION, correlation_id=4, client_id='client3')
     assert header.encode() == expect
 
 
