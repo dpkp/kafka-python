@@ -1,4 +1,5 @@
 import abc
+from io import BytesIO
 
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import Int16, Int32, String, Schema, Array, TaggedFields
@@ -73,6 +74,31 @@ class Request(Struct, metaclass=abc.ABCMeta):
             return RequestHeaderV2.decode(read_buffer)
         return RequestHeader.decode(read_buffer)
 
+    def encode(self, header=False, framed=False, correlation_id=None, client_id=None, **kwargs):
+        data = super(Request, self).encode()
+        if not framed and not header:
+            return data
+        bits = [data]
+        if header:
+            bits.insert(0, self.build_header(correlation_id, client_id).encode())
+        if framed:
+            bits.insert(0, Int32.encode(sum(map(len, bits))))
+        return b''.join(bits)
+
+    @classmethod
+    def decode(cls, data, header=False, framed=False):
+        if not framed and not header:
+            return super(Request, cls).decode(data)
+        if isinstance(data, bytes):
+            data = BytesIO(data)
+        ret = []
+        if framed:
+            ret.append(Int32.decode(data))
+        if header:
+            ret.append(cls.parse_header(data))
+        ret.append(super(Request, cls).decode(data))
+        return tuple(ret)
+
 
 class Response(Struct, metaclass=abc.ABCMeta):
     FLEXIBLE_VERSION = False
@@ -100,6 +126,31 @@ class Response(Struct, metaclass=abc.ABCMeta):
         if cls.FLEXIBLE_VERSION:
             return ResponseHeaderV2.decode(read_buffer)
         return ResponseHeader.decode(read_buffer)
+
+    def encode(self, header=False, framed=False, correlation_id=None, **kwargs):
+        data = super(Response, self).encode()
+        if not framed and not header:
+            return data
+        bits = [data]
+        if header:
+            bits.insert(0, self.build_header(correlation_id).encode())
+        if framed:
+            bits.insert(0, Int32.encode(sum(map(len, bits))))
+        return b''.join(bits)
+
+    @classmethod
+    def decode(cls, data, header=False, framed=False):
+        if not framed and not header:
+            return super(Response, cls).decode(data)
+        if isinstance(data, bytes):
+            data = BytesIO(data)
+        ret = []
+        if framed:
+            ret.append(Int32.decode(data))
+        if header:
+            ret.append(cls.parse_header(data))
+        ret.append(super(Response, cls).decode(data))
+        return tuple(ret)
 
 
 def _to_object(schema, data):
