@@ -1,4 +1,5 @@
 import collections
+import copy
 import itertools
 import logging
 import sys
@@ -609,7 +610,7 @@ class Fetcher(object):
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
         # do not fetch a partition if we have a pending fetch response to process
-        # use copy.copy to avoid runtimeerror on mutation from different thread
+        # use copy to avoid runtimeerror on mutation from different thread
         discard = {fetch.topic_partition for fetch in self._completed_fetches.copy()}
         current = self._next_partition_records
         if current:
