@@ -319,7 +319,5 @@ def zstd_encode(payload):
 def zstd_decode(payload):
     if not zstd:
         raise NotImplementedError("Zstd codec is not available")
-    try:
-        return zstd.ZstdDecompressor().decompress(payload)
-    except zstd.ZstdError:
-        return zstd.ZstdDecompressor().decompress(payload, max_output_size=ZSTD_MAX_OUTPUT_SIZE)
+    with zstd.ZstdDecompressor().stream_reader(io.BytesIO(payload), read_across_frames=True) as reader:
+        return reader.read()
