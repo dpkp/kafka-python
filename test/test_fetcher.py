@@ -422,7 +422,7 @@ def test_fetched_records(fetcher, topic, mocker):
 ])
 def test__handle_fetch_response(fetcher, fetch_offsets, fetch_response, num_partitions):
     fetcher._nodes_with_pending_fetch_requests.add(0)
-    fetcher._handle_fetch_response(0, fetch_offsets, time.time(), fetch_response)
+    fetcher._handle_fetch_response(0, fetch_offsets, time.monotonic(), fetch_response)
     assert len(fetcher._completed_fetches) == num_partitions
 
 

@@ -73,9 +73,9 @@ def test_group(kafka_broker, topic):
         threads[i] = t
 
     try:
-        timeout = time.time() + 15
+        timeout = time.monotonic() + 15
         while True:
-            assert time.time() < timeout, "timeout waiting for assignments"
+            assert time.monotonic() < timeout, "timeout waiting for assignments"
             # Verify all consumers have been created
             missing_consumers = set(consumers.keys()) - set(range(num_consumers))
             if missing_consumers:
@@ -128,7 +128,7 @@ def test_group(kafka_broker, topic):
         while True:
             for c in range(num_consumers):
                 heartbeat = consumers[c]._coordinator.heartbeat
-                last_hb = time.time() - 0.5
+                last_hb = time.monotonic() - 0.5
                 if (heartbeat.heartbeat_failed or
                     heartbeat.last_receive < last_hb or
                     heartbeat.last_reset > last_hb):
@@ -176,7 +176,7 @@ def test_heartbeat_thread(kafka_broker, topic):
                              heartbeat_interval_ms=500)
 
     # poll until we have joined group / have assignment
-    start = time.time()
+    start = time.monotonic()
     while not consumer.assignment():
         consumer.poll(timeout_ms=100)
 
@@ -193,9 +193,9 @@ def test_heartbeat_thread(kafka_broker, topic):
     assert last_send > start
     assert last_recv > start
 
-    timeout = time.time() + 30
+    timeout = time.monotonic() + 30
     while True:
-        if time.time() > timeout:
+        if time.monotonic() > timeout:
             raise RuntimeError('timeout waiting for heartbeat')
         if consumer._coordinator.heartbeat.last_receive > last_recv:
             break

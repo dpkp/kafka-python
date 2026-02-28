@@ -574,7 +574,7 @@ class BaseCoordinator(object):
         log.debug("Sending JoinGroup (%s) to coordinator %s", request, self.coordinator_id)
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
-        _f.add_callback(self._handle_join_group_response, future, time.time())
+        _f.add_callback(self._handle_join_group_response, future, time.monotonic())
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
         return future
@@ -598,7 +598,7 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             if self._sensors:
-                self._sensors.join_latency.record((time.time() - send_time) * 1000)
+                self._sensors.join_latency.record((time.monotonic() - send_time) * 1000)
             with self._lock:
                 if self.state is not MemberState.REBALANCING:
                     # if the consumer was woken up before a rebalance completes,
@@ -744,7 +744,7 @@ class BaseCoordinator(object):
 
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
-        _f.add_callback(self._handle_sync_group_response, future, time.time())
+        _f.add_callback(self._handle_sync_group_response, future, time.monotonic())
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
         return future
@@ -754,7 +754,7 @@ class BaseCoordinator(object):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             if self._sensors:
-                self._sensors.sync_latency.record((time.time() - send_time) * 1000)
+                self._sensors.sync_latency.record((time.monotonic() - send_time) * 1000)
             future.success(response.member_assignment)
             return
 
@@ -997,14 +997,14 @@ class BaseCoordinator(object):
         heartbeat_log.debug("Sending HeartbeatRequest to %s: %s", self.coordinator_id, request)
         future = Future()
         _f = self._client.send(self.coordinator_id, request)
-        _f.add_callback(self._handle_heartbeat_response, future, time.time())
+        _f.add_callback(self._handle_heartbeat_response, future, time.monotonic())
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
         return future
 
     def _handle_heartbeat_response(self, future, send_time, response):
         if self._sensors:
-            self._sensors.heartbeat_latency.record((time.time() - send_time) * 1000)
+            self._sensors.heartbeat_latency.record((time.monotonic() - send_time) * 1000)
         heartbeat_log.debug("Received heartbeat response for group %s: %s",
                             self.group_id, response)
         error_type = Errors.for_code(response.error_code)

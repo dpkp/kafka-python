@@ -147,7 +147,7 @@ class Fetcher(object):
             log.debug("Sending FetchRequest to node %s", node_id)
             self._nodes_with_pending_fetch_requests.add(node_id)
             future = self._client.send(node_id, request, wakeup=False)
-            future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.time())
+            future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.monotonic())
             future.add_errback(self._handle_fetch_error, node_id)
             future.add_both(self._clear_pending_fetch_request, node_id)
             futures.append(future)
@@ -421,13 +421,13 @@ class Fetcher(object):
             if not self._client.ready(node_id):
                 continue
             partitions = set(timestamps_and_epochs.keys())
-            expire_at = time.time() + self.config['request_timeout_ms'] / 1000
+            expire_at = time.monotonic() + self.config['request_timeout_ms'] / 1000
             self._subscriptions.set_reset_pending(partitions, expire_at)
 
             def on_success(timestamps_and_epochs, result):
                 fetched_offsets, partitions_to_retry = result
                 if partitions_to_retry:
-                    self._subscriptions.reset_failed(partitions_to_retry, time.time() + self.config['retry_backoff_ms'] / 1000)
+                    self._subscriptions.reset_failed(partitions_to_retry, time.monotonic() + self.config['retry_backoff_ms'] / 1000)
                     self._client.cluster.request_update()
 
                 for partition, offset in fetched_offsets.items():
@@ -435,7 +435,7 @@ class Fetcher(object):
                     self._reset_offset_if_needed(partition, ts, offset.offset)
 
             def on_failure(partitions, error):
-                self._subscriptions.reset_failed(partitions, time.time() + self.config['retry_backoff_ms'] / 1000)
+                self._subscriptions.reset_failed(partitions, time.monotonic() + self.config['retry_backoff_ms'] / 1000)
                 self._client.cluster.request_update()
 
                 if not getattr(error, 'retriable', False):
@@ -777,7 +777,7 @@ class Fetcher(object):
                 self._completed_fetches.append(completed_fetch)
 
         if self._sensors:
-            self._sensors.fetch_latency.record((time.time() - send_time) * 1000)
+            self._sensors.fetch_latency.record((time.monotonic() - send_time) * 1000)
 
     def _handle_fetch_error(self, node_id, exception):
         level = logging.INFO if isinstance(exception, Errors.Cancelled) else logging.ERROR

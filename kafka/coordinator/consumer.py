@@ -127,7 +127,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.warning('group_id is None: disabling auto-commit.')
                 self.config['enable_auto_commit'] = False
             else:
-                self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
+                self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval
 
         if self.config['metrics']:
             self._consumer_sensors = ConsumerCoordinatorMetrics(
@@ -250,7 +250,7 @@ class ConsumerCoordinator(BaseCoordinator):
             assignor.on_generation_assignment(generation)
 
         # reschedule the auto commit starting from now
-        self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
+        self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval
 
         assigned = set(self._subscription.assigned_partitions())
         log.info("Setting newly assigned partitions %s for group %s",
@@ -321,10 +321,10 @@ class ConsumerCoordinator(BaseCoordinator):
         if not self.config['enable_auto_commit']:
             return self.time_to_next_heartbeat()
 
-        if time.time() > self.next_auto_commit_deadline:
+        if time.monotonic() > self.next_auto_commit_deadline:
             return 0
 
-        return min(self.next_auto_commit_deadline - time.time(),
+        return min(self.next_auto_commit_deadline - time.monotonic(),
                    self.time_to_next_heartbeat())
 
     def _perform_assignment(self, leader_id, assignment_strategy, members):
@@ -753,7 +753,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         future = Future()
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_offset_commit_response, offsets, future, time.time())
+        _f.add_callback(self._handle_offset_commit_response, offsets, future, time.monotonic())
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
 
@@ -761,7 +761,7 @@ class ConsumerCoordinator(BaseCoordinator):
         log.debug("Received OffsetCommitResponse: %s", response)
         # TODO look at adding request_latency_ms to response (like java kafka)
         if self._consumer_sensors:
-            self._consumer_sensors.commit_latency.record((time.time() - send_time) * 1000)
+            self._consumer_sensors.commit_latency.record((time.monotonic() - send_time) * 1000)
         unauthorized_topics = set()
 
         for topic, partitions in response.topics:
@@ -961,15 +961,15 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _commit_offsets_async_on_complete(self, offsets, res_or_exc):
         if isinstance(res_or_exc, Exception) and getattr(res_or_exc, 'retriable', False):
-            self.next_auto_commit_deadline = min(time.time() + self.config['retry_backoff_ms'] / 1000, self.next_auto_commit_deadline)
+            self.next_auto_commit_deadline = min(time.monotonic() + self.config['retry_backoff_ms'] / 1000, self.next_auto_commit_deadline)
         self.config['default_offset_commit_callback'](offsets, res_or_exc)
 
     def _maybe_auto_commit_offsets_async(self):
         if self.config['enable_auto_commit']:
             if self.coordinator_unknown():
-                self.next_auto_commit_deadline = time.time() + self.config['retry_backoff_ms'] / 1000
-            elif time.time() > self.next_auto_commit_deadline:
-                self.next_auto_commit_deadline = time.time() + self.auto_commit_interval
+                self.next_auto_commit_deadline = time.monotonic() + self.config['retry_backoff_ms'] / 1000
+            elif time.monotonic() > self.next_auto_commit_deadline:
+                self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval
                 self._do_auto_commit_offsets_async()
 
     def maybe_auto_commit_offsets_now(self):
