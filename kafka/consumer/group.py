@@ -718,7 +718,20 @@ class KafkaConsumer(object):
             dict: Map of topic to list of records (may be empty).
         """
         if not self._coordinator.poll(timeout_ms=timer.timeout_ms):
-            log.debug('poll: timeout during coordinator.poll(); returning early')
+            log.debug('poll: timeout during coordinator.poll()')
+            # Still return any records already available in the fetch buffer.
+            # This is critical for timeout_ms=0 (non-blocking) usage where
+            # previous poll() calls may have issued fetches that have since
+            # completed and populated the buffer.
+            records, partial = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
+            if records:
+                log.debug('poll: returning %d partitions of previously fetched records after coordinator timeout', len(records))
+                if not partial:
+                    futures = self._fetcher.send_fetches()
+                    if len(futures):
+                        self._client.poll(timeout_ms=0)
+                return records
+            log.debug('poll: no previously fetched records; returning early')
             return {}
 
         has_all_fetch_positions = self._update_fetch_positions(timeout_ms=timer.timeout_ms)
