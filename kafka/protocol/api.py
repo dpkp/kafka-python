@@ -109,11 +109,6 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
 
 
 class Request(RequestResponse):
-    @abc.abstractproperty
-    def RESPONSE_TYPE(self):
-        """The Response class associated with the api request"""
-        pass
-
     @classmethod
     def is_request(cls):
         return True

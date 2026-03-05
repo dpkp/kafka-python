@@ -81,7 +81,6 @@ class JoinGroupResponse_v5(Response):
 class JoinGroupRequest_v0(Request):
     API_KEY = 11
     API_VERSION = 0
-    RESPONSE_TYPE = JoinGroupResponse_v0
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('session_timeout', Int32),
@@ -96,7 +95,6 @@ class JoinGroupRequest_v0(Request):
 class JoinGroupRequest_v1(Request):
     API_KEY = 11
     API_VERSION = 1
-    RESPONSE_TYPE = JoinGroupResponse_v1
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('session_timeout', Int32),
@@ -112,28 +110,24 @@ class JoinGroupRequest_v1(Request):
 class JoinGroupRequest_v2(Request):
     API_KEY = 11
     API_VERSION = 2
-    RESPONSE_TYPE = JoinGroupResponse_v2
     SCHEMA = JoinGroupRequest_v1.SCHEMA
 
 
 class JoinGroupRequest_v3(Request):
     API_KEY = 11
     API_VERSION = 3
-    RESPONSE_TYPE = JoinGroupResponse_v3
     SCHEMA = JoinGroupRequest_v2.SCHEMA
 
 
 class JoinGroupRequest_v4(Request):
     API_KEY = 11
     API_VERSION = 4
-    RESPONSE_TYPE = JoinGroupResponse_v4
     SCHEMA = JoinGroupRequest_v3.SCHEMA
 
 
 class JoinGroupRequest_v5(Request):
     API_KEY = 11
     API_VERSION = 5
-    RESPONSE_TYPE = JoinGroupResponse_v5
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('session_timeout', Int32),
@@ -201,7 +195,6 @@ class SyncGroupResponse_v3(Response):
 class SyncGroupRequest_v0(Request):
     API_KEY = 14
     API_VERSION = 0
-    RESPONSE_TYPE = SyncGroupResponse_v0
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('generation_id', Int32),
@@ -215,21 +208,18 @@ class SyncGroupRequest_v0(Request):
 class SyncGroupRequest_v1(Request):
     API_KEY = 14
     API_VERSION = 1
-    RESPONSE_TYPE = SyncGroupResponse_v1
     SCHEMA = SyncGroupRequest_v0.SCHEMA
 
 
 class SyncGroupRequest_v2(Request):
     API_KEY = 14
     API_VERSION = 2
-    RESPONSE_TYPE = SyncGroupResponse_v2
     SCHEMA = SyncGroupRequest_v1.SCHEMA
 
 
 class SyncGroupRequest_v3(Request):
     API_KEY = 14
     API_VERSION = 3
-    RESPONSE_TYPE = SyncGroupResponse_v3
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('generation_id', Int32),
@@ -294,7 +284,6 @@ class HeartbeatResponse_v3(Response):
 class HeartbeatRequest_v0(Request):
     API_KEY = 12
     API_VERSION = 0
-    RESPONSE_TYPE = HeartbeatResponse_v0
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('generation_id', Int32),
@@ -305,21 +294,18 @@ class HeartbeatRequest_v0(Request):
 class HeartbeatRequest_v1(Request):
     API_KEY = 12
     API_VERSION = 1
-    RESPONSE_TYPE = HeartbeatResponse_v1
     SCHEMA = HeartbeatRequest_v0.SCHEMA
 
 
 class HeartbeatRequest_v2(Request):
     API_KEY = 12
     API_VERSION = 2
-    RESPONSE_TYPE = HeartbeatResponse_v2
     SCHEMA = HeartbeatRequest_v1.SCHEMA
 
 
 class HeartbeatRequest_v3(Request):
     API_KEY = 12
     API_VERSION = 3
-    RESPONSE_TYPE = HeartbeatResponse_v3
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('generation_id', Int32),
@@ -377,7 +363,6 @@ class LeaveGroupResponse_v3(Response):
 class LeaveGroupRequest_v0(Request):
     API_KEY = 13
     API_VERSION = 0
-    RESPONSE_TYPE = LeaveGroupResponse_v0
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('member_id', String('utf-8'))
@@ -387,21 +372,18 @@ class LeaveGroupRequest_v0(Request):
 class LeaveGroupRequest_v1(Request):
     API_KEY = 13
     API_VERSION = 1
-    RESPONSE_TYPE = LeaveGroupResponse_v1
     SCHEMA = LeaveGroupRequest_v0.SCHEMA
 
 
 class LeaveGroupRequest_v2(Request):
     API_KEY = 13
     API_VERSION = 2
-    RESPONSE_TYPE = LeaveGroupResponse_v2
     SCHEMA = LeaveGroupRequest_v1.SCHEMA
 
 
 class LeaveGroupRequest_v3(Request):
     API_KEY = 13
     API_VERSION = 3
-    RESPONSE_TYPE = LeaveGroupResponse_v3
     SCHEMA = Schema(
         ('group', String('utf-8')),
         ('members', Array(

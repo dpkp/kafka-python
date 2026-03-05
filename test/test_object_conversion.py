@@ -13,7 +13,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myobject', Int16))
 
@@ -26,7 +25,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema()
 
         tc = TestClass()
@@ -37,7 +35,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myobject', Int16))
 
@@ -49,7 +46,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myarray', Array(Int16)))
 
@@ -61,7 +57,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myarray', Array(
                     ('subobject', Int16),
@@ -80,7 +75,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myarray', Array(
                     ('subobject', Int16),
@@ -102,7 +96,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myarray', Array(
                     ('subarray', Array(Int16)),
@@ -128,7 +121,6 @@ class TestObjectConversion:
         class TestClass(superclass):
             API_KEY = 0
             API_VERSION = 0
-            RESPONSE_TYPE = None  # To satisfy the Request ABC
             SCHEMA = Schema(
                 ('myarray', Array(
                     ('subarray', Array(

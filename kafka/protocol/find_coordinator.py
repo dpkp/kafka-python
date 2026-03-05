@@ -35,7 +35,6 @@ class FindCoordinatorResponse_v2(Response):
 class FindCoordinatorRequest_v0(Request):
     API_KEY = 10
     API_VERSION = 0
-    RESPONSE_TYPE = FindCoordinatorResponse_v0
     SCHEMA = Schema(
         ('consumer_group', String('utf-8'))
     )
@@ -44,7 +43,6 @@ class FindCoordinatorRequest_v0(Request):
 class FindCoordinatorRequest_v1(Request):
     API_KEY = 10
     API_VERSION = 1
-    RESPONSE_TYPE = FindCoordinatorResponse_v1
     SCHEMA = Schema(
         ('coordinator_key', String('utf-8')),
         ('coordinator_type', Int8) # 0: consumer, 1: transaction
@@ -54,7 +52,6 @@ class FindCoordinatorRequest_v1(Request):
 class FindCoordinatorRequest_v2(Request):
     API_KEY = 10
     API_VERSION = 2
-    RESPONSE_TYPE = FindCoordinatorResponse_v2
     SCHEMA = FindCoordinatorRequest_v1.SCHEMA
 
 

@@ -132,7 +132,6 @@ class ProduceRequest(Request):
 
 class ProduceRequest_v0(ProduceRequest):
     API_VERSION = 0
-    RESPONSE_TYPE = ProduceResponse_v0
     SCHEMA = Schema(
         ('required_acks', Int16),
         ('timeout', Int32),
@@ -146,20 +145,17 @@ class ProduceRequest_v0(ProduceRequest):
 
 class ProduceRequest_v1(ProduceRequest):
     API_VERSION = 1
-    RESPONSE_TYPE = ProduceResponse_v1
     SCHEMA = ProduceRequest_v0.SCHEMA
 
 
 class ProduceRequest_v2(ProduceRequest):
     API_VERSION = 2
-    RESPONSE_TYPE = ProduceResponse_v2
     SCHEMA = ProduceRequest_v1.SCHEMA
 
 
 class ProduceRequest_v3(ProduceRequest):
     # Adds support for message format v2
     API_VERSION = 3
-    RESPONSE_TYPE = ProduceResponse_v3
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
         ('required_acks', Int16),
@@ -178,7 +174,6 @@ class ProduceRequest_v4(ProduceRequest):
     The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
     """
     API_VERSION = 4
-    RESPONSE_TYPE = ProduceResponse_v4
     SCHEMA = ProduceRequest_v3.SCHEMA
 
 
@@ -188,7 +183,6 @@ class ProduceRequest_v5(ProduceRequest):
     partition level field: the log_start_offset.
     """
     API_VERSION = 5
-    RESPONSE_TYPE = ProduceResponse_v5
     SCHEMA = ProduceRequest_v4.SCHEMA
 
 
@@ -197,7 +191,6 @@ class ProduceRequest_v6(ProduceRequest):
     The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
     """
     API_VERSION = 6
-    RESPONSE_TYPE = ProduceResponse_v6
     SCHEMA = ProduceRequest_v5.SCHEMA
 
 
@@ -206,7 +199,6 @@ class ProduceRequest_v7(ProduceRequest):
     V7 bumped up to indicate ZStandard capability. (see KIP-110)
     """
     API_VERSION = 7
-    RESPONSE_TYPE = ProduceResponse_v7
     SCHEMA = ProduceRequest_v6.SCHEMA
 
 
@@ -216,7 +208,6 @@ class ProduceRequest_v8(ProduceRequest):
     (See KIP-467)
     """
     API_VERSION = 8
-    RESPONSE_TYPE = ProduceResponse_v8
     SCHEMA = ProduceRequest_v7.SCHEMA
 
 

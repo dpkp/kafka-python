@@ -29,7 +29,6 @@ class AddPartitionsToTxnResponse_v2(Response):
 class AddPartitionsToTxnRequest_v0(Request):
     API_KEY = 24
     API_VERSION = 0
-    RESPONSE_TYPE = AddPartitionsToTxnResponse_v0
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
         ('producer_id', Int64),
@@ -42,14 +41,12 @@ class AddPartitionsToTxnRequest_v0(Request):
 class AddPartitionsToTxnRequest_v1(Request):
     API_KEY = 24
     API_VERSION = 1
-    RESPONSE_TYPE = AddPartitionsToTxnResponse_v1
     SCHEMA = AddPartitionsToTxnRequest_v0.SCHEMA
 
 
 class AddPartitionsToTxnRequest_v2(Request):
     API_KEY = 24
     API_VERSION = 2
-    RESPONSE_TYPE = AddPartitionsToTxnResponse_v2
     SCHEMA = AddPartitionsToTxnRequest_v1.SCHEMA
 
 

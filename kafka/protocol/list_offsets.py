@@ -91,7 +91,6 @@ class ListOffsetsResponse_v5(Response):
 class ListOffsetsRequest_v0(Request):
     API_KEY = 2
     API_VERSION = 0
-    RESPONSE_TYPE = ListOffsetsResponse_v0
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -108,7 +107,6 @@ class ListOffsetsRequest_v0(Request):
 class ListOffsetsRequest_v1(Request):
     API_KEY = 2
     API_VERSION = 1
-    RESPONSE_TYPE = ListOffsetsResponse_v1
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -125,7 +123,6 @@ class ListOffsetsRequest_v1(Request):
 class ListOffsetsRequest_v2(Request):
     API_KEY = 2
     API_VERSION = 2
-    RESPONSE_TYPE = ListOffsetsResponse_v2
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('isolation_level', Int8),  # <- added isolation_level
@@ -143,7 +140,6 @@ class ListOffsetsRequest_v2(Request):
 class ListOffsetsRequest_v3(Request):
     API_KEY = 2
     API_VERSION = 3
-    RESPONSE_TYPE = ListOffsetsResponse_v3
     SCHEMA = ListOffsetsRequest_v2.SCHEMA
     DEFAULTS = {
         'replica_id': -1
@@ -156,7 +152,6 @@ class ListOffsetsRequest_v4(Request):
     """
     API_KEY = 2
     API_VERSION = 4
-    RESPONSE_TYPE = ListOffsetsResponse_v4
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('isolation_level', Int8),  # <- added isolation_level
@@ -175,7 +170,6 @@ class ListOffsetsRequest_v4(Request):
 class ListOffsetsRequest_v5(Request):
     API_KEY = 2
     API_VERSION = 5
-    RESPONSE_TYPE = ListOffsetsResponse_v5
     SCHEMA = ListOffsetsRequest_v4.SCHEMA
     DEFAULTS = {
         'replica_id': -1

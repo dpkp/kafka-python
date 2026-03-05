@@ -88,28 +88,24 @@ class ApiVersionsResponse_v4(BaseApiVersionsResponse):
 class ApiVersionsRequest_v0(Request):
     API_KEY = 18
     API_VERSION = 0
-    RESPONSE_TYPE = ApiVersionsResponse_v0
     SCHEMA = Schema()
 
 
 class ApiVersionsRequest_v1(Request):
     API_KEY = 18
     API_VERSION = 1
-    RESPONSE_TYPE = ApiVersionsResponse_v1
     SCHEMA = ApiVersionsRequest_v0.SCHEMA
 
 
 class ApiVersionsRequest_v2(Request):
     API_KEY = 18
     API_VERSION = 2
-    RESPONSE_TYPE = ApiVersionsResponse_v2
     SCHEMA = ApiVersionsRequest_v1.SCHEMA
 
 
 class ApiVersionsRequest_v3(Request):
     API_KEY = 18
     API_VERSION = 3
-    RESPONSE_TYPE = ApiVersionsResponse_v3
     SCHEMA = Schema(
         ('client_software_name', CompactString('utf-8')),
         ('client_software_version', CompactString('utf-8')),
@@ -121,7 +117,6 @@ class ApiVersionsRequest_v3(Request):
 class ApiVersionsRequest_v4(Request):
     API_KEY = 18
     API_VERSION = 4
-    RESPONSE_TYPE = ApiVersionsResponse_v4
     SCHEMA = ApiVersionsRequest_v3.SCHEMA
     FLEXIBLE_VERSION = True
 

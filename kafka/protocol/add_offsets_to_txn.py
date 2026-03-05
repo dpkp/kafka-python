@@ -26,7 +26,6 @@ class AddOffsetsToTxnResponse_v2(Response):
 class AddOffsetsToTxnRequest_v0(Request):
     API_KEY = 25
     API_VERSION = 0
-    RESPONSE_TYPE = AddOffsetsToTxnResponse_v0
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
         ('producer_id', Int64),
@@ -38,14 +37,12 @@ class AddOffsetsToTxnRequest_v0(Request):
 class AddOffsetsToTxnRequest_v1(Request):
     API_KEY = 25
     API_VERSION = 1
-    RESPONSE_TYPE = AddOffsetsToTxnResponse_v1
     SCHEMA = AddOffsetsToTxnRequest_v0.SCHEMA
 
 
 class AddOffsetsToTxnRequest_v2(Request):
     API_KEY = 25
     API_VERSION = 2
-    RESPONSE_TYPE = AddOffsetsToTxnResponse_v2
     SCHEMA = AddOffsetsToTxnRequest_v1.SCHEMA
 
 
