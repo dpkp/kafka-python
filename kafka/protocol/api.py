@@ -75,7 +75,7 @@ class Request(Struct, metaclass=abc.ABCMeta):
         return RequestHeader.decode(read_buffer)
 
     def encode(self, header=False, framed=False, correlation_id=None, client_id=None, **kwargs):
-        data = super(Request, self).encode()
+        data = super().encode()
         if not framed and not header:
             return data
         bits = [data]
@@ -88,7 +88,7 @@ class Request(Struct, metaclass=abc.ABCMeta):
     @classmethod
     def decode(cls, data, header=False, framed=False):
         if not framed and not header:
-            return super(Request, cls).decode(data)
+            return super().decode(data)
         if isinstance(data, bytes):
             data = BytesIO(data)
         ret = []
@@ -96,7 +96,7 @@ class Request(Struct, metaclass=abc.ABCMeta):
             ret.append(Int32.decode(data))
         if header:
             ret.append(cls.parse_header(data))
-        ret.append(super(Request, cls).decode(data))
+        ret.append(super().decode(data))
         return tuple(ret)
 
 
@@ -128,7 +128,7 @@ class Response(Struct, metaclass=abc.ABCMeta):
         return ResponseHeader.decode(read_buffer)
 
     def encode(self, header=False, framed=False, correlation_id=None, **kwargs):
-        data = super(Response, self).encode()
+        data = super().encode()
         if not framed and not header:
             return data
         bits = [data]
@@ -141,7 +141,7 @@ class Response(Struct, metaclass=abc.ABCMeta):
     @classmethod
     def decode(cls, data, header=False, framed=False):
         if not framed and not header:
-            return super(Response, cls).decode(data)
+            return super().decode(data)
         if isinstance(data, bytes):
             data = BytesIO(data)
         ret = []
@@ -149,7 +149,7 @@ class Response(Struct, metaclass=abc.ABCMeta):
             ret.append(Int32.decode(data))
         if header:
             ret.append(cls.parse_header(data))
-        ret.append(super(Response, cls).decode(data))
+        ret.append(super().decode(data))
         return tuple(ret)
 
 
