@@ -38,8 +38,12 @@ class ResponseHeaderV2(Struct):
     )
 
 
-class Request(Struct, metaclass=abc.ABCMeta):
+class RequestResponse(Struct, metaclass=abc.ABCMeta):
     FLEXIBLE_VERSION = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._header = None
 
     @abc.abstractproperty
     def API_KEY(self):
@@ -51,6 +55,40 @@ class Request(Struct, metaclass=abc.ABCMeta):
         """Integer of api request version"""
         pass
 
+    def to_object(self):
+        return _to_object(self.SCHEMA, self)
+
+    @property
+    def header(self):
+        return self._header
+
+    def encode(self, header=False, framed=False):
+        data = super().encode()
+        if not framed and not header:
+            return data
+        bits = [data]
+        if header:
+            bits.insert(0, self.header.encode())
+        if framed:
+            bits.insert(0, Int32.encode(sum(map(len, bits))))
+        return b''.join(bits)
+
+    @classmethod
+    def decode(cls, data, header=False, framed=False):
+        if not framed and not header:
+            return super().decode(data)
+        if isinstance(data, bytes):
+            data = BytesIO(data)
+        ret = []
+        if framed:
+            ret.append(Int32.decode(data))
+        if header:
+            ret.append(cls.parse_header(data))
+        ret.append(super().decode(data))
+        return tuple(ret)
+
+
+class Request(RequestResponse):
     @abc.abstractproperty
     def RESPONSE_TYPE(self):
         """The Response class associated with the api request"""
@@ -60,13 +98,11 @@ class Request(Struct, metaclass=abc.ABCMeta):
         """Override this method if an api request does not always generate a response"""
         return True
 
-    def to_object(self):
-        return _to_object(self.SCHEMA, self)
-
-    def build_header(self, correlation_id=0, client_id='kafka-python'):
+    def with_header(self, correlation_id=0, client_id='kafka-python'):
         if self.FLEXIBLE_VERSION:
-            return RequestHeaderV2(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
-        return RequestHeader(self.API_KEY, self.API_VERSION, correlation_id, client_id)
+            self._header = RequestHeaderV2(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
+        else:
+            self._header = RequestHeader(self.API_KEY, self.API_VERSION, correlation_id, client_id)
 
     @classmethod
     def parse_header(cls, read_buffer):
@@ -75,51 +111,17 @@ class Request(Struct, metaclass=abc.ABCMeta):
         return RequestHeader.decode(read_buffer)
 
     def encode(self, header=False, framed=False, correlation_id=None, client_id=None, **kwargs):
-        data = super().encode()
-        if not framed and not header:
-            return data
-        bits = [data]
-        if header:
-            bits.insert(0, self.build_header(correlation_id, client_id).encode())
-        if framed:
-            bits.insert(0, Int32.encode(sum(map(len, bits))))
-        return b''.join(bits)
-
-    @classmethod
-    def decode(cls, data, header=False, framed=False):
-        if not framed and not header:
-            return super().decode(data)
-        if isinstance(data, bytes):
-            data = BytesIO(data)
-        ret = []
-        if framed:
-            ret.append(Int32.decode(data))
-        if header:
-            ret.append(cls.parse_header(data))
-        ret.append(super().decode(data))
-        return tuple(ret)
+        if header and self.header is None:
+            self.with_header(correlation_id=correlation_id, client_id=client_id)
+        return super().encode(header=header, framed=framed)
 
 
-class Response(Struct, metaclass=abc.ABCMeta):
-    FLEXIBLE_VERSION = False
-
-    @abc.abstractproperty
-    def API_KEY(self):
-        """Integer identifier for api request/response"""
-        pass
-
-    @abc.abstractproperty
-    def API_VERSION(self):
-        """Integer of api request/response version"""
-        pass
-
-    def to_object(self):
-        return _to_object(self.SCHEMA, self)
-
-    def build_header(self, correlation_id=0):
+class Response(RequestResponse):
+    def with_header(self, correlation_id=0):
         if self.FLEXIBLE_VERSION:
-            return ResponseHeaderV2(correlation_id=correlation_id, tags=None)
-        return ResponseHeader(correlation_id=correlation_id)
+            self._header = ResponseHeaderV2(correlation_id=correlation_id, tags={})
+        else:
+            self._header = ResponseHeader(correlation_id=correlation_id)
 
     @classmethod
     def parse_header(cls, read_buffer):
@@ -128,29 +130,9 @@ class Response(Struct, metaclass=abc.ABCMeta):
         return ResponseHeader.decode(read_buffer)
 
     def encode(self, header=False, framed=False, correlation_id=None, **kwargs):
-        data = super().encode()
-        if not framed and not header:
-            return data
-        bits = [data]
-        if header:
-            bits.insert(0, self.build_header(correlation_id).encode())
-        if framed:
-            bits.insert(0, Int32.encode(sum(map(len, bits))))
-        return b''.join(bits)
-
-    @classmethod
-    def decode(cls, data, header=False, framed=False):
-        if not framed and not header:
-            return super().decode(data)
-        if isinstance(data, bytes):
-            data = BytesIO(data)
-        ret = []
-        if framed:
-            ret.append(Int32.decode(data))
-        if header:
-            ret.append(cls.parse_header(data))
-        ret.append(super().decode(data))
-        return tuple(ret)
+        if header and self.header is None:
+            self.with_header(correlation_id=correlation_id)
+        return super().encode(header=header, framed=framed)
 
 
 def _to_object(schema, data):
