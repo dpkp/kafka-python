@@ -74,6 +74,15 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
         return b''.join(bits)
 
     @classmethod
+    @abc.abstractproperty
+    def header_class(cls):
+        pass
+
+    @classmethod
+    def parse_header(cls, read_buffer):
+        return cls.header_class.decode(read_buffer)
+
+    @classmethod
     def decode(cls, data, header=False, framed=False):
         if not framed and not header:
             return super().decode(data)
@@ -100,15 +109,17 @@ class Request(RequestResponse):
 
     def with_header(self, correlation_id=0, client_id='kafka-python'):
         if self.FLEXIBLE_VERSION:
-            self._header = RequestHeaderV2(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
+            self._header = self.header_class(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
         else:
-            self._header = RequestHeader(self.API_KEY, self.API_VERSION, correlation_id, client_id)
+            self._header = self.header_class(self.API_KEY, self.API_VERSION, correlation_id, client_id)
 
     @classmethod
-    def parse_header(cls, read_buffer):
+    @property
+    def header_class(cls):
         if cls.FLEXIBLE_VERSION:
-            return RequestHeaderV2.decode(read_buffer)
-        return RequestHeader.decode(read_buffer)
+            return RequestHeaderV2
+        else:
+            return RequestHeader
 
     def encode(self, header=False, framed=False, correlation_id=None, client_id=None, **kwargs):
         if header and self.header is None:
@@ -119,15 +130,17 @@ class Request(RequestResponse):
 class Response(RequestResponse):
     def with_header(self, correlation_id=0):
         if self.FLEXIBLE_VERSION:
-            self._header = ResponseHeaderV2(correlation_id=correlation_id, tags={})
+            self._header = self.header_class(correlation_id, {})
         else:
-            self._header = ResponseHeader(correlation_id=correlation_id)
+            self._header = self.header_class(correlation_id)
 
     @classmethod
-    def parse_header(cls, read_buffer):
+    @property
+    def header_class(cls):
         if cls.FLEXIBLE_VERSION:
-            return ResponseHeaderV2.decode(read_buffer)
-        return ResponseHeader.decode(read_buffer)
+            return ResponseHeaderV2
+        else:
+            return ResponseHeader
 
     def encode(self, header=False, framed=False, correlation_id=None, **kwargs):
         if header and self.header is None:
