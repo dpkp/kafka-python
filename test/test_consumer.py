@@ -55,8 +55,8 @@ def test_poll_timeout_zero_returns_buffered_records():
     """Test that poll(timeout_ms=0) returns records already in the fetch buffer.
 
     Regression test for https://github.com/dpkp/kafka-python/issues/2692
-    When timeout_ms=0, coordinator.poll() may time out, but we should still
-    check the fetcher buffer for already-fetched records before returning empty.
+    Buffered records are checked before coordinator.poll(), so they are
+    returned regardless of coordinator state (rebalance, timeout, etc.).
     """
     consumer = KafkaConsumer(api_version=(0, 10, 0))
     tp = TopicPartition('test-topic', 0)
@@ -64,18 +64,19 @@ def test_poll_timeout_zero_returns_buffered_records():
 
     mock_records = {tp: [MagicMock()]}
 
-    # Simulate coordinator.poll() timing out (returns False)
-    # but fetcher already has records buffered from a previous network poll
-    with patch.object(consumer._coordinator, 'poll', return_value=False), \
-         patch.object(consumer._fetcher, 'fetched_records', return_value=(mock_records, False)), \
+    # Fetcher already has records buffered from a previous network poll.
+    # coordinator.poll() should never be reached in this path.
+    with patch.object(consumer._fetcher, 'fetched_records', return_value=(mock_records, False)), \
          patch.object(consumer._fetcher, 'send_fetches', return_value=[]), \
-         patch.object(consumer._client, 'poll'):
+         patch.object(consumer._client, 'poll'), \
+         patch.object(consumer._coordinator, 'poll', return_value=False) as mock_coord_poll:
 
         result = consumer.poll(timeout_ms=0)
         assert result == mock_records, (
             "poll(timeout_ms=0) should return buffered records "
-            "even when coordinator.poll() times out"
+            "without needing a successful coordinator.poll()"
         )
+        mock_coord_poll.assert_not_called()
 
 
 def test_poll_timeout_zero_returns_empty_when_no_buffered_records():
@@ -88,8 +89,8 @@ def test_poll_timeout_zero_returns_empty_when_no_buffered_records():
     tp = TopicPartition('test-topic', 0)
     consumer.assign([tp])
 
-    with patch.object(consumer._coordinator, 'poll', return_value=False), \
-         patch.object(consumer._fetcher, 'fetched_records', return_value=({}, False)):
+    with patch.object(consumer._fetcher, 'fetched_records', return_value=({}, False)), \
+         patch.object(consumer._coordinator, 'poll', return_value=False):
 
         result = consumer.poll(timeout_ms=0)
         assert result == {}, (
