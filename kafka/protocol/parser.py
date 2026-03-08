@@ -54,10 +54,10 @@ class KafkaProtocol(object):
         Returns:
             correlation_id
         """
-        log.debug('Sending request %s', request.__class__.__name__)
         if correlation_id is None:
             correlation_id = self._next_correlation_id()
 
+        log.debug('%s Sending request %d %s', self._ident, correlation_id, request)
         header = request.build_header(correlation_id=correlation_id, client_id=self._client_id)
         message = b''.join([header.encode(), request.encode()])
         size = Int32.encode(len(message))
@@ -142,7 +142,6 @@ class KafkaProtocol(object):
         response_type = request.RESPONSE_TYPE
         response_header = response_type.parse_header(read_buffer)
         recv_correlation_id = response_header.correlation_id
-        log.debug('Received correlation id: %d', recv_correlation_id)
         # 0.8.2 quirk
         if (recv_correlation_id == 0 and
             correlation_id != 0 and
@@ -160,7 +159,6 @@ class KafkaProtocol(object):
                 % (correlation_id, recv_correlation_id))
 
         # decode response
-        log.debug('Processing response %s', response_type.__name__)
         try:
             response = response_type.decode(read_buffer)
         except ValueError:
@@ -172,6 +170,7 @@ class KafkaProtocol(object):
                       request, len(buf), buf)
             raise Errors.KafkaProtocolError('Unable to decode response')
 
+        log.debug('%s Received response %d %s', self._ident, correlation_id, response)
         return (correlation_id, response)
 
     def _reset_buffer(self):
