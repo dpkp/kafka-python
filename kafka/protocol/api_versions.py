@@ -16,16 +16,20 @@ class BaseApiVersionsResponse(Response):
     )
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, header=False, framed=False):
         if isinstance(data, bytes):
             data = BytesIO(data)
         # Check error_code, decode as v0 if any error
         curr = data.tell()
+        if framed:
+            nbytes = Int32.decode(data)
+        if header:
+            cls.parse_header(data)
         err = Int16.decode(data)
         data.seek(curr)
         if err != 0:
-            return ApiVersionsResponse_v0.decode(data)
-        return super(BaseApiVersionsResponse, cls).decode(data)
+            return ApiVersionsResponse_v0.decode(data, header=header, framed=framed)
+        return super(BaseApiVersionsResponse, cls).decode(data, header=header, framed=framed)
 
 
 class ApiVersionsResponse_v0(Response):

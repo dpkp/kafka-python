@@ -58,10 +58,8 @@ class KafkaProtocol(object):
             correlation_id = self._next_correlation_id()
 
         log.debug('%s Sending request %d %s', self._ident, correlation_id, request)
-        header = request.build_header(correlation_id=correlation_id, client_id=self._client_id)
-        message = b''.join([header.encode(), request.encode()])
-        size = Int32.encode(len(message))
-        data = size + message
+        data = request.encode(correlation_id=correlation_id, client_id=self._client_id,
+                              framed=True, header=True)
         self.bytes_to_send.append(data)
         if request.expect_response():
             ifr = (correlation_id, request)
