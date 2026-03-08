@@ -74,14 +74,13 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
         return b''.join(bits)
 
     @classmethod
-    @abc.abstractproperty
+    @abc.abstractmethod
     def header_class(cls):
         pass
 
     @classmethod
     def parse_header(cls, read_buffer):
-        klass = cls.header_class
-        return klass.decode(read_buffer)
+        return cls.header_class().decode(read_buffer)
 
     @classmethod
     def decode(cls, data, header=False, framed=False):
@@ -109,14 +108,12 @@ class Request(RequestResponse):
         return True
 
     def with_header(self, correlation_id=0, client_id='kafka-python'):
-        klass = self.header_class
         if self.FLEXIBLE_VERSION:
-            self._header = klass(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
+            self._header = self.header_class()(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
         else:
-            self._header = klass(self.API_KEY, self.API_VERSION, correlation_id, client_id)
+            self._header = self.header_class()(self.API_KEY, self.API_VERSION, correlation_id, client_id)
 
     @classmethod
-    @property
     def header_class(cls):
         if cls.FLEXIBLE_VERSION:
             return RequestHeaderV2
@@ -131,14 +128,12 @@ class Request(RequestResponse):
 
 class Response(RequestResponse):
     def with_header(self, correlation_id=0):
-        klass = self.header_class
         if self.FLEXIBLE_VERSION:
-            self._header = klass(correlation_id, {})
+            self._header = self.header_class()(correlation_id, {})
         else:
-            self._header = klass(correlation_id)
+            self._header = self.header_class()(correlation_id)
 
     @classmethod
-    @property
     def header_class(cls):
         if cls.FLEXIBLE_VERSION:
             return ResponseHeaderV2
