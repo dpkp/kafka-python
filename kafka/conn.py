@@ -295,7 +295,7 @@ class BrokerConnection(object):
 
     def _new_protocol_parser(self):
         return KafkaProtocol(
-            ident='node=%s[%s:%d]' % (self.node_id, self.host, self.port),
+            ident=f'node={self.node_id}[{self.host}:{self.port}]',
             client_id=self.config['client_id'],
             api_version=self.config['api_version'])
 

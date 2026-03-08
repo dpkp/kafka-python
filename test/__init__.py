@@ -14,7 +14,7 @@ if log_file_path:
     file_handler.setLevel(logging.DEBUG) # Set the handler's level to DEBUG
 
     # Create a formatter for the log messages
-    formatter = logging.Formatter('%(thread)d %(message)s')
+    formatter = logging.Formatter('thread=%(thread)d %(message)s')
     file_handler.setFormatter(formatter)
 
     # Add the file handler to the logger
