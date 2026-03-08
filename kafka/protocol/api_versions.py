@@ -72,9 +72,9 @@ class ApiVersionsResponse_v3(BaseApiVersionsResponse):
             ('api_key', Int16),
             ('min_version', Int16),
             ('max_version', Int16),
-            ('_tagged_fields', TaggedFields))),
+            ('tags', TaggedFields))),
         ('throttle_time_ms', Int32),
-        ('_tagged_fields', TaggedFields)
+        ('tags', TaggedFields)
     )
     # Note: ApiVersions Response does not send FLEXIBLE_VERSION header!
 
@@ -113,7 +113,7 @@ class ApiVersionsRequest_v3(Request):
     SCHEMA = Schema(
         ('client_software_name', CompactString('utf-8')),
         ('client_software_version', CompactString('utf-8')),
-        ('_tagged_fields', TaggedFields)
+        ('tags', TaggedFields)
     )
     FLEXIBLE_VERSION = True
 
