@@ -66,9 +66,9 @@ class ProducerPerformance(object):
                         raise ValueError(r)
                 print("%d suceeded, %d failed" % (count_success, count_failure))
 
-            start_time = time.time()
+            start_time = time.monotonic()
             _benchmark()
-            end_time = time.time()
+            end_time = time.monotonic()
             timer_stop.set()
             timer.join()
             print('Execution time:', end_time - start_time, 'secs')

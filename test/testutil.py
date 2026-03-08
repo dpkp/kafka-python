@@ -52,9 +52,9 @@ def maybe_skip_unsupported_compression(compression_type):
 
 class Timer(object):
     def __enter__(self):
-        self.start = time.time()
+        self.start = time.monotonic()
         return self
 
     def __exit__(self, *args):
-        self.end = time.time()
+        self.end = time.monotonic()
         self.interval = self.end - self.start

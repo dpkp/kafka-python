@@ -304,7 +304,7 @@ class KafkaClient(object):
                     self._selector.modify(sock, selectors.EVENT_WRITE, conn)
 
                 if self.cluster.is_bootstrap(node_id):
-                    self._last_bootstrap = time.time()
+                    self._last_bootstrap = time.monotonic()
 
             elif conn.state is ConnectionStates.API_VERSIONS_SEND:
                 try:
@@ -708,9 +708,9 @@ class KafkaClient(object):
         # Send pending requests first, before polling for responses
         self._register_send_sockets()
 
-        start_select = time.time()
+        start_select = time.monotonic()
         ready = self._selector.select(timeout)
-        end_select = time.time()
+        end_select = time.monotonic()
         if self._sensors:
             self._sensors.select_time.record((end_select - start_select) * 1000000000)
 
@@ -782,7 +782,7 @@ class KafkaClient(object):
                     timeout_ms))
 
         if self._sensors:
-            self._sensors.io_time.record((time.time() - end_select) * 1000000000)
+            self._sensors.io_time.record((time.monotonic() - end_select) * 1000000000)
 
         self._maybe_close_oldest_connection()
 
@@ -1020,9 +1020,9 @@ class KafkaClient(object):
         """
         timeout = timeout or (self.config['api_version_auto_timeout_ms'] / 1000)
         with self._lock:
-            end = time.time() + timeout
-            while time.time() < end:
-                time_remaining = max(end - time.time(), 0)
+            end = time.monotonic() + timeout
+            while time.monotonic() < end:
+                time_remaining = max(end - time.monotonic(), 0)
                 if node_id is not None and self.connection_delay(node_id) > 0:
                     sleep_time = min(time_remaining, self.connection_delay(node_id) / 1000.0)
                     if sleep_time > 0:
@@ -1043,8 +1043,8 @@ class KafkaClient(object):
                         continue
                 conn = self._conns[try_node]
 
-                while conn.connecting() and time.time() < end:
-                    timeout_ms = min((end - time.time()) * 1000, 200)
+                while conn.connecting() and time.monotonic() < end:
+                    timeout_ms = min((end - time.monotonic()) * 1000, 200)
                     self.poll(timeout_ms=timeout_ms)
 
                 if conn._api_version is not None:
@@ -1130,7 +1130,7 @@ class KafkaClient(object):
         expired_connection = self._idle_expiry_manager.poll_expired_connection()
         if expired_connection:
             conn_id, ts = expired_connection
-            idle_ms = (time.time() - ts) * 1000
+            idle_ms = (time.monotonic() - ts) * 1000
             log.info('Closing idle connection %s, last active %d ms ago', conn_id, idle_ms)
             self.close(node_id=conn_id)
 
@@ -1185,14 +1185,14 @@ class IdleConnectionManager(object):
         else:
             self.connections_max_idle = float('inf')
         self.next_idle_close_check_time = None
-        self.update_next_idle_close_check_time(time.time())
+        self.update_next_idle_close_check_time(time.monotonic())
         self.lru_connections = collections.OrderedDict()
 
     def update(self, conn_id):
         # order should reflect last-update
         if conn_id in self.lru_connections:
             del self.lru_connections[conn_id]
-        self.lru_connections[conn_id] = time.time()
+        self.lru_connections[conn_id] = time.monotonic()
 
     def remove(self, conn_id):
         if conn_id in self.lru_connections:
@@ -1201,10 +1201,10 @@ class IdleConnectionManager(object):
     def is_expired(self, conn_id):
         if conn_id not in self.lru_connections:
             return None
-        return time.time() >= self.lru_connections[conn_id] + self.connections_max_idle
+        return time.monotonic() >= self.lru_connections[conn_id] + self.connections_max_idle
 
     def next_check_ms(self):
-        now = time.time()
+        now = time.monotonic()
         if not self.lru_connections or self.next_idle_close_check_time == float('inf'):
             return float('inf')
         elif self.next_idle_close_check_time <= now:
@@ -1216,7 +1216,7 @@ class IdleConnectionManager(object):
         self.next_idle_close_check_time = ts + self.connections_max_idle
 
     def poll_expired_connection(self):
-        if time.time() < self.next_idle_close_check_time:
+        if time.monotonic() < self.next_idle_close_check_time:
             return None
 
         if not len(self.lru_connections):
@@ -1228,7 +1228,7 @@ class IdleConnectionManager(object):
 
         self.update_next_idle_close_check_time(oldest_ts)
 
-        if time.time() >= oldest_ts + self.connections_max_idle:
+        if time.monotonic() >= oldest_ts + self.connections_max_idle:
             return (oldest_conn_id, oldest_ts)
         else:
             return None

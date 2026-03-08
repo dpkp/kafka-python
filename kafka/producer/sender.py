@@ -177,7 +177,7 @@ class Sender(threading.Thread):
         self._client.poll(timeout_ms=poll_timeout_ms)
 
     def _send_producer_data(self, now=None):
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         # get the list of partitions with data ready to send
         result = self._accumulator.ready(self._metadata, now=now)
         ready_nodes, next_ready_check_delay, unknown_leaders_exist = result
@@ -232,7 +232,7 @@ class Sender(threading.Thread):
         for expired_batch in expired_batches:
             error_message = "Expiring %d record(s) for %s: %s ms has passed since batch creation" % (
                 expired_batch.record_count, expired_batch.topic_partition,
-                int((time.time() - expired_batch.created) * 1000))
+                int((time.monotonic() - expired_batch.created) * 1000))
             self._fail_batch(expired_batch, PartitionResponse(error=Errors.KafkaTimeoutError, error_message=error_message))
 
         if self._sensors:
@@ -273,7 +273,7 @@ class Sender(threading.Thread):
             log.debug('%s: Sending Produce Request: %r', str(self), request)
             (self._client.send(node_id, request, wakeup=False)
                  .add_callback(
-                     self._handle_produce_response, node_id, time.time(), batches)
+                     self._handle_produce_response, node_id, time.monotonic(), batches)
                  .add_errback(
                      self._failed_produce, batches, node_id))
         return poll_timeout_ms

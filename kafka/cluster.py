@@ -169,7 +169,7 @@ class ClusterMetadata(object):
 
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
-        now = time.time() * 1000
+        now = time.monotonic() * 1000
         if self._need_update:
             ttl = 0
         else:
@@ -231,7 +231,7 @@ class ClusterMetadata(object):
                 self._future = None
         if f:
             f.failure(exception)
-        self._last_refresh_ms = time.time() * 1000
+        self._last_refresh_ms = time.monotonic() * 1000
 
     def update_metadata(self, metadata):
         """Update cluster state given a MetadataResponse.
@@ -335,7 +335,7 @@ class ClusterMetadata(object):
             self._future = None
             self._need_update = False
 
-        now = time.time() * 1000
+        now = time.monotonic() * 1000
         self._last_refresh_ms = now
         self._last_successful_refresh_ms = now
 

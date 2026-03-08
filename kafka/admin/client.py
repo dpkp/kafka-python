@@ -256,8 +256,8 @@ class KafkaAdminClient(object):
         # use defaults for allow_auto_topic_creation / include_authorized_operations in v6+
         request = MetadataRequest[version]()
 
-        timeout_at = time.time() + timeout_ms / 1000
-        while time.time() < timeout_at:
+        timeout_at = time.monotonic() + timeout_ms / 1000
+        while time.monotonic() < timeout_at:
             response = self.send_request(request)
             controller_id = response.controller_id
             if controller_id == -1:

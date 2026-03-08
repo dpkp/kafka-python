@@ -52,14 +52,14 @@ class ConsumerPerformance(object):
             print('-> OK!')
             print()
 
-            start_time = time.time()
+            start_time = time.monotonic()
             records = 0
             for msg in consumer:
                 records += 1
                 if records >= args.num_records:
                     break
 
-            end_time = time.time()
+            end_time = time.monotonic()
             timer_stop.set()
             timer.join()
             print('Consumed {0} records'.format(records))

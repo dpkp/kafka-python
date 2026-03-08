@@ -129,7 +129,7 @@ class RecordAccumulator(object):
         """
         assert isinstance(tp, TopicPartition), 'not TopicPartition'
         assert not self._closed, 'RecordAccumulator is closed'
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         # We keep track of the number of appending thread to make sure we do
         # not miss batches in abortIncompleteBatches().
         self._appends_in_progress.increment()
@@ -250,7 +250,7 @@ class RecordAccumulator(object):
         ready_nodes = set()
         next_ready_check = 9999999.99
         unknown_leaders_exist = False
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
 
         # several threads are accessing self._batches -- to simplify
         # concurrent access, we iterate over a snapshot of partitions
@@ -316,7 +316,7 @@ class RecordAccumulator(object):
         return False
 
     def drain_batches_for_one_node(self, cluster, node_id, max_size, now=None):
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         size = 0
         ready = []
         partitions = list(cluster.partitions_for_broker(node_id))
@@ -405,7 +405,7 @@ class RecordAccumulator(object):
         if not nodes:
             return {}
 
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         batches = {}
         for node_id in nodes:
             batches[node_id] = self.drain_batches_for_one_node(cluster, node_id, max_size, now=now)

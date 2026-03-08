@@ -12,7 +12,7 @@ class Timer:
 
     def __init__(self, timeout_ms, error_message=None, start_at=None):
         self._timeout_ms = timeout_ms
-        self._start_at = start_at or time.time()
+        self._start_at = start_at or time.monotonic()
         if timeout_ms is not None:
             self._expire_at = self._start_at + timeout_ms / 1000
         else:
@@ -21,7 +21,7 @@ class Timer:
 
     @property
     def expired(self):
-        return time.time() >= self._expire_at
+        return time.monotonic() >= self._expire_at
 
     @property
     def timeout_ms(self):
@@ -29,7 +29,7 @@ class Timer:
             return None
         elif self._expire_at == float('inf'):
             return float('inf')
-        remaining = self._expire_at - time.time()
+        remaining = self._expire_at - time.monotonic()
         if remaining < 0:
             return 0
         else:
@@ -37,7 +37,7 @@ class Timer:
 
     @property
     def elapsed_ms(self):
-        return int(1000 * (time.time() - self._start_at))
+        return int(1000 * (time.monotonic() - self._start_at))
 
     def maybe_raise(self):
         if self.expired:

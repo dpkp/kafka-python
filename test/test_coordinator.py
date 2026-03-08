@@ -531,7 +531,7 @@ def test_send_offset_commit_request_success(mocker, patched_coord, offsets):
 def test_handle_offset_commit_response(mocker, patched_coord, offsets,
                                        response, error, dead):
     future = Future()
-    patched_coord._handle_offset_commit_response(offsets, future, time.time(),
+    patched_coord._handle_offset_commit_response(offsets, future, time.monotonic(),
                                                  response)
     assert isinstance(future.exception, error) if error else True
     assert patched_coord.coordinator_id is (None if dead else 0)

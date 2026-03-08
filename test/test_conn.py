@@ -122,7 +122,7 @@ def test_connect_timeout(_socket, conn):
 
 
 def test_blacked_out(conn):
-    with mock.patch("time.time", return_value=1000):
+    with mock.patch("time.monotonic", return_value=1000):
         conn.last_attempt = 0
         assert conn.blacked_out() is False
         conn.last_attempt = 1000
@@ -131,7 +131,7 @@ def test_blacked_out(conn):
 
 def test_connection_delay(conn, mocker):
     mocker.patch.object(conn, '_reconnect_jitter_pct', return_value=1.0)
-    with mock.patch("time.time", return_value=1000):
+    with mock.patch("time.monotonic", return_value=1000):
         conn.last_attempt = 1000
         assert conn.connection_delay() == conn.config['reconnect_backoff_ms']
         conn.state = ConnectionStates.CONNECTING
@@ -385,7 +385,7 @@ def test_relookup_on_failure():
 
 
 def test_requests_timed_out(conn):
-    with mock.patch("time.time", return_value=0):
+    with mock.patch("time.monotonic", return_value=0):
         # No in-flight requests, not timed out
         assert not conn.requests_timed_out()
 
@@ -415,7 +415,7 @@ def test_maybe_throttle(conn):
     conn._maybe_throttle(HeartbeatResponse[0](error_code=0))
     assert not conn.throttled()
 
-    with mock.patch("time.time", return_value=1000) as time:
+    with mock.patch("time.monotonic", return_value=1000) as time:
         # server-side throttling in v1.0
         conn.config['api_version'] = (1, 0)
         conn._maybe_throttle(HeartbeatResponse[1](throttle_time_ms=1000, error_code=0))

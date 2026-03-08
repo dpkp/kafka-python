@@ -462,7 +462,7 @@ class TopicPartitionState(object):
         self.next_allowed_retry_time = None
 
     def is_reset_allowed(self):
-        return self.next_allowed_retry_time is None or self.next_allowed_retry_time < time.time()
+        return self.next_allowed_retry_time is None or self.next_allowed_retry_time < time.monotonic()
 
     @property
     def awaiting_reset(self):

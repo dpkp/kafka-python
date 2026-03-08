@@ -17,7 +17,7 @@ class FinalState(IntEnum):
 
 class ProducerBatch(object):
     def __init__(self, tp, records, now=None):
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         self.max_record_size = 0
         self.created = now
         self.drained = None
@@ -55,7 +55,7 @@ class ProducerBatch(object):
         if metadata is None:
             return None
 
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         self.max_record_size = max(self.max_record_size, metadata.size)
         self.last_append = now
         future = FutureRecordMetadata(
@@ -151,14 +151,14 @@ class ProducerBatch(object):
         self.produce_future.success((base_offset, timestamp_ms, record_exceptions_fn))
 
     def has_reached_delivery_timeout(self, delivery_timeout_ms, now=None):
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         return delivery_timeout_ms / 1000 <= now - self.created
 
     def in_retry(self):
         return self._retry
 
     def retry(self, now=None):
-        now = time.time() if now is None else now
+        now = time.monotonic() if now is None else now
         self._retry = True
         self.attempts += 1
         self.last_attempt = now

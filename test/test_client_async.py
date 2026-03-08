@@ -233,8 +233,8 @@ def test_send(client_selector_mocked, conn):
 def test_poll(mocker, client_poll_mocked):
     metadata = mocker.patch.object(client_poll_mocked, '_maybe_refresh_metadata')
     ifr_request_timeout = mocker.patch.object(client_poll_mocked, '_next_ifr_request_timeout_ms')
-    now = time.time()
-    t = mocker.patch('time.time')
+    now = time.monotonic()
+    t = mocker.patch('time.monotonic')
     t.return_value = now
 
     # metadata timeout wins
@@ -302,8 +302,8 @@ def test_maybe_refresh_metadata_ttl(client_poll_mocked):
 def test_maybe_refresh_metadata_backoff(mocker, client_poll_mocked):
     mocker.patch.object(client_poll_mocked, 'least_loaded_node', return_value=None)
     mocker.patch.object(client_poll_mocked, 'least_loaded_node_refresh_ms', return_value=4321)
-    now = time.time()
-    t = mocker.patch('time.time')
+    now = time.monotonic()
+    t = mocker.patch('time.monotonic')
     t.return_value = now
 
     client_poll_mocked.poll(timeout_ms=12345678)
@@ -336,8 +336,8 @@ def test_maybe_refresh_metadata_cant_send(mocker, client_poll_mocked):
     mocker.patch.object(client_poll_mocked, '_can_connect', return_value=True)
     mocker.patch.object(client_poll_mocked, '_init_connect', return_value=True)
 
-    now = time.time()
-    t = mocker.patch('time.time')
+    now = time.monotonic()
+    t = mocker.patch('time.monotonic')
     t.return_value = now
 
     # first poll attempts connection
@@ -363,7 +363,7 @@ def test_unschedule():
 
 
 def test_idle_connection_manager(mocker):
-    t = mocker.patch.object(time, 'time')
+    t = mocker.patch.object(time, 'monotonic')
     t.return_value = 0
 
     idle = IdleConnectionManager(100)
