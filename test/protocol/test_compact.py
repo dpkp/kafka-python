@@ -17,6 +17,14 @@ def test_compact_data_structs():
     encoded = cs.encode("foobarbaz")
     assert cs.decode(io.BytesIO(encoded)) == "foobarbaz"
 
+    # Test custom encoding
+    cs_utf16 = CompactString('utf-16')
+    val = "好"
+    encoded = cs_utf16.encode(val)
+    assert len(encoded) == 5
+    decoded = cs_utf16.decode(io.BytesIO(encoded))
+    assert decoded == val
+
     arr = CompactArray(CompactString())
     assert arr.encode(None) == b'\x00'
     assert arr.decode(io.BytesIO(b'\x00')) is None
