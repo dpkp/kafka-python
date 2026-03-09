@@ -61,6 +61,7 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
     _flexible_versions = None
     _valid_versions = None
     _struct = None
+    _class_version = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
