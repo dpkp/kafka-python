@@ -91,7 +91,7 @@ class Field:
         return self.is_struct() or self.is_struct_array()
 
     def __call__(self, *args, **kwargs):
-        return self.data_class(*args, **kwargs)
+        return self.data_class(*args, **kwargs) # pylint: disable=E1102
 
     @property
     def data_class(self):

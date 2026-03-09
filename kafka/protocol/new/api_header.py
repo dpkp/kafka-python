@@ -34,13 +34,13 @@ class ApiHeader(ApiStructData, metaclass=ApiHeaderMeta, init=False):
 
     def encode(self, flexible=False):
         # Request versions are 1-2, Response versions are 0-1
-        version = self._flexible_versions[0] if flexible else self._valid_versions[0]
+        version = self._flexible_versions[0] if flexible else self._valid_versions[0] # pylint: disable=E1136
         return super().encode(version=version, compact=False, tagged=flexible)
 
     @classmethod
     def decode(cls, data, flexible=False):
         # Request versions are 1-2, Response versions are 0-1
-        version = cls._flexible_versions[0] if flexible else cls._valid_versions[0]
+        version = cls._flexible_versions[0] if flexible else cls._valid_versions[0] # pylint: disable=E1136
         return cls._struct.decode(data, version=version, compact=False, tagged=flexible, data_class=cls)
 
 

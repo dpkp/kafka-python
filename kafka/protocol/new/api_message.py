@@ -71,31 +71,31 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
             self.API_VERSION = kwargs['version']
 
     @classproperty
-    def name(cls):
+    def name(cls): # pylint: disable=E0213
         return cls._name
 
     @classproperty
-    def type(cls):
+    def type(cls): # pylint: disable=E0213
         return cls._type
 
     @classproperty
-    def API_KEY(cls):
+    def API_KEY(cls): # pylint: disable=E0213
         return cls._api_key
 
     @classproperty
-    def json(cls):
+    def json(cls): # pylint: disable=E0213
         return cls._json
 
     @classproperty
-    def valid_versions(cls):
+    def valid_versions(cls): # pylint: disable=E0213
         return cls._valid_versions
 
     @classproperty
-    def min_version(cls):
+    def min_version(cls): # pylint: disable=E0213
         return 0
 
     @classproperty
-    def max_version(cls):
+    def max_version(cls): # pylint: disable=E0213
         if cls._valid_versions:
             return cls._valid_versions[1]
         return None
@@ -134,7 +134,7 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
         return self._header
 
     @classproperty
-    def header_class(cls):
+    def header_class(cls): # pylint: disable=E0213
         if cls.type == 'response':
             return ResponseHeader
         elif cls.type == 'request':
@@ -160,11 +160,11 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
 
     # allow override by api-specific classes (e.g., ApiVersionsResponse)
     def encode_header(self, flexible=False):
-        return self._header.encode(flexible=flexible)
+        return self._header.encode(flexible=flexible) # pylint: disable=E1120
 
     @classmethod
     def parse_header(cls, data, flexible=False):
-        return cls.header_class.decode(data, flexible=flexible)
+        return cls.header_class.decode(data, flexible=flexible) # pylint: disable=E1101
 
     def encode(self, version=None, header=False, framed=False):
         if version is not None:

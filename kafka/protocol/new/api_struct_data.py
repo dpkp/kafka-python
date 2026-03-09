@@ -49,7 +49,7 @@ class ApiStructData(metaclass=ApiStructMeta, init=False):
         return cls._struct.decode(data, **kwargs)
 
     @classproperty
-    def fields(cls):
+    def fields(cls): # pylint: disable=E0213
         return cls._struct.fields
 
     def __repr__(self):
