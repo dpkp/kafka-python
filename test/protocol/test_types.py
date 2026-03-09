@@ -96,10 +96,13 @@ def test_array_type():
 
 
 def test_error_handling():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Error encountered when attempting to convert value: 1000 to struct format: '>b'"):
         Int8.encode(1000) # Too large
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Error encountered when attempting to convert value: None to struct format: '>h'"):
+        Int16.encode(None)
+
+    with pytest.raises(ValueError, match="Error encountered when attempting to convert value: b'' to struct format: '>b'"):
         Int8.decode(io.BytesIO(b'')) # Too short
 
     s = String()

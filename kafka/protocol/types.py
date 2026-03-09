@@ -9,9 +9,13 @@ def _pack(f, value):
     try:
         return f(value)
     except error as e:
+        try:
+            fmt = f.__self__.format
+        except AttributeError:
+            fmt = 'unknown'
         raise ValueError("Error encountered when attempting to convert value: "
                         "{!r} to struct format: '{}', hit error: {}"
-                        .format(value, f, e))
+                        .format(value, fmt, e))
 
 
 def _unpack(f, data):
@@ -19,9 +23,13 @@ def _unpack(f, data):
         (value,) = f(data)
         return value
     except error as e:
+        try:
+            fmt = f.__self__.format
+        except AttributeError:
+            fmt = 'unknown'
         raise ValueError("Error encountered when attempting to convert value: "
                         "{!r} to struct format: '{}', hit error: {}"
-                        .format(data, f, e))
+                        .format(data, fmt, e))
 
 
 class Int8(AbstractType):
