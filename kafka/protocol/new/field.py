@@ -1,4 +1,5 @@
 import re
+import uuid
 
 from .api_array import ApiArray
 from .api_struct import ApiStruct
