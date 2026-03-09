@@ -24,7 +24,6 @@ class SaslAuthenticateResponse_v1(Response):
 class SaslAuthenticateRequest_v0(Request):
     API_KEY = 36
     API_VERSION = 0
-    RESPONSE_TYPE = SaslAuthenticateResponse_v0
     SCHEMA = Schema(
         ('auth_bytes', Bytes))
 
@@ -32,7 +31,6 @@ class SaslAuthenticateRequest_v0(Request):
 class SaslAuthenticateRequest_v1(Request):
     API_KEY = 36
     API_VERSION = 1
-    RESPONSE_TYPE = SaslAuthenticateResponse_v1
     SCHEMA = SaslAuthenticateRequest_v0.SCHEMA
 
 

@@ -26,7 +26,6 @@ class EndTxnResponse_v2(Response):
 class EndTxnRequest_v0(Request):
     API_KEY = 26
     API_VERSION = 0
-    RESPONSE_TYPE = EndTxnResponse_v0
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
         ('producer_id', Int64),
@@ -37,14 +36,12 @@ class EndTxnRequest_v0(Request):
 class EndTxnRequest_v1(Request):
     API_KEY = 26
     API_VERSION = 1
-    RESPONSE_TYPE = EndTxnResponse_v1
     SCHEMA = EndTxnRequest_v0.SCHEMA
 
 
 class EndTxnRequest_v2(Request):
     API_KEY = 26
     API_VERSION = 2
-    RESPONSE_TYPE = EndTxnResponse_v2
     SCHEMA = EndTxnRequest_v1.SCHEMA
 
 

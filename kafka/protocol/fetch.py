@@ -168,7 +168,6 @@ class FetchResponse_v11(Response):
 class FetchRequest_v0(Request):
     API_KEY = 1
     API_VERSION = 0
-    RESPONSE_TYPE = FetchResponse_v0
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -185,21 +184,18 @@ class FetchRequest_v0(Request):
 class FetchRequest_v1(Request):
     API_KEY = 1
     API_VERSION = 1
-    RESPONSE_TYPE = FetchResponse_v1
     SCHEMA = FetchRequest_v0.SCHEMA
 
 
 class FetchRequest_v2(Request):
     API_KEY = 1
     API_VERSION = 2
-    RESPONSE_TYPE = FetchResponse_v2
     SCHEMA = FetchRequest_v1.SCHEMA
 
 
 class FetchRequest_v3(Request):
     API_KEY = 1
     API_VERSION = 3
-    RESPONSE_TYPE = FetchResponse_v3
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -219,7 +215,6 @@ class FetchRequest_v4(Request):
     # Adds message format v2
     API_KEY = 1
     API_VERSION = 4
-    RESPONSE_TYPE = FetchResponse_v4
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -239,7 +234,6 @@ class FetchRequest_v5(Request):
     # This may only be used in broker-broker api calls
     API_KEY = 1
     API_VERSION = 5
-    RESPONSE_TYPE = FetchResponse_v5
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -264,7 +258,6 @@ class FetchRequest_v6(Request):
     """
     API_KEY = 1
     API_VERSION = 6
-    RESPONSE_TYPE = FetchResponse_v6
     SCHEMA = FetchRequest_v5.SCHEMA
 
 
@@ -274,7 +267,6 @@ class FetchRequest_v7(Request):
     """
     API_KEY = 1
     API_VERSION = 7
-    RESPONSE_TYPE = FetchResponse_v7
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -303,7 +295,6 @@ class FetchRequest_v8(Request):
     """
     API_KEY = 1
     API_VERSION = 8
-    RESPONSE_TYPE = FetchResponse_v8
     SCHEMA = FetchRequest_v7.SCHEMA
 
 
@@ -313,7 +304,6 @@ class FetchRequest_v9(Request):
     """
     API_KEY = 1
     API_VERSION = 9
-    RESPONSE_TYPE = FetchResponse_v9
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),
@@ -343,7 +333,6 @@ class FetchRequest_v10(Request):
     """
     API_KEY = 1
     API_VERSION = 10
-    RESPONSE_TYPE = FetchResponse_v10
     SCHEMA = FetchRequest_v9.SCHEMA
 
 
@@ -353,7 +342,6 @@ class FetchRequest_v11(Request):
     """
     API_KEY = 1
     API_VERSION = 11
-    RESPONSE_TYPE = FetchResponse_v11
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('max_wait_time', Int32),

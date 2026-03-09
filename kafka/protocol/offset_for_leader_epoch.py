@@ -67,7 +67,6 @@ class OffsetForLeaderEpochResponse_v4(Response):
 class OffsetForLeaderEpochRequest_v0(Request):
     API_KEY = 23
     API_VERSION = 0
-    RESPONSE_TYPE = OffsetForLeaderEpochResponse_v0
     SCHEMA = Schema(
         ('topics', Array(
             ('topic', String('utf-8')),
@@ -79,14 +78,12 @@ class OffsetForLeaderEpochRequest_v0(Request):
 class OffsetForLeaderEpochRequest_v1(Request):
     API_KEY = 23
     API_VERSION = 1
-    RESPONSE_TYPE = OffsetForLeaderEpochResponse_v1
     SCHEMA = OffsetForLeaderEpochRequest_v0.SCHEMA
 
 
 class OffsetForLeaderEpochRequest_v2(Request):
     API_KEY = 23
     API_VERSION = 2
-    RESPONSE_TYPE = OffsetForLeaderEpochResponse_v2
     SCHEMA = Schema(
         ('topics', Array(
             ('topic', String('utf-8')),
@@ -99,7 +96,6 @@ class OffsetForLeaderEpochRequest_v2(Request):
 class OffsetForLeaderEpochRequest_v3(Request):
     API_KEY = 23
     API_VERSION = 3
-    RESPONSE_TYPE = OffsetForLeaderEpochResponse_v3
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', Array(
@@ -113,7 +109,6 @@ class OffsetForLeaderEpochRequest_v3(Request):
 class OffsetForLeaderEpochRequest_v4(Request):
     API_KEY = 23
     API_VERSION = 4
-    RESPONSE_TYPE = OffsetForLeaderEpochResponse_v4
     SCHEMA = Schema(
         ('replica_id', Int32),
         ('topics', CompactArray(

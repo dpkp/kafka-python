@@ -22,7 +22,6 @@ class InitProducerIdResponse_v1(Response):
 class InitProducerIdRequest_v0(Request):
     API_KEY = 22
     API_VERSION = 0
-    RESPONSE_TYPE = InitProducerIdResponse_v0
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
         ('transaction_timeout_ms', Int32),
@@ -32,7 +31,6 @@ class InitProducerIdRequest_v0(Request):
 class InitProducerIdRequest_v1(Request):
     API_KEY = 22
     API_VERSION = 1
-    RESPONSE_TYPE = InitProducerIdResponse_v1
     SCHEMA = InitProducerIdRequest_v0.SCHEMA
 
 

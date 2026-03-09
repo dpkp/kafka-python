@@ -1,3 +1,12 @@
+from . import (
+    produce, fetch, list_offsets, metadata,
+    commit, find_coordinator, group,
+    sasl_handshake, api_versions, admin,
+    init_producer_id, offset_for_leader_epoch,
+    add_partitions_to_txn, add_offsets_to_txn, end_txn,
+    txn_offset_commit, sasl_authenticate,
+)
+
 API_KEYS = {
     0: 'Produce',
     1: 'Fetch',
@@ -44,3 +53,47 @@ API_KEYS = {
     46: 'ListPartitionReassignments',
     48: 'DescribeClientQuotas',
 }
+
+# Mapping of Api_key to a tuple of (request_classes, response_classes)
+REQUEST_TYPES = {
+    0: (produce.ProduceRequest, produce.ProduceResponse),
+    1: (fetch.FetchRequest, fetch.FetchResponse),
+    2: (list_offsets.ListOffsetsRequest, list_offsets.ListOffsetsResponse),
+    3: (metadata.MetadataRequest, metadata.MetadataResponse),
+    8: (commit.OffsetCommitRequest, commit.OffsetCommitResponse),
+    9: (commit.OffsetFetchRequest, commit.OffsetFetchResponse),
+    10: (find_coordinator.FindCoordinatorRequest, find_coordinator.FindCoordinatorResponse),
+    11: (group.JoinGroupRequest, group.JoinGroupResponse),
+    12: (group.HeartbeatRequest, group.HeartbeatResponse),
+    13: (group.LeaveGroupRequest, group.LeaveGroupResponse),
+    14: (group.SyncGroupRequest, group.SyncGroupResponse),
+    15: (admin.DescribeGroupsRequest, admin.DescribeGroupsResponse),
+    16: (admin.ListGroupsRequest, admin.ListGroupsResponse),
+    17: (sasl_handshake.SaslHandshakeRequest, sasl_handshake.SaslHandshakeResponse),
+    18: (api_versions.ApiVersionsRequest, api_versions.ApiVersionsResponse),
+    19: (admin.CreateTopicsRequest, admin.CreateTopicsResponse),
+    20: (admin.DeleteTopicsRequest, admin.DeleteTopicsResponse),
+    21: (admin.DeleteRecordsRequest, admin.DeleteRecordsResponse),
+    22: (init_producer_id.InitProducerIdRequest, init_producer_id.InitProducerIdResponse),
+    23: (offset_for_leader_epoch.OffsetForLeaderEpochRequest, offset_for_leader_epoch.OffsetForLeaderEpochResponse),
+    24: (add_partitions_to_txn.AddPartitionsToTxnRequest, add_partitions_to_txn.AddPartitionsToTxnResponse),
+    25: (add_offsets_to_txn.AddOffsetsToTxnRequest, add_offsets_to_txn.AddOffsetsToTxnResponse),
+    26: (end_txn.EndTxnRequest, end_txn.EndTxnResponse),
+    28: (txn_offset_commit.TxnOffsetCommitRequest, txn_offset_commit.TxnOffsetCommitResponse),
+    29: (admin.DescribeAclsRequest, admin.DescribeAclsResponse),
+    30: (admin.CreateAclsRequest, admin.CreateAclsResponse),
+    31: (admin.DeleteAclsRequest, admin.DeleteAclsResponse),
+    32: (admin.DescribeConfigsRequest, admin.DescribeConfigsResponse),
+    33: (admin.AlterConfigsRequest, admin.AlterConfigsResponse),
+    36: (sasl_authenticate.SaslAuthenticateRequest, sasl_authenticate.SaslAuthenticateResponse),
+    37: (admin.CreatePartitionsRequest, admin.CreatePartitionsResponse),
+    42: (admin.DeleteGroupsRequest, admin.DeleteGroupsResponse)
+}
+
+def get_response_class(api_key, api_version):
+    request_type, response_type = REQUEST_TYPES.get(api_key, (None, None))
+    if response_type:
+        if hasattr(response_type, '__getitem__'):
+            return response_type[api_version]
+        return response_type
+    return None

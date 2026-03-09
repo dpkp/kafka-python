@@ -195,7 +195,6 @@ class MetadataResponse_v8(Response):
 class MetadataRequest_v0(Request):
     API_KEY = 3
     API_VERSION = 0
-    RESPONSE_TYPE = MetadataResponse_v0
     SCHEMA = Schema(
         ('topics', Array(String('utf-8')))
     )
@@ -206,7 +205,6 @@ class MetadataRequest_v0(Request):
 class MetadataRequest_v1(Request):
     API_KEY = 3
     API_VERSION = 1
-    RESPONSE_TYPE = MetadataResponse_v1
     SCHEMA = MetadataRequest_v0.SCHEMA
     ALL_TOPICS = None # Null Array (len -1) for topics returns all topics
     NO_TOPICS = [] # Empty array (len 0) for topics returns no topics
@@ -215,7 +213,6 @@ class MetadataRequest_v1(Request):
 class MetadataRequest_v2(Request):
     API_KEY = 3
     API_VERSION = 2
-    RESPONSE_TYPE = MetadataResponse_v2
     SCHEMA = MetadataRequest_v1.SCHEMA
     ALL_TOPICS = None
     NO_TOPICS = []
@@ -224,7 +221,6 @@ class MetadataRequest_v2(Request):
 class MetadataRequest_v3(Request):
     API_KEY = 3
     API_VERSION = 3
-    RESPONSE_TYPE = MetadataResponse_v3
     SCHEMA = MetadataRequest_v1.SCHEMA
     ALL_TOPICS = None
     NO_TOPICS = []
@@ -233,7 +229,6 @@ class MetadataRequest_v3(Request):
 class MetadataRequest_v4(Request):
     API_KEY = 3
     API_VERSION = 4
-    RESPONSE_TYPE = MetadataResponse_v4
     SCHEMA = Schema(
         ('topics', Array(String('utf-8'))),
         ('allow_auto_topic_creation', Boolean)
@@ -249,7 +244,6 @@ class MetadataRequest_v5(Request):
     """
     API_KEY = 3
     API_VERSION = 5
-    RESPONSE_TYPE = MetadataResponse_v5
     SCHEMA = MetadataRequest_v4.SCHEMA
     ALL_TOPICS = None
     NO_TOPICS = []
@@ -258,7 +252,6 @@ class MetadataRequest_v5(Request):
 class MetadataRequest_v6(Request):
     API_KEY = 3
     API_VERSION = 6
-    RESPONSE_TYPE = MetadataResponse_v6
     SCHEMA = MetadataRequest_v5.SCHEMA
     ALL_TOPICS = None
     NO_TOPICS = []
@@ -267,7 +260,6 @@ class MetadataRequest_v6(Request):
 class MetadataRequest_v7(Request):
     API_KEY = 3
     API_VERSION = 7
-    RESPONSE_TYPE = MetadataResponse_v7
     SCHEMA = MetadataRequest_v6.SCHEMA
     ALL_TOPICS = None
     NO_TOPICS = []
@@ -276,7 +268,6 @@ class MetadataRequest_v7(Request):
 class MetadataRequest_v8(Request):
     API_KEY = 3
     API_VERSION = 8
-    RESPONSE_TYPE = MetadataResponse_v8
     SCHEMA = Schema(
         ('topics', Array(String('utf-8'))),
         ('allow_auto_topic_creation', Boolean),
