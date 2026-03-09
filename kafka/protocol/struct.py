@@ -54,6 +54,8 @@ class Struct(metaclass=abc.ABCMeta):
         return hash(self.encode())
 
     def __eq__(self, other):
+        if not isinstance(other, Struct):
+            return False
         if self.SCHEMA != other.SCHEMA:
             return False
         for attr in self.SCHEMA.names:
