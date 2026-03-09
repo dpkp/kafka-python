@@ -58,6 +58,11 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
     def to_object(self):
         return _to_object(self.SCHEMA, self)
 
+    @classmethod
+    @abc.abstractmethod
+    def is_request(cls):
+        pass
+
     @property
     def header(self):
         return self._header
@@ -88,13 +93,19 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
             return super().decode(data)
         if isinstance(data, bytes):
             data = BytesIO(data)
-        ret = []
         if framed:
-            ret.append(Int32.decode(data))
+            size = Int32.decode(data)
         if header:
-            ret.append(cls.parse_header(data))
-        ret.append(super().decode(data))
-        return tuple(ret)
+            hdr = cls.parse_header(data)
+        else:
+            hdr = None
+        ret = super().decode(data)
+        if hdr is not None:
+            ret._header = hdr
+        return ret
+
+    def __eq__(self, other):
+        return self._header == other._header and super().__eq__(other)
 
 
 class Request(RequestResponse):
@@ -102,6 +113,10 @@ class Request(RequestResponse):
     def RESPONSE_TYPE(self):
         """The Response class associated with the api request"""
         pass
+
+    @classmethod
+    def is_request(cls):
+        return True
 
     def expect_response(self):
         """Override this method if an api request does not always generate a response"""
@@ -120,13 +135,12 @@ class Request(RequestResponse):
         else:
             return RequestHeader
 
-    def encode(self, header=False, framed=False, correlation_id=None, client_id=None, **kwargs):
-        if header and self.header is None:
-            self.with_header(correlation_id=correlation_id, client_id=client_id)
-        return super().encode(header=header, framed=framed)
-
 
 class Response(RequestResponse):
+    @classmethod
+    def is_request(cls):
+        return False
+
     def with_header(self, correlation_id=0):
         if self.FLEXIBLE_VERSION:
             self._header = self.header_class()(correlation_id, {})
@@ -139,11 +153,6 @@ class Response(RequestResponse):
             return ResponseHeaderV2
         else:
             return ResponseHeader
-
-    def encode(self, header=False, framed=False, correlation_id=None, **kwargs):
-        if header and self.header is None:
-            self.with_header(correlation_id=correlation_id)
-        return super().encode(header=header, framed=framed)
 
 
 def _to_object(schema, data):

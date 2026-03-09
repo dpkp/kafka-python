@@ -65,5 +65,9 @@ TEST_CASES = [
 
 @pytest.mark.parametrize('msg, encoded', TEST_CASES)
 def test_parse(msg, encoded):
-    assert msg.encode(correlation_id=1, client_id='_internal_client_kYVL', header=True, framed=True) == encoded
-    assert msg.decode(encoded, header=True, framed=True)[2] == msg
+    if msg.is_request():
+        msg.with_header(correlation_id=1, client_id='_internal_client_kYVL')
+    else:
+        msg.with_header(correlation_id=1)
+    assert msg.encode(header=True, framed=True) == encoded
+    assert msg.decode(encoded, header=True, framed=True) == msg
