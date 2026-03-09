@@ -96,14 +96,14 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
 
     @classproperty
     def max_version(cls): # pylint: disable=E0213
-        if cls._valid_versions:
-            return cls._valid_versions[1]
+        if cls._valid_versions is not None:
+            return cls._valid_versions[1] # pylint: disable=E1136
         return None
 
     @classmethod
     def flexible_version_q(cls, version):
         if cls._flexible_versions is not None:
-            if cls._flexible_versions[0] <= version <= cls._flexible_versions[1]:
+            if cls._flexible_versions[0] <= version <= cls._flexible_versions[1]: # pylint: disable=E1136
                 return True
         return False
 
