@@ -63,7 +63,7 @@ class KafkaProtocol(object):
         data = request.encode(framed=True, header=True)
         self.bytes_to_send.append(data)
         if request.expect_response():
-            self.in_flight_requests.append(header)
+            self.in_flight_requests.append(request.header)
         return correlation_id
 
     def send_bytes(self):
@@ -140,7 +140,7 @@ class KafkaProtocol(object):
         correlation_id = header.correlation_id
         response_type = get_response_class(header.api_key, header.api_version)
         if response_type is None:
-            log.error('Unable to find ResponseType for api_key=%d api_version=%d',
+            log.error('Unable to find ResponseType for api=%d version=%d',
                       header.api_key, header.api_version)
             raise Errors.KafkaProtocolError('Unable to find response type for api %d v%d' % (header.api_key, header.api_version))
         response_header = response_type.parse_header(read_buffer)
