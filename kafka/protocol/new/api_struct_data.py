@@ -41,15 +41,11 @@ class ApiStructData(metaclass=ApiStructMeta, init=False):
 
     def encode(self, *args, **kwargs):
         """Add version= to kwargs, otherwise pass-through to ApiStruct"""
-        if getattr(self, '_version', None) is not None and kwargs.get('version', None) is None:
-            kwargs['version'] = self._version
         return self._struct.encode(self, *args, **kwargs)
 
     @classmethod
     def decode(cls, data, **kwargs):
         """Add version= to kwargs, otherwise pass-through to ApiStruct"""
-        if getattr(cls, '_version', None) is not None and kwargs.get('version', None) is None:
-            kwargs['version'] = cls._version
         return cls._struct.decode(data, **kwargs)
 
     @classproperty
