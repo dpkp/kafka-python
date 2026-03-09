@@ -24,7 +24,7 @@ class BaseApiVersionsResponse(Response):
         if framed:
             nbytes = Int32.decode(data)
         if header:
-            cls.parse_header(data)
+            cls.parse_header(data) # Note: non-flexible header
         err = Int16.decode(data)
         data.seek(curr)
         if err != 0:

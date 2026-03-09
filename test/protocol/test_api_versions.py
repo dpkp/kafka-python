@@ -1,6 +1,8 @@
+from io import BytesIO
+
 import pytest
 
-from kafka.protocol.api import Request
+from kafka.protocol.api import Request, ResponseHeader
 from kafka.protocol.api_versions import ApiVersionsRequest, ApiVersionsResponse
 from kafka.protocol.types import Int32
 from kafka.version import __version__
@@ -70,4 +72,17 @@ def test_parse(msg, encoded):
     else:
         msg.with_header(correlation_id=1)
     assert msg.encode(header=True, framed=True) == encoded
-    assert msg.decode(encoded, header=True, framed=True) == msg
+    data = BytesIO(encoded)
+    assert msg.decode(data, header=True, framed=True) == msg
+    assert data.read() == b''
+
+
+@pytest.mark.parametrize('version', [0, 1, 2, 3, 4])
+def test_parse_flexible_error(version):
+    # An unsupported request version returns v0 response. Make sure this works with all versions!
+    msg = ApiVersionsResponse[0](error_code=35, api_versions=[(18, 0, 3)])
+    msg.with_header(correlation_id=1)
+    encoded = b'\x00\x00\x00\x10\x00\x00\x00\x01\x00#\x00\x00\x00\x01\x00\x12\x00\x00\x00\x03'
+    data = BytesIO(encoded)
+    assert ApiVersionsResponse[version].decode(data, header=True, framed=True) == msg
+    assert data.read() == b''
