@@ -335,8 +335,9 @@ class TaggedFields(AbstractType):
         for k, v in value.items():
             # do we allow for other data types ?? It could get complicated really fast
             assert isinstance(v, bytes), 'Value {} is not a byte array'.format(v)
-            assert isinstance(k, int) and k > 0, 'Key {} is not a positive integer'.format(k)
+            assert isinstance(k, int) and k >= 0, 'Key {} is not a non-negative integer'.format(k)
             ret += UnsignedVarInt32.encode(k)
+            ret += UnsignedVarInt32.encode(len(v))
             ret += v
         return ret
 
