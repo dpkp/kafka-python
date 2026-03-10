@@ -2,7 +2,6 @@ import collections
 import logging
 
 import kafka.errors as Errors
-from kafka.protocol import get_response_class
 from kafka.protocol.find_coordinator import FindCoordinatorResponse
 from kafka.protocol.frame import KafkaBytes
 from kafka.protocol.types import Int32
