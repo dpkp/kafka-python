@@ -1,11 +1,26 @@
 import abc
 from io import BytesIO
+import weakref
 
 from kafka.protocol.struct import Struct
 from kafka.protocol.types import Int16, Int32, String, Schema, Array, TaggedFields
 
 
-class RequestHeader(Struct):
+class ResponseClassRegistry:
+    _response_class_registry = {}
+
+    @classmethod
+    def register_response_class(cls, response_class):
+        cls._response_class_registry[(response_class.API_KEY, response_class.API_VERSION)] = response_class
+
+    @classmethod
+    def get_response_class(cls, header):
+        key = (header.api_key, header.api_version)
+        if key in cls._response_class_registry:
+            return cls._response_class_registry[key]
+
+
+class RequestHeader(ResponseClassRegistry, Struct):
     SCHEMA = Schema(
         ('api_key', Int16),
         ('api_version', Int16),
@@ -13,8 +28,11 @@ class RequestHeader(Struct):
         ('client_id', String('utf-8'))
     )
 
+    def get_response_class(self):
+        return ResponseClassRegistry.get_response_class(self)
 
-class RequestHeaderV2(Struct):
+
+class RequestHeaderV2(ResponseClassRegistry, Struct):
     # Flexible response / request headers end in field buffer
     SCHEMA = Schema(
         ('api_key', Int16),
@@ -23,6 +41,11 @@ class RequestHeaderV2(Struct):
         ('client_id', String('utf-8')),
         ('tags', TaggedFields),
     )
+
+    def get_response_class(self):
+        key = (self.api_key, self.api_version) # pylint: disable=E1101
+        if key in ResponseClassRegistry._response_class_registry:
+            return ResponseClassRegistry._response_class_registry[key]
 
 
 class ResponseHeader(Struct):
@@ -132,6 +155,10 @@ class Request(RequestResponse):
 
 
 class Response(RequestResponse):
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        ResponseClassRegistry.register_response_class(weakref.proxy(cls))
+
     @classmethod
     def is_request(cls):
         return False

@@ -2,7 +2,6 @@ import collections
 import logging
 
 import kafka.errors as Errors
-from kafka.protocol import get_response_class
 from kafka.protocol.find_coordinator import FindCoordinatorResponse
 from kafka.protocol.frame import KafkaBytes
 from kafka.protocol.types import Int32
@@ -138,7 +137,7 @@ class KafkaProtocol(object):
             raise Errors.CorrelationIdError('No in-flight-request found for server response')
         header = self.in_flight_requests.popleft()
         correlation_id = header.correlation_id
-        response_type = get_response_class(header.api_key, header.api_version)
+        response_type = header.get_response_class()
         if response_type is None:
             log.error('Unable to find ResponseType for api=%d version=%d',
                       header.api_key, header.api_version)
