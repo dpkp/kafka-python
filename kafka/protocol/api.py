@@ -23,7 +23,7 @@ class RequestHeader(ResponseClassRegistry, Struct):
     )
 
     def get_response_class(self):
-        key = (self.api_key, self.api_version)
+        key = (self.api_key, self.api_version) # pylint: disable=E1101
         if key in ResponseClassRegistry._response_class_registry:
             return ResponseClassRegistry._response_class_registry[key]
 
@@ -39,7 +39,7 @@ class RequestHeaderV2(ResponseClassRegistry, Struct):
     )
 
     def get_response_class(self):
-        key = (self.api_key, self.api_version)
+        key = (self.api_key, self.api_version) # pylint: disable=E1101
         if key in ResponseClassRegistry._response_class_registry:
             return ResponseClassRegistry._response_class_registry[key]
 
