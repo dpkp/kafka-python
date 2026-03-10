@@ -115,6 +115,10 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
     def is_request(cls):
         return cls._type == 'request'
 
+    # allow override by api-specific classes (e.g., ProduceRequest)
+    def expect_response(self):
+        return True
+
     @property
     def API_VERSION(self):
         return self._version if self._version is not None else self._class_version
