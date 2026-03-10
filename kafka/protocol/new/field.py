@@ -4,7 +4,7 @@ import uuid
 from .api_array import ApiArray
 from .api_struct import ApiStruct
 from ..types import (
-    Boolean, Bytes, CompactBytes, CompactString,
+    BitField, Boolean, Bytes, CompactBytes, CompactString,
     Float64, Int8, Int16, Int32, Int64, String, UUID
 )
 
@@ -42,6 +42,7 @@ class Field:
         'string': String('utf-8'), # CompactString if flexible version
         'bytes': Bytes, # CompactBytes if flexible version
         'records': Bytes,
+        'bitfield': BitField, # patched only; does not exist in raw schemas
     }
 
     def __init__(self, json):
@@ -149,6 +150,14 @@ class Field:
                 return 0.0
             else:
                 return float(default)
+        elif self._type is BitField:
+            if not default:
+                return None
+            else:
+                default = BitField.from_32_bit_field(int(default))
+                if default == {31}:
+                    return None
+                return default
         elif default == 'null':
             self._validate_null_default()
             return None

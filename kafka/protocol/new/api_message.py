@@ -39,6 +39,8 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
         # Pass init=False from base classes
         if kw.get('init', True):
             json = load_json(name)
+            if 'json_patch' in attrs:
+                json = attrs['json_patch'].__func__(metacls, json)
             attrs['_json'] = json
             attrs['_struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
             attrs['__doc__'] = json.get('doc')

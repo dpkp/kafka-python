@@ -46,7 +46,7 @@ def test_metadata_response_roundtrip(version):
                     offline_replicas=[]
                 )
             ],
-            topic_authorized_operations=-2147483648
+            authorized_operations=None
         )
     ]
     data = MetadataResponse(
@@ -55,7 +55,7 @@ def test_metadata_response_roundtrip(version):
         cluster_id=None,
         controller_id=1 if version >= 1 else -1,
         topics=topics,
-        cluster_authorized_operations=-2147483648
+        authorized_operations=None
     )
 
     encoded = MetadataResponse.encode(data, version=version)
