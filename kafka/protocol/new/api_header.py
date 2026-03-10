@@ -36,5 +36,23 @@ class ApiHeader(ApiStructData, metaclass=ApiHeaderMeta, init=False):
         return cls._struct.decode(data, version=version, compact=False, tagged=flexible, data_class=cls)
 
 
-class RequestHeader(ApiHeader): pass
+class ResponseClassRegistry:
+    _response_class_registry = {}
+
+    @classmethod
+    def register_response_class(cls, response_class):
+        cls._response_class_registry[response_class.API_KEY] = response_class
+
+    @classmethod
+    def get_response_class(cls, request_header):
+        response_class = cls._response_class_registry.get(request_header.request_api_key)
+        if response_class is not None:
+            return response_class[request_header.request_api_version]
+
+
+class RequestHeader(ApiHeader):
+    def get_response_class(self):
+        return ResponseClassRegistry.get_response_class(self)
+
+
 class ResponseHeader(ApiHeader): pass

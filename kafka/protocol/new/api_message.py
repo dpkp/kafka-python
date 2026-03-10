@@ -1,7 +1,7 @@
 import io
 import weakref
 
-from .api_header import RequestHeader, ResponseHeader
+from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .api_struct import ApiStruct
 from .api_struct_data import ApiStructData, ApiStructMeta
 from .field import Field, parse_versions
@@ -64,6 +64,8 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
             assert cls._json['type'] in ('request', 'response')
             cls._flexible_versions = parse_versions(cls._json['flexibleVersions'])
             cls._valid_versions = parse_versions(cls._json['validVersions'])
+            if not cls.is_request():
+                ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
