@@ -10,8 +10,14 @@ class ResponseClassRegistry:
     _response_class_registry = {}
 
     @classmethod
-    def _register_response_class(cls, response_class):
+    def register_response_class(cls, response_class):
         cls._response_class_registry[(response_class.API_KEY, response_class.API_VERSION)] = response_class
+
+    @classmethod
+    def get_response_class(cls, header):
+        key = (header.api_key, header.api_version)
+        if key in cls._response_class_registry:
+            return cls._response_class_registry[key]
 
 
 class RequestHeader(ResponseClassRegistry, Struct):
@@ -23,9 +29,7 @@ class RequestHeader(ResponseClassRegistry, Struct):
     )
 
     def get_response_class(self):
-        key = (self.api_key, self.api_version) # pylint: disable=E1101
-        if key in ResponseClassRegistry._response_class_registry:
-            return ResponseClassRegistry._response_class_registry[key]
+        return ResponseClassRegistry.get_response_class(self)
 
 
 class RequestHeaderV2(ResponseClassRegistry, Struct):
@@ -153,7 +157,7 @@ class Request(RequestResponse):
 class Response(RequestResponse):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        ResponseClassRegistry._register_response_class(weakref.proxy(cls))
+        ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 
     @classmethod
     def is_request(cls):
