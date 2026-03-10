@@ -532,10 +532,10 @@ class KafkaAdminClient(object):
 
     def _process_metadata_response(self, metadata_response):
         obj = metadata_response.to_object()
-        if 'authorized_operations' in obj:
+        if obj.get('authorized_operations', None) is not None:
             obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
         for t in obj['topics']:
-            if 'authorized_operations' in t:
+            if t.get('authorized_operations', None) is not None:
                 t['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(t['authorized_operations'])))
         return obj
 

@@ -72,7 +72,7 @@ TEST_API_VERSIONS_2 = {
             'response': (
                 b'\x00\x00\x00E\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\tlocalhost\x00\x00\xb9}\xff\xff\x00\x1634wjNp3hRJixCRvMlK9Znw\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\x00',
                 3,
-                MetadataResponse[8](throttle_time_ms=0, brokers=[(0, 'localhost', 47485, None)], cluster_id='34wjNp3hRJixCRvMlK9Znw', controller_id=0, topics=[], authorized_operations={31}),
+                MetadataResponse[8](throttle_time_ms=0, brokers=[(0, 'localhost', 47485, None)], cluster_id='34wjNp3hRJixCRvMlK9Znw', controller_id=0, topics=[], authorized_operations=None),
             ),
         },
         {
@@ -83,7 +83,7 @@ TEST_API_VERSIONS_2 = {
             'response': (
                 b'\x00\x00\x00E\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\tlocalhost\x00\x00\xb9}\xff\xff\x00\x1634wjNp3hRJixCRvMlK9Znw\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\x00',
                 4,
-                MetadataResponse[8](throttle_time_ms=0, brokers=[(0, 'localhost', 47485, None)], cluster_id='34wjNp3hRJixCRvMlK9Znw', controller_id=0, topics=[], authorized_operations={31}),
+                MetadataResponse[8](throttle_time_ms=0, brokers=[(0, 'localhost', 47485, None)], cluster_id='34wjNp3hRJixCRvMlK9Znw', controller_id=0, topics=[], authorized_operations=None),
             ),
         }
     ),
