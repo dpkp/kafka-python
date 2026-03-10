@@ -4,20 +4,22 @@ from kafka.util import classproperty
 class ApiStructMeta(type):
     def __new__(metacls, name, bases, attrs, **kw):
         if kw.get('init', True):
-            struct = kw.get('struct', attrs.get('_struct'))
-            assert struct is not None
-            attrs['_struct'] = struct
+            assert attrs.get('_struct') is not None
             attrs['__slots__'] = attrs.get('__slots__', ()) + tuple(attrs['_struct'].fields.keys())
-            # Link sub-struct data_classes as class attrs
-            for field in attrs['_struct'].fields.values():
-                if field.has_data_class():
-                    attrs[field.data_class.__name__] = field.data_class
         return super().__new__(metacls, name, bases, attrs)
 
 
 class ApiStructData(metaclass=ApiStructMeta, init=False):
     __slots__ = ('tags', 'unknown_tags')
     _struct = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Link sub-struct data_classes as class attrs
+        if cls._struct is not None:
+            for field in cls._struct.fields.values():
+                if field.has_data_class():
+                    setattr(cls, field.data_class.__name__, field.data_class)
 
     def __init__(self, **field_vals):
         assert self._struct is not None

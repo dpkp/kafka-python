@@ -27,7 +27,7 @@ class ApiStruct:
     @property
     def data_class(self):
         if self._data_class is None:
-            self._data_class = type(self._name, (ApiStructData,), {}, struct=weakref.proxy(self))
+            self._data_class = type(self._name, (ApiStructData,), {'_struct': weakref.proxy(self)})
         return self._data_class
 
     def to_schema(self, version, compact=False, tagged=False):

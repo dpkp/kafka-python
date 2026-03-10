@@ -8,29 +8,21 @@ class ApiHeaderMeta(ApiStructMeta):
     def __new__(metacls, name, bases, attrs, **kw):
         if kw.get('init', True):
             json = load_json(name)
-            kw['struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
             attrs['_json'] = json
-            attrs['_name'] = json['name']
-            attrs['_type'] = json['type']
-            attrs['_flexible_versions'] = parse_versions(json['flexibleVersions'])
-            attrs['_valid_versions'] = parse_versions(json['validVersions'])
+            attrs['_struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
         return super().__new__(metacls, name, bases, attrs, **kw)
-
-    def __init__(cls, name, bases, attrs, **kw):
-        super().__init__(name, bases, attrs, **kw)
-        if name != 'ApiHeader':
-            assert cls._type == 'header'
-            assert cls._valid_versions is not None
 
 
 class ApiHeader(ApiStructData, metaclass=ApiHeaderMeta, init=False):
     __slots__ = ()
-    _json = None
-    _name = None
-    _type = None
-    _flexible_versions = None
-    _valid_versions = None
-    _struct = None
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if kw.get('init', True):
+            # pylint: disable=E1101
+            assert cls._json['type'] == 'header'
+            cls._flexible_versions = parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = parse_versions(cls._json['validVersions'])
 
     def encode(self, flexible=False):
         # Request versions are 1-2, Response versions are 0-1

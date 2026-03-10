@@ -11,36 +11,16 @@ from ..types import Int32
 from kafka.util import classproperty
 
 
-class ApiMessageMeta(ApiStructMeta):
-    def __new__(metacls, name, bases, attrs, **kw):
-        # Pass init=False from base classes
-        if kw.get('init', True):
-            json = load_json(name)
-            kw['struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
-            attrs['_json'] = json
-            attrs['_name'] = json['name']
-            attrs['_type'] = json['type']
-            attrs['_api_key'] = json['apiKey']
-            attrs['_flexible_versions'] = parse_versions(json['flexibleVersions'])
-            attrs['_valid_versions'] = parse_versions(json['validVersions'])
-            attrs['_class_version'] = kw.get('version', attrs.get('_class_version'))
-            attrs['__doc__'] = json.get('doc')
-            attrs['__license__'] = json.get('license')
-        return super().__new__(metacls, name, bases, attrs, **kw)
-
+class VersionSubscriptable(type):
     def __init__(cls, name, bases, attrs, **kw):
         super().__init__(name, bases, attrs, **kw)
         if kw.get('init', True):
-            assert cls._type in ('request', 'response')
-            assert cls._valid_versions is not None
             # The primary message class has _version = None
             # and a _VERSIONS dict that provides access to version-specific wrappers
             # We also include cls[None] -> primary class to "exit" a version class
-            if cls._class_version is None:
+            if getattr(cls, '_class_version', None) is None:
+                cls._class_version = None
                 cls._VERSIONS = {None: weakref.proxy(cls)}
-            # Configure the ApiStruct to use our ApiMessage wrapper
-            # and not construct a default ApiStructData
-            cls._struct._data_class = weakref.proxy(cls)
 
     def __getitem__(cls, version):
         # Use [] lookups to move from primary class to "versioned" classes
@@ -54,16 +34,36 @@ class ApiMessageMeta(ApiStructMeta):
         return cls._VERSIONS[klass_name]
 
 
+class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
+    def __new__(metacls, name, bases, attrs, **kw):
+        # Pass init=False from base classes
+        if kw.get('init', True):
+            json = load_json(name)
+            attrs['_json'] = json
+            attrs['_struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
+            attrs['__doc__'] = json.get('doc')
+            attrs['__license__'] = json.get('license')
+        return super().__new__(metacls, name, bases, attrs, **kw)
+
+    def __init__(cls, name, bases, attrs, **kw):
+        super().__init__(name, bases, attrs, **kw)
+        if kw.get('init', True):
+            # Configure the ApiStruct to use our ApiMessage wrapper
+            # and not construct a default ApiStructData
+            cls._struct._data_class = weakref.proxy(cls)
+
+
 class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
     __slots__ = ('_header', '_version')
-    _json = None
-    _name = None
-    _type = None
-    _api_key = None
-    _flexible_versions = None
-    _valid_versions = None
-    _struct = None
-    _class_version = None
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if kw.get('init', True):
+            # pylint: disable=E1101
+            assert cls._json is not None
+            assert cls._json['type'] in ('request', 'response')
+            cls._flexible_versions = parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = parse_versions(cls._json['validVersions'])
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -74,19 +74,19 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
 
     @classproperty
     def name(cls): # pylint: disable=E0213
-        return cls._name
+        return cls._json['name'] # pylint: disable=E1101
 
     @classproperty
     def type(cls): # pylint: disable=E0213
-        return cls._type
+        return cls._json['type'] # pylint: disable=E1101
 
     @classproperty
     def API_KEY(cls): # pylint: disable=E0213
-        return cls._api_key
+        return cls._json['apiKey'] # pylint: disable=E1101
 
     @classproperty
     def json(cls): # pylint: disable=E0213
-        return cls._json
+        return cls._json # pylint: disable=E1101
 
     @classproperty
     def valid_versions(cls): # pylint: disable=E0213
@@ -115,7 +115,7 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
 
     @classmethod
     def is_request(cls):
-        return cls._type == 'request'
+        return cls.type == 'request'
 
     # allow override by api-specific classes (e.g., ProduceRequest)
     def expect_response(self):
@@ -123,11 +123,11 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
 
     @property
     def API_VERSION(self):
-        return self._version if self._version is not None else self._class_version
+        return self._version if self._version is not None else self._class_version # pylint: disable=E1101
 
     @API_VERSION.setter
     def API_VERSION(self, version):
-        if self._class_version is not None and self._class_version != version:
+        if self._class_version is not None and self._class_version != version: # pylint: disable=E1101
             raise ValueError("Version has already been set by class")
         if not 0 <= version <= self.max_version:
             raise ValueError('Invalid version %s (max version is %s).' % (version, self.max_version))
