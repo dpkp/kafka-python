@@ -33,7 +33,9 @@ class ApiArray:
             size = UnsignedVarInt32.encode(len(items) + 1 if items is not None else 0)
         else:
             size = Int32.encode(len(items) if items is not None else -1)
-        if isinstance(self.array_of, ApiStruct):
+        if items is None:
+            return size
+        elif isinstance(self.array_of, ApiStruct):
             fields = [self.array_of.encode(item, version=version, compact=compact, tagged=tagged)
                       for item in items]
         else:
