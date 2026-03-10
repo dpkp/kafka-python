@@ -24,6 +24,8 @@ class ApiMessageMeta(ApiStructMeta):
             attrs['_flexible_versions'] = parse_versions(json['flexibleVersions'])
             attrs['_valid_versions'] = parse_versions(json['validVersions'])
             attrs['_class_version'] = kw.get('version', attrs.get('_class_version'))
+            attrs['__doc__'] = json.get('doc')
+            attrs['__license__'] = json.get('license')
         return super().__new__(metacls, name, bases, attrs, **kw)
 
     def __init__(cls, name, bases, attrs, **kw):

@@ -4,10 +4,15 @@ import re
 
 
 def load_json(msg_type):
+    COMMENTS_REGEX = r"(?m)((?:^\s*//.*\n?)+)"
     # Raises FileNotFoundError if not found
     msg_json = importlib.resources.read_text(__package__, msg_type + '.json')
-    data = json.loads(re.sub('^ *//.*$', '', msg_json, flags=re.MULTILINE))
-
+    data = json.loads(re.sub(COMMENTS_REGEX, '', msg_json))
+    comments = re.findall(COMMENTS_REGEX, msg_json)
+    if comments:
+        data['license'] = comments[0]
+        if len(comments) > 1:
+            data['doc'] = comments[1]
     common_structs = {s['name']: s['fields'] for s in data.get('commonStructs', [])}
     if common_structs:
         _resolve_common_structs(data.get('fields', []), common_structs)
