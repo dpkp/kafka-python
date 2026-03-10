@@ -57,7 +57,6 @@ class Field:
         self._is_struct_array = isinstance(self._type, ApiArray) and isinstance(self._type.array_of, ApiStruct)
         self._map_key = json.get('mapKey')
         self._nullable_versions = parse_versions(json.get('nullableVersions'))
-        self._default = json.get('default', '')
         self._ignorable = json.get('ignorable')
         self._entity_type = json.get('entityType')
         self._about = json.get('about', '')
@@ -119,44 +118,43 @@ class Field:
     def max_version(self):
         return self._versions[1]
 
-    @property
-    def default(self):
+    def _calculate_default(self, default):
         if self._type is Boolean:
-            if not self._default:
+            if not default:
                 return False
-            if isinstance(self._default, str):
-                if self._default.lower() == 'false':
+            if isinstance(default, str):
+                if default.lower() == 'false':
                     return False
-                elif self._default.lower() == 'true':
+                elif default.lower() == 'true':
                     return True
                 else:
-                    raise ValueError('Invalid default for boolean field %s: %s' % (self._name, self._default))
-            return bool(self._default)
+                    raise ValueError('Invalid default for boolean field %s: %s' % (self._name, default))
+            return bool(default)
         elif self._type in (Int8, Int16, Int32, Int64):
-            if not self._default:
+            if not default:
                 return 0
-            if isinstance(self._default, str):
-                if self._default.lower().startswith('0x'):
-                    return int(self._default, 16)
+            if isinstance(default, str):
+                if default.lower().startswith('0x'):
+                    return int(default, 16)
                 else:
-                    return int(self._default)
-            return int(self._default)
+                    return int(default)
+            return int(default)
         elif self._type is UUID:
-            if not self._default:
+            if not default:
                 return UUID.ZERO_UUID
             else:
-                return uuid.UUID(self._default)
+                return uuid.UUID(default)
         elif self._type is Float64:
-            if not self._default:
+            if not default:
                 return 0.0
             else:
-                return float(self._default)
-        elif self._default == 'null':
+                return float(default)
+        elif default == 'null':
             self._validate_null_default()
             return None
         elif isinstance(self._type, String):
-            return self._default
-        elif not self._default:
+            return default
+        elif not default:
             if self._type is Bytes:
                 return b''
             elif isinstance(self._type, ApiStruct):
@@ -173,6 +171,12 @@ class Field:
             if self._nullable_versions[0] <= self._versions[0] and self._nullable_versions[1] >= self._versions[1]:
                 return True
         raise ValueError('null cannot be the default for field %s, because not all versions of this field are nullable.' % self._name)
+
+    @property
+    def default(self):
+        if not hasattr(self, '_default'):
+            setattr(self, '_default', self._calculate_default(self._json.get('default', '')))
+        return self._default # pylint: disable=E1101
 
     def _parse_type(self, type_str, fields, tagged_versions):
         if type_str in self.TYPES:
