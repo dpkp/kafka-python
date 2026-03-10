@@ -38,7 +38,7 @@ class ACLOperation(IntEnum):
     ALTER_CONFIGS = 11,
     IDEMPOTENT_WRITE = 12,
     CREATE_TOKENS = 13,
-    DESCRIBE_TOKENS = 13
+    DESCRIBE_TOKENS = 14
 
 
 class ACLPermissionType(IntEnum):
