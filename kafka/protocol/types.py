@@ -339,6 +339,8 @@ class TaggedFields(AbstractType):
 
     @classmethod
     def encode(cls, value):
+        if value is None:
+            value = {}
         ret = UnsignedVarInt32.encode(len(value))
         for k, v in value.items():
             # do we allow for other data types ?? It could get complicated really fast
@@ -388,10 +390,15 @@ class CompactArray(Array):
 class BitField(AbstractType):
     @classmethod
     def decode(cls, data):
-        return cls.from_32_bit_field(Int32.decode(data))
+        vals = cls.from_32_bit_field(Int32.decode(data))
+        if vals == {31}:
+            vals = None
+        return vals
 
     @classmethod
     def encode(cls, vals):
+        if vals is None:
+            vals = {31}
         # to_32_bit_field returns unsigned val, so we need to
         # encode >I to avoid crash if/when byte 31 is set
         # (note that decode as signed still works fine)
