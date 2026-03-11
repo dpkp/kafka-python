@@ -174,7 +174,13 @@ class Schema(AbstractType):
         else:
             self.names, self.fields = (), ()
 
+    def has_tagged_fields(self):
+        return len(self.fields) and self.fields[-1] is TaggedFields
+
     def encode(self, item):
+        # Add empty tags to item if missing
+        if self.has_tagged_fields() and len(item) == len(self.fields) - 1:
+            item = [*item, {}]
         if len(item) != len(self.fields):
             raise ValueError('Item field count does not match Schema')
         return b''.join([
@@ -183,7 +189,11 @@ class Schema(AbstractType):
         ])
 
     def decode(self, data):
-        return tuple([field.decode(data) for field in self.fields])
+        decoded = [field.decode(data) for field in self.fields]
+        # Drop empty tags from tuple decoding
+        if self.has_tagged_fields() and decoded[-1] == {}:
+            decoded.pop()
+        return tuple(decoded)
 
     def __len__(self):
         return len(self.fields)

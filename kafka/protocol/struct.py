@@ -2,7 +2,7 @@ import abc
 from io import BytesIO
 
 from kafka.protocol.abstract import AbstractType
-from kafka.protocol.types import Schema
+from kafka.protocol.types import Schema, TaggedFields
 
 from kafka.util import WeakMethod
 
@@ -15,12 +15,17 @@ class Struct(metaclass=abc.ABCMeta):
         pass
 
     def __init__(self, *args, **kwargs):
+        # Dont require TaggedFields value in *args
+        if self.SCHEMA.has_tagged_fields() and len(args) == len(self.SCHEMA) - 1:
+            args = (*args, {})
         if len(args) == len(self.SCHEMA):
             for i, name in enumerate(self.SCHEMA.names):
                 setattr(self, name, args[i])
         elif len(args) > 0:
             raise ValueError('Args must be empty or mirror schema')
         else:
+            if self.SCHEMA.has_tagged_fields() and 'tags' not in kwargs:
+                kwargs['tags'] = {}
             for name in self.SCHEMA.names:
                 setattr(self, name, kwargs.pop(name, None))
             if kwargs:
