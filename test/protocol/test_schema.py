@@ -2,6 +2,7 @@ import io
 
 import pytest
 
+from kafka.protocol.struct import Struct
 from kafka.protocol.types import Schema, Int32, String, TaggedFields
 
 
@@ -20,10 +21,34 @@ def test_schema_tagged_fields():
     schema = Schema(('f1', Int32), ('f2', String()), ('tags', TaggedFields))
     assert schema.has_tagged_fields()
 
+    val = (123, "foo", {0: b'bar'})
+    encoded = schema.encode(val)
+    assert encoded == b'\x00\x00\x00\x7b\x00\x03foo\x01\x00\x03bar'
+    assert schema.decode(io.BytesIO(encoded)) == val
+
     val = (123, "bar")
     encoded = schema.encode(val)
     assert encoded == b'\x00\x00\x00\x7b\x00\x03bar\x00'
+    # empty tags always decodes to tuple w/o tag field
     assert schema.decode(io.BytesIO(encoded)) == val
 
-    # Same encoding if empty tags are passed
+    # Same encoding with various ways to construct
     assert schema.encode((123, "bar", {})) == encoded
+
+
+@pytest.mark.parametrize('args, kwargs', [
+    ((),{"f1": 123, "f2": "bar"}),
+    ((),{"f1": 123, "f2": "bar", "tags": {}}),
+    ((),{"f1": 123, "f2": "bar", "tags": None}),
+    ((123, "bar"), {}),
+    ((123, "bar", {}), {}),
+    ((123, "bar", None), {}),
+])
+def test_struct(args, kwargs):
+    schema = Schema(('f1', Int32), ('f2', String()), ('tags', TaggedFields))
+    struct = type('TestStruct', (Struct,), {'SCHEMA': schema})
+    encoded = b'\x00\x00\x00\x7b\x00\x03bar\x00'
+
+    data = struct(*args, **kwargs)
+    assert data.encode() == encoded
+    assert struct.decode(encoded) == data
