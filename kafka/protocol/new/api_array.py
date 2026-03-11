@@ -1,4 +1,5 @@
 from .field import Field
+from .field_basic import FieldBasicType
 from ..types import (
     Array, CompactArray,
     UnsignedVarInt32, Int32,
@@ -7,43 +8,36 @@ from ..types import (
 
 class ApiArray(Field):
     @classmethod
-    def parse_json(cls, json):
+    def parse_inner_type(cls, json):
+        if 'fields' in json:
+            return
+        type_str = cls.parse_array_type(json)
+        if type_str is not None:
+            inner_json = {**json, 'type': type_str}
+            return FieldBasicType.parse_json(inner_json)
+
+    @classmethod
+    def parse_array_type(cls, json):
         if json['type'].startswith('[]'):
-            inner_type_str = json['type'][2:]
-            if inner_type_str.startswith('[]'): # this would be strange...
-                return None
-            inner_json = {**json, 'type': inner_type_str}
-            inner_type = super().parse_json(inner_json)
-            if inner_type is not None:
-                return cls(json, array_of=inner_type)
+            type_str = json['type'][2:]
+            assert not type_str.startswith('[]'), 'Unexpected double-array type: %s' % json['type']
+            return type_str
+
+    @classmethod
+    def parse_json(cls, json):
+        inner_type = cls.parse_inner_type(json)
+        if inner_type is not None:
+            return cls(json, array_of=inner_type)
 
     def __init__(self, json, array_of=None):
+        if array_of is None:
+            array_of = self.parse_inner_type(json)
+            assert array_of is not None, 'json does not contain a (simple) Array!'
         super().__init__(json)
-        self.array_of = array_of # Field (ApiStruct or FieldBasicType)
+        self.array_of = array_of # FieldBasicType
 
     def is_array(self):
         return True
-
-    def is_struct_array(self):
-        return self.array_of.is_struct()
-
-    @property
-    def fields(self):
-        if self.is_struct_array():
-            return self.array_of.fields
-
-    def has_data_class(self):
-        return self.is_struct_array()
-
-    @property
-    def data_class(self):
-        if self.has_data_class():
-            return self.array_of.data_class
-        else:
-            raise ValueError('Non-struct field does not have a data_class!')
-
-    def __call__(self, *args, **kw):
-        return self.data_class(*args, **kw) # pylint: disable=E1102
 
     def to_schema(self, version, compact=False, tagged=False):
         if not self.for_version_q(version) or self.tagged_field_q(version):
