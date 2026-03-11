@@ -545,8 +545,7 @@ class BrokerConnection(object):
                 if version >= 3:
                     request = ApiVersionsRequest[version](
                         client_software_name=self.config['client_software_name'],
-                        client_software_version=self.config['client_software_version'],
-                        tags={})
+                        client_software_version=self.config['client_software_version'])
                 else:
                     request = ApiVersionsRequest[version]()
                 future = Future()
