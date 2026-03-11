@@ -1,6 +1,6 @@
 from .api_struct import ApiStruct
 from .api_struct_data import ApiStructData, ApiStructMeta
-from .field import Field, parse_versions
+from .field import Field
 from .schema import load_json
 
 
@@ -9,7 +9,7 @@ class ApiHeaderMeta(ApiStructMeta):
         if kw.get('init', True):
             json = load_json(name)
             attrs['_json'] = json
-            attrs['_struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
+            attrs['_struct'] = ApiStruct(json)
         return super().__new__(metacls, name, bases, attrs, **kw)
 
 
@@ -21,12 +21,15 @@ class ApiHeader(ApiStructData, metaclass=ApiHeaderMeta, init=False):
         if kw.get('init', True):
             # pylint: disable=E1101
             assert cls._json['type'] == 'header'
-            cls._flexible_versions = parse_versions(cls._json['flexibleVersions'])
-            cls._valid_versions = parse_versions(cls._json['validVersions'])
+            cls._flexible_versions = Field.parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = Field.parse_versions(cls._json['validVersions'])
 
     def encode(self, flexible=False):
         # Request versions are 1-2, Response versions are 0-1
         version = self._flexible_versions[0] if flexible else self._valid_versions[0] # pylint: disable=E1136
+        # compact=False is probably wrong,
+        # but it works to make sure that the client_id request header field
+        # is never encoded as compact (required to support ApiVersionsRequest for unsupported version)
         return super().encode(version=version, compact=False, tagged=flexible)
 
     @classmethod

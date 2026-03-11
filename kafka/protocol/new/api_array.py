@@ -1,49 +1,83 @@
-from .api_struct import ApiStruct
+from .field import Field
 from ..types import (
-    Bytes, CompactBytes,
-    String, CompactString,
     Array, CompactArray,
     UnsignedVarInt32, Int32,
 )
 
 
-class ApiArray:
-    def __init__(self, array_of):
-        self.array_of = array_of # ApiStruct or AbstractType (not Field)
+class ApiArray(Field):
+    @classmethod
+    def parse_json(cls, json, fields=None):
+        if json['type'].startswith('[]'):
+            inner_type_str = json['type'][2:]
+            if inner_type_str.startswith('[]'): # this would be strange...
+                return None
+            inner_json = {**json, 'type': inner_type_str}
+            inner_type = super().parse_json(inner_json, fields=fields)
+            if inner_type is not None:
+                return cls(json, fields=fields, array_of=inner_type)
 
-    def inner_type(self, compact=False):
-        if self.array_of in (Bytes, CompactBytes):
-            return CompactBytes if compact else Bytes
-        elif isinstance(self.array_of, (String, CompactString)):
-            encoding = self.array_of.encoding
-            return CompactString(encoding) if compact else String(encoding)
+    def __init__(self, json, fields=None, array_of=None):
+        super().__init__(json, fields=fields)
+        self.array_of = array_of # Field (ApiStruct or FieldBasicType)
+
+    def is_array(self):
+        return True
+
+    def is_struct_array(self):
+        return self.array_of.is_struct()
+
+    @property
+    def fields(self):
+        if self.is_struct_array():
+            return self.array_of.fields
+
+    def has_data_class(self):
+        return self.is_struct_array()
+
+    @property
+    def data_class(self):
+        if self.has_data_class():
+            return self.array_of.data_class
         else:
-            return self.array_of
+            raise ValueError('Non-struct field does not have a data_class!')
+
+    def __call__(self, *args, **kw):
+        return self.data_class(*args, **kw) # pylint: disable=E1102
 
     def to_schema(self, version, compact=False, tagged=False):
+        if not self.for_version_q(version) or self.tagged_field_q(version):
+            return None
         arr_type = CompactArray if compact else Array
-        if isinstance(self.array_of, ApiStruct):
-            inner_type = self.array_of.to_schema(version, compact=compact, tagged=tagged)
+        inner_type = self.array_of.to_schema(version, compact=compact, tagged=tagged)
+        return (self.name, arr_type(inner_type))
+
+    def _calculate_default(self, default):
+        if default == 'null':
+            return None
+        elif not default:
+            return []
         else:
-            inner_type = self.inner_type()
-        return arr_type(inner_type)
+            raise ValueError('Invalid default for field %s. The only valid default is empty or null.' % self._name)
 
     def encode(self, items, version=None, compact=False, tagged=False):
+        assert version is not None, 'version is required to encode Field'
+        if not self.for_version_q(version):
+            return b''
         if compact:
             size = UnsignedVarInt32.encode(len(items) + 1 if items is not None else 0)
         else:
             size = Int32.encode(len(items) if items is not None else -1)
         if items is None:
             return size
-        elif isinstance(self.array_of, ApiStruct):
-            fields = [self.array_of.encode(item, version=version, compact=compact, tagged=tagged)
-                      for item in items]
-        else:
-            inner_type = self.inner_type(compact=compact)
-            fields = [inner_type.encode(item) for item in items]
+        fields = [self.array_of.encode(item, version=version, compact=compact, tagged=tagged)
+                  for item in items]
         return b''.join([size] + fields)
 
     def decode(self, data, version=None, compact=False, tagged=False):
+        assert version is not None, 'version is required to decode Field'
+        if not self.for_version_q(version):
+            return None
         if compact:
             size = UnsignedVarInt32.decode(data)
             size -= 1
@@ -51,9 +85,5 @@ class ApiArray:
             size = Int32.decode(data)
         if size == -1:
             return None
-        elif isinstance(self.array_of, ApiStruct):
-            return [self.array_of.decode(data, version=version, compact=compact, tagged=tagged)
-                    for _ in range(size)]
-        else:
-            inner_type = self.inner_type(compact=compact)
-            return [inner_type.decode(data) for _ in range(size)]
+        return [self.array_of.decode(data, version=version, compact=compact, tagged=tagged)
+                for _ in range(size)]

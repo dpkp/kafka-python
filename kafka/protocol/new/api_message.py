@@ -4,7 +4,7 @@ import weakref
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .api_struct import ApiStruct
 from .api_struct_data import ApiStructData, ApiStructMeta
-from .field import Field, parse_versions
+from .field import Field
 from .schema import load_json
 from ..types import Int32
 
@@ -42,7 +42,7 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
             if 'json_patch' in attrs:
                 json = attrs['json_patch'].__func__(metacls, json)
             attrs['_json'] = json
-            attrs['_struct'] = ApiStruct(json['name'], tuple(map(Field, json.get('fields', []))))
+            attrs['_struct'] = ApiStruct(json)
             attrs['__doc__'] = json.get('doc')
             attrs['__license__'] = json.get('license')
         return super().__new__(metacls, name, bases, attrs, **kw)
@@ -50,6 +50,10 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
     def __init__(cls, name, bases, attrs, **kw):
         super().__init__(name, bases, attrs, **kw)
         if kw.get('init', True):
+            # Ignore min valid version on request/response schemas
+            # We'll get the brokers supported versions via ApiVersionsRequest
+            if cls._struct._versions[0] > 0:
+                cls._struct._versions = (0, cls._struct._versions[1])
             # Configure the ApiStruct to use our ApiMessage wrapper
             # and not construct a default ApiStructData
             cls._struct._data_class = weakref.proxy(cls)
@@ -64,8 +68,8 @@ class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
             # pylint: disable=E1101
             assert cls._json is not None
             assert cls._json['type'] in ('request', 'response')
-            cls._flexible_versions = parse_versions(cls._json['flexibleVersions'])
-            cls._valid_versions = parse_versions(cls._json['validVersions'])
+            cls._flexible_versions = Field.parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = Field.parse_versions(cls._json['validVersions'])
             if not cls.is_request():
                 ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 
