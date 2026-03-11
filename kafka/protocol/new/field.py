@@ -12,14 +12,12 @@ class Field:
         return tuple(map(Field.parse_json, json.get('fields', []))) or None # Note: DFS Field construction
 
     @classmethod
-    def parse_json(cls, json, fields=None):
+    def parse_json(cls, json):
         if 'type' not in json:
             raise ValueError('No type found in json')
         type_str = json['type']
-        if fields is None and json.get('fields') is not None:
-            fields = cls.parse_json_fields(json)
         for field_type in cls.FIELD_TYPES:
-            maybe_type = field_type.parse_json(json, fields=fields)
+            maybe_type = field_type.parse_json(json)
             if maybe_type is not None:
                 return maybe_type
         else:
@@ -42,7 +40,7 @@ class Field:
         else:
             return tuple(map(int, versions.split('-')))
 
-    def __init__(self, json, fields=None):
+    def __init__(self, json):
         self._json = json
         self._name = json['name']
         # versions tells when to include the field in encode / decode
@@ -63,9 +61,10 @@ class Field:
         self._flexible_versions = self.parse_versions(json.get('flexibleVersions'))
         self._nullable_versions = self.parse_versions(json.get('nullableVersions'))
         self._type_str = json['type']
-        if fields is None and json.get('fields') is not None:
-            fields = self.parse_json_fields(json)
-        self._fields = fields
+        if 'fields' in json:
+            self._fields = self.parse_json_fields(json)
+        else:
+            self._fields = None
         self._ignorable = json.get('ignorable')
         self._entity_type = json.get('entityType')
         self._about = json.get('about', '')

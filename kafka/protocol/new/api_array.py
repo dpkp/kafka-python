@@ -7,18 +7,18 @@ from ..types import (
 
 class ApiArray(Field):
     @classmethod
-    def parse_json(cls, json, fields=None):
+    def parse_json(cls, json):
         if json['type'].startswith('[]'):
             inner_type_str = json['type'][2:]
             if inner_type_str.startswith('[]'): # this would be strange...
                 return None
             inner_json = {**json, 'type': inner_type_str}
-            inner_type = super().parse_json(inner_json, fields=fields)
+            inner_type = super().parse_json(inner_json)
             if inner_type is not None:
-                return cls(json, fields=fields, array_of=inner_type)
+                return cls(json, array_of=inner_type)
 
-    def __init__(self, json, fields=None, array_of=None):
-        super().__init__(json, fields=fields)
+    def __init__(self, json, array_of=None):
+        super().__init__(json)
         self.array_of = array_of # Field (ApiStruct or FieldBasicType)
 
     def is_array(self):

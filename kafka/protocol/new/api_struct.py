@@ -8,17 +8,17 @@ from ..types import Schema
 
 class ApiStruct(Field):
     @classmethod
-    def parse_json(cls, json, fields=None):
+    def parse_json(cls, json):
         if json['type'] in ('request', 'response', 'header') or json['type'][0].isupper():
-            if fields is not None or json.get('fields') is not None:
-                return cls(json, fields=fields)
+            if 'fields' in json:
+                return cls(json)
 
     # Cases
     # oldschool  - standard types, no tagged fields
     # newschool  - compact types, tagged fields
     # nested tag - compact types, no (nested) tagged fields
-    def __init__(self, json, fields=None):
-        super().__init__(json, fields=fields)
+    def __init__(self, json):
+        super().__init__(json)
         self._field_map = {field.name: field for field in self._fields if field is not None}
         self._data_class = None
 

@@ -25,14 +25,14 @@ class FieldBasicType(Field):
     }
 
     @classmethod
-    def parse_json(cls, json, fields=None):
-        if fields is None and json['type'] in cls.TYPES:
+    def parse_json(cls, json):
+        if 'fields' not in json and json['type'] in cls.TYPES:
             return cls(json)
 
-    def __init__(self, json, fields=None):
-        if fields is not None or json.get('fields') is not None:
-            raise ValueError('Non-empty fields not allowed in FieldBasicType!')
-        super().__init__(json, fields=None)
+    def __init__(self, json):
+        if 'fields' in json:
+            raise ValueError('Fields not allowed in FieldBasicType!')
+        super().__init__(json)
         if self._type_str not in self.TYPES:
             raise ValueError('Unrecognized type: %s' % self._type_str)
         self._type = self.TYPES[self._type_str]
