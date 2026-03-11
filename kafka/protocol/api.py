@@ -62,8 +62,6 @@ class ResponseHeaderV2(Struct):
 
 
 class RequestResponse(Struct, metaclass=abc.ABCMeta):
-    FLEXIBLE_VERSION = False
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._header = None
@@ -89,6 +87,20 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
     @property
     def header(self):
         return self._header
+
+    def with_header(self, correlation_id=0, client_id='kafka-python'):
+        if self.is_request():
+            kwargs = {
+                'api_key': self.API_KEY,
+                'api_version': self.API_VERSION,
+                'correlation_id': correlation_id,
+                'client_id': client_id,
+            }
+        else:
+            kwargs = {
+                'correlation_id': correlation_id,
+            }
+        self._header = self.header_class()(**kwargs)
 
     def encode(self, header=False, framed=False):
         data = super().encode()
@@ -132,6 +144,8 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
 
 
 class Request(RequestResponse):
+    FLEXIBLE_VERSION = False
+
     @classmethod
     def is_request(cls):
         return True
@@ -139,12 +153,6 @@ class Request(RequestResponse):
     def expect_response(self):
         """Override this method if an api request does not always generate a response"""
         return True
-
-    def with_header(self, correlation_id=0, client_id='kafka-python'):
-        if self.FLEXIBLE_VERSION:
-            self._header = self.header_class()(self.API_KEY, self.API_VERSION, correlation_id, client_id, {})
-        else:
-            self._header = self.header_class()(self.API_KEY, self.API_VERSION, correlation_id, client_id)
 
     @classmethod
     def header_class(cls):
@@ -155,6 +163,8 @@ class Request(RequestResponse):
 
 
 class Response(RequestResponse):
+    FLEXIBLE_VERSION = False
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         ResponseClassRegistry.register_response_class(weakref.proxy(cls))
@@ -162,12 +172,6 @@ class Response(RequestResponse):
     @classmethod
     def is_request(cls):
         return False
-
-    def with_header(self, correlation_id=0):
-        if self.FLEXIBLE_VERSION:
-            self._header = self.header_class()(correlation_id, {})
-        else:
-            self._header = self.header_class()(correlation_id)
 
     @classmethod
     def header_class(cls):
