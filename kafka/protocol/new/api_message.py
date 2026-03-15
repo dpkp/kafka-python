@@ -2,9 +2,8 @@ import io
 import weakref
 
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
-from .api_struct import ApiStruct
 from .api_struct_data import ApiStructData, ApiStructMeta
-from .field import Field
+from .field import Field, StructField
 from .schema import load_json
 from ..types import Int32
 
@@ -42,7 +41,7 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
             if 'json_patch' in attrs:
                 json = attrs['json_patch'].__func__(metacls, json)
             attrs['_json'] = json
-            attrs['_struct'] = ApiStruct(json)
+            attrs['_struct'] = StructField(json)
             attrs['__doc__'] = json.get('doc')
             attrs['__license__'] = json.get('license')
         return super().__new__(metacls, name, bases, attrs, **kw)
@@ -54,7 +53,7 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
             # We'll get the brokers supported versions via ApiVersionsRequest
             if cls._struct._versions[0] > 0:
                 cls._struct._versions = (0, cls._struct._versions[1])
-            # Configure the ApiStruct to use our ApiMessage wrapper
+            # Configure the StructField to use our ApiMessage wrapper
             # and not construct a default ApiStructData
             cls._struct._data_class = weakref.proxy(cls)
 

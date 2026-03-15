@@ -42,12 +42,12 @@ class ApiStructData(metaclass=ApiStructMeta, init=False):
             raise ValueError('Unrecognized fields for type %s: %s' % (self._struct.name, field_vals))
 
     def encode(self, *args, **kwargs):
-        """Add version= to kwargs, otherwise pass-through to ApiStruct"""
+        """Add version= to kwargs, otherwise pass-through to _struct"""
         return self._struct.encode(self, *args, **kwargs)
 
     @classmethod
     def decode(cls, data, **kwargs):
-        """Add version= to kwargs, otherwise pass-through to ApiStruct"""
+        """Add version= to kwargs, otherwise pass-through to _struct"""
         return cls._struct.decode(data, **kwargs)
 
     @classproperty

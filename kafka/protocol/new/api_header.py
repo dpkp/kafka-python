@@ -1,6 +1,5 @@
-from .api_struct import ApiStruct
 from .api_struct_data import ApiStructData, ApiStructMeta
-from .field import Field
+from .field import Field, StructField
 from .schema import load_json
 
 
@@ -9,7 +8,7 @@ class ApiHeaderMeta(ApiStructMeta):
         if kw.get('init', True):
             json = load_json(name)
             attrs['_json'] = json
-            attrs['_struct'] = ApiStruct(json)
+            attrs['_struct'] = StructField(json)
         return super().__new__(metacls, name, bases, attrs, **kw)
 
 

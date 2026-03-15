@@ -1,11 +1,11 @@
-from .api_array import ApiArray
-from .api_struct import ApiStruct
+from .array import ArrayField
+from .struct import StructField
 
 
-class ApiStructArray(ApiArray):
+class StructArrayField(ArrayField):
     @classmethod
     def parse_inner_type(cls, json):
-        # ApiStructArray requires non-empty fields
+        # StructArrayField requires non-empty fields
         if 'fields' not in json:
             return
         assert len(json['fields']) > 0, 'Unexpected empty fields in json'
@@ -13,7 +13,7 @@ class ApiStructArray(ApiArray):
         if type_str is None:
             return
         inner_json = {**json, 'type': type_str}
-        return ApiStruct.parse_json(inner_json)
+        return StructField.parse_json(inner_json)
 
     @classmethod
     def parse_json(cls, json):

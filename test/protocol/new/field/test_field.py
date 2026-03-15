@@ -1,9 +1,9 @@
 import pytest
 
-from kafka.protocol.new.api_array import ApiArray
-from kafka.protocol.new.api_struct import ApiStruct
+from kafka.protocol.new.field.array import ArrayField
+from kafka.protocol.new.field.struct import StructField
 from kafka.protocol.new.field import Field
-from kafka.protocol.new.field_basic import FieldBasicType
+from kafka.protocol.new.field.basic import BasicField
 from kafka.protocol.types import Int16, Int32, Boolean, String, UUID
 
 
@@ -77,33 +77,33 @@ def test_field_string_defaults():
 ])
 def test_field_basic_types(field_json, inner_type):
     field = Field.parse_json(field_json)
-    assert isinstance(field, FieldBasicType)
+    assert isinstance(field, BasicField)
     assert field._type is inner_type or isinstance(field._type, inner_type)
 
 
-def test_field_api_struct():
+def test_struct_field():
     field = Field.parse_json({"name": "f", "versions": "0+", "type": "Foo", "fields": [{"name": "b", "versions": "0+", "type": "int16"}]})
     assert field.is_struct()
-    assert isinstance(field, ApiStruct)
-    assert isinstance(field.fields['b'], FieldBasicType)
+    assert isinstance(field, StructField)
+    assert isinstance(field.fields['b'], BasicField)
     assert field.fields['b']._type is Int16
 
 
-def test_field_api_array_basic():
+def test_array_field():
     field = Field.parse_json({"name": "f", "versions": "0+", "type": "[]int16"})
     assert field.is_array()
     assert not field.is_struct_array()
-    assert isinstance(field, ApiArray)
-    assert isinstance(field.array_of, FieldBasicType)
+    assert isinstance(field, ArrayField)
+    assert isinstance(field.array_of, BasicField)
     assert field.array_of._type is Int16
 
 
-def test_field_api_array_struct():
+def test_struct_array_field():
     field = Field.parse_json({"name": "f", "versions": "0+", "type": "[]Foo", "fields": [{"name": "b", "versions": "0+", "type": "int16"}]})
     assert field.is_array()
     assert field.is_struct_array()
-    assert isinstance(field, ApiArray)
-    assert isinstance(field.array_of, ApiStruct)
+    assert isinstance(field, ArrayField)
+    assert isinstance(field.array_of, StructField)
     assert field.array_of.fields['b']._type is Int16
 
 

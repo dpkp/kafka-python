@@ -1,12 +1,12 @@
 import weakref
 
-from .api_struct_data import ApiStructData
+from ..api_struct_data import ApiStructData
 from .field import Field
-from .tagged_fields import TaggedFields
-from ..types import Schema
+from ..tagged_fields import TaggedFields
+from ...types import Schema
 
 
-class ApiStruct(Field):
+class StructField(Field):
     @classmethod
     def parse_json(cls, json):
         if 'type' not in json or json['type'].startswith('[]'):
