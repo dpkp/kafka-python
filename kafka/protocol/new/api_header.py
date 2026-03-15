@@ -1,9 +1,9 @@
-from .api_struct_data import ApiStructData, ApiStructMeta
+from .data_container import DataContainer, SlotsBuilder
 from .field import Field, StructField
 from .schema import load_json
 
 
-class ApiHeaderMeta(ApiStructMeta):
+class ApiHeaderMeta(SlotsBuilder):
     def __new__(metacls, name, bases, attrs, **kw):
         if kw.get('init', True):
             json = load_json(name)
@@ -12,7 +12,7 @@ class ApiHeaderMeta(ApiStructMeta):
         return super().__new__(metacls, name, bases, attrs, **kw)
 
 
-class ApiHeader(ApiStructData, metaclass=ApiHeaderMeta, init=False):
+class ApiHeader(DataContainer, metaclass=ApiHeaderMeta, init=False):
     __slots__ = ()
 
     def __init_subclass__(cls, **kw):

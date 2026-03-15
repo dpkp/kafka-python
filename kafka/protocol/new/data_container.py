@@ -1,15 +1,14 @@
 from kafka.util import classproperty
 
 
-class ApiStructMeta(type):
+class SlotsBuilder(type):
     def __new__(metacls, name, bases, attrs, **kw):
-        if kw.get('init', True):
-            assert attrs.get('_struct') is not None
+        if attrs.get('_struct') is not None:
             attrs['__slots__'] = attrs.get('__slots__', ()) + tuple(attrs['_struct'].fields.keys())
         return super().__new__(metacls, name, bases, attrs)
 
 
-class ApiStructData(metaclass=ApiStructMeta, init=False):
+class DataContainer(metaclass=SlotsBuilder):
     __slots__ = ('tags', 'unknown_tags')
     _struct = None
 

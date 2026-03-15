@@ -1,6 +1,6 @@
 import weakref
 
-from ..api_struct_data import ApiStructData
+from ..data_container import DataContainer
 from .field import Field
 from ..tagged_fields import TaggedFields
 from ...types import Schema
@@ -36,7 +36,7 @@ class StructField(Field):
     @property
     def data_class(self):
         if self._data_class is None:
-            self._data_class = type(self._type_str, (ApiStructData,), {'_struct': weakref.proxy(self)})
+            self._data_class = type(self._type_str, (DataContainer,), {'_struct': weakref.proxy(self)})
         return self._data_class
 
     def to_schema(self, version, compact=False, tagged=False):

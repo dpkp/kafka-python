@@ -2,7 +2,7 @@ import io
 import weakref
 
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
-from .api_struct_data import ApiStructData, ApiStructMeta
+from .data_container import DataContainer, SlotsBuilder
 from .field import Field, StructField
 from .schema import load_json
 from ..types import Int32
@@ -33,7 +33,7 @@ class VersionSubscriptable(type):
         return cls._VERSIONS[klass_name]
 
 
-class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
+class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
     def __new__(metacls, name, bases, attrs, **kw):
         # Pass init=False from base classes
         if kw.get('init', True):
@@ -54,11 +54,11 @@ class ApiMessageMeta(VersionSubscriptable, ApiStructMeta):
             if cls._struct._versions[0] > 0:
                 cls._struct._versions = (0, cls._struct._versions[1])
             # Configure the StructField to use our ApiMessage wrapper
-            # and not construct a default ApiStructData
+            # and not construct a default DataContainer
             cls._struct._data_class = weakref.proxy(cls)
 
 
-class ApiMessage(ApiStructData, metaclass=ApiMessageMeta, init=False):
+class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
     __slots__ = ('_header', '_version')
 
     def __init_subclass__(cls, **kw):
