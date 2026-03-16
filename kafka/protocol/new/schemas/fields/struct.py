@@ -59,7 +59,6 @@ class StructField(BaseField):
         assert version is not None, 'version required to encode StructField'
         if not self.for_version_q(version):
             return b''
-        # TODO: assert version is not None or isinstance(self, ApiMessage), 'version is required to encode non-schema structs'
         fields = [field for field in self._fields if field.for_version_q(version) and not field.tagged_field_q(version)]
         if isinstance(item, tuple):
             getter = lambda item, i, field: item[i]
