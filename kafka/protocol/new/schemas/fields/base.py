@@ -1,7 +1,7 @@
 import re
 
 
-class Field:
+class BaseField:
     FIELD_TYPES = []
 
     def __init_subclass__(cls, **kw):
@@ -9,7 +9,7 @@ class Field:
 
     @classmethod
     def parse_json_fields(cls, json):
-        return tuple(map(Field.parse_json, json.get('fields', []))) or None # Note: DFS Field construction
+        return tuple(map(BaseField.parse_json, json.get('fields', []))) or None # Note: DFS Field construction
 
     @classmethod
     def parse_json(cls, json):
@@ -137,7 +137,7 @@ class Field:
         raise NotImplementedError
 
     def __repr__(self):
-        return 'Field(%s)' % self._json
+        return 'BaseField(%s)' % self._json
 
     def __eq__(self, other):
         if self.__class__ != other.__class__:

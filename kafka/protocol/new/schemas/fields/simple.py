@@ -1,13 +1,13 @@
 import uuid
 
-from .field import Field
-from ...types import (
+from .base import BaseField
+from ....types import (
     BitField, Boolean, Bytes, CompactBytes, CompactString,
     Float64, Int8, Int16, Int32, Int64, String, UUID
 )
 
 
-class BasicField(Field):
+class SimpleField(BaseField):
     TYPES = {
         'int8': Int8,
         'int16': Int16,
@@ -31,7 +31,7 @@ class BasicField(Field):
 
     def __init__(self, json):
         if 'fields' in json:
-            raise ValueError('Fields not allowed in BasicField!')
+            raise ValueError('Fields not allowed in SimpleField!')
         super().__init__(json)
         if self._type_str not in self.TYPES:
             raise ValueError('Unrecognized type: %s' % self._type_str)

@@ -1,9 +1,9 @@
-from .field import Field
-from ..tagged_fields import TaggedFields
-from ...types import Schema
+from .base import BaseField
+from ...tagged_fields import TaggedFields
+from ....types import Schema
 
 
-class StructField(Field):
+class StructField(BaseField):
     @classmethod
     def parse_json(cls, json):
         if 'type' not in json or json['type'].startswith('[]'):
@@ -66,7 +66,7 @@ class StructField(Field):
                              and field.tagged_field_q(version)])
 
     def encode(self, item, version=None, compact=False, tagged=False):
-        assert version is not None, 'version required to encode Field'
+        assert version is not None, 'version required to encode StructField'
         if not self.for_version_q(version):
             return b''
         # TODO: assert version is not None or isinstance(self, ApiMessage), 'version is required to encode non-schema structs'
@@ -90,7 +90,7 @@ class StructField(Field):
         return b''.join(encoded)
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
-        assert version is not None, 'version required to encode Field'
+        assert version is not None, 'version required to encode StructField'
         if not self.for_version_q(version):
             return None
         if data_class is None:

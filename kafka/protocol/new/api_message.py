@@ -3,8 +3,7 @@ import weakref
 
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer, SlotsBuilder
-from .field import Field, StructField
-from .schemas import load_json
+from .schemas import BaseField, StructField, load_json
 from ..types import Int32
 
 from kafka.util import classproperty
@@ -67,8 +66,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
             # pylint: disable=E1101
             assert cls._json is not None
             assert cls._json['type'] in ('request', 'response')
-            cls._flexible_versions = Field.parse_versions(cls._json['flexibleVersions'])
-            cls._valid_versions = Field.parse_versions(cls._json['validVersions'])
+            cls._flexible_versions = BaseField.parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = BaseField.parse_versions(cls._json['validVersions'])
             if not cls.is_request():
                 ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 

@@ -1,6 +1,5 @@
 from .data_container import DataContainer, SlotsBuilder
-from .field import Field, StructField
-from .schemas import load_json
+from .schemas import BaseField, StructField, load_json
 
 
 class ApiHeaderMeta(SlotsBuilder):
@@ -20,8 +19,8 @@ class ApiHeader(DataContainer, metaclass=ApiHeaderMeta, init=False):
         if kw.get('init', True):
             # pylint: disable=E1101
             assert cls._json['type'] == 'header'
-            cls._flexible_versions = Field.parse_versions(cls._json['flexibleVersions'])
-            cls._valid_versions = Field.parse_versions(cls._json['validVersions'])
+            cls._flexible_versions = BaseField.parse_versions(cls._json['flexibleVersions'])
+            cls._valid_versions = BaseField.parse_versions(cls._json['validVersions'])
 
     def encode(self, flexible=False):
         # Request versions are 1-2, Response versions are 0-1

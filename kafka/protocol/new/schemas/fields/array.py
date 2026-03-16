@@ -1,12 +1,12 @@
-from .field import Field
-from .basic import BasicField
-from ...types import (
+from .base import BaseField
+from .simple import SimpleField
+from ....types import (
     Array, CompactArray,
     UnsignedVarInt32, Int32,
 )
 
 
-class ArrayField(Field):
+class ArrayField(BaseField):
     @classmethod
     def parse_inner_type(cls, json):
         if 'fields' in json:
@@ -14,7 +14,7 @@ class ArrayField(Field):
         type_str = cls.parse_array_type(json)
         if type_str is not None:
             inner_json = {**json, 'type': type_str}
-            return BasicField.parse_json(inner_json)
+            return SimpleField.parse_json(inner_json)
 
     @classmethod
     def parse_array_type(cls, json):
@@ -34,7 +34,7 @@ class ArrayField(Field):
             array_of = self.parse_inner_type(json)
             assert array_of is not None, 'json does not contain a (simple) Array!'
         super().__init__(json)
-        self.array_of = array_of # BasicField
+        self.array_of = array_of # SimpleField
 
     def is_array(self):
         return True
