@@ -1,6 +1,6 @@
 from .base import BaseField
 from .simple import SimpleField
-from ....types import (
+from .codecs import (
     Array, CompactArray,
     UnsignedVarInt32, Int32,
 )

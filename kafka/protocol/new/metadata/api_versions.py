@@ -1,7 +1,7 @@
 import io
 
 from ..api_message import ApiMessage
-from ...types import Int16, Int32
+from ..schemas.fields.codecs import Int16, Int32
 
 
 class ApiVersionsRequest(ApiMessage): pass

@@ -1,5 +1,5 @@
 from .base import BaseField
-from ...tagged_fields import TaggedFields
+from .codecs.tagged_fields import TaggedFields
 from ....types import Schema
 
 

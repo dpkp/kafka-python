@@ -1,7 +1,7 @@
 import uuid
 
 from .base import BaseField
-from ....types import (
+from .codecs import (
     BitField, Boolean, Bytes, CompactBytes, CompactString,
     Float64, Int8, Int16, Int32, Int64, String, UUID
 )

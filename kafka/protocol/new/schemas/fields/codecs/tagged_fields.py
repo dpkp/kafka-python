@@ -1,4 +1,4 @@
-from ..types import UnsignedVarInt32
+from . import UnsignedVarInt32
 
 
 class TaggedFields:
