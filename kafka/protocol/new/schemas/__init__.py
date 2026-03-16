@@ -3,7 +3,7 @@ from .load_json import load_json
 
 
 __all__ = [
-    "Field", "BasicField", "StructField",
+    "BaseField", "SimpleField", "StructField",
     "ArrayField", "StructArrayField",
     "load_json",
 ]
