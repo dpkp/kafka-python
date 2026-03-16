@@ -8,7 +8,7 @@ from kafka.protocol.api_versions import (
     ApiVersionsRequest_v3, ApiVersionsResponse_v3,
     ApiVersionsRequest_v4, ApiVersionsResponse_v4
 )
-from kafka.protocol.new.messages.metadata import (
+from kafka.protocol.new.metadata import (
     ApiVersionsRequest as NewApiVersionsRequest,
     ApiVersionsResponse as NewApiVersionsResponse
 )

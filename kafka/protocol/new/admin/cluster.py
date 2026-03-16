@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-from ...api_message import ApiMessage
+from ..api_message import ApiMessage
 
 
 class DescribeClusterRequest(ApiMessage): pass

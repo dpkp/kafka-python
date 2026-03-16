@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.protocol.new.messages.sasl import (
+from kafka.protocol.new.sasl import (
     SaslHandshakeRequest, SaslHandshakeResponse,
     SaslAuthenticateRequest, SaslAuthenticateResponse,
 )

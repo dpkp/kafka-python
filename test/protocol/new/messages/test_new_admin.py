@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from kafka.protocol.new.messages.admin import (
+from kafka.protocol.new.admin import (
     CreateTopicsRequest, CreateTopicsResponse,
     DeleteTopicsRequest, DeleteTopicsResponse,
     CreatePartitionsRequest, CreatePartitionsResponse,

@@ -1,4 +1,4 @@
-from ...api_message import ApiMessage
+from ..api_message import ApiMessage
 
 
 class InitProducerIdRequest(ApiMessage): pass

@@ -2,12 +2,12 @@ import pytest
 
 from kafka.protocol.parser import KafkaProtocol
 
-from kafka.protocol.new.messages.metadata import (
+from kafka.protocol.new.metadata import (
     ApiVersionsRequest, ApiVersionsResponse,
     FindCoordinatorRequest, FindCoordinatorResponse,
     MetadataRequest, MetadataResponse,
 )
-from kafka.protocol.new.messages.consumer import (
+from kafka.protocol.new.consumer import (
     JoinGroupRequest, JoinGroupResponse,
     SyncGroupRequest, SyncGroupResponse,
     LeaveGroupRequest, LeaveGroupResponse,

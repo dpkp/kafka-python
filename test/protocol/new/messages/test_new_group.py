@@ -1,7 +1,7 @@
 import pytest
 
-from kafka.protocol.new.messages.metadata import FindCoordinatorRequest, FindCoordinatorResponse
-from kafka.protocol.new.messages.consumer import (
+from kafka.protocol.new.metadata import FindCoordinatorRequest, FindCoordinatorResponse
+from kafka.protocol.new.consumer import (
     JoinGroupRequest, JoinGroupResponse,
     SyncGroupRequest, SyncGroupResponse,
     LeaveGroupRequest, LeaveGroupResponse,

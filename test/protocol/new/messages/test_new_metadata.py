@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.protocol.new.messages.metadata import MetadataRequest, MetadataResponse
+from kafka.protocol.new.metadata import MetadataRequest, MetadataResponse
 
 
 @pytest.mark.parametrize("version", range(MetadataRequest.min_version, MetadataRequest.max_version + 1))
