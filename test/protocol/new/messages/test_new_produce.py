@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.protocol.new.messages.produce import ProduceRequest, ProduceResponse
+from kafka.protocol.new.messages.producer import ProduceRequest, ProduceResponse
 
 
 @pytest.mark.parametrize("version", range(ProduceRequest.min_version, ProduceRequest.max_version + 1))

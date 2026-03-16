@@ -2,7 +2,7 @@ import pytest
 
 
 from kafka.protocol.new.api_header import ResponseHeader
-from kafka.protocol.new.messages.api_versions import ApiVersionsRequest, ApiVersionsResponse
+from kafka.protocol.new.messages.metadata import ApiVersionsRequest, ApiVersionsResponse
 
 from kafka.version import __version__
 

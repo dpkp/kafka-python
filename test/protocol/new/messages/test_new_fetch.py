@@ -2,7 +2,7 @@ import binascii
 import pytest
 import uuid
 
-from kafka.protocol.new.messages.fetch import FetchRequest, FetchResponse
+from kafka.protocol.new.messages.consumer import FetchRequest, FetchResponse
 
 
 def test_fetch_request_v15_hex():

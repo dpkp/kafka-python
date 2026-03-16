@@ -1,4 +1,5 @@
-from ..api_message import ApiMessage
+from ...api_message import ApiMessage
+
 
 class MetadataRequest(ApiMessage): pass
 class MetadataResponse(ApiMessage):
@@ -11,3 +12,8 @@ class MetadataResponse(ApiMessage):
         json['fields'][4]['fields'][5]['name'] = 'authorized_operations'
         json['fields'][4]['fields'][5]['type'] = 'bitfield'
         return json
+
+
+__all__ = [
+    'MetadataRequest', 'MetadataResponse',
+]

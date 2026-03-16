@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.protocol.new.messages.list_offsets import ListOffsetsRequest, ListOffsetsResponse
+from kafka.protocol.new.messages.consumer import ListOffsetsRequest, ListOffsetsResponse
 
 
 @pytest.mark.parametrize("version", range(ListOffsetsRequest.min_version, ListOffsetsRequest.max_version + 1))

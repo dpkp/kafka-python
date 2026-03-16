@@ -2,21 +2,19 @@ import pytest
 
 from kafka.protocol.parser import KafkaProtocol
 
-from kafka.protocol.new.messages.api_versions import ApiVersionsRequest, ApiVersionsResponse
-from kafka.protocol.new.messages.group_coordinator import (
-    FindCoordinatorRequest, FindCoordinatorResponse
+from kafka.protocol.new.messages.metadata import (
+    ApiVersionsRequest, ApiVersionsResponse,
+    FindCoordinatorRequest, FindCoordinatorResponse,
+    MetadataRequest, MetadataResponse,
 )
-from kafka.protocol.new.messages.group_membership import (
+from kafka.protocol.new.messages.consumer import (
     JoinGroupRequest, JoinGroupResponse,
     SyncGroupRequest, SyncGroupResponse,
     LeaveGroupRequest, LeaveGroupResponse,
-    HeartbeatRequest, HeartbeatResponse
-)
-from kafka.protocol.new.messages.group_offsets import (
+    HeartbeatRequest, HeartbeatResponse,
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse
 )
-from kafka.protocol.new.messages.metadata import MetadataRequest, MetadataResponse
 from kafka.version import __version__
 
 

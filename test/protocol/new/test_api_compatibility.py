@@ -3,13 +3,12 @@ import os
 import json
 from io import BytesIO
 
-from kafka.protocol.api import RequestHeaderV2, ResponseHeaderV2
+from kafka.protocol.api import RequestHeaderV2
 from kafka.protocol.api_versions import (
     ApiVersionsRequest_v3, ApiVersionsResponse_v3,
     ApiVersionsRequest_v4, ApiVersionsResponse_v4
 )
-from kafka.protocol.new.api_message import ApiMessage
-from kafka.protocol.new.messages.api_versions import (
+from kafka.protocol.new.messages.metadata import (
     ApiVersionsRequest as NewApiVersionsRequest,
     ApiVersionsResponse as NewApiVersionsResponse
 )

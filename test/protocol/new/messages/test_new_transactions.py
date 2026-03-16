@@ -1,6 +1,6 @@
 
 import pytest
-from kafka.protocol.new.messages.transactions import (
+from kafka.protocol.new.messages.producer import (
     InitProducerIdRequest, InitProducerIdResponse,
     AddPartitionsToTxnRequest, AddPartitionsToTxnResponse,
     AddOffsetsToTxnRequest, AddOffsetsToTxnResponse,

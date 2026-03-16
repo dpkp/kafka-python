@@ -1,13 +1,11 @@
 import pytest
 
-from kafka.protocol.new.messages.group_coordinator import FindCoordinatorRequest, FindCoordinatorResponse
-from kafka.protocol.new.messages.group_membership import (
+from kafka.protocol.new.messages.metadata import FindCoordinatorRequest, FindCoordinatorResponse
+from kafka.protocol.new.messages.consumer import (
     JoinGroupRequest, JoinGroupResponse,
     SyncGroupRequest, SyncGroupResponse,
     LeaveGroupRequest, LeaveGroupResponse,
     HeartbeatRequest, HeartbeatResponse,
-)
-from kafka.protocol.new.messages.group_offsets import (
     OffsetFetchRequest, OffsetFetchResponse,
     OffsetCommitRequest, OffsetCommitResponse,
 )

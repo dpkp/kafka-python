@@ -1,13 +1,10 @@
 import io
 
-from ..api_message import ApiMessage
-from ...types import Int16, Int32
+from ...api_message import ApiMessage
+from ....types import Int16, Int32
 
 
-class ApiVersionsRequest(ApiMessage):
-    pass
-
-
+class ApiVersionsRequest(ApiMessage): pass
 class ApiVersionsResponse(ApiMessage):
     # ApiVersionsResponse header never uses flexible formats, even if body does
     @classmethod
@@ -37,3 +34,8 @@ class ApiVersionsResponse(ApiMessage):
         if hdr is not None:
             ret._header = hdr
         return ret
+
+
+__all__ = [
+    'ApiVersionsRequest', 'ApiVersionsResponse',
+]
