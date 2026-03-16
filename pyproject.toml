@@ -42,6 +42,9 @@ benchmarks = ["pyperf"]
 include-package-data = false
 license-files = [] # workaround for https://github.com/pypa/setuptools/issues/4759
 
+[tool.setuptools.package-data]
+kafka = ["protocol/new/schemas/resources/*.json"]
+
 [tool.setuptools.packages.find]
 exclude = ["test"]
 namespaces = false

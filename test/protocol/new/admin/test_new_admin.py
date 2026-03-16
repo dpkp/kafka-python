@@ -1,0 +1,196 @@
+import uuid
+
+import pytest
+
+from kafka.protocol.new.admin import (
+    CreateTopicsRequest, CreateTopicsResponse,
+    DeleteTopicsRequest, DeleteTopicsResponse,
+    CreatePartitionsRequest, CreatePartitionsResponse,
+    DescribeGroupsRequest, DescribeGroupsResponse,
+    ListGroupsRequest, ListGroupsResponse,
+    DeleteGroupsRequest, DeleteGroupsResponse,
+    DescribeClusterRequest, DescribeClusterResponse,
+    DescribeConfigsRequest, DescribeConfigsResponse,
+    AlterConfigsRequest, AlterConfigsResponse,
+    CreateAclsRequest, CreateAclsResponse,
+    DeleteAclsRequest, DeleteAclsResponse,
+    DescribeAclsRequest, DescribeAclsResponse,
+)
+
+
+@pytest.mark.parametrize("version", range(CreateTopicsRequest.min_version, CreateTopicsRequest.max_version + 1))
+def test_create_topics_request_roundtrip(version):
+    Topic = CreateTopicsRequest.CreatableTopic
+    topics = [
+        Topic(
+            name="test-topic",
+            num_partitions=1,
+            replication_factor=1,
+            assignments=[],
+            configs=[]
+        )
+    ]
+    data = CreateTopicsRequest(
+        topics=topics,
+        timeout_ms=10000,
+        validate_only=False
+    )
+    encoded = CreateTopicsRequest.encode(data, version=version)
+    decoded = CreateTopicsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DeleteTopicsRequest.min_version, DeleteTopicsRequest.max_version + 1))
+def test_delete_topics_request_roundtrip(version):
+    topic_names = ["topic-1", "topic-2"]
+    
+    Topic = DeleteTopicsRequest.DeleteTopicState
+    topics = []
+    if version >= 6:
+        for t_name in topic_names:
+            topics.append(Topic(name=t_name, topic_id=uuid.uuid4()))
+    
+    data = DeleteTopicsRequest(
+        topic_names=topic_names if version < 6 else [],
+        timeout_ms=10000,
+        topics=topics
+    )
+    encoded = DeleteTopicsRequest.encode(data, version=version)
+    decoded = DeleteTopicsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DescribeGroupsRequest.min_version, DescribeGroupsRequest.max_version + 1))
+def test_describe_groups_request_roundtrip(version):
+    data = DescribeGroupsRequest(
+        groups=["group-1"],
+        include_authorized_operations=True if version >= 3 else False
+    )
+    encoded = DescribeGroupsRequest.encode(data, version=version)
+    decoded = DescribeGroupsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(ListGroupsRequest.min_version, ListGroupsRequest.max_version + 1))
+def test_list_groups_request_roundtrip(version):
+    data = ListGroupsRequest(
+        states_filter=["Stable"] if version >= 4 else []
+    )
+    encoded = ListGroupsRequest.encode(data, version=version)
+    decoded = ListGroupsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DescribeClusterRequest.min_version, DescribeClusterRequest.max_version + 1))
+def test_describe_cluster_request_roundtrip(version):
+    data = DescribeClusterRequest(
+        include_cluster_authorized_operations=True,
+        endpoint_type=1 if version >= 1 else 1,
+        include_fenced_brokers=False if version >= 2 else False
+    )
+    encoded = DescribeClusterRequest.encode(data, version=version)
+    decoded = DescribeClusterRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DescribeConfigsRequest.min_version, DescribeConfigsRequest.max_version + 1))
+def test_describe_configs_request_roundtrip(version):
+    Resource = DescribeConfigsRequest.DescribeConfigsResource
+    resources = [
+        Resource(
+            resource_type=2, # TOPIC
+            resource_name="test-topic",
+            configuration_keys=["cleanup.policy"]
+        )
+    ]
+    data = DescribeConfigsRequest(
+        resources=resources,
+        include_synonyms=True if version >= 1 else False,
+        include_documentation=True if version >= 3 else False
+    )
+    encoded = DescribeConfigsRequest.encode(data, version=version)
+    decoded = DescribeConfigsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(CreateAclsRequest.min_version, CreateAclsRequest.max_version + 1))
+def test_create_acls_request_roundtrip(version):
+    Creation = CreateAclsRequest.AclCreation
+    creations = [
+        Creation(
+            resource_type=2,
+            resource_name="test-topic",
+            resource_pattern_type=3,
+            principal="User:alice",
+            host="*",
+            operation=3,
+            permission_type=3
+        )
+    ]
+    data = CreateAclsRequest(
+        creations=creations
+    )
+    encoded = CreateAclsRequest.encode(data, version=version)
+    decoded = CreateAclsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(CreatePartitionsRequest.min_version, CreatePartitionsRequest.max_version + 1))
+def test_create_partitions_request_roundtrip(version):
+    TopicPartition = CreatePartitionsRequest.CreatePartitionsTopic
+    Assignment = TopicPartition.CreatePartitionsAssignment
+    topic_partitions = [
+        TopicPartition(
+            name="test-topic",
+            count=2,
+            assignments=[
+                Assignment(broker_ids=[1, 2])
+            ]
+        )
+    ]
+    data = CreatePartitionsRequest(
+        topics=topic_partitions,
+        timeout_ms=10000,
+        validate_only=False
+    )
+    encoded = CreatePartitionsRequest.encode(data, version=version)
+    decoded = CreatePartitionsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DescribeAclsRequest.min_version, DescribeAclsRequest.max_version + 1))
+def test_describe_acls_request_roundtrip(version):
+    data = DescribeAclsRequest(
+        resource_type_filter=2,
+        resource_name_filter="test-topic",
+        pattern_type_filter=3 if version >= 1 else 3,
+        principal_filter="User:alice",
+        host_filter="*",
+        operation=3,
+        permission_type=3
+    )
+    encoded = DescribeAclsRequest.encode(data, version=version)
+    decoded = DescribeAclsRequest.decode(encoded, version=version)
+    assert decoded == data
+
+
+@pytest.mark.parametrize("version", range(DeleteAclsRequest.min_version, DeleteAclsRequest.max_version + 1))
+def test_delete_acls_request_roundtrip(version):
+    Filter = DeleteAclsRequest.DeleteAclsFilter
+    filters = [
+        Filter(
+            resource_type_filter=2,
+            resource_name_filter="test-topic",
+            pattern_type_filter=3 if version >= 1 else 3,
+            principal_filter="User:alice",
+            host_filter="*",
+            operation=3,
+            permission_type=3
+        )
+    ]
+    data = DeleteAclsRequest(
+        filters=filters
+    )
+    encoded = DeleteAclsRequest.encode(data, version=version)
+    decoded = DeleteAclsRequest.decode(encoded, version=version)
+    assert decoded == data
