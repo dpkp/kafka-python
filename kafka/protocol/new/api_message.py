@@ -55,7 +55,7 @@ class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
                 cls._struct._versions = (0, cls._struct._versions[1])
             # Configure the StructField to use our ApiMessage wrapper
             # and not construct a default DataContainer
-            cls._struct._data_class = weakref.proxy(cls)
+            cls._struct.set_data_class(weakref.proxy(cls))
 
 
 class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):

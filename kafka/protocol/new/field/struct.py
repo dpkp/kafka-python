@@ -1,6 +1,3 @@
-import weakref
-
-from ..data_container import DataContainer
 from .field import Field
 from ..tagged_fields import TaggedFields
 from ...types import Schema
@@ -31,13 +28,18 @@ class StructField(Field):
         return True
 
     def has_data_class(self):
-        return True
+        return self._data_class is not None
+
+    def set_data_class(self, data_class):
+        assert self._data_class is None
+        self._data_class = data_class
 
     @property
     def data_class(self):
-        if self._data_class is None:
-            self._data_class = type(self._type_str, (DataContainer,), {'_struct': weakref.proxy(self)})
         return self._data_class
+
+    def __call__(self, *args, **kw):
+        return self.data_class(*args, **kw) # pylint: disable=E1102
 
     def to_schema(self, version, compact=False, tagged=False):
         if not self.for_version_q(version):

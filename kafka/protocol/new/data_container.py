@@ -14,11 +14,13 @@ class DataContainer(metaclass=SlotsBuilder):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        # Link sub-struct data_classes as class attrs
+        # Generate field data_classes and set as class attrs (by field.type_str)
         if cls._struct is not None:
             for field in cls._struct.fields.values():
-                if field.has_data_class():
-                    setattr(cls, field.data_class.__name__, field.data_class)
+                if field.is_struct() or field.is_struct_array():
+                    if not field.has_data_class():
+                        field.set_data_class(type(field.type_str, (DataContainer,), {'_struct': field}))
+                    setattr(cls, field.type_str, field.data_class)
 
     def __init__(self, **field_vals):
         assert self._struct is not None

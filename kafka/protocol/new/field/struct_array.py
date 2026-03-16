@@ -29,6 +29,10 @@ class StructArrayField(ArrayField):
         # map_key will be (idx, field) of the mapKey field if found
         self.map_key = next(filter(lambda x: x[1]._json.get('mapKey'), enumerate(self._fields)), None)
 
+    @property
+    def type_str(self):
+        return self._type_str[2:]
+
     def is_struct_array(self):
         return True
 
@@ -37,7 +41,10 @@ class StructArrayField(ArrayField):
         return self.array_of.fields
 
     def has_data_class(self):
-        return True
+        return self.array_of.has_data_class()
+
+    def set_data_class(self, data_class):
+        return self.array_of.set_data_class(data_class)
 
     @property
     def data_class(self):

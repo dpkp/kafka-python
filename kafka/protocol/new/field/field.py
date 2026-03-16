@@ -75,6 +75,10 @@ class Field:
         return self.underscore_name(self._name)
 
     @property
+    def type_str(self):
+        return self._type_str
+
+    @property
     def tag(self):
         return self._tag
 
