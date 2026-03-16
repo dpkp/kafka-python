@@ -7,7 +7,6 @@ from kafka.protocol.commit import OffsetCommitRequest, OffsetCommitResponse, Off
 from kafka.protocol.find_coordinator import FindCoordinatorRequest, FindCoordinatorResponse
 from kafka.protocol.group import JoinGroupRequest, JoinGroupResponse, SyncGroupRequest, SyncGroupResponse, LeaveGroupRequest, LeaveGroupResponse, HeartbeatRequest, HeartbeatResponse
 from kafka.protocol.metadata import MetadataRequest, MetadataResponse
-from kafka.version import __version__
 
 
 TEST_API_VERSIONS_1 = {
@@ -15,7 +14,7 @@ TEST_API_VERSIONS_1 = {
     'messages': (
         {
             'request': (
-                ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version=__version__),
+                ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version='2.3.0'),
                 b'\x00\x00\x004\x00\x12\x00\x04\x00\x00\x00\x01\x00\x15_internal_client_kYVL\x00\rkafka-python\x062.3.0\x00',
             ),
             'response': (
@@ -26,7 +25,7 @@ TEST_API_VERSIONS_1 = {
         },
         {
             'request': (
-                ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version=__version__),
+                ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version='2.3.0'),
                 b'\x00\x00\x004\x00\x12\x00\x03\x00\x00\x00\x02\x00\x15_internal_client_kYVL\x00\rkafka-python\x062.3.0\x00',
             ),
             'response': (
@@ -44,7 +43,7 @@ TEST_API_VERSIONS_2 = {
     'messages': (
         {
             'request': (
-                ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version=__version__),
+                ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version='2.3.0'),
                 b'\x00\x00\x000\x00\x12\x00\x04\x00\x00\x00\x01\x00\x11admin_client_VIsf\x00\rkafka-python\x062.3.0\x00',
             ),
             'response': (
@@ -55,7 +54,7 @@ TEST_API_VERSIONS_2 = {
         },
         {
             'request': (
-                ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version=__version__),
+                ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version='2.3.0'),
                 b'\x00\x00\x000\x00\x12\x00\x03\x00\x00\x00\x02\x00\x11admin_client_VIsf\x00\rkafka-python\x062.3.0\x00',
             ),
             'response': (

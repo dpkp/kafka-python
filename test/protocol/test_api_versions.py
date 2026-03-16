@@ -5,7 +5,6 @@ import pytest
 from kafka.protocol.api import Request, ResponseHeader
 from kafka.protocol.api_versions import ApiVersionsRequest, ApiVersionsResponse
 from kafka.protocol.types import Int32
-from kafka.version import __version__
 
 
 TEST_CASES = [
@@ -25,12 +24,12 @@ TEST_CASES = [
     ),
 
     (
-        ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version=__version__),
+        ApiVersionsRequest[3](client_software_name='kafka-python', client_software_version='2.3.0'),
         b'\x00\x00\x004\x00\x12\x00\x03\x00\x00\x00\x01\x00\x15_internal_client_kYVL\x00\rkafka-python\x062.3.0\x00',
     ),
 
     (
-        ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version=__version__),
+        ApiVersionsRequest[4](client_software_name='kafka-python', client_software_version='2.3.0'),
         b'\x00\x00\x004\x00\x12\x00\x04\x00\x00\x00\x01\x00\x15_internal_client_kYVL\x00\rkafka-python\x062.3.0\x00',
     ),
 
