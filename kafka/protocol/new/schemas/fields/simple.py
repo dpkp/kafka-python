@@ -37,18 +37,6 @@ class SimpleField(BaseField):
             raise ValueError('Unrecognized type: %s' % self._type_str)
         self._type = self.TYPES[self._type_str]
 
-    def to_schema(self, version, compact=False, tagged=False):
-        if compact and self._type is Bytes:
-            schema_type = CompactBytes
-        elif compact and isinstance(self._type, String):
-            schema_type = CompactString(self._type.encoding)
-        else:
-            schema_type = self._type
-        if self.name is None:
-            return schema_type
-        else:
-            return (self.name, schema_type)
-
     def _calculate_default(self, default):
         if self._type is Boolean:
             if not default:

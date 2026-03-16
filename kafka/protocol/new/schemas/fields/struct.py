@@ -1,6 +1,5 @@
 from .base import BaseField
 from .codecs.tagged_fields import TaggedFields
-from ....types import Schema
 
 
 class StructField(BaseField):
@@ -40,15 +39,6 @@ class StructField(BaseField):
 
     def __call__(self, *args, **kw):
         return self.data_class(*args, **kw) # pylint: disable=E1102
-
-    def to_schema(self, version, compact=False, tagged=False):
-        if not self.for_version_q(version):
-            return None
-        version_fields = [field.to_schema(version, compact=compact, tagged=tagged)
-                          for field in self._fields]
-        if tagged:
-            version_fields.append(('tags', self.tagged_fields(version)))
-        return Schema(*[field for field in version_fields if field is not None])
 
     def _calculate_default(self, default):
         if default == 'null':

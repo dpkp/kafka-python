@@ -1,7 +1,6 @@
 from .base import BaseField
 from .simple import SimpleField
 from .codecs import (
-    Array, CompactArray,
     UnsignedVarInt32, Int32,
 )
 
@@ -38,13 +37,6 @@ class ArrayField(BaseField):
 
     def is_array(self):
         return True
-
-    def to_schema(self, version, compact=False, tagged=False):
-        if not self.for_version_q(version) or self.tagged_field_q(version):
-            return None
-        arr_type = CompactArray if compact else Array
-        inner_type = self.array_of.to_schema(version, compact=compact, tagged=tagged)
-        return (self.name, arr_type(inner_type))
 
     def _calculate_default(self, default):
         if default == 'null':

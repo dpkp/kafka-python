@@ -115,10 +115,6 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
                 return True
         return False
 
-    def to_schema(self, version):
-        flex_version = self.flexible_version_q(version)
-        return self._struct.to_schema(version, compact=flex_version, tagged=flex_version)
-
     @classmethod
     def is_request(cls):
         return cls.type == 'request'
