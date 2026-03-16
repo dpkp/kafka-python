@@ -1,4 +1,4 @@
-from kafka.protocol.new.schema import load_json
+from kafka.protocol.new.schemas import load_json
 
 
 def test_load_json_common_structs():

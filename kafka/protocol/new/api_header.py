@@ -1,6 +1,6 @@
 from .data_container import DataContainer, SlotsBuilder
 from .field import Field, StructField
-from .schema import load_json
+from .schemas import load_json
 
 
 class ApiHeaderMeta(SlotsBuilder):

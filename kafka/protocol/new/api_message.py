@@ -4,7 +4,7 @@ import weakref
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer, SlotsBuilder
 from .field import Field, StructField
-from .schema import load_json
+from .schemas import load_json
 from ..types import Int32
 
 from kafka.util import classproperty
