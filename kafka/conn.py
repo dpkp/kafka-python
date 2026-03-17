@@ -17,8 +17,7 @@ from kafka.protocol.broker_api_versions import (
     infer_broker_version_from_api_versions,
 )
 from kafka.protocol.parser import KafkaProtocol
-from kafka.protocol.sasl_authenticate import SaslAuthenticateRequest
-from kafka.protocol.sasl_handshake import SaslHandshakeRequest
+from kafka.protocol.new.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
 from kafka.protocol.types import Int32
 from kafka.sasl import get_sasl_mechanism
 from kafka.socks5_wrapper import Socks5Wrapper
