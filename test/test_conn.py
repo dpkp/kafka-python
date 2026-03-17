@@ -8,7 +8,7 @@ import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates
 from kafka.future import Future
-from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError
+from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VERSION_CHECKS
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
 from kafka.protocol.api import RequestHeader
@@ -91,7 +91,7 @@ def test_api_versions_check(_socket, mocker):
     assert conn._try_api_versions_check() is False
     assert conn.connecting() is True
 
-    conn._check_version_idx = len(conn.VERSION_CHECKS)
+    conn._check_version_idx = len(VERSION_CHECKS)
     conn._api_versions_future = None
     assert conn._try_api_versions_check() is False
     assert conn.connecting() is False
