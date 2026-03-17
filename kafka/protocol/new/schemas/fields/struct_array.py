@@ -52,3 +52,6 @@ class StructArrayField(ArrayField):
 
     def __call__(self, *args, **kw):
         return self.data_class(*args, **kw) # pylint: disable=E1102
+
+    def __repr__(self):
+        return 'StructArrayField(%s)' % self._json

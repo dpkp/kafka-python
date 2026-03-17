@@ -108,3 +108,6 @@ class SimpleField(BaseField):
             return CompactString(self._type.encoding).decode(data)
         else:
             return self._type.decode(data)
+
+    def __repr__(self):
+        return 'SimpleField(%s)' % self._json
