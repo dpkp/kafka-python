@@ -9,7 +9,7 @@ from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.new.metadata import MetadataRequest
 from kafka.protocol.produce import ProduceRequest
 from kafka.structs import BrokerMetadata
 
