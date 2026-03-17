@@ -11,7 +11,7 @@ import time
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.api_versions import ApiVersionsRequest
+from kafka.protocol.new.metadata import ApiVersionsRequest
 from kafka.protocol.broker_api_versions import (
     BROKER_API_VERSIONS, VERSION_CHECKS,
     infer_broker_version_from_api_versions,
