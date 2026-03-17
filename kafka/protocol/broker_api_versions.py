@@ -49,9 +49,9 @@ def infer_broker_version_from_api_versions(api_versions):
         if min_version <= proto_struct.API_VERSION <= max_version:
             return broker_version
 
-        # We know that ApiVersionsResponse is only supported in 0.10+
-        # so if all else fails, choose that
-        return (0, 10, 0)
+    # We know that ApiVersionsResponse is only supported in 0.10+
+    # so if all else fails, choose that
+    return (0, 10, 0)
 
 
 # Fallback version checks for brokers that do not support ApiVersionsCheck
