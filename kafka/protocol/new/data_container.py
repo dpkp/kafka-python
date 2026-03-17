@@ -90,10 +90,15 @@ class DataContainer(metaclass=SlotsBuilder):
             raise RuntimeError('DataContainer Iteration not supported without _version')
         return iter([getattr(self, field.name) for field in self._struct.untagged_fields(self._version)])
 
-    def __getitem__(self, idx):
+    def __getitem__(self, key):
         if self._version is None:
             raise RuntimeError('DataContainer subscript not supported without _version')
-        elif not isinstance(idx, int):
-            raise RuntimeError('DataContainer subscript by field idx only')
-        field = self._struct.untagged_fields(self._version)[idx]
-        return getattr(self, field.name)
+        elif isinstance(key, int):
+            field = self._struct.untagged_fields(self._version)[key]
+            return getattr(self, field.name)
+        elif isinstance(key, slice):
+            fields = self._struct.untagged_fields(self._version)
+            start, stop, step = key.indices(len(fields))
+            return [getattr(self, fields[i].name) for i in range(start, stop, step)]
+        else:
+            raise TypeError('DataContainer subscript supports int or slices only: %s' % type(key).__name__)
