@@ -1,3 +1,68 @@
+from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
+from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.fetch import FetchRequest
+from kafka.protocol.find_coordinator import FindCoordinatorRequest
+from kafka.protocol.list_offsets import ListOffsetsRequest
+from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.produce import ProduceRequest
+
+
+def infer_broker_version_from_api_versions(api_versions):
+    # The logic here is to check the list of supported request versions
+    # in reverse order. As soon as we find one that works, return it
+    test_cases = [
+        # format (<broker version>, <needed struct>)
+        # Make sure to update consumer_integration test check when adding newer versions.
+        # ((3, 9), FetchRequest[17]),
+        # ((3, 8), ProduceRequest[11]),
+        # ((3, 7), FetchRequest[16]),
+        # ((3, 6), AddPartitionsToTxnRequest[4]),
+        # ((3, 5), FetchRequest[15]),
+        # ((3, 4), StopReplicaRequest[3]), # broker-internal api...
+        # ((3, 3), DescribeAclsRequest[3]),
+        # ((3, 2), JoinGroupRequest[9]),
+        # ((3, 1), FetchRequest[13]),
+        # ((3, 0), ListOffsetsRequest[7]),
+        # ((2, 8), ProduceRequest[9]),
+        # ((2, 7), FetchRequest[12]),
+        # ((2, 6), ListGroupsRequest[4]),
+        # ((2, 5), JoinGroupRequest[7]),
+        ((2, 6), DescribeClientQuotasRequest[0]),
+        ((2, 5), DescribeAclsRequest[2]),
+        ((2, 4), ProduceRequest[8]),
+        ((2, 3), FetchRequest[11]),
+        ((2, 2), ListOffsetsRequest[5]),
+        ((2, 1), FetchRequest[10]),
+        ((2, 0), FetchRequest[8]),
+        ((1, 1), FetchRequest[7]),
+        ((1, 0), MetadataRequest[5]),
+        ((0, 11), MetadataRequest[4]),
+        ((0, 10, 2), OffsetFetchRequest[2]),
+        ((0, 10, 1), MetadataRequest[2]),
+    ]
+
+    # Get the best match of test cases
+    for broker_version, proto_struct in sorted(test_cases, reverse=True):
+        if proto_struct.API_KEY not in api_versions:
+            continue
+        min_version, max_version = api_versions[proto_struct.API_KEY]
+        if min_version <= proto_struct.API_VERSION <= max_version:
+            return broker_version
+
+    # We know that ApiVersionsResponse is only supported in 0.10+
+    # so if all else fails, choose that
+    return (0, 10, 0)
+
+
+# Fallback version checks for brokers that do not support ApiVersionsCheck
+VERSION_CHECKS = (
+    ((0, 9), ListGroupsRequest[0]()),
+    ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
+    ((0, 8, 1), OffsetFetchRequest[0]('kafka-python-default-group', [])),
+    ((0, 8, 0), MetadataRequest[0]([])),
+)
+
+
 BROKER_API_VERSIONS = {
     # api_versions responses prior to (0, 10) are synthesized for compatibility
     (0, 8, 0): {0: (0, 0), 1: (0, 0), 2: (0, 0), 3: (0, 0)},
