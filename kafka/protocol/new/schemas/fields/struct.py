@@ -66,6 +66,10 @@ class StructField(BaseField):
         elif isinstance(item, dict):
             getter = lambda item, i, field: item.get(field.name) # defaults?
             tags = item
+        elif isinstance(item, (str, int, float)):
+            assert len(fields) == 1, "Encoding single value item (str/int/float) requires single field struct"
+            getter = lambda item, i, field: item
+            tags = {}
         else:
             getter = lambda item, i, field: getattr(item, field.name)
             tags = item
