@@ -55,11 +55,16 @@ class StructField(BaseField):
                              if field.for_version_q(version)
                              and field.tagged_field_q(version)])
 
+    def untagged_fields(self, version):
+        return [field for field in self._fields
+                if field.for_version_q(version)
+                and not field.tagged_field_q(version)]
+
     def encode(self, item, version=None, compact=False, tagged=False):
         assert version is not None, 'version required to encode StructField'
         if not self.for_version_q(version):
             return b''
-        fields = [field for field in self._fields if field.for_version_q(version) and not field.tagged_field_q(version)]
+        fields = self.untagged_fields(version)
         if isinstance(item, tuple):
             getter = lambda item, i, field: item[i]
             tags = {} if len(item) == len(fields) else item[-1]
@@ -79,7 +84,7 @@ class StructField(BaseField):
         if tagged:
             # TaggedFields are always compact and never include nested tagged fields
             encoded.append(self.tagged_fields(version).encode(tags, version=version,
-                                                               compact=True, tagged=False))
+                                                              compact=True, tagged=False))
         return b''.join(encoded)
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):

@@ -40,6 +40,12 @@ class StructArrayField(ArrayField):
     def fields(self):
         return self.array_of.fields
 
+    def tagged_fields(self, version):
+        return self.array_of.tagged_fields(version)
+
+    def untagged_fields(self, version):
+        return self.array_of.untagged_fields(version)
+
     def has_data_class(self):
         return self.array_of.has_data_class()
 
