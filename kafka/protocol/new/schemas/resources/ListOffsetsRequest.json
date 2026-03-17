@@ -59,7 +59,9 @@
         { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+", "default": "-1", "ignorable": true,
           "about": "The current leader epoch." },
         { "name": "Timestamp", "type": "int64", "versions": "0+",
-          "about": "The current timestamp." }
+          "about": "The current timestamp." },
+        { "name": "MaxNumOffsets", "type": "int32", "versions": "0", "default": "1",
+          "about": "The maximum number of offsets to report." }
       ]}
     ]},
     { "name": "TimeoutMs", "type": "int32", "versions": "10+", "ignorable": true,
