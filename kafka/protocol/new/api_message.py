@@ -24,12 +24,25 @@ class VersionSubscriptable(type):
         # Use [] lookups to move from primary class to "versioned" classes
         # which are simple wrappers around the primary class but with a _version attr
         if cls._class_version is not None:
-            return cls._VERSIONS[None].__getitem__(version)
+            return cls._VERSIONS[None][version]
+        if cls._valid_versions is not None:
+            if version < 0:
+                version += 1 + cls.max_version # support negative index, e.g., [-1]
+            if not cls.min_version <= version <= cls.max_version:
+                raise ValueError('Invalid version! min=%d, max=%d' % (cls.min_version, cls.max_version))
         klass_name = cls.__name__ + '_v' + str(version)
         if klass_name in cls._VERSIONS:
             return cls._VERSIONS[klass_name]
         cls._VERSIONS[klass_name] = type(klass_name, tuple(cls.mro()), {'_class_version': version}, init=False)
         return cls._VERSIONS[klass_name]
+
+    def __len__(cls):
+        # Maintain compatibility
+        if cls._valid_versions is None:
+            raise RuntimeError('Unable to calculate __len__ for class without valid_versions')
+        elif cls._class_version is not None:
+            raise TypeError('len() only supported on primary message class (not versioned)')
+        return cls._valid_versions[1] + 1
 
 
 class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
