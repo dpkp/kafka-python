@@ -100,7 +100,7 @@ class StructField(BaseField):
         }
         if tagged:
             decoded.update(self.tagged_fields(version).decode(data, version=version, compact=True, tagged=False))
-        return data_class(**decoded)
+        return data_class(version=version, **decoded)
 
     def __len__(self):
         return len(self._fields)

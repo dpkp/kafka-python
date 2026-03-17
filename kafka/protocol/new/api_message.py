@@ -71,7 +71,7 @@ class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
 
 
 class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
-    __slots__ = ('_header', '_version')
+    __slots__ = ('_header')
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
