@@ -190,7 +190,13 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
         return self._header.encode(flexible=flexible) # pylint: disable=E1120
 
     @classmethod
-    def parse_header(cls, data, flexible=False):
+    def parse_header(cls, data, version=None):
+        version = cls._class_version if version is None else version
+        if version is None:
+            raise ValueError('Version required to decode data')
+        elif not 0 <= version <= cls.max_version:
+            raise ValueError('Invalid version %s (max version is %s).' % (version, cls.max_version))
+        flexible = cls.flexible_version_q(version)
         return cls.header_class.decode(data, flexible=flexible) # pylint: disable=E1101
 
     def encode(self, version=None, header=False, framed=False):
@@ -225,15 +231,15 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
         else:
             data_class = cls
 
-        flexible = cls.flexible_version_q(version)
         if isinstance(data, bytes):
             data = io.BytesIO(data)
         if framed:
             size = Int32.decode(data)
         if header:
-            hdr = cls.parse_header(data, flexible=flexible)
+            hdr = cls.parse_header(data, version=version)
         else:
             hdr = None
+        flexible = cls.flexible_version_q(version)
         ret = cls._struct.decode(data, version=version, compact=flexible, tagged=flexible, data_class=data_class)
         if hdr is not None:
             ret._header = hdr

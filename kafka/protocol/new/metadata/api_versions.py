@@ -8,8 +8,8 @@ class ApiVersionsRequest(ApiMessage): pass
 class ApiVersionsResponse(ApiMessage):
     # ApiVersionsResponse header never uses flexible formats, even if body does
     @classmethod
-    def parse_header(cls, data, flexible=False):
-        return super().parse_header(data, flexible=False)
+    def parse_header(cls, data, version=None):
+        return cls.header_class.decode(data, flexible=False) # pylint: disable=E1101
 
     def encode_header(self, flexible=False):
         return super().encode_header(flexible=False)
