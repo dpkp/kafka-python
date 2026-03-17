@@ -9,7 +9,7 @@ class SlotsBuilder(type):
 
 
 class DataContainer(metaclass=SlotsBuilder):
-    __slots__ = ('tags', 'unknown_tags')
+    __slots__ = ('tags', 'unknown_tags', '_version')
     _struct = None
 
     def __init_subclass__(cls, **kwargs):
@@ -22,8 +22,9 @@ class DataContainer(metaclass=SlotsBuilder):
                         field.set_data_class(type(field.type_str, (DataContainer,), {'_struct': field}))
                     setattr(cls, field.type_str, field.data_class)
 
-    def __init__(self, **field_vals):
+    def __init__(self, version=None, **field_vals):
         assert self._struct is not None
+        self._version = version
         self.tags = None
         self.unknown_tags = None
         for field in self._struct._fields:
@@ -83,3 +84,21 @@ class DataContainer(metaclass=SlotsBuilder):
             if getattr(self, field.name) != getattr(other, field.name):
                 return False
         return True
+
+    def __iter__(self):
+        if self._version is None:
+            raise RuntimeError('DataContainer Iteration not supported without _version')
+        return iter([getattr(self, field.name) for field in self._struct.untagged_fields(self._version)])
+
+    def __getitem__(self, key):
+        if self._version is None:
+            raise RuntimeError('DataContainer subscript not supported without _version')
+        elif isinstance(key, int):
+            field = self._struct.untagged_fields(self._version)[key]
+            return getattr(self, field.name)
+        elif isinstance(key, slice):
+            fields = self._struct.untagged_fields(self._version)
+            start, stop, step = key.indices(len(fields))
+            return [getattr(self, fields[i].name) for i in range(start, stop, step)]
+        else:
+            raise TypeError('DataContainer subscript supports int or slices only: %s' % type(key).__name__)

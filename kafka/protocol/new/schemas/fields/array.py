@@ -73,3 +73,6 @@ class ArrayField(BaseField):
             return None
         return [self.array_of.decode(data, version=version, compact=compact, tagged=tagged)
                 for _ in range(size)]
+
+    def __repr__(self):
+        return 'ArrayField(%s)' % self._json

@@ -40,6 +40,12 @@ class StructArrayField(ArrayField):
     def fields(self):
         return self.array_of.fields
 
+    def tagged_fields(self, version):
+        return self.array_of.tagged_fields(version)
+
+    def untagged_fields(self, version):
+        return self.array_of.untagged_fields(version)
+
     def has_data_class(self):
         return self.array_of.has_data_class()
 
@@ -52,3 +58,6 @@ class StructArrayField(ArrayField):
 
     def __call__(self, *args, **kw):
         return self.data_class(*args, **kw) # pylint: disable=E1102
+
+    def __repr__(self):
+        return 'StructArrayField(%s)' % self._json

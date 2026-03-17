@@ -24,12 +24,25 @@ class VersionSubscriptable(type):
         # Use [] lookups to move from primary class to "versioned" classes
         # which are simple wrappers around the primary class but with a _version attr
         if cls._class_version is not None:
-            return cls._VERSIONS[None].__getitem__(version)
+            return cls._VERSIONS[None][version]
+        if cls._valid_versions is not None:
+            if version < 0:
+                version += 1 + cls.max_version # support negative index, e.g., [-1]
+            if not cls.min_version <= version <= cls.max_version:
+                raise ValueError('Invalid version! min=%d, max=%d' % (cls.min_version, cls.max_version))
         klass_name = cls.__name__ + '_v' + str(version)
         if klass_name in cls._VERSIONS:
             return cls._VERSIONS[klass_name]
         cls._VERSIONS[klass_name] = type(klass_name, tuple(cls.mro()), {'_class_version': version}, init=False)
         return cls._VERSIONS[klass_name]
+
+    def __len__(cls):
+        # Maintain compatibility
+        if cls._valid_versions is None:
+            raise RuntimeError('Unable to calculate __len__ for class without valid_versions')
+        elif cls._class_version is not None:
+            raise TypeError('len() only supported on primary message class (not versioned)')
+        return cls._valid_versions[1] + 1
 
 
 class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
@@ -58,7 +71,7 @@ class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
 
 
 class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
-    __slots__ = ('_header', '_version')
+    __slots__ = ('_header')
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -72,11 +85,17 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
                 ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self._header = None
         self._version = None
         if 'version' in kwargs:
             self.API_VERSION = kwargs['version']
+        if len(args) > 0:
+            untagged_fields = self._struct.untagged_fields(self.API_VERSION)
+            if len(args) != len(untagged_fields):
+                raise RuntimeError('Unable to init ApiMessage via positional args: unexpected len')
+            kwargs.update({field.name: args[i] for i, field in enumerate(untagged_fields)})
+            args = ()
+        super().__init__(*args, **kwargs)
 
     @classproperty
     def name(cls): # pylint: disable=E0213
@@ -171,7 +190,13 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
         return self._header.encode(flexible=flexible) # pylint: disable=E1120
 
     @classmethod
-    def parse_header(cls, data, flexible=False):
+    def parse_header(cls, data, version=None):
+        version = cls._class_version if version is None else version
+        if version is None:
+            raise ValueError('Version required to decode data')
+        elif not 0 <= version <= cls.max_version:
+            raise ValueError('Invalid version %s (max version is %s).' % (version, cls.max_version))
+        flexible = cls.flexible_version_q(version)
         return cls.header_class.decode(data, flexible=flexible) # pylint: disable=E1101
 
     def encode(self, version=None, header=False, framed=False):
@@ -206,15 +231,15 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
         else:
             data_class = cls
 
-        flexible = cls.flexible_version_q(version)
         if isinstance(data, bytes):
             data = io.BytesIO(data)
         if framed:
             size = Int32.decode(data)
         if header:
-            hdr = cls.parse_header(data, flexible=flexible)
+            hdr = cls.parse_header(data, version=version)
         else:
             hdr = None
+        flexible = cls.flexible_version_q(version)
         ret = cls._struct.decode(data, version=version, compact=flexible, tagged=flexible, data_class=data_class)
         if hdr is not None:
             ret._header = hdr

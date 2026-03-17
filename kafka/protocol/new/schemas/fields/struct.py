@@ -55,17 +55,26 @@ class StructField(BaseField):
                              if field.for_version_q(version)
                              and field.tagged_field_q(version)])
 
+    def untagged_fields(self, version):
+        return [field for field in self._fields
+                if field.for_version_q(version)
+                and not field.tagged_field_q(version)]
+
     def encode(self, item, version=None, compact=False, tagged=False):
         assert version is not None, 'version required to encode StructField'
         if not self.for_version_q(version):
             return b''
-        fields = [field for field in self._fields if field.for_version_q(version) and not field.tagged_field_q(version)]
+        fields = self.untagged_fields(version)
         if isinstance(item, tuple):
             getter = lambda item, i, field: item[i]
             tags = {} if len(item) == len(fields) else item[-1]
         elif isinstance(item, dict):
             getter = lambda item, i, field: item.get(field.name) # defaults?
             tags = item
+        elif isinstance(item, (str, int, float)):
+            assert len(fields) == 1, "Encoding single value item (str/int/float) requires single field struct"
+            getter = lambda item, i, field: item
+            tags = {}
         else:
             getter = lambda item, i, field: getattr(item, field.name)
             tags = item
@@ -75,7 +84,7 @@ class StructField(BaseField):
         if tagged:
             # TaggedFields are always compact and never include nested tagged fields
             encoded.append(self.tagged_fields(version).encode(tags, version=version,
-                                                               compact=True, tagged=False))
+                                                              compact=True, tagged=False))
         return b''.join(encoded)
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
@@ -91,7 +100,7 @@ class StructField(BaseField):
         }
         if tagged:
             decoded.update(self.tagged_fields(version).decode(data, version=version, compact=True, tagged=False))
-        return data_class(**decoded)
+        return data_class(version=version, **decoded)
 
     def __len__(self):
         return len(self._fields)
@@ -104,4 +113,4 @@ class StructField(BaseField):
         return True
 
     def __repr__(self):
-        return '%s(%s, %s)' % (self.__class__.__name__, self._name, self._fields)
+        return 'StructField(%s)' % self._json

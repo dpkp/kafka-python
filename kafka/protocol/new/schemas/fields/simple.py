@@ -101,10 +101,12 @@ class SimpleField(BaseField):
         assert version is not None, 'version is required to decode Field'
         if not self.for_version_q(version):
             return None
-        print("decoding", self.name)
         if compact and self._type is Bytes:
             return CompactBytes.decode(data)
         elif compact and isinstance(self._type, String):
             return CompactString(self._type.encoding).decode(data)
         else:
             return self._type.decode(data)
+
+    def __repr__(self):
+        return 'SimpleField(%s)' % self._json
