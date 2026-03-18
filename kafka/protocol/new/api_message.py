@@ -18,23 +18,26 @@ class VersionSubscriptable(type):
             # We also include cls[None] -> primary class to "exit" a version class
             if getattr(cls, '_class_version', None) is None:
                 cls._class_version = None
-                cls._VERSIONS = {None: weakref.proxy(cls)}
+                cls._VERSIONS = {}
 
     def __getitem__(cls, version):
         # Use [] lookups to move from primary class to "versioned" classes
         # which are simple wrappers around the primary class but with a _version attr
         if cls._class_version is not None:
-            return cls._VERSIONS[None][version]
+            primary_cls = cls.mro()[1]
+            if version is None:
+                return primary_cls
+            return primary_cls[version]
         if cls._valid_versions is not None:
             if version < 0:
                 version += 1 + cls.max_version # support negative index, e.g., [-1]
             if not cls.min_version <= version <= cls.max_version:
                 raise ValueError('Invalid version! min=%d, max=%d' % (cls.min_version, cls.max_version))
+        if version in cls._VERSIONS:
+            return cls._VERSIONS[version]
         klass_name = cls.__name__ + '_v' + str(version)
-        if klass_name in cls._VERSIONS:
-            return cls._VERSIONS[klass_name]
-        cls._VERSIONS[klass_name] = type(klass_name, tuple(cls.mro()), {'_class_version': version}, init=False)
-        return cls._VERSIONS[klass_name]
+        cls._VERSIONS[version] = type(klass_name, tuple(cls.mro()), {'_class_version': version}, init=False)
+        return cls._VERSIONS[version]
 
     def __len__(cls):
         # Maintain compatibility
