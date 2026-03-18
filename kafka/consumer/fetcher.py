@@ -757,14 +757,14 @@ class Fetcher(object):
                 return
 
         partitions = set([TopicPartition(topic, partition_data[0])
-                          for topic, partitions in response.topics
+                          for topic, partitions in response.responses
                           for partition_data in partitions])
         if self._sensors:
             metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
         else:
             metric_aggregator = None
 
-        for topic, partitions in response.topics:
+        for topic, partitions in response.responses:
             for partition_data in partitions:
                 tp = TopicPartition(topic, partition_data[0])
                 fetch_offset = fetch_offsets[tp]
@@ -922,7 +922,7 @@ class Fetcher(object):
             self.aborted_producer_ids = set()
             self.aborted_transactions = collections.deque(
                 sorted([AbortedTransaction(*data) for data in aborted_transactions] if aborted_transactions else [],
-                       key=lambda txn: txn.first_offset)
+                        key=lambda txn: txn.first_offset)
             )
             self.metric_aggregator = metric_aggregator
             self.check_crcs = check_crcs
@@ -1206,7 +1206,7 @@ class FetchSessionHandler(object):
 
     def _response_partitions(self, response):
         return {TopicPartition(topic, partition_data[0])
-                for topic, partitions in response.topics
+                for topic, partitions in response.responses
                 for partition_data in partitions}
 
 
