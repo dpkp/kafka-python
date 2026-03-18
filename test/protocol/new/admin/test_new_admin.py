@@ -103,14 +103,48 @@ def test_describe_configs_request_roundtrip(version):
             configuration_keys=["cleanup.policy"]
         )
     ]
-    data = DescribeConfigsRequest(
+    request = DescribeConfigsRequest(
         resources=resources,
         include_synonyms=True if version >= 1 else False,
         include_documentation=True if version >= 3 else False
     )
-    encoded = DescribeConfigsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DescribeConfigsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
+
+    Result = DescribeConfigsResponse.DescribeConfigsResult
+    Config = Result.DescribeConfigsResourceResult
+    Synonym = Config.DescribeConfigsSynonym
+    response = DescribeConfigsResponse(
+        throttle_time_ms=0,
+        results=[
+            DescribeConfigsResponse.DescribeConfigsResult(
+                error_code=0,
+                error_message=None,
+                resource_type=2,
+                resource_name="test-topic",
+                configs=[
+                    Config(
+                        name='foo',
+                        value='bar',
+                        read_only=False,
+                        config_source=2 if version >= 1 else -1,
+                        is_default=True if version == 0 else False,
+                        is_sensitive=False,
+                        synonyms=[
+                            Synonym(name='fizz', value='buzz', source=2)
+                        ] if version >= 1 else [],
+                        config_type=1 if version >=3 else 0,
+                        documentation='whats up doc' if version >=3 else '',
+                    )
+                ]
+            )
+        ],
+    )
+
+    encoded = DescribeConfigsResponse.encode(response, version=version)
+    decoded = DescribeConfigsResponse.decode(encoded, version=version)
+    assert decoded == response
 
 
 @pytest.mark.parametrize("version", range(CreateAclsRequest.min_version, CreateAclsRequest.max_version + 1))
