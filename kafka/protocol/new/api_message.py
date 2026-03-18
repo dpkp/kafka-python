@@ -87,7 +87,7 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
     def __init__(self, *args, **kwargs):
         self._header = None
         if 'version' not in kwargs:
-            kwargs['version'] = self._class_version
+            kwargs['version'] = self._class_version # pylint: disable=E1101
         super().__init__(*args, **kwargs)
 
     @classproperty
