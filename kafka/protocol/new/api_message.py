@@ -87,10 +87,19 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
             if not cls.is_request():
                 ResponseClassRegistry.register_response_class(weakref.proxy(cls))
 
+    def __new__(cls, *args, **kwargs):
+        # Translate "versioned" classes back to primary w/ version= kwarg on construction
+        if cls._class_version is not None:
+            if kwargs.get('version', cls._class_version) != cls._class_version: # pylint: disable=E1101
+                raise ValueError("Version has already been set by class")
+            kwargs['version'] = cls._class_version
+            instance = super().__new__(cls[None])
+            instance.__init__(*args, **kwargs)
+            return instance
+        return super().__new__(cls)
+
     def __init__(self, *args, **kwargs):
         self._header = None
-        if 'version' not in kwargs:
-            kwargs['version'] = self._class_version # pylint: disable=E1101
         super().__init__(*args, **kwargs)
 
     @classproperty
@@ -144,8 +153,6 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
 
     @API_VERSION.setter
     def API_VERSION(self, version):
-        if self._class_version is not None and self._class_version != version: # pylint: disable=E1101
-            raise ValueError("Version has already been set by class")
         if not 0 <= version <= self.max_version:
             raise ValueError('Invalid version %s (max version is %s).' % (version, self.max_version))
         self._version = version
