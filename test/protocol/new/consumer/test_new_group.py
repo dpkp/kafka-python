@@ -293,6 +293,7 @@ def test_offset_commit_request_roundtrip(version):
                     partition_index=0,
                     committed_offset=100,
                     committed_leader_epoch=1 if version >= 6 else -1,
+                    commit_timestamp=1 if version == 1 else -1,
                     committed_metadata="meta"
                 )
             ]
