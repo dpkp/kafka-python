@@ -22,9 +22,19 @@ class DataContainer(metaclass=SlotsBuilder):
                         field.set_data_class(type(field.type_str, (DataContainer,), {'_struct': field}))
                     setattr(cls, field.type_str, field.data_class)
 
-    def __init__(self, version=None, **field_vals):
+    def __init__(self, *args, version=None, **field_vals):
         assert self._struct is not None
         self._version = version
+        # Support positional arg init for convenience
+        if len(args) > 0:
+            if self._version is not None:
+                field_args = [field for field in self._struct._fields if field.for_version_q(self._version)]
+            else:
+                field_args = self._struct._fields
+            if len(args) > len(field_args):
+                raise RuntimeError('Unable to init DataContainer with %d positional args: unexpected %d' % (len(args), len(field_args)))
+            field_vals.update({field_args[i].name: arg for i, arg in enumerate(args)})
+            args = ()
         self.tags = None
         self.unknown_tags = None
         for field in self._struct._fields:

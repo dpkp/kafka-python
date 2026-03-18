@@ -86,15 +86,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
 
     def __init__(self, *args, **kwargs):
         self._header = None
-        self._version = None
-        if 'version' in kwargs:
-            self.API_VERSION = kwargs['version']
-        if len(args) > 0:
-            untagged_fields = self._struct.untagged_fields(self.API_VERSION)
-            if len(args) != len(untagged_fields):
-                raise RuntimeError('Unable to init ApiMessage via positional args: unexpected len')
-            kwargs.update({field.name: args[i] for i, field in enumerate(untagged_fields)})
-            args = ()
+        if 'version' not in kwargs:
+            kwargs['version'] = self._class_version # pylint: disable=E1101
         super().__init__(*args, **kwargs)
 
     @classproperty
