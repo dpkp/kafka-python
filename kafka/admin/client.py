@@ -308,7 +308,7 @@ class KafkaAdminClient(object):
             raise error_type(
                 "FindCoordinatorRequest failed with response '{}'."
                 .format(response))
-        return response.coordinator_id
+        return response.node_id
 
     def _find_coordinator_ids(self, group_ids):
         """Find the broker node_ids of the coordinators of the given groups.

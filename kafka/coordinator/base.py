@@ -802,12 +802,12 @@ class BaseCoordinator(object):
                   self.group_id, node_id, request)
         future = Future()
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_group_coordinator_response, future)
+        _f.add_callback(self._handle_find_coordinator_response, future)
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
 
-    def _handle_group_coordinator_response(self, future, response):
-        log.debug("Received group coordinator response %s", response)
+    def _handle_find_coordinator_response(self, future, response):
+        log.debug("Received find coordinator response %s", response)
 
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:

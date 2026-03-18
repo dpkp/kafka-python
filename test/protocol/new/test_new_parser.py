@@ -102,7 +102,7 @@ TEST_FIND_COORDINATOR = {
     'messages': (
         {
             'request': (
-                FindCoordinatorRequest[2](key='test-group-CYErjI'),
+                FindCoordinatorRequest[2]('test-group-CYErjI', 0),
                 b'\x00\x00\x00/\x00\n\x00\x02\x00\x00\x00\x01\x00\x11consumer_thread-1\x00\x11test-group-CYErjI\x00',
             ),
             'response': (
@@ -113,7 +113,7 @@ TEST_FIND_COORDINATOR = {
         },
         {
             'request': (
-                FindCoordinatorRequest[2](key='test-group-CYErjI'),
+                FindCoordinatorRequest[2]('test-group-CYErjI', 0),
                 b'\x00\x00\x00/\x00\n\x00\x02\x00\x00\x00\x02\x00\x11consumer_thread-1\x00\x11test-group-CYErjI\x00',
             ),
             'response': (
