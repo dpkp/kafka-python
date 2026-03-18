@@ -7,10 +7,13 @@ class FindCoordinatorResponse_v0(Response):
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('coordinator_id', Int32),
+        ('node_id', Int32),
         ('host', String('utf-8')),
         ('port', Int32)
     )
+    ALIASES = {
+        'coordinator_id': 'node_id',
+    }
 
 
 class FindCoordinatorResponse_v1(Response):
@@ -20,39 +23,49 @@ class FindCoordinatorResponse_v1(Response):
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('error_message', String('utf-8')),
-        ('coordinator_id', Int32),
+        ('node_id', Int32),
         ('host', String('utf-8')),
         ('port', Int32)
     )
+    ALIASES = FindCoordinatorResponse_v0.ALIASES
 
 
 class FindCoordinatorResponse_v2(Response):
     API_KEY = 10
     API_VERSION = 2
     SCHEMA = FindCoordinatorResponse_v1.SCHEMA
+    ALIASES = FindCoordinatorResponse_v1.ALIASES
 
 
 class FindCoordinatorRequest_v0(Request):
     API_KEY = 10
     API_VERSION = 0
     SCHEMA = Schema(
-        ('consumer_group', String('utf-8'))
+        ('key', String('utf-8'))
     )
+    ALIASES = {
+        'consumer_group': 'key',
+    }
 
 
 class FindCoordinatorRequest_v1(Request):
     API_KEY = 10
     API_VERSION = 1
     SCHEMA = Schema(
-        ('coordinator_key', String('utf-8')),
-        ('coordinator_type', Int8) # 0: consumer, 1: transaction
+        ('key', String('utf-8')),
+        ('key_type', Int8) # 0: consumer, 1: transaction
     )
+    ALIASES = {
+        'coordinator_key': 'key',
+        'coordinator_type': 'key_type',
+    }
 
 
 class FindCoordinatorRequest_v2(Request):
     API_KEY = 10
     API_VERSION = 2
     SCHEMA = FindCoordinatorRequest_v1.SCHEMA
+    ALIASES = FindCoordinatorRequest_v1.ALIASES
 
 
 FindCoordinatorRequest = [FindCoordinatorRequest_v0, FindCoordinatorRequest_v1, FindCoordinatorRequest_v2]
