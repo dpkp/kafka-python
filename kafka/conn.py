@@ -666,11 +666,11 @@ class BrokerConnection(object):
             self.close(error=error)
             return future.failure(error_type(self))
 
-        if self.config['sasl_mechanism'] not in response.enabled_mechanisms:
+        if self.config['sasl_mechanism'] not in response.mechanisms:
             future.failure(
                 Errors.UnsupportedSaslMechanismError(
                     'Kafka broker does not support %s sasl mechanism. Enabled mechanisms are: %s'
-                    % (self.config['sasl_mechanism'], response.enabled_mechanisms)))
+                    % (self.config['sasl_mechanism'], response.mechanisms)))
         else:
             self._sasl_authenticate(future)
 
