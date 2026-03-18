@@ -53,6 +53,10 @@ class DataContainer(metaclass=SlotsBuilder):
         if field_vals:
             raise ValueError('Unrecognized fields for type %s: %s' % (self._struct.name, field_vals))
 
+    @property
+    def version(self):
+        return self._version
+
     def encode(self, *args, **kwargs):
         """Add version= to kwargs, otherwise pass-through to _struct"""
         return self._struct.encode(self, *args, **kwargs)
