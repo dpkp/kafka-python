@@ -6,42 +6,47 @@ class ProduceResponse_v0(Response):
     API_KEY = 0
     API_VERSION = 0
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('responses', Array(
+            ('name', String('utf-8')),
+            ('partition_responses', Array(
+                ('index', Int32),
                 ('error_code', Int16),
-                ('offset', Int64)))))
+                ('base_offset', Int64)))))
     )
+    ALIASES = {
+        'topics': 'responses',
+    }
 
 
 class ProduceResponse_v1(Response):
     API_KEY = 0
     API_VERSION = 1
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('responses', Array(
+            ('name', String('utf-8')),
+            ('partition_responses', Array(
+                ('index', Int32),
                 ('error_code', Int16),
-                ('offset', Int64))))),
+                ('base_offset', Int64))))),
         ('throttle_time_ms', Int32)
     )
+    ALIASES = ProduceResponse_v0.ALIASES
 
 
 class ProduceResponse_v2(Response):
     API_KEY = 0
     API_VERSION = 2
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('responses', Array(
+            ('name', String('utf-8')),
+            ('partition_responses', Array(
+                ('index', Int32),
                 ('error_code', Int16),
-                ('offset', Int64),
-                ('timestamp', Int64))))),
+                ('base_offset', Int64),
+                ('log_append_time_ms', Int64))))),
         ('throttle_time_ms', Int32)
     )
+    ALIASES = ProduceResponse_v1.ALIASES
 
 
 class ProduceResponse_v3(Response):
@@ -49,6 +54,7 @@ class ProduceResponse_v3(Response):
     API_KEY = 0
     API_VERSION = 3
     SCHEMA = ProduceResponse_v2.SCHEMA
+    ALIASES = ProduceResponse_v2.ALIASES
 
 
 class ProduceResponse_v4(Response):
@@ -59,22 +65,24 @@ class ProduceResponse_v4(Response):
     API_KEY = 0
     API_VERSION = 4
     SCHEMA = ProduceResponse_v3.SCHEMA
+    ALIASES = ProduceResponse_v3.ALIASES
 
 
 class ProduceResponse_v5(Response):
     API_KEY = 0
     API_VERSION = 5
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('responses', Array(
+            ('name', String('utf-8')),
+            ('partition_responses', Array(
+                ('index', Int32),
                 ('error_code', Int16),
-                ('offset', Int64),
-                ('timestamp', Int64),
+                ('base_offset', Int64),
+                ('log_append_time_ms', Int64),
                 ('log_start_offset', Int64))))),
         ('throttle_time_ms', Int32)
     )
+    ALIASES = ProduceResponse_v4.ALIASES
 
 
 class ProduceResponse_v6(Response):
@@ -84,6 +92,7 @@ class ProduceResponse_v6(Response):
     API_KEY = 0
     API_VERSION = 6
     SCHEMA = ProduceResponse_v5.SCHEMA
+    ALIASES = ProduceResponse_v5.ALIASES
 
 
 class ProduceResponse_v7(Response):
@@ -93,6 +102,7 @@ class ProduceResponse_v7(Response):
     API_KEY = 0
     API_VERSION = 7
     SCHEMA = ProduceResponse_v6.SCHEMA
+    ALIASES = ProduceResponse_v6.ALIASES
 
 
 class ProduceResponse_v8(Response):
@@ -103,13 +113,13 @@ class ProduceResponse_v8(Response):
     API_KEY = 0
     API_VERSION = 8
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('responses', Array(
+            ('name', String('utf-8')),
+            ('partition_responses', Array(
+                ('index', Int32),
                 ('error_code', Int16),
-                ('offset', Int64),
-                ('timestamp', Int64),
+                ('base_offset', Int64),
+                ('log_append_time_ms', Int64),
                 ('log_start_offset', Int64),
                 ('record_errors', (Array(
                     ('batch_index', Int32),
@@ -119,13 +129,14 @@ class ProduceResponse_v8(Response):
              ))),
         ('throttle_time_ms', Int32)
     )
+    ALIASES = ProduceResponse_v7.ALIASES
 
 
 class ProduceRequest(Request):
     API_KEY = 0
 
     def expect_response(self):
-        if self.required_acks == 0: # pylint: disable=no-member
+        if self.acks == 0: # pylint: disable=no-member
             return False
         return True
 
@@ -133,24 +144,31 @@ class ProduceRequest(Request):
 class ProduceRequest_v0(ProduceRequest):
     API_VERSION = 0
     SCHEMA = Schema(
-        ('required_acks', Int16),
-        ('timeout', Int32),
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('acks', Int16),
+        ('timeout_ms', Int32),
+        ('topic_data', Array(
+            ('name', String('utf-8')),
+            ('partition_data', Array(
+                ('index', Int32),
                 ('records', Bytes)))))
     )
+    ALIASES = {
+        'required_acks': 'acks',
+        'timeout': 'timeout_ms',
+        'topics': 'topic_data',
+    }
 
 
 class ProduceRequest_v1(ProduceRequest):
     API_VERSION = 1
     SCHEMA = ProduceRequest_v0.SCHEMA
+    ALIASES = ProduceRequest_v0.ALIASES
 
 
 class ProduceRequest_v2(ProduceRequest):
     API_VERSION = 2
     SCHEMA = ProduceRequest_v1.SCHEMA
+    ALIASES = ProduceRequest_v1.ALIASES
 
 
 class ProduceRequest_v3(ProduceRequest):
@@ -158,14 +176,15 @@ class ProduceRequest_v3(ProduceRequest):
     API_VERSION = 3
     SCHEMA = Schema(
         ('transactional_id', String('utf-8')),
-        ('required_acks', Int16),
-        ('timeout', Int32),
-        ('topics', Array(
-            ('topic', String('utf-8')),
-            ('partitions', Array(
-                ('partition', Int32),
+        ('acks', Int16),
+        ('timeout_ms', Int32),
+        ('topic_data', Array(
+            ('name', String('utf-8')),
+            ('partition_data', Array(
+                ('index', Int32),
                 ('records', Bytes)))))
     )
+    ALIASES = ProduceRequest_v2.ALIASES
 
 
 class ProduceRequest_v4(ProduceRequest):
@@ -175,6 +194,7 @@ class ProduceRequest_v4(ProduceRequest):
     """
     API_VERSION = 4
     SCHEMA = ProduceRequest_v3.SCHEMA
+    ALIASES = ProduceRequest_v3.ALIASES
 
 
 class ProduceRequest_v5(ProduceRequest):
@@ -184,6 +204,7 @@ class ProduceRequest_v5(ProduceRequest):
     """
     API_VERSION = 5
     SCHEMA = ProduceRequest_v4.SCHEMA
+    ALIASES = ProduceRequest_v4.ALIASES
 
 
 class ProduceRequest_v6(ProduceRequest):
@@ -192,6 +213,7 @@ class ProduceRequest_v6(ProduceRequest):
     """
     API_VERSION = 6
     SCHEMA = ProduceRequest_v5.SCHEMA
+    ALIASES = ProduceRequest_v5.ALIASES
 
 
 class ProduceRequest_v7(ProduceRequest):
@@ -200,6 +222,7 @@ class ProduceRequest_v7(ProduceRequest):
     """
     API_VERSION = 7
     SCHEMA = ProduceRequest_v6.SCHEMA
+    ALIASES = ProduceRequest_v6.ALIASES
 
 
 class ProduceRequest_v8(ProduceRequest):
@@ -209,6 +232,7 @@ class ProduceRequest_v8(ProduceRequest):
     """
     API_VERSION = 8
     SCHEMA = ProduceRequest_v7.SCHEMA
+    ALIASES = ProduceRequest_v7.ALIASES
 
 
 ProduceRequest = [
