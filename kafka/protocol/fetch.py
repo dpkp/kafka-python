@@ -12,14 +12,17 @@ class FetchResponse_v0(Response):
     API_KEY = 1
     API_VERSION = 0
     SCHEMA = Schema(
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('records', Bytes)))))
     )
+    ALIASES = {
+        'topics': 'responses',
+    }
 
 
 class FetchResponse_v1(Response):
@@ -27,26 +30,29 @@ class FetchResponse_v1(Response):
     API_VERSION = 1
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('records', Bytes)))))
     )
+    ALIASES = FetchResponse_v0.ALIASES
 
 
 class FetchResponse_v2(Response):
     API_KEY = 1
     API_VERSION = 2
     SCHEMA = FetchResponse_v1.SCHEMA  # message format changed internally
+    ALIASES = FetchResponse_v1.ALIASES
 
 
 class FetchResponse_v3(Response):
     API_KEY = 1
     API_VERSION = 3
     SCHEMA = FetchResponse_v2.SCHEMA
+    ALIASES = FetchResponse_v2.ALIASES
 
 
 class FetchResponse_v4(Response):
@@ -55,18 +61,19 @@ class FetchResponse_v4(Response):
     API_VERSION = 4
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('last_stable_offset', Int64),
                 ('aborted_transactions', Array(
                     ('producer_id', Int64),
                     ('first_offset', Int64))),
                 ('records', Bytes)))))
     )
+    ALIASES = FetchResponse_v3.ALIASES
 
 
 class FetchResponse_v5(Response):
@@ -74,12 +81,12 @@ class FetchResponse_v5(Response):
     API_VERSION = 5
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('last_stable_offset', Int64),
                 ('log_start_offset', Int64),
                 ('aborted_transactions', Array(
@@ -87,6 +94,7 @@ class FetchResponse_v5(Response):
                     ('first_offset', Int64))),
                 ('records', Bytes)))))
     )
+    ALIASES = FetchResponse_v4.ALIASES
 
 
 class FetchResponse_v6(Response):
@@ -97,6 +105,7 @@ class FetchResponse_v6(Response):
     API_KEY = 1
     API_VERSION = 6
     SCHEMA = FetchResponse_v5.SCHEMA
+    ALIASES = FetchResponse_v5.ALIASES
 
 
 class FetchResponse_v7(Response):
@@ -109,12 +118,12 @@ class FetchResponse_v7(Response):
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('session_id', Int32),
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('last_stable_offset', Int64),
                 ('log_start_offset', Int64),
                 ('aborted_transactions', Array(
@@ -122,24 +131,28 @@ class FetchResponse_v7(Response):
                     ('first_offset', Int64))),
                 ('records', Bytes)))))
     )
+    ALIASES = FetchResponse_v6.ALIASES
 
 
 class FetchResponse_v8(Response):
     API_KEY = 1
     API_VERSION = 8
     SCHEMA = FetchResponse_v7.SCHEMA
+    ALIASES = FetchResponse_v7.ALIASES
 
 
 class FetchResponse_v9(Response):
     API_KEY = 1
     API_VERSION = 9
-    SCHEMA = FetchResponse_v7.SCHEMA
+    SCHEMA = FetchResponse_v8.SCHEMA
+    ALIASES = FetchResponse_v8.ALIASES
 
 
 class FetchResponse_v10(Response):
     API_KEY = 1
     API_VERSION = 10
-    SCHEMA = FetchResponse_v7.SCHEMA
+    SCHEMA = FetchResponse_v9.SCHEMA
+    ALIASES = FetchResponse_v9.ALIASES
 
 
 class FetchResponse_v11(Response):
@@ -149,12 +162,12 @@ class FetchResponse_v11(Response):
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('session_id', Int32),
-        ('topics', Array(
-            ('topics', String('utf-8')),
+        ('responses', Array(
+            ('topic', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16),
-                ('highwater_offset', Int64),
+                ('high_watermark', Int64),
                 ('last_stable_offset', Int64),
                 ('log_start_offset', Int64),
                 ('aborted_transactions', Array(
@@ -163,6 +176,7 @@ class FetchResponse_v11(Response):
                 ('preferred_read_replica', Int32),
                 ('records', Bytes)))))
     )
+    ALIASES = FetchResponse_v10.ALIASES
 
 
 class FetchRequest_v0(Request):
@@ -170,27 +184,32 @@ class FetchRequest_v0(Request):
     API_VERSION = 0
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('topics', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('offset', Int64),
-                ('max_bytes', Int32)))))
+                ('fetch_offset', Int64),
+                ('partition_max_bytes', Int32)))))
     )
+    ALIASES = {
+        'max_wait_time': 'max_wait_ms',
+    }
 
 
 class FetchRequest_v1(Request):
     API_KEY = 1
     API_VERSION = 1
     SCHEMA = FetchRequest_v0.SCHEMA
+    ALIASES = FetchRequest_v0.ALIASES
 
 
 class FetchRequest_v2(Request):
     API_KEY = 1
     API_VERSION = 2
     SCHEMA = FetchRequest_v1.SCHEMA
+    ALIASES = FetchRequest_v1.ALIASES
 
 
 class FetchRequest_v3(Request):
@@ -198,16 +217,17 @@ class FetchRequest_v3(Request):
     API_VERSION = 3
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),  # This new field is only difference from FR_v2
         ('topics', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('offset', Int64),
-                ('max_bytes', Int32)))))
+                ('fetch_offset', Int64),
+                ('partition_max_bytes', Int32)))))
     )
+    ALIASES = FetchRequest_v2.ALIASES
 
 
 class FetchRequest_v4(Request):
@@ -217,7 +237,7 @@ class FetchRequest_v4(Request):
     API_VERSION = 4
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),
         ('isolation_level', Int8),
@@ -225,9 +245,10 @@ class FetchRequest_v4(Request):
             ('topic', String('utf-8')),
             ('partitions', Array(
                 ('partition', Int32),
-                ('offset', Int64),
-                ('max_bytes', Int32)))))
+                ('fetch_offset', Int64),
+                ('partition_max_bytes', Int32)))))
     )
+    ALIASES = FetchRequest_v3.ALIASES
 
 
 class FetchRequest_v5(Request):
@@ -236,7 +257,7 @@ class FetchRequest_v5(Request):
     API_VERSION = 5
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),
         ('isolation_level', Int8),
@@ -246,8 +267,9 @@ class FetchRequest_v5(Request):
                 ('partition', Int32),
                 ('fetch_offset', Int64),
                 ('log_start_offset', Int64),
-                ('max_bytes', Int32)))))
+                ('partition_max_bytes', Int32)))))
     )
+    ALIASES = FetchRequest_v4.ALIASES
 
 
 class FetchRequest_v6(Request):
@@ -259,6 +281,7 @@ class FetchRequest_v6(Request):
     API_KEY = 1
     API_VERSION = 6
     SCHEMA = FetchRequest_v5.SCHEMA
+    ALIASES = FetchRequest_v5.ALIASES
 
 
 class FetchRequest_v7(Request):
@@ -269,7 +292,7 @@ class FetchRequest_v7(Request):
     API_VERSION = 7
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),
         ('isolation_level', Int8),
@@ -281,12 +304,13 @@ class FetchRequest_v7(Request):
                 ('partition', Int32),
                 ('fetch_offset', Int64),
                 ('log_start_offset', Int64),
-                ('max_bytes', Int32))))),
+                ('partition_max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(Int32))
         )),
     )
+    ALIASES = FetchRequest_v6.ALIASES
 
 
 class FetchRequest_v8(Request):
@@ -296,6 +320,7 @@ class FetchRequest_v8(Request):
     API_KEY = 1
     API_VERSION = 8
     SCHEMA = FetchRequest_v7.SCHEMA
+    ALIASES = FetchRequest_v7.ALIASES
 
 
 class FetchRequest_v9(Request):
@@ -306,7 +331,7 @@ class FetchRequest_v9(Request):
     API_VERSION = 9
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),
         ('isolation_level', Int8),
@@ -319,12 +344,13 @@ class FetchRequest_v9(Request):
                 ('current_leader_epoch', Int32),
                 ('fetch_offset', Int64),
                 ('log_start_offset', Int64),
-                ('max_bytes', Int32))))),
+                ('partition_max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(Int32)),
         )),
     )
+    ALIASES = FetchRequest_v8.ALIASES
 
 
 class FetchRequest_v10(Request):
@@ -334,6 +360,7 @@ class FetchRequest_v10(Request):
     API_KEY = 1
     API_VERSION = 10
     SCHEMA = FetchRequest_v9.SCHEMA
+    ALIASES = FetchRequest_v9.ALIASES
 
 
 class FetchRequest_v11(Request):
@@ -344,7 +371,7 @@ class FetchRequest_v11(Request):
     API_VERSION = 11
     SCHEMA = Schema(
         ('replica_id', Int32),
-        ('max_wait_time', Int32),
+        ('max_wait_ms', Int32),
         ('min_bytes', Int32),
         ('max_bytes', Int32),
         ('isolation_level', Int8),
@@ -357,13 +384,14 @@ class FetchRequest_v11(Request):
                 ('current_leader_epoch', Int32),
                 ('fetch_offset', Int64),
                 ('log_start_offset', Int64),
-                ('max_bytes', Int32))))),
+                ('partition_max_bytes', Int32))))),
         ('forgotten_topics_data', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(Int32))
         )),
         ('rack_id', String('utf-8')),
     )
+    ALIASES = FetchRequest_v10.ALIASES
 
 
 FetchRequest = [
