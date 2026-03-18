@@ -46,6 +46,8 @@
           "about": "True if the configuration is read-only." },
         { "name": "ConfigSource", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,
           "about": "The configuration source." },
+        { "name": "IsDefault", "type": "bool", "versions": "0",
+          "about": "True if the configuration is not set." },
         { "name": "IsSensitive", "type": "bool", "versions": "0+",
           "about": "True if this configuration is sensitive." },
         { "name": "Synonyms", "type": "[]DescribeConfigsSynonym", "versions": "1+", "ignorable": true,
