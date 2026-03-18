@@ -66,7 +66,7 @@ TEST_CASES = [
 def test_parse(msg, encoded):
     msg.with_header(correlation_id=1, client_id='_internal_client_kYVL')
     assert msg.encode(header=True, framed=True) == encoded
-    assert msg.decode(encoded, header=True, framed=True) == msg
+    assert msg.__class__.decode(encoded, version=msg.version, header=True, framed=True) == msg
 
 
 @pytest.mark.parametrize('version', [0, 1, 2, 3, 4])

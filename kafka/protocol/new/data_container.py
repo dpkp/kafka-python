@@ -53,6 +53,10 @@ class DataContainer(metaclass=SlotsBuilder):
         if field_vals:
             raise ValueError('Unrecognized fields for type %s: %s' % (self._struct.name, field_vals))
 
+    @property
+    def version(self):
+        return self._version
+
     def encode(self, *args, **kwargs):
         """Add version= to kwargs, otherwise pass-through to _struct"""
         return self._struct.encode(self, *args, **kwargs)
@@ -67,8 +71,14 @@ class DataContainer(metaclass=SlotsBuilder):
         return cls._struct.fields
 
     def __repr__(self):
-        key_vals = ['%s=%s' % (field.name, repr(getattr(self, field.name)))
-                    for field in self._struct._fields]
+        if self._version is not None:
+            v_filter = lambda field: field.for_version_q(self._version)
+            key_vals = ['version=%s' % self._version]
+        else:
+            v_filter = lambda field: True
+            key_vals = []
+        for field in filter(v_filter, self._struct._fields):
+            key_vals.append('%s=%s' % (field.name, repr(getattr(self, field.name))))
         return self.__class__.__name__ + '(' + ', '.join(key_vals) + ')'
 
     def __eq__(self, other):
