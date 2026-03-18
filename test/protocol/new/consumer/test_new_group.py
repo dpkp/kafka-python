@@ -2,6 +2,7 @@ import pytest
 
 from kafka.protocol.new.metadata import FindCoordinatorRequest, FindCoordinatorResponse
 from kafka.protocol.new.consumer import (
+    DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
     JoinGroupRequest, JoinGroupResponse,
     SyncGroupRequest, SyncGroupResponse,
     LeaveGroupRequest, LeaveGroupResponse,
@@ -331,3 +332,11 @@ def test_offset_commit_response_roundtrip(version):
     encoded = OffsetCommitResponse.encode(data, version=version)
     decoded = OffsetCommitResponse.decode(encoded, version=version)
     assert decoded == data
+
+
+def test_default_generation_id():
+    assert DEFAULT_GENERATION_ID == -1
+
+
+def test_unknown_member_id():
+    assert UNKNOWN_MEMBER_ID == ''

@@ -1,6 +1,9 @@
 from ..api_message import ApiMessage
 
 
+DEFAULT_GENERATION_ID = -1
+UNKNOWN_MEMBER_ID = ''
+
 class JoinGroupRequest(ApiMessage): pass
 class JoinGroupResponse(ApiMessage): pass
 
@@ -21,6 +24,7 @@ class OffsetCommitResponse(ApiMessage): pass
 
 
 __all__ = [
+    'DEFAULT_GENERATION_ID', 'UNKNOWN_MEMBER_ID',
     'JoinGroupRequest', 'JoinGroupResponse',
     'SyncGroupRequest', 'SyncGroupResponse',
     'LeaveGroupRequest', 'LeaveGroupResponse',
