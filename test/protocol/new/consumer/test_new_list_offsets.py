@@ -1,6 +1,9 @@
 import pytest
 
-from kafka.protocol.new.consumer import ListOffsetsRequest, ListOffsetsResponse
+from kafka.protocol.new.consumer import (
+    ListOffsetsRequest, ListOffsetsResponse,
+    UNKNOWN_OFFSET, OffsetResetStrategy,
+)
 
 
 @pytest.mark.parametrize("version", range(ListOffsetsRequest.min_version, ListOffsetsRequest.max_version + 1))
@@ -54,3 +57,14 @@ def test_list_offsets_response_roundtrip(version):
     encoded = ListOffsetsResponse.encode(data, version=version)
     decoded = ListOffsetsResponse.decode(encoded, version=version)
     assert decoded == data
+
+
+def test_unknown_offset():
+    assert UNKNOWN_OFFSET == -1
+
+
+def test_offset_reset_strategies():
+    assert OffsetResetStrategy.LATEST == -1
+    assert OffsetResetStrategy.EARLIEST == -2
+    assert OffsetResetStrategy.NONE == 0
+
