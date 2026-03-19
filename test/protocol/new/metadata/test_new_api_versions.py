@@ -76,3 +76,48 @@ def test_parse_flexible_error(version):
     msg.with_header(correlation_id=1)
     encoded = b'\x00\x00\x00\x10\x00\x00\x00\x01\x00#\x00\x00\x00\x01\x00\x12\x00\x00\x00\x03'
     assert ApiVersionsResponse[version].decode(encoded, header=True, framed=True) == msg
+
+
+@pytest.mark.parametrize("version", range(ApiVersionsRequest.min_version, ApiVersionsRequest.max_version + 1))
+def test_api_versions_request_roundtrip(version):
+    request = ApiVersionsRequest(
+        client_software_name='foo' if version >= 3 else '',
+        client_software_version='123' if version >= 3 else '',
+    )
+    encoded = request.encode(version=version)
+    decoded = ApiVersionsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", range(ApiVersionsResponse.min_version, ApiVersionsResponse.max_version + 1))
+def test_api_versions_response_roundtrip(version):
+    ApiVersion = ApiVersionsResponse.ApiVersion
+    SupportedFeatureKey = ApiVersionsResponse.SupportedFeatureKey
+    FinalizedFeatureKey = ApiVersionsResponse.FinalizedFeatureKey
+    response = ApiVersionsResponse(
+        error_code=0,
+        api_keys=[
+            ApiVersion(api_key=1, min_version=0, max_version=10),
+            ApiVersion(3, 2, 5),
+        ],
+        throttle_time_ms=123 if version >= 1 else 0,
+        supported_features=[
+            SupportedFeatureKey(
+                name='foo',
+                min_version=1,
+                max_version=3,
+            ),
+        ] if version >= 3 else [],
+        finalized_features_epoch=5555 if version >= 3 else -1,
+        finalized_features=[
+            FinalizedFeatureKey(
+                name='bar',
+                max_version_level=3,
+                min_version_level=2,
+            ),
+        ] if version >= 3 else [],
+        zk_migration_ready=True if version >= 3 else False,
+    )
+    encoded = response.encode(version=version)
+    decoded = ApiVersionsResponse.decode(encoded, version=version)
+    assert decoded == response
