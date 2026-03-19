@@ -23,7 +23,7 @@ def test_produce_request_roundtrip(version):
         topic_data=topic_data
     )
 
-    encoded = ProduceRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = ProduceRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -49,6 +49,6 @@ def test_produce_response_roundtrip(version):
         throttle_time_ms=10 if version >= 1 else 0
     )
 
-    encoded = ProduceResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = ProduceResponse.decode(encoded, version=version)
     assert decoded == data

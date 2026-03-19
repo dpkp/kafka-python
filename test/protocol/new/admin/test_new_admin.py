@@ -30,14 +30,14 @@ def test_create_topics_request_roundtrip(version):
             configs=[]
         )
     ]
-    data = CreateTopicsRequest(
+    request = CreateTopicsRequest(
         topics=topics,
         timeout_ms=10000,
         validate_only=False
     )
-    encoded = CreateTopicsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = CreateTopicsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DeleteTopicsRequest.min_version, DeleteTopicsRequest.max_version + 1))
@@ -50,47 +50,47 @@ def test_delete_topics_request_roundtrip(version):
         for t_name in topic_names:
             topics.append(Topic(name=t_name, topic_id=uuid.uuid4()))
     
-    data = DeleteTopicsRequest(
+    request = DeleteTopicsRequest(
         topic_names=topic_names if version < 6 else [],
         timeout_ms=10000,
         topics=topics
     )
-    encoded = DeleteTopicsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DeleteTopicsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DescribeGroupsRequest.min_version, DescribeGroupsRequest.max_version + 1))
 def test_describe_groups_request_roundtrip(version):
-    data = DescribeGroupsRequest(
+    request = DescribeGroupsRequest(
         groups=["group-1"],
         include_authorized_operations=True if version >= 3 else False
     )
-    encoded = DescribeGroupsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DescribeGroupsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(ListGroupsRequest.min_version, ListGroupsRequest.max_version + 1))
 def test_list_groups_request_roundtrip(version):
-    data = ListGroupsRequest(
+    request = ListGroupsRequest(
         states_filter=["Stable"] if version >= 4 else []
     )
-    encoded = ListGroupsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = ListGroupsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DescribeClusterRequest.min_version, DescribeClusterRequest.max_version + 1))
 def test_describe_cluster_request_roundtrip(version):
-    data = DescribeClusterRequest(
+    request = DescribeClusterRequest(
         include_cluster_authorized_operations=True,
         endpoint_type=1 if version >= 1 else 1,
         include_fenced_brokers=False if version >= 2 else False
     )
-    encoded = DescribeClusterRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DescribeClusterRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DescribeConfigsRequest.min_version, DescribeConfigsRequest.max_version + 1))
@@ -161,12 +161,12 @@ def test_create_acls_request_roundtrip(version):
             permission_type=3
         )
     ]
-    data = CreateAclsRequest(
+    request = CreateAclsRequest(
         creations=creations
     )
-    encoded = CreateAclsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = CreateAclsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(CreatePartitionsRequest.min_version, CreatePartitionsRequest.max_version + 1))
@@ -182,19 +182,19 @@ def test_create_partitions_request_roundtrip(version):
             ]
         )
     ]
-    data = CreatePartitionsRequest(
+    request = CreatePartitionsRequest(
         topics=topic_partitions,
         timeout_ms=10000,
         validate_only=False
     )
-    encoded = CreatePartitionsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = CreatePartitionsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DescribeAclsRequest.min_version, DescribeAclsRequest.max_version + 1))
 def test_describe_acls_request_roundtrip(version):
-    data = DescribeAclsRequest(
+    request = DescribeAclsRequest(
         resource_type_filter=2,
         resource_name_filter="test-topic",
         pattern_type_filter=3 if version >= 1 else 3,
@@ -203,9 +203,9 @@ def test_describe_acls_request_roundtrip(version):
         operation=3,
         permission_type=3
     )
-    encoded = DescribeAclsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DescribeAclsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(DeleteAclsRequest.min_version, DeleteAclsRequest.max_version + 1))
@@ -222,9 +222,9 @@ def test_delete_acls_request_roundtrip(version):
             permission_type=3
         )
     ]
-    data = DeleteAclsRequest(
+    request = DeleteAclsRequest(
         filters=filters
     )
-    encoded = DeleteAclsRequest.encode(data, version=version)
+    encoded = request.encode(version=version)
     decoded = DeleteAclsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request

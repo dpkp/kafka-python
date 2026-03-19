@@ -1,5 +1,5 @@
-
 import pytest
+
 from kafka.protocol.new.producer import (
     InitProducerIdRequest, InitProducerIdResponse,
     AddPartitionsToTxnRequest, AddPartitionsToTxnResponse,
@@ -7,6 +7,7 @@ from kafka.protocol.new.producer import (
     EndTxnRequest, EndTxnResponse,
     TxnOffsetCommitRequest, TxnOffsetCommitResponse,
 )
+
 
 @pytest.mark.parametrize("version", range(InitProducerIdRequest.min_version, InitProducerIdRequest.max_version + 1))
 def test_init_producer_id_request_roundtrip(version):
@@ -16,9 +17,10 @@ def test_init_producer_id_request_roundtrip(version):
         producer_id=-1,
         producer_epoch=-1
     )
-    encoded = InitProducerIdRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = InitProducerIdRequest.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(InitProducerIdResponse.min_version, InitProducerIdResponse.max_version + 1))
 def test_init_producer_id_response_roundtrip(version):
@@ -28,9 +30,10 @@ def test_init_producer_id_response_roundtrip(version):
         producer_id=12345,
         producer_epoch=1
     )
-    encoded = InitProducerIdResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = InitProducerIdResponse.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(AddPartitionsToTxnRequest.min_version, AddPartitionsToTxnRequest.max_version + 1))
 def test_add_partitions_to_txn_request_roundtrip(version):
@@ -73,9 +76,10 @@ def test_add_partitions_to_txn_request_roundtrip(version):
             v3_and_below_producer_epoch=0,
             v3_and_below_topics=[]
         )
-    encoded = AddPartitionsToTxnRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = AddPartitionsToTxnRequest.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(AddPartitionsToTxnResponse.min_version, AddPartitionsToTxnResponse.max_version + 1))
 def test_add_partitions_to_txn_response_roundtrip(version):
@@ -125,9 +129,10 @@ def test_add_partitions_to_txn_response_roundtrip(version):
             results_by_transaction=results_by_transaction,
             results_by_topic_v3_and_below=[]
         )
-    encoded = AddPartitionsToTxnResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = AddPartitionsToTxnResponse.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(AddOffsetsToTxnRequest.min_version, AddOffsetsToTxnRequest.max_version + 1))
 def test_add_offsets_to_txn_request_roundtrip(version):
@@ -137,9 +142,10 @@ def test_add_offsets_to_txn_request_roundtrip(version):
         producer_epoch=1,
         group_id="test-group"
     )
-    encoded = AddOffsetsToTxnRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = AddOffsetsToTxnRequest.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(AddOffsetsToTxnResponse.min_version, AddOffsetsToTxnResponse.max_version + 1))
 def test_add_offsets_to_txn_response_roundtrip(version):
@@ -147,9 +153,10 @@ def test_add_offsets_to_txn_response_roundtrip(version):
         throttle_time_ms=100 if version >= 1 else 0,
         error_code=0
     )
-    encoded = AddOffsetsToTxnResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = AddOffsetsToTxnResponse.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(EndTxnRequest.min_version, EndTxnRequest.max_version + 1))
 def test_end_txn_request_roundtrip(version):
@@ -159,9 +166,10 @@ def test_end_txn_request_roundtrip(version):
         producer_epoch=1,
         committed=True
     )
-    encoded = EndTxnRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = EndTxnRequest.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(EndTxnResponse.min_version, EndTxnResponse.max_version + 1))
 def test_end_txn_response_roundtrip(version):
@@ -169,9 +177,10 @@ def test_end_txn_response_roundtrip(version):
         throttle_time_ms=100 if version >= 1 else 0,
         error_code=0
     )
-    encoded = EndTxnResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = EndTxnResponse.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(TxnOffsetCommitRequest.min_version, TxnOffsetCommitRequest.max_version + 1))
 def test_txn_offset_commit_request_roundtrip(version):
@@ -200,9 +209,10 @@ def test_txn_offset_commit_request_roundtrip(version):
         group_instance_id=None,
         topics=topics
     )
-    encoded = TxnOffsetCommitRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = TxnOffsetCommitRequest.decode(encoded, version=version)
     assert decoded == data
+
 
 @pytest.mark.parametrize("version", range(TxnOffsetCommitResponse.min_version, TxnOffsetCommitResponse.max_version + 1))
 def test_txn_offset_commit_response_roundtrip(version):
@@ -223,6 +233,6 @@ def test_txn_offset_commit_response_roundtrip(version):
         throttle_time_ms=100 if version >= 1 else 0,
         topics=topics
     )
-    encoded = TxnOffsetCommitResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = TxnOffsetCommitResponse.decode(encoded, version=version)
     assert decoded == data

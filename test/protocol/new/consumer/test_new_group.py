@@ -19,7 +19,7 @@ def test_find_coordinator_request_roundtrip(version):
         key_type=0,
         coordinator_keys=["test-group"] if version >= 4 else []
     )
-    encoded = FindCoordinatorRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = FindCoordinatorRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -45,7 +45,7 @@ def test_find_coordinator_response_roundtrip(version):
         port=9092 if version < 4 else 0,
         coordinators=coordinators if version >= 4 else []
     )
-    encoded = FindCoordinatorResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = FindCoordinatorResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -68,7 +68,7 @@ def test_join_group_request_roundtrip(version):
         protocols=protocols,
         reason="joining" if version >= 8 else None
     )
-    encoded = JoinGroupRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = JoinGroupRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -92,7 +92,7 @@ def test_join_group_response_roundtrip(version):
         member_id="test-member",
         members=members
     )
-    encoded = JoinGroupResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = JoinGroupResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -114,7 +114,7 @@ def test_sync_group_request_roundtrip(version):
         protocol_type="consumer" if version >= 5 else None,
         protocol_name="range" if version >= 5 else None
     )
-    encoded = SyncGroupRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SyncGroupRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -128,7 +128,7 @@ def test_sync_group_response_roundtrip(version):
         protocol_name="range" if version >= 5 else None,
         assignment=b"test-assignment"
     )
-    encoded = SyncGroupResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SyncGroupResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -141,7 +141,7 @@ def test_heartbeat_request_roundtrip(version):
         member_id="test-member",
         group_instance_id=None
     )
-    encoded = HeartbeatRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = HeartbeatRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -152,7 +152,7 @@ def test_heartbeat_response_roundtrip(version):
         throttle_time_ms=100 if version >= 1 else 0,
         error_code=0
     )
-    encoded = HeartbeatResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = HeartbeatResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -171,7 +171,7 @@ def test_leave_group_request_roundtrip(version):
         member_id="test-member" if version < 3 else "",
         members=members if version >= 3 else []
     )
-    encoded = LeaveGroupRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = LeaveGroupRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -190,7 +190,7 @@ def test_leave_group_response_roundtrip(version):
         error_code=0,
         members=members if version >= 3 else []
     )
-    encoded = LeaveGroupResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = LeaveGroupResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -226,7 +226,7 @@ def test_offset_fetch_request_roundtrip(version):
             require_stable=False
         )
 
-    encoded = OffsetFetchRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = OffsetFetchRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -279,7 +279,7 @@ def test_offset_fetch_response_roundtrip(version):
             groups=groups
         )
 
-    encoded = OffsetFetchResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = OffsetFetchResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -308,7 +308,7 @@ def test_offset_commit_request_roundtrip(version):
         retention_time_ms=5000 if 2 <= version <= 4 else -1,
         topics=topics
     )
-    encoded = OffsetCommitRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = OffsetCommitRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -330,7 +330,7 @@ def test_offset_commit_response_roundtrip(version):
         throttle_time_ms=100 if version >= 3 else 0,
         topics=topics
     )
-    encoded = OffsetCommitResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = OffsetCommitResponse.decode(encoded, version=version)
     assert decoded == data
 

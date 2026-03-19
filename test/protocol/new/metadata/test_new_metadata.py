@@ -19,7 +19,7 @@ def test_metadata_request_roundtrip(version):
         include_topic_authorized_operations=True if version >= 8 else False
     )
 
-    encoded = MetadataRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = MetadataRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -58,6 +58,6 @@ def test_metadata_response_roundtrip(version):
         authorized_operations=None
     )
 
-    encoded = MetadataResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = MetadataResponse.decode(encoded, version=version)
     assert decoded == data
