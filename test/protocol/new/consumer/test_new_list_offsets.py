@@ -8,55 +8,56 @@ from kafka.protocol.new.consumer import (
 
 @pytest.mark.parametrize("version", range(ListOffsetsRequest.min_version, ListOffsetsRequest.max_version + 1))
 def test_list_offsets_request_roundtrip(version):
-    topics = [
-        ListOffsetsRequest.ListOffsetsTopic(
-            name="topic-1",
-            partitions=[
-                ListOffsetsRequest.ListOffsetsTopic.ListOffsetsPartition(
-                    partition_index=0,
-                    current_leader_epoch=1 if version >= 9 else -1,
-                    timestamp=1000,
-                    max_num_offsets=2 if version == 0 else 1
-                )
-            ],
-        )
-    ]
-    data = ListOffsetsRequest(
+    Topic = ListOffsetsRequest.ListOffsetsTopic
+    Partition = Topic.ListOffsetsPartition
+    request = ListOffsetsRequest(
         replica_id=-1,
-        isolation_level=0, 
-        topics=topics
+        isolation_level=1 if version >= 2 else 0,
+        topics=[
+            Topic(
+                name="topic-1",
+                partitions=[
+                    Partition(
+                        partition_index=1,
+                        current_leader_epoch=1 if version >= 4 else -1,
+                        timestamp=1000,
+                        max_num_offsets=2 if version == 0 else 1
+                    )
+                ],
+            )
+        ],
+        timeout_ms=1000 if version >= 10 else 0,
     )
-
-    encoded = data.encode(version=version)
+    encoded = request.encode(version=version)
     decoded = ListOffsetsRequest.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == request
 
 
 @pytest.mark.parametrize("version", range(ListOffsetsResponse.min_version, ListOffsetsResponse.max_version + 1))
 def test_list_offsets_response_roundtrip(version):
-    topics = [
-        ListOffsetsResponse.ListOffsetsTopicResponse(
-            name="topic-1",
-            partitions=[
-                ListOffsetsResponse.ListOffsetsTopicResponse.ListOffsetsPartitionResponse(
-                    partition_index=0,
-                    error_code=0,
-                    old_style_offsets=[0] if version == 0 else [],
-                    timestamp=1000 if version >= 1 else -1,
-                    offset=1000 if version >= 1 else -1,
-                    leader_epoch=1 if version >= 4 else -1
-                )
-            ],
-        )
-    ]
-    data = ListOffsetsResponse(
+    Topic = ListOffsetsResponse.ListOffsetsTopicResponse
+    Partition = Topic.ListOffsetsPartitionResponse
+    response = ListOffsetsResponse(
         throttle_time_ms=10 if version >= 2 else 0,
-        topics=topics
+        topics=[
+            Topic(
+                name="topic-1",
+                partitions=[
+                    Partition(
+                        partition_index=1,
+                        error_code=2,
+                        old_style_offsets=[0] if version == 0 else [],
+                        timestamp=1000 if version >= 1 else -1,
+                        offset=1000 if version >= 1 else -1,
+                        leader_epoch=1 if version >= 4 else -1
+                    ),
+                ],
+            ),
+        ],
     )
-
-    encoded = data.encode(version=version)
+    encoded = response.encode(version=version)
     decoded = ListOffsetsResponse.decode(encoded, version=version)
-    assert decoded == data
+    assert decoded == response
 
 
 def test_unknown_offset():
