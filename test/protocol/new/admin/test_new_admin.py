@@ -40,6 +40,29 @@ def test_create_topics_request_roundtrip(version):
     assert decoded == request
 
 
+@pytest.mark.parametrize("version", range(CreateTopicsResponse.min_version, CreateTopicsResponse.max_version + 1))
+def test_create_topics_response_roundtrip(version):
+    Topic = CreateTopicsResponse.CreatableTopicResult
+    topics = [
+        Topic(
+            name="test-topic",
+            error_code=13,
+            error_message='foo' if version >= 1 else '',
+            topic_config_error_code=2 if version >= 5 else 0,
+            num_partitions=1 if version >= 5 else -1,
+            replication_factor=1 if version >= 5 else -1,
+            configs=[]
+        )
+    ]
+    response = CreateTopicsResponse(
+        throttle_time_ms=123 if version >= 2 else 0,
+        topics=topics,
+    )
+    encoded = response.encode(version=version)
+    decoded = CreateTopicsResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
 @pytest.mark.parametrize("version", range(DeleteTopicsRequest.min_version, DeleteTopicsRequest.max_version + 1))
 def test_delete_topics_request_roundtrip(version):
     topic_names = ["topic-1", "topic-2"]
