@@ -12,9 +12,9 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.new.metadata import FindCoordinatorRequest
-from kafka.protocol.group import (
+from kafka.protocol.new.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
-    DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, GroupMember,
+    DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
 )
 from kafka.util import Timer
 
@@ -215,7 +215,7 @@ class BaseCoordinator(object):
         Arguments:
             leader_id (str): The id of the leader (which is this member)
             protocol (str): the chosen group protocol (assignment strategy)
-            members (list): [GroupMember] from JoinGroupResponse.
+            members (list): [JoinGroupResponseMember] from JoinGroupResponse.
                 metadata_bytes are associated with the chosen group protocol,
                 and the Coordinator subclass is responsible for decoding
                 metadata_bytes based on that protocol.
@@ -697,14 +697,9 @@ class BaseCoordinator(object):
             Future: resolves to member assignment encoded-bytes
         """
         try:
-            members = [GroupMember(
-                           member_id=member[0],
-                           group_instance_id=member[1] if response.API_VERSION >= 5 else None,
-                           metadata=member[2] if response.API_VERSION >= 5 else member[1])
-                       for member in response.members]
             group_assignment = self._perform_assignment(response.leader,
                                                         response.protocol_name,
-                                                        members)
+                                                        response.members)
         except Exception as e:
             return Future().failure(e)
 
