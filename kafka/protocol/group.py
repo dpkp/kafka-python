@@ -18,19 +18,24 @@ class JoinGroupResponse_v0(Response):
     SCHEMA = Schema(
         ('error_code', Int16),
         ('generation_id', Int32),
-        ('group_protocol', String('utf-8')),
-        ('leader_id', String('utf-8')),
+        ('protocol_name', String('utf-8')),
+        ('leader', String('utf-8')),
         ('member_id', String('utf-8')),
         ('members', Array(
             ('member_id', String('utf-8')),
-            ('member_metadata', Bytes)))
+            ('metadata', Bytes)))
     )
+    ALIASES = {
+        'group_protocol': 'protocol_name',
+        'leader_id': 'leader',
+    }
 
 
 class JoinGroupResponse_v1(Response):
     API_KEY = 11
     API_VERSION = 1
     SCHEMA = JoinGroupResponse_v0.SCHEMA
+    ALIASES = JoinGroupResponse_v0.ALIASES
 
 
 class JoinGroupResponse_v2(Response):
@@ -40,25 +45,28 @@ class JoinGroupResponse_v2(Response):
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('generation_id', Int32),
-        ('group_protocol', String('utf-8')),
-        ('leader_id', String('utf-8')),
+        ('protocol_name', String('utf-8')),
+        ('leader', String('utf-8')),
         ('member_id', String('utf-8')),
         ('members', Array(
             ('member_id', String('utf-8')),
-            ('member_metadata', Bytes)))
+            ('metadata', Bytes)))
     )
+    ALIASES = JoinGroupResponse_v1.ALIASES
 
 
 class JoinGroupResponse_v3(Response):
     API_KEY = 11
     API_VERSION = 3
     SCHEMA = JoinGroupResponse_v2.SCHEMA
+    ALIASES = JoinGroupResponse_v2.ALIASES
 
 
 class JoinGroupResponse_v4(Response):
     API_KEY = 11
     API_VERSION = 4
     SCHEMA = JoinGroupResponse_v3.SCHEMA
+    ALIASES = JoinGroupResponse_v3.ALIASES
 
 
 class JoinGroupResponse_v5(Response):
@@ -68,77 +76,93 @@ class JoinGroupResponse_v5(Response):
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
         ('generation_id', Int32),
-        ('group_protocol', String('utf-8')),
-        ('leader_id', String('utf-8')),
+        ('protocol_name', String('utf-8')),
+        ('leader', String('utf-8')),
         ('member_id', String('utf-8')),
         ('members', Array(
             ('member_id', String('utf-8')),
             ('group_instance_id', String('utf-8')),
-            ('member_metadata', Bytes)))
+            ('metadata', Bytes)))
     )
+    ALIASES = JoinGroupResponse_v4.ALIASES
 
 
 class JoinGroupRequest_v0(Request):
     API_KEY = 11
     API_VERSION = 0
     SCHEMA = Schema(
-        ('group', String('utf-8')),
-        ('session_timeout', Int32),
+        ('group_id', String('utf-8')),
+        ('session_timeout_ms', Int32),
         ('member_id', String('utf-8')),
         ('protocol_type', String('utf-8')),
-        ('group_protocols', Array(
-            ('protocol_name', String('utf-8')),
-            ('protocol_metadata', Bytes)))
+        ('protocols', Array(
+            ('name', String('utf-8')),
+            ('metadata', Bytes)))
     )
+    ALIASES = {
+        'group': 'group_id',
+        'session_timeout': 'session_timeout_ms',
+        'group_protocols': 'protocols',
+    }
 
 
 class JoinGroupRequest_v1(Request):
     API_KEY = 11
     API_VERSION = 1
     SCHEMA = Schema(
-        ('group', String('utf-8')),
-        ('session_timeout', Int32),
-        ('rebalance_timeout', Int32),
+        ('group_id', String('utf-8')),
+        ('session_timeout_ms', Int32),
+        ('rebalance_timeout_ms', Int32),
         ('member_id', String('utf-8')),
         ('protocol_type', String('utf-8')),
-        ('group_protocols', Array(
-            ('protocol_name', String('utf-8')),
-            ('protocol_metadata', Bytes)))
+        ('protocols', Array(
+            ('name', String('utf-8')),
+            ('metadata', Bytes)))
     )
+    ALIASES = {
+        'group': 'group_id',
+        'session_timeout': 'session_timeout_ms',
+        'rebalance_timeout': 'rebalance_timeout_ms',
+        'group_protocols': 'protocols',
+    }
 
 
 class JoinGroupRequest_v2(Request):
     API_KEY = 11
     API_VERSION = 2
     SCHEMA = JoinGroupRequest_v1.SCHEMA
+    ALIASES = JoinGroupRequest_v1.ALIASES
 
 
 class JoinGroupRequest_v3(Request):
     API_KEY = 11
     API_VERSION = 3
     SCHEMA = JoinGroupRequest_v2.SCHEMA
+    ALIASES = JoinGroupRequest_v2.ALIASES
 
 
 class JoinGroupRequest_v4(Request):
     API_KEY = 11
     API_VERSION = 4
     SCHEMA = JoinGroupRequest_v3.SCHEMA
+    ALIASES = JoinGroupRequest_v3.ALIASES
 
 
 class JoinGroupRequest_v5(Request):
     API_KEY = 11
     API_VERSION = 5
     SCHEMA = Schema(
-        ('group', String('utf-8')),
-        ('session_timeout', Int32),
-        ('rebalance_timeout', Int32),
+        ('group_id', String('utf-8')),
+        ('session_timeout_ms', Int32),
+        ('rebalance_timeout_ms', Int32),
         ('member_id', String('utf-8')),
         ('group_instance_id', String('utf-8')),
         ('protocol_type', String('utf-8')),
-        ('group_protocols', Array(
-            ('protocol_name', String('utf-8')),
-            ('protocol_metadata', Bytes)))
+        ('protocols', Array(
+            ('name', String('utf-8')),
+            ('metadata', Bytes)))
     )
+    ALIASES = JoinGroupRequest_v4.ALIASES
 
 
 JoinGroupRequest = [
@@ -166,8 +190,11 @@ class SyncGroupResponse_v0(Response):
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('member_assignment', Bytes)
+        ('assignment', Bytes)
     )
+    ALIASES = {
+        'member_assignment': 'assignment',
+    }
 
 
 class SyncGroupResponse_v1(Response):
@@ -176,59 +203,69 @@ class SyncGroupResponse_v1(Response):
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
         ('error_code', Int16),
-        ('member_assignment', Bytes)
+        ('assignment', Bytes)
     )
+    ALIASES = SyncGroupResponse_v0.ALIASES
 
 
 class SyncGroupResponse_v2(Response):
     API_KEY = 14
     API_VERSION = 2
     SCHEMA = SyncGroupResponse_v1.SCHEMA
+    ALIASES = SyncGroupResponse_v1.ALIASES
 
 
 class SyncGroupResponse_v3(Response):
     API_KEY = 14
     API_VERSION = 3
     SCHEMA = SyncGroupResponse_v2.SCHEMA
+    ALIASES = SyncGroupResponse_v2.ALIASES
 
 
 class SyncGroupRequest_v0(Request):
     API_KEY = 14
     API_VERSION = 0
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('generation_id', Int32),
         ('member_id', String('utf-8')),
-        ('group_assignment', Array(
+        ('assignments', Array(
             ('member_id', String('utf-8')),
-            ('member_metadata', Bytes)))
+            ('assignment', Bytes)))
     )
+    ALIASES = {
+        'group': 'group_id',
+        'group_assignment': 'assignments',
+    }
 
 
 class SyncGroupRequest_v1(Request):
     API_KEY = 14
     API_VERSION = 1
     SCHEMA = SyncGroupRequest_v0.SCHEMA
+    ALIASES = SyncGroupRequest_v0.ALIASES
 
 
 class SyncGroupRequest_v2(Request):
     API_KEY = 14
     API_VERSION = 2
     SCHEMA = SyncGroupRequest_v1.SCHEMA
+    ALIASES = SyncGroupRequest_v1.ALIASES
 
 
 class SyncGroupRequest_v3(Request):
     API_KEY = 14
     API_VERSION = 3
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('generation_id', Int32),
         ('member_id', String('utf-8')),
         ('group_instance_id', String('utf-8')),
-        ('group_assignment', Array(
+        ('assignments', Array(
             ('member_id', String('utf-8')),
-            ('member_metadata', Bytes)))
+            ('assignment', Bytes)))
     )
+    ALIASES = SyncGroupRequest_v2.ALIASES
 
 
 SyncGroupRequest = [
@@ -285,33 +322,39 @@ class HeartbeatRequest_v0(Request):
     API_KEY = 12
     API_VERSION = 0
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('generation_id', Int32),
         ('member_id', String('utf-8'))
     )
+    ALIASES = {
+        'group': 'group_id',
+    }
 
 
 class HeartbeatRequest_v1(Request):
     API_KEY = 12
     API_VERSION = 1
     SCHEMA = HeartbeatRequest_v0.SCHEMA
+    ALIASES = HeartbeatRequest_v0.ALIASES
 
 
 class HeartbeatRequest_v2(Request):
     API_KEY = 12
     API_VERSION = 2
     SCHEMA = HeartbeatRequest_v1.SCHEMA
+    ALIASES = HeartbeatRequest_v1.ALIASES
 
 
 class HeartbeatRequest_v3(Request):
     API_KEY = 12
     API_VERSION = 3
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('generation_id', Int32),
         ('member_id', String('utf-8')),
         ('group_instance_id', String('utf-8'))
     )
+    ALIASES = HeartbeatRequest_v2.ALIASES
 
 
 HeartbeatRequest = [
@@ -364,32 +407,38 @@ class LeaveGroupRequest_v0(Request):
     API_KEY = 13
     API_VERSION = 0
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('member_id', String('utf-8'))
     )
+    ALIASES = {
+        'group': 'group_id',
+    }
 
 
 class LeaveGroupRequest_v1(Request):
     API_KEY = 13
     API_VERSION = 1
     SCHEMA = LeaveGroupRequest_v0.SCHEMA
+    ALIASES = LeaveGroupRequest_v0.ALIASES
 
 
 class LeaveGroupRequest_v2(Request):
     API_KEY = 13
     API_VERSION = 2
     SCHEMA = LeaveGroupRequest_v1.SCHEMA
+    ALIASES = LeaveGroupRequest_v1.ALIASES
 
 
 class LeaveGroupRequest_v3(Request):
     API_KEY = 13
     API_VERSION = 3
     SCHEMA = Schema(
-        ('group', String('utf-8')),
+        ('group_id', String('utf-8')),
         ('members', Array(
             ('member_id', String('utf-8')),
             ('group_instance_id', String('utf-8'))))
     )
+    ALIASES = LeaveGroupRequest_v2.ALIASES
 
 
 LeaveGroupRequest = [

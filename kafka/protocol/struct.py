@@ -14,6 +14,17 @@ class Struct(metaclass=abc.ABCMeta):
         """An instance of Schema() representing the structure"""
         pass
 
+    ALIASES = {} # for compatibility with new protocol defs from json
+    def __getattr__(self, name):
+        if name in self.ALIASES:
+            return getattr(self, self.ALIASES[name])
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        if name in self.ALIASES:
+            name = self.ALIASES[name]
+        return super().__setattr__(name, value)
+
     def __init__(self, *args, **kwargs):
         if self.SCHEMA.has_tagged_fields():
             # Dont require TaggedFields value in *args
@@ -30,6 +41,9 @@ class Struct(metaclass=abc.ABCMeta):
             if self.SCHEMA.has_tagged_fields():
                 if kwargs.get('tags') is None:
                     kwargs['tags'] = {}
+            for name in self.ALIASES:
+                if name in kwargs:
+                    kwargs[self.ALIASES[name]] = kwargs.pop(name)
             for name in self.SCHEMA.names:
                 setattr(self, name, kwargs.pop(name, None))
             if kwargs:

@@ -9,11 +9,12 @@ class BaseApiVersionsResponse(Response):
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('api_versions', Array(
+        ('api_keys', Array(
             ('api_key', Int16),
             ('min_version', Int16),
             ('max_version', Int16)))
     )
+    ALIASES = {'api_versions': 'api_keys'}
 
     @classmethod
     def decode(cls, data, header=False, framed=False):
@@ -37,11 +38,12 @@ class ApiVersionsResponse_v0(Response):
     API_VERSION = 0
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('api_versions', Array(
+        ('api_keys', Array(
             ('api_key', Int16),
             ('min_version', Int16),
             ('max_version', Int16)))
     )
+    ALIASES = {'api_versions': 'api_keys'}
 
 
 class ApiVersionsResponse_v1(BaseApiVersionsResponse):
@@ -49,7 +51,7 @@ class ApiVersionsResponse_v1(BaseApiVersionsResponse):
     API_VERSION = 1
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('api_versions', Array(
+        ('api_keys', Array(
             ('api_key', Int16),
             ('min_version', Int16),
             ('max_version', Int16))),
@@ -68,7 +70,7 @@ class ApiVersionsResponse_v3(BaseApiVersionsResponse):
     API_VERSION = 3
     SCHEMA = Schema(
         ('error_code', Int16),
-        ('api_versions', CompactArray(
+        ('api_keys', CompactArray(
             ('api_key', Int16),
             ('min_version', Int16),
             ('max_version', Int16),

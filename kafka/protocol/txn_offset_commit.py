@@ -8,9 +8,9 @@ class TxnOffsetCommitResponse_v0(Response):
     SCHEMA = Schema(
         ('throttle_time_ms', Int32),
         ('topics', Array(
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
+                ('partition_index', Int32),
                 ('error_code', Int16))))))
 
 
@@ -35,11 +35,11 @@ class TxnOffsetCommitRequest_v0(Request):
         ('producer_id', Int64),
         ('producer_epoch', Int16),
         ('topics', Array(
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
-                ('offset', Int64),
-                ('metadata', String('utf-8')))))))
+                ('partition_index', Int32),
+                ('committed_offset', Int64),
+                ('committed_metadata', String('utf-8')))))))
 
 
 class TxnOffsetCommitRequest_v1(Request):
@@ -57,12 +57,12 @@ class TxnOffsetCommitRequest_v2(Request):
         ('producer_id', Int64),
         ('producer_epoch', Int16),
         ('topics', Array(
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('partitions', Array(
-                ('partition', Int32),
-                ('offset', Int64),
-                ('leader_epoch', Int32),
-                ('metadata', String('utf-8')))))))
+                ('partition_index', Int32),
+                ('committed_offset', Int64),
+                ('committed_leader_epoch', Int32),
+                ('committed_metadata', String('utf-8')))))))
 
 
 TxnOffsetCommitRequest = [
