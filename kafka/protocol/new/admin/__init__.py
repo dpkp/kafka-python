@@ -1,4 +1,5 @@
 from .acl import *
+from .client_quotas import *
 from .cluster import *
 from .groups import *
 from .topics import *
@@ -9,6 +10,9 @@ __all__ = [
     'DescribeAclsRequest', 'DescribeAclsResponse',
     'ACLResourceType', 'ACLOperation',
     'ACLPermissionType', 'ACLResourcePatternType',
+
+    'AlterClientQuotasRequest', 'AlterClientQuotasResponse',
+    'DescribeClientQuotasRequest', 'DescribeClientQuotasResponse',
 
     'DescribeClusterRequest', 'DescribeClusterResponse',
     'DescribeConfigsRequest', 'DescribeConfigsResponse',
@@ -23,5 +27,8 @@ __all__ = [
     'CreateTopicsRequest', 'CreateTopicsResponse',
     'DeleteTopicsRequest', 'DeleteTopicsResponse',
     'CreatePartitionsRequest', 'CreatePartitionsResponse',
+    'AlterPartitionRequest', 'AlterPartitionResponse',
+    'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse',
+    'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse',
     'DeleteRecordsRequest', 'DeleteRecordsResponse',
 ]

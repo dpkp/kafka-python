@@ -19,9 +19,7 @@ class ElectLeadersRequest(ApiMessage): pass
 class ElectLeadersResponse(ApiMessage): pass
 
 class ElectionType(IntEnum):
-    """ Leader election type
-    """
-
+    """Leader election type"""
     PREFERRED = 0,
     UNCLEAN = 1
 
