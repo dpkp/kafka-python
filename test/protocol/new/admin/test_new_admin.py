@@ -83,6 +83,24 @@ def test_delete_topics_request_roundtrip(version):
     assert decoded == request
 
 
+@pytest.mark.parametrize("version", range(DeleteTopicsResponse.min_version, DeleteTopicsResponse.max_version + 1))
+def test_delete_topics_response_roundtrip(version):
+    Topic = DeleteTopicsResponse.DeletableTopicResult
+    response = DeleteTopicsResponse(
+        throttle_time_ms=123 if version >= 1 else 0,
+        responses=[
+            Topic(
+                name="topic-1",
+                error_code=123,
+                error_message='foo' if version >= 5 else None,
+            )
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = DeleteTopicsResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
 @pytest.mark.parametrize("version", range(DescribeGroupsRequest.min_version, DescribeGroupsRequest.max_version + 1))
 def test_describe_groups_request_roundtrip(version):
     request = DescribeGroupsRequest(
