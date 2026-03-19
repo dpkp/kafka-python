@@ -23,8 +23,10 @@ class TaggedFields:
         for tag, val in tags:
             ret.append(UnsignedVarInt32.encode(tag))
             # Tags that are structs never include nested tagged fields
-            ret.append(self._tags[tag].encode(val, version=version,
-                                              compact=True, tagged=False))
+            encoded_val = self._tags[tag].encode(val, version=version,
+                                                 compact=True, tagged=False)
+            ret.append(UnsignedVarInt32.encode(len(encoded_val)))
+            ret.append(encoded_val)
         return b''.join(ret)
 
     def decode(self, data, version=None, compact=True, tagged=False):
