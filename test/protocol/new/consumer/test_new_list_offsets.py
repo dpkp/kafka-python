@@ -27,7 +27,7 @@ def test_list_offsets_request_roundtrip(version):
         topics=topics
     )
 
-    encoded = ListOffsetsRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = ListOffsetsRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -54,7 +54,7 @@ def test_list_offsets_response_roundtrip(version):
         topics=topics
     )
 
-    encoded = ListOffsetsResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = ListOffsetsResponse.decode(encoded, version=version)
     assert decoded == data
 

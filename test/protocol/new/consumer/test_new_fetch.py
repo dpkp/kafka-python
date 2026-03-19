@@ -75,7 +75,7 @@ def test_fetch_request_roundtrip(version):
         topics=topic_data
     )
 
-    encoded = FetchRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = FetchRequest.decode(encoded, version=version)
     
     assert decoded == data
@@ -122,7 +122,7 @@ def test_fetch_response_roundtrip(version):
         responses=resp_topic_data
     )
 
-    encoded = FetchResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = FetchResponse.decode(encoded, version=version)
     
     assert decoded == data

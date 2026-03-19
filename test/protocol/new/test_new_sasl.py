@@ -11,7 +11,7 @@ def test_sasl_handshake_request_roundtrip(version):
     data = SaslHandshakeRequest(
         mechanism="PLAIN"
     )
-    encoded = SaslHandshakeRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SaslHandshakeRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -22,7 +22,7 @@ def test_sasl_handshake_response_roundtrip(version):
         error_code=0,
         mechanisms=["PLAIN", "SCRAM-SHA-256"]
     )
-    encoded = SaslHandshakeResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SaslHandshakeResponse.decode(encoded, version=version)
     assert decoded == data
 
@@ -32,7 +32,7 @@ def test_sasl_authenticate_request_roundtrip(version):
     data = SaslAuthenticateRequest(
         auth_bytes=b"sasl-payload"
     )
-    encoded = SaslAuthenticateRequest.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SaslAuthenticateRequest.decode(encoded, version=version)
     assert decoded == data
 
@@ -45,6 +45,6 @@ def test_sasl_authenticate_response_roundtrip(version):
         auth_bytes=b"server-payload",
         session_lifetime_ms=3600000 if version >= 1 else 0
     )
-    encoded = SaslAuthenticateResponse.encode(data, version=version)
+    encoded = data.encode(version=version)
     decoded = SaslAuthenticateResponse.decode(encoded, version=version)
     assert decoded == data
