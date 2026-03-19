@@ -60,7 +60,7 @@ class SimpleField(BaseField):
             return int(default)
         elif self._type is UUID:
             if not default:
-                return UUID.ZERO_UUID
+                return None
             else:
                 return uuid.UUID(default)
         elif self._type is Float64:
