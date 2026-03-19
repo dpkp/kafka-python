@@ -405,7 +405,7 @@ class Sender(threading.Thread):
             batches_by_partition = dict([(batch.topic_partition, batch)
                                          for batch in batches])
 
-            for topic, partitions in response.topics:
+            for topic, partitions in response.responses:
                 for partition_info in partitions:
                     log_append_time = -1
                     log_start_offset = -1
@@ -609,17 +609,17 @@ class Sender(threading.Thread):
         if version >= 3:
             return ProduceRequest[version](
                 transactional_id=transactional_id,
-                required_acks=acks,
-                timeout=timeout,
-                topics=topic_partition_data,
+                acks=acks,
+                timeout_ms=timeout,
+                topic_data=topic_partition_data,
             )
         else:
             if transactional_id is not None:
                 log.warning('%s: Broker does not support ProduceRequest v3+, required for transactional_id', str(self))
             return ProduceRequest[version](
-                required_acks=acks,
-                timeout=timeout,
-                topics=topic_partition_data,
+                acks=acks,
+                timeout_ms=timeout,
+                topic_data=topic_partition_data,
             )
 
     def wakeup(self):
