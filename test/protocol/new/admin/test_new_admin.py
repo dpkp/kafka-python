@@ -60,7 +60,7 @@ def test_create_topics_response_roundtrip(version):
         topics=[
             Topic(
                 name="test-topic",
-                topic_id=uuid.uuid4() if version >= 7 else uuid.UUID(int=0),
+                topic_id=uuid.uuid4() if version >= 7 else None,
                 error_code=13,
                 error_message='foo' if version >= 1 else '',
                 topic_config_error_code=2 if version >= 5 else 0,

@@ -102,13 +102,18 @@ class UUID(AbstractType):
 
     @classmethod
     def encode(cls, value):
+        if value is None:
+            value = cls.ZERO_UUID
         if isinstance(value, uuid.UUID):
             return value.bytes
         return uuid.UUID(value).bytes
 
     @classmethod
     def decode(cls, data):
-        return uuid.UUID(bytes=data.read(16))
+        val = uuid.UUID(bytes=data.read(16))
+        if val == cls.ZERO_UUID:
+            return None
+        return val
 
 
 class String(AbstractType):
