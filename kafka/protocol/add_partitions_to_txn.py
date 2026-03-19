@@ -45,6 +45,7 @@ class AddPartitionsToTxnRequest_v0(Request):
         'transactional_id': 'v3_and_below_transactional_id',
         'producer_id': 'v3_and_below_producer_id',
         'producer_epoch': 'v3_and_below_producer_epoch',
+        'topics': 'v3_and_below_topics',
     }
 
 
