@@ -4,7 +4,11 @@ from ..api_message import ApiMessage
 
 
 class DescribeClusterRequest(ApiMessage): pass
-class DescribeClusterResponse(ApiMessage): pass
+class DescribeClusterResponse(ApiMessage):
+    @classmethod
+    def json_patch(cls, json):
+        json['fields'][7]['type'] = 'bitfield'
+        return json
 
 class DescribeConfigsRequest(ApiMessage): pass
 class DescribeConfigsResponse(ApiMessage): pass
