@@ -141,8 +141,9 @@ class Bytes(AbstractType):
     def encode(cls, value):
         if value is None:
             return Int32.encode(-1)
-        else:
-            return Int32.encode(len(value)) + value
+        elif not isinstance(value, bytes):
+            value = value.encode()
+        return Int32.encode(len(value)) + value
 
     @classmethod
     def decode(cls, data):

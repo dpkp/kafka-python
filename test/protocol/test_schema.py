@@ -3,7 +3,7 @@ import io
 import pytest
 
 from kafka.protocol.struct import Struct
-from kafka.protocol.types import Schema, Int32, String, TaggedFields
+from kafka.protocol.types import Schema, Int32, String, TaggedFields, Bytes
 
 
 def test_schema_type():
@@ -52,3 +52,12 @@ def test_struct(args, kwargs):
     data = struct(*args, **kwargs)
     assert data.encode() == encoded
     assert struct.decode(encoded) == data
+
+
+def test_bytes_struct():
+    schema = Schema(('f1', Int32), ('f2', String()))
+    struct = type('TestStruct', (Struct,), {'SCHEMA': schema})
+    data = struct(f1=123, f2="bar")
+    bytes_encoded = Bytes.encode(data)
+    assert bytes_encoded[4:] == data.encode()
+    assert bytes_encoded[:4] == Int32.encode(len(data.encode()))
