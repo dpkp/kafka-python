@@ -383,7 +383,7 @@ class KafkaAdminClient(object):
         self._wait_for_futures(futures)
         return [response_fn(future.value) for future in futures]
 
-    def _send_request_to_controller(self, request):
+    def _send_request_to_controller(self, request, get_errors_fn=lambda r: (), ignore_errors=(), raise_errors=True, tries=2):
         """Send a Kafka protocol message to the cluster controller.
 
         Will block until the message result is received.
@@ -391,60 +391,35 @@ class KafkaAdminClient(object):
         Arguments:
             request: The message to send.
 
+        Keyword Arguments:
+            get_errors_fn (func): Function to process response and return an iterable of Error types.
+            ignore_errors (tuple): Any non-zero error codes that should be ignored. Not used if raise_errors=False.
+            raise_errors (bool): Whether to raise unhandled errors (True, default) or return response with errors (False).
+            tries (int): Number of times to refresh controller id and retry on NotControllerIdError.
+
         Returns:
             The Kafka protocol response for the message.
         """
-        tries = 2  # in case our cached self._controller_id is outdated
+        # retry in case our controller_id is out of date
         while tries:
             tries -= 1
             response = self.send_request(request, node_id=self._controller_id)
-            # In Java, the error field name is inconsistent:
-            #  - CreateTopicsResponse / CreatePartitionsResponse uses topic_errors
-            #  - DeleteTopicsResponse uses topic_error_codes
-            # So this is a little brittle in that it assumes all responses have
-            # one of these attributes and that they always unpack into
-            # (topic, error_code) tuples.
-            topic_error_tuples = getattr(response, 'topic_errors', getattr(response, 'topic_error_codes', None))
-            if topic_error_tuples is not None:
-                success = self._parse_topic_request_response(topic_error_tuples, request, response, tries)
-            else:
-                # Leader Election request has a two layer error response (topic and partition)
-                success = self._parse_topic_partition_request_response(request, response, tries)
-
-            if success:
-                return response
-        raise RuntimeError("This should never happen, please file a bug with full stacktrace if encountered")
-
-    def _parse_topic_request_response(self, topic_error_tuples, request, response, tries):
-        for topic, error_code, *_ in topic_error_tuples:
-            error_type = Errors.for_code(error_code)
-            if tries and error_type is Errors.NotControllerError:
-                # No need to inspect the rest of the errors for
-                # non-retriable errors because NotControllerError should
-                # either be thrown for all errors or no errors.
-                self._refresh_controller_id()
-                return False
-            elif error_type is not Errors.NoError:
-                raise error_type(
-                    "Request '{}' failed with response '{}'."
-                    .format(request, response))
-        return True
-
-    def _parse_topic_partition_request_response(self, request, response, tries):
-        for topic, partition_results in response.replication_election_results:
-            for partition_id, error_code, *_ in partition_results:
-                error_type = Errors.for_code(error_code)
+            for error_type in get_errors_fn(response):
                 if tries and error_type is Errors.NotControllerError:
                     # No need to inspect the rest of the errors for
                     # non-retriable errors because NotControllerError should
                     # either be thrown for all errors or no errors.
                     self._refresh_controller_id()
-                    return False
-                elif error_type not in (Errors.NoError, Errors.ElectionNotNeededError):
-                    raise error_type(
-                        "Request '{}' failed with response '{}'."
-                        .format(request, response))
-        return True
+                    break
+                elif raise_errors:
+                    if error_type is not Errors.NoError and error_type not in ignore_errors:
+                        raise error_type(
+                            "Request '{}' failed with response '{}'."
+                            .format(request, response))
+            else:
+                # No controller refresh needed
+                return response
+        raise RuntimeError("Failed to find active controller id!")
 
     @staticmethod
     def _convert_new_topic_request(new_topic):
@@ -472,7 +447,7 @@ class KafkaAdminClient(object):
             ]
         )
 
-    def create_topics(self, new_topics, timeout_ms=None, validate_only=False):
+    def create_topics(self, new_topics, timeout_ms=None, validate_only=False, raise_errors=True):
         """Create new topics in the cluster.
 
         Arguments:
@@ -483,6 +458,7 @@ class KafkaAdminClient(object):
                 before the broker returns.
             validate_only (bool, optional): If True, don't actually create new topics.
                 Not supported by all versions. Default: False
+            raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
 
         Returns:
             Appropriate version of CreateTopicResponse class.
@@ -505,10 +481,12 @@ class KafkaAdminClient(object):
                 validate_only=validate_only
             )
         # TODO convert structs to a more pythonic interface
-        # TODO raise exceptions if errors
-        return self._send_request_to_controller(request)  # pylint: disable=E0606
+        def get_response_errors(r):
+            for topic in r.topics:
+                yield Errors.for_code(topic[1])
+        return self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
 
-    def delete_topics(self, topics, timeout_ms=None):
+    def delete_topics(self, topics, timeout_ms=None, raise_errors=True):
         """Delete topics from the cluster.
 
         Arguments:
@@ -517,18 +495,18 @@ class KafkaAdminClient(object):
         Keyword Arguments:
             timeout_ms (numeric, optional): Milliseconds to wait for topics to be deleted
                 before the broker returns.
+            raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
 
         Returns:
             Appropriate version of DeleteTopicsResponse class.
         """
         version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        return self._send_request_to_controller(
-            DeleteTopicsRequest[version](
-                topics=topics,
-                timeout=timeout_ms
-            )
-        )
+        request = DeleteTopicsRequest[version](topics=topics, timeout=timeout_ms)
+        def get_response_errors(r):
+            for response in r.responses:
+                yield Errors.for_code(response[1])
+        return self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
 
     def _process_metadata_response(self, metadata_response):
         obj = metadata_response.to_object()
@@ -1057,7 +1035,7 @@ class KafkaAdminClient(object):
             )
         )
 
-    def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False):
+    def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False, raise_errors=True):
         """Create additional partitions for an existing topic.
 
         Arguments:
@@ -1068,6 +1046,7 @@ class KafkaAdminClient(object):
                 created before the broker returns.
             validate_only (bool, optional): If True, don't actually create new partitions.
                 Default: False
+            raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
 
         Returns:
             Appropriate version of CreatePartitionsResponse class.
@@ -1079,7 +1058,10 @@ class KafkaAdminClient(object):
             timeout=timeout_ms,
             validate_only=validate_only
         )
-        return self._send_request_to_controller(request)
+        def get_response_errors(r):
+            for result in r.results:
+                yield Errors.for_code(result[1])
+        return self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
 
     def _get_leader_for_partitions(self, partitions, timeout_ms=None):
         """Finds ID of the leader node for every given topic partition.
@@ -1583,7 +1565,7 @@ class KafkaAdminClient(object):
             return self._get_all_topic_partitions()
         return self._convert_topic_partitions(topic_partitions)
 
-    def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None):
+    def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None, raise_errors=True):
         """Perform leader election on the topic partitions.
 
         :param election_type: Type of election to attempt. 0 for Perferred, 1 for Unclean
@@ -1602,7 +1584,17 @@ class KafkaAdminClient(object):
             timeout=timeout_ms,
         )
         # TODO convert structs to a more pythonic interface
-        return self._send_request_to_controller(request)
+        def get_response_errors(r):
+            if r.API_VERSION >= 1:
+                yield Errors.for_code(r.error_code)
+            for result in r.replica_election_results:
+                for partition in result[1]:
+                    yield Errors.for_code(partition[1])
+        ignore_errors = (Errors.ElectionNotNeededError,)
+        return self._send_request_to_controller(request,
+                                                get_errors_fn=get_response_errors,
+                                                ignore_errors=ignore_errors,
+                                                raise_errors=raise_errors)
 
     def describe_log_dirs(self):
         """Send a DescribeLogDirsRequest request to a broker.
