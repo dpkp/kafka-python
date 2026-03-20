@@ -6,12 +6,11 @@ import logging
 import threading
 
 import kafka.errors as Errors
-from kafka.protocol.add_offsets_to_txn import AddOffsetsToTxnRequest
-from kafka.protocol.add_partitions_to_txn import AddPartitionsToTxnRequest
-from kafka.protocol.end_txn import EndTxnRequest
-from kafka.protocol.find_coordinator import FindCoordinatorRequest
-from kafka.protocol.init_producer_id import InitProducerIdRequest
-from kafka.protocol.txn_offset_commit import TxnOffsetCommitRequest
+from kafka.protocol.new.metadata import FindCoordinatorRequest
+from kafka.protocol.new.producer import (
+    AddOffsetsToTxnRequest, AddPartitionsToTxnRequest,
+    EndTxnRequest, InitProducerIdRequest, TxnOffsetCommitRequest,
+)
 from kafka.structs import TopicPartition
 
 

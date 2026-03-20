@@ -9,8 +9,7 @@ from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
 from kafka.producer.transaction_manager import ProducerIdAndEpoch
-from kafka.protocol.init_producer_id import InitProducerIdRequest
-from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.new.producer import InitProducerIdRequest, ProduceRequest
 from kafka.structs import TopicPartition
 from kafka.version import __version__
 
