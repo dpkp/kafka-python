@@ -480,6 +480,8 @@ class KafkaAdminClient(object):
                 timeout=timeout_ms,
                 validate_only=validate_only
             )
+        else:
+            raise RuntimeError('Version check error: %s' % version)
         # TODO convert structs to a more pythonic interface
         def get_response_errors(r):
             for topic in r.topics:
