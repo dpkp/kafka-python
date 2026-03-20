@@ -568,10 +568,8 @@ class KafkaAdminClient(object):
         return metadata['topics']
 
     def describe_cluster(self):
-        """
-        Fetch cluster-wide metadata such as the list of brokers, the controller ID,
+        """Fetch cluster-wide metadata such as the list of brokers, the controller ID,
         and the cluster ID.
-
 
         Returns:
             A dict with cluster-wide metadata, excluding topic details.
@@ -1068,11 +1066,15 @@ class KafkaAdminClient(object):
 
         Will raise UnknownTopicOrPartitionError if for some partition no leader can be found.
 
-        :param partitions: ``[TopicPartition]``: partitions for which to find leaders.
-        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
-            config.
+        Arguments:
+            partitions ([TopicPartition]): partitions for which to find leaders.
 
-        :return: Dictionary with ``{leader_id -> {partitions}}``
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Timeout in milliseconds, if None (default), will be read from
+                config.
+
+        Returns:
+            dict with ``{leader_id -> {partitions}}``
         """
         timeout_ms = self._validate_timeout(timeout_ms)
 
@@ -1102,15 +1104,19 @@ class KafkaAdminClient(object):
     def delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
         """Delete records whose offset is smaller than the given offset of the corresponding partition.
 
-        :param records_to_delete: ``{TopicPartition: int}``: The earliest available offsets for the
-            given partitions.
-        :param timeout_ms: ``float``: Timeout in milliseconds, if None (default), will be read from
-            config.
-        :param partition_leader_id: ``str``: If specified, all deletion requests will be sent to
-            this node. No check is performed verifying that this is indeed the leader for all
-            listed partitions: use with caution.
+        Arguments:
+            records_to_delete ({TopicPartition: int}): The earliest available offsets for the
+                given partitions.
 
-        :return: Dictionary {topicPartition -> metadata}, where metadata is returned by the broker.
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Timeout in milliseconds, if None (default), will be read from
+                config.
+            partition_leader_id (node_id / int, optional): If specified, all deletion requests will be sent to
+                this node. No check is performed verifying that this is indeed the leader for all
+                listed partitions: use with caution.
+
+        Returns:
+            dict {topicPartition -> metadata}, where metadata is returned by the broker.
             See DeleteRecordsResponse for possible fields. error_code for all partitions is
             guaranteed to be zero, otherwise an exception is raised.
         """
@@ -1568,13 +1574,18 @@ class KafkaAdminClient(object):
     def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None, raise_errors=True):
         """Perform leader election on the topic partitions.
 
-        :param election_type: Type of election to attempt. 0 for Perferred, 1 for Unclean
-        :param topic_partitions: A map of topic name strings to partition ids list.
-            By default, will run on all topic partitions
-        :param timeout_ms: Milliseconds to wait for the leader election process to complete
-            before the broker returns.
+        Arguments:
+            election_type: Type of election to attempt. 0 for Preferred, 1 for Unclean
 
-        :return: Appropriate version of ElectLeadersResponse class.
+        Keyword Arguments:
+            topic_partitions (dict): A map of topic name strings to partition ids list.
+                By default, will run on all topic partitions
+            timeout_ms (num, optional): Milliseconds to wait for the leader election process to complete
+                before the broker returns.
+            raise_errors (bool, optional): True/False whether to raise errors as exceptions. Default True.
+
+        Returns:
+            Appropriate version of ElectLeadersResponse class.
         """
         version = self._client.api_version(ElectLeadersRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
