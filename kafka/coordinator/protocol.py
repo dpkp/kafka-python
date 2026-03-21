@@ -13,14 +13,17 @@ class ConsumerProtocolMemberMetadata_v0(Struct):
 class ConsumerProtocolMemberAssignment_v0(Struct):
     SCHEMA = Schema(
         ('version', Int16),
-        ('assignment', Array(
+        ('assigned_partitions', Array(
             ('topic', String('utf-8')),
             ('partitions', Array(Int32)))),
         ('user_data', Bytes))
+    ALIASES = {
+        'assignment': 'assigned_partitions',
+    }
 
     def partitions(self):
         return [TopicPartition(topic, partition)
-                for topic, partitions in self.assignment # pylint: disable-msg=no-member
+                for topic, partitions in self.assigned_partitions
                 for partition in partitions]
 
 
