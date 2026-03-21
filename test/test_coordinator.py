@@ -4,8 +4,7 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient
-from kafka.consumer.subscription_state import (
-    SubscriptionState, ConsumerRebalanceListener)
+from kafka.consumer.subscription_state import SubscriptionState, ConsumerRebalanceListener
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
@@ -17,11 +16,12 @@ from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-from kafka.protocol.commit import (
+from kafka.protocol.new.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
-    OffsetFetchRequest, OffsetFetchResponse)
+    OffsetFetchRequest, OffsetFetchResponse,
+)
 from kafka.protocol.group import GroupMember
-from kafka.protocol.metadata import MetadataResponse
+from kafka.protocol.new.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
@@ -444,23 +444,23 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
     assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
 
 
-@pytest.mark.parametrize('api_version,req_type', [
-    ((0, 8, 1), OffsetCommitRequest[0]),
-    ((0, 8, 2), OffsetCommitRequest[1]),
-    ((0, 9), OffsetCommitRequest[2]),
-    ((0, 11), OffsetCommitRequest[3]),
-    ((2, 0), OffsetCommitRequest[4]),
-    ((2, 1), OffsetCommitRequest[6]),
+@pytest.mark.parametrize('api_version,version', [
+    ((0, 8, 1), 0),
+    ((0, 8, 2), 1),
+    ((0, 9), 2),
+    ((0, 11), 3),
+    ((2, 0), 4),
+    ((2, 1), 6),
 ])
 def test_send_offset_commit_request_versions(patched_coord, offsets,
-                                             api_version, req_type):
+                                             api_version, version):
     expect_node = 0
     patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
 
     patched_coord._send_offset_commit_request(offsets)
     (node, request), _ = patched_coord._client.send.call_args
     assert node == expect_node, 'Unexpected coordinator node'
-    assert isinstance(request, req_type)
+    assert request.API_VERSION == version
 
 
 def test_send_offset_commit_request_failure(patched_coord, offsets):
@@ -557,17 +557,17 @@ def test_send_offset_fetch_request_fail(mocker, patched_coord, partitions):
     assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
 
 
-@pytest.mark.parametrize('api_version,req_type', [
-    ((0, 8, 1), OffsetFetchRequest[0]),
-    ((0, 8, 2), OffsetFetchRequest[1]),
-    ((0, 9), OffsetFetchRequest[1]),
-    ((0, 10, 2), OffsetFetchRequest[2]),
-    ((0, 11), OffsetFetchRequest[3]),
-    ((2, 0), OffsetFetchRequest[4]),
-    ((2, 1), OffsetFetchRequest[5]),
+@pytest.mark.parametrize('api_version,version', [
+    ((0, 8, 1), 0),
+    ((0, 8, 2), 1),
+    ((0, 9), 1),
+    ((0, 10, 2), 2),
+    ((0, 11), 3),
+    ((2, 0), 4),
+    ((2, 1), 5),
 ])
 def test_send_offset_fetch_request_versions(patched_coord, partitions,
-                                            api_version, req_type):
+                                            api_version, version):
     # assuming fixture sets coordinator=0, least_loaded_node=1
     expect_node = 0
     patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
@@ -575,7 +575,7 @@ def test_send_offset_fetch_request_versions(patched_coord, partitions,
     patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args
     assert node == expect_node, 'Unexpected coordinator node'
-    assert isinstance(request, req_type)
+    assert request.API_VERSION == version
 
 
 def test_send_offset_fetch_request_failure(patched_coord, partitions):
