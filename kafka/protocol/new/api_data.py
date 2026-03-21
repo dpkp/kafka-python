@@ -86,7 +86,7 @@ class ApiData(DataContainer, metaclass=JsonSchemaData, init=False):
 
     @classmethod
     def parse_header(cls, data):
-        return cls.header_class.decode(data)
+        return cls.header_class.decode(data) # pylint: disable-msg=no-member
 
     def encode(self, version=None, header=True, framed=False):
         if version is not None:
