@@ -702,10 +702,6 @@ class BaseCoordinator(object):
             group_assignment = self._perform_assignment(response.leader_id,
                                                         response.group_protocol,
                                                         members)
-            for member_id, assignment in group_assignment.items():
-                if not isinstance(assignment, bytes):
-                    group_assignment[member_id] = assignment.encode()
-
         except Exception as e:
             return Future().failure(e)
 
