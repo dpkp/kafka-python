@@ -1,8 +1,9 @@
 import io
 import weakref
 
+from .api_data import JsonSchemaData
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
-from .data_container import DataContainer, SlotsBuilder
+from .data_container import DataContainer
 from .schemas import BaseField, StructField, load_json
 from .schemas.fields.codecs import Int32
 
@@ -48,19 +49,7 @@ class VersionSubscriptable(type):
         return cls._valid_versions[1] + 1
 
 
-class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
-    def __new__(metacls, name, bases, attrs, **kw):
-        # Pass init=False from base classes
-        if kw.get('init', True):
-            json = load_json(name)
-            if 'json_patch' in attrs:
-                json = attrs['json_patch'].__func__(metacls, json)
-            attrs['_json'] = json
-            attrs['_struct'] = StructField(json)
-            attrs['__doc__'] = json.get('doc')
-            attrs['__license__'] = json.get('license')
-        return super().__new__(metacls, name, bases, attrs, **kw)
-
+class ApiMessageData(VersionSubscriptable, JsonSchemaData):
     def __init__(cls, name, bases, attrs, **kw):
         super().__init__(name, bases, attrs, **kw)
         if kw.get('init', True):
@@ -68,12 +57,9 @@ class ApiMessageMeta(VersionSubscriptable, SlotsBuilder):
             # We'll get the brokers supported versions via ApiVersionsRequest
             if cls._struct._versions[0] > 0:
                 cls._struct._versions = (0, cls._struct._versions[1])
-            # Configure the StructField to use our ApiMessage wrapper
-            # and not construct a default DataContainer
-            cls._struct.set_data_class(weakref.proxy(cls))
 
 
-class ApiMessage(DataContainer, metaclass=ApiMessageMeta, init=False):
+class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
     __slots__ = ('_header')
 
     def __init_subclass__(cls, **kw):
