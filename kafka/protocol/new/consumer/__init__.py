@@ -1,5 +1,6 @@
 from .fetch import *
 from .group import *
+from .metadata import *
 from .offsets import *
 
 
@@ -13,4 +14,5 @@ __all__ = [
     'HeartbeatRequest', 'HeartbeatResponse',
     'OffsetFetchRequest', 'OffsetFetchResponse',
     'OffsetCommitRequest', 'OffsetCommitResponse',
+    'ConsumerProtocolType', 'ConsumerProtocolSubscription', 'ConsumerProtocolAssignment',
 ]
