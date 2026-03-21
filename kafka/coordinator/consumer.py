@@ -66,7 +66,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 a commit request completes.
             assignors (list): List of objects to use to distribute partition
                 ownership amongst consumer instances when group management is
-                used. Default: [RangePartitionAssignor, RoundRobinPartitionAssignor]
+                used. Default: [RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor]
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
