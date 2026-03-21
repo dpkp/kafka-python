@@ -1,7 +1,8 @@
 import abc
-import logging
 
-log = logging.getLogger(__name__)
+from kafka.protocol.new.consumer.metadata import (
+    ConsumerProtocolSubscription, ConsumerProtocolAssignment,
+)
 
 
 class AbstractPartitionAssignor(object):
@@ -26,7 +27,7 @@ class AbstractPartitionAssignor(object):
                 when available.
 
         Returns:
-            dict: {member_id: MemberAssignment}
+            dict: {member_id: ConsumerProtocolAssignment}
         """
         pass
 
@@ -38,7 +39,7 @@ class AbstractPartitionAssignor(object):
             topics (set): a member's subscribed topics
 
         Returns:
-            MemberMetadata struct
+            ConsumerProtocolSubscription
         """
         pass
 
@@ -50,7 +51,7 @@ class AbstractPartitionAssignor(object):
         partition assignor.
 
         Arguments:
-            assignment (MemberAssignment): the member's assignment
+            assignment (ConsumerProtocolAssignment): the member's assignment
             generation (int): generation id of assignment
         """
         pass
