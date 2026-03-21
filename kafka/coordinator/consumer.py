@@ -11,7 +11,6 @@ from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAs
 from kafka.protocol.new.consumer.metadata import (
     ConsumerProtocolType, ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
-from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
@@ -330,15 +329,10 @@ class ConsumerCoordinator(BaseCoordinator):
     def _perform_assignment(self, leader_id, assignment_strategy, members):
         assignor = self._lookup_assignor(assignment_strategy)
         assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
-        member_subscriptions = {}
         all_subscribed_topics = set()
         for member in members:
-            subscription = Subscription(
-                ConsumerProtocolSubscription.decode(member.metadata),
-                member.group_instance_id
-            )
-            member_subscriptions[member.member_id] = subscription
-            all_subscribed_topics.update(subscription.topics)
+            member.metadata = ConsumerProtocolSubscription.decode(member.metadata)
+            all_subscribed_topics.update(member.metadata.topics)
 
         # the leader will begin watching for changes to any of the topics
         # the group is interested in, which ensures that all metadata changes
@@ -356,9 +350,9 @@ class ConsumerCoordinator(BaseCoordinator):
 
         log.debug("Performing assignment for group %s using strategy %s"
                   " with subscriptions %s", self.group_id, assignor.name,
-                  member_subscriptions)
+                  members)
 
-        assignments = assignor.assign(self._cluster, member_subscriptions)
+        assignments = assignor.assign(self._cluster, members)
 
         log.debug("Finished assignment for group %s: %s", self.group_id, assignments)
 

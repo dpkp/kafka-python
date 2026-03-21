@@ -10,7 +10,7 @@ from kafka.coordinator.assignors.abstract import ConsumerProtocolAssignment
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-from kafka.coordinator.subscription import Subscription
+from kafka.protocol.new.consumer import JoinGroupResponse
 
 
 @pytest.fixture(autouse=True)
@@ -30,16 +30,26 @@ def create_cluster(mocker, topics, topics_partitions=None, topic_partitions_lamb
     return cluster
 
 
+def make_join_group_response_members(group_subscriptions):
+    return [
+        JoinGroupResponse.JoinGroupResponseMember(
+            member_id=member_id,
+            metadata=subscription,
+        )
+        for member_id, subscription in group_subscriptions.items()
+    ]
+
+
 def test_assignor_roundrobin(mocker):
     assignor = RoundRobinPartitionAssignor
 
-    group_subscriptions = {
-        'C0': Subscription(assignor.metadata({'t0', 't1'}), None),
-        'C1': Subscription(assignor.metadata({'t0', 't1'}), None),
-    }
+    members = make_join_group_response_members({
+        'C0': assignor.metadata({'t0', 't1'}),
+        'C1': assignor.metadata({'t0', 't1'}),
+    })
 
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
-    ret = assignor.assign(cluster, group_subscriptions)
+    ret = assignor.assign(cluster, members)
     expected = {
         'C0': ConsumerProtocolAssignment(
             assignor.version, [('t0', [0, 2]), ('t1', [1])], b''),
@@ -55,13 +65,13 @@ def test_assignor_roundrobin(mocker):
 def test_assignor_range(mocker):
     assignor = RangePartitionAssignor
 
-    group_subscriptions = {
-        'C0': Subscription(assignor.metadata({'t0', 't1'}), None),
-        'C1': Subscription(assignor.metadata({'t0', 't1'}), None),
-    }
+    members = make_join_group_response_members({
+        'C0': assignor.metadata({'t0', 't1'}),
+        'C1': assignor.metadata({'t0', 't1'}),
+    })
 
     cluster = create_cluster(mocker, {'t0', 't1'}, topics_partitions={0, 1, 2})
-    ret = assignor.assign(cluster, group_subscriptions)
+    ret = assignor.assign(cluster, members)
     expected = {
         'C0': ConsumerProtocolAssignment(
             assignor.version, [('t0', [0, 1]), ('t1', [0, 1])], b''),
@@ -72,6 +82,16 @@ def test_assignor_range(mocker):
     assert set(ret) == set(expected)
     for member in ret:
         assert ret[member].encode() == expected[member].encode()
+
+
+def make_member_metadata(subscriptions):
+    return [
+        JoinGroupResponse.JoinGroupResponseMember(
+            member_id=member_id,
+            metadata=StickyPartitionAssignor._metadata(topics, []),
+        )
+        for member_id, topics in subscriptions.items()
+    ]
 
 
 def test_sticky_assignor1(mocker):
@@ -112,7 +132,7 @@ def test_sticky_assignor1(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C0': ConsumerProtocolAssignment(
             StickyPartitionAssignor.version, [('t0', [0]), ('t1', [1]), ('t2', [0]), ('t3', [0])], b''
@@ -155,7 +175,7 @@ def test_sticky_assignor2(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
 
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C0': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t0', [0])], b''),
         'C1': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t1', [0, 1])], b''),
@@ -168,7 +188,7 @@ def test_sticky_assignor2(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C1': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t0', [0]), ('t1', [0, 1])], b''),
         'C2': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t2', [0, 1, 2])], b''),
@@ -329,7 +349,7 @@ def test_sticky_add_remove_consumer_one_topic(mocker):
             topics, assignment[member].partitions() if member in assignment else []
         )
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
 
     subscriptions = {
@@ -339,7 +359,7 @@ def test_sticky_add_remove_consumer_one_topic(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert len(assignment['C2'].assigned_partitions[0][1]) == 3
 
@@ -368,7 +388,7 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C1': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t1', [0, 2]), ('t2', [1])], b''),
         'C2': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t1', [1]), ('t2', [0, 2])], b''),
@@ -383,7 +403,7 @@ def test_sticky_add_remove_topic_two_consumers(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C1': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t2', [1])], b''),
         'C2': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [('t2', [0, 2])], b''),
@@ -414,7 +434,7 @@ def test_sticky_reassignment_after_one_consumer_leaves(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -437,7 +457,7 @@ def test_sticky_reassignment_after_one_consumer_added(mocker):
         member_metadata[member] = StickyPartitionAssignor._metadata(
             topics, assignment[member].partitions() if member in assignment else []
         )
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -462,7 +482,7 @@ def test_sticky_same_subscriptions(mocker):
     member_metadata = {}
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -495,7 +515,7 @@ def test_sticky_large_assignment_with_multiple_consumers_leaving(mocker):
             del subscriptions[member]
             del member_metadata[member]
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -518,7 +538,7 @@ def test_new_subscription(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -541,7 +561,7 @@ def test_move_existing_assignments(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, member_assignments[member])
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
 
 
@@ -571,7 +591,7 @@ def test_stickiness(mocker):
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -627,7 +647,7 @@ def test_no_exceptions_when_only_subscribed_topic_is_deleted(mocker):
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, sticky_assignment[member].partitions())
 
     cluster = create_cluster(mocker, topics={}, topics_partitions={})
-    sticky_assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    sticky_assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     expected_assignment = {
         'C': ConsumerProtocolAssignment(StickyPartitionAssignor.version, [], b''),
     }
@@ -646,7 +666,7 @@ def test_conflicting_previous_assignments(mocker):
         # assume both C1 and C2 have partition 1 assigned to them in generation 1
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, [TopicPartition('t', 0), TopicPartition('t', 0)], 1)
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
 
 
@@ -677,7 +697,7 @@ def test_reassignment_with_random_subscriptions_and_changes(mocker, execution_nu
     for member, topics in subscriptions.items():
         member_metadata[member] = StickyPartitionAssignor._metadata(topics, assignment[member].partitions())
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance(subscriptions, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
 
@@ -691,7 +711,7 @@ def test_assignment_with_multiple_generations1(mocker):
         'C3': StickyPartitionAssignor._metadata({'t'}, []),
     }
 
-    assignment1 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment1 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}, 'C3': {'t'}}, assignment1)
     assert len(assignment1['C1'].assigned_partitions[0][1]) == 2
     assert len(assignment1['C2'].assigned_partitions[0][1]) == 2
@@ -702,7 +722,7 @@ def test_assignment_with_multiple_generations1(mocker):
         'C2': StickyPartitionAssignor._metadata({'t'}, assignment1['C2'].partitions()),
     }
 
-    assignment2 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment2 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}}, assignment2)
     assert len(assignment2['C1'].assigned_partitions[0][1]) == 3
     assert len(assignment2['C2'].assigned_partitions[0][1]) == 3
@@ -715,7 +735,7 @@ def test_assignment_with_multiple_generations1(mocker):
         'C3': StickyPartitionAssignor._metadata({'t'}, assignment1['C3'].partitions(), 1),
     }
 
-    assignment3 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment3 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C2': {'t'}, 'C3': {'t'}}, assignment3)
     assert len(assignment3['C2'].assigned_partitions[0][1]) == 3
     assert len(assignment3['C3'].assigned_partitions[0][1]) == 3
@@ -731,7 +751,7 @@ def test_assignment_with_multiple_generations2(mocker):
         'C3': StickyPartitionAssignor._metadata({'t'}, []),
     }
 
-    assignment1 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment1 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}, 'C3': {'t'}}, assignment1)
     assert len(assignment1['C1'].assigned_partitions[0][1]) == 2
     assert len(assignment1['C2'].assigned_partitions[0][1]) == 2
@@ -741,7 +761,7 @@ def test_assignment_with_multiple_generations2(mocker):
         'C2': StickyPartitionAssignor._metadata({'t'}, assignment1['C2'].partitions(), 1),
     }
 
-    assignment2 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment2 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C2': {'t'}}, assignment2)
     assert len(assignment2['C2'].assigned_partitions[0][1]) == 6
     assert all([partition in assignment2['C2'].assigned_partitions[0][1] for partition in assignment1['C2'].assigned_partitions[0][1]])
@@ -753,7 +773,7 @@ def test_assignment_with_multiple_generations2(mocker):
         'C3': StickyPartitionAssignor._metadata({'t'}, assignment1['C3'].partitions(), 1),
     }
 
-    assignment3 = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment3 = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}, 'C3': {'t'}}, assignment3)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
     assert set(assignment3['C1'].assigned_partitions[0][1]) == set(assignment1['C1'].assigned_partitions[0][1])
@@ -779,16 +799,9 @@ def test_assignment_with_conflicting_previous_generations(mocker, execution_numb
     for member in member_assignments:
         member_metadata[member] = StickyPartitionAssignor._metadata({'t'}, member_assignments[member], member_generations[member])
 
-    assignment = StickyPartitionAssignor.assign(cluster, member_metadata)
+    assignment = StickyPartitionAssignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}, 'C3': {'t'}}, assignment)
     assert StickyPartitionAssignor._latest_partition_movements.are_sticky()
-
-
-def make_member_metadata(subscriptions):
-    member_metadata = {}
-    for member, topics in subscriptions.items():
-        member_metadata[member] = StickyPartitionAssignor._metadata(topics, [])
-    return member_metadata
 
 
 def assert_assignment(result_assignment, expected_assignment):

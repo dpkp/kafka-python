@@ -13,7 +13,6 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
 from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
-from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
@@ -192,10 +191,16 @@ def test_subscription_listener_failure(mocker, coordinator):
 
 def test_perform_assignment(mocker, coordinator):
     coordinator._subscription.subscribe(topics=['foo1'])
-    group_subscriptions = {
-        'member-foo': Subscription(ConsumerProtocolSubscription(0, ['foo1'], b''), None),
-        'member-bar': Subscription(ConsumerProtocolSubscription(0, ['foo1'], b''), None),
-    }
+    members = [
+        JoinGroupResponse.JoinGroupResponseMember(
+            member_id='member-foo',
+            metadata=ConsumerProtocolSubscription(0, ['foo1'], b'').encode(),
+        ),
+        JoinGroupResponse.JoinGroupResponseMember(
+            member_id='member-bar',
+            metadata=ConsumerProtocolSubscription(0, ['foo1'], b'').encode(),
+        ),
+    ]
     assignments = {
         'member-foo': ConsumerProtocolAssignment(
             0, [('foo1', [0])], b''),
@@ -207,15 +212,12 @@ def test_perform_assignment(mocker, coordinator):
     RoundRobinPartitionAssignor.assign.return_value = assignments
 
     ret = coordinator._perform_assignment(
-        'member-foo', 'roundrobin',
-        [JoinGroupResponse.JoinGroupResponseMember(
-            member_id=member_id,
-            metadata=subscription.encode(),
-         ) for member_id, subscription in group_subscriptions.items()])
+        'member-foo', 'roundrobin', members,
+    )
 
     assert RoundRobinPartitionAssignor.assign.call_count == 1
     RoundRobinPartitionAssignor.assign.assert_called_with(
-        coordinator._client.cluster, group_subscriptions)
+        coordinator._client.cluster, members)
     assert ret == assignments
 
 

@@ -48,10 +48,10 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
     version = 0
 
     @classmethod
-    def assign(cls, cluster, group_subscriptions):
+    def assign(cls, cluster, members):
         all_topics = set()
-        for subscription in group_subscriptions.values():
-            all_topics.update(subscription.topics)
+        for member in members:
+            all_topics.update(member.metadata.topics)
 
         all_topic_partitions = []
         for topic in all_topics:
@@ -67,10 +67,11 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
         assignment = collections.defaultdict(lambda: collections.defaultdict(list))
 
         # Sort static and dynamic members separately to maintain stable static assignments
-        ungrouped = [(subscription.group_instance_id, member_id) for member_id, subscription in group_subscriptions.items()]
+        ungrouped = [(member.group_instance_id, member.member_id) for member in members]
         grouped = {k: list(g) for k, g in itertools.groupby(ungrouped, key=lambda ids: ids[0] is not None)}
         member_list = sorted(grouped.get(True, [])) + sorted(grouped.get(False, [])) # sorted static members first, then sorted dynamic
         member_iter = itertools.cycle(member_list)
+        member_topics = {member.member_id: member.metadata.topics for member in members}
 
         for partition in all_topic_partitions:
             _group_instance_id, member_id = next(member_iter)
@@ -79,15 +80,15 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
             # member subscribed topics, we should be safe assuming that
             # each topic in all_topic_partitions is in at least one member
             # subscription; otherwise this could yield an infinite loop
-            while partition.topic not in group_subscriptions[member_id].topics:
+            while partition.topic not in member_topics[member_id]:
                 member_id = next(member_iter)
             assignment[member_id][partition.topic].append(partition.partition)
 
         protocol_assignment = {}
-        for member_id in group_subscriptions:
-            protocol_assignment[member_id] = ConsumerProtocolAssignment(
+        for member in members:
+            protocol_assignment[member.member_id] = ConsumerProtocolAssignment(
                 cls.version,
-                sorted(assignment[member_id].items()),
+                sorted(assignment[member.member_id].items()),
                 b'')
         return protocol_assignment
 
