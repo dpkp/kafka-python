@@ -334,7 +334,7 @@ class ConsumerCoordinator(BaseCoordinator):
         all_subscribed_topics = set()
         for member in members:
             subscription = Subscription(
-                ConsumerProtocol[0].METADATA.decode(member.metadata_bytes),
+                ConsumerProtocol[0].METADATA.decode(member.metadata),
                 member.group_instance_id
             )
             member_subscriptions[member.member_id] = subscription

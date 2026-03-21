@@ -4,7 +4,6 @@ import pytest
 
 from kafka.protocol.api import RequestHeader
 from kafka.protocol.fetch import FetchRequest
-from kafka.protocol.find_coordinator import FindCoordinatorRequest
 from kafka.protocol.metadata import MetadataRequest
 
 
@@ -17,8 +16,7 @@ def test_encode_message_header():
         b'client3',                        # ClientId
     ])
 
-    req = FindCoordinatorRequest[0]('foo')
-    header = RequestHeader(api_key=req.API_KEY, api_version=req.API_VERSION, correlation_id=4, client_id='client3')
+    header = RequestHeader(api_key=10, api_version=0, correlation_id=4, client_id='client3')
     assert header.encode() == expect
 
 

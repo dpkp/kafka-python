@@ -8,7 +8,7 @@ from kafka.protocol.types import Array, Bytes, Int16, Int32, Schema, String
 DEFAULT_GENERATION_ID = -1
 UNKNOWN_MEMBER_ID = ''
 
-GroupMember = collections.namedtuple("GroupMember", ["member_id", "group_instance_id", "metadata_bytes"])
+GroupMember = collections.namedtuple("GroupMember", ["member_id", "group_instance_id", "metadata"])
 GroupMember.__new__.__defaults__ = (None,) * len(GroupMember._fields)
 
 

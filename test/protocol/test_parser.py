@@ -123,37 +123,37 @@ TEST_JOIN_GROUP = {
     'messages': (
         {
             'request': (
-                JoinGroupRequest[5](group='test-group-IrXFAX', session_timeout=10000, rebalance_timeout=300000, member_id='', group_instance_id=None, protocol_type='consumer', group_protocols=[('range', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('roundrobin', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
+                JoinGroupRequest[5](group_id='test-group-IrXFAX', session_timeout_ms=10000, rebalance_timeout_ms=300000, member_id='', group_instance_id=None, protocol_type='consumer', protocols=[('range', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('roundrobin', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
                 b"\x00\x00\x00\xa5\x00\x0b\x00\x05\x00\x00\x00\x01\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00'\x10\x00\x04\x93\xe0\x00\x00\xff\xff\x00\x08consumer\x00\x00\x00\x02\x00\x05range\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00\x00\nroundrobin\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00",
             ),
             'response': (
                 b'\x00\x00\x00N\x00\x00\x00\x01\x00\x00\x00\x00\x00O\xff\xff\xff\xff\x00\x00\x00\x00\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\x00\x00\x00\x00',
                 1,
-                JoinGroupResponse[5](throttle_time_ms=0, error_code=79, generation_id=-1, group_protocol='', leader_id='', member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', members=[]),
+                JoinGroupResponse[5](throttle_time_ms=0, error_code=79, generation_id=-1, protocol_name='', leader='', member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', members=[]),
             ),
         },
 
         {
             'request': (
-                JoinGroupRequest[5](group='test-group-IrXFAX', session_timeout=10000, rebalance_timeout=300000, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, protocol_type='consumer', group_protocols=[('range', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('roundrobin', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
+                JoinGroupRequest[5](group_id='test-group-IrXFAX', session_timeout_ms=10000, rebalance_timeout_ms=300000, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, protocol_type='consumer', protocols=[('range', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('roundrobin', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
                 b"\x00\x00\x00\xdb\x00\x0b\x00\x05\x00\x00\x00\x02\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00'\x10\x00\x04\x93\xe0\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff\x00\x08consumer\x00\x00\x00\x02\x00\x05range\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00\x00\nroundrobin\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00",
             ),
             'response': (
                 b'\x00\x00\x02\x05\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x05range\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\x00\x00\x00\x04\x006consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7\xff\xff\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00\x006consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c\xff\xff\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00\x006consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8\xff\xff\x00\x00\x00!\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00',
                 2,
-                JoinGroupResponse[5](throttle_time_ms=0, error_code=0, generation_id=1, group_protocol='range', leader_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', members=[('consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
+                JoinGroupResponse[5](throttle_time_ms=0, error_code=0, generation_id=1, protocol_name='range', leader='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', members=[('consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00'), ('consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8', None, b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x00')]),
             ),
         },
 
         {
             'request': (
-                SyncGroupRequest[3](group='test-group-IrXFAX', generation_id=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, group_assignment=[('consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00'), ('consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x03\x00\x00\x00\x00'), ('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00'), ('consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00')]),
+                SyncGroupRequest[3](group_id='test-group-IrXFAX', generation_id=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, assignments=[('consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00'), ('consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x03\x00\x00\x00\x00'), ('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00'), ('consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8', b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00')]),
                 b'\x00\x00\x02\x04\x00\x0e\x00\x03\x00\x00\x00\x03\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00\x00\x01\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff\x00\x00\x00\x04\x006consumer_thread-1-a1e534ee-01a9-4c45-9dfd-778bbac550b7\x00\x00\x00)\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x006consumer_thread-3-5c966b06-f0da-4ba9-9d89-38e9da865b8c\x00\x00\x00)\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x03\x00\x00\x00\x00\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\x00\x00\x00)\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x006consumer_thread-2-01a02bdb-5425-4bfd-979f-ddff280cecd8\x00\x00\x00)\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00',
             ),
             'response': (
                 b'\x00\x00\x007\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00)\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00',
                 3,
-                SyncGroupResponse[3](throttle_time_ms=0, error_code=0, member_assignment=b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00'),
+                SyncGroupResponse[3](throttle_time_ms=0, error_code=0, assignment=b'\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00'),
             ),
         },
 
@@ -171,7 +171,7 @@ TEST_JOIN_GROUP = {
 
         {
             'request': (
-                HeartbeatRequest[3](group='test-group-IrXFAX', generation_id=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None),
+                HeartbeatRequest[3](group_id='test-group-IrXFAX', generation_id=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None),
                 b'\x00\x00\x00l\x00\x0c\x00\x03\x00\x00\x00\x05\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00\x00\x01\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff',
             ),
             'response': (
@@ -195,7 +195,7 @@ TEST_JOIN_GROUP = {
 
         {
             'request': (
-                LeaveGroupRequest[3](group='test-group-IrXFAX', members=[('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', None)]),
+                LeaveGroupRequest[3](group_id='test-group-IrXFAX', members=[('consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', None)]),
                 b'\x00\x00\x00l\x00\r\x00\x03\x00\x00\x00\x07\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00\x00\x01\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff',
             ),
             'response': (

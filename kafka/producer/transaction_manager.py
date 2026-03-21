@@ -658,10 +658,10 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         for tp in topic_partitions:
             topic_data[tp.topic].append(tp.partition)
         self.request = AddPartitionsToTxnRequest[version](
-            transactional_id=self.transactional_id,
-            producer_id=self.producer_id,
-            producer_epoch=self.producer_epoch,
-            topics=list(topic_data.items()))
+            v3_and_below_transactional_id=self.transactional_id,
+            v3_and_below_producer_id=self.producer_id,
+            v3_and_below_producer_epoch=self.producer_epoch,
+            v3_and_below_topics=list(topic_data.items()))
 
     @property
     def priority(self):
@@ -673,7 +673,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         self.retry_backoff_ms = self.transaction_manager.retry_backoff_ms
 
         results = {TopicPartition(topic, partition): Errors.for_code(error_code)
-                   for topic, partition_data in response.results
+                   for topic, partition_data in response.results_by_topic_v3_and_below
                    for partition, error_code in partition_data}
 
         for tp, error in results.items():

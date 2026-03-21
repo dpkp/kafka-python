@@ -308,7 +308,7 @@ class KafkaAdminClient(object):
             raise error_type(
                 "FindCoordinatorRequest failed with response '{}'."
                 .format(response))
-        return response.coordinator_id
+        return response.node_id
 
     def _find_coordinator_ids(self, group_ids):
         """Find the broker node_ids of the coordinators of the given groups.
@@ -471,13 +471,13 @@ class KafkaAdminClient(object):
                     "validate_only requires CreateTopicsRequest >= v1, which is not supported by Kafka {}."
                     .format(self.config['api_version']))
             request = CreateTopicsRequest[version](
-                create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
-                timeout=timeout_ms
+                topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
+                timeout_ms=timeout_ms
             )
         elif version <= 3:
             request = CreateTopicsRequest[version](
-                create_topic_requests=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
-                timeout=timeout_ms,
+                topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
+                timeout_ms=timeout_ms,
                 validate_only=validate_only
             )
         else:
@@ -504,7 +504,7 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = DeleteTopicsRequest[version](topics=topics, timeout=timeout_ms)
+        request = DeleteTopicsRequest[version](topics=topics, timeout_ms=timeout_ms)
         def get_response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response[1])
@@ -640,19 +640,19 @@ class KafkaAdminClient(object):
         version = self._client.api_version(DescribeAclsRequest, max_version=1)
         if version == 0:
             request = DescribeAclsRequest[version](
-                resource_type=acl_filter.resource_pattern.resource_type,
-                resource_name=acl_filter.resource_pattern.resource_name,
-                principal=acl_filter.principal,
-                host=acl_filter.host,
+                resource_type_filter=acl_filter.resource_pattern.resource_type,
+                resource_name_filter=acl_filter.resource_pattern.resource_name,
+                principal_filter=acl_filter.principal,
+                host_filter=acl_filter.host,
                 operation=acl_filter.operation,
                 permission_type=acl_filter.permission_type
             )
         elif version <= 1:
             request = DescribeAclsRequest[version](
-                resource_type=acl_filter.resource_pattern.resource_type,
-                resource_name=acl_filter.resource_pattern.resource_name,
+                resource_type_filter=acl_filter.resource_pattern.resource_type,
+                resource_name_filter=acl_filter.resource_pattern.resource_name,
                 resource_pattern_type_filter=acl_filter.resource_pattern.pattern_type,
-                principal=acl_filter.principal,
+                principal_filter=acl_filter.principal,
                 host=acl_filter.host,
                 operation=acl_filter.operation,
                 permission_type=acl_filter.permission_type
@@ -727,7 +727,7 @@ class KafkaAdminClient(object):
 
         creations_error = []
         creations_success = []
-        for i, creations in enumerate(create_response.creation_responses):
+        for i, creations in enumerate(create_response.results):
             if version <= 1:
                 error_code, error_message = creations
                 acl = acls[i]
@@ -827,7 +827,7 @@ class KafkaAdminClient(object):
         """
         version = delete_response.API_VERSION
         filter_result_list = []
-        for i, filter_responses in enumerate(delete_response.filter_responses):
+        for i, filter_responses in enumerate(delete_response.filter_results):
             filter_error_code, filter_error_message, matching_acls = filter_responses
             filter_error = Errors.for_code(filter_error_code)
             acl_result_list = []
@@ -1054,8 +1054,8 @@ class KafkaAdminClient(object):
         version = self._client.api_version(CreatePartitionsRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
         request = CreatePartitionsRequest[version](
-            topic_partitions=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
-            timeout=timeout_ms,
+            topics=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
+            timeout_ms=timeout_ms,
             validate_only=validate_only
         )
         def get_response_errors(r):
@@ -1594,7 +1594,7 @@ class KafkaAdminClient(object):
         request = ElectLeadersRequest[version](
             election_type=ElectionType(election_type),
             topic_partitions=self._get_topic_partitions(topic_partitions),
-            timeout=timeout_ms,
+            timeout_ms=timeout_ms,
         )
         # TODO convert structs to a more pythonic interface
         def get_response_errors(r):

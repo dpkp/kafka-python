@@ -57,8 +57,8 @@ def test_decode_fetch_response_partial():
         b'ar',                         # Value (truncated)
     ])
     resp = FetchResponse[0].decode(io.BytesIO(encoded))
-    assert len(resp.topics) == 1
-    topic, partitions = resp.topics[0]
+    assert len(resp.responses) == 1
+    topic, partitions = resp.responses[0]
     assert topic == 'foobar'
     assert len(partitions) == 2
 

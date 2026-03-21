@@ -44,7 +44,7 @@ GOLDEN_API_VERSIONS_REQUEST_V3_BYTES = \
 
 # ApiVersionsResponse_v3 (with no header for simplicity in this golden sample)
 # error_code = 0
-# api_versions = [
+# api_keys = [
 #   {'api_key': 0, 'min_version': 0, 'max_version': 9, 'tags': {}}, # Produce
 #   {'api_key': 1, 'min_version': 0, 'max_version': 10, 'tags': {}}, # Fetch
 # ]
@@ -52,7 +52,7 @@ GOLDEN_API_VERSIONS_REQUEST_V3_BYTES = \
 # tags = {}
 # Response Body:
 #   error_code (Int16) = 0 (0x0000)
-#   api_versions (CompactArray):
+#   api_keys (CompactArray):
 #     len(2) -> 0x03 (VarInt)
 #     Item 1:
 #       api_key (Int16) = 0 (0x0000)
@@ -133,7 +133,7 @@ def test_old_system_encode_decode_response():
     # Old system encoding
     response = ApiVersionsResponse[3](
         error_code=0,
-        api_versions=[
+        api_keys=[
             #{'api_key': 0, 'min_version': 0, 'max_version': 9},
             (0, 0, 9),
             #{'api_key': 1, 'min_version': 0, 'max_version': 10}
@@ -148,17 +148,17 @@ def test_old_system_encode_decode_response():
     decoded_response = ApiVersionsResponse[3].decode(BytesIO(encoded_body))
 
     assert decoded_response.error_code == 0
-    assert len(decoded_response.api_versions) == 2
-    assert decoded_response.api_versions[0][0] == 0 # api_key
-    assert decoded_response.api_versions[0][1] == 0 # min_version
-    assert decoded_response.api_versions[0][2] == 9 # max_version
-    #assert decoded_response.api_versions[0].tags == {}
-    assert decoded_response.api_versions[1][0] == 1 # api_key
-    assert decoded_response.api_versions[1][1] == 0 # min_version
-    assert decoded_response.api_versions[1][2] == 10 # max_version
-    #assert decoded_response.api_versions[1].tags == {}
+    assert len(decoded_response.api_keys) == 2
+    assert decoded_response.api_keys[0][0] == 0 # api_key
+    assert decoded_response.api_keys[0][1] == 0 # min_version
+    assert decoded_response.api_keys[0][2] == 9 # max_version
+    #assert decoded_response.api_keys[0].tags == {}
+    assert decoded_response.api_keys[1][0] == 1 # api_key
+    assert decoded_response.api_keys[1][1] == 0 # min_version
+    assert decoded_response.api_keys[1][2] == 10 # max_version
+    #assert decoded_response.api_keys[1].tags == {}
     assert decoded_response.throttle_time_ms == 0
-    #assert decoded_response.tags == {}
+    assert decoded_response.tags == {}
 
 
 def test_new_system_nested_field_access():

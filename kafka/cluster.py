@@ -45,7 +45,7 @@ class ClusterMetadata(object):
         self._brokers = {}  # node_id -> BrokerMetadata
         self._partitions = {}  # topic -> partition -> PartitionMetadata
         self._broker_partitions = collections.defaultdict(set)  # node_id -> {TopicPartition...}
-        self._coordinators = {}  # (coord_type, coord_key) -> node_id
+        self._coordinators = {}  # (key_type, key) -> node_id
         self._last_refresh_ms = 0
         self._last_successful_refresh_ms = 0
         self._need_update = True
@@ -369,36 +369,36 @@ class ClusterMetadata(object):
         """Remove a previously added listener callback"""
         self._listeners.remove(listener)
 
-    def add_coordinator(self, response, coord_type, coord_key):
+    def add_coordinator(self, response, key_type, key):
         """Update with metadata for a group or txn coordinator
 
         Arguments:
             response (FindCoordinatorResponse): broker response
-            coord_type (str): 'group' or 'transaction'
-            coord_key (str): consumer_group or transactional_id
+            key_type (str): 'group' or 'transaction'
+            key (str): consumer_group or transactional_id
 
         Returns:
             string: coordinator node_id if metadata is updated, None on error
         """
-        log.debug("Updating coordinator for %s/%s: %s", coord_type, coord_key, response)
+        log.debug("Updating coordinator for %s/%s: %s", key_type, key, response)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             log.error("FindCoordinatorResponse error: %s", error_type)
-            self._coordinators[(coord_type, coord_key)] = -1
+            self._coordinators[(key_type, key)] = -1
             return
 
         # Use a coordinator-specific node id so that requests
         # get a dedicated connection
-        node_id = 'coordinator-{}'.format(response.coordinator_id)
+        node_id = 'coordinator-{}'.format(response.node_id)
         coordinator = BrokerMetadata(
             node_id,
             response.host,
             response.port,
             None)
 
-        log.info("Coordinator for %s/%s is %s", coord_type, coord_key, coordinator)
+        log.info("Coordinator for %s/%s is %s", key_type, key, coordinator)
         self._coordinator_brokers[node_id] = coordinator
-        self._coordinators[(coord_type, coord_key)] = node_id
+        self._coordinators[(key_type, key)] = node_id
         return node_id
 
     def with_partitions(self, partitions_to_add):

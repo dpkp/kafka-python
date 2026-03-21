@@ -604,10 +604,10 @@ class BaseCoordinator(object):
                 else:
                     self._generation = Generation(response.generation_id,
                                                   response.member_id,
-                                                  response.group_protocol)
+                                                  response.protocol_name)
 
                 log.info("Successfully joined group %s %s", self.group_id, self._generation)
-                if response.leader_id == response.member_id:
+                if response.leader == response.member_id:
                     log.info("Elected group leader -- performing partition"
                              " assignments using %s", self._generation.protocol)
                     self._on_join_leader(response).chain(future)
@@ -697,10 +697,13 @@ class BaseCoordinator(object):
             Future: resolves to member assignment encoded-bytes
         """
         try:
-            members = [GroupMember(*member) if response.API_VERSION >= 5 else GroupMember(member[0], None, member[1])
+            members = [GroupMember(
+                           member_id=member[0],
+                           group_instance_id=member[1] if response.API_VERSION >= 5 else None,
+                           metadata=member[2] if response.API_VERSION >= 5 else member[1])
                        for member in response.members]
-            group_assignment = self._perform_assignment(response.leader_id,
-                                                        response.group_protocol,
+            group_assignment = self._perform_assignment(response.leader,
+                                                        response.protocol_name,
                                                         members)
         except Exception as e:
             return Future().failure(e)
@@ -747,7 +750,7 @@ class BaseCoordinator(object):
         if error_type is Errors.NoError:
             if self._sensors:
                 self._sensors.sync_latency.record((time.monotonic() - send_time) * 1000)
-            future.success(response.member_assignment)
+            future.success(response.assignment)
             return
 
         # Always rejoin on error
@@ -802,12 +805,12 @@ class BaseCoordinator(object):
                   self.group_id, node_id, request)
         future = Future()
         _f = self._client.send(node_id, request)
-        _f.add_callback(self._handle_group_coordinator_response, future)
+        _f.add_callback(self._handle_find_coordinator_response, future)
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
 
-    def _handle_group_coordinator_response(self, future, response):
-        log.debug("Received group coordinator response %s", response)
+    def _handle_find_coordinator_response(self, future, response):
+        log.debug("Received find coordinator response %s", response)
 
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
