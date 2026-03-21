@@ -74,5 +74,5 @@ class RangePartitionAssignor(AbstractPartitionAssignor):
         return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), b'')
 
     @classmethod
-    def on_assignment(cls, assignment):
+    def on_assignment(cls, assignment, generation):
         pass

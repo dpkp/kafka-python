@@ -43,7 +43,7 @@ class AbstractPartitionAssignor(object):
         pass
 
     @abc.abstractmethod
-    def on_assignment(self, assignment):
+    def on_assignment(self, assignment, generation):
         """Callback that runs on each assignment.
 
         This method can be used to update internal state, if any, of the
@@ -51,5 +51,6 @@ class AbstractPartitionAssignor(object):
 
         Arguments:
             assignment (MemberAssignment): the member's assignment
+            generation (int): generation id of assignment
         """
         pass
