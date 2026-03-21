@@ -24,6 +24,5 @@ class ConsumerProtocolAssignment(ApiData):
 
 
 __all__ = [
-    'ConsumerProtocolSubscription', 'ConsumerProtocolAssignment',
-    'ConsumerProtocolType',
+    'ConsumerProtocolSubscription', 'ConsumerProtocolAssignment', 'ConsumerProtocolType',
 ]
