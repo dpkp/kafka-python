@@ -1,4 +1,6 @@
-from .fields import *, __all__ as fields_all
+from .fields import *
+from .fields import __all__ as fields_all
+
 from .load_json import load_json
 
 
