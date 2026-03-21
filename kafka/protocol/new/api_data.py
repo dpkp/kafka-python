@@ -11,7 +11,7 @@ from .schemas.fields.codecs import Int16, Int32
 class JsonSchemaData(SlotsBuilder):
     def __new__(metacls, name, bases, attrs, **kw):
         if kw.get('init', True):
-            json = load_json(name)
+            json = load_json(name, package=kw.get('load_json'))
             if 'json_patch' in attrs:
                 json = attrs['json_patch'].__func__(metacls, json)
             attrs['_json'] = json

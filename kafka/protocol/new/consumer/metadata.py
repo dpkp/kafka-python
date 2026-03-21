@@ -23,14 +23,7 @@ class ConsumerProtocolAssignment(ApiData):
                 for partition in partitions]
 
 
-class StickyAssignorUserData(ApiData):
-    def __init__(self, *args, **kw):
-        if 'version' not in kw:
-            kw['version'] = 1
-        super().__init__(*args, **kw)
-
-
 __all__ = [
     'ConsumerProtocolSubscription', 'ConsumerProtocolAssignment',
-    'ConsumerProtocolType', 'StickyAssignorUserData',
+    'ConsumerProtocolType',
 ]

@@ -1,12 +1,17 @@
 import importlib.resources
+import inspect
 import json
 import re
 
 
-def load_json(msg_type):
+def load_json(msg_type, package=None):
+    if package is None:
+        package = __package__ + '.resources'
+    elif inspect.ismodule(package):
+        package = package.__package__
     COMMENTS_REGEX = r"(?m)((?:^\s*//.*\n?)+)"
     # Raises FileNotFoundError if not found
-    msg_json = importlib.resources.read_text(__package__ + '.resources', msg_type + '.json')
+    msg_json = importlib.resources.read_text(package, msg_type + '.json')
     data = json.loads(re.sub(COMMENTS_REGEX, '', msg_json))
     comments = re.findall(COMMENTS_REGEX, msg_json)
     if comments:
