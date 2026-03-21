@@ -591,7 +591,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             members (dict of {member_id: MemberMetadata}): decoded metadata for each member in the group.
 
         Returns:
-          dict: {member_id: MemberAssignment}
+          dict: {member_id: ConsumerProtocolAssignment}
         """
         members_metadata = {}
         for consumer, member_metadata in members.items():
@@ -619,7 +619,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
         there is no need to support backward compatibility with V0.
 
         Arguments:
-          metadata (MemberMetadata): decoded metadata for a member of the group.
+          metadata (ConsumerProtocolSubscription): decoded subscription for a member of the group.
 
         Returns:
           parsed metadata (StickyAssignorMemberMetadataV1)
