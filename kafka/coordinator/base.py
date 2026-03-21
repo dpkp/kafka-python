@@ -540,10 +540,6 @@ class BaseCoordinator(object):
 
         # send a join group request to the coordinator
         log.info("(Re-)joining group %s", self.group_id)
-        member_metadata = [
-            (protocol, metadata if isinstance(metadata, bytes) else metadata.encode())
-            for protocol, metadata in self.group_protocols()
-        ]
         version = self._client.api_version(JoinGroupRequest, max_version=5)
         if version == 0:
             request = JoinGroupRequest[version](
@@ -551,7 +547,7 @@ class BaseCoordinator(object):
                 self.config['session_timeout_ms'],
                 self._generation.member_id,
                 self.protocol_type(),
-                member_metadata)
+                self.group_protocols())
         elif version <= 4:
             request = JoinGroupRequest[version](
                 self.group_id,
@@ -559,7 +555,7 @@ class BaseCoordinator(object):
                 self.config['max_poll_interval_ms'],
                 self._generation.member_id,
                 self.protocol_type(),
-                member_metadata)
+                self.group_protocols())
         else:
             request = JoinGroupRequest[version](
                 self.group_id,
@@ -568,7 +564,7 @@ class BaseCoordinator(object):
                 self._generation.member_id,
                 self.group_instance_id,
                 self.protocol_type(),
-                member_metadata)
+                self.group_protocols())
 
         # create the request for the coordinator
         log.debug("Sending JoinGroup (%s) to coordinator %s", request, self.coordinator_id)
@@ -706,10 +702,6 @@ class BaseCoordinator(object):
             group_assignment = self._perform_assignment(response.leader_id,
                                                         response.group_protocol,
                                                         members)
-            for member_id, assignment in group_assignment.items():
-                if not isinstance(assignment, bytes):
-                    group_assignment[member_id] = assignment.encode()
-
         except Exception as e:
             return Future().failure(e)
 
