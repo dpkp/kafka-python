@@ -1,12 +1,5 @@
-from .produce import *
-from .transaction import *
+from .produce import *, __all__ as produce_all
+from .transaction import *, __all__ as transaction_all
 
 
-__all__ = [
-    'ProduceRequest', 'ProduceResponse',
-    'InitProducerIdRequest', 'InitProducerIdResponse',
-    'AddPartitionsToTxnRequest', 'AddPartitionsToTxnResponse',
-    'AddOffsetsToTxnRequest', 'AddOffsetsToTxnResponse',
-    'EndTxnRequest', 'EndTxnResponse',
-    'TxnOffsetCommitRequest', 'TxnOffsetCommitResponse',
-]
+__all__ = produce_all + transaction_all
