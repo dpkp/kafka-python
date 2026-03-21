@@ -1,17 +1,9 @@
+from .api_data import JsonSchemaData
 from .data_container import DataContainer, SlotsBuilder
 from .schemas import BaseField, StructField, load_json
 
 
-class ApiHeaderMeta(SlotsBuilder):
-    def __new__(metacls, name, bases, attrs, **kw):
-        if kw.get('init', True):
-            json = load_json(name)
-            attrs['_json'] = json
-            attrs['_struct'] = StructField(json)
-        return super().__new__(metacls, name, bases, attrs, **kw)
-
-
-class ApiHeader(DataContainer, metaclass=ApiHeaderMeta, init=False):
+class ApiHeader(DataContainer, metaclass=JsonSchemaData, init=False):
     __slots__ = ()
 
     def __init_subclass__(cls, **kw):
