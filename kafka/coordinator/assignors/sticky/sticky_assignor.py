@@ -565,13 +565,12 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
     name = "sticky"
     version = 0
 
-    member_assignment = None
-    generation = DEFAULT_GENERATION_ID
+    def __init__(self):
+        self.member_assignment = None
+        self.generation = self.DEFAULT_GENERATION_ID
+        self._latest_partition_movements = None
 
-    _latest_partition_movements = None
-
-    @classmethod
-    def assign(cls, cluster, members):
+    def assign(self, cluster, members):
         """Performs group assignment given cluster metadata and member subscriptions
 
         Arguments:
@@ -582,23 +581,23 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
           dict: {member_id: ConsumerProtocolAssignment}
         """
         members_metadata = {
-            member.member_id: cls.parse_member_metadata(member.metadata)
+            member.member_id: self.parse_member_metadata(member.metadata)
             for member in members
         }
         executor = StickyAssignmentExecutor(cluster, members_metadata)
         executor.perform_initial_assignment()
         executor.balance()
 
-        cls._latest_partition_movements = executor.partition_movements
+        # store for tests
+        self._latest_partition_movements = executor.partition_movements
 
         assignment = {
             member.member_id: ConsumerProtocolAssignment(
-                cls.version, sorted(executor.get_final_assignment(member.member_id)), b'')
+                self.version, sorted(executor.get_final_assignment(member.member_id)), b'')
             for member in members
         }
         return assignment
 
-    @classmethod
     def parse_member_metadata(cls, metadata):
         """
         Parses member metadata into a python object.
@@ -635,9 +634,8 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             partitions=member_partitions, generation=decoded_user_data.generation, subscription=metadata.topics
         )
 
-    @classmethod
-    def metadata(cls, topics):
-        return cls._metadata(topics, cls.member_assignment, cls.generation)
+    def metadata(self, topics):
+        return self._metadata(topics, self.member_assignment, self.generation)
 
     @classmethod
     def _metadata(cls, topics, member_assignment_partitions, generation=-1):
@@ -645,7 +643,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             log.debug("No member assignment available")
             user_data = b''
         else:
-            log.debug("Member assignment is available, generating the metadata: generation {}".format(cls.generation))
+            log.debug("Member assignment is available, generating the metadata: generation {}".format(generation))
             partitions_by_topic = defaultdict(list)
             for topic_partition in member_assignment_partitions:
                 partitions_by_topic[topic_partition.topic].append(topic_partition.partition)
@@ -653,13 +651,12 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
             user_data = data.encode()
         return ConsumerProtocolSubscription(cls.version, list(topics), user_data)
 
-    @classmethod
-    def on_assignment(cls, assignment, generation):
+    def on_assignment(self, assignment, generation):
         """Callback that runs on each assignment. Updates assignor's state.
 
         Arguments:
           assignment: MemberAssignment
         """
         log.debug(f"On assignment: assignment={assignment}, generation={generation}")
-        cls.member_assignment = assignment.partitions()
-        cls.generation = generation
+        self.member_assignment = assignment.partitions()
+        self.generation = generation
