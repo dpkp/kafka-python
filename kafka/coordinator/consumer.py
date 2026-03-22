@@ -696,7 +696,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 self.group_id,
                 generation.generation_id,
                 generation.member_id,
-                OffsetCommitRequest[version].DEFAULT_RETENTION_TIME,
+                -1, # default retention time
                 [(
                     topic, [(
                         partition,
