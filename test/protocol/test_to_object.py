@@ -1,9 +1,6 @@
-from kafka.protocol.admin import Request
-from kafka.protocol.admin import Response
-from kafka.protocol.types import Schema
-from kafka.protocol.types import Array
-from kafka.protocol.types import Int16
-from kafka.protocol.types import String
+from kafka.protocol.api import Request
+from kafka.protocol.api import Response
+from kafka.protocol.types import Schema, Array, Int16, String
 
 import pytest
 
