@@ -238,7 +238,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
                 assert(len(consumer_group.members) == 1)
             for member in consumer_group.members:
                     assert(member.member_metadata.topics[0] == topic)
-                    assert(member.member_assignment.assignment[0][0] == topic)
+                    assert(member.member_assignment.assigned_partitions[0][0] == topic)
             consumer_groups.add(consumer_group.group)
         assert(sorted(list(consumer_groups)) == group_id_list)
     finally:
@@ -406,8 +406,8 @@ def test_create_delete_topics(kafka_admin_client):
 @pytest.mark.skipif(env_kafka_version() < (2, 2), reason="Leader Election requires broker >=2.2")
 def test_perform_leader_election(kafka_admin_client, topic):
     topic_metadata = kafka_admin_client.describe_topics([topic])[0]
-    assert topic_metadata['topic'] == topic
-    partitions = list(map(lambda p: p['partition'], topic_metadata['partitions']))
+    assert topic_metadata['name'] == topic
+    partitions = list(map(lambda p: p['partition_index'], topic_metadata['partitions']))
     election_type = 0 # Preferred
     topic_partitions = {topic: partitions}
     # When Leader Election is not needed (cluster is stable), error 84 is returned

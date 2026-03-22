@@ -504,7 +504,7 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = DeleteTopicsRequest[version](topics=topics, timeout_ms=timeout_ms)
+        request = DeleteTopicsRequest[version](topic_names=topics, timeout_ms=timeout_ms)
         def get_response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response[1])
@@ -554,7 +554,7 @@ class KafkaAdminClient(object):
             A list of topic name strings.
         """
         metadata = self._get_cluster_metadata(topics=None)
-        return [t['topic'] for t in metadata['topics']]
+        return [t['name'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
         """Fetch metadata for the specified topics or all topics if None.
@@ -651,12 +651,11 @@ class KafkaAdminClient(object):
             request = DescribeAclsRequest[version](
                 resource_type_filter=acl_filter.resource_pattern.resource_type,
                 resource_name_filter=acl_filter.resource_pattern.resource_name,
-                resource_pattern_type_filter=acl_filter.resource_pattern.pattern_type,
+                pattern_type_filter=acl_filter.resource_pattern.pattern_type,
                 principal_filter=acl_filter.principal,
-                host=acl_filter.host,
+                host_filter=acl_filter.host,
                 operation=acl_filter.operation,
                 permission_type=acl_filter.permission_type
-
             )
         response = self.send_request(request)  # pylint: disable=E0606
         error_type = Errors.for_code(response.error_code)
@@ -1089,9 +1088,9 @@ class KafkaAdminClient(object):
         valid_partitions = set()
         for topic in metadata.get("topics", ()):
             for partition in topic.get("partitions", ()):
-                t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
+                t2p = TopicPartition(topic=topic["name"], partition=partition["partition_index"])
                 if t2p in partitions:
-                    leader2partitions[partition["leader"]].append(t2p)
+                    leader2partitions[partition["leader_id"]].append(t2p)
                     valid_partitions.add(t2p)
 
         if len(partitions) != len(valid_partitions):

@@ -1,9 +1,6 @@
-from kafka.protocol.admin import Request
-from kafka.protocol.admin import Response
-from kafka.protocol.types import Schema
-from kafka.protocol.types import Array
-from kafka.protocol.types import Int16
-from kafka.protocol.types import String
+from kafka.protocol.api import Request
+from kafka.protocol.api import Response
+from kafka.protocol.types import Schema, Array, Int16, String
 
 import pytest
 
@@ -197,31 +194,31 @@ def test_with_metadata_response():
 
     assert len(obj['topics']) == 2
     assert obj['topics'][0]['error_code'] == 0
-    assert obj['topics'][0]['topic'] == 'testtopic1'
+    assert obj['topics'][0]['name'] == 'testtopic1'
     assert obj['topics'][0]['is_internal'] is False
     assert len(obj['topics'][0]['partitions']) == 2
     assert obj['topics'][0]['partitions'][0]['error_code'] == 0
-    assert obj['topics'][0]['partitions'][0]['partition'] == 0
-    assert obj['topics'][0]['partitions'][0]['leader'] == 0
-    assert obj['topics'][0]['partitions'][0]['replicas'] == [0, 1]
-    assert obj['topics'][0]['partitions'][0]['isr'] == [0, 1]
+    assert obj['topics'][0]['partitions'][0]['partition_index'] == 0
+    assert obj['topics'][0]['partitions'][0]['leader_id'] == 0
+    assert obj['topics'][0]['partitions'][0]['replica_nodes'] == [0, 1]
+    assert obj['topics'][0]['partitions'][0]['isr_nodes'] == [0, 1]
     assert obj['topics'][0]['partitions'][0]['offline_replicas'] == []
     assert obj['topics'][0]['partitions'][1]['error_code'] == 0
-    assert obj['topics'][0]['partitions'][1]['partition'] == 1
-    assert obj['topics'][0]['partitions'][1]['leader'] == 1
-    assert obj['topics'][0]['partitions'][1]['replicas'] == [1, 0]
-    assert obj['topics'][0]['partitions'][1]['isr'] == [1, 0]
+    assert obj['topics'][0]['partitions'][1]['partition_index'] == 1
+    assert obj['topics'][0]['partitions'][1]['leader_id'] == 1
+    assert obj['topics'][0]['partitions'][1]['replica_nodes'] == [1, 0]
+    assert obj['topics'][0]['partitions'][1]['isr_nodes'] == [1, 0]
     assert obj['topics'][0]['partitions'][1]['offline_replicas'] == []
 
     assert obj['topics'][1]['error_code'] == 0
-    assert obj['topics'][1]['topic'] == 'other-test-topic'
+    assert obj['topics'][1]['name'] == 'other-test-topic'
     assert obj['topics'][1]['is_internal'] is True
     assert len(obj['topics'][1]['partitions']) == 1
     assert obj['topics'][1]['partitions'][0]['error_code'] == 0
-    assert obj['topics'][1]['partitions'][0]['partition'] == 0
-    assert obj['topics'][1]['partitions'][0]['leader'] == 0
-    assert obj['topics'][1]['partitions'][0]['replicas'] == [0, 1]
-    assert obj['topics'][1]['partitions'][0]['isr'] == [0, 1]
+    assert obj['topics'][1]['partitions'][0]['partition_index'] == 0
+    assert obj['topics'][1]['partitions'][0]['leader_id'] == 0
+    assert obj['topics'][1]['partitions'][0]['replica_nodes'] == [0, 1]
+    assert obj['topics'][1]['partitions'][0]['isr_nodes'] == [0, 1]
     assert obj['topics'][1]['partitions'][0]['offline_replicas'] == []
 
     tc.encode()
