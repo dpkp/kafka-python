@@ -20,7 +20,7 @@ def main_parser():
         '-c', '--extra-config', type=str, action='append',
         help='additional configuration properties for kafka producer')
     parser.add_argument(
-        '-l', '--log-level', type=str,
+        '-l', '--log-level', type=str, default='CRITICAL',
         help='logging level, passed to logging.basicConfig')
     parser.add_argument(
         '--encoding', type=str, default='utf-8',
@@ -78,7 +78,7 @@ def run_cli(args=None):
         logger.info('Bye!')
         return 0
     except Exception:
-        logger.exception('Error!')
+        logger.critical('Error!', exc_info=True)
         return 1
     finally:
         producer.close()

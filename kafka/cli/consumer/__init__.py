@@ -23,7 +23,7 @@ def main_parser():
         '-c', '--extra-config', type=str, action='append',
         help='additional configuration properties for kafka consumer')
     parser.add_argument(
-        '-l', '--log-level', type=str,
+        '-l', '--log-level', type=str, default='CRITICAL',
         help='logging level, passed to logging.basicConfig')
     parser.add_argument(
         '-f', '--format', type=str, default='str',
@@ -77,11 +77,8 @@ def run_cli(args=None):
     except KeyboardInterrupt:
         logger.info('Bye!')
         return 0
-    except KafkaError as e:
-        logger.error(e)
-        return 1
     except Exception:
-        logger.exception('Error!')
+        logger.critical('Error!', exc_info=True)
         return 1
     finally:
         consumer.close()
