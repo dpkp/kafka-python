@@ -504,7 +504,7 @@ class KafkaAdminClient(object):
         """
         version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = DeleteTopicsRequest[version](topics=topics, timeout_ms=timeout_ms)
+        request = DeleteTopicsRequest[version](topic_names=topics, timeout_ms=timeout_ms)
         def get_response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response[1])
