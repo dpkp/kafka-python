@@ -12,13 +12,13 @@ class MetadataResponse_v0(Response):
             ('port', Int32))),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32))))))
+                ('partition_index', Int32),
+                ('leader_id', Int32),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32))))))
     )
 
 
@@ -34,14 +34,14 @@ class MetadataResponse_v1(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32))))))
+                ('partition_index', Int32),
+                ('leader_id', Int32),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32))))))
     )
 
 
@@ -58,14 +58,14 @@ class MetadataResponse_v2(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32))))))
+                ('partition_index', Int32),
+                ('leader_id', Int32),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32))))))
     )
 
 
@@ -83,14 +83,14 @@ class MetadataResponse_v3(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32))))))
+                ('partition_index', Int32),
+                ('leader_id', Int32),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32))))))
     )
 
 
@@ -114,14 +114,14 @@ class MetadataResponse_v5(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32)),
+                ('partition_index', Int32),
+                ('leader_id', Int32),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32)),
                 ('offline_replicas', Array(Int32))))))
     )
 
@@ -149,15 +149,15 @@ class MetadataResponse_v7(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
+                ('partition_index', Int32),
+                ('leader_id', Int32),
                 ('leader_epoch', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32)),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32)),
                 ('offline_replicas', Array(Int32))))))
     )
 
@@ -177,15 +177,15 @@ class MetadataResponse_v8(Response):
         ('controller_id', Int32),
         ('topics', Array(
             ('error_code', Int16),
-            ('topic', String('utf-8')),
+            ('name', String('utf-8')),
             ('is_internal', Boolean),
             ('partitions', Array(
                 ('error_code', Int16),
-                ('partition', Int32),
-                ('leader', Int32),
+                ('partition_index', Int32),
+                ('leader_id', Int32),
                 ('leader_epoch', Int32),
-                ('replicas', Array(Int32)),
-                ('isr', Array(Int32)),
+                ('replica_nodes', Array(Int32)),
+                ('isr_nodes', Array(Int32)),
                 ('offline_replicas', Array(Int32)))),
             ('authorized_operations', BitField))),
         ('authorized_operations', BitField)

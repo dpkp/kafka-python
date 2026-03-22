@@ -554,7 +554,7 @@ class KafkaAdminClient(object):
             A list of topic name strings.
         """
         metadata = self._get_cluster_metadata(topics=None)
-        return [t['topic'] for t in metadata['topics']]
+        return [t['name'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
         """Fetch metadata for the specified topics or all topics if None.
@@ -1089,9 +1089,9 @@ class KafkaAdminClient(object):
         valid_partitions = set()
         for topic in metadata.get("topics", ()):
             for partition in topic.get("partitions", ()):
-                t2p = TopicPartition(topic=topic["topic"], partition=partition["partition"])
+                t2p = TopicPartition(topic=topic["name"], partition=partition["partition_index"])
                 if t2p in partitions:
-                    leader2partitions[partition["leader"]].append(t2p)
+                    leader2partitions[partition["leader_id"]].append(t2p)
                     valid_partitions.add(t2p)
 
         if len(partitions) != len(valid_partitions):

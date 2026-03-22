@@ -406,8 +406,8 @@ def test_create_delete_topics(kafka_admin_client):
 @pytest.mark.skipif(env_kafka_version() < (2, 2), reason="Leader Election requires broker >=2.2")
 def test_perform_leader_election(kafka_admin_client, topic):
     topic_metadata = kafka_admin_client.describe_topics([topic])[0]
-    assert topic_metadata['topic'] == topic
-    partitions = list(map(lambda p: p['partition'], topic_metadata['partitions']))
+    assert topic_metadata['name'] == topic
+    partitions = list(map(lambda p: p['partition_index'], topic_metadata['partitions']))
     election_type = 0 # Preferred
     topic_partitions = {topic: partitions}
     # When Leader Election is not needed (cluster is stable), error 84 is returned
