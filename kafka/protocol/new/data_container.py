@@ -24,6 +24,8 @@ class DataContainer(metaclass=SlotsBuilder):
 
     def __init__(self, *args, version=None, **field_vals):
         assert self._struct is not None
+        if version is not None and not self._struct.min_version <= version <= self._struct.max_version:
+            raise ValueError(f'Invalid version: {version} (min={self._struct.min_version}, max={self._struct.max_version})')
         self._version = version
         # Support positional arg init for convenience
         if len(args) > 0:
