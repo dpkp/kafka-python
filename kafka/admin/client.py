@@ -24,8 +24,7 @@ from kafka.protocol.admin import (
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest, ElectLeadersRequest, ElectionType)
 from kafka.protocol.commit import OffsetFetchRequest
-from kafka.protocol.find_coordinator import FindCoordinatorRequest
-from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.new.metadata import MetadataRequest, FindCoordinatorRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
 from kafka.version import __version__
@@ -512,13 +511,9 @@ class KafkaAdminClient(object):
                 yield Errors.for_code(response[1])
         return self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
 
-    def _process_metadata_response(self, metadata_response):
-        obj = metadata_response.to_object()
+    def _process_acl_operations(self, obj):
         if obj.get('authorized_operations', None) is not None:
             obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
-        for t in obj['topics']:
-            if t.get('authorized_operations', None) is not None:
-                t['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(t['authorized_operations'])))
         return obj
 
     def _get_cluster_metadata(self, topics=None, auto_topic_creation=False):
@@ -547,7 +542,11 @@ class KafkaAdminClient(object):
                 include_topic_authorized_operations=True,
             )
 
-        return self._process_metadata_response(self.send_request(request))
+        metadata = self.send_request(request).to_dict()
+        self._process_acl_operations(metadata)
+        for topic in metadata['topics']:
+            self._process_acl_operations(topic)
+        return metadata
 
     def list_topics(self):
         """Retrieve a list of all topic names in the cluster.
