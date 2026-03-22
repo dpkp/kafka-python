@@ -19,7 +19,7 @@ from kafka.errors import (
     UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.future import Future
 from kafka.metrics import MetricConfig, Metrics
-from kafka.protocol.admin import (
+from kafka.protocol.new.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest, ElectLeadersRequest, ElectionType)
@@ -1150,7 +1150,7 @@ class KafkaAdminClient(object):
                 timeout_ms=timeout_ms
             )
             response = self.send_request(request, node_id=leader)
-            responses.append(response.to_object())
+            responses.append(response.to_dict())
 
         partition2result = {}
         partition2error = {}
@@ -1224,29 +1224,33 @@ class KafkaAdminClient(object):
                 .format(response.API_VERSION))
 
         assert len(response.groups) == 1
-        for response_field, response_name in zip(response.SCHEMA.fields, response.SCHEMA.names):
-            if isinstance(response_field, Array):
-                described_groups_field_schema = response_field.array_of
+        for response_name, response_field in response.fields.items():
+            if response_name == 'groups':
                 described_group = getattr(response, response_name)[0]
                 described_group_information_list = []
                 protocol_type_is_consumer = False
-                for (described_group_information, group_information_name, group_information_field) in zip(described_group, described_groups_field_schema.names, described_groups_field_schema.fields):
+                for group_information_name, group_information_field in response_field.fields.items():
+                    if not group_information_field.for_version_q(response.API_VERSION):
+                        continue
+                    described_group_information = getattr(described_group, group_information_name)
                     if group_information_name == 'protocol_type':
                         protocol_type = described_group_information
                         protocol_type_is_consumer = (protocol_type == ConsumerProtocolType or not protocol_type)
-                    if isinstance(group_information_field, Array):
+                    if group_information_name == 'members':
                         member_information_list = []
-                        member_schema = group_information_field.array_of
-                        for members in described_group_information:
+                        for member in described_group_information:
                             member_information = []
-                            for (member, member_field, member_name)  in zip(members, member_schema.fields, member_schema.names):
+                            for attr_name, attr_field in group_information_field.fields.items():
+                                if not attr_field.for_version_q(response.API_VERSION):
+                                    continue
+                                attr_val = getattr(member, attr_name)
                                 if protocol_type_is_consumer:
-                                    if member_name == 'member_metadata' and member:
-                                        member_information.append(ConsumerProtocolSubscription.decode(member))
-                                    elif member_name == 'member_assignment' and member:
-                                        member_information.append(ConsumerProtocolAssignment.decode(member))
+                                    if attr_name == 'member_metadata' and attr_val:
+                                        member_information.append(ConsumerProtocolSubscription.decode(attr_val))
+                                    elif attr_name == 'member_assignment' and attr_val:
+                                        member_information.append(ConsumerProtocolAssignment.decode(attr_val))
                                     else:
-                                        member_information.append(member)
+                                        member_information.append(attr_val)
                             member_info_tuple = MemberInformation._make(member_information)
                             member_information_list.append(member_info_tuple)
                         described_group_information_list.append(member_information_list)
@@ -1324,7 +1328,7 @@ class KafkaAdminClient(object):
             raise NotImplementedError(
                 "Support for ListGroupsResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
-        return response.groups
+        return [(group.group_id, group.protocol_type) for group in response.groups]
 
     def list_consumer_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
