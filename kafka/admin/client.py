@@ -651,12 +651,11 @@ class KafkaAdminClient(object):
             request = DescribeAclsRequest[version](
                 resource_type_filter=acl_filter.resource_pattern.resource_type,
                 resource_name_filter=acl_filter.resource_pattern.resource_name,
-                resource_pattern_type_filter=acl_filter.resource_pattern.pattern_type,
+                pattern_type_filter=acl_filter.resource_pattern.pattern_type,
                 principal_filter=acl_filter.principal,
-                host=acl_filter.host,
+                host_filter=acl_filter.host,
                 operation=acl_filter.operation,
                 permission_type=acl_filter.permission_type
-
             )
         response = self.send_request(request)  # pylint: disable=E0606
         error_type = Errors.for_code(response.error_code)
