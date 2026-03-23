@@ -55,7 +55,7 @@ import kafka.codec as codecs
 from kafka.errors import CorruptRecordError, UnsupportedCodecError
 
 
-class LegacyRecordBase(object):
+class LegacyRecordBase:
 
     __slots__ = ()
 
@@ -549,7 +549,7 @@ class LegacyRecordBatchBuilder(ABCRecordBatchBuilder, LegacyRecordBase):
         return cls.LOG_OVERHEAD + cls.record_size(magic, key, value)
 
 
-class LegacyRecordMetadata(object):
+class LegacyRecordMetadata:
 
     __slots__ = ("_crc", "_size", "_timestamp", "_offset")
 

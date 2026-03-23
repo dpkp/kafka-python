@@ -11,7 +11,7 @@ import traceback
 from kafka import KafkaProducer
 
 
-class ProducerPerformance(object):
+class ProducerPerformance:
     @staticmethod
     def run(args):
         try:

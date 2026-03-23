@@ -81,7 +81,7 @@ class AbstractSampledStat(AbstractMeasurableStat, metaclass=abc.ABCMeta):
             sample.reset(time_ms)
             return sample
 
-    class Sample(object):
+    class Sample:
 
         def __init__(self, initial_value, now):
             self.initial_value = initial_value

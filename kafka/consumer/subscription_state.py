@@ -23,7 +23,7 @@ class SubscriptionType(IntEnum):
     USER_ASSIGNED = 3
 
 
-class SubscriptionState(object):
+class SubscriptionState:
     """
     A class for tracking the topics, partitions, and offsets for the consumer.
     A partition is "assigned" either directly with assign_from_user() (manual
@@ -436,7 +436,7 @@ class SubscriptionState(object):
         return self.assignment[partition].position
 
 
-class TopicPartitionState(object):
+class TopicPartitionState:
     def __init__(self):
         self.paused = False # whether this partition has been paused by the user
         self.reset_strategy = None # the reset strategy if awaiting_reset is set

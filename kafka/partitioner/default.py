@@ -1,7 +1,7 @@
 import random
 
 
-class DefaultPartitioner(object):
+class DefaultPartitioner:
     """Default partitioner.
 
     Hashes key to partition using murmur2 hashing (from java client)

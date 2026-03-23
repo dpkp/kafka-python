@@ -632,7 +632,7 @@ class Sender(threading.Thread):
         return "<Sender client_id=%s transactional_id=%s>" % (self.config['client_id'], self.config['transactional_id'])
 
 
-class SenderMetrics(object):
+class SenderMetrics:
 
     def __init__(self, metrics, client, metadata):
         self.metrics = metrics

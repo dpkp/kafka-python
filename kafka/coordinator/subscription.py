@@ -1,4 +1,4 @@
-class Subscription(object):
+class Subscription:
     __slots__ = ('_metadata', '_group_instance_id')
     def __init__(self, metadata, group_instance_id):
         self._metadata = metadata

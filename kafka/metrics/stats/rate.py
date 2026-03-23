@@ -2,7 +2,7 @@ from kafka.metrics.measurable_stat import AbstractMeasurableStat
 from kafka.metrics.stats.sampled_stat import AbstractSampledStat
 
 
-class TimeUnit(object):
+class TimeUnit:
     _names = {
         'nanosecond': 0,
         'microsecond': 1,

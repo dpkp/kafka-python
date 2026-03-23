@@ -15,7 +15,7 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 
-class ExternalService(object):
+class ExternalService:
     def __init__(self, host, port):
         log.info("Using already running service at %s:%d", host, port)
         self.host = host

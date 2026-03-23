@@ -4,7 +4,7 @@ from kafka.metrics.stats import Histogram
 from kafka.metrics.stats.sampled_stat import AbstractSampledStat
 
 
-class BucketSizing(object):
+class BucketSizing:
     CONSTANT = 0
     LINEAR = 1
 

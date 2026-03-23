@@ -22,7 +22,7 @@ NO_PRODUCER_EPOCH = -1
 NO_SEQUENCE = -1
 
 
-class ProducerIdAndEpoch(object):
+class ProducerIdAndEpoch:
     __slots__ = ('producer_id', 'epoch')
 
     def __init__(self, producer_id, epoch):
@@ -87,7 +87,7 @@ class Priority(IntEnum):
     END_TXN = 3
 
 
-class TransactionManager(object):
+class TransactionManager:
     """
     A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
     """
@@ -491,7 +491,7 @@ class TransactionManager(object):
             return AddPartitionsToTxnHandler(self, self._pending_partitions_in_transaction)
 
 
-class TransactionalRequestResult(object):
+class TransactionalRequestResult:
     def __init__(self):
         self._latch = threading.Event()
         self._error = None

@@ -13,7 +13,7 @@ from kafka.structs import TopicPartition
 log = logging.getLogger(__name__)
 
 
-class AtomicInteger(object):
+class AtomicInteger:
     def __init__(self, val=0):
         self._lock = threading.Lock()
         self._val = val
@@ -32,7 +32,7 @@ class AtomicInteger(object):
         return self._val
 
 
-class RecordAccumulator(object):
+class RecordAccumulator:
     """
     This class maintains a dequeue per TopicPartition that accumulates messages
     into MessageSets to be sent to the server.
@@ -497,7 +497,7 @@ class RecordAccumulator(object):
         self._closed = True
 
 
-class IncompleteProducerBatches(object):
+class IncompleteProducerBatches:
     """A threadsafe helper class to hold ProducerBatches that haven't been ack'd yet"""
 
     def __init__(self):

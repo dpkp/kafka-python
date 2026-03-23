@@ -15,7 +15,7 @@ class FinalState(IntEnum):
     SUCCEEDED = 2
 
 
-class ProducerBatch(object):
+class ProducerBatch:
     def __init__(self, tp, records, now=None):
         now = time.monotonic() if now is None else now
         self.max_record_size = 0

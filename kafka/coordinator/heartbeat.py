@@ -7,7 +7,7 @@ from kafka.errors import KafkaConfigurationError
 log = logging.getLogger(__name__)
 
 
-class Heartbeat(object):
+class Heartbeat:
     DEFAULT_CONFIG = {
         'group_id': None,
         'heartbeat_interval_ms': 3000,

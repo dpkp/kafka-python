@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 PRODUCER_CLIENT_ID_SEQUENCE = AtomicInteger()
 
 
-class KafkaProducer(object):
+class KafkaProducer:
     """A Kafka client that publishes records to the Kafka cluster.
 
     The producer is thread safe and sharing a single producer instance across
@@ -592,7 +592,7 @@ class KafkaProducer(object):
         """
         if null_logger:
             # Disable logger during destruction to avoid touching dangling references
-            class NullLogger(object):
+            class NullLogger:
                 def __getattr__(self, name):
                     return lambda *args: None
 
