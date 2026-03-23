@@ -941,7 +941,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                 log.debug("Successfully added offsets for %s from consumer group %s to transaction.",
                           tp, self.consumer_group_id)
                 del self.transaction_manager._pending_txn_offset_commits[tp]
-            elif error in (errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError, Errors.RequestTimedOutError):
+            elif error in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError, Errors.RequestTimedOutError):
                 retriable_failure = True
                 lookup_coordinator = True
             elif error is Errors.UnknownTopicOrPartitionError:
