@@ -194,6 +194,7 @@ def test_transactional_producer_offsets(kafka_broker):
     with producer_factory(bootstrap_servers=connect_str, transactional_id='testing') as producer:
         producer.init_transactions()
         producer.begin_transaction()
+        producer.send('transactional_test_topic', partition=0, value=b'msg1').get()
         producer.send_offsets_to_transaction(offsets, 'txn-test-group')
         producer.commit_transaction()
 
