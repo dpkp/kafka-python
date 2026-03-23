@@ -29,5 +29,5 @@ def test_struct_unrecognized_kwargs():
 
 
 def test_struct_missing_kwargs():
-    fr = FetchRequest[0](max_wait_time=100)
+    fr = FetchRequest[0](max_wait_ms=100)
     assert fr.min_bytes is None
