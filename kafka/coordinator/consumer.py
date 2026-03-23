@@ -137,7 +137,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self._consumer_sensors = None
 
         self._assignors = {}
-        for klass in self._config['assignors']:
+        for klass in self.config['assignors']:
             assignor = klass()
             self._assignors[assignor.name] = assignor
         self._cluster.request_update()

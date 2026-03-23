@@ -598,6 +598,7 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
         }
         return assignment
 
+    @classmethod
     def parse_member_metadata(cls, metadata):
         """
         Parses member metadata into a python object.
