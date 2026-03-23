@@ -123,16 +123,16 @@ def test_pattern_subscription(conn, metrics, api_version):
 
 
 def test_lookup_assignor(coordinator):
-    assert coordinator._lookup_assignor('roundrobin') is RoundRobinPartitionAssignor
-    assert coordinator._lookup_assignor('range') is RangePartitionAssignor
-    assert coordinator._lookup_assignor('sticky') is StickyPartitionAssignor
+    assert isinstance(coordinator._lookup_assignor('roundrobin'), RoundRobinPartitionAssignor)
+    assert isinstance(coordinator._lookup_assignor('range'), RangePartitionAssignor)
+    assert isinstance(coordinator._lookup_assignor('sticky'), StickyPartitionAssignor)
     assert coordinator._lookup_assignor('foobar') is None
 
 
 def test_join_complete(mocker, coordinator):
     coordinator._subscription.subscribe(topics=['foobar'])
     assignor = RoundRobinPartitionAssignor()
-    coordinator.config['assignors'] = (assignor,)
+    coordinator._assignors = {assignor.name: assignor}
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
@@ -145,7 +145,7 @@ def test_join_complete(mocker, coordinator):
 def test_join_complete_with_sticky_assignor(mocker, coordinator):
     coordinator._subscription.subscribe(topics=['foobar'])
     assignor = StickyPartitionAssignor()
-    coordinator.config['assignors'] = (assignor,)
+    coordinator._assignors = {assignor.name: assignor}
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
     generation = 3
