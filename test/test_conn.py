@@ -12,9 +12,9 @@ from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VE
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
 from kafka.protocol.api import RequestHeader
-from kafka.protocol.group import HeartbeatResponse
-from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.new.consumer import HeartbeatResponse
+from kafka.protocol.new.metadata import MetadataRequest
+from kafka.protocol.new.producer import ProduceRequest
 
 import kafka.errors as Errors
 
