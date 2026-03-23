@@ -1,7 +1,7 @@
 import pytest
 
+from kafka.errors import KafkaProtocolError, CorrelationIdError
 from kafka.protocol.parser import KafkaProtocol
-
 from kafka.protocol.new.metadata import (
     ApiVersionsRequest, ApiVersionsResponse,
     FindCoordinatorRequest, FindCoordinatorResponse,
@@ -241,3 +241,27 @@ def test_parser(test_case):
         assert len(responses) == 1
         assert responses[0][0] == correlation_id
         assert responses[0][1] == resp
+
+
+def test_correlation_id_error():
+    parser = KafkaProtocol(client_id='test-parser-error')
+    parser.send_request(MetadataRequest[0]())
+    sent_bytes = parser.send_bytes()
+    resp = MetadataResponse[0]()
+    resp.with_header(correlation_id=99)
+    with pytest.raises(CorrelationIdError):
+        parser.receive_bytes(resp.encode(header=True, framed=True))
+
+
+def test_parser_error():
+    parser = KafkaProtocol(client_id='test-parser-error')
+
+    parser.send_request(MetadataRequest[0]())
+    sent_bytes = parser.send_bytes()
+    resp = MetadataResponse[0]()
+    resp.with_header(correlation_id=0)
+    resp_bytes = resp.encode(header=True, framed=True)
+    # frame header too short -> response decode buffer underrun
+    bad_bytes = b''.join([resp_bytes[0:3], b'\x0a', resp_bytes[4:]])
+    with pytest.raises(KafkaProtocolError):
+        responses = parser.receive_bytes(bad_bytes)

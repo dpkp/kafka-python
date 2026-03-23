@@ -1,5 +1,6 @@
 import collections
 import logging
+import struct
 
 import kafka.errors as Errors
 from kafka.protocol.find_coordinator import FindCoordinatorResponse
@@ -163,7 +164,7 @@ class KafkaProtocol:
         # decode response
         try:
             response = response_type.decode(read_buffer)
-        except ValueError:
+        except (ValueError, struct.error):
             read_buffer.seek(0)
             buf = read_buffer.read()
             log.error('Response %d [ResponseType: %s RequestHeader: %s]:'
