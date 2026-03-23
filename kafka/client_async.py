@@ -16,7 +16,7 @@ from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.new.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
 from kafka.version import __version__
 

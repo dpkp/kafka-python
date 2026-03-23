@@ -3,7 +3,7 @@
 import socket
 
 from kafka.cluster import ClusterMetadata, collect_hosts
-from kafka.protocol.metadata import MetadataResponse
+from kafka.protocol.new.metadata import MetadataResponse
 
 
 def test_empty_broker_list():

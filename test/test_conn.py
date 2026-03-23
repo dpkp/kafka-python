@@ -11,10 +11,9 @@ from kafka.future import Future
 from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VERSION_CHECKS
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
-from kafka.protocol.api import RequestHeader
-from kafka.protocol.group import HeartbeatResponse
-from kafka.protocol.metadata import MetadataRequest
-from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.new.consumer import HeartbeatResponse
+from kafka.protocol.new.metadata import MetadataRequest
+from kafka.protocol.new.producer import ProduceRequest
 
 import kafka.errors as Errors
 
@@ -201,8 +200,8 @@ def test_send_no_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
     req = ProduceRequest[0](acks=0, timeout_ms=0, topic_data=())
-    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
-    payload_bytes = len(header.encode()) + len(req.encode())
+    req.with_header(correlation_id=0, client_id=conn.config['client_id'])
+    payload_bytes = len(req.encode(header=True, framed=False))
     third = payload_bytes // 3
     remainder = payload_bytes % 3
     _socket.send.side_effect = [4, third, third, third, remainder]
@@ -218,8 +217,8 @@ def test_send_response(_socket, conn):
     conn.connect()
     assert conn.state is ConnectionStates.CONNECTED
     req = MetadataRequest[0]([])
-    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
-    payload_bytes = len(header.encode()) + len(req.encode())
+    req.with_header(correlation_id=0, client_id=conn.config['client_id'])
+    payload_bytes = len(req.encode(header=True, framed=False))
     third = payload_bytes // 3
     remainder = payload_bytes % 3
     _socket.send.side_effect = [4, third, third, third, remainder]
@@ -237,11 +236,11 @@ def test_send_async_request_while_other_request_is_already_in_buffer(_socket, co
     bytes_sent_sensor = metrics.mocked_sensors['node-0.bytes-sent']
 
     req1 = MetadataRequest[0](topics='foo')
-    header1 = RequestHeader(req1.API_KEY, req1.API_VERSION, 0, conn.config['client_id'])
-    payload_bytes1 = len(header1.encode()) + len(req1.encode())
+    req1.with_header(correlation_id=0, client_id=conn.config['client_id'])
+    payload_bytes1 = len(req1.encode(header=True, framed=False))
     req2 = MetadataRequest[0]([])
-    header2 = RequestHeader(req2.API_KEY, req2.API_VERSION, 0, conn.config['client_id'])
-    payload_bytes2 = len(header2.encode()) + len(req2.encode())
+    req2.with_header(correlation_id=0, client_id=conn.config['client_id'])
+    payload_bytes2 = len(req2.encode(header=True, framed=False))
 
     # The first call to the socket will raise a transient SSL exception. This will make the first
     # request to be kept in the internal buffer to be sent in the next call of
@@ -299,8 +298,8 @@ def test_recv_disconnected(_socket, conn):
     assert conn.connected()
 
     req = MetadataRequest[0]([])
-    header = RequestHeader(req.API_KEY, req.API_VERSION, 0, conn.config['client_id'])
-    payload_bytes = len(header.encode()) + len(req.encode())
+    req.with_header(correlation_id=0, client_id=conn.config['client_id'])
+    payload_bytes = len(req.encode(header=True, framed=False))
     _socket.send.side_effect = [4, payload_bytes]
     conn.send(req)
 
