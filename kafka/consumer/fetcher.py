@@ -8,8 +8,8 @@ import time
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.fetch import FetchRequest, AbortedTransaction
-from kafka.protocol.list_offsets import (
+from kafka.protocol.new.consumer import FetchRequest
+from kafka.protocol.new.consumer import (
     ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
 from kafka.record import MemoryRecords
@@ -910,7 +910,7 @@ class Fetcher(object):
         def __init__(self, fetch_offset, tp, records,
                      key_deserializer=None, value_deserializer=None,
                      check_crcs=True, isolation_level=READ_UNCOMMITTED,
-                     aborted_transactions=None, # raw data from response / list of (producer_id, first_offset) tuples
+                     aborted_transactions=None, # AbortedTransaction data from FetchResponse
                      metric_aggregator=None, on_drain=lambda x: None):
             self.fetch_offset = fetch_offset
             self.topic_partition = tp
@@ -921,8 +921,7 @@ class Fetcher(object):
             self.isolation_level = isolation_level
             self.aborted_producer_ids = set()
             self.aborted_transactions = collections.deque(
-                sorted([AbortedTransaction(*data) for data in aborted_transactions] if aborted_transactions else [],
-                        key=lambda txn: txn.first_offset)
+                sorted(aborted_transactions or [], key=lambda txn: txn.first_offset)
             )
             self.metric_aggregator = metric_aggregator
             self.check_crcs = check_crcs

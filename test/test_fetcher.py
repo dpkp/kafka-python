@@ -14,8 +14,10 @@ from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
-from kafka.protocol.fetch import FetchRequest, FetchResponse
-from kafka.protocol.list_offsets import ListOffsetsResponse, OffsetResetStrategy
+from kafka.protocol.new.consumer import (
+    FetchRequest, FetchResponse,
+    ListOffsetsResponse, OffsetResetStrategy,
+)
 from kafka.errors import (
     StaleMetadata, NotLeaderForPartitionError,
     UnknownTopicOrPartitionError, OffsetOutOfRangeError

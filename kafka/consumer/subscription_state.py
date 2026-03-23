@@ -9,7 +9,7 @@ import threading
 import time
 
 import kafka.errors as Errors
-from kafka.protocol.list_offsets import OffsetResetStrategy
+from kafka.protocol.new.consumer import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata
 from kafka.util import ensure_valid_topic_name, synchronized
 
