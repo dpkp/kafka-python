@@ -20,7 +20,7 @@ TEST_API_VERSIONS_1 = {
             'response': (
                 b'\x00\x00\x00\x10\x00\x00\x00\x01\x00#\x00\x00\x00\x01\x00\x12\x00\x00\x00\x03',
                 1,
-                ApiVersionsResponse[0](error_code=35, api_versions=[(18, 0, 3)]) # Note different class on error - special case
+                ApiVersionsResponse[0](error_code=35, api_keys=[(18, 0, 3)]) # Note different class on error - special case
             ),
         },
         {
@@ -31,7 +31,7 @@ TEST_API_VERSIONS_1 = {
             'response': (
                 b'\x00\x00\x01j\x00\x00\x00\x02\x00\x003\x00\x00\x00\x00\x00\x08\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x02\x00\x00\x00\x05\x00\x00\x03\x00\x00\x00\t\x00\x00\x04\x00\x00\x00\x04\x00\x00\x05\x00\x00\x00\x03\x00\x00\x06\x00\x00\x00\x06\x00\x00\x07\x00\x00\x00\x03\x00\x00\x08\x00\x00\x00\x08\x00\x00\t\x00\x00\x00\x07\x00\x00\n\x00\x00\x00\x03\x00\x00\x0b\x00\x00\x00\x07\x00\x00\x0c\x00\x00\x00\x04\x00\x00\r\x00\x00\x00\x04\x00\x00\x0e\x00\x00\x00\x05\x00\x00\x0f\x00\x00\x00\x05\x00\x00\x10\x00\x00\x00\x04\x00\x00\x11\x00\x00\x00\x01\x00\x00\x12\x00\x00\x00\x03\x00\x00\x13\x00\x00\x00\x05\x00\x00\x14\x00\x00\x00\x04\x00\x00\x15\x00\x00\x00\x02\x00\x00\x16\x00\x00\x00\x03\x00\x00\x17\x00\x00\x00\x03\x00\x00\x18\x00\x00\x00\x01\x00\x00\x19\x00\x00\x00\x01\x00\x00\x1a\x00\x00\x00\x01\x00\x00\x1b\x00\x00\x00\x00\x00\x00\x1c\x00\x00\x00\x03\x00\x00\x1d\x00\x00\x00\x02\x00\x00\x1e\x00\x00\x00\x02\x00\x00\x1f\x00\x00\x00\x02\x00\x00 \x00\x00\x00\x03\x00\x00!\x00\x00\x00\x01\x00\x00"\x00\x00\x00\x01\x00\x00#\x00\x00\x00\x02\x00\x00$\x00\x00\x00\x02\x00\x00%\x00\x00\x00\x02\x00\x00&\x00\x00\x00\x02\x00\x00\'\x00\x00\x00\x02\x00\x00(\x00\x00\x00\x02\x00\x00)\x00\x00\x00\x02\x00\x00*\x00\x00\x00\x02\x00\x00+\x00\x00\x00\x02\x00\x00,\x00\x00\x00\x01\x00\x00-\x00\x00\x00\x00\x00\x00.\x00\x00\x00\x00\x00\x00/\x00\x00\x00\x00\x00\x000\x00\x00\x00\x00\x00\x001\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
                 2,
-                ApiVersionsResponse[3](error_code=0, api_versions=[(0, 0, 8), (1, 0, 11), (2, 0, 5), (3, 0, 9), (4, 0, 4), (5, 0, 3), (6, 0, 6), (7, 0, 3), (8, 0, 8), (9, 0, 7), (10, 0, 3), (11, 0, 7), (12, 0, 4), (13, 0, 4), (14, 0, 5), (15, 0, 5), (16, 0, 4), (17, 0, 1), (18, 0, 3), (19, 0, 5), (20, 0, 4), (21, 0, 2), (22, 0, 3), (23, 0, 3), (24, 0, 1), (25, 0, 1), (26, 0, 1), (27, 0, 0), (28, 0, 3), (29, 0, 2), (30, 0, 2), (31, 0, 2), (32, 0, 3), (33, 0, 1), (34, 0, 1), (35, 0, 2), (36, 0, 2), (37, 0, 2), (38, 0, 2), (39, 0, 2), (40, 0, 2), (41, 0, 2), (42, 0, 2), (43, 0, 2), (44, 0, 1), (45, 0, 0), (46, 0, 0), (47, 0, 0), (48, 0, 0), (49, 0, 0)], throttle_time_ms=0),
+                ApiVersionsResponse[3](error_code=0, api_keys=[(0, 0, 8), (1, 0, 11), (2, 0, 5), (3, 0, 9), (4, 0, 4), (5, 0, 3), (6, 0, 6), (7, 0, 3), (8, 0, 8), (9, 0, 7), (10, 0, 3), (11, 0, 7), (12, 0, 4), (13, 0, 4), (14, 0, 5), (15, 0, 5), (16, 0, 4), (17, 0, 1), (18, 0, 3), (19, 0, 5), (20, 0, 4), (21, 0, 2), (22, 0, 3), (23, 0, 3), (24, 0, 1), (25, 0, 1), (26, 0, 1), (27, 0, 0), (28, 0, 3), (29, 0, 2), (30, 0, 2), (31, 0, 2), (32, 0, 3), (33, 0, 1), (34, 0, 1), (35, 0, 2), (36, 0, 2), (37, 0, 2), (38, 0, 2), (39, 0, 2), (40, 0, 2), (41, 0, 2), (42, 0, 2), (43, 0, 2), (44, 0, 1), (45, 0, 0), (46, 0, 0), (47, 0, 0), (48, 0, 0), (49, 0, 0)], throttle_time_ms=0),
             ),
         },
     ),
@@ -49,7 +49,7 @@ TEST_API_VERSIONS_2 = {
             'response': (
                 b'\x00\x00\x00\x10\x00\x00\x00\x01\x00#\x00\x00\x00\x01\x00\x12\x00\x00\x00\x03',
                 1,
-                ApiVersionsResponse[0](error_code=35, api_versions=[(18, 0, 3)]) # Note different class on error - special case
+                ApiVersionsResponse[0](error_code=35, api_keys=[(18, 0, 3)]) # Note different class on error - special case
             ),
         },
         {
@@ -60,7 +60,7 @@ TEST_API_VERSIONS_2 = {
             'response': (
                 b'\x00\x00\x01j\x00\x00\x00\x02\x00\x003\x00\x00\x00\x00\x00\x08\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x02\x00\x00\x00\x05\x00\x00\x03\x00\x00\x00\t\x00\x00\x04\x00\x00\x00\x04\x00\x00\x05\x00\x00\x00\x03\x00\x00\x06\x00\x00\x00\x06\x00\x00\x07\x00\x00\x00\x03\x00\x00\x08\x00\x00\x00\x08\x00\x00\t\x00\x00\x00\x07\x00\x00\n\x00\x00\x00\x03\x00\x00\x0b\x00\x00\x00\x07\x00\x00\x0c\x00\x00\x00\x04\x00\x00\r\x00\x00\x00\x04\x00\x00\x0e\x00\x00\x00\x05\x00\x00\x0f\x00\x00\x00\x05\x00\x00\x10\x00\x00\x00\x04\x00\x00\x11\x00\x00\x00\x01\x00\x00\x12\x00\x00\x00\x03\x00\x00\x13\x00\x00\x00\x05\x00\x00\x14\x00\x00\x00\x04\x00\x00\x15\x00\x00\x00\x02\x00\x00\x16\x00\x00\x00\x03\x00\x00\x17\x00\x00\x00\x03\x00\x00\x18\x00\x00\x00\x01\x00\x00\x19\x00\x00\x00\x01\x00\x00\x1a\x00\x00\x00\x01\x00\x00\x1b\x00\x00\x00\x00\x00\x00\x1c\x00\x00\x00\x03\x00\x00\x1d\x00\x00\x00\x02\x00\x00\x1e\x00\x00\x00\x02\x00\x00\x1f\x00\x00\x00\x02\x00\x00 \x00\x00\x00\x03\x00\x00!\x00\x00\x00\x01\x00\x00"\x00\x00\x00\x01\x00\x00#\x00\x00\x00\x02\x00\x00$\x00\x00\x00\x02\x00\x00%\x00\x00\x00\x02\x00\x00&\x00\x00\x00\x02\x00\x00\'\x00\x00\x00\x02\x00\x00(\x00\x00\x00\x02\x00\x00)\x00\x00\x00\x02\x00\x00*\x00\x00\x00\x02\x00\x00+\x00\x00\x00\x02\x00\x00,\x00\x00\x00\x01\x00\x00-\x00\x00\x00\x00\x00\x00.\x00\x00\x00\x00\x00\x00/\x00\x00\x00\x00\x00\x000\x00\x00\x00\x00\x00\x001\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
                 2,
-                ApiVersionsResponse[3](error_code=0, api_versions=[(0, 0, 8), (1, 0, 11), (2, 0, 5), (3, 0, 9), (4, 0, 4), (5, 0, 3), (6, 0, 6), (7, 0, 3), (8, 0, 8), (9, 0, 7), (10, 0, 3), (11, 0, 7), (12, 0, 4), (13, 0, 4), (14, 0, 5), (15, 0, 5), (16, 0, 4), (17, 0, 1), (18, 0, 3), (19, 0, 5), (20, 0, 4), (21, 0, 2), (22, 0, 3), (23, 0, 3), (24, 0, 1), (25, 0, 1), (26, 0, 1), (27, 0, 0), (28, 0, 3), (29, 0, 2), (30, 0, 2), (31, 0, 2), (32, 0, 3), (33, 0, 1), (34, 0, 1), (35, 0, 2), (36, 0, 2), (37, 0, 2), (38, 0, 2), (39, 0, 2), (40, 0, 2), (41, 0, 2), (42, 0, 2), (43, 0, 2), (44, 0, 1), (45, 0, 0), (46, 0, 0), (47, 0, 0), (48, 0, 0), (49, 0, 0)], throttle_time_ms=0),
+                ApiVersionsResponse[3](error_code=0, api_keys=[(0, 0, 8), (1, 0, 11), (2, 0, 5), (3, 0, 9), (4, 0, 4), (5, 0, 3), (6, 0, 6), (7, 0, 3), (8, 0, 8), (9, 0, 7), (10, 0, 3), (11, 0, 7), (12, 0, 4), (13, 0, 4), (14, 0, 5), (15, 0, 5), (16, 0, 4), (17, 0, 1), (18, 0, 3), (19, 0, 5), (20, 0, 4), (21, 0, 2), (22, 0, 3), (23, 0, 3), (24, 0, 1), (25, 0, 1), (26, 0, 1), (27, 0, 0), (28, 0, 3), (29, 0, 2), (30, 0, 2), (31, 0, 2), (32, 0, 3), (33, 0, 1), (34, 0, 1), (35, 0, 2), (36, 0, 2), (37, 0, 2), (38, 0, 2), (39, 0, 2), (40, 0, 2), (41, 0, 2), (42, 0, 2), (43, 0, 2), (44, 0, 1), (45, 0, 0), (46, 0, 0), (47, 0, 0), (48, 0, 0), (49, 0, 0)], throttle_time_ms=0),
             ),
         },
         {
@@ -100,7 +100,7 @@ TEST_FIND_COORDINATOR = {
             'response': (
                 b'\x00\x00\x007\x00\x00\x00\x01\x00\x00\x00\x00\x00\x0f\x00!The coordinator is not available.\xff\xff\xff\xff\x00\x00\xff\xff\xff\xff',
                 1,
-                FindCoordinatorResponse[2](throttle_time_ms=0, error_code=15, error_message='The coordinator is not available.', coordinator_id=-1, host='', port=-1),
+                FindCoordinatorResponse[2](throttle_time_ms=0, error_code=15, error_message='The coordinator is not available.', node_id=-1, host='', port=-1),
             ),
         },
         {
@@ -111,7 +111,7 @@ TEST_FIND_COORDINATOR = {
             'response': (
                 b'\x00\x00\x00#\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x04NONE\x00\x00\x00\x00\x00\tlocalhost\x00\x00\xe1\t',
                 2,
-                FindCoordinatorResponse[2](throttle_time_ms=0, error_code=0, error_message='NONE', coordinator_id=0, host='localhost', port=57609),
+                FindCoordinatorResponse[2](throttle_time_ms=0, error_code=0, error_message='NONE', node_id=0, host='localhost', port=57609),
             ),
         },
     ),
@@ -159,7 +159,7 @@ TEST_JOIN_GROUP = {
 
         {
             'request': (
-                OffsetFetchRequest[5](consumer_group='test-group-IrXFAX', topics=[('test_group_fNFDXXKzKt', [0])]),
+                OffsetFetchRequest[5](group_id='test-group-IrXFAX', topics=[('test_group_fNFDXXKzKt', [0])]),
                 b'\x00\x00\x00Q\x00\t\x00\x05\x00\x00\x00\x04\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00',
             ),
             'response': (
@@ -183,7 +183,7 @@ TEST_JOIN_GROUP = {
 
         {
             'request': (
-                OffsetCommitRequest[7](group_id='test-group-IrXFAX', generation_id=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, topics=[('test_group_fNFDXXKzKt', [(0, 0, -1, '')])]),
+                OffsetCommitRequest[7](group_id='test-group-IrXFAX', generation_id_or_member_epoch=1, member_id='consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b', group_instance_id=None, topics=[('test_group_fNFDXXKzKt', [(0, 0, -1, '')])]),
                 b'\x00\x00\x00\x9d\x00\x08\x00\x07\x00\x00\x00\x06\x00\x11consumer_thread-0\x00\x11test-group-IrXFAX\x00\x00\x00\x01\x006consumer_thread-0-b3c8845c-6071-48bc-9cf1-372f84c4409b\xff\xff\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00',
             ),
             'response': (
