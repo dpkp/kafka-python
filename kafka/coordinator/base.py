@@ -216,9 +216,9 @@ class BaseCoordinator(object):
             leader_id (str): The id of the leader (which is this member)
             protocol (str): the chosen group protocol (assignment strategy)
             members (list): [JoinGroupResponseMember] from JoinGroupResponse.
-                metadata_bytes are associated with the chosen group protocol,
+                metadata is associated with the chosen group protocol,
                 and the Coordinator subclass is responsible for decoding
-                metadata_bytes based on that protocol.
+                metadata based on that protocol.
 
         Returns:
             dict: {member_id: assignment}; assignment must either be bytes

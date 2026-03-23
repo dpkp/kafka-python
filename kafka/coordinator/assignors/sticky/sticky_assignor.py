@@ -576,26 +576,26 @@ class StickyPartitionAssignor(AbstractPartitionAssignor):
 
         Arguments:
             cluster (ClusterMetadata): cluster metadata
-            members (dict of {member_id: MemberMetadata}): decoded metadata for each member in the group.
+            members ([JoinGroupResponseMember]): decoded metadata for each member in the group.
 
         Returns:
           dict: {member_id: ConsumerProtocolAssignment}
         """
-        members_metadata = {}
-        for consumer, member_metadata in members.items():
-            members_metadata[consumer] = cls.parse_member_metadata(member_metadata)
-
+        members_metadata = {
+            member.member_id: cls.parse_member_metadata(member.metadata)
+            for member in members
+        }
         executor = StickyAssignmentExecutor(cluster, members_metadata)
         executor.perform_initial_assignment()
         executor.balance()
 
         cls._latest_partition_movements = executor.partition_movements
 
-        assignment = {}
-        for member_id in members:
-            assignment[member_id] = ConsumerProtocolAssignment(
-                cls.version, sorted(executor.get_final_assignment(member_id)), b''
-            )
+        assignment = {
+            member.member_id: ConsumerProtocolAssignment(
+                cls.version, sorted(executor.get_final_assignment(member.member_id)), b'')
+            for member in members
+        }
         return assignment
 
     @classmethod

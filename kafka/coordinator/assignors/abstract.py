@@ -22,9 +22,10 @@ class AbstractPartitionAssignor(object):
 
         Arguments:
             cluster (ClusterMetadata): metadata for use in assignment
-            members (dict of {member_id: Subscription}): decoded metadata
+            members ([JoinGroupResponseMember]): member_id and metadata
                 for each member in the group, including group_instance_id
-                when available.
+                when available (v5+). metadata is a decoded instance of
+                ConsumerProtocolSubscription.
 
         Returns:
             dict: {member_id: ConsumerProtocolAssignment}
