@@ -14,7 +14,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.commit import OffsetCommitRequest, OffsetFetchRequest
+from kafka.protocol.new.consumer import OffsetCommitRequest, OffsetFetchRequest
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import Timer, WeakMethod
 
