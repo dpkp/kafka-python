@@ -19,8 +19,8 @@ from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.new.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
+    JoinGroupResponse,
 )
-from kafka.protocol.group import GroupMember
 from kafka.protocol.new.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
@@ -207,8 +207,10 @@ def test_perform_assignment(mocker, coordinator):
 
     ret = coordinator._perform_assignment(
         'member-foo', 'roundrobin',
-        [GroupMember(member, None, subscription.encode())
-         for member, subscription in group_subscriptions.items()])
+        [JoinGroupResponse.JoinGroupResponseMember(
+            member_id=member_id,
+            metadata=subscription.encode(),
+         ) for member_id, subscription in group_subscriptions.items()])
 
     assert RoundRobinPartitionAssignor.assign.call_count == 1
     RoundRobinPartitionAssignor.assign.assert_called_with(
@@ -302,7 +304,7 @@ def test_close(mocker, coordinator):
     assert coordinator._maybe_auto_commit_offsets_sync.call_count == 1
     coordinator._handle_leave_group_response.assert_called_with('foobar')
 
-    assert coordinator.generation() is None
+    assert coordinator.generation_if_stable() is None
     assert coordinator._generation == Generation.NO_GENERATION
     assert coordinator.state is MemberState.UNJOINED
     assert coordinator.rejoin_needed is True
