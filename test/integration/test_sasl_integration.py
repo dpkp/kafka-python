@@ -5,7 +5,7 @@ import time
 import pytest
 
 from kafka.admin import NewTopic
-from kafka.protocol.metadata import MetadataRequest_v1
+from kafka.protocol.new.metadata import MetadataRequest
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 
 
@@ -69,7 +69,7 @@ def test_client(request, sasl_kafka):
     sasl_kafka.create_topics([topic_name], num_partitions=1)
 
     client, = sasl_kafka.get_clients(1)
-    request = MetadataRequest_v1(None)
+    request = MetadataRequest(topics=None, version=1)
     timeout_at = time.time() + 1
     while not client.is_ready(0):
         client.maybe_connect(0)
