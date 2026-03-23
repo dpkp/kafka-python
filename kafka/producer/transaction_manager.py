@@ -6,12 +6,11 @@ import logging
 import threading
 
 import kafka.errors as Errors
-from kafka.protocol.add_offsets_to_txn import AddOffsetsToTxnRequest
-from kafka.protocol.add_partitions_to_txn import AddPartitionsToTxnRequest
-from kafka.protocol.end_txn import EndTxnRequest
-from kafka.protocol.find_coordinator import FindCoordinatorRequest
-from kafka.protocol.init_producer_id import InitProducerIdRequest
-from kafka.protocol.txn_offset_commit import TxnOffsetCommitRequest
+from kafka.protocol.new.metadata import FindCoordinatorRequest
+from kafka.protocol.new.producer import (
+    AddOffsetsToTxnRequest, AddPartitionsToTxnRequest,
+    EndTxnRequest, InitProducerIdRequest, TxnOffsetCommitRequest,
+)
 from kafka.structs import TopicPartition
 
 
@@ -942,7 +941,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                 log.debug("Successfully added offsets for %s from consumer group %s to transaction.",
                           tp, self.consumer_group_id)
                 del self.transaction_manager._pending_txn_offset_commits[tp]
-            elif error in (errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError, Errors.RequestTimedOutError):
+            elif error in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError, Errors.RequestTimedOutError):
                 retriable_failure = True
                 lookup_coordinator = True
             elif error is Errors.UnknownTopicOrPartitionError:
