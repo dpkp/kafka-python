@@ -245,9 +245,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         # give the assignor a chance to update internal state
         # based on the received assignment
-        assignor.on_assignment(assignment)
-        if assignor.name == 'sticky':
-            assignor.on_generation_assignment(generation)
+        assignor.on_assignment(assignment, generation)
 
         # reschedule the auto commit starting from now
         self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval

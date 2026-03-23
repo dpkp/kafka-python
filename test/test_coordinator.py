@@ -136,9 +136,10 @@ def test_join_complete(mocker, coordinator):
     mocker.spy(assignor, 'on_assignment')
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(0, 'member-foo', 'roundrobin', assignment.encode())
+    generation = 12
+    coordinator._on_join_complete(generation, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
-    assignor.on_assignment.assert_called_with(assignment)
+    assignor.on_assignment.assert_called_with(assignment, generation)
 
 
 def test_join_complete_with_sticky_assignor(mocker, coordinator):
@@ -146,15 +147,12 @@ def test_join_complete_with_sticky_assignor(mocker, coordinator):
     assignor = StickyPartitionAssignor()
     coordinator.config['assignors'] = (assignor,)
     mocker.spy(assignor, 'on_assignment')
-    mocker.spy(assignor, 'on_generation_assignment')
     assert assignor.on_assignment.call_count == 0
-    assert assignor.on_generation_assignment.call_count == 0
+    generation = 3
     assignment = ConsumerProtocolMemberAssignment_v0(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(0, 'member-foo', 'sticky', assignment.encode())
+    coordinator._on_join_complete(generation, 'member-foo', 'sticky', assignment.encode())
     assert assignor.on_assignment.call_count == 1
-    assert assignor.on_generation_assignment.call_count == 1
-    assignor.on_assignment.assert_called_with(assignment)
-    assignor.on_generation_assignment.assert_called_with(0)
+    assignor.on_assignment.assert_called_with(assignment, generation)
 
 
 def test_subscription_listener(mocker, coordinator):
