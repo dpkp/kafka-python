@@ -12,7 +12,7 @@ from kafka.protocol.new.metadata import (
     ApiVersionsRequest as NewApiVersionsRequest,
     ApiVersionsResponse as NewApiVersionsResponse
 )
-from kafka.protocol.types import Int16
+from kafka.protocol.new.schemas.fields.codecs import Int16
 
 
 # --- Golden Samples (Generated from existing working system) ---
