@@ -136,6 +136,10 @@ class ConsumerCoordinator(BaseCoordinator):
         else:
             self._consumer_sensors = None
 
+        self._assignors = {}
+        for klass in self.config['assignors']:
+            assignor = klass()
+            self._assignors[assignor.name] = assignor
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
 
@@ -166,9 +170,9 @@ class ConsumerCoordinator(BaseCoordinator):
         # best I've got for now.
         self._joined_subscription = set(self._subscription.subscription)
         metadata_list = []
-        for assignor in self.config['assignors']:
-            metadata = assignor.metadata(self._joined_subscription)
-            group_protocol = (assignor.name, metadata)
+        for assignor in self._assignors:
+            metadata = self._assignors[assignor].metadata(self._joined_subscription)
+            group_protocol = (assignor, metadata)
             metadata_list.append(group_protocol)
         return metadata_list
 
@@ -221,10 +225,7 @@ class ConsumerCoordinator(BaseCoordinator):
         return metadata_snapshot
 
     def _lookup_assignor(self, name):
-        for assignor in self.config['assignors']:
-            if assignor.name == name:
-                return assignor
-        return None
+        return self._assignors.get(name, None)
 
     def _on_join_complete(self, generation, member_id, protocol,
                           member_assignment_bytes):
@@ -326,9 +327,9 @@ class ConsumerCoordinator(BaseCoordinator):
         return min(self.next_auto_commit_deadline - time.monotonic(),
                    self.time_to_next_heartbeat())
 
-    def _perform_assignment(self, leader_id, assignment_strategy, members):
-        assignor = self._lookup_assignor(assignment_strategy)
-        assert assignor, 'Invalid assignment protocol: %s' % (assignment_strategy,)
+    def _perform_assignment(self, leader_id, protocol_name, members):
+        assignor = self._lookup_assignor(protocol_name)
+        assert assignor, 'Invalid assignment protocol: %s' % (protocol_name,)
         all_subscribed_topics = set()
         for member in members:
             member.metadata = ConsumerProtocolSubscription.decode(member.metadata)
