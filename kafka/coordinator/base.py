@@ -57,7 +57,7 @@ class UnjoinedGroupException(Errors.KafkaError):
     retriable = True
 
 
-class BaseCoordinator:
+class BaseCoordinator(metaclass=abc.ABCMeta):
     """
     BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group

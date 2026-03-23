@@ -5,7 +5,7 @@ from kafka.protocol.new.consumer.metadata import (
 )
 
 
-class AbstractPartitionAssignor:
+class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
     """
     Abstract assignor implementation which does some common grunt work (in particular collecting
     partition counts which are always needed in assignors).

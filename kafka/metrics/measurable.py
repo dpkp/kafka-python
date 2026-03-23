@@ -1,7 +1,7 @@
 import abc
 
 
-class AbstractMeasurable:
+class AbstractMeasurable(metaclass=abc.ABCMeta):
     """A measurable quantity that can be registered as a metric"""
     @abc.abstractmethod
     def measure(self, config, now):
