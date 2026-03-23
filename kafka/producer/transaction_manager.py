@@ -755,8 +755,8 @@ class FindCoordinatorHandler(TxnRequestHandler):
         else:
             raise ValueError("Unrecognized coordinator type: %s" % (coord_type,))
         self.request = FindCoordinatorRequest[version](
-            coordinator_key=coord_key,
-            coordinator_type=coord_type_int8,
+            key=coord_key,
+            key_type=coord_type_int8,
         )
 
     @property
