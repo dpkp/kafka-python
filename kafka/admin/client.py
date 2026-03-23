@@ -23,7 +23,7 @@ from kafka.protocol.new.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest, ElectLeadersRequest, ElectionType)
-from kafka.protocol.commit import OffsetFetchRequest
+from kafka.protocol.new.consumer import OffsetFetchRequest
 from kafka.protocol.new.metadata import MetadataRequest, FindCoordinatorRequest
 from kafka.protocol.types import Array
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation

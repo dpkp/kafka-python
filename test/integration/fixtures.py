@@ -13,8 +13,8 @@ import py
 
 from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError
-from kafka.protocol.admin import CreateTopicsRequest
-from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.new.admin import CreateTopicsRequest
+from kafka.protocol.new.metadata import MetadataRequest
 from test.testutil import env_kafka_version, random_string
 from test.service import ExternalService, SpawnedService
 
