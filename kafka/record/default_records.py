@@ -68,7 +68,7 @@ from kafka.codec import (
 import kafka.codec as codecs
 
 
-class DefaultRecordBase(object):
+class DefaultRecordBase:
 
     __slots__ = ()
 
@@ -744,7 +744,7 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
                 self._num_records))
 
 
-class DefaultRecordMetadata(object):
+class DefaultRecordMetadata:
 
     __slots__ = ("_size", "_timestamp", "_offset")
 

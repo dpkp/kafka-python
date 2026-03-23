@@ -50,7 +50,7 @@ def maybe_skip_unsupported_compression(compression_type):
         pytest.skip("Compression libraries not installed for %s" % (compression_type,))
 
 
-class Timer(object):
+class Timer:
     def __enter__(self):
         self.start = time.monotonic()
         return self

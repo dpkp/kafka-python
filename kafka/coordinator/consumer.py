@@ -975,7 +975,7 @@ class ConsumerCoordinator(BaseCoordinator):
                                   self._commit_offsets_async_on_complete)
 
 
-class ConsumerCoordinatorMetrics(object):
+class ConsumerCoordinatorMetrics:
     def __init__(self, metrics, metric_group_prefix, subscription):
         self.metrics = metrics
         self.metric_group_name = '%s-coordinator-metrics' % (metric_group_prefix,)

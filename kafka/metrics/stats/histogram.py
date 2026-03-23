@@ -1,7 +1,7 @@
 import math
 
 
-class Histogram(object):
+class Histogram:
     __slots__ = ('_hist', '_count', '_bin_scheme')
 
     def __init__(self, bin_scheme):
@@ -39,7 +39,7 @@ class Histogram(object):
         values.append('%s:%s' % (float('inf'), self._hist[-1]))
         return '{%s}' % ','.join(values)
 
-    class ConstantBinScheme(object):
+    class ConstantBinScheme:
         __slots__ = ('_min', '_max', '_bins', '_bucket_width')
 
         def __init__(self, bins, min_val, max_val):
@@ -70,7 +70,7 @@ class Histogram(object):
             else:
                 return int(((x - self._min) / self._bucket_width) + 1)
 
-    class LinearBinScheme(object):
+    class LinearBinScheme:
         __slots__ = ('_bins', '_max', '_scale')
 
         def __init__(self, num_bins, max_val):

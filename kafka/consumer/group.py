@@ -21,7 +21,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaConsumer(object):
+class KafkaConsumer:
     """Consume records from a Kafka cluster.
 
     The consumer will transparently handle the failure of servers in the Kafka

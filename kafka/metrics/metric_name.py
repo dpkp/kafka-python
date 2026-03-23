@@ -1,7 +1,7 @@
 import copy
 
 
-class MetricName(object):
+class MetricName:
     """
     This class encapsulates a metric's name, logical group and its
     related attributes (tags).

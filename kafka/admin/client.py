@@ -32,7 +32,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaAdminClient(object):
+class KafkaAdminClient:
     """A class for administering the Kafka cluster.
 
     Warning:

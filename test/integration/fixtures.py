@@ -59,7 +59,7 @@ def gen_ssl_resources(directory):
     """.format(directory))
 
 
-class Fixture(object):
+class Fixture:
     kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
     scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
     project_root = os.environ.get('PROJECT_ROOT',

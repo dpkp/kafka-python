@@ -119,7 +119,7 @@ class MemoryRecords(ABCRecords):
     next = __next__
 
 
-class MemoryRecordsBuilder(object):
+class MemoryRecordsBuilder:
 
     __slots__ = ("_builder", "_batch_size", "_buffer", "_next_offset", "_closed",
                  "_magic", "_bytes_written", "_producer_id", "_producer_epoch")

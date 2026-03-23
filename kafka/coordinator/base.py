@@ -22,13 +22,13 @@ log = logging.getLogger('kafka.coordinator')
 heartbeat_log = logging.getLogger('kafka.coordinator.heartbeat')
 
 
-class MemberState(object):
+class MemberState:
     UNJOINED = '<unjoined>'  # the client is not part of a group
     REBALANCING = '<rebalancing>'  # the client has begun rebalancing
     STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
 
-class Generation(object):
+class Generation:
     def __init__(self, generation_id, member_id, protocol):
         self.generation_id = generation_id
         self.member_id = member_id
@@ -57,7 +57,7 @@ class UnjoinedGroupException(Errors.KafkaError):
     retriable = True
 
 
-class BaseCoordinator(object):
+class BaseCoordinator:
     """
     BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group
@@ -1036,7 +1036,7 @@ class BaseCoordinator(object):
             future.failure(error)
 
 
-class GroupCoordinatorMetrics(object):
+class GroupCoordinatorMetrics:
     def __init__(self, heartbeat, metrics, prefix, tags=None):
         self.heartbeat = heartbeat
         self.metrics = metrics

@@ -61,7 +61,7 @@ AFI_NAMES = {
 }
 
 
-class ConnectionStates(object):
+class ConnectionStates:
     DISCONNECTED = '<disconnected>'
     CONNECTING = '<connecting>'
     HANDSHAKE = '<handshake>'
@@ -71,7 +71,7 @@ class ConnectionStates(object):
     API_VERSIONS_RECV = '<checking_api_versions_recv>'
 
 
-class BrokerConnection(object):
+class BrokerConnection:
     """Initialize a Kafka broker connection
 
     Keyword Arguments:
@@ -1229,7 +1229,7 @@ class BrokerConnection(object):
             AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
-class BrokerConnectionMetrics(object):
+class BrokerConnectionMetrics:
     def __init__(self, metrics, metric_group_prefix, node_id):
         self.metrics = metrics
 

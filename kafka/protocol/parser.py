@@ -10,7 +10,7 @@ from kafka.version import __version__
 log = logging.getLogger(__name__)
 
 
-class KafkaProtocol(object):
+class KafkaProtocol:
     """Manage the kafka network protocol
 
     Use an instance of KafkaProtocol to manage bytes send/recv'd
@@ -46,7 +46,7 @@ class KafkaProtocol(object):
         """Encode and queue a kafka api request for sending.
 
         Arguments:
-            request (object): An un-encoded kafka request.
+            request : An un-encoded kafka request.
             correlation_id (int, optional): Optionally specify an ID to
                 correlate requests with responses. If not provided, an ID will
                 be generated automatically.

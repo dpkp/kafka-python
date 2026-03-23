@@ -1,4 +1,4 @@
-class NewTopic(object):
+class NewTopic:
     """ A class for new topic creation
     Arguments:
         name (string): name of the topic

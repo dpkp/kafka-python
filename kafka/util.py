@@ -69,7 +69,7 @@ def ensure_valid_topic_name(topic):
         raise ValueError('Topic name "{0}" is illegal, it contains a character other than ASCII alphanumerics, ".", "_" and "-"'.format(topic))
 
 
-class WeakMethod(object):
+class WeakMethod:
     """
     Callable that weakly references a method and the object it is bound to. It
     is based on https://stackoverflow.com/a/24287465.

@@ -464,7 +464,7 @@ class ConstantMeasurable(AbstractMeasurable):
         return self._value
 
 
-class TimeKeeper(object):
+class TimeKeeper:
     """
     A clock that you can manually advance by calling sleep
     """

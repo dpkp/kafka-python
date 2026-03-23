@@ -5,7 +5,7 @@ import threading
 log = logging.getLogger(__name__)
 
 
-class Future(object):
+class Future:
     error_on_callbacks = False # and errbacks
 
     def __init__(self):

@@ -5,7 +5,7 @@ from kafka.errors import QuotaViolationError
 from kafka.metrics import KafkaMetric
 
 
-class Sensor(object):
+class Sensor:
     """
     A sensor applies a continuous sequence of numerical values
     to a set of associated metrics. For example a sensor on

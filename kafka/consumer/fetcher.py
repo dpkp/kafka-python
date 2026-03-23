@@ -51,7 +51,7 @@ class RecordTooLargeError(Errors.KafkaError):
     pass
 
 
-class Fetcher(object):
+class Fetcher:
     DEFAULT_CONFIG = {
         'key_deserializer': None,
         'value_deserializer': None,
@@ -906,7 +906,7 @@ class Fetcher(object):
             self._next_partition_records.drain()
         self._next_in_line_exception_metadata = None
 
-    class PartitionRecords(object):
+    class PartitionRecords:
         def __init__(self, fetch_offset, tp, records,
                      key_deserializer=None, value_deserializer=None,
                      check_crcs=True, isolation_level=READ_UNCOMMITTED,
@@ -1082,7 +1082,7 @@ class Fetcher(object):
             return record.abort
 
 
-class FetchSessionHandler(object):
+class FetchSessionHandler:
     """
     FetchSessionHandler maintains the fetch session state for connecting to a broker.
 
@@ -1209,7 +1209,7 @@ class FetchSessionHandler(object):
                 for partition_data in partitions}
 
 
-class FetchMetadata(object):
+class FetchMetadata:
     __slots__ = ('session_id', 'epoch')
 
     MAX_EPOCH = 2147483647
@@ -1249,7 +1249,7 @@ FetchMetadata.INITIAL = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMet
 FetchMetadata.LEGACY = FetchMetadata(FetchMetadata.INVALID_SESSION_ID, FetchMetadata.FINAL_EPOCH)
 
 
-class FetchRequestData(object):
+class FetchRequestData:
     __slots__ = ('_to_send', '_to_forget', '_metadata')
 
     def __init__(self, to_send, to_forget, metadata):
@@ -1288,7 +1288,7 @@ class FetchRequestData(object):
         return list(partition_data.items())
 
 
-class FetchMetrics(object):
+class FetchMetrics:
     __slots__ = ('total_bytes', 'total_records')
 
     def __init__(self):
@@ -1296,7 +1296,7 @@ class FetchMetrics(object):
         self.total_records = 0
 
 
-class FetchResponseMetricAggregator(object):
+class FetchResponseMetricAggregator:
     """
     Since we parse the message data for each partition from each fetch
     response lazily, fetch-level metrics need to be aggregated as the messages
@@ -1329,7 +1329,7 @@ class FetchResponseMetricAggregator(object):
                 self.sensors.record_topic_fetch_metrics(topic, metrics.total_bytes, metrics.total_records)
 
 
-class FetchManagerMetrics(object):
+class FetchManagerMetrics:
     def __init__(self, metrics, prefix):
         self.metrics = metrics
         self.group_name = '%s-fetch-manager-metrics' % (prefix,)

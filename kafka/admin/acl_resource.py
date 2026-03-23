@@ -68,7 +68,7 @@ class ACLResourcePatternType(IntEnum):
     PREFIXED = 4
 
 
-class ACLFilter(object):
+class ACLFilter:
     """Represents a filter to use with describing and deleting ACLs
 
     The difference between this class and the ACL class is mainly that
@@ -172,7 +172,7 @@ class ACL(ACLFilter):
             raise IllegalArgumentError("resource_pattern must be a ResourcePattern object")
 
 
-class ResourcePatternFilter(object):
+class ResourcePatternFilter:
     def __init__(
             self,
             resource_type,

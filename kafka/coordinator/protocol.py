@@ -27,7 +27,7 @@ class ConsumerProtocolMemberAssignment_v0(Struct):
                 for partition in partitions]
 
 
-class ConsumerProtocol_v0(object):
+class ConsumerProtocol_v0:
     PROTOCOL_TYPE = 'consumer'
     METADATA = ConsumerProtocolMemberMetadata_v0
     ASSIGNMENT = ConsumerProtocolMemberAssignment_v0

@@ -14,7 +14,7 @@ from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
 log = logging.getLogger(__name__)
 
 
-class ClusterMetadata(object):
+class ClusterMetadata:
     """
     A class to manage kafka cluster metadata.
 

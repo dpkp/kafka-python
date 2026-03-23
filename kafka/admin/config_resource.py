@@ -8,7 +8,7 @@ class ConfigResourceType(IntEnum):
     TOPIC = 2
 
 
-class ConfigResource(object):
+class ConfigResource:
     """A class for specifying config resources.
     Arguments:
         resource_type (ConfigResourceType): the type of kafka resource

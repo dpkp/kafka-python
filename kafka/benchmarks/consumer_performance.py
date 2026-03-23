@@ -11,7 +11,7 @@ import traceback
 from kafka import KafkaConsumer
 
 
-class ConsumerPerformance(object):
+class ConsumerPerformance:
     @staticmethod
     def run(args):
         try:

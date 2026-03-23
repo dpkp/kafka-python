@@ -24,7 +24,7 @@ from kafka.version import __version__
 log = logging.getLogger('kafka.client')
 
 
-class KafkaClient(object):
+class KafkaClient:
     """
     A network client for asynchronous request/response network I/O.
 
@@ -1178,7 +1178,7 @@ class KafkaClient(object):
         return future.value
 
 
-class IdleConnectionManager(object):
+class IdleConnectionManager:
     def __init__(self, connections_max_idle_ms):
         if connections_max_idle_ms > 0:
             self.connections_max_idle = connections_max_idle_ms / 1000
@@ -1234,7 +1234,7 @@ class IdleConnectionManager(object):
             return None
 
 
-class KafkaClientMetrics(object):
+class KafkaClientMetrics:
     def __init__(self, metrics, metric_group_prefix, conns):
         self.metrics = metrics
         self.metric_group_name = metric_group_prefix + '-metrics'
