@@ -13,7 +13,7 @@ from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.producer.kafka import KafkaProducer
-from kafka.protocol.produce import ProduceRequest
+from kafka.protocol.new.producer import ProduceRequest
 from kafka.producer.future import FutureRecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.producer.record_accumulator import RecordAccumulator
@@ -64,7 +64,8 @@ def test_produce_request(sender, api_version, produce_version):
     magic = KafkaProducer.max_usable_produce_magic(api_version)
     batch = producer_batch(magic=magic)
     produce_request = sender._produce_request(0, 0, 0, [batch])
-    assert isinstance(produce_request, ProduceRequest[produce_version])
+    assert isinstance(produce_request, ProduceRequest)
+    assert produce_request.version == produce_version
 
 
 @pytest.mark.parametrize(("api_version", "produce_version"), [
@@ -81,7 +82,8 @@ def test_create_produce_requests(sender, api_version, produce_version):
     produce_requests_by_node = sender._create_produce_requests(batches_by_node)
     assert len(produce_requests_by_node) == 3
     for node in range(3):
-        assert isinstance(produce_requests_by_node[node], ProduceRequest[produce_version])
+        assert isinstance(produce_requests_by_node[node], ProduceRequest)
+        assert produce_requests_by_node[node].version == produce_version
 
 
 def test_complete_batch_success(sender):
