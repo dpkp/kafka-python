@@ -4,7 +4,7 @@ from kafka.protocol.new.schemas.fields.array import ArrayField
 from kafka.protocol.new.schemas.fields.struct import StructField
 from kafka.protocol.new.schemas.fields.base import BaseField
 from kafka.protocol.new.schemas.fields.simple import SimpleField
-from kafka.protocol.types import Int16, Int32, Boolean, String, UUID
+from kafka.protocol.new.schemas.fields.codecs import Int16, Int32, Boolean, String, UUID
 
 
 def test_parse_versions():
