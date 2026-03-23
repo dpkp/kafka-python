@@ -8,7 +8,9 @@ from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocol
+from kafka.protocol.new.consumer.metadata import (
+    ConsumerProtocolType, ConsumerProtocolSubscription, ConsumerProtocolAssignment,
+)
 from kafka.coordinator.subscription import Subscription
 import kafka.errors as Errors
 from kafka.future import Future
@@ -147,7 +149,7 @@ class ConsumerCoordinator(BaseCoordinator):
         super(ConsumerCoordinator, self).__del__()
 
     def protocol_type(self):
-        return ConsumerProtocol[0].PROTOCOL_TYPE
+        return ConsumerProtocolType
 
     def group_protocols(self):
         """Returns list of preferred (protocols, metadata)"""
@@ -235,7 +237,7 @@ class ConsumerCoordinator(BaseCoordinator):
         assignor = self._lookup_assignor(protocol)
         assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
-        assignment = ConsumerProtocol[0].ASSIGNMENT.decode(member_assignment_bytes)
+        assignment = ConsumerProtocolAssignment.decode(member_assignment_bytes)
 
         try:
             self._subscription.assign_from_subscribed(assignment.partitions())
@@ -332,7 +334,7 @@ class ConsumerCoordinator(BaseCoordinator):
         all_subscribed_topics = set()
         for member in members:
             subscription = Subscription(
-                ConsumerProtocol[0].METADATA.decode(member.metadata),
+                ConsumerProtocolSubscription.decode(member.metadata),
                 member.group_instance_id
             )
             member_subscriptions[member.member_id] = subscription

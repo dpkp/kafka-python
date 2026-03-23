@@ -2,8 +2,11 @@ import collections
 import itertools
 import logging
 
-from kafka.coordinator.assignors.abstract import AbstractPartitionAssignor
-from kafka.coordinator.protocol import ConsumerProtocolMemberMetadata_v0, ConsumerProtocolMemberAssignment_v0
+from kafka.coordinator.assignors.abstract import (
+    AbstractPartitionAssignor,
+    ConsumerProtocolSubscription,
+    ConsumerProtocolAssignment,
+)
 from kafka.structs import TopicPartition
 
 log = logging.getLogger(__name__)
@@ -82,7 +85,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
 
         protocol_assignment = {}
         for member_id in group_subscriptions:
-            protocol_assignment[member_id] = ConsumerProtocolMemberAssignment_v0(
+            protocol_assignment[member_id] = ConsumerProtocolAssignment(
                 cls.version,
                 sorted(assignment[member_id].items()),
                 b'')
@@ -90,7 +93,7 @@ class RoundRobinPartitionAssignor(AbstractPartitionAssignor):
 
     @classmethod
     def metadata(cls, topics):
-        return ConsumerProtocolMemberMetadata_v0(cls.version, list(topics), b'')
+        return ConsumerProtocolSubscription(cls.version, list(topics), b'')
 
     @classmethod
     def on_assignment(cls, assignment, generation):
