@@ -29,6 +29,8 @@ class VersionSubscriptable(type):
             if version is None:
                 return primary_cls
             return primary_cls[version]
+        elif version is None:
+            return cls
         if cls._valid_versions is not None:
             if version < 0:
                 version += 1 + cls.max_version # support negative index, e.g., [-1]
@@ -214,11 +216,6 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             raise ValueError('Version required to decode data')
         elif not 0 <= version <= cls.max_version:
             raise ValueError('Invalid version %s (max version is %s).' % (version, cls.max_version))
-        # Return current class except: current class is versioned and diff version is requested
-        if cls._class_version is not None and cls._class_version != version:
-            data_class = cls[version]
-        else:
-            data_class = cls
 
         if isinstance(data, bytes):
             data = io.BytesIO(data)
@@ -228,6 +225,10 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             hdr = cls.parse_header(data, version=version)
         else:
             hdr = None
+
+        # Resolve versioned class to primary class (e.g., Response_v0 -> Response)
+        data_class = cls[None]
+
         flexible = cls.flexible_version_q(version)
         ret = cls._struct.decode(data, version=version, compact=flexible, tagged=flexible, data_class=data_class)
         if hdr is not None:
