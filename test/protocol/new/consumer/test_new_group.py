@@ -10,6 +10,7 @@ from kafka.protocol.new.consumer import (
     OffsetFetchRequest, OffsetFetchResponse,
     OffsetCommitRequest, OffsetCommitResponse,
 )
+from kafka.protocol.new.consumer.metadata import ConsumerProtocolSubscription
 
 
 @pytest.mark.parametrize("version", range(FindCoordinatorRequest.min_version, FindCoordinatorRequest.max_version + 1))
@@ -338,3 +339,67 @@ def test_default_generation_id():
 
 def test_unknown_member_id():
     assert UNKNOWN_MEMBER_ID == ''
+
+
+def test_joingroup_request_with_subscription_object_metadata():
+    """JoinGroupRequest should encode correctly when metadata is a ConsumerProtocolSubscription object."""
+    sub = ConsumerProtocolSubscription(0, topics=['test-topic'])
+
+    # Encode the subscription to bytes for comparison
+    sub_bytes = sub.encode()
+
+    # Create JoinGroupRequest with the subscription object (not bytes) as metadata
+    req = JoinGroupRequest[2](
+        group_id='test-group',
+        session_timeout_ms=10000,
+        rebalance_timeout_ms=10000,
+        member_id='',
+        protocol_type='consumer',
+        protocols=[('consumer', sub)],
+    )
+
+    # This should work — the Bytes codec should call sub.encode() automatically
+    encoded = req.encode()
+
+    # Now create the same request but with pre-encoded bytes
+    req_bytes = JoinGroupRequest[2](
+        group_id='test-group',
+        session_timeout_ms=10000,
+        rebalance_timeout_ms=10000,
+        member_id='',
+        protocol_type='consumer',
+        protocols=[('consumer', sub_bytes)],
+    )
+    encoded_bytes = req_bytes.encode()
+
+    # Both should produce identical wire format
+    assert encoded == encoded_bytes
+
+
+def test_joingroup_request_with_subscription_object_metadata_flexible():
+    """Same test but with a flexible version (compact encoding)."""
+    sub = ConsumerProtocolSubscription(0, topics=['test-topic'])
+    sub_bytes = sub.encode()
+
+    # Version 6+ is flexible for JoinGroupRequest
+    req = JoinGroupRequest[6](
+        group_id='test-group',
+        session_timeout_ms=10000,
+        rebalance_timeout_ms=10000,
+        member_id='',
+        protocol_type='consumer',
+        protocols=[('consumer', sub)],
+    )
+    encoded = req.encode()
+
+    req_bytes = JoinGroupRequest[6](
+        group_id='test-group',
+        session_timeout_ms=10000,
+        rebalance_timeout_ms=10000,
+        member_id='',
+        protocol_type='consumer',
+        protocols=[('consumer', sub_bytes)],
+    )
+    encoded_bytes = req_bytes.encode()
+
+    assert encoded == encoded_bytes
