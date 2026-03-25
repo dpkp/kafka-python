@@ -59,6 +59,28 @@ class StructArrayField(ArrayField):
     def __call__(self, *args, **kw):
         return self.data_class(*args, **kw) # pylint: disable=E1102
 
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        from .codecs import UnsignedVarInt32
+        inner_struct = self.array_of
+        n = ctx.next_var('n')
+        if compact:
+            UnsignedVarInt32.emit_decode_from(ctx, n, indent)
+            ctx.emit(indent, '%s -= 1' % n)
+        else:
+            ctx.emit(indent, '%s = unpack_from(">i", data, pos)[0]' % n)
+            ctx.emit(indent, 'pos += 4')
+        ctx.emit(indent, 'if %s == -1:' % n)
+        ctx.emit(indent, '    %s = None' % var_name)
+        ctx.emit(indent, 'else:')
+        inner_indent = indent + '    '
+        ctx.emit(inner_indent, '%s = []' % var_name)
+        idx = ctx.next_var('idx')
+        item = ctx.next_var('obj')
+        ctx.emit(inner_indent, 'for %s in range(%s):' % (idx, n))
+        inner_struct.emit_decode_from(ctx, item, inner_indent + '    ',
+                                       version=version, compact=compact, tagged=tagged)
+        ctx.emit(inner_indent, '    %s.append(%s)' % (var_name, item))
+
     def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
         from .codecs import UnsignedVarInt32
         inner_struct = self.array_of

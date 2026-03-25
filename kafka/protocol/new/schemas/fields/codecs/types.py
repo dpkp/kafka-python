@@ -1,4 +1,4 @@
-from struct import error, pack, pack_into, unpack
+from struct import error, pack, pack_into, unpack, unpack_from
 import uuid
 
 from .encode_buffer import EncodeBuffer
@@ -13,6 +13,7 @@ class FixedCodec:
     """
     fmt = None  # e.g., 'i' — set by subclass
     size = None # e.g., 4 — set by subclass
+    batchable = True  # Can be batched with adjacent FixedCodec fields
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -33,8 +34,19 @@ class FixedCodec:
         return unpack(cls._be_fmt, data.read(cls.size))[0]
 
     @classmethod
+    def decode_from(cls, data, pos):
+        """Decode from a buffer at pos. Returns (value, new_pos)."""
+        return unpack_from(cls._be_fmt, data, pos)[0], pos + cls.size
+
+    @classmethod
     def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
         ctx.emit(indent, "pack_into('%s', buf, pos, %s)" % (cls._be_fmt, val_expr))
+        ctx.emit(indent, 'pos += %d' % cls.size)
+
+    @classmethod
+    def emit_decode_from(cls, ctx, var_name, indent, compact=False):
+        """Emit decode for a single fixed field (unbatched fallback)."""
+        ctx.emit(indent, '%s = unpack_from("%s", data, pos)[0]' % (var_name, cls._be_fmt))
         ctx.emit(indent, 'pos += %d' % cls.size)
 
 
@@ -95,6 +107,14 @@ class UUID:
         ctx.emit(indent, '%s = %s' % (v, val_expr))
         ctx.emit(indent, 'if %s is None: %s = _ZERO_UUID' % (v, v))
         ctx.emit(indent, 'buf[pos:pos+16] = %s.bytes if hasattr(%s, "bytes") else __import__("uuid").UUID(%s).bytes' % (v, v, v))
+        ctx.emit(indent, 'pos += 16')
+
+    @classmethod
+    def emit_decode_from(cls, ctx, var_name, indent, compact=False):
+        ctx.globs['_ZERO_UUID'] = cls.ZERO_UUID
+        ctx.globs['_uuid_cls'] = uuid.UUID
+        ctx.emit(indent, '%s = _uuid_cls(bytes=bytes(data[pos:pos+16]))' % var_name)
+        ctx.emit(indent, 'if %s == _ZERO_UUID: %s = None' % (var_name, var_name))
         ctx.emit(indent, 'pos += 16')
 
     @classmethod
@@ -165,6 +185,20 @@ class String:
             ctx.emit(indent, '    pos += 2')
             ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (sv, sv))
             ctx.emit(indent, '    pos += len(%s)' % sv)
+
+    def emit_decode_from(self, ctx, var_name, indent, compact=False):
+        ln = ctx.next_var('ln')
+        if compact:
+            UnsignedVarInt32.emit_decode_from(ctx, ln, indent)
+            ctx.emit(indent, '%s -= 1' % ln)
+        else:
+            ctx.emit(indent, '%s = unpack_from(">h", data, pos)[0]' % ln)
+            ctx.emit(indent, 'pos += 2')
+        ctx.emit(indent, 'if %s < 0:' % ln)
+        ctx.emit(indent, '    %s = None' % var_name)
+        ctx.emit(indent, 'else:')
+        ctx.emit(indent, '    %s = str(data[pos:pos+%s], "utf-8")' % (var_name, ln))
+        ctx.emit(indent, '    pos += %s' % ln)
 
     def decode(self, data, compact=False):
         if compact:
@@ -252,6 +286,21 @@ class Bytes:
             ctx.emit(indent, '    pos += %s' % bn)
 
     @classmethod
+    def emit_decode_from(cls, ctx, var_name, indent, compact=False):
+        ln = ctx.next_var('ln')
+        if compact:
+            UnsignedVarInt32.emit_decode_from(ctx, ln, indent)
+            ctx.emit(indent, '%s -= 1' % ln)
+        else:
+            ctx.emit(indent, '%s = unpack_from(">i", data, pos)[0]' % ln)
+            ctx.emit(indent, 'pos += 4')
+        ctx.emit(indent, 'if %s < 0:' % ln)
+        ctx.emit(indent, '    %s = None' % var_name)
+        ctx.emit(indent, 'else:')
+        ctx.emit(indent, '    %s = bytes(data[pos:pos+%s])' % (var_name, ln))
+        ctx.emit(indent, '    pos += %s' % ln)
+
+    @classmethod
     def decode(cls, data, compact=False):
         if compact:
             length = UnsignedVarInt32.decode(data) - 1
@@ -302,6 +351,20 @@ class UnsignedVarInt32:
         ctx.emit(indent, '    pos += 1')
         ctx.emit(indent, 'buf[pos] = %s' % val_expr)
         ctx.emit(indent, 'pos += 1')
+
+    @classmethod
+    def emit_decode_from(cls, ctx, var_name, indent):
+        """Emit inline unsigned varint decode. Result in var_name, pos advanced."""
+        b = ctx.next_var('b')
+        shift = ctx.next_var('sh')
+        ctx.emit(indent, '%s = 0' % var_name)
+        ctx.emit(indent, '%s = 0' % shift)
+        ctx.emit(indent, 'while True:')
+        ctx.emit(indent, '    %s = data[pos]' % b)
+        ctx.emit(indent, '    pos += 1')
+        ctx.emit(indent, '    %s |= (%s & 0x7f) << %s' % (var_name, b, shift))
+        ctx.emit(indent, '    if not (%s & 0x80): break' % b)
+        ctx.emit(indent, '    %s += 7' % shift)
 
 
 class VarInt32:
@@ -405,6 +468,15 @@ class BitField:
         ctx.emit(indent, 'for _b in %s: %s |= 1 << _b' % (bf, bfi))
         ctx.emit(indent, "pack_into('>I', buf, pos, %s)" % bfi)
         ctx.emit(indent, 'pos += 4')
+
+    @classmethod
+    def emit_decode_from(cls, ctx, var_name, indent, compact=False):
+        ctx.globs['_bitfield_from_32'] = cls.from_32_bit_field
+        raw = ctx.next_var('bfr')
+        ctx.emit(indent, '%s = unpack_from(">I", data, pos)[0]' % raw)
+        ctx.emit(indent, 'pos += 4')
+        ctx.emit(indent, '%s = _bitfield_from_32(%s)' % (var_name, raw))
+        ctx.emit(indent, 'if %s == {31}: %s = None' % (var_name, var_name))
 
     @classmethod
     def to_32_bit_field(cls, vals):

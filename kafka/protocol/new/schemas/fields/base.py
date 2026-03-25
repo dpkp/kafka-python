@@ -89,6 +89,9 @@ class BaseField:
     def is_struct_array(self):
         return False
 
+    def is_batchable(self):
+        return False
+
     def has_data_class(self):
         return False
 

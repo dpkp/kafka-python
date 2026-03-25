@@ -229,12 +229,24 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         elif not 0 <= version <= cls.max_version:
             raise ValueError('Invalid version %s (max version is %s).' % (version, cls.max_version))
 
+        # Normalize input to memoryview
         if isinstance(data, bytes):
-            data = io.BytesIO(data)
+            data = memoryview(data)
+        elif not isinstance(data, memoryview):
+            if hasattr(data, 'read'):
+                data = memoryview(data.read())
+            else:
+                # else: assume buffer protocol compatible
+                data = memoryview(data)
+        pos = 0
+
         if framed:
-            size = Int32.decode(data)
+            size, pos = Int32.decode_from(data, pos)
         if header:
-            hdr = cls.parse_header(data, version=version)
+            # Header decode uses BytesIO (variable-length fields)
+            hdr_data = io.BytesIO(bytes(data[pos:]))
+            hdr = cls.parse_header(hdr_data, version=version)
+            pos += hdr_data.tell()
         else:
             hdr = None
 
@@ -242,7 +254,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         data_class = cls[None]
 
         flexible = cls.flexible_version_q(version)
-        ret = cls._struct.decode(data, version=version, compact=flexible, tagged=flexible, data_class=data_class)
+        fast_decode = cls._struct.compiled_decode_from(version, compact=flexible, tagged=flexible, data_class=data_class)
+        ret, pos = fast_decode(data, pos)
         if hdr is not None:
             ret._header = hdr
         return ret

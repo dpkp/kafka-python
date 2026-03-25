@@ -37,6 +37,9 @@ class SimpleField(BaseField):
             raise ValueError('Unrecognized type: %s' % self._type_str)
         self._type = self.TYPES[self._type_str]
 
+    def is_batchable(self):
+        return getattr(self._type, 'batchable', False)
+
     def _calculate_default(self, default):
         if self._type is Boolean:
             if not default:
@@ -94,6 +97,9 @@ class SimpleField(BaseField):
 
     def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
         self._type.emit_encode_into(ctx, val_expr, indent, compact=compact)
+
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        self._type.emit_decode_from(ctx, var_name, indent, compact=compact)
 
     def decode(self, data, version=None, compact=False, tagged=False):
         return self._type.decode(data, compact=compact)

@@ -1,16 +1,16 @@
-"""Generate flat encode_into functions for a StructField + version.
+"""Generate flat encode/decode functions for a StructField + version.
 
-Given a StructField and a protocol version, generates a Python function
-that encodes directly into an EncodeBuffer with zero dispatch overhead —
-no intermediate SimpleField/ArrayField/StructField method calls.
+Given a StructField and a protocol version, generates Python functions
+that encode/decode directly with zero dispatch overhead — no intermediate
+SimpleField/ArrayField/StructField method calls.
 
 Usage:
-    from kafka.protocol.new.schemas.fields.codegen import compile_encode_into
-    fast_encode = compile_encode_into(some_struct_field, version=0, compact=False, tagged=False)
-    fast_encode(item, out)
+    from kafka.protocol.new.schemas.fields.codegen import CodegenContext
+    # Encode: see StructField.compiled_encode_into()
+    # Decode: see StructField.compiled_decode_from()
 """
 
-from struct import pack_into
+from struct import pack_into, unpack_from
 
 
 class CodegenContext:
@@ -18,7 +18,7 @@ class CodegenContext:
 
     def __init__(self):
         self.lines = []
-        self.globs = {'pack_into': pack_into}
+        self.globs = {'pack_into': pack_into, 'unpack_from': unpack_from}
         self._var_counter = 0
 
     def next_var(self, prefix='v'):

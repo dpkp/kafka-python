@@ -86,6 +86,26 @@ class ArrayField(BaseField):
         self.array_of.emit_encode_into(ctx, item_var, guard + '    ',
                                         version=version, compact=compact, tagged=tagged)
 
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        n = ctx.next_var('n')
+        if compact:
+            UnsignedVarInt32.emit_decode_from(ctx, n, indent)
+            ctx.emit(indent, '%s -= 1' % n)
+        else:
+            ctx.emit(indent, '%s = unpack_from(">i", data, pos)[0]' % n)
+            ctx.emit(indent, 'pos += 4')
+        ctx.emit(indent, 'if %s == -1:' % n)
+        ctx.emit(indent, '    %s = None' % var_name)
+        ctx.emit(indent, 'else:')
+        inner_indent = indent + '    '
+        ctx.emit(inner_indent, '%s = []' % var_name)
+        idx = ctx.next_var('idx')
+        item = ctx.next_var('item')
+        ctx.emit(inner_indent, 'for %s in range(%s):' % (idx, n))
+        self.array_of.emit_decode_from(ctx, item, inner_indent + '    ',
+                                        version=version, compact=compact, tagged=tagged)
+        ctx.emit(inner_indent, '    %s.append(%s)' % (var_name, item))
+
     def decode(self, data, version=None, compact=False, tagged=False):
         if compact:
             size = UnsignedVarInt32.decode(data)

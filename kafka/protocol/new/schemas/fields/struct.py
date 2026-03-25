@@ -155,6 +155,127 @@ class StructField(BaseField):
             self._compiled_encoders[key] = ctx.globs['_encode']
         return self._compiled_encoders[key]
 
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        """Emit decode code that creates a DataContainer via __new__ + direct slot assignment.
+
+        Batches adjacent batchable fields into single unpack_from calls.
+        """
+        fields = self.untagged_fields(version)
+        data_class = self.data_class
+
+        if data_class is not None:
+            dc_var = ctx.next_var('dc')
+            ctx.globs[dc_var] = data_class
+            ctx.emit(indent, '%s = object.__new__(%s)' % (var_name, dc_var))
+            ctx.emit(indent, '%s._version = %d' % (var_name, version))
+            ctx.emit(indent, '%s.tags = None' % var_name)
+            ctx.emit(indent, '%s.unknown_tags = None' % var_name)
+
+        # Walk fields, batching adjacent batchable fields
+        i = 0
+        while i < len(fields):
+            field = fields[i]
+
+            # Try to batch consecutive batchable fields.
+            if field.is_batchable():
+                # Collect the run
+                batch_fields = []
+                batch_fmt = '>'
+                batch_size = 0
+                while i < len(fields):
+                    f = fields[i]
+                    if f.is_batchable():
+                        batch_fields.append(f)
+                        batch_fmt += f._type.fmt
+                        batch_size += f._type.size
+                        i += 1
+                    else:
+                        break
+
+                if len(batch_fields) == 1:
+                    # Single field — no batching benefit
+                    f = batch_fields[0]
+                    v = ctx.next_var('val')
+                    f.emit_decode_from(ctx, v, indent, version=version,
+                                       compact=compact, tagged=tagged)
+                    if data_class is not None:
+                        ctx.emit(indent, '%s.%s = %s' % (var_name, f.name, v))
+                else:
+                    # Batched unpack
+                    var_names = [ctx.next_var('val') for _ in batch_fields]
+                    ctx.emit(indent, '%s = unpack_from("%s", data, pos)' % (
+                        ', '.join(var_names), batch_fmt))
+                    ctx.emit(indent, 'pos += %d' % batch_size)
+                    if data_class is not None:
+                        for f, v in zip(batch_fields, var_names):
+                            ctx.emit(indent, '%s.%s = %s' % (var_name, f.name, v))
+            else:
+                # Non-batchable field (String, Bytes, Array, Struct, etc.)
+                v = ctx.next_var('val')
+                field.emit_decode_from(ctx, v, indent, version=version,
+                                       compact=compact, tagged=tagged)
+                if data_class is not None:
+                    ctx.emit(indent, '%s.%s = %s' % (var_name, field.name, v))
+                i += 1
+
+        if tagged:
+            # Fast path: most messages have zero tagged fields (single 0x00 byte).
+            # Only fall back to full TaggedFields.decode when tags are present.
+            ctx.emit(indent, 'if data[pos] == 0:')
+            ctx.emit(indent, '    pos += 1')
+            ctx.emit(indent, 'else:')
+            self._emit_tagged_decode(ctx, var_name, indent + '    ', version)
+        elif tagged is None:
+            # Empty tagged fields: single 0x00 byte
+            ctx.emit(indent, 'pos += 1  # empty tagged fields')
+
+    def _emit_tagged_decode(self, ctx, var_name, indent, version):
+        """Emit tagged fields decode — falls back to method-based decode."""
+        tf_var = ctx.next_var('tf')
+        ctx.globs[tf_var] = self.tagged_fields(version)
+        ctx.globs['_BytesIO'] = __import__('io').BytesIO
+        bio_var = ctx.next_var('bio')
+        ctx.emit(indent, '%s = _BytesIO(bytes(data[pos:]))' % bio_var)
+        ctx.emit(indent, '_tfd = %s.decode(%s, version=%d)' % (tf_var, bio_var, version))
+        ctx.emit(indent, 'pos += %s.tell()' % bio_var)
+        ctx.emit(indent, 'if _tfd:')
+        ctx.emit(indent, '    for _tk, _tv in _tfd.items():')
+        ctx.emit(indent, '        if _tk.startswith("_"):')
+        ctx.emit(indent, '            if %s.unknown_tags is None: %s.unknown_tags = {}' % (var_name, var_name))
+        ctx.emit(indent, '            %s.unknown_tags[_tk] = _tv' % var_name)
+        ctx.emit(indent, '        else:')
+        ctx.emit(indent, '            if %s.tags is None: %s.tags = set()' % (var_name, var_name))
+        ctx.emit(indent, '            %s.tags.add(_tk)' % var_name)
+        ctx.emit(indent, '            setattr(%s, _tk, _tv)' % var_name)
+
+    def compiled_decode_from(self, version, compact=False, tagged=False, data_class=None):
+        """Return a compiled flat decode function for this struct+version.
+
+        Lazily compiled on first call and cached. The returned function has
+        signature: f(data, pos) -> (obj, pos) where data is a memoryview/bytes.
+        data_class overrides self.data_class for the top-level object (needed
+        to resolve weakref proxies on ApiMessage classes).
+        """
+        key = ('decode', version, compact, tagged, data_class)
+        if key not in self._compiled_encoders:
+            # Temporarily override data_class for codegen if provided
+            saved = self._data_class
+            if data_class is not None:
+                self._data_class = data_class
+            try:
+                ctx = CodegenContext()
+                indent = '    '
+                ctx.lines.append('def _decode(data, pos):')
+                self.emit_decode_from(ctx, 'obj', indent, version=version,
+                                      compact=compact, tagged=tagged)
+                ctx.emit(indent, 'return obj, pos')
+                code = ctx.source()
+                exec(compile(code, '<codegen_decode:%s_v%d>' % (self.name, version), 'exec'), ctx.globs)
+                self._compiled_encoders[key] = ctx.globs['_decode']
+            finally:
+                self._data_class = saved
+        return self._compiled_encoders[key]
+
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
         if data_class is None:
             data_class = self.data_class
