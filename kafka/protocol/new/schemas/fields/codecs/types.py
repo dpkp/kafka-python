@@ -22,94 +22,60 @@ class EncodeBuffer:
 
 
 
-class Int8:
+
+class FixedCodec:
+    """Base class for fixed-size codecs. Subclasses define fmt and size.
+
+    The Kafka protocol uses big-endian ('>') byte order for all fixed-size
+    types. This prefix is applied here so subclasses only specify the type
+    format character (e.g., 'i' for 32-bit signed int).
+    """
+    fmt = None  # e.g., 'i' — set by subclass
+    size = None # e.g., 4 — set by subclass
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if cls.fmt is not None:
+            cls._be_fmt = '>' + cls.fmt
+
+    @classmethod
+    def encode(cls, value, compact=False):
+        return pack(cls._be_fmt, value)
+
+    @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into(cls._be_fmt, out.buf, out.pos, value)
+        out.pos += cls.size
+
+    @classmethod
+    def decode(cls, data, compact=False):
+        return unpack(cls._be_fmt, data.read(cls.size))[0]
+
+
+
+class Int8(FixedCodec):
     fmt = 'b'
     size = 1
 
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>b', value)
 
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>b', out.buf, out.pos, value)
-        out.pos += 1
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>b', data.read(1))[0]
-
-
-class Int16:
+class Int16(FixedCodec):
     fmt = 'h'
     size = 2
 
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>h', value)
 
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>h', out.buf, out.pos, value)
-        out.pos += 2
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>h', data.read(2))[0]
-
-
-class Int32:
+class Int32(FixedCodec):
     fmt = 'i'
     size = 4
 
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>i', value)
 
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>i', out.buf, out.pos, value)
-        out.pos += 4
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>i', data.read(4))[0]
-
-
-class Int64:
+class Int64(FixedCodec):
     fmt = 'q'
     size = 8
 
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>q', value)
 
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>q', out.buf, out.pos, value)
-        out.pos += 8
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>q', data.read(8))[0]
-
-
-class Float64:
+class Float64(FixedCodec):
     fmt = 'd'
     size = 8
-
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>d', value)
-
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>d', out.buf, out.pos, value)
-        out.pos += 8
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>d', data.read(8))[0]
 
 
 class UUID:
@@ -248,22 +214,9 @@ class Bytes:
         return value
 
 
-class Boolean:
+class Boolean(FixedCodec):
     fmt = '?'
     size = 1
-
-    @classmethod
-    def encode(cls, value, compact=False):
-        return pack('>?', value)
-
-    @classmethod
-    def encode_into(cls, out, value, compact=False):
-        pack_into('>?', out.buf, out.pos, value)
-        out.pos += 1
-
-    @classmethod
-    def decode(cls, data, compact=False):
-        return unpack('>?', data.read(1))[0]
 
 
 class UnsignedVarInt32:
