@@ -1,4 +1,4 @@
-from . import UnsignedVarInt32
+from .types import UnsignedVarInt32
 
 
 def _uvarint_size(value):

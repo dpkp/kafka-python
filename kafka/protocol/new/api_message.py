@@ -5,8 +5,7 @@ from .api_data import JsonSchemaData
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer
 from .schemas import BaseField, StructField, load_json
-from .schemas.fields.codecs import Int32
-from .schemas.fields.codecs.types import EncodeBuffer
+from .schemas.fields.codecs import Int32, EncodeBuffer
 from struct import pack_into
 
 from kafka.util import classproperty
