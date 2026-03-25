@@ -74,6 +74,10 @@ class DataContainer(metaclass=SlotsBuilder):
         """Add version= to kwargs, otherwise pass-through to _struct"""
         return self._struct.encode(self, *args, **kwargs)
 
+    def encode_into(self, out, *args, **kwargs):
+        """Buffer-based encode, pass-through to _struct.encode_into"""
+        self._struct.encode_into(self, out, *args, **kwargs)
+
     @classmethod
     def decode(cls, data, **kwargs):
         """Add version= to kwargs, otherwise pass-through to _struct"""

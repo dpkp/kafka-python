@@ -57,6 +57,17 @@ class ArrayField(BaseField):
                   for item in items]
         return b''.join([size] + fields)
 
+    def encode_into(self, items, out, version=None, compact=False, tagged=False):
+        if compact:
+            UnsignedVarInt32.encode_into(out, len(items) + 1 if items is not None else 0)
+        else:
+            Int32.encode_into(out, len(items) if items is not None else -1)
+        if items is None:
+            return
+        encode_into = self.array_of.encode_into
+        for item in items:
+            encode_into(item, out, version=version, compact=compact, tagged=tagged)
+
     def decode(self, data, version=None, compact=False, tagged=False):
         if compact:
             size = UnsignedVarInt32.decode(data)

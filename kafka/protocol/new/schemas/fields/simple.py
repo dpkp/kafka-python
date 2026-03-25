@@ -89,6 +89,9 @@ class SimpleField(BaseField):
     def encode(self, value, version=None, compact=False, tagged=False):
         return self._type.encode(value, compact=compact)
 
+    def encode_into(self, value, out, version=None, compact=False, tagged=False):
+        self._type.encode_into(out, value, compact=compact)
+
     def decode(self, data, version=None, compact=False, tagged=False):
         return self._type.decode(data, compact=compact)
 

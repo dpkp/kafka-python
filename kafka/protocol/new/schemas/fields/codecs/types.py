@@ -1,5 +1,26 @@
-from struct import error, pack, unpack
+from struct import error, pack, pack_into, unpack
 import uuid
+
+
+class EncodeBuffer:
+    """Growable buffer for encode_into operations."""
+    __slots__ = ('buf', 'pos')
+
+    def __init__(self, size=4096):
+        self.buf = bytearray(size)
+        self.pos = 0
+
+    def ensure(self, needed):
+        if self.pos + needed > len(self.buf):
+            new_size = max(len(self.buf) * 2, self.pos + needed)
+            new_buf = bytearray(new_size)
+            new_buf[:self.pos] = self.buf[:self.pos]
+            self.buf = new_buf
+
+    def result(self):
+        return bytes(self.buf[:self.pos])
+
+
 
 class Int8:
     fmt = 'b'
@@ -8,6 +29,11 @@ class Int8:
     @classmethod
     def encode(cls, value, compact=False):
         return pack('>b', value)
+
+    @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>b', out.buf, out.pos, value)
+        out.pos += 1
 
     @classmethod
     def decode(cls, data, compact=False):
@@ -23,6 +49,11 @@ class Int16:
         return pack('>h', value)
 
     @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>h', out.buf, out.pos, value)
+        out.pos += 2
+
+    @classmethod
     def decode(cls, data, compact=False):
         return unpack('>h', data.read(2))[0]
 
@@ -34,6 +65,11 @@ class Int32:
     @classmethod
     def encode(cls, value, compact=False):
         return pack('>i', value)
+
+    @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>i', out.buf, out.pos, value)
+        out.pos += 4
 
     @classmethod
     def decode(cls, data, compact=False):
@@ -49,6 +85,11 @@ class Int64:
         return pack('>q', value)
 
     @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>q', out.buf, out.pos, value)
+        out.pos += 8
+
+    @classmethod
     def decode(cls, data, compact=False):
         return unpack('>q', data.read(8))[0]
 
@@ -60,6 +101,11 @@ class Float64:
     @classmethod
     def encode(cls, value, compact=False):
         return pack('>d', value)
+
+    @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>d', out.buf, out.pos, value)
+        out.pos += 8
 
     @classmethod
     def decode(cls, data, compact=False):
@@ -78,6 +124,18 @@ class UUID:
         if isinstance(value, uuid.UUID):
             return value.bytes
         return uuid.UUID(value).bytes
+
+    @classmethod
+    def encode_into(cls, out, value, compact=False):
+        if value is None:
+            value = cls.ZERO_UUID
+        if isinstance(value, uuid.UUID):
+            b = value.bytes
+        else:
+            b = uuid.UUID(value).bytes
+        pos = out.pos
+        out.buf[pos:pos+16] = b
+        out.pos = pos + 16
 
     @classmethod
     def decode(cls, data, compact=False):
@@ -104,6 +162,26 @@ class String:
             return Int16.encode(-1)
         value = str(value).encode(self.encoding)
         return Int16.encode(len(value)) + value
+
+    def encode_into(self, out, value, compact=False):
+        if compact:
+            if value is None:
+                UnsignedVarInt32.encode_into(out,0)
+                return
+            value = str(value).encode(self.encoding)
+            UnsignedVarInt32.encode_into(out,len(value) + 1)
+        else:
+            if value is None:
+                pack_into('>h', out.buf, out.pos, -1)
+                out.pos += 2
+                return
+            value = str(value).encode(self.encoding)
+            pack_into('>h', out.buf, out.pos, len(value))
+            out.pos += 2
+        n = len(value)
+        pos = out.pos
+        out.buf[pos:pos+n] = value
+        out.pos = pos + n
 
     def decode(self, data, compact=False):
         if compact:
@@ -135,6 +213,28 @@ class Bytes:
         return Int32.encode(len(value)) + value
 
     @classmethod
+    def encode_into(cls, out, value, compact=False):
+        if compact:
+            if value is None:
+                UnsignedVarInt32.encode_into(out,0)
+                return
+            UnsignedVarInt32.encode_into(out,len(value) + 1)
+        else:
+            if value is None:
+                pack_into('>i', out.buf, out.pos, -1)
+                out.pos += 4
+                return
+            elif not isinstance(value, bytes):
+                value = value.encode()
+            pack_into('>i', out.buf, out.pos, len(value))
+            out.pos += 4
+        n = len(value)
+        out.ensure(n)
+        pos = out.pos
+        out.buf[pos:pos+n] = value
+        out.pos = pos + n
+
+    @classmethod
     def decode(cls, data, compact=False):
         if compact:
             length = UnsignedVarInt32.decode(data) - 1
@@ -157,6 +257,11 @@ class Boolean:
         return pack('>?', value)
 
     @classmethod
+    def encode_into(cls, out, value, compact=False):
+        pack_into('>?', out.buf, out.pos, value)
+        out.pos += 1
+
+    @classmethod
     def decode(cls, data, compact=False):
         return unpack('>?', data.read(1))[0]
 
@@ -173,6 +278,17 @@ class UnsignedVarInt32:
     @classmethod
     def encode(cls, value, compact=False):
         return VarInt32.encode((value >> 1) ^ -(value & 1))
+
+    @classmethod
+    def encode_into(cls, out, value):
+        buf = out.buf
+        pos = out.pos
+        while (value & 0xffffff80) != 0:
+            buf[pos] = (value & 0x7f) | 0x80
+            value >>= 7
+            pos += 1
+        buf[pos] = value
+        out.pos = pos + 1
 
 
 class VarInt32:
@@ -258,6 +374,13 @@ class BitField:
         # encode >I to avoid crash if/when byte 31 is set
         # (note that decode as signed still works fine)
         return pack('>I', cls.to_32_bit_field(vals))
+
+    @classmethod
+    def encode_into(cls, out, vals, compact=False):
+        if vals is None:
+            vals = {31}
+        pack_into('>I', out.buf, out.pos, cls.to_32_bit_field(vals))
+        out.pos += 4
 
     @classmethod
     def to_32_bit_field(cls, vals):

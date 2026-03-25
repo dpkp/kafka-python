@@ -6,6 +6,8 @@ from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer
 from .schemas import BaseField, StructField, load_json
 from .schemas.fields.codecs import Int32
+from .schemas.fields.codecs.types import EncodeBuffer
+from struct import pack_into
 
 from kafka.util import classproperty
 
@@ -180,6 +182,15 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
     def encode_header(self, flexible=False):
         return self._header.encode(flexible=flexible) # pylint: disable=E1120
 
+    def encode_header_into(self, out, flexible=False):
+        # Subclasses may override encode_header to change flexible flag
+        # (e.g., ApiVersionsResponse forces flexible=False).
+        # Fall back to bytes-based encode_header if not overridden at this level.
+        header_bytes = self.encode_header(flexible=flexible)
+        n = len(header_bytes)
+        out.buf[out.pos:out.pos+n] = header_bytes
+        out.pos += n
+
     @classmethod
     def parse_header(cls, data, version=None):
         version = cls._class_version if version is None else version
@@ -199,15 +210,16 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             raise ValueError('No header found')
 
         flexible = self.flexible_version_q(self.API_VERSION)
-        encoded = self._struct.encode(self, version=self.API_VERSION, compact=flexible, tagged=flexible)
-        if not header and not framed:
-            return encoded
-        bits = [encoded]
-        if header:
-            bits.insert(0, self.encode_header(flexible=flexible))
+        out = EncodeBuffer()
         if framed:
-            bits.insert(0, Int32.encode(sum(map(len, bits))))
-        return b''.join(bits)
+            out.pos += 4  # reserve space for frame size
+        if header:
+            self.encode_header_into(out, flexible=flexible)
+        self._struct.encode_into(self, out, version=self.API_VERSION, compact=flexible, tagged=flexible)
+        if framed:
+            payload_size = out.pos - 4
+            pack_into('>i', out.buf, 0, payload_size)
+        return out.result()
 
     @classmethod
     def decode(cls, data, version=None, header=False, framed=False):

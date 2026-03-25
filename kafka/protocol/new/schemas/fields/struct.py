@@ -1,5 +1,6 @@
 from .base import BaseField
 from .codecs.tagged_fields import TaggedFields
+from .codecs.types import UnsignedVarInt32
 
 
 class StructField(BaseField):
@@ -92,6 +93,26 @@ class StructField(BaseField):
         elif tagged is None:
             encoded.append(TaggedFields.encode_empty())
         return b''.join(encoded)
+
+    def encode_into(self, item, out, version=None, compact=False, tagged=False):
+        fields = self.untagged_fields(version)
+        if isinstance(item, tuple):
+            for i, field in enumerate(fields):
+                field.encode_into(item[i], out, version=version, compact=compact, tagged=tagged)
+        elif isinstance(item, dict):
+            for field in fields:
+                field.encode_into(item.get(field.name), out, version=version, compact=compact, tagged=tagged)
+        elif isinstance(item, (str, int, float)):
+            fields[0].encode_into(item, out, version=version, compact=compact, tagged=tagged)
+        else:
+            for field in fields:
+                field.encode_into(getattr(item, field.name), out, version=version, compact=compact, tagged=tagged)
+        if tagged:
+            self.tagged_fields(version).encode_into(item, out, version=version)
+        elif tagged is None:
+            UnsignedVarInt32.encode_into(out, 0)
+
+
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
         if data_class is None:
