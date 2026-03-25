@@ -6,11 +6,11 @@ class Int8:
     size = 1
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>b', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>b', data.read(1))[0]
 
 
@@ -19,11 +19,11 @@ class Int16:
     size = 2
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>h', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>h', data.read(2))[0]
 
 
@@ -32,11 +32,11 @@ class Int32:
     size = 4
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>i', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>i', data.read(4))[0]
 
 
@@ -45,11 +45,11 @@ class Int64:
     size = 8
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>q', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>q', data.read(8))[0]
 
 
@@ -58,11 +58,11 @@ class Float64:
     size = 8
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>d', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>d', data.read(8))[0]
 
 
@@ -72,7 +72,7 @@ class UUID:
     ZERO_UUID = uuid.UUID(int=0)
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         if value is None:
             value = cls.ZERO_UUID
         if isinstance(value, uuid.UUID):
@@ -80,7 +80,7 @@ class UUID:
         return uuid.UUID(value).bytes
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         val = uuid.UUID(bytes=data.read(16))
         if val == cls.ZERO_UUID:
             return None
@@ -88,20 +88,28 @@ class UUID:
 
 
 class String:
-    fmt = Int16.fmt
+    fmt = None # 'B' for compact, 'h' for standard
     size = 'variable'
 
     def __init__(self, encoding='utf-8'):
         self.encoding = encoding
 
-    def encode(self, value):
+    def encode(self, value, compact=False):
+        if compact:
+            if value is None:
+                return UnsignedVarInt32.encode(0)
+            value = str(value).encode(self.encoding)
+            return UnsignedVarInt32.encode(len(value) + 1) + value
         if value is None:
             return Int16.encode(-1)
         value = str(value).encode(self.encoding)
         return Int16.encode(len(value)) + value
 
-    def decode(self, data):
-        length = Int16.decode(data)
+    def decode(self, data, compact=False):
+        if compact:
+            length = UnsignedVarInt32.decode(data) - 1
+        else:
+            length = Int16.decode(data)
         if length < 0:
             return None
         value = data.read(length)
@@ -115,7 +123,11 @@ class Bytes:
     size = 'variable'
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
+        if compact:
+            if value is None:
+                return UnsignedVarInt32.encode(0)
+            return UnsignedVarInt32.encode(len(value) + 1) + value
         if value is None:
             return Int32.encode(-1)
         elif not isinstance(value, bytes):
@@ -123,8 +135,11 @@ class Bytes:
         return Int32.encode(len(value)) + value
 
     @classmethod
-    def decode(cls, data):
-        length = Int32.decode(data)
+    def decode(cls, data, compact=False):
+        if compact:
+            length = UnsignedVarInt32.decode(data) - 1
+        else:
+            length = Int32.decode(data)
         if length < 0:
             return None
         value = data.read(length)
@@ -138,11 +153,11 @@ class Boolean:
     size = 1
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return pack('>?', value)
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         return unpack('>?', data.read(1))[0]
 
 
@@ -151,12 +166,12 @@ class UnsignedVarInt32:
     size = 'variable'
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         value = VarInt32.decode(data)
         return (value << 1) ^ (value >> 31)
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         return VarInt32.encode((value >> 1) ^ -(value & 1))
 
 
@@ -165,7 +180,7 @@ class VarInt32:
     size = 'variable'
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         value, i = 0, 0
         while True:
             b, = unpack('B', data.read(1))
@@ -179,7 +194,7 @@ class VarInt32:
         return (value >> 1) ^ -(value & 1)
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         # bring it in line with the java binary repr
         value = (value << 1) ^ (value >> 31)
         value &= 0xffffffff
@@ -197,7 +212,7 @@ class VarInt64:
     size = 'variable'
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         value, i = 0, 0
         while True:
             b, = unpack('B', data.read(1))
@@ -211,7 +226,7 @@ class VarInt64:
         return (value >> 1) ^ -(value & 1)
 
     @classmethod
-    def encode(cls, value):
+    def encode(cls, value, compact=False):
         # bring it in line with the java binary repr
         value = (value << 1) ^ (value >> 63)
         value &= 0xffffffffffffffff
@@ -224,62 +239,19 @@ class VarInt64:
         return ret
 
 
-class CompactString(String):
-    fmt = 'B'
-    size = 'variable'
-
-    def decode(self, data):
-        length = UnsignedVarInt32.decode(data) - 1
-        if length < 0:
-            return None
-        value = data.read(length)
-        if len(value) != length:
-            raise ValueError('Buffer underrun decoding string')
-        return value.decode(self.encoding)
-
-    def encode(self, value):
-        if value is None:
-            return UnsignedVarInt32.encode(0)
-        value = str(value).encode(self.encoding)
-        return UnsignedVarInt32.encode(len(value) + 1) + value
-
-
-class CompactBytes:
-    fmt = 'B'
-    size = 'variable'
-
-    @classmethod
-    def decode(cls, data):
-        length = UnsignedVarInt32.decode(data) - 1
-        if length < 0:
-            return None
-        value = data.read(length)
-        if len(value) != length:
-            raise ValueError('Buffer underrun decoding Bytes')
-        return value
-
-    @classmethod
-    def encode(cls, value):
-        if value is None:
-            return UnsignedVarInt32.encode(0)
-        elif not isinstance(value, bytes):
-            value = value.encode()
-        return UnsignedVarInt32.encode(len(value) + 1) + value
-
-
 class BitField:
     fmt = 'I'
     size = 4
 
     @classmethod
-    def decode(cls, data):
+    def decode(cls, data, compact=False):
         vals = cls.from_32_bit_field(unpack('>I', data.read(4))[0])
         if vals == {31}:
             vals = None
         return vals
 
     @classmethod
-    def encode(cls, vals):
+    def encode(cls, vals, compact=False):
         if vals is None:
             vals = {31}
         # to_32_bit_field returns unsigned val, so we need to
