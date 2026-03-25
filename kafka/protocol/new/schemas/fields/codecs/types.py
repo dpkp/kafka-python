@@ -219,30 +219,30 @@ class Bytes:
 
     @classmethod
     def encode(cls, value, compact=False):
+        if value is not None and not isinstance(value, bytes):
+            value = value.encode()
         if compact:
             if value is None:
                 return UnsignedVarInt32.encode(0)
             return UnsignedVarInt32.encode(len(value) + 1) + value
         if value is None:
             return Int32.encode(-1)
-        elif not isinstance(value, bytes):
-            value = value.encode()
         return Int32.encode(len(value)) + value
 
     @classmethod
     def encode_into(cls, out, value, compact=False):
+        if value is not None and not isinstance(value, bytes):
+            value = value.encode()
         if compact:
             if value is None:
-                UnsignedVarInt32.encode_into(out,0)
+                UnsignedVarInt32.encode_into(out, 0)
                 return
-            UnsignedVarInt32.encode_into(out,len(value) + 1)
+            UnsignedVarInt32.encode_into(out, len(value) + 1)
         else:
             if value is None:
                 pack_into('>i', out.buf, out.pos, -1)
                 out.pos += 4
                 return
-            elif not isinstance(value, bytes):
-                value = value.encode()
             pack_into('>i', out.buf, out.pos, len(value))
             out.pos += 4
         n = len(value)
@@ -257,6 +257,7 @@ class Bytes:
         bn = ctx.next_var('bn')
         if compact:
             ctx.emit(indent, '%s = %s' % (bv, val_expr))
+            ctx.emit(indent, 'if %s is not None and not isinstance(%s, bytes): %s = %s.encode()' % (bv, bv, bv, bv))
             ctx.emit(indent, 'if %s is None:' % bv)
             ctx.emit(indent, '    buf[pos] = 0')
             ctx.emit(indent, '    pos += 1')
@@ -272,6 +273,7 @@ class Bytes:
             ctx.emit(indent, '    pos += %s' % bn)
         else:
             ctx.emit(indent, '%s = %s' % (bv, val_expr))
+            ctx.emit(indent, 'if %s is not None and not isinstance(%s, bytes): %s = %s.encode()' % (bv, bv, bv, bv))
             ctx.emit(indent, 'if %s is None:' % bv)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
             ctx.emit(indent, '    pos += 4')
