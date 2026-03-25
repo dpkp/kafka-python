@@ -1,6 +1,7 @@
 from .base import BaseField
 from .codecs.tagged_fields import TaggedFields
 from .codecs.types import UnsignedVarInt32
+from .codegen import CodegenContext
 
 
 class StructField(BaseField):
@@ -21,6 +22,7 @@ class StructField(BaseField):
         self._data_class = None
         self._untagged_fields_cache = {}
         self._tagged_fields_cache = {}
+        self._compiled_encoders = {}
 
     @property
     def fields(self):
@@ -132,7 +134,26 @@ class StructField(BaseField):
         elif tagged is None:
             UnsignedVarInt32.encode_into(out, 0)
 
+    def compiled_encode_into(self, version, compact=False, tagged=False):
+        """Return a compiled flat encode function for this struct+version.
 
+        Lazily compiled on first call and cached. The returned function has
+        signature: f(item, out) where out is an EncodeBuffer.
+        """
+        key = (version, compact, tagged)
+        if key not in self._compiled_encoders:
+            ctx = CodegenContext()
+            indent = '    '
+            ctx.lines.append('def _encode(item, out):')
+            ctx.emit(indent, 'buf = out.buf')
+            ctx.emit(indent, 'pos = out.pos')
+            self.emit_encode_into(ctx, 'item', indent, version=version,
+                                  compact=compact, tagged=tagged)
+            ctx.emit(indent, 'out.pos = pos')
+            code = ctx.source()
+            exec(compile(code, '<codegen:%s_v%d>' % (self.name, version), 'exec'), ctx.globs)
+            self._compiled_encoders[key] = ctx.globs['_encode']
+        return self._compiled_encoders[key]
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
         if data_class is None:

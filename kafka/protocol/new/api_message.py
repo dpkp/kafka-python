@@ -215,7 +215,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             out.pos += 4  # reserve space for frame size
         if header:
             self.encode_header_into(out, flexible=flexible)
-        self._struct.encode_into(self, out, version=self.API_VERSION, compact=flexible, tagged=flexible)
+        fast_encode = self._struct.compiled_encode_into(self.API_VERSION, compact=flexible, tagged=flexible)
+        fast_encode(self, out)
         if framed:
             payload_size = out.pos - 4
             pack_into('>i', out.buf, 0, payload_size)
