@@ -5,7 +5,7 @@ from .api_data import JsonSchemaData
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer
 from .schemas import BaseField, StructField, load_json
-from .schemas.fields.codecs import Int32, EncodeBuffer
+from .schemas.fields.codecs import Int32, EncodeBufferPool
 from struct import pack_into
 
 from kafka.util import classproperty
@@ -209,17 +209,17 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             raise ValueError('No header found')
 
         flexible = self.flexible_version_q(self.API_VERSION)
-        out = EncodeBuffer()
-        if framed:
-            out.pos += 4  # reserve space for frame size
-        if header:
-            self.encode_header_into(out, flexible=flexible)
-        fast_encode = self._struct.compiled_encode_into(self.API_VERSION, compact=flexible, tagged=flexible)
-        fast_encode(self, out)
-        if framed:
-            payload_size = out.pos - 4
-            pack_into('>i', out.buf, 0, payload_size)
-        return out.result()
+        with EncodeBufferPool.acquire() as out:
+            if framed:
+                out.pos += 4  # reserve space for frame size
+            if header:
+                self.encode_header_into(out, flexible=flexible)
+            fast_encode = self._struct.compiled_encode_into(self.API_VERSION, compact=flexible, tagged=flexible)
+            fast_encode(self, out)
+            if framed:
+                payload_size = out.pos - 4
+                pack_into('>i', out.buf, 0, payload_size)
+            return out.result()
 
     @classmethod
     def decode(cls, data, version=None, header=False, framed=False):

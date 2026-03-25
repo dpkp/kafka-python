@@ -1,4 +1,4 @@
-from .encode_buffer import EncodeBuffer
+from .encode_buffer import EncodeBuffer, EncodeBufferPool
 from .tagged_fields import TaggedFields
 from .types import (
     BitField, Boolean, UUID, Bytes, String,
