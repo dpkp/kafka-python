@@ -38,6 +38,7 @@ class ProducerPerformance:
             producer = KafkaProducer(**props)
             for k, v in props.items():
                 print('---> {0}={1}'.format(k, v))
+            print('---> topic={0}'.format(args.topic))
             print('---> send {0} byte records'.format(args.record_size))
             print('---> report stats every {0} secs'.format(args.stats_interval))
             print('---> raw metrics? {0}'.format(args.raw_metrics))
@@ -116,10 +117,10 @@ def get_args_parser():
         description='This tool is used to verify the producer performance.')
 
     parser.add_argument(
-        '--bootstrap-servers', type=str, nargs='+', default=(),
+        '-b', '--bootstrap-servers', type=str, nargs='+', default=(),
         help='host:port for cluster bootstrap server')
     parser.add_argument(
-        '--topic', type=str,
+        '-t', '--topic', type=str,
         help='Topic name for test (default: kafka-python-benchmark-test)',
         default='kafka-python-benchmark-test')
     parser.add_argument(
@@ -131,7 +132,7 @@ def get_args_parser():
         help='message size in bytes (default: 100)',
         default=100)
     parser.add_argument(
-        '--producer-config', type=str, nargs='+', default=(),
+        '-c', '--producer-config', type=str, nargs='+', default=(),
         help='kafka producer related configuaration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(

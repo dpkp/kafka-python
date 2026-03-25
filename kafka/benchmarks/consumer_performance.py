@@ -33,15 +33,13 @@ class ConsumerPerformance:
             print('Initializing Consumer...')
             props['bootstrap_servers'] = args.bootstrap_servers
             props['auto_offset_reset'] = 'earliest'
-            if 'group_id' not in props:
-                props['group_id'] = 'kafka-consumer-benchmark'
             if 'consumer_timeout_ms' not in props:
                 props['consumer_timeout_ms'] = 10000
             props['metrics_sample_window_ms'] = args.stats_interval * 1000
             for k, v in props.items():
                 print('---> {0}={1}'.format(k, v))
             consumer = KafkaConsumer(args.topic, **props)
-            print('---> group_id={0}'.format(consumer.config['group_id']))
+            print('---> topic={0}'.format(args.topic))
             print('---> report stats every {0} secs'.format(args.stats_interval))
             print('---> raw metrics? {0}'.format(args.raw_metrics))
             timer_stop = threading.Event()
@@ -108,10 +106,10 @@ def get_args_parser():
         description='This tool is used to verify the consumer performance.')
 
     parser.add_argument(
-        '--bootstrap-servers', type=str, nargs='+', default=(),
+        '-b', '--bootstrap-servers', type=str, nargs='+', default=(),
         help='host:port for cluster bootstrap servers')
     parser.add_argument(
-        '--topic', type=str,
+        '-t', '--topic', type=str,
         help='Topic for consumer test (default: kafka-python-benchmark-test)',
         default='kafka-python-benchmark-test')
     parser.add_argument(
@@ -119,7 +117,7 @@ def get_args_parser():
         help='number of messages to consume (default: 1000000)',
         default=1000000)
     parser.add_argument(
-        '--consumer-config', type=str, nargs='+', default=(),
+        '-c', '--consumer-config', type=str, nargs='+', default=(),
         help='kafka consumer related configuration properties like '
              'bootstrap_servers,client_id etc..')
     parser.add_argument(
