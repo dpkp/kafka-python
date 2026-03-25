@@ -47,9 +47,6 @@ class ArrayField(BaseField):
             raise ValueError('Invalid default for field %s. The only valid default is empty or null.' % self._name)
 
     def encode(self, items, version=None, compact=False, tagged=False):
-        assert version is not None, 'version is required to encode Field'
-        if not self.for_version_q(version):
-            return b''
         if compact:
             size = UnsignedVarInt32.encode(len(items) + 1 if items is not None else 0)
         else:
@@ -61,9 +58,6 @@ class ArrayField(BaseField):
         return b''.join([size] + fields)
 
     def decode(self, data, version=None, compact=False, tagged=False):
-        assert version is not None, 'version is required to decode Field'
-        if not self.for_version_q(version):
-            return None
         if compact:
             size = UnsignedVarInt32.decode(data)
             size -= 1

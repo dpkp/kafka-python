@@ -69,9 +69,6 @@ class StructField(BaseField):
         return self._untagged_fields_cache[version]
 
     def encode(self, item, version=None, compact=False, tagged=False):
-        assert version is not None, 'version required to encode StructField'
-        if not self.for_version_q(version):
-            return b''
         fields = self.untagged_fields(version)
         if isinstance(item, tuple):
             getter = lambda item, i, field: item[i]
@@ -97,9 +94,6 @@ class StructField(BaseField):
         return b''.join(encoded)
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
-        assert version is not None, 'version required to encode StructField'
-        if not self.for_version_q(version):
-            return None
         if data_class is None:
             data_class = self.data_class
         decoded = {
