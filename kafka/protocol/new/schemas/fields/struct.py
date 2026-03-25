@@ -94,6 +94,26 @@ class StructField(BaseField):
             encoded.append(TaggedFields.encode_empty())
         return b''.join(encoded)
 
+    def emit_encode_into(self, ctx, item_expr, indent, version=None, compact=False,
+                          tagged=False, tuple_access=False):
+        fields = self.untagged_fields(version)
+        for i, field in enumerate(fields):
+            if tuple_access:
+                val_expr = '%s[%d]' % (item_expr, i)
+            else:
+                val_expr = '%s.%s' % (item_expr, field.name)
+            field.emit_encode_into(ctx, val_expr, indent, version=version,
+                                   compact=compact, tagged=tagged)
+        if tagged:
+            tf_var = ctx.next_var('tf')
+            ctx.globs[tf_var] = self.tagged_fields(version)
+            ctx.emit(indent, 'out.pos = pos')
+            ctx.emit(indent, '%s.encode_into(%s, out, version=%d)' % (tf_var, item_expr, version))
+            ctx.emit(indent, 'pos = out.pos')
+        elif tagged is None:
+            ctx.emit(indent, 'buf[pos] = 0')
+            ctx.emit(indent, 'pos += 1')
+
     def encode_into(self, item, out, version=None, compact=False, tagged=False):
         fields = self.untagged_fields(version)
         if isinstance(item, tuple):

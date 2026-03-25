@@ -92,6 +92,9 @@ class SimpleField(BaseField):
     def encode_into(self, value, out, version=None, compact=False, tagged=False):
         self._type.encode_into(out, value, compact=compact)
 
+    def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
+        self._type.emit_encode_into(ctx, val_expr, indent, compact=compact)
+
     def decode(self, data, version=None, compact=False, tagged=False):
         return self._type.decode(data, compact=compact)
 

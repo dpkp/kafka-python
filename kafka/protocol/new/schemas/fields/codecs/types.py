@@ -51,6 +51,10 @@ class FixedCodec:
     def decode(cls, data, compact=False):
         return unpack(cls._be_fmt, data.read(cls.size))[0]
 
+    @classmethod
+    def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        ctx.emit(indent, "pack_into('%s', buf, pos, %s)" % (cls._be_fmt, val_expr))
+        ctx.emit(indent, 'pos += %d' % cls.size)
 
 
 class Int8(FixedCodec):
@@ -104,6 +108,15 @@ class UUID:
         out.pos = pos + 16
 
     @classmethod
+    def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        ctx.globs['_ZERO_UUID'] = cls.ZERO_UUID
+        v = ctx.next_var('uv')
+        ctx.emit(indent, '%s = %s' % (v, val_expr))
+        ctx.emit(indent, 'if %s is None: %s = _ZERO_UUID' % (v, v))
+        ctx.emit(indent, 'buf[pos:pos+16] = %s.bytes if hasattr(%s, "bytes") else __import__("uuid").UUID(%s).bytes' % (v, v, v))
+        ctx.emit(indent, 'pos += 16')
+
+    @classmethod
     def decode(cls, data, compact=False):
         val = uuid.UUID(bytes=data.read(16))
         if val == cls.ZERO_UUID:
@@ -148,6 +161,29 @@ class String:
         pos = out.pos
         out.buf[pos:pos+n] = value
         out.pos = pos + n
+
+    def emit_encode_into(self, ctx, val_expr, indent, compact=False):
+        sv = ctx.next_var('sv')
+        ctx.emit(indent, 'if %s is None:' % val_expr)
+        if compact:
+            ctx.emit(indent, '    buf[pos] = 0')
+            ctx.emit(indent, '    pos += 1')
+            ctx.emit(indent, 'else:')
+            sn = ctx.next_var('sn')
+            ctx.emit(indent, '    %s = str(%s).encode("utf-8")' % (sv, val_expr))
+            ctx.emit(indent, '    %s = len(%s) + 1' % (sn, sv))
+            UnsignedVarInt32.emit_encode_into(ctx, sn, indent + '    ')
+            ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (sv, sv))
+            ctx.emit(indent, '    pos += len(%s)' % sv)
+        else:
+            ctx.emit(indent, "    pack_into('>h', buf, pos, -1)")
+            ctx.emit(indent, '    pos += 2')
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, '    %s = str(%s).encode("utf-8")' % (sv, val_expr))
+            ctx.emit(indent, "    pack_into('>h', buf, pos, len(%s))" % sv)
+            ctx.emit(indent, '    pos += 2')
+            ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (sv, sv))
+            ctx.emit(indent, '    pos += len(%s)' % sv)
 
     def decode(self, data, compact=False):
         if compact:
@@ -201,6 +237,37 @@ class Bytes:
         out.pos = pos + n
 
     @classmethod
+    def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        bv = ctx.next_var('bv')
+        if compact:
+            ctx.emit(indent, '%s = %s' % (bv, val_expr))
+            ctx.emit(indent, 'if %s is None:' % bv)
+            ctx.emit(indent, '    buf[pos] = 0')
+            ctx.emit(indent, '    pos += 1')
+            ctx.emit(indent, 'else:')
+            bn = ctx.next_var('bn')
+            ctx.emit(indent, '    %s = len(%s) + 1' % (bn, bv))
+            UnsignedVarInt32.emit_encode_into(ctx, bn, indent + '    ')
+            ctx.emit(indent, '    out.pos = pos')
+            ctx.emit(indent, '    out.ensure(len(%s))' % bv)
+            ctx.emit(indent, '    buf = out.buf')
+            ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (bv, bv))
+            ctx.emit(indent, '    pos += len(%s)' % bv)
+        else:
+            ctx.emit(indent, '%s = %s' % (bv, val_expr))
+            ctx.emit(indent, 'if %s is None:' % bv)
+            ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
+            ctx.emit(indent, '    pos += 4')
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, "    pack_into('>i', buf, pos, len(%s))" % bv)
+            ctx.emit(indent, '    pos += 4')
+            ctx.emit(indent, '    out.pos = pos')
+            ctx.emit(indent, '    out.ensure(len(%s))' % bv)
+            ctx.emit(indent, '    buf = out.buf')
+            ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (bv, bv))
+            ctx.emit(indent, '    pos += len(%s)' % bv)
+
+    @classmethod
     def decode(cls, data, compact=False):
         if compact:
             length = UnsignedVarInt32.decode(data) - 1
@@ -242,6 +309,15 @@ class UnsignedVarInt32:
             pos += 1
         buf[pos] = value
         out.pos = pos + 1
+
+    @classmethod
+    def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        ctx.emit(indent, 'while (%s & 0xffffff80) != 0:' % val_expr)
+        ctx.emit(indent, '    buf[pos] = (%s & 0x7f) | 0x80' % val_expr)
+        ctx.emit(indent, '    %s >>= 7' % val_expr)
+        ctx.emit(indent, '    pos += 1')
+        ctx.emit(indent, 'buf[pos] = %s' % val_expr)
+        ctx.emit(indent, 'pos += 1')
 
 
 class VarInt32:
@@ -334,6 +410,17 @@ class BitField:
             vals = {31}
         pack_into('>I', out.buf, out.pos, cls.to_32_bit_field(vals))
         out.pos += 4
+
+    @classmethod
+    def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        bf = ctx.next_var('bf')
+        bfi = ctx.next_var('bfi')
+        ctx.emit(indent, '%s = %s' % (bf, val_expr))
+        ctx.emit(indent, 'if %s is None: %s = {31}' % (bf, bf))
+        ctx.emit(indent, '%s = 0' % bfi)
+        ctx.emit(indent, 'for _b in %s: %s |= 1 << _b' % (bf, bfi))
+        ctx.emit(indent, "pack_into('>I', buf, pos, %s)" % bfi)
+        ctx.emit(indent, 'pos += 4')
 
     @classmethod
     def to_32_bit_field(cls, vals):

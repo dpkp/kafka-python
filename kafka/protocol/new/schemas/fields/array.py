@@ -68,6 +68,24 @@ class ArrayField(BaseField):
         for item in items:
             encode_into(item, out, version=version, compact=compact, tagged=tagged)
 
+    def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
+        if compact:
+            an = ctx.next_var('an')
+            ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
+            UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+        else:
+            ctx.emit(indent, 'if %s is None:' % val_expr)
+            ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
+            ctx.emit(indent, '    pos += 4')
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, "    pack_into('>i', buf, pos, len(%s))" % val_expr)
+            ctx.emit(indent, '    pos += 4')
+        guard = indent + '    ' if not compact else indent
+        item_var = ctx.next_var('ai')
+        ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
+        self.array_of.emit_encode_into(ctx, item_var, guard + '    ',
+                                        version=version, compact=compact, tagged=tagged)
+
     def decode(self, data, version=None, compact=False, tagged=False):
         if compact:
             size = UnsignedVarInt32.decode(data)
