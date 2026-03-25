@@ -18,6 +18,8 @@ class StructField(BaseField):
         super().__init__(json)
         self._field_map = {field.name: field for field in self._fields}
         self._data_class = None
+        self._untagged_fields_cache = {}
+        self._tagged_fields_cache = {}
 
     @property
     def fields(self):
@@ -51,14 +53,20 @@ class StructField(BaseField):
             raise ValueError('Invalid default for struct field %s. The only valid default is null.' % self._name)
 
     def tagged_fields(self, version):
-        return TaggedFields([field for field in self._fields
-                             if field.for_version_q(version)
-                             and field.tagged_field_q(version)])
+        if version not in self._tagged_fields_cache:
+            self._tagged_fields_cache[version] = TaggedFields(
+                [field for field in self._fields
+                 if field.for_version_q(version)
+                 and field.tagged_field_q(version)])
+        return self._tagged_fields_cache[version]
 
     def untagged_fields(self, version):
-        return [field for field in self._fields
+        if version not in self._untagged_fields_cache:
+            self._untagged_fields_cache[version] = [
+                field for field in self._fields
                 if field.for_version_q(version)
                 and not field.tagged_field_q(version)]
+        return self._untagged_fields_cache[version]
 
     def encode(self, item, version=None, compact=False, tagged=False):
         assert version is not None, 'version required to encode StructField'
@@ -96,8 +104,7 @@ class StructField(BaseField):
             data_class = self.data_class
         decoded = {
             field.name: field.decode(data, version=version, compact=compact, tagged=tagged)
-            for field in self._fields
-            if field.for_version_q(version) and not field.tagged_field_q(version)
+            for field in self.untagged_fields(version)
         }
         if tagged:
             decoded.update(self.tagged_fields(version).decode(data, version=version))
