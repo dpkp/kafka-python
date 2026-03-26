@@ -262,8 +262,9 @@ class CompactBytes:
     def encode(cls, value):
         if value is None:
             return UnsignedVarInt32.encode(0)
-        else:
-            return UnsignedVarInt32.encode(len(value) + 1) + value
+        elif not isinstance(value, bytes):
+            value = value.encode()
+        return UnsignedVarInt32.encode(len(value) + 1) + value
 
 
 class BitField:
