@@ -118,14 +118,17 @@ class StructArrayField(ArrayField):
                 ctx.emit(scalar_indent, 'buf[pos] = 0')
                 ctx.emit(scalar_indent, 'pos += 1')
         else:
-            # Multi-field struct: emit both tuple and attribute access paths
-            ctx.emit(guard, 'if %s and isinstance(%s[0], tuple):' % (val_expr, val_expr))
-            ctx.emit(guard, '    for %s in %s:' % (item_var, val_expr))
+            # Multi-field struct: emit both tuple and attribute access paths.
+            # Use list() to handle non-subscriptable iterables (e.g., dict_items).
+            list_var = ctx.next_var('lst')
+            ctx.emit(guard, '%s = %s if isinstance(%s, list) else list(%s)' % (list_var, val_expr, val_expr, val_expr))
+            ctx.emit(guard, 'if %s and isinstance(%s[0], tuple):' % (list_var, list_var))
+            ctx.emit(guard, '    for %s in %s:' % (item_var, list_var))
             inner_struct.emit_encode_into(ctx, item_var, guard + '        ',
                                            version=version, compact=compact, tagged=tagged,
                                            tuple_access=True)
             ctx.emit(guard, 'else:')
-            ctx.emit(guard, '    for %s in %s:' % (item_var, val_expr))
+            ctx.emit(guard, '    for %s in %s:' % (item_var, list_var))
             inner_struct.emit_encode_into(ctx, item_var, guard + '        ',
                                            version=version, compact=compact, tagged=tagged,
                                            tuple_access=False)
