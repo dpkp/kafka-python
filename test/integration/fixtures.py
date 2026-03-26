@@ -622,7 +622,7 @@ class KafkaFixture(Fixture):
         response = self._send_request(request, timeout=timeout_ms)
         for topic_result in response.topics:
             if topic_result.error_code != 0:
-                raise errors.for_code(error_code)
+                raise errors.for_code(topic_result.error_code)
 
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
         args = self.run_script('kafka-topics.sh',
