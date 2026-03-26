@@ -587,13 +587,12 @@ class KafkaFixture(Fixture):
         # Try different methods to create a topic, from the fastest to the slowest
         if self.auto_create_topic and num_partitions == self.partitions and replication_factor == self.replicas:
             self._create_topic_via_metadata(topic_name, timeout_ms)
-        elif env_kafka_version() >= (0, 10, 1, 0) and env_kafka_version() < (4, 0):
+        elif env_kafka_version() >= (0, 10, 1, 0):
             try:
-                # 4.0 brokers dropped support for CreateTopicsRequest v0 (TODO: pick from api_versions)
                 self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
             except InvalidReplicationFactorError:
                 # wait and try again
-                # on travis the brokers sometimes take a while to find themselves
+                # in CI the brokers sometimes take a while to find themselves
                 time.sleep(0.5)
                 self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
         else:
@@ -611,13 +610,19 @@ class KafkaFixture(Fixture):
             raise RuntimeError('Unable to create topic via MetadataRequest')
 
     def _create_topic_via_admin_api(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
-        request = CreateTopicsRequest[0]([(topic_name, num_partitions,
-                                           replication_factor, [], [])], timeout_ms)
+        version = self._client.api_version(CreateTopicsRequest, max_version=7)
+        topic = CreateTopicsRequest.CreatableTopic(
+            name=topic_name,
+            num_partitions=num_partitions,
+            replication_factor=replication_factor,
+            assignments=[],
+            configs=[]
+        )
+        request = CreateTopicsRequest[version](topics=[topic], timeout_ms=timeout_ms)
         response = self._send_request(request, timeout=timeout_ms)
         for topic_result in response.topics:
-            error_code = topic_result[1]
-            if error_code != 0:
-                raise errors.for_code(error_code)
+            if topic_result.error_code != 0:
+                raise errors.for_code(topic_result.error_code)
 
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
         args = self.run_script('kafka-topics.sh',
