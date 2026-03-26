@@ -57,11 +57,17 @@ stubs:
 check-stubs:
 	python -m kafka.protocol.new.generate_stubs --check
 
+bench-protocol:
+	python kafka/benchmarks/protocol_old_vs_new.py
+
+bench-protocol-fast:
+	python kafka/benchmarks/protocol_old_vs_new.py --fast
+
 doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test test-local cov-local clean doc dist publish stubs check-stubs
+.PHONY: all test test-local cov-local clean doc dist publish stubs check-stubs bench-protocol bench-protocol-fast
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 
