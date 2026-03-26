@@ -17,6 +17,7 @@ from kafka.protocol.new.schemas.fields.simple import SimpleField
 from kafka.protocol.new.schemas.fields.array import ArrayField
 from kafka.protocol.new.schemas.fields.struct import StructField
 from kafka.protocol.new.schemas.fields.struct_array import StructArrayField
+from kafka.util import classproperty
 
 
 # JSON schema type string -> Python type annotation
@@ -193,15 +194,91 @@ def _emit_api_message_methods(lines, pad, cls):
     lines.append('%sdef with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...' % pad)
 
 
+def _format_annotation(ann):
+    """Format a type annotation as a clean string, using short class names."""
+    if isinstance(ann, str):
+        return ann
+    if isinstance(ann, type):
+        return ann.__name__
+    # For generic aliases like list[TopicPartition], use repr and clean up module paths
+    s = str(ann)
+    # Remove module prefixes (e.g., kafka.structs.TopicPartition -> TopicPartition)
+    import re
+    s = re.sub(r'[a-zA-Z_][a-zA-Z0-9_.]*\.([A-Z][a-zA-Z0-9_]*)', r'\1', s)
+    return s
+
+
+def _get_return_annotation(obj):
+    """Extract the return type annotation string from a callable, property, or classproperty."""
+    func = None
+    if isinstance(obj, classproperty):
+        func = obj.f
+    elif isinstance(obj, property):
+        func = obj.fget
+    elif isinstance(obj, classmethod):
+        func = obj.__func__
+    elif isinstance(obj, staticmethod):
+        func = obj.__func__
+    elif callable(obj):
+        func = obj
+
+    if func is not None:
+        hints = getattr(func, '__annotations__', {})
+        ret = hints.get('return')
+        if ret is not None:
+            return _format_annotation(ret)
+    return None
+
+
+def _get_param_annotations(obj):
+    """Extract parameter annotations from a callable, returning (params_str, has_annotations)."""
+    func = None
+    if isinstance(obj, classmethod):
+        func = obj.__func__
+    elif isinstance(obj, staticmethod):
+        func = obj.__func__
+    elif callable(obj):
+        func = obj
+
+    if func is None:
+        return None
+
+    try:
+        sig = inspect.signature(func)
+    except (ValueError, TypeError):
+        return None
+
+    parts = []
+    for pname, param in sig.parameters.items():
+        if pname == 'self' or pname == 'cls':
+            parts.append(pname)
+            continue
+        ann = param.annotation
+        if ann is inspect.Parameter.empty:
+            ann_str = 'Any'
+        else:
+            ann_str = _format_annotation(ann)
+        if param.default is not inspect.Parameter.empty:
+            parts.append('%s: %s = ...' % (pname, ann_str))
+        elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+            parts.append('*%s: %s' % (pname, ann_str))
+        elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            parts.append('**%s: %s' % (pname, ann_str))
+        else:
+            parts.append('%s: %s' % (pname, ann_str))
+    return ', '.join(parts)
+
+
 def _emit_custom_members(lines, pad, cls, base_name):
-    """Emit stubs for custom members defined directly on the class."""
-    # Skip internal/metaclass attributes
+    """Emit stubs for custom members defined directly on the class.
+
+    Reads type annotations from the source when available.
+    """
     skip = {
         '_json', '_struct', '_class_version', '_VERSIONS', '_flexible_versions',
         '_valid_versions', '__module__', '__qualname__', '__doc__', '__dict__',
         '__weakref__', '__license__', 'json_patch', '__init_subclass__',
     }
-    # Get members unique to this class (not inherited from base)
     if base_name == 'ApiMessage':
         base = ApiMessage
     elif base_name == 'ApiData':
@@ -212,20 +289,34 @@ def _emit_custom_members(lines, pad, cls, base_name):
     for name, obj in cls.__dict__.items():
         if name.startswith('_') or name in skip:
             continue
-        # Skip if it's on the base class too
-        if hasattr(base, name) and getattr(base, name) is obj:
+        # Skip encode/decode overrides to avoid LSP violations in stubs
+        if name in ('encode', 'decode', 'encode_into') and hasattr(base, name):
             continue
-        # classproperty or property
-        if hasattr(obj, 'fget') or (hasattr(obj, '__func__') and callable(obj.__func__)):
-            # Try to infer return type from source or just use Any
+        # Skip slot descriptors and nested classes (already handled)
+        if isinstance(obj, type):
+            continue
+        if type(obj).__name__ == 'member_descriptor':
+            continue
+
+        ret = _get_return_annotation(obj) or 'Any'
+
+        if isinstance(obj, classproperty):
             lines.append('%s@property' % pad)
-            lines.append('%sdef %s(self) -> Any: ...' % (pad, name))
-        elif isinstance(obj, classmethod):
-            lines.append('%s@classmethod' % pad)
-            lines.append('%sdef %s(cls, *args: Any, **kwargs: Any) -> Any: ...' % (pad, name))
+            lines.append('%sdef %s(self) -> %s: ...' % (pad, name, ret))
         elif isinstance(obj, property):
             lines.append('%s@property' % pad)
-            lines.append('%sdef %s(self) -> Any: ...' % (pad, name))
+            lines.append('%sdef %s(self) -> %s: ...' % (pad, name, ret))
+        elif isinstance(obj, classmethod):
+            params = _get_param_annotations(obj) or 'cls, *args: Any, **kwargs: Any'
+            lines.append('%s@classmethod' % pad)
+            lines.append('%sdef %s(%s) -> %s: ...' % (pad, name, params, ret))
+        elif isinstance(obj, staticmethod):
+            params = _get_param_annotations(obj) or '*args: Any, **kwargs: Any'
+            lines.append('%s@staticmethod' % pad)
+            lines.append('%sdef %s(%s) -> %s: ...' % (pad, name, params, ret))
+        elif callable(obj) and not isinstance(obj, type):
+            params = _get_param_annotations(obj) or 'self, *args: Any, **kwargs: Any'
+            lines.append('%sdef %s(%s) -> %s: ...' % (pad, name, params, ret))
 
 
 def discover_modules():

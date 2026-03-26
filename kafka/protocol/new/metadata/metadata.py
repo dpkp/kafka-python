@@ -5,14 +5,14 @@ from kafka.util import classproperty
 
 class MetadataRequest(ApiMessage):
     @classproperty
-    def ALL_TOPICS(cls): # pylint: disable=E0213
-        if cls._class_version == 0: # pylint: disable=E1101
+    def ALL_TOPICS(cls) -> list | None: # pylint: disable=E0213
+        if cls._class_version == 0: # pylint: disable=E1101  # ty: ignore[unresolved-attribute]
             return []
         else:
             return None
 
     @classproperty
-    def NO_TOPICS(cls): # pylint: disable=E0213
+    def NO_TOPICS(cls) -> list: # pylint: disable=E0213
         return []
 
 
