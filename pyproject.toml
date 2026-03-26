@@ -43,7 +43,7 @@ include-package-data = false
 license-files = [] # workaround for https://github.com/pypa/setuptools/issues/4759
 
 [tool.setuptools.package-data]
-kafka = ["protocol/new/schemas/resources/*.json", "coordinator/assignors/sticky/*.json"]
+kafka = ["protocol/new/schemas/resources/*.json", "coordinator/assignors/sticky/*.json", "**/*.pyi"]
 
 [tool.setuptools.packages.find]
 exclude = ["test"]
@@ -51,6 +51,9 @@ namespaces = false
 
 [tool.distutils.bdist_wheel]
 universal = 1
+
+[tool.pylint.main]
+ignore-patterns = '.*\.pyi$'
 
 [tool.setuptools.dynamic]
 version = {attr = "kafka.__version__"}

@@ -51,11 +51,17 @@ clean:
 	rm -rf cover
 	rm -rf dist
 
+stubs:
+	python -m kafka.protocol.new.generate_stubs
+
+check-stubs:
+	python -m kafka.protocol.new.generate_stubs --check
+
 doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test test-local cov-local clean doc dist publish
+.PHONY: all test test-local cov-local clean doc dist publish stubs check-stubs
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 

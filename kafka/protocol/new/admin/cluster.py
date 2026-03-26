@@ -24,7 +24,7 @@ class ElectLeadersResponse(ApiMessage): pass
 
 class ElectionType(IntEnum):
     """Leader election type"""
-    PREFERRED = 0,
+    PREFERRED = 0
     UNCLEAN = 1
 
 
