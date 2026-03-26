@@ -23,7 +23,7 @@ class ConsumerProtocolSubscription(ApiData):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     topics: list[str]
-    user_data: bytes | None
+    user_data: bytes | ApiData | None
     owned_partitions: list[TopicPartition]
     generation_id: int
     rack_id: str | None
@@ -31,7 +31,7 @@ class ConsumerProtocolSubscription(ApiData):
         self,
         *args: Any,
         topics: list[str] = ...,
-        user_data: bytes | None = ...,
+        user_data: bytes | ApiData | None = ...,
         owned_partitions: list[TopicPartition] = ...,
         generation_id: int = ...,
         rack_id: str | None = ...,
@@ -64,12 +64,12 @@ class ConsumerProtocolAssignment(ApiData):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     assigned_partitions: list[TopicPartition]
-    user_data: bytes | None
+    user_data: bytes | ApiData | None
     def __init__(
         self,
         *args: Any,
         assigned_partitions: list[TopicPartition] = ...,
-        user_data: bytes | None = ...,
+        user_data: bytes | ApiData | None = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...

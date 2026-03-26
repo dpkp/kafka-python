@@ -54,6 +54,18 @@ MESSAGE_MODULES = [
 ]
 
 
+def _all_fields_recursive(cls):
+    """Yield all fields from cls and its nested structs."""
+    if cls._struct is None:
+        return
+    for field in cls._struct._fields:
+        yield field
+        if field.is_struct() or field.is_struct_array():
+            dc = getattr(cls, field.type_str, None)
+            if dc is not None:
+                yield from _all_fields_recursive(dc)
+
+
 def resolve_type(field):
     """Convert a field object to a Python type annotation string."""
     if isinstance(field, StructArrayField):
@@ -66,6 +78,9 @@ def resolve_type(field):
         base = field.type_str
     elif isinstance(field, SimpleField):
         base = SIMPLE_TYPE_MAP.get(field._type_str, 'Any')
+        # bytes fields accept ApiData objects (encoded automatically via .encode())
+        if field._type_str in ('bytes', 'records'):
+            base = 'bytes | ApiData'
     else:
         base = 'Any'
 
@@ -249,13 +264,14 @@ def generate_module(mod, exports):
             elif issubclass(obj, ApiData):
                 needs_api_data = True
 
-    # Check if any nested classes exist (they'll need DataContainer)
+    # Check fields for nested classes (DataContainer) and bytes fields (ApiData)
     for name, obj in exports:
         if isinstance(obj, type) and hasattr(obj, '_struct') and obj._struct is not None:
-            for field in obj._struct._fields:
+            for field in _all_fields_recursive(obj):
                 if field.is_struct() or field.is_struct_array():
                     needs_data_container = True
-                    break
+                if isinstance(field, SimpleField) and field._type_str in ('bytes', 'records'):
+                    needs_api_data = True
 
     if needs_api_message:
         lines.append('from kafka.protocol.new.api_message import ApiMessage')

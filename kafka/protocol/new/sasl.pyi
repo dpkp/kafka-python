@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Self
 
 from kafka.protocol.new.api_message import ApiMessage
+from kafka.protocol.new.api_data import ApiData
 
 __all__ = ['SaslHandshakeRequest', 'SaslHandshakeResponse', 'SaslAuthenticateRequest', 'SaslAuthenticateResponse']
 
@@ -60,11 +61,11 @@ class SaslHandshakeResponse(ApiMessage):
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
 class SaslAuthenticateRequest(ApiMessage):
-    auth_bytes: bytes
+    auth_bytes: bytes | ApiData
     def __init__(
         self,
         *args: Any,
-        auth_bytes: bytes = ...,
+        auth_bytes: bytes | ApiData = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -88,14 +89,14 @@ class SaslAuthenticateRequest(ApiMessage):
 class SaslAuthenticateResponse(ApiMessage):
     error_code: int
     error_message: str | None
-    auth_bytes: bytes
+    auth_bytes: bytes | ApiData
     session_lifetime_ms: int
     def __init__(
         self,
         *args: Any,
         error_code: int = ...,
         error_message: str | None = ...,
-        auth_bytes: bytes = ...,
+        auth_bytes: bytes | ApiData = ...,
         session_lifetime_ms: int = ...,
         version: int | None = None,
         **kwargs: Any,

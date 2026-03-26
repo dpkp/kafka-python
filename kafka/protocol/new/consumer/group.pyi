@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Self
 
 from kafka.protocol.new.api_message import ApiMessage
+from kafka.protocol.new.api_data import ApiData
 from kafka.protocol.new.data_container import DataContainer
 
 __all__ = ['DEFAULT_GENERATION_ID', 'UNKNOWN_MEMBER_ID', 'JoinGroupRequest', 'JoinGroupResponse', 'SyncGroupRequest', 'SyncGroupResponse', 'LeaveGroupRequest', 'LeaveGroupResponse', 'HeartbeatRequest', 'HeartbeatResponse', 'OffsetFetchRequest', 'OffsetFetchResponse', 'OffsetCommitRequest', 'OffsetCommitResponse']
@@ -13,12 +14,12 @@ UNKNOWN_MEMBER_ID: str
 class JoinGroupRequest(ApiMessage):
     class JoinGroupRequestProtocol(DataContainer):
         name: str
-        metadata: bytes
+        metadata: bytes | ApiData
         def __init__(
             self,
             *args: Any,
             name: str = ...,
-            metadata: bytes = ...,
+            metadata: bytes | ApiData = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -69,13 +70,13 @@ class JoinGroupResponse(ApiMessage):
     class JoinGroupResponseMember(DataContainer):
         member_id: str
         group_instance_id: str | None
-        metadata: bytes
+        metadata: bytes | ApiData
         def __init__(
             self,
             *args: Any,
             member_id: str = ...,
             group_instance_id: str | None = ...,
-            metadata: bytes = ...,
+            metadata: bytes | ApiData = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -127,12 +128,12 @@ class JoinGroupResponse(ApiMessage):
 class SyncGroupRequest(ApiMessage):
     class SyncGroupRequestAssignment(DataContainer):
         member_id: str
-        assignment: bytes
+        assignment: bytes | ApiData
         def __init__(
             self,
             *args: Any,
             member_id: str = ...,
-            assignment: bytes = ...,
+            assignment: bytes | ApiData = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -182,7 +183,7 @@ class SyncGroupResponse(ApiMessage):
     error_code: int
     protocol_type: str | None
     protocol_name: str | None
-    assignment: bytes
+    assignment: bytes | ApiData
     def __init__(
         self,
         *args: Any,
@@ -190,7 +191,7 @@ class SyncGroupResponse(ApiMessage):
         error_code: int = ...,
         protocol_type: str | None = ...,
         protocol_name: str | None = ...,
-        assignment: bytes = ...,
+        assignment: bytes | ApiData = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...

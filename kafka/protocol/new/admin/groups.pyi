@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Self
 
 from kafka.protocol.new.api_message import ApiMessage
+from kafka.protocol.new.api_data import ApiData
 from kafka.protocol.new.data_container import DataContainer
 
 __all__ = ['DescribeGroupsRequest', 'DescribeGroupsResponse', 'ListGroupsRequest', 'ListGroupsResponse', 'DeleteGroupsRequest', 'DeleteGroupsResponse']
@@ -41,8 +42,8 @@ class DescribeGroupsResponse(ApiMessage):
             group_instance_id: str | None
             client_id: str
             client_host: str
-            member_metadata: bytes
-            member_assignment: bytes
+            member_metadata: bytes | ApiData
+            member_assignment: bytes | ApiData
             def __init__(
                 self,
                 *args: Any,
@@ -50,8 +51,8 @@ class DescribeGroupsResponse(ApiMessage):
                 group_instance_id: str | None = ...,
                 client_id: str = ...,
                 client_host: str = ...,
-                member_metadata: bytes = ...,
-                member_assignment: bytes = ...,
+                member_metadata: bytes | ApiData = ...,
+                member_assignment: bytes | ApiData = ...,
                 version: int | None = None,
                 **kwargs: Any,
             ) -> None: ...

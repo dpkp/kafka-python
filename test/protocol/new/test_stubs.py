@@ -46,7 +46,7 @@ class TestResolveType:
     def test_bytes_field(self):
         from kafka.protocol.new.consumer.metadata import ConsumerProtocolSubscription
         field = ConsumerProtocolSubscription._struct._field_map['user_data']
-        assert resolve_type(field) == 'bytes | None'
+        assert resolve_type(field) == 'bytes | ApiData | None'
 
 
 class TestEmitClass:

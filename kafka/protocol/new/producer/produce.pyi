@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Self
 
 from kafka.protocol.new.api_message import ApiMessage
+from kafka.protocol.new.api_data import ApiData
 from kafka.protocol.new.data_container import DataContainer
 
 __all__ = ['ProduceRequest', 'ProduceResponse']
@@ -10,12 +11,12 @@ class ProduceRequest(ApiMessage):
     class TopicProduceData(DataContainer):
         class PartitionProduceData(DataContainer):
             index: int
-            records: bytes | None
+            records: bytes | ApiData | None
             def __init__(
                 self,
                 *args: Any,
                 index: int = ...,
-                records: bytes | None = ...,
+                records: bytes | ApiData | None = ...,
                 version: int | None = None,
                 **kwargs: Any,
             ) -> None: ...
