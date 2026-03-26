@@ -26,7 +26,7 @@ test: build-integration
 fixture: build-integration
 	python -m test.integration.fixtures kafka
 
-coverage: build-integration
+test-coverage: build-integration
 	pytest --cov=kafka --cov-report html test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
@@ -66,7 +66,7 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test test-local coverage clean doc dist publish stubs check-stubs bench-protocol bench-protocol-fast
+.PHONY: all test test-local test-coverage clean doc dist publish stubs check-stubs bench-protocol bench-protocol-fast
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 

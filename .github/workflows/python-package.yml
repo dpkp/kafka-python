@@ -89,12 +89,14 @@ jobs:
           path: servers/dist
           key: ${{ steps.cache-servers-dist-restore.outputs.cache-primary-key }}
       - name: Pytest
+        # coverage runs all tests, so we can skip this test step if we're going to do coverage
+        if: matrix.python != '3.14' || matrix.kafka != '4.0.0'
         run: make test
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
-      - name: Coverage
+      - name: Pytest (with coverage)
         if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
-        run: make coverage
+        run: make test-coverage
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
       - name: Upload coverage report
