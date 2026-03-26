@@ -29,10 +29,7 @@ class DataContainer(metaclass=SlotsBuilder):
         self._version = version
         # Support positional arg init for convenience
         if len(args) > 0:
-            if self._version is not None:
-                field_args = [field for field in self._struct._fields if field.for_version_q(self._version)]
-            else:
-                field_args = self._struct._fields
+            field_args = self._struct.untagged_fields(self._version) if self._version is not None else self._struct._fields
             if len(args) > len(field_args):
                 raise RuntimeError('Unable to init DataContainer with %d positional args: unexpected %d' % (len(args), len(field_args)))
             field_vals.update({field_args[i].name: arg for i, arg in enumerate(args)})
@@ -40,20 +37,34 @@ class DataContainer(metaclass=SlotsBuilder):
         self.tags = None
         self.unknown_tags = None
         for field in self._struct._fields:
-            if field.name in field_vals and field.tag is not None:
-                if self.tags is None:
-                    self.tags = set()
-                self.tags.add(field.name)
-            setattr(self, field.name, field_vals.pop(field.name, field.default))
-
-        for name in list(field_vals.keys()):
+            name = field.name
+            if name in field_vals:
+                if field._tag is not None:
+                    if self.tags is None:
+                        self.tags = set()
+                    self.tags.add(name)
+                setattr(self, name, field_vals.pop(name))
+            # set default values for in-version attributes only
+            # for outbound requests these fields will be encoded and this
+            # optimizes to avoid __getattr__ lookups in the general case
+            elif self._version is not None and field.for_version_q(self._version):
+                setattr(self, name, field.default)
+        # Remaining field_vals are unknown tags or errors
+        for name in list(field_vals):
             if name.startswith('_'):
                 if self.unknown_tags is None:
                     self.unknown_tags = {}
                 self.unknown_tags[name] = field_vals.pop(name)
-
         if field_vals:
             raise ValueError('Unrecognized fields for type %s: %s' % (self._struct.name, field_vals))
+
+    def __getattr__(self, name):
+        # Only called when normal slot lookup fails (field not set).
+        # Returns the schema default for fields outside the decoded version.
+        field_map = self._struct.fields
+        if name in field_map:
+            return field_map[name].default
+        raise AttributeError("'%s' object has no attribute '%s'" % (type(self).__name__, name))
 
     @property
     def version(self):
