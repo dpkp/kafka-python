@@ -1,13 +1,12 @@
-from .types import (
-    BitField, Boolean, UUID,
-    Int8, Int16, Int32, Int64, UnsignedVarInt32, Float64,
-    Bytes, CompactBytes, String, CompactString,
-)
+from .encode_buffer import EncodeBuffer, EncodeBufferPool
 from .tagged_fields import TaggedFields
+from .types import (
+    BitField, Boolean, UUID, Bytes, String,
+    Int8, Int16, Int32, Int64, UnsignedVarInt32, Float64,
+)
 
 __all__ = [
-    'BitField', 'Boolean', 'UUID',
+    'BitField', 'Boolean', 'UUID', 'Bytes', 'String',
     'Int8', 'Int16', 'Int32', 'Int64', 'UnsignedVarInt32', 'Float64',
-    'Bytes', 'CompactBytes', 'String', 'CompactString',
-    'TaggedFields',
+    'TaggedFields', 'EncodeBuffer',
 ]

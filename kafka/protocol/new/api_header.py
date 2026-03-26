@@ -22,6 +22,10 @@ class ApiHeader(DataContainer, metaclass=JsonSchemaData, init=False):
         # is never encoded as compact (required to support ApiVersionsRequest for unsupported version)
         return super().encode(version=version, compact=False, tagged=flexible)
 
+    def encode_into(self, out, flexible=False):
+        version = self._flexible_versions[0] if flexible else self._valid_versions[0] # pylint: disable=E1136
+        super().encode_into(out, version=version, compact=False, tagged=flexible)
+
     @classmethod
     def decode(cls, data, flexible=False):
         # Request versions are 1-2, Response versions are 0-1

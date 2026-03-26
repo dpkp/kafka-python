@@ -59,5 +59,79 @@ class StructArrayField(ArrayField):
     def __call__(self, *args, **kw):
         return self.data_class(*args, **kw) # pylint: disable=E1102
 
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        from .codecs import UnsignedVarInt32
+        inner_struct = self.array_of
+        n = ctx.next_var('n')
+        if compact:
+            UnsignedVarInt32.emit_decode_from(ctx, n, indent)
+            ctx.emit(indent, '%s -= 1' % n)
+        else:
+            ctx.emit(indent, '%s = unpack_from(">i", data, pos)[0]' % n)
+            ctx.emit(indent, 'pos += 4')
+        ctx.emit(indent, 'if %s == -1:' % n)
+        ctx.emit(indent, '    %s = None' % var_name)
+        ctx.emit(indent, 'else:')
+        inner_indent = indent + '    '
+        ctx.emit(inner_indent, '%s = []' % var_name)
+        idx = ctx.next_var('idx')
+        item = ctx.next_var('obj')
+        ctx.emit(inner_indent, 'for %s in range(%s):' % (idx, n))
+        inner_struct.emit_decode_from(ctx, item, inner_indent + '    ',
+                                       version=version, compact=compact, tagged=tagged)
+        ctx.emit(inner_indent, '    %s.append(%s)' % (var_name, item))
+
+    def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
+        from .codecs import UnsignedVarInt32
+        inner_struct = self.array_of
+        fields = inner_struct.untagged_fields(version)
+        if compact:
+            an = ctx.next_var('an')
+            ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
+            UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+        else:
+            ctx.emit(indent, 'if %s is None:' % val_expr)
+            ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
+            ctx.emit(indent, '    pos += 4')
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, "    pack_into('>i', buf, pos, len(%s))" % val_expr)
+            ctx.emit(indent, '    pos += 4')
+        guard = indent + '    ' if not compact else indent
+        item_var = ctx.next_var('si')
+        if len(fields) == 1:
+            # Single-field struct: items may be scalars (str, int, etc.)
+            ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
+            scalar_indent = guard + '    '
+            ctx.emit(scalar_indent, 'if isinstance(%s, tuple): %s = %s[0]' % (item_var, item_var, item_var))
+            ctx.emit(scalar_indent, 'elif hasattr(%s, "%s"): %s = %s.%s' % (
+                item_var, fields[0].name, item_var, item_var, fields[0].name))
+            fields[0].emit_encode_into(ctx, item_var, scalar_indent,
+                                        version=version, compact=compact, tagged=tagged)
+            if tagged:
+                tf_var = ctx.next_var('tf')
+                ctx.globs[tf_var] = inner_struct.tagged_fields(version)
+                ctx.emit(scalar_indent, 'out.pos = pos')
+                ctx.emit(scalar_indent, '# tagged fields for single-field struct')
+                ctx.emit(scalar_indent, '%s.encode_into(%s, out, version=%d)' % (tf_var, item_var, version))
+                ctx.emit(scalar_indent, 'pos = out.pos')
+            elif tagged is None:
+                ctx.emit(scalar_indent, 'buf[pos] = 0')
+                ctx.emit(scalar_indent, 'pos += 1')
+        else:
+            # Multi-field struct: emit both tuple and attribute access paths.
+            # Use list() to handle non-subscriptable iterables (e.g., dict_items).
+            list_var = ctx.next_var('lst')
+            ctx.emit(guard, '%s = %s if isinstance(%s, list) else list(%s)' % (list_var, val_expr, val_expr, val_expr))
+            ctx.emit(guard, 'if %s and isinstance(%s[0], tuple):' % (list_var, list_var))
+            ctx.emit(guard, '    for %s in %s:' % (item_var, list_var))
+            inner_struct.emit_encode_into(ctx, item_var, guard + '        ',
+                                           version=version, compact=compact, tagged=tagged,
+                                           tuple_access=True)
+            ctx.emit(guard, 'else:')
+            ctx.emit(guard, '    for %s in %s:' % (item_var, list_var))
+            inner_struct.emit_encode_into(ctx, item_var, guard + '        ',
+                                           version=version, compact=compact, tagged=tagged,
+                                           tuple_access=False)
+
     def __repr__(self):
         return 'StructArrayField(%s)' % self._json

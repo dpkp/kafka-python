@@ -2,7 +2,7 @@ import uuid
 
 from .base import BaseField
 from .codecs import (
-    BitField, Boolean, Bytes, CompactBytes, CompactString,
+    BitField, Boolean, Bytes,
     Float64, Int8, Int16, Int32, Int64, String, UUID
 )
 
@@ -18,8 +18,8 @@ class SimpleField(BaseField):
         'float64': Float64,
         'bool': Boolean,
         'uuid': UUID,
-        'string': String('utf-8'), # CompactString if flexible version
-        'bytes': Bytes, # CompactBytes if flexible version
+        'string': String('utf-8'),
+        'bytes': Bytes,
         'records': Bytes,
         'bitfield': BitField, # patched only; does not exist in raw schemas
     }
@@ -36,6 +36,9 @@ class SimpleField(BaseField):
         if self._type_str not in self.TYPES:
             raise ValueError('Unrecognized type: %s' % self._type_str)
         self._type = self.TYPES[self._type_str]
+
+    def is_batchable(self):
+        return getattr(self._type, 'batchable', False)
 
     def _calculate_default(self, default):
         if self._type is Boolean:
@@ -87,26 +90,19 @@ class SimpleField(BaseField):
             raise ValueError('Invalid default for field %s. The only valid default is empty or null.' % self._name)
 
     def encode(self, value, version=None, compact=False, tagged=False):
-        assert version is not None, 'version is required to encode Field'
-        if not self.for_version_q(version):
-            return b''
-        if compact and self._type is Bytes:
-            return CompactBytes.encode(value)
-        elif compact and isinstance(self._type, String):
-            return CompactString(self._type.encoding).encode(value)
-        else:
-            return self._type.encode(value)
+        return self._type.encode(value, compact=compact)
+
+    def encode_into(self, value, out, version=None, compact=False, tagged=False):
+        self._type.encode_into(out, value, compact=compact)
+
+    def emit_encode_into(self, ctx, val_expr, indent, version=None, compact=False, tagged=False):
+        self._type.emit_encode_into(ctx, val_expr, indent, compact=compact)
+
+    def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
+        self._type.emit_decode_from(ctx, var_name, indent, compact=compact)
 
     def decode(self, data, version=None, compact=False, tagged=False):
-        assert version is not None, 'version is required to decode Field'
-        if not self.for_version_q(version):
-            return None
-        if compact and self._type is Bytes:
-            return CompactBytes.decode(data)
-        elif compact and isinstance(self._type, String):
-            return CompactString(self._type.encoding).decode(data)
-        else:
-            return self._type.decode(data)
+        return self._type.decode(data, compact=compact)
 
     def __repr__(self):
         return 'SimpleField(%s)' % self._json

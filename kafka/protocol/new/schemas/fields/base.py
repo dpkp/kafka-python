@@ -43,6 +43,7 @@ class BaseField:
     def __init__(self, json):
         self._json = json
         self._name = json['name']
+        self.name = self.underscore_name(self._name)
         # versions tells when to include the field in encode / decode
         # 'validVersions' is included for top-level request/response structs
         # otherwise this should always be 'versions'
@@ -71,10 +72,6 @@ class BaseField:
         self._zero_copy = json.get('zeroCopy') # ?
 
     @property
-    def name(self):
-        return self.underscore_name(self._name)
-
-    @property
     def type_str(self):
         return self._type_str
 
@@ -90,6 +87,9 @@ class BaseField:
         return False
 
     def is_struct_array(self):
+        return False
+
+    def is_batchable(self):
         return False
 
     def has_data_class(self):
@@ -111,7 +111,7 @@ class BaseField:
         return self._versions[1]
 
     def for_version_q(self, version):
-        return self.min_version <= version <= self.max_version
+        return self._versions[0] <= version <= self._versions[1]
 
     def tagged_field_q(self, version):
         if self._tag is None or self._tagged_versions is None:
@@ -126,9 +126,11 @@ class BaseField:
 
     @property
     def default(self):
-        if not hasattr(self, '_default'):
-            setattr(self, '_default', self._calculate_default(self._json.get('default', '')))
-        return self._default # pylint: disable=E1101
+        try:
+            return self._default # pylint: disable=E1101
+        except AttributeError:
+            self._default = self._calculate_default(self._json.get('default', ''))
+            return self._default
 
     def encode(self, value, version=None, compact=False, tagged=False):
         raise NotImplementedError

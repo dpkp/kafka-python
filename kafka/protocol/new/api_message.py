@@ -5,7 +5,8 @@ from .api_data import JsonSchemaData
 from .api_header import RequestHeader, ResponseHeader, ResponseClassRegistry
 from .data_container import DataContainer
 from .schemas import BaseField, StructField, load_json
-from .schemas.fields.codecs import Int32
+from .schemas.fields.codecs import Int32, EncodeBufferPool
+from struct import pack_into
 
 from kafka.util import classproperty
 
@@ -180,6 +181,15 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
     def encode_header(self, flexible=False):
         return self._header.encode(flexible=flexible) # pylint: disable=E1120
 
+    def encode_header_into(self, out, flexible=False):
+        # Subclasses may override encode_header to change flexible flag
+        # (e.g., ApiVersionsResponse forces flexible=False).
+        # Fall back to bytes-based encode_header if not overridden at this level.
+        header_bytes = self.encode_header(flexible=flexible)
+        n = len(header_bytes)
+        out.buf[out.pos:out.pos+n] = header_bytes
+        out.pos += n
+
     @classmethod
     def parse_header(cls, data, version=None):
         version = cls._class_version if version is None else version
@@ -199,15 +209,17 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
             raise ValueError('No header found')
 
         flexible = self.flexible_version_q(self.API_VERSION)
-        encoded = self._struct.encode(self, version=self.API_VERSION, compact=flexible, tagged=flexible)
-        if not header and not framed:
-            return encoded
-        bits = [encoded]
-        if header:
-            bits.insert(0, self.encode_header(flexible=flexible))
-        if framed:
-            bits.insert(0, Int32.encode(sum(map(len, bits))))
-        return b''.join(bits)
+        with EncodeBufferPool.acquire() as out:
+            if framed:
+                out.pos += 4  # reserve space for frame size
+            if header:
+                self.encode_header_into(out, flexible=flexible)
+            fast_encode = self._struct.compiled_encode_into(self.API_VERSION, compact=flexible, tagged=flexible)
+            fast_encode(self, out)
+            if framed:
+                payload_size = out.pos - 4
+                pack_into('>i', out.buf, 0, payload_size)
+            return out.result()
 
     @classmethod
     def decode(cls, data, version=None, header=False, framed=False):
@@ -217,12 +229,24 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         elif not 0 <= version <= cls.max_version:
             raise ValueError('Invalid version %s (max version is %s).' % (version, cls.max_version))
 
+        # Normalize input to memoryview
         if isinstance(data, bytes):
-            data = io.BytesIO(data)
+            data = memoryview(data)
+        elif not isinstance(data, memoryview):
+            if hasattr(data, 'read'):
+                data = memoryview(data.read())
+            else:
+                # else: assume buffer protocol compatible
+                data = memoryview(data)
+        pos = 0
+
         if framed:
-            size = Int32.decode(data)
+            size, pos = Int32.decode_from(data, pos)
         if header:
-            hdr = cls.parse_header(data, version=version)
+            # Header decode uses BytesIO (variable-length fields)
+            hdr_data = io.BytesIO(bytes(data[pos:]))
+            hdr = cls.parse_header(hdr_data, version=version)
+            pos += hdr_data.tell()
         else:
             hdr = None
 
@@ -230,7 +254,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         data_class = cls[None]
 
         flexible = cls.flexible_version_q(version)
-        ret = cls._struct.decode(data, version=version, compact=flexible, tagged=flexible, data_class=data_class)
+        fast_decode = cls._struct.compiled_decode_from(version, compact=flexible, tagged=flexible, data_class=data_class)
+        ret, pos = fast_decode(data, pos)
         if hdr is not None:
             ret._header = hdr
         return ret
