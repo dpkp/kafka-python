@@ -26,9 +26,8 @@ test: build-integration
 fixture: build-integration
 	python -m test.integration.fixtures kafka
 
-cov-local: build-integration
-	pytest --pylint --pylint-rcfile=pylint.rc --pylint-error-types=EF --cov=kafka \
-		--cov-config=.covrc --cov-report html $(TEST_FLAGS) kafka test
+coverage: build-integration
+	pytest --cov=kafka --cov-report html test
 	@echo "open file://`pwd`/htmlcov/index.html"
 
 # Check the readme for syntax errors, which can lead to invalid formatting on
@@ -67,7 +66,7 @@ doc:
 	make -C docs html
 	@echo "open file://`pwd`/docs/_build/html/index.html"
 
-.PHONY: all test test-local cov-local clean doc dist publish stubs check-stubs bench-protocol bench-protocol-fast
+.PHONY: all test test-local coverage clean doc dist publish stubs check-stubs bench-protocol bench-protocol-fast
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 

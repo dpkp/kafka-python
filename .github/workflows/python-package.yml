@@ -68,7 +68,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Pylint
-        run: pylint --recursive=y --errors-only kafka test
+        run: make lint
       - name: Setup java
         uses: actions/setup-java@v5
         with:
@@ -92,3 +92,14 @@ jobs:
         run: make test
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
+      - name: Coverage
+        if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
+        run: make coverage
+        env:
+          KAFKA_VERSION: ${{ matrix.kafka }}
+      - name: Upload coverage report
+        if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
