@@ -24,26 +24,26 @@ def infer_broker_version_from_api_versions(api_versions):
         # ((2, 7), FetchRequest[12]),
         # ((2, 6), ListGroupsRequest[4]),
         # ((2, 5), JoinGroupRequest[7]),
-        ((2, 6), DescribeClientQuotasRequest[0]),
-        ((2, 5), DescribeAclsRequest[2]),
-        ((2, 4), ProduceRequest[8]),
-        ((2, 3), FetchRequest[11]),
-        ((2, 2), ListOffsetsRequest[5]),
-        ((2, 1), FetchRequest[10]),
-        ((2, 0), FetchRequest[8]),
-        ((1, 1), FetchRequest[7]),
-        ((1, 0), MetadataRequest[5]),
-        ((0, 11), MetadataRequest[4]),
-        ((0, 10, 2), OffsetFetchRequest[2]),
-        ((0, 10, 1), MetadataRequest[2]),
+        ((2, 6), DescribeClientQuotasRequest, 0),
+        ((2, 5), DescribeAclsRequest, 2),
+        ((2, 4), ProduceRequest, 8),
+        ((2, 3), FetchRequest, 11),
+        ((2, 2), ListOffsetsRequest, 5),
+        ((2, 1), FetchRequest, 10),
+        ((2, 0), FetchRequest, 8),
+        ((1, 1), FetchRequest, 7),
+        ((1, 0), MetadataRequest, 5),
+        ((0, 11), MetadataRequest, 4),
+        ((0, 10, 2), OffsetFetchRequest, 2),
+        ((0, 10, 1), MetadataRequest, 2),
     ]
 
     # Get the best match of test cases
-    for broker_version, proto_struct in sorted(test_cases, reverse=True):
+    for broker_version, proto_struct, API_VERSION in sorted(test_cases, reverse=True):
         if proto_struct.API_KEY not in api_versions:
             continue
         min_version, max_version = api_versions[proto_struct.API_KEY]
-        if min_version <= proto_struct.API_VERSION <= max_version:
+        if min_version <= API_VERSION <= max_version:
             return broker_version
 
     # We know that ApiVersionsResponse is only supported in 0.10+
