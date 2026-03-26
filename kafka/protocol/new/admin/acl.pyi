@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, Self
 
+from enum import IntEnum
 from kafka.protocol.new.api_message import ApiMessage
 from kafka.protocol.new.data_container import DataContainer
 
@@ -333,14 +334,41 @@ class DescribeAclsResponse(ApiMessage):
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
-# Defined in source — see .py file
-class ACLResourceType: ...
+class ACLResourceType(IntEnum):
+    UNKNOWN: int
+    ANY: int
+    CLUSTER: int
+    DELEGATION_TOKEN: int
+    GROUP: int
+    TOPIC: int
+    TRANSACTIONAL_ID: int
 
-# Defined in source — see .py file
-class ACLOperation: ...
+class ACLOperation(IntEnum):
+    UNKNOWN: int
+    ANY: int
+    ALL: int
+    READ: int
+    WRITE: int
+    CREATE: int
+    DELETE: int
+    ALTER: int
+    DESCRIBE: int
+    CLUSTER_ACTION: int
+    DESCRIBE_CONFIGS: int
+    ALTER_CONFIGS: int
+    IDEMPOTENT_WRITE: int
+    CREATE_TOKENS: int
+    DESCRIBE_TOKENS: int
 
-# Defined in source — see .py file
-class ACLPermissionType: ...
+class ACLPermissionType(IntEnum):
+    UNKNOWN: int
+    ANY: int
+    DENY: int
+    ALLOW: int
 
-# Defined in source — see .py file
-class ACLResourcePatternType: ...
+class ACLResourcePatternType(IntEnum):
+    UNKNOWN: int
+    ANY: int
+    MATCH: int
+    LITERAL: int
+    PREFIXED: int

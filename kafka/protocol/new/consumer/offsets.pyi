@@ -8,8 +8,10 @@ __all__ = ['UNKNOWN_OFFSET', 'OffsetResetStrategy', 'ListOffsetsRequest', 'ListO
 
 UNKNOWN_OFFSET: int
 
-# Defined in source — see .py file
-class OffsetResetStrategy: ...
+class OffsetResetStrategy:
+    LATEST: int
+    EARLIEST: int
+    NONE: int
 
 class ListOffsetsRequest(ApiMessage):
     class ListOffsetsTopic(DataContainer):

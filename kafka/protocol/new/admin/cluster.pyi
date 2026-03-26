@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, Self
 
+from enum import IntEnum
 from kafka.protocol.new.api_message import ApiMessage
 from kafka.protocol.new.data_container import DataContainer
 
@@ -579,5 +580,6 @@ class ElectLeadersResponse(ApiMessage):
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
-# Defined in source — see .py file
-class ElectionType: ...
+class ElectionType(IntEnum):
+    PREFERRED: int
+    UNCLEAN: int

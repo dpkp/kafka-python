@@ -254,15 +254,19 @@ def generate_module(mod, exports):
     lines.append('')
 
     # Determine needed imports based on base classes
+    from enum import IntEnum as _IntEnum
     needs_api_message = False
     needs_api_data = False
     needs_data_container = False
+    needs_int_enum = False
     for name, obj in exports:
         if isinstance(obj, type):
             if issubclass(obj, ApiMessage):
                 needs_api_message = True
             elif issubclass(obj, ApiData):
                 needs_api_data = True
+            if issubclass(obj, _IntEnum):
+                needs_int_enum = True
 
     # Check fields for nested classes (DataContainer) and bytes fields (ApiData)
     for name, obj in exports:
@@ -273,13 +277,15 @@ def generate_module(mod, exports):
                 if isinstance(field, SimpleField) and field._type_str in ('bytes', 'records'):
                     needs_api_data = True
 
+    if needs_int_enum:
+        lines.append('from enum import IntEnum')
     if needs_api_message:
         lines.append('from kafka.protocol.new.api_message import ApiMessage')
     if needs_api_data:
         lines.append('from kafka.protocol.new.api_data import ApiData')
     if needs_data_container:
         lines.append('from kafka.protocol.new.data_container import DataContainer')
-    if needs_api_message or needs_api_data or needs_data_container:
+    if needs_api_message or needs_api_data or needs_data_container or needs_int_enum:
         lines.append('')
 
     # Export __all__ so __init__.py can import it
@@ -293,9 +299,22 @@ def generate_module(mod, exports):
             lines.append('')
         elif isinstance(obj, type):
             # Non-protocol class (IntEnum, OffsetResetStrategy, etc.)
-            # These are already statically typed in source — just re-export
-            lines.append('# Defined in source — see .py file')
-            lines.append('class %s: ...' % name)
+            # Reproduce class with its attributes so the stub doesn't shadow the real definition
+            from enum import IntEnum as _IntEnum
+            bases = [b.__name__ for b in obj.__bases__ if b is not object]
+            base_str = '(%s)' % ', '.join(bases) if bases else ''
+            lines.append('class %s%s:' % (name, base_str))
+            members = {k: v for k, v in obj.__dict__.items()
+                       if not k.startswith('_') and not callable(v)}
+            if members:
+                for k, v in members.items():
+                    # IntEnum members have the enum class as type; use int instead
+                    if issubclass(obj, _IntEnum):
+                        lines.append('    %s: int' % k)
+                    else:
+                        lines.append('    %s: %s' % (k, type(v).__name__))
+            else:
+                lines.append('    ...')
             lines.append('')
         else:
             # Constants
