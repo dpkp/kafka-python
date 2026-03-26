@@ -23,13 +23,7 @@ def zookeeper():
 
 @pytest.fixture(scope="module")
 def kafka_broker(kafka_broker_factory):
-    """Return a Kafka broker fixture"""
-    if "KAFKA_URI" in os.environ:
-        parse = urlparse(os.environ["KAFKA_URI"])
-        (host, port) = (parse.hostname, parse.port)
-        return KafkaFixture.instance(0, host=host, port=port, external=True)
-    else:
-        return kafka_broker_factory()
+    return kafka_broker_factory()
 
 
 @pytest.fixture(scope="module")
@@ -39,6 +33,10 @@ def kafka_broker_factory():
 
     _brokers = []
     def factory(**broker_params):
+        if "KAFKA_URI" in os.environ:
+            parse = urlparse(os.environ["KAFKA_URI"])
+            (host, port) = (parse.hostname, parse.port)
+            return KafkaFixture.instance(0, host=host, port=port, external=True)
         params = {} if broker_params is None else broker_params.copy()
         params.setdefault('partitions', 4)
         node_id = params.pop('node_id', 0)
