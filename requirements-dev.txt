@@ -9,7 +9,6 @@ pyperf
 pytest
 pytest-cov
 pytest-mock
-pytest-pylint
 pytest-timeout
 python-snappy
 Sphinx
