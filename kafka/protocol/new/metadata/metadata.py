@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ..api_message import ApiMessage
 
 from kafka.util import classproperty

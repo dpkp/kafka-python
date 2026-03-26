@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ..api_data import ApiData
 from kafka.structs import TopicPartition
 
