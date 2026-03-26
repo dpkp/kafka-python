@@ -1,0 +1,292 @@
+import uuid
+from typing import Any, Self
+
+from kafka.protocol.new.api_message import ApiMessage
+from kafka.protocol.new.data_container import DataContainer
+
+__all__ = ['FetchRequest', 'FetchResponse']
+
+class FetchRequest(ApiMessage):
+    class ReplicaState(DataContainer):
+        replica_id: int
+        replica_epoch: int
+        def __init__(
+            self,
+            *args: Any,
+            replica_id: int = ...,
+            replica_epoch: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    class FetchTopic(DataContainer):
+        class FetchPartition(DataContainer):
+            partition: int
+            current_leader_epoch: int
+            fetch_offset: int
+            last_fetched_epoch: int
+            log_start_offset: int
+            partition_max_bytes: int
+            replica_directory_id: uuid.UUID
+            def __init__(
+                self,
+                *args: Any,
+                partition: int = ...,
+                current_leader_epoch: int = ...,
+                fetch_offset: int = ...,
+                last_fetched_epoch: int = ...,
+                log_start_offset: int = ...,
+                partition_max_bytes: int = ...,
+                replica_directory_id: uuid.UUID = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        topic: str
+        topic_id: uuid.UUID
+        partitions: list[FetchPartition]
+        def __init__(
+            self,
+            *args: Any,
+            topic: str = ...,
+            topic_id: uuid.UUID = ...,
+            partitions: list[FetchPartition] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    class ForgottenTopic(DataContainer):
+        topic: str
+        topic_id: uuid.UUID
+        partitions: list[int]
+        def __init__(
+            self,
+            *args: Any,
+            topic: str = ...,
+            topic_id: uuid.UUID = ...,
+            partitions: list[int] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    cluster_id: str | None
+    replica_id: int
+    replica_state: ReplicaState
+    max_wait_ms: int
+    min_bytes: int
+    max_bytes: int
+    isolation_level: int
+    session_id: int
+    session_epoch: int
+    topics: list[FetchTopic]
+    forgotten_topics_data: list[ForgottenTopic]
+    rack_id: str
+    def __init__(
+        self,
+        *args: Any,
+        cluster_id: str | None = ...,
+        replica_id: int = ...,
+        replica_state: ReplicaState = ...,
+        max_wait_ms: int = ...,
+        min_bytes: int = ...,
+        max_bytes: int = ...,
+        isolation_level: int = ...,
+        session_id: int = ...,
+        session_epoch: int = ...,
+        topics: list[FetchTopic] = ...,
+        forgotten_topics_data: list[ForgottenTopic] = ...,
+        rack_id: str = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class FetchResponse(ApiMessage):
+    class FetchableTopicResponse(DataContainer):
+        class PartitionData(DataContainer):
+            class EpochEndOffset(DataContainer):
+                epoch: int
+                end_offset: int
+                def __init__(
+                    self,
+                    *args: Any,
+                    epoch: int = ...,
+                    end_offset: int = ...,
+                    version: int | None = None,
+                    **kwargs: Any,
+                ) -> None: ...
+                @property
+                def version(self) -> int | None: ...
+                def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+            class LeaderIdAndEpoch(DataContainer):
+                leader_id: int
+                leader_epoch: int
+                def __init__(
+                    self,
+                    *args: Any,
+                    leader_id: int = ...,
+                    leader_epoch: int = ...,
+                    version: int | None = None,
+                    **kwargs: Any,
+                ) -> None: ...
+                @property
+                def version(self) -> int | None: ...
+                def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+            class SnapshotId(DataContainer):
+                end_offset: int
+                epoch: int
+                def __init__(
+                    self,
+                    *args: Any,
+                    end_offset: int = ...,
+                    epoch: int = ...,
+                    version: int | None = None,
+                    **kwargs: Any,
+                ) -> None: ...
+                @property
+                def version(self) -> int | None: ...
+                def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+            class AbortedTransaction(DataContainer):
+                producer_id: int
+                first_offset: int
+                def __init__(
+                    self,
+                    *args: Any,
+                    producer_id: int = ...,
+                    first_offset: int = ...,
+                    version: int | None = None,
+                    **kwargs: Any,
+                ) -> None: ...
+                @property
+                def version(self) -> int | None: ...
+                def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+            partition_index: int
+            error_code: int
+            high_watermark: int
+            last_stable_offset: int
+            log_start_offset: int
+            diverging_epoch: EpochEndOffset
+            current_leader: LeaderIdAndEpoch
+            snapshot_id: SnapshotId
+            aborted_transactions: list[AbortedTransaction] | None
+            preferred_read_replica: int
+            records: bytes | None
+            def __init__(
+                self,
+                *args: Any,
+                partition_index: int = ...,
+                error_code: int = ...,
+                high_watermark: int = ...,
+                last_stable_offset: int = ...,
+                log_start_offset: int = ...,
+                diverging_epoch: EpochEndOffset = ...,
+                current_leader: LeaderIdAndEpoch = ...,
+                snapshot_id: SnapshotId = ...,
+                aborted_transactions: list[AbortedTransaction] | None = ...,
+                preferred_read_replica: int = ...,
+                records: bytes | None = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        topic: str
+        topic_id: uuid.UUID
+        partitions: list[PartitionData]
+        def __init__(
+            self,
+            *args: Any,
+            topic: str = ...,
+            topic_id: uuid.UUID = ...,
+            partitions: list[PartitionData] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    class NodeEndpoint(DataContainer):
+        node_id: int
+        host: str
+        port: int
+        rack: str | None
+        def __init__(
+            self,
+            *args: Any,
+            node_id: int = ...,
+            host: str = ...,
+            port: int = ...,
+            rack: str | None = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    error_code: int
+    session_id: int
+    responses: list[FetchableTopicResponse]
+    node_endpoints: list[NodeEndpoint]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        error_code: int = ...,
+        session_id: int = ...,
+        responses: list[FetchableTopicResponse] = ...,
+        node_endpoints: list[NodeEndpoint] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
