@@ -337,11 +337,11 @@ class DescribeAclsResponse(ApiMessage):
 class ACLResourceType(IntEnum):
     UNKNOWN: int
     ANY: int
-    CLUSTER: int
-    DELEGATION_TOKEN: int
-    GROUP: int
     TOPIC: int
+    GROUP: int
+    CLUSTER: int
     TRANSACTIONAL_ID: int
+    DELEGATION_TOKEN: int
 
 class ACLOperation(IntEnum):
     UNKNOWN: int
