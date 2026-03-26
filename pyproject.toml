@@ -52,5 +52,8 @@ namespaces = false
 [tool.distutils.bdist_wheel]
 universal = 1
 
+[tool.pylint.main]
+ignore-patterns = '.*\.pyi$'
+
 [tool.setuptools.dynamic]
 version = {attr = "kafka.__version__"}
