@@ -4,9 +4,10 @@ import os
 
 import pytest
 
-from kafka.protocol.api import RequestHeaderV2
-from kafka.protocol.api_versions import (
-    ApiVersionsRequest, ApiVersionsResponse,
+from kafka.protocol.old.api import RequestHeaderV2
+from kafka.protocol.old.api_versions import (
+    ApiVersionsRequest as OldApiVersionsRequest,
+    ApiVersionsResponse as OldApiVersionsResponse,
 )
 from kafka.protocol.new.metadata import (
     ApiVersionsRequest as NewApiVersionsRequest,
@@ -77,7 +78,7 @@ GOLDEN_API_VERSIONS_RESPONSE_V3_BODY_BYTES = \
 
 def test_old_system_encode_decode_request():
     # Old system encoding
-    request = ApiVersionsRequest[3](
+    request = OldApiVersionsRequest[3](
         client_software_name="kafka-python",
         client_software_version="2.9.0",
     )
@@ -88,8 +89,8 @@ def test_old_system_encode_decode_request():
 
     # Old system decoding
     data = BytesIO(full_encoded_request)
-    decoded_header = ApiVersionsRequest[3].parse_header(data)
-    decoded_request = ApiVersionsRequest[3].decode(data)
+    decoded_header = OldApiVersionsRequest[3].parse_header(data)
+    decoded_request = OldApiVersionsRequest[3].decode(data)
 
     assert decoded_header.api_key == request.API_KEY
     assert decoded_header.api_version == request.API_VERSION
@@ -131,7 +132,7 @@ def test_new_system_encode_decode_request():
 
 def test_old_system_encode_decode_response():
     # Old system encoding
-    response = ApiVersionsResponse[3](
+    response = OldApiVersionsResponse[3](
         error_code=0,
         api_keys=[
             #{'api_key': 0, 'min_version': 0, 'max_version': 9},
@@ -145,7 +146,7 @@ def test_old_system_encode_decode_response():
     assert encoded_body == GOLDEN_API_VERSIONS_RESPONSE_V3_BODY_BYTES
 
     # Old system decoding
-    decoded_response = ApiVersionsResponse[3].decode(BytesIO(encoded_body))
+    decoded_response = OldApiVersionsResponse[3].decode(BytesIO(encoded_body))
 
     assert decoded_response.error_code == 0
     assert len(decoded_response.api_keys) == 2

@@ -20,16 +20,16 @@ import sys
 import pyperf
 
 # === Old system imports ===
-from kafka.protocol.api_versions import (
+from kafka.protocol.old.api_versions import (
     ApiVersionsRequest_v0 as OldApiVersionsReq_v0,
     ApiVersionsRequest_v3 as OldApiVersionsReq_v3,
     ApiVersionsResponse_v0 as OldApiVersionsResp_v0,
 )
-from kafka.protocol.fetch import (
+from kafka.protocol.old.fetch import (
     FetchRequest_v4 as OldFetchReq_v4,
     FetchResponse_v4 as OldFetchResp_v4,
 )
-from kafka.protocol.produce import (
+from kafka.protocol.old.produce import (
     ProduceRequest_v3 as OldProduceReq_v3,
     ProduceResponse_v3 as OldProduceResp_v3,
 )
