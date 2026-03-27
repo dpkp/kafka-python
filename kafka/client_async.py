@@ -15,7 +15,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
-from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
+from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS, BrokerVersionData
 from kafka.protocol.new.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
@@ -218,7 +218,7 @@ class KafkaClient:
         self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
         self._conns = Dict()  # object to support weakrefs
-        self._api_versions = None
+        self.broker_version = None # set on bootstrap or via user config
         self._connecting = set()
         self._sending = set()
 
@@ -244,12 +244,14 @@ class KafkaClient:
         if self.config['api_version'] is None:
             self.config['api_version'] = self.check_version()
         elif self.config['api_version'] in BROKER_API_VERSIONS:
-            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+            api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+            self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
         elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
             log.warning('Configured api_version %s is ambiguous; using %s',
                         self.config['api_version'], self.config['api_version'] + (0,))
             self.config['api_version'] = self.config['api_version'] + (0,)
-            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+            api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+            self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
         else:
             compatible_version = None
             for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
@@ -260,7 +262,8 @@ class KafkaClient:
                 log.warning('Configured api_version %s not supported; using %s',
                             self.config['api_version'], compatible_version)
                 self.config['api_version'] = compatible_version
-                self._api_versions = BROKER_API_VERSIONS[compatible_version]
+                api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+                self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
             else:
                 raise Errors.UnrecognizedBrokerVersion(self.config['api_version'])
 
@@ -334,8 +337,8 @@ class KafkaClient:
 
                 if self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails = 0
-                    if self._api_versions is None:
-                        self._api_versions = conn._api_versions
+                    if self.broker_version is None:
+                        self.broker_version = conn.broker_version
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -948,7 +951,7 @@ class KafkaClient:
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
         or None if ApiVersion is not supported by the kafka cluster.
         """
-        return self._api_versions
+        return self.broker_version.api_versions
 
     def check_version(self, node_id=None, timeout=None, **kwargs):
         """Attempt to guess the version of a Kafka broker.
@@ -996,8 +999,8 @@ class KafkaClient:
                     timeout_ms = min((end - time.monotonic()) * 1000, 200)
                     self.poll(timeout_ms=timeout_ms)
 
-                if conn._api_version is not None:
-                    return conn._api_version
+                if conn.broker_version is not None:
+                    return conn.broker_version.broker_version
                 else:
                     log.debug('Failed to identify api_version after connection attempt to %s', conn)
 
@@ -1029,7 +1032,7 @@ class KafkaClient:
         """
         # Cap max_version at the largest available version in operation list
         max_version = min(len(operation) - 1, max_version if max_version is not None else float('inf'))
-        broker_api_versions = self._api_versions
+        broker_api_versions = self.broker_version.api_versions
         api_key = operation[0].API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
             raise Errors.IncompatibleBrokerVersion(

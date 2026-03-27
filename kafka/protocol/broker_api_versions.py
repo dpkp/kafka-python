@@ -1,7 +1,13 @@
+from collections import namedtuple
+
 from kafka.protocol.new.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.new.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest
 from kafka.protocol.new.metadata import FindCoordinatorRequest, MetadataRequest
 from kafka.protocol.new.producer import ProduceRequest
+
+
+BrokerVersionData = namedtuple("BrokerVersionData",
+    ["broker_version", "api_versions"])
 
 
 def infer_broker_version_from_api_versions(api_versions):
