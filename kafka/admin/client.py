@@ -218,7 +218,7 @@ class KafkaAdminClient:
         )
 
         # Get auto-discovered version from client if necessary
-        self.config['api_version'] = self._client.config['api_version']
+        self.config['api_version'] = self._client.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
 
         self._closed = False
         self._refresh_controller_id()

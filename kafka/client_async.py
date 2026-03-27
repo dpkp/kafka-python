@@ -217,6 +217,7 @@ class KafkaClient:
         self.cluster = ClusterMetadata(**self.config)
         self._conns = Dict()  # object to support weakrefs
         self.broker_version = None # set on bootstrap or via user config
+        self.broker_version_future = Future()
         self._connecting = set()
         self._sending = set()
 
@@ -240,10 +241,10 @@ class KafkaClient:
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
-            self.config['api_version'] = self.check_version()
+            self.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
         else:
             self.broker_version = BrokerVersionData(self.config['api_version'])
-            self.config['api_version'] = self.broker_version.broker_version
+            self.broker_version_future.success(self.broker_version)
 
     def _init_wakeup_socketpair(self):
         self._wake_r, self._wake_w = socket.socketpair()
@@ -317,6 +318,7 @@ class KafkaClient:
                     self._bootstrap_fails = 0
                     if self.broker_version is None:
                         self.broker_version = conn.broker_version
+                        self.broker_version_future.success(self.broker_version)
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -1054,6 +1056,15 @@ class KafkaClient:
             idle_ms = (time.monotonic() - ts) * 1000
             log.info('Closing idle connection %s, last active %d ms ago', conn_id, idle_ms)
             self.close(node_id=conn_id)
+
+    def get_broker_version(self, timeout_ms=None):
+        self.poll(future=self.broker_version_future, timeout_ms=timeout_ms)
+        if not self.broker_version_future.is_done:
+            raise Errors.KafkaTimeoutError('Timeout attempting to get broker api version!')
+        elif self.broker_version_future.failed():
+            raise self.broker_version_future.exception
+        else:
+            return self.broker_version.broker_version
 
     def bootstrap_connected(self):
         """Return True if a bootstrap node is connected"""
