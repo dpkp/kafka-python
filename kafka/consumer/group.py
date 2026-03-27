@@ -1129,16 +1129,6 @@ class KafkaConsumer:
             partitions, self.config['request_timeout_ms'])
         return offsets
 
-    def _use_consumer_group(self):
-        """Return True iff this consumer can/should join a broker-coordinated group."""
-        if self.config['api_version'] < (0, 9):
-            return False
-        elif self.config['group_id'] is None:
-            return False
-        elif not self._subscription.partitions_auto_assigned():
-            return False
-        return True
-
     def _update_fetch_positions(self, timeout_ms=None):
         """Set the fetch position to the committed position (if there is one)
         or reset it using the offset reset policy the user has configured.
