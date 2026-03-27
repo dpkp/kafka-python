@@ -162,7 +162,6 @@ class KafkaClient:
 
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
-        'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
         'wakeup_timeout_ms': 3000,
@@ -921,21 +920,8 @@ class KafkaClient:
 
         # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
-            topics = list(self.cluster._topics)
-            if not topics and self.cluster.is_bootstrap(node_id):
-                topics = list(self.config['bootstrap_topics_filter'])
-
             api_version = self.api_version(MetadataRequest, max_version=8)
-            if self.cluster.need_all_topic_metadata:
-                topics = MetadataRequest[api_version].ALL_TOPICS
-            elif not topics:
-                topics = MetadataRequest[api_version].NO_TOPICS
-            if api_version <= 3:
-                request = MetadataRequest[api_version](topics)
-            elif api_version <= 7:
-                request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'])
-            else:
-                request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'], False, False)
+            request = self.cluster.metadata_request(api_version)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)

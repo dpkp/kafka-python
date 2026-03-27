@@ -374,7 +374,6 @@ class KafkaProducer:
         'transaction_timeout_ms': 60000,
         'delivery_timeout_ms': 120000,
         'acks': 1,
-        'bootstrap_topics_filter': set(),
         'compression_type': None,
         'retries': float('inf'),
         'batch_size': 16384,
