@@ -12,10 +12,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.new.metadata import ApiVersionsRequest
-from kafka.protocol.broker_api_versions import (
-    BROKER_API_VERSIONS, BrokerVersionData, VERSION_CHECKS,
-    infer_broker_version_from_api_versions,
-)
+from kafka.protocol.broker_api_versions import BrokerVersionData, VERSION_CHECKS
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.new.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
 from kafka.protocol.new.schemas.fields.codecs import Int32
@@ -490,12 +487,7 @@ class BrokerConnection:
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
             if self.config['api_version'] is not None:
-                # api_version will be normalized by KafkaClient, so this should not happen
-                if self.config['api_version'] not in BROKER_API_VERSIONS:
-                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions' % (self.config['api_version'],))
-                self.broker_version = BrokerVersionData(
-                    broker_version=self.config['api_version'],
-                    api_versions=BROKER_API_VERSIONS[self.config['api_version']])
+                self.broker_version = BrokerVersionData(self.config['api_version'])
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version.broker_version)
                 return True
             elif self._check_version_idx is None:
@@ -563,8 +555,7 @@ class BrokerConnection:
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
             for api_version_data in response.api_keys
         ])
-        broker_version = infer_broker_version_from_api_versions(api_versions)
-        self.broker_version = BrokerVersionData(broker_version=broker_version, api_versions=api_versions)
+        self.broker_version = BrokerVersionData(api_versions=api_versions)
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version.broker_version)))
         future.success(self.broker_version.broker_version)
         self.connect()
@@ -584,9 +575,7 @@ class BrokerConnection:
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, version)))
         log.info('Set configuration api_version=%s to skip auto'
                  ' check_version requests on startup', version)
-        self.broker_version = BrokerVersionData(
-            broker_version=version,
-            api_versions=BROKER_API_VERSIONS[version])
+        self.broker_version = BrokerVersionData(version)
         future.success(version)
         self.connect()
 

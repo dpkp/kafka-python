@@ -1,13 +1,43 @@
 from collections import namedtuple
+import logging
 
+import kafka.errors as Errors
 from kafka.protocol.new.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.new.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest
 from kafka.protocol.new.metadata import FindCoordinatorRequest, MetadataRequest
 from kafka.protocol.new.producer import ProduceRequest
 
+log = logging.getLogger('kafka.protocol')
 
-BrokerVersionData = namedtuple("BrokerVersionData",
-    ["broker_version", "api_versions"])
+
+class BrokerVersionData:
+    __slots__ = ('broker_version', 'api_versions')
+    def __init__(self, broker_version=None, api_versions=None):
+        if broker_version is None and api_versions is None:
+            raise ValueError('Cannot construct BrokerVersionData!')
+        if broker_version is None:
+            broker_version = infer_broker_version_from_api_versions(api_versions)
+        elif api_versions is None:
+            if not isinstance(broker_version, tuple):
+                raise Errors.KafkaConfigurationError('api_version must be tuple')
+            elif broker_version not in BROKER_API_VERSIONS:
+                # Try an extra patch version... (0, 10) -> (0, 10, 0)
+                patched_broker_version = broker_version + (0,)
+                if patched_broker_version in BROKER_API_VERSIONS:
+                    log.warning('Configured api_version %s is ambiguous; using %s',
+                                broker_version, patched_broker_version)
+                    broker_version = patched_broker_version
+                else:
+                    for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
+                        if v <= broker_version:
+                            log.warning('Configured broker_version %s not supported; using %s', broker_version, v)
+                            broker_version = v
+                            break
+                    else:
+                        raise Errors.UnrecognizedBrokerVersion(broker_version)
+            api_versions = BROKER_API_VERSIONS[broker_version]
+        self.broker_version = broker_version
+        self.api_versions = api_versions
 
 
 def infer_broker_version_from_api_versions(api_versions):

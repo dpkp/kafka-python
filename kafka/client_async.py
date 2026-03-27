@@ -15,7 +15,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
-from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS, BrokerVersionData
+from kafka.protocol.broker_api_versions import BrokerVersionData
 from kafka.protocol.new.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
@@ -241,29 +241,9 @@ class KafkaClient:
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
             self.config['api_version'] = self.check_version()
-        elif self.config['api_version'] in BROKER_API_VERSIONS:
-            api_versions = BROKER_API_VERSIONS[self.config['api_version']]
-            self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
-        elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
-            log.warning('Configured api_version %s is ambiguous; using %s',
-                        self.config['api_version'], self.config['api_version'] + (0,))
-            self.config['api_version'] = self.config['api_version'] + (0,)
-            api_versions = BROKER_API_VERSIONS[self.config['api_version']]
-            self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
         else:
-            compatible_version = None
-            for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
-                if v <= self.config['api_version']:
-                    compatible_version = v
-                    break
-            if compatible_version:
-                log.warning('Configured api_version %s not supported; using %s',
-                            self.config['api_version'], compatible_version)
-                self.config['api_version'] = compatible_version
-                api_versions = BROKER_API_VERSIONS[self.config['api_version']]
-                self.broker_version = BrokerVersionData(self.config['api_version'], api_versions)
-            else:
-                raise Errors.UnrecognizedBrokerVersion(self.config['api_version'])
+            self.broker_version = BrokerVersionData(self.config['api_version'])
+            self.config['api_version'] = self.broker_version.broker_version
 
     def _init_wakeup_socketpair(self):
         self._wake_r, self._wake_w = socket.socketpair()
