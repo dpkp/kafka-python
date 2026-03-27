@@ -482,7 +482,7 @@ class KafkaProducer:
             **self.config)
 
         # Get auto-discovered / normalized version from client
-        self.config['api_version'] = client.config['api_version']
+        self.config['api_version'] = client.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
 
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
