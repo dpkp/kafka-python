@@ -266,32 +266,6 @@ def test_least_loaded_node():
     pass
 
 
-def test_set_topics(mocker):
-    request_update = mocker.patch.object(ClusterMetadata, 'request_update')
-    request_update.side_effect = lambda: Future()
-    cli = KafkaClient(api_version=(0, 10, 0))
-
-    # replace 'empty' with 'non empty'
-    request_update.reset_mock()
-    fut = cli.set_topics(['t1', 't2'])
-    assert not fut.is_done
-    request_update.assert_called_with()
-
-    # replace 'non empty' with 'same'
-    request_update.reset_mock()
-    fut = cli.set_topics(['t1', 't2'])
-    assert fut.is_done
-    assert fut.value == set(['t1', 't2'])
-    request_update.assert_not_called()
-
-    # replace 'non empty' with 'empty'
-    request_update.reset_mock()
-    fut = cli.set_topics([])
-    assert fut.is_done
-    assert fut.value == set()
-    request_update.assert_not_called()
-
-
 def test_maybe_refresh_metadata_ttl(client_poll_mocked):
     client_poll_mocked.cluster.ttl.return_value = 1234
 

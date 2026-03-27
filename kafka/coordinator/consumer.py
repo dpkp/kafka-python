@@ -189,7 +189,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
             if set(topics) != self._subscription.subscription:
                 self._subscription.change_subscription(topics)
-                self._client.set_topics(self._subscription.group_subscription())
+                self._client.cluster.set_topics(self._subscription.group_subscription())
 
         # check if there are any changes to the metadata which should trigger
         # a rebalance
@@ -341,7 +341,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # Because assignment typically happens within response callbacks,
         # we cannot block on metadata updates here (no recursion into poll())
         self._subscription.group_subscribe(all_subscribed_topics)
-        self._client.set_topics(self._subscription.group_subscription())
+        self._client.cluster.set_topics(self._subscription.group_subscription())
 
         # keep track of the metadata used for assignment so that we can check
         # after rebalance completion whether anything has changed

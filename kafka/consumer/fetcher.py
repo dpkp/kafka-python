@@ -491,7 +491,7 @@ class Fetcher:
         for partition, timestamp in timestamps.items():
             node_id = self._client.cluster.leader_for_partition(partition)
             if node_id is None:
-                self._client.add_topic(partition.topic)
+                self._client.cluster.add_topic(partition.topic)
                 log.debug("Partition %s is unknown for fetching offset", partition)
                 self._client.cluster.request_update()
             elif node_id == -1:

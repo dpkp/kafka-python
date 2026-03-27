@@ -10,6 +10,7 @@ from kafka import errors as Errors
 from kafka.conn import get_ip_port_afi
 from kafka.future import Future
 from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
+from kafka.util import ensure_valid_topic_name
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class ClusterMetadata:
     }
 
     def __init__(self, **configs):
+        self._topics = set()
         self._brokers = {}  # node_id -> BrokerMetadata
         self._partitions = {}  # topic -> partition -> PartitionMetadata
         self._broker_partitions = collections.defaultdict(set)  # node_id -> {TopicPartition...}
@@ -78,6 +80,41 @@ class ClusterMetadata:
 
     def is_bootstrap(self, node_id):
         return node_id in self._bootstrap_brokers
+
+    def set_topics(self, topics):
+        """Set specific topics to track for metadata.
+
+        Arguments:
+            topics (list of str): topics to check for metadata
+
+        Returns:
+            Future: resolves after metadata request/response
+        """
+        if set(topics).difference(self._topics):
+            future = self.request_update()
+        else:
+            future = Future().success(set(topics))
+        self._topics = set(topics)
+        return future
+
+    def add_topic(self, topic):
+        """Add a topic to the list of topics tracked via metadata.
+
+        Arguments:
+            topic (str): topic to track
+
+        Returns:
+            Future: resolves after metadata request/response
+
+        Raises:
+            TypeError: if topic is not a string
+            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
+        """
+        ensure_valid_topic_name(topic)
+        if topic in self._topics:
+            return Future().success(set(self._topics))
+        self._topics.add(topic)
+        return self.request_update()
 
     def brokers(self):
         """Get all BrokerMetadata

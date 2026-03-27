@@ -17,7 +17,7 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.new.metadata import MetadataRequest
-from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
+from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
 
 
@@ -871,43 +871,6 @@ class KafkaClient:
         """
         return min([self._refresh_delay_ms(broker.nodeId) for broker in self.cluster.brokers()])
 
-    def set_topics(self, topics):
-        """Set specific topics to track for metadata.
-
-        Arguments:
-            topics (list of str): topics to check for metadata
-
-        Returns:
-            Future: resolves after metadata request/response
-        """
-        if set(topics).difference(self._topics):
-            future = self.cluster.request_update()
-        else:
-            future = Future().success(set(topics))
-        self._topics = set(topics)
-        return future
-
-    def add_topic(self, topic):
-        """Add a topic to the list of topics tracked via metadata.
-
-        Arguments:
-            topic (str): topic to track
-
-        Returns:
-            Future: resolves after metadata request/response
-
-        Raises:
-            TypeError: if topic is not a string
-            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
-        """
-        ensure_valid_topic_name(topic)
-
-        if topic in self._topics:
-            return Future().success(set(self._topics))
-
-        self._topics.add(topic)
-        return self.cluster.request_update()
-
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
             return min([conn.next_ifr_request_timeout_ms() for conn in self._conns.values()])
@@ -958,7 +921,7 @@ class KafkaClient:
 
         # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
-            topics = list(self._topics)
+            topics = list(self.cluster._topics)
             if not topics and self.cluster.is_bootstrap(node_id):
                 topics = list(self.config['bootstrap_topics_filter'])
 

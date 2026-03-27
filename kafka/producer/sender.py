@@ -140,7 +140,7 @@ class Sender(threading.Thread):
     def run_once(self):
         """Run a single iteration of sending."""
         while self._topics_to_add:
-            self._client.add_topic(self._topics_to_add.pop())
+            self.metadata.add_topic(self._topics_to_add.pop())
 
         if self._transaction_manager:
             try:

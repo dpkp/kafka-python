@@ -430,9 +430,10 @@ class KafkaConsumer:
 
         if topics:
             self._subscription.subscribe(topics=topics)
-            self._client.set_topics(topics)
+            self._client.cluster.set_topics(topics)
 
     def _validate_group_instance_id(self, group_instance_id):
+        # See also kafka.util.ensure_valid_topic_name
         if not group_instance_id or not isinstance(group_instance_id, str):
             raise KafkaConfigurationError("group_instance_id must be non-empty string")
         if group_instance_id in (".", ".."):
@@ -478,7 +479,7 @@ class KafkaConsumer:
             # are committed since there will be no following rebalance
             self._coordinator.maybe_auto_commit_offsets_now()
             self._subscription.assign_from_user(partitions)
-            self._client.set_topics([tp.topic for tp in partitions])
+            self._client.cluster.set_topics([tp.topic for tp in partitions])
             log.debug("Subscribed to partition(s): %s", partitions)
 
     def assignment(self):
@@ -975,12 +976,12 @@ class KafkaConsumer:
         # Regex will need all topic metadata
         if pattern is not None:
             self._client.cluster.need_all_topic_metadata = True
-            self._client.set_topics([])
+            self._client.cluster.set_topics([])
             self._client.cluster.request_update()
             log.debug("Subscribed to topic pattern: %s", pattern)
         else:
             self._client.cluster.need_all_topic_metadata = False
-            self._client.set_topics(self._subscription.group_subscription())
+            self._client.cluster.set_topics(self._subscription.group_subscription())
             log.debug("Subscribed to topic(s): %s", topics)
 
     def subscription(self):
@@ -1002,7 +1003,7 @@ class KafkaConsumer:
         if self.config['api_version'] >= (0, 9):
             self._coordinator.maybe_leave_group()
         self._client.cluster.need_all_topic_metadata = False
-        self._client.set_topics([])
+        self._client.cluster.set_topics([])
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
         self._iterator = None
 
