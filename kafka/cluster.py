@@ -95,6 +95,8 @@ class ClusterMetadata:
         Returns:
             Future: resolves after metadata request/response
         """
+        for topic in topics:
+            ensure_valid_topic_name(topic)
         if set(topics).difference(self._topics):
             future = self.request_update()
         else:
