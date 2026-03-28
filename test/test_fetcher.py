@@ -13,7 +13,7 @@ from kafka.consumer.fetcher import (
 from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
+from kafka.protocol.broker_api_versions import BrokerVersionData
 from kafka.protocol.new.consumer import (
     FetchRequest, FetchResponse,
     ListOffsetsResponse, OffsetResetStrategy,
@@ -101,7 +101,7 @@ def test_send_fetches(fetcher, topic, mocker):
     ((0, 8, 2), 0)
 ])
 def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
-    fetcher._client._api_versions = BROKER_API_VERSIONS[api_version]
+    fetcher._client.broker_version = BrokerVersionData(api_version)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
     mocker.patch.object(fetcher._client, "ready", return_value=True)

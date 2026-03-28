@@ -12,10 +12,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.new.metadata import ApiVersionsRequest
-from kafka.protocol.broker_api_versions import (
-    BROKER_API_VERSIONS, VERSION_CHECKS,
-    infer_broker_version_from_api_versions,
-)
+from kafka.protocol.broker_api_versions import BrokerVersionData, VERSION_CHECKS
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.new.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
 from kafka.protocol.new.schemas.fields.codecs import Int32
@@ -218,8 +215,7 @@ class BrokerConnection:
         self.afi = afi
         self._sock_afi = afi
         self._sock_addr = None
-        self._api_versions = None
-        self._api_version = None
+        self.broker_version = None
         self._check_version_idx = None
         self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
         self._api_versions_future = None
@@ -491,12 +487,8 @@ class BrokerConnection:
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
             if self.config['api_version'] is not None:
-                self._api_version = self.config['api_version']
-                # api_version will be normalized by KafkaClient, so this should not happen
-                if self._api_version not in BROKER_API_VERSIONS:
-                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions' % (self._api_version,))
-                self._api_versions = BROKER_API_VERSIONS[self._api_version]
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self._api_version)
+                self.broker_version = BrokerVersionData(self.config['api_version'])
+                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version.broker_version)
                 return True
             elif self._check_version_idx is None:
                 version = self._api_versions_idx
@@ -559,13 +551,13 @@ class BrokerConnection:
             else:
                 self.close(error=error_type())
             return
-        self._api_versions = dict([
+        api_versions = dict([
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
             for api_version_data in response.api_keys
         ])
-        self._api_version = infer_broker_version_from_api_versions(self._api_versions)
-        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self._api_version)))
-        future.success(self._api_version)
+        self.broker_version = BrokerVersionData(api_versions=api_versions)
+        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version.broker_version)))
+        future.success(self.broker_version.broker_version)
         self.connect()
 
     def _handle_api_versions_failure(self, future, ex):
@@ -583,8 +575,7 @@ class BrokerConnection:
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, version)))
         log.info('Set configuration api_version=%s to skip auto'
                  ' check_version requests on startup', version)
-        self._api_versions = BROKER_API_VERSIONS[version]
-        self._api_version = version
+        self.broker_version = BrokerVersionData(version)
         future.success(version)
         self.connect()
 
@@ -594,13 +585,13 @@ class BrokerConnection:
         # after failure connection is closed, so state should already be DISCONNECTED
 
     def _sasl_handshake_version(self):
-        if self._api_versions is None:
-            raise RuntimeError('_api_versions not set')
-        if SaslHandshakeRequest[0].API_KEY not in self._api_versions:
+        if self.broker_version is None:
+            raise RuntimeError('broker_version not set')
+        if SaslHandshakeRequest[0].API_KEY not in self.broker_version.api_versions:
             raise Errors.UnsupportedVersionError('SaslHandshake')
 
         # Build a SaslHandshakeRequest message
-        min_version, max_version = self._api_versions[SaslHandshakeRequest[0].API_KEY]
+        min_version, max_version = self.broker_version.api_versions[SaslHandshakeRequest[0].API_KEY]
         if min_version > 1:
             raise Errors.UnsupportedVersionError('SaslHandshake %s' % min_version)
         return min(max_version, 1)
