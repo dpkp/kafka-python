@@ -99,7 +99,7 @@ def test_create_describe_delete_acls(kafka_admin_client):
 def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     """Tests that describe config returns configs for broker
     """
-    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
+    broker_id = kafka_admin_client._client.cluster._brokers[0].node_id
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
     assert len(configs) == 1
@@ -127,7 +127,7 @@ def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_clie
 def test_describe_configs_mixed_resources_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for mixed resource types (topic + broker)
     """
-    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
+    broker_id = kafka_admin_client._client.cluster._brokers[0].node_id
     configs = kafka_admin_client.describe_configs([
         ConfigResource(ConfigResourceType.TOPIC, topic),
         ConfigResource(ConfigResourceType.BROKER, broker_id)])
