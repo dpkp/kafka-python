@@ -39,6 +39,42 @@ class BrokerVersionData:
         self.broker_version = broker_version
         self.api_versions = api_versions
 
+    def api_version(self, operation, max_version=None):
+        """Find the latest version of the protocol operation supported by both
+        this library and the broker.
+
+        This resolves to the lesser of either the latest api version this
+        library supports, or the max version supported by the broker.
+
+        Arguments:
+            operation: A list of protocol operation versions from kafka.protocol.
+
+        Keyword Arguments:
+            max_version (int, optional): Provide an alternate maximum api version
+                to reflect limitations in user code.
+
+        Returns:
+            int: The highest api version number compatible between client and broker.
+
+        Raises: IncompatibleBrokerVersion if no matching version is found
+        """
+        # Cap max_version at the largest available version in operation list
+        max_version = min(operation.max_version, max_version if max_version is not None else float('inf'))
+        broker_api_versions = self.api_versions
+        api_key = operation.API_KEY
+        if broker_api_versions is None or api_key not in broker_api_versions:
+            raise Errors.IncompatibleBrokerVersion(
+                "Kafka broker does not support the '{}' Kafka protocol."
+                .format(operation[0].__name__))
+        broker_min_version, broker_max_version = broker_api_versions[api_key]
+        version = min(max_version, broker_max_version)
+        if version < broker_min_version:
+            # max library version is less than min broker version. Currently,
+            # no Kafka versions specify a min msg version. Maybe in the future?
+            raise Errors.IncompatibleBrokerVersion(
+                "No version of the '{}' Kafka protocol is supported by both the client and broker."
+                .format(operation[0].__name__))
+        return version
 
 def infer_broker_version_from_api_versions(api_versions):
     # The logic here is to check the list of supported request versions
