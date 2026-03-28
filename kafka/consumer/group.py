@@ -379,16 +379,6 @@ class KafkaConsumer:
         else:
             self._metrics = None
 
-        # api_version was previously a str. Accept old format for now
-        if isinstance(self.config['api_version'], str):
-            str_version = self.config['api_version']
-            if str_version == 'auto':
-                self.config['api_version'] = None
-            else:
-                self.config['api_version'] = tuple(map(int, str_version.split('.')))
-            log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
-                        str(self.config['api_version']), str_version)
-
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
         # Get auto-discovered / normalized version from client
