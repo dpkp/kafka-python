@@ -5,7 +5,6 @@ import time
 import pytest
 
 from kafka.client_async import KafkaClient, IdleConnectionManager
-from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
@@ -20,8 +19,6 @@ def client_poll_mocked(mocker):
                       connections_max_idle_ms=float('inf'),
                       api_version=(0, 9))
     mocker.patch.object(cli, '_poll')
-    ttl = mocker.patch.object(cli.cluster, 'ttl')
-    ttl.return_value = 0
     try:
         yield cli
     finally:
@@ -136,17 +133,17 @@ def test_is_ready(client_selector_mocked, conn):
     # metadata refresh blocks ready nodes
     assert client_selector_mocked.is_ready(0)
     assert client_selector_mocked.is_ready(1)
-    client_selector_mocked._metadata_refresh_in_progress = True
+    client_selector_mocked.cluster.metadata_refresh_in_progress = True
     assert not client_selector_mocked.is_ready(0)
     assert not client_selector_mocked.is_ready(1)
 
     # requesting metadata update also blocks ready nodes
-    client_selector_mocked._metadata_refresh_in_progress = False
+    client_selector_mocked.cluster.metadata_refresh_in_progress = False
     assert client_selector_mocked.is_ready(0)
     assert client_selector_mocked.is_ready(1)
     client_selector_mocked.cluster.request_update()
     client_selector_mocked.cluster.config['retry_backoff_ms'] = 0
-    assert not client_selector_mocked._metadata_refresh_in_progress
+    assert not client_selector_mocked.cluster.metadata_refresh_in_progress
     assert not client_selector_mocked.is_ready(0)
     assert not client_selector_mocked.is_ready(1)
     client_selector_mocked.cluster._need_update = False
@@ -265,8 +262,9 @@ def test_least_loaded_node():
     pass
 
 
-def test_maybe_refresh_metadata_ttl(client_poll_mocked):
-    client_poll_mocked.cluster.ttl.return_value = 1234
+def test_maybe_refresh_metadata_ttl(mocker, client_poll_mocked):
+    ttl = mocker.patch.object(client_poll_mocked.cluster, 'ttl')
+    ttl.return_value = 1234
 
     client_poll_mocked.poll(timeout_ms=12345678)
     client_poll_mocked._poll.assert_called_with(1.234)
@@ -284,10 +282,10 @@ def test_maybe_refresh_metadata_backoff(mocker, client_poll_mocked):
 
 
 def test_maybe_refresh_metadata_in_progress(client_poll_mocked):
-    client_poll_mocked._metadata_refresh_in_progress = True
+    client_poll_mocked.cluster.metadata_refresh_in_progress = True
 
     client_poll_mocked.poll(timeout_ms=12345678)
-    client_poll_mocked._poll.assert_called_with(9999.999) # request_timeout_ms
+    client_poll_mocked._poll.assert_called_with(0.100) # retry_backoff_ms
 
 
 def test_maybe_refresh_metadata_update(mocker, client_poll_mocked):
@@ -298,7 +296,7 @@ def test_maybe_refresh_metadata_update(mocker, client_poll_mocked):
 
     client_poll_mocked.poll(timeout_ms=12345678)
     client_poll_mocked._poll.assert_called_with(9999.999) # request_timeout_ms
-    assert client_poll_mocked._metadata_refresh_in_progress
+    assert client_poll_mocked.cluster.metadata_refresh_in_progress
     request = MetadataRequest[0]([])
     send.assert_called_once_with('foobar', request, wakeup=False)
 
@@ -324,7 +322,7 @@ def test_maybe_refresh_metadata_cant_send(mocker, client_poll_mocked):
     client_poll_mocked.poll()
     client_poll_mocked._poll.assert_called()
     assert not client_poll_mocked._can_connect.called
-    assert not client_poll_mocked._metadata_refresh_in_progress
+    assert not client_poll_mocked.cluster.metadata_refresh_in_progress
 
 
 def test_schedule():

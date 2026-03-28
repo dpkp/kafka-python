@@ -64,6 +64,7 @@ class ClusterMetadata:
         self.internal_topics = set()
         self.controller = None
         self.cluster_id = None
+        self.metadata_refresh_in_progress = False
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -217,7 +218,9 @@ class ClusterMetadata:
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
         now = time.monotonic() * 1000
-        if self._need_update:
+        if self.metadata_refresh_in_progress:
+            ttl = self.config['retry_backoff_ms']
+        elif self._need_update:
             ttl = 0
         else:
             metadata_age = now - self._last_successful_refresh_ms
@@ -270,6 +273,10 @@ class ClusterMetadata:
             return topics
 
     def metadata_request(self, version):
+        if self.metadata_refresh_in_progress:
+            raise RuntimeError('MetadataRequest currently in-flight!')
+        else:
+            self.metadata_refresh_in_progress = True
         if self.need_all_topic_metadata:
             topics = MetadataRequest[version].ALL_TOPICS
         elif not self._topics:
@@ -292,9 +299,10 @@ class ClusterMetadata:
             if self._future:
                 f = self._future
                 self._future = None
+        self._last_refresh_ms = time.monotonic() * 1000
+        self.metadata_refresh_in_progress = False
         if f:
             f.failure(exception)
-        self._last_refresh_ms = time.monotonic() * 1000
 
     def update_metadata(self, metadata):
         """Update cluster state given a MetadataResponse.
@@ -384,6 +392,7 @@ class ClusterMetadata:
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
         self._last_successful_refresh_ms = now
+        self.metadata_refresh_in_progress = False
 
         if f:
             # In the common case where we ask for a single topic and get back an
