@@ -36,13 +36,13 @@ def test_assign():
     with pytest.raises(IllegalStateError):
         consumer.assign([TopicPartition('foo', 0)])
 
-    assert 'foo' in consumer._client._topics
+    assert 'foo' in consumer._client.cluster._topics
 
     consumer = KafkaConsumer(api_version=(0, 10, 0))
     assert consumer.assignment() == set()
     consumer.assign([TopicPartition('foo', 0)])
     assert consumer.assignment() == set([TopicPartition('foo', 0)])
-    assert 'foo' in consumer._client._topics
+    assert 'foo' in consumer._client.cluster._topics
     # Cannot subscribe
     with pytest.raises(IllegalStateError):
         consumer.subscribe(topics=['foo'])

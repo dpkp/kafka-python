@@ -17,7 +17,7 @@ from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
 from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
 from kafka.protocol.new.metadata import MetadataRequest
-from kafka.util import Dict, Timer, WeakMethod, ensure_valid_topic_name
+from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
 
 
@@ -162,7 +162,6 @@ class KafkaClient:
 
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
-        'bootstrap_topics_filter': set(),
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
         'wakeup_timeout_ms': 3000,
@@ -871,43 +870,6 @@ class KafkaClient:
         """
         return min([self._refresh_delay_ms(broker.nodeId) for broker in self.cluster.brokers()])
 
-    def set_topics(self, topics):
-        """Set specific topics to track for metadata.
-
-        Arguments:
-            topics (list of str): topics to check for metadata
-
-        Returns:
-            Future: resolves after metadata request/response
-        """
-        if set(topics).difference(self._topics):
-            future = self.cluster.request_update()
-        else:
-            future = Future().success(set(topics))
-        self._topics = set(topics)
-        return future
-
-    def add_topic(self, topic):
-        """Add a topic to the list of topics tracked via metadata.
-
-        Arguments:
-            topic (str): topic to track
-
-        Returns:
-            Future: resolves after metadata request/response
-
-        Raises:
-            TypeError: if topic is not a string
-            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
-        """
-        ensure_valid_topic_name(topic)
-
-        if topic in self._topics:
-            return Future().success(set(self._topics))
-
-        self._topics.add(topic)
-        return self.cluster.request_update()
-
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
             return min([conn.next_ifr_request_timeout_ms() for conn in self._conns.values()])
@@ -958,21 +920,8 @@ class KafkaClient:
 
         # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
-            topics = list(self._topics)
-            if not topics and self.cluster.is_bootstrap(node_id):
-                topics = list(self.config['bootstrap_topics_filter'])
-
             api_version = self.api_version(MetadataRequest, max_version=8)
-            if self.cluster.need_all_topic_metadata:
-                topics = MetadataRequest[api_version].ALL_TOPICS
-            elif not topics:
-                topics = MetadataRequest[api_version].NO_TOPICS
-            if api_version <= 3:
-                request = MetadataRequest[api_version](topics)
-            elif api_version <= 7:
-                request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'])
-            else:
-                request = MetadataRequest[api_version](topics, self.config['allow_auto_create_topics'], False, False)
+            request = self.cluster.metadata_request(api_version)
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)

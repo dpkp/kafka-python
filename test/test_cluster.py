@@ -150,6 +150,28 @@ def test_unauthorized_topic():
     assert 'unauthorized-topic' in cluster.unauthorized_topics
 
 
+def test_set_topics():
+    cluster = ClusterMetadata()
+    cluster._need_update = False
+
+    fut = cluster.set_topics(['t1', 't2'])
+    assert not fut.is_done
+    assert cluster._need_update is True
+
+    fut.success(True)
+    cluster._need_update = False
+
+    fut = cluster.set_topics(['t1', 't2'])
+    assert fut.is_done
+    assert fut.value == set(['t1', 't2'])
+    assert cluster._need_update is False
+
+    fut = cluster.set_topics([])
+    assert fut.is_done
+    assert fut.value == set()
+    assert cluster._need_update is False
+
+
 def test_collect_hosts__happy_path():
     hosts = "127.0.0.1:1234,127.0.0.1"
     results = collect_hosts(hosts)
