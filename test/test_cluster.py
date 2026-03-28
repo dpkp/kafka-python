@@ -162,17 +162,17 @@ def test_set_topics():
     assert not fut.is_done
     assert cluster._need_update is True
 
-    fut.success(True)
+    fut.success(cluster)
     cluster._need_update = False
 
     fut = cluster.set_topics(['t1', 't2'])
     assert fut.is_done
-    assert fut.value == set(['t1', 't2'])
+    assert fut.value == cluster
     assert cluster._need_update is False
 
     fut = cluster.set_topics([])
     assert fut.is_done
-    assert fut.value == set()
+    assert fut.value == cluster
     assert cluster._need_update is False
 
 

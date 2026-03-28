@@ -621,7 +621,7 @@ class KafkaConsumer:
         cluster that the user is authorized to view.
         """
         cluster = self._client.cluster
-        if self._client._metadata_refresh_in_progress and self._client._topics:
+        if self._client._metadata_refresh_in_progress and cluster._topics:
             future = cluster.request_update()
             self._client.poll(future=future)
         stash = cluster.need_all_topic_metadata

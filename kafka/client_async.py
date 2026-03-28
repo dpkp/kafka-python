@@ -215,7 +215,6 @@ class KafkaClient:
         self._wake_lock = threading.Lock()
 
         self.cluster = ClusterMetadata(**self.config)
-        self._topics = set()  # empty set will fetch all topic metadata
         self._metadata_refresh_in_progress = False
         self._conns = Dict()  # object to support weakrefs
         self._api_versions = None

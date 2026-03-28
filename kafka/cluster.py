@@ -95,10 +95,14 @@ class ClusterMetadata:
         Returns:
             Future: resolves after metadata request/response
         """
+        for topic in topics:
+            ensure_valid_topic_name(topic)
         if set(topics).difference(self._topics):
+            # TODO: handle future when old metadata request is currently in-flight
+            # TODO: handle future when set_topics called multiple times before new request
             future = self.request_update()
         else:
-            future = Future().success(set(topics))
+            future = Future().success(self)
         self._topics = set(topics)
         return future
 
@@ -117,7 +121,8 @@ class ClusterMetadata:
         """
         ensure_valid_topic_name(topic)
         if topic in self._topics:
-            return Future().success(set(self._topics))
+            # TODO: handle future when old metadata request is currently in-flight
+            return Future().success(self)
         self._topics.add(topic)
         return self.request_update()
 
@@ -373,7 +378,8 @@ class ClusterMetadata:
             if self._future:
                 f = self._future
             self._future = None
-            self._need_update = False
+            if self.need_all_topic_metadata or self._topics.issubset({t.name for t in metadata.topics}):
+                self._need_update = False
 
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
@@ -393,13 +399,6 @@ class ClusterMetadata:
 
         for listener in self._listeners:
             listener(self)
-
-        if self.need_all_topic_metadata:
-            # the listener may change the interested topics,
-            # which could cause another metadata refresh.
-            # If we have already fetched all topics, however,
-            # another fetch should be unnecessary.
-            self._need_update = False
 
     def add_listener(self, listener):
         """Add a callback function to be called on each metadata update"""
