@@ -15,6 +15,7 @@ class BrokerVersionData:
     def __init__(self, broker_version=None, api_versions=None):
         if broker_version is None and api_versions is None:
             raise ValueError('Cannot construct BrokerVersionData!')
+        broker_version = self._clean_broker_version(broker_version)
         if broker_version is None:
             broker_version = infer_broker_version_from_api_versions(api_versions)
         elif api_versions is None:
@@ -38,6 +39,18 @@ class BrokerVersionData:
             api_versions = BROKER_API_VERSIONS[broker_version]
         self.broker_version = broker_version
         self.api_versions = api_versions
+
+    def _clean_broker_version(self, broker_version):
+        # broker_version was previously a str. Accept old format for now
+        if isinstance(broker_version, str):
+            str_version = broker_version
+            if str_version == 'auto':
+                broker_version = None
+            else:
+                broker_version = tuple(map(int, str_version.split('.')))
+            log.warning('use broker_version=%s [tuple] -- "%s" as str is deprecated',
+                        str(broker_version), str_version)
+        return broker_version
 
     def api_version(self, operation, max_version=None):
         """Find the latest version of the protocol operation supported by both
