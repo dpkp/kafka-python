@@ -200,6 +200,15 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         flexible = cls.flexible_version_q(version)
         return cls.header_class.decode(data, flexible=flexible) # pylint: disable=E1101
 
+    @classmethod
+    def encode_into__optimized_context(cls, version=None):
+        if version is None:
+            version = cls._class_version
+        if version is None:
+            raise ValueError('Version required to encode data')
+        flexible = cls.flexible_version_q(version)
+        return cls._struct.encode_into__optimized_context(version, compact=flexible, tagged=flexible)
+
     def encode(self, version=None, header=False, framed=False):
         if version is not None:
             self.API_VERSION = version

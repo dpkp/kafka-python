@@ -30,3 +30,11 @@ class CodegenContext:
 
     def source(self):
         return '\n'.join(self.lines)
+
+    def print(self):
+        print('GLOBALS:')
+        for var in self.globs:
+            print(f'     {var}={self.globs[var]}')
+        print('\nSOURCE:')
+        for i, line in enumerate(self.lines):
+            print(f'{i+1:<4} {line}')

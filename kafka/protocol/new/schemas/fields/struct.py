@@ -134,6 +134,16 @@ class StructField(BaseField):
         elif tagged is None:
             UnsignedVarInt32.encode_into(out, 0)
 
+    def encode_into__optimized_context(self, version, compact=False, tagged=False):
+        ctx = CodegenContext()
+        indent = '    '
+        ctx.lines.append('def _encode(item, out):')
+        ctx.emit(indent, 'buf = out.buf')
+        ctx.emit(indent, 'pos = out.pos')
+        self.emit_encode_into(ctx, 'item', indent, version=version, compact=compact, tagged=tagged)
+        ctx.emit(indent, 'out.pos = pos')
+        return ctx
+
     def compiled_encode_into(self, version, compact=False, tagged=False):
         """Return a compiled flat encode function for this struct+version.
 
@@ -142,16 +152,8 @@ class StructField(BaseField):
         """
         key = (version, compact, tagged)
         if key not in self._compiled_encoders:
-            ctx = CodegenContext()
-            indent = '    '
-            ctx.lines.append('def _encode(item, out):')
-            ctx.emit(indent, 'buf = out.buf')
-            ctx.emit(indent, 'pos = out.pos')
-            self.emit_encode_into(ctx, 'item', indent, version=version,
-                                  compact=compact, tagged=tagged)
-            ctx.emit(indent, 'out.pos = pos')
-            code = ctx.source()
-            exec(compile(code, '<codegen:%s_v%d>' % (self.name, version), 'exec'), ctx.globs)
+            ctx = self.encode_into__optimized_context(version, compact=compact, tagged=tagged)
+            exec(compile(ctx.source(), '<codegen:%s_v%d>' % (self.name, version), 'exec'), ctx.globs)
             self._compiled_encoders[key] = ctx.globs['_encode']
         return self._compiled_encoders[key]
 
