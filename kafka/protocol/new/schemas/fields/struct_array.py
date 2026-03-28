@@ -89,6 +89,7 @@ class StructArrayField(ArrayField):
             an = ctx.next_var('an')
             ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
             UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+            ctx.emit(indent, 'if %s is not None:' % val_expr)
         else:
             ctx.emit(indent, 'if %s is None:' % val_expr)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
@@ -96,7 +97,7 @@ class StructArrayField(ArrayField):
             ctx.emit(indent, 'else:')
             ctx.emit(indent, "    pack_into('>i', buf, pos, len(%s))" % val_expr)
             ctx.emit(indent, '    pos += 4')
-        guard = indent + '    ' if not compact else indent
+        guard = indent + '    '
         item_var = ctx.next_var('si')
         if len(fields) == 1:
             # Single-field struct: items may be scalars (str, int, etc.)
