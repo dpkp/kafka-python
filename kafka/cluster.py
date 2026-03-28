@@ -98,9 +98,11 @@ class ClusterMetadata:
         for topic in topics:
             ensure_valid_topic_name(topic)
         if set(topics).difference(self._topics):
+            # TODO: handle future when old metadata request is currently in-flight
+            # TODO: handle future when set_topics called multiple times before new request
             future = self.request_update()
         else:
-            future = Future().success(set(topics))
+            future = Future().success(self)
         self._topics = set(topics)
         return future
 
@@ -119,7 +121,8 @@ class ClusterMetadata:
         """
         ensure_valid_topic_name(topic)
         if topic in self._topics:
-            return Future().success(set(self._topics))
+            # TODO: handle future when old metadata request is currently in-flight
+            return Future().success(self)
         self._topics.add(topic)
         return self.request_update()
 
