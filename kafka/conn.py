@@ -1165,14 +1165,6 @@ class BrokerConnection:
             else:
                 return float('inf')
 
-    def get_api_versions(self):
-        # _api_versions is set as a side effect of first connection
-        # which should typically be bootstrap, but call check_version
-        # if that hasn't happened yet
-        if self._api_versions is None:
-            self.check_version()
-        return self._api_versions
-
     def __str__(self):
         return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
             self.config['client_id'], self.node_id, self.host, self.port, self.state,
