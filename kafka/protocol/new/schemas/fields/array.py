@@ -73,6 +73,7 @@ class ArrayField(BaseField):
             an = ctx.next_var('an')
             ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
             UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+            ctx.emit(indent, 'if %s is not None:' % val_expr)
         else:
             ctx.emit(indent, 'if %s is None:' % val_expr)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
@@ -80,11 +81,11 @@ class ArrayField(BaseField):
             ctx.emit(indent, 'else:')
             ctx.emit(indent, "    pack_into('>i', buf, pos, len(%s))" % val_expr)
             ctx.emit(indent, '    pos += 4')
-        guard = indent + '    ' if not compact else indent
+        guard = indent + '    '
         item_var = ctx.next_var('ai')
         ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
         self.array_of.emit_encode_into(ctx, item_var, guard + '    ',
-                                        version=version, compact=compact, tagged=tagged)
+                                       version=version, compact=compact, tagged=tagged)
 
     def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
         n = ctx.next_var('n')
