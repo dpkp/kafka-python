@@ -13,37 +13,6 @@ TopicPartition = namedtuple("TopicPartition",
     ["topic", "partition"])
 
 
-"""A Kafka broker metadata used by admin tools.
-
-Keyword Arguments:
-    nodeID (int): The Kafka broker id.
-    host (str): The Kafka broker hostname.
-    port (int): The Kafka broker port.
-    rack (str): The rack of the broker, which is used to in rack aware
-                partition assignment for fault tolerance.
-    Examples: `RACK1`, `us-east-1d`. Default: None
-"""
-BrokerMetadata = namedtuple("BrokerMetadata",
-    ["nodeId", "host", "port", "rack"])
-
-
-"""A topic partition metadata describing the state in the MetadataResponse.
-
-Keyword Arguments:
-    topic (str): The topic name of the partition this metadata relates to.
-    partition (int): The id of the partition this metadata relates to.
-    leader (int): The id of the broker that is the leader for the partition.
-    replicas (List[int]): The ids of all brokers that contain replicas of the
-                          partition.
-    isr (List[int]): The ids of all brokers that contain in-sync replicas of
-                     the partition.
-    error (KafkaError): A KafkaError object associated with the request for
-                        this partition metadata.
-"""
-PartitionMetadata = namedtuple("PartitionMetadata",
-    ["topic", "partition", "leader", "leader_epoch", "replicas", "isr", "offline_replicas", "error"])
-
-
 """The Kafka offset commit API
 
 The Kafka offset commit API allows users to provide additional metadata

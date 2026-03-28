@@ -102,13 +102,15 @@ def test_pattern_subscription(conn, metrics, api_version):
     assert coordinator._metadata_snapshot == coordinator._build_metadata_snapshot(coordinator._subscription, {})
 
     cluster = coordinator._client.cluster
+    Broker = MetadataResponse.MetadataResponseBroker
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
     cluster.update_metadata(MetadataResponse[0](
-        # brokers
-        [(0, 'foo', 12), (1, 'bar', 34)],
-        # topics
-        [(0, 'fizz', []),
-         (0, 'foo1', [(0, 0, 0, [], [])]),
-         (0, 'foo2', [(0, 0, 1, [], [])])]))
+        brokers=[Broker(0, 'foo', 12, version=0), Broker(1, 'bar', 34, version=0)],
+        topics=[
+            Topic(0, 'fizz', [], version=0),
+            Topic(0, 'foo1', [Partition(0, 0, 0, [], [], version=0)], version=0),
+            Topic(0, 'foo2', [Partition(0, 0, 1, [], [], version=0)], version=0)]))
     assert coordinator._subscription.subscription == {'foo1', 'foo2'}
 
     # 0.9 consumers should trigger dynamic partition assignment

@@ -9,9 +9,8 @@ from kafka.cluster import ClusterMetadata
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.new.metadata import MetadataRequest
+from kafka.protocol.new.metadata import MetadataRequest, MetadataResponse
 from kafka.protocol.new.producer import ProduceRequest
-from kafka.structs import BrokerMetadata
 
 
 @pytest.fixture
@@ -54,8 +53,8 @@ def test_bootstrap(mocker, conn):
     assert kwargs == cli.config
     conn.send.assert_called_once_with(MetadataRequest[7]([], True), blocking=False, request_timeout_ms=None)
     assert cli._bootstrap_fails == 0
-    assert cli.cluster.brokers() == set([BrokerMetadata(0, 'foo', 12, None),
-                                         BrokerMetadata(1, 'bar', 34, None)])
+    assert cli.cluster.brokers() == list([MetadataResponse.MetadataResponseBroker(0, 'foo', 12, None),
+                                          MetadataResponse.MetadataResponseBroker(1, 'bar', 34, None)])
 
 
 def test_can_connect(client_selector_mocked, conn):

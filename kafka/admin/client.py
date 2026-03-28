@@ -1364,7 +1364,7 @@ class KafkaAdminClient:
         # consumer groups move to new brokers that haven't yet been queried,
         # then the same group could be returned by multiple brokers.
         if broker_ids is None:
-            broker_ids = [broker.nodeId for broker in self._client.cluster.brokers()]
+            broker_ids = [broker.node_id for broker in self._client.cluster.brokers()]
         requests = [
             (self._list_consumer_groups_request(), broker_id)
             for broker_id in broker_ids

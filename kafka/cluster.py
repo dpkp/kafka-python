@@ -9,8 +9,8 @@ import time
 from kafka import errors as Errors
 from kafka.conn import get_ip_port_afi
 from kafka.future import Future
-from kafka.structs import BrokerMetadata, PartitionMetadata, TopicPartition
-from kafka.protocol.new.metadata import MetadataRequest
+from kafka.protocol.new.metadata import MetadataRequest, MetadataResponse
+from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class ClusterMetadata:
 
     def __init__(self, **configs):
         self._topics = set()
-        self._brokers = {}  # node_id -> BrokerMetadata
+        self._brokers = {}  # node_id -> MetadataResponseBroker
         self._partitions = {}  # topic -> partition -> PartitionMetadata
         self._broker_partitions = collections.defaultdict(set)  # node_id -> {TopicPartition...}
         self._coordinators = {}  # (key_type, key) -> node_id
@@ -80,7 +80,7 @@ class ClusterMetadata:
         brokers = {}
         for i, (host, port, _) in enumerate(bootstrap_hosts):
             node_id = 'bootstrap-%s' % i
-            brokers[node_id] = BrokerMetadata(node_id, host, port, None)
+            brokers[node_id] = MetadataResponse.MetadataResponseBroker(node_id, host, port, None)
         return brokers
 
     def is_bootstrap(self, node_id):
@@ -122,21 +122,21 @@ class ClusterMetadata:
         return self.request_update()
 
     def brokers(self):
-        """Get all BrokerMetadata
+        """Get all MetadataResponseBroker
 
         Returns:
-            set: {BrokerMetadata, ...}
+            set: {MetadataResponseBroker, ...}
         """
-        return set(self._brokers.values()) or set(self._bootstrap_brokers.values())
+        return list(self._brokers.values()) or list(self._bootstrap_brokers.values())
 
     def broker_metadata(self, broker_id):
-        """Get BrokerMetadata
+        """Get MetadataResponseBroker
 
         Arguments:
             broker_id (int or str): node_id for a broker to check
 
         Returns:
-            BrokerMetadata or None if not found
+            MetadataResponseBroker or None if not found
         """
         return (
             self._brokers.get(broker_id) or
@@ -172,7 +172,7 @@ class ClusterMetadata:
             return None
         return set([partition for partition, metadata
                               in self._partitions[topic].items()
-                              if metadata.leader != -1])
+                              if metadata.leader_id != -1])
 
     def leader_for_partition(self, partition):
         """Return node_id of leader, -1 unavailable, None if unknown."""
@@ -180,7 +180,7 @@ class ClusterMetadata:
             return None
         elif partition.partition not in self._partitions[partition.topic]:
             return None
-        return self._partitions[partition.topic][partition.partition].leader
+        return self._partitions[partition.topic][partition.partition].leader_id
 
     def leader_epoch_for_partition(self, partition):
         return self._partitions[partition.topic][partition.partition].leader_epoch
@@ -311,7 +311,7 @@ class ClusterMetadata:
             else:
                 node_id, host, port, rack = broker
             _new_brokers.update({
-                node_id: BrokerMetadata(node_id, host, port, rack)
+                node_id: MetadataResponse.MetadataResponseBroker(node_id, host, port, rack)
             })
 
         if metadata.API_VERSION == 0:
@@ -329,36 +329,18 @@ class ClusterMetadata:
         _new_unauthorized_topics = set()
         _new_internal_topics = set()
 
-        for topic_data in metadata.topics:
-            if metadata.API_VERSION == 0:
-                error_code, topic, partitions = topic_data
-                is_internal = False
-            elif metadata.API_VERSION <= 7:
-                error_code, topic, is_internal, partitions = topic_data
-            else:
-                error_code, topic, is_internal, partitions, _authorized_operations = topic_data
-            if is_internal:
+        for t in metadata.topics:
+            topic = t.name
+            if t.is_internal:
                 _new_internal_topics.add(topic)
-            error_type = Errors.for_code(error_code)
+            error_type = Errors.for_code(t.error_code)
             if error_type is Errors.NoError:
                 _new_partitions[topic] = {}
-                for partition_data in partitions:
-                    leader_epoch = -1
-                    offline_replicas = []
-                    if metadata.API_VERSION >= 7:
-                        p_error, partition, leader, leader_epoch, replicas, isr, offline_replicas = partition_data
-                    elif metadata.API_VERSION >= 5:
-                        p_error, partition, leader, replicas, isr, offline_replicas = partition_data
-                    else:
-                        p_error, partition, leader, replicas, isr = partition_data
-
-                    _new_partitions[topic][partition] = PartitionMetadata(
-                        topic=topic, partition=partition,
-                        leader=leader, leader_epoch=leader_epoch,
-                        replicas=replicas, isr=isr, offline_replicas=offline_replicas,
-                        error=p_error)
-                    if leader != -1:
-                        _new_broker_partitions[leader].add(
+                for p_data in t.partitions:
+                    partition = p_data.partition_index
+                    _new_partitions[topic][partition] = p_data
+                    if p_data.leader_id != -1:
+                        _new_broker_partitions[p_data.leader_id].add(
                             TopicPartition(topic, partition))
 
             # Specific topic errors can be ignored if this is a full metadata fetch
@@ -448,7 +430,7 @@ class ClusterMetadata:
         # Use a coordinator-specific node id so that requests
         # get a dedicated connection
         node_id = 'coordinator-{}'.format(response.node_id)
-        coordinator = BrokerMetadata(
+        coordinator = MetadataResponse.MetadataResponseBroker(
             node_id,
             response.host,
             response.port,

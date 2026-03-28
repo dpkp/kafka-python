@@ -5,27 +5,31 @@ import socket
 from kafka.cluster import ClusterMetadata, collect_hosts
 from kafka.protocol.new.metadata import MetadataResponse
 
+Broker = MetadataResponse.MetadataResponseBroker
+Topic = MetadataResponse.MetadataResponseTopic
+Partition = Topic.MetadataResponsePartition
+
 
 def test_empty_broker_list():
     cluster = ClusterMetadata()
     assert len(cluster.brokers()) == 0
 
     cluster.update_metadata(MetadataResponse[0](
-        [(0, 'foo', 12), (1, 'bar', 34)], []))
+        [Broker(0, 'foo', 12, version=0), Broker(1, 'bar', 34, version=0)], []))
     assert len(cluster.brokers()) == 2
 
     # empty broker list response should be ignored
     cluster.update_metadata(MetadataResponse[0](
-        [],  # empty brokers
-        [(17, 'foo', []), (17, 'bar', [])]))  # topics w/ error
+        brokers=[],  # empty brokers
+        topics=[Topic(17, 'foo', [], version=0), Topic(17, 'bar', [], version=0)]))  # topics w/ error
     assert len(cluster.brokers()) == 2
 
 
 def test_metadata_v0():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[0](
-        [(0, 'foo', 12), (1, 'bar', 34)],
-        [(0, 'topic-1', [(0, 0, 0, [0], [0])])]))
+        brokers=[Broker(0, 'foo', 12, version=0), Broker(1, 'bar', 34, version=0)],
+        topics=[Topic(0, 'topic-1', [Partition(0, 0, 0, [0], [0], version=0)], version=0)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller is None
     assert cluster.cluster_id is None
@@ -36,9 +40,9 @@ def test_metadata_v0():
 def test_metadata_v1():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[1](
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0])])]))
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=1), Broker(1, 'bar', 34, 'rack-2', version=1)],
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], version=1)], version=1)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id is None
@@ -49,10 +53,10 @@ def test_metadata_v1():
 def test_metadata_v2():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[2](
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0])])]))
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=2), Broker(1, 'bar', 34, 'rack-2', version=2)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], version=2)], version=2)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -63,11 +67,11 @@ def test_metadata_v2():
 def test_metadata_v3():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[3](
-        0, # throttle_time_ms
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0])])]))
+        throttle_time_ms=0,
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=3), Broker(1, 'bar', 34, 'rack-2', version=3)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], version=3)], version=3)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -78,11 +82,11 @@ def test_metadata_v3():
 def test_metadata_v4():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[4](
-        0, # throttle_time_ms
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0])])]))
+        throttle_time_ms=0,
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=4), Broker(1, 'bar', 34, 'rack-2', version=4)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], version=4)], version=4)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -93,11 +97,11 @@ def test_metadata_v4():
 def test_metadata_v5():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[5](
-        0, # throttle_time_ms
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0], [12])])]))
+        throttle_time_ms=0,
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=5), Broker(1, 'bar', 34, 'rack-2', version=5)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], [12], version=5)], version=5)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -108,11 +112,11 @@ def test_metadata_v5():
 def test_metadata_v6():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[6](
-        0, # throttle_time_ms
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, [0], [0], [12])])]))
+        throttle_time_ms=0,
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=6), Broker(1, 'bar', 34, 'rack-2', version=6)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, [0], [0], [12], version=6)], version=6)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -123,11 +127,11 @@ def test_metadata_v6():
 def test_metadata_v7():
     cluster = ClusterMetadata()
     cluster.update_metadata(MetadataResponse[7](
-        0, # throttle_time_ms
-        [(0, 'foo', 12, 'rack-1'), (1, 'bar', 34, 'rack-2')],
-        'cluster-foo', # cluster_id
-        0, # controller_id
-        [(0, 'topic-1', False, [(0, 0, 0, 0, [0], [0], [12])])]))
+        throttle_time_ms=0,
+        brokers=[Broker(0, 'foo', 12, 'rack-1', version=7), Broker(1, 'bar', 34, 'rack-2', version=7)],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[Topic(0, 'topic-1', False, [Partition(0, 0, 0, 0, [0], [0], [12], version=7)], version=7)]))
     assert len(cluster.topics()) == 1
     assert cluster.controller == cluster.broker_metadata(0)
     assert cluster.cluster_id == 'cluster-foo'
@@ -140,8 +144,8 @@ def test_unauthorized_topic():
     assert len(cluster.brokers()) == 0
 
     cluster.update_metadata(MetadataResponse[0](
-        [(0, 'foo', 12), (1, 'bar', 34)],
-        [(29, 'unauthorized-topic', [])]))  # single topic w/ unauthorized error
+        brokers=[Broker(0, 'foo', 12, version=0), Broker(1, 'bar', 34, version=0)],
+        topics=[Topic(29, 'unauthorized-topic', [], version=0)]))  # single topic w/ unauthorized error
 
     # broker metadata should get updated
     assert len(cluster.brokers()) == 2
