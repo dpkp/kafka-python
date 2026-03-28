@@ -222,6 +222,7 @@ class BrokerConnection:
         self._api_version = None
         self._check_version_idx = None
         self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
+        self._api_versions_future = None
         self._throttle_time = None
         self._socks5_proxy = None
 
@@ -311,38 +312,6 @@ class BrokerConnection:
                 return
         afi, _, __, ___, sockaddr = self._gai.pop(0)
         return (afi, sockaddr)
-
-    def connect_blocking(self, timeout=float('inf')):
-        if self.connected():
-            return True
-        timeout += time.monotonic()
-        # First attempt to perform dns lookup
-        # note that the underlying interface, socket.getaddrinfo,
-        # has no explicit timeout so we may exceed the user-specified timeout
-        self._dns_lookup()
-
-        # Loop once over all returned dns entries
-        selector = None
-        while self._gai:
-            while time.monotonic() < timeout:
-                self.connect()
-                if self.connected():
-                    if selector is not None:
-                        selector.close()
-                    return True
-                elif self.connecting():
-                    if selector is None:
-                        selector = self.config['selector']()
-                        selector.register(self._sock, selectors.EVENT_WRITE)
-                    selector.select(1)
-                elif self.disconnected():
-                    if selector is not None:
-                        selector.close()
-                        selector = None
-                    break
-            else:
-                break
-        return False
 
     def connect(self):
         """Attempt to connect and return ConnectionState"""
@@ -1203,25 +1172,6 @@ class BrokerConnection:
         if self._api_versions is None:
             self.check_version()
         return self._api_versions
-
-    def check_version(self, timeout=2, **kwargs):
-        """Attempt to guess the broker version.
-
-        Keyword Arguments:
-            timeout (numeric, optional): Maximum number of seconds to block attempting
-                to connect and check version. Default 2
-
-        Note: This is a blocking call.
-
-        Returns: version tuple, i.e. (3, 9), (2, 4), etc ...
-
-        Raises: NodeNotReadyError on timeout
-        """
-        timeout_at = time.monotonic() + timeout
-        if not self.connect_blocking(timeout_at - time.monotonic()):
-            raise Errors.NodeNotReadyError()
-        else:
-            return self._api_version
 
     def __str__(self):
         return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
