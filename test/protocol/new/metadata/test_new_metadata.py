@@ -28,6 +28,20 @@ def test_metadata_request_roundtrip(version):
     assert decoded == request
 
 
+@pytest.mark.parametrize("version", range(MetadataRequest.min_version, MetadataRequest.max_version + 1))
+def test_metadata_request_all_topics(version):
+    Topic = MetadataRequest.MetadataRequestTopic
+    request = MetadataRequest(
+        topics=None if version > 0 else [],
+        allow_auto_topic_creation=False if version >= 4 else True,
+        include_cluster_authorized_operations=True if 8 <= version <= 10 else False,
+        include_topic_authorized_operations=True if version >= 8 else False
+    )
+    encoded = request.encode(version=version)
+    decoded = MetadataRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
 @pytest.mark.parametrize("version", range(MetadataResponse.min_version, MetadataResponse.max_version + 1))
 def test_metadata_response_roundtrip(version):
     Broker = MetadataResponse.MetadataResponseBroker
