@@ -373,7 +373,8 @@ class ClusterMetadata:
             if self._future:
                 f = self._future
             self._future = None
-            self._need_update = False
+            if self.need_all_topic_metadata or self._topics.issubset({t.name for t in metadata.topics}):
+                self._need_update = False
 
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
@@ -393,13 +394,6 @@ class ClusterMetadata:
 
         for listener in self._listeners:
             listener(self)
-
-        if self.need_all_topic_metadata:
-            # the listener may change the interested topics,
-            # which could cause another metadata refresh.
-            # If we have already fetched all topics, however,
-            # another fetch should be unnecessary.
-            self._need_update = False
 
     def add_listener(self, listener):
         """Add a callback function to be called on each metadata update"""
