@@ -298,7 +298,7 @@ def test_maybe_refresh_metadata_update(mocker, client_poll_mocked):
     client_poll_mocked.poll(timeout_ms=12345678)
     client_poll_mocked._poll.assert_called_with(9999.999) # request_timeout_ms
     assert client_poll_mocked.cluster.metadata_refresh_in_progress
-    request = MetadataRequest[0]([])
+    request = MetadataRequest(topics=MetadataRequest.ALL_TOPICS)
     send.assert_called_once_with('foobar', request, wakeup=False)
 
 

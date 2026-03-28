@@ -272,20 +272,19 @@ class ClusterMetadata:
         else:
             return topics
 
-    def metadata_request(self, version):
+    def metadata_request(self):
         if self.metadata_refresh_in_progress:
             raise RuntimeError('MetadataRequest currently in-flight!')
         else:
             self.metadata_refresh_in_progress = True
         if self.need_all_topic_metadata:
-            topics = MetadataRequest[version].ALL_TOPICS
+            topics = MetadataRequest.ALL_TOPICS
         elif not self._topics:
-            topics = MetadataRequest[version].NO_TOPICS
+            topics = MetadataRequest.NO_TOPICS
         else:
             topics = [MetadataRequest.MetadataRequestTopic(name=topic)
                       for topic in self._topics]
         return MetadataRequest(
-            version=version,
             topics=topics,
             allow_auto_topic_creation=self.config['allow_auto_create_topics'],
             include_cluster_authorized_operations=False,

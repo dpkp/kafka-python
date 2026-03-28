@@ -900,8 +900,7 @@ class KafkaClient:
 
         # Recheck node_id in case we were able to connect immediately above
         if self._can_send_request(node_id):
-            api_version = self.api_version(MetadataRequest, max_version=8)
-            request = self.cluster.metadata_request(api_version)
+            request = self.cluster.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
             future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)
