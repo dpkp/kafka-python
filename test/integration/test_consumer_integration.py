@@ -12,14 +12,14 @@ from test.testutil import Timer, assert_message_count, env_kafka_version, random
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
-@pytest.mark.skipif(env_kafka_version()[:2] > (2, 6, 0), reason="KAFKA_VERSION newer than max inferred version")
 def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory()
     actual_ver_major_minor = env_kafka_version()[:2]
     client = consumer._client
     inferred_ver_major_minor = client.check_version()[:2]
-    assert actual_ver_major_minor == inferred_ver_major_minor, \
-        "Was expecting inferred broker version to be %s but was %s" % (actual_ver_major_minor, inferred_ver_major_minor)
+    expected_ver_major_minor = min(actual_ver_major_minor, (2, 6))
+    assert expected_ver_major_minor == inferred_ver_major_minor, \
+        "Was expecting inferred broker version to be %s but was %s" % (expected_ver_major_minor, inferred_ver_major_minor)
 
 
 @pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
