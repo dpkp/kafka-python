@@ -216,7 +216,7 @@ class BrokerConnection:
         self._sock_addr = None
         self.broker_version_data = broker_version_data
         self._check_version_idx = None
-        self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
+        self._api_versions_idx = ApiVersionsRequest.max_version # version to try on first connect
         self._api_versions_future = None
         self._throttle_time = None
         self._socks5_proxy = None
@@ -492,16 +492,16 @@ class BrokerConnection:
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
             if self.broker_version_data is not None:
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
-                return True
-            elif self._check_version_idx is None:
+                try:
+                    self._api_versions_idx = self.broker_version_data.api_version(ApiVersionsRequest)
+                except Errors.IncompatibleBrokerVersion:
+                    log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
+                    return True
+            if self._api_versions_idx is not None:
                 version = self._api_versions_idx
-                if version >= 3:
-                    request = ApiVersionsRequest[version](
-                        client_software_name=self.config['client_software_name'],
-                        client_software_version=self.config['client_software_version'])
-                else:
-                    request = ApiVersionsRequest[version]()
+                request = ApiVersionsRequest(version=version,
+                                             client_software_name=self.config['client_software_name'],
+                                             client_software_version=self.config['client_software_version'])
                 future = Future()
                 self._api_versions_check_timeout /= 2
                 response = self._send(request, blocking=True, request_timeout_ms=self._api_versions_check_timeout)
@@ -510,7 +510,8 @@ class BrokerConnection:
                 self._api_versions_future = future
                 self.state = ConnectionStates.API_VERSIONS_RECV
                 self.config['state_change_callback'](self.node_id, self._sock, self)
-            elif self._check_version_idx < len(VERSION_CHECKS):
+            # Fallback for early brokers without ApiVersions api support
+            elif self._check_version_idx is not None and self._check_version_idx < len(VERSION_CHECKS):
                 version, request = VERSION_CHECKS[self._check_version_idx]
                 log.debug('%s: Probing version %s with %s', self, version, request)
                 future = Future()
@@ -525,8 +526,8 @@ class BrokerConnection:
                 self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
                 return False
 
-        for r, f in self.recv():
-            f.success(r)
+        # Handle any immediate responses
+        self.recv(resolve_futures=True)
 
         # A connection error during blocking send could trigger close() which will reset the future
         if self._api_versions_future is None:
@@ -540,8 +541,9 @@ class BrokerConnection:
     def _handle_api_versions_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
-            future.failure(error_type())
             if error_type is Errors.UnsupportedVersionError:
+                future.failure(error_type())
+                self._api_versions_future = None
                 self._api_versions_idx -= 1
                 for api_version_data in response.api_keys:
                     api_key, min_version, max_version = api_version_data[:3]
@@ -550,11 +552,10 @@ class BrokerConnection:
                         self._api_versions_idx = min(self._api_versions_idx, max_version)
                         break
                 if self._api_versions_idx >= 0:
-                    self._api_versions_future = None
                     self.state = ConnectionStates.API_VERSIONS_SEND
                     self.config['state_change_callback'](self.node_id, self._sock, self)
-            else:
-                self.close(error=error_type())
+                    return
+            self.close(error=error_type())
             return
         api_versions = dict([
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
@@ -569,10 +570,13 @@ class BrokerConnection:
         future.failure(ex)
         # Modern brokers should not disconnect on unrecognized api-versions request,
         # but in case they do we always want to try v0 as a fallback
-        # otherwise switch to check_version probe.
         if self._api_versions_idx > 0:
             self._api_versions_idx = 0
-        else:
+        # Only attempt fallback checks if we dont know anything about the cluster.
+        # Once we have a cached broker_version_data (i.e., after bootstrap)
+        # this is skipped.
+        elif self.broker_version_data is None:
+            self._api_versions_idx = None
             self._check_version_idx = 0
         # after failure connection is closed, so state should already be DISCONNECTED
 
@@ -1060,12 +1064,13 @@ class BrokerConnection:
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
-    def recv(self):
+    def recv(self, responses=None, resolve_futures=False):
         """Non-blocking network receive.
 
         Return list of (response, future) tuples
         """
-        responses = self._recv()
+        if responses is None:
+            responses = self._recv()
         if not responses and self.requests_timed_out():
             timed_out = self.timed_out_ifrs()
             timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
@@ -1092,6 +1097,9 @@ class BrokerConnection:
             self._maybe_throttle(response)
             responses[i] = (response, future)
 
+        if resolve_futures:
+            for r, f in responses:
+                f.success(r)
         return responses
 
     def _recv(self):
