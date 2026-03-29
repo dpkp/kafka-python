@@ -1,8 +1,93 @@
+from collections import namedtuple
+import logging
+
+import kafka.errors as Errors
 from kafka.protocol.new.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
 from kafka.protocol.new.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest
 from kafka.protocol.new.metadata import FindCoordinatorRequest, MetadataRequest
 from kafka.protocol.new.producer import ProduceRequest
 
+log = logging.getLogger('kafka.protocol')
+
+
+class BrokerVersionData:
+    __slots__ = ('broker_version', 'api_versions')
+    def __init__(self, broker_version=None, api_versions=None):
+        if broker_version is None and api_versions is None:
+            raise ValueError('Cannot construct BrokerVersionData!')
+        broker_version = self._clean_broker_version(broker_version)
+        if broker_version is None:
+            broker_version = infer_broker_version_from_api_versions(api_versions)
+        elif api_versions is None:
+            if not isinstance(broker_version, tuple):
+                raise Errors.KafkaConfigurationError('api_version must be tuple')
+            elif broker_version not in BROKER_API_VERSIONS:
+                # Try an extra patch version... (0, 10) -> (0, 10, 0)
+                patched_broker_version = broker_version + (0,)
+                if patched_broker_version in BROKER_API_VERSIONS:
+                    log.warning('Configured api_version %s is ambiguous; using %s',
+                                broker_version, patched_broker_version)
+                    broker_version = patched_broker_version
+                else:
+                    for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
+                        if v <= broker_version:
+                            log.warning('Configured broker_version %s not supported; using %s', broker_version, v)
+                            broker_version = v
+                            break
+                    else:
+                        raise Errors.UnrecognizedBrokerVersion(broker_version)
+            api_versions = BROKER_API_VERSIONS[broker_version]
+        self.broker_version = broker_version
+        self.api_versions = api_versions
+
+    def _clean_broker_version(self, broker_version):
+        # broker_version was previously a str. Accept old format for now
+        if isinstance(broker_version, str):
+            str_version = broker_version
+            if str_version == 'auto':
+                broker_version = None
+            else:
+                broker_version = tuple(map(int, str_version.split('.')))
+            log.warning('use broker_version=%s [tuple] -- "%s" as str is deprecated',
+                        str(broker_version), str_version)
+        return broker_version
+
+    def api_version(self, operation, max_version=None):
+        """Find the latest version of the protocol operation supported by both
+        this library and the broker.
+
+        This resolves to the lesser of either the latest api version this
+        library supports, or the max version supported by the broker.
+
+        Arguments:
+            operation: A list of protocol operation versions from kafka.protocol.
+
+        Keyword Arguments:
+            max_version (int, optional): Provide an alternate maximum api version
+                to reflect limitations in user code.
+
+        Returns:
+            int: The highest api version number compatible between client and broker.
+
+        Raises: IncompatibleBrokerVersion if no matching version is found
+        """
+        # Cap max_version at the largest available version in operation list
+        max_version = min(operation.max_version, max_version if max_version is not None else float('inf'))
+        broker_api_versions = self.api_versions
+        api_key = operation.API_KEY
+        if broker_api_versions is None or api_key not in broker_api_versions:
+            raise Errors.IncompatibleBrokerVersion(
+                "Kafka broker does not support the '{}' Kafka protocol."
+                .format(operation[0].__name__))
+        broker_min_version, broker_max_version = broker_api_versions[api_key]
+        version = min(max_version, broker_max_version)
+        if version < broker_min_version:
+            # max library version is less than min broker version. Currently,
+            # no Kafka versions specify a min msg version. Maybe in the future?
+            raise Errors.IncompatibleBrokerVersion(
+                "No version of the '{}' Kafka protocol is supported by both the client and broker."
+                .format(operation[0].__name__))
+        return version
 
 def infer_broker_version_from_api_versions(api_versions):
     # The logic here is to check the list of supported request versions

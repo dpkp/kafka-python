@@ -15,7 +15,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
-from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.new.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
@@ -216,7 +216,8 @@ class KafkaClient:
 
         self.cluster = ClusterMetadata(**self.config)
         self._conns = Dict()  # object to support weakrefs
-        self._api_versions = None
+        self.broker_version_data = None # set on bootstrap or via user config
+        self.broker_version_data_future = Future()
         self._connecting = set()
         self._sending = set()
 
@@ -240,27 +241,10 @@ class KafkaClient:
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
-            self.config['api_version'] = self.check_version()
-        elif self.config['api_version'] in BROKER_API_VERSIONS:
-            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
-        elif (self.config['api_version'] + (0,)) in BROKER_API_VERSIONS:
-            log.warning('Configured api_version %s is ambiguous; using %s',
-                        self.config['api_version'], self.config['api_version'] + (0,))
-            self.config['api_version'] = self.config['api_version'] + (0,)
-            self._api_versions = BROKER_API_VERSIONS[self.config['api_version']]
+            self.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
         else:
-            compatible_version = None
-            for v in sorted(BROKER_API_VERSIONS.keys(), reverse=True):
-                if v <= self.config['api_version']:
-                    compatible_version = v
-                    break
-            if compatible_version:
-                log.warning('Configured api_version %s not supported; using %s',
-                            self.config['api_version'], compatible_version)
-                self.config['api_version'] = compatible_version
-                self._api_versions = BROKER_API_VERSIONS[compatible_version]
-            else:
-                raise Errors.UnrecognizedBrokerVersion(self.config['api_version'])
+            self.broker_version_data = BrokerVersionData(self.config['api_version'])
+            self.broker_version_data_future.success(self.broker_version_data)
 
     def _init_wakeup_socketpair(self):
         self._wake_r, self._wake_w = socket.socketpair()
@@ -332,8 +316,9 @@ class KafkaClient:
 
                 if self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails = 0
-                    if self._api_versions is None:
-                        self._api_versions = conn._api_versions
+                    if self.broker_version_data is None:
+                        self.broker_version_data = conn.broker_version_data
+                        self.broker_version_data_future.success(self.broker_version_data)
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -431,6 +416,7 @@ class KafkaClient:
                 conn = BrokerConnection(host, broker.port, afi,
                                         state_change_callback=cb,
                                         node_id=node_id,
+                                        broker_version_data=self.broker_version_data,
                                         **self.config)
                 self._conns[node_id] = conn
 
@@ -932,12 +918,12 @@ class KafkaClient:
     def get_api_versions(self):
         """Return the ApiVersions map, if available.
 
-        Note: Only available after bootstrap; requires broker version 0.10.0 or later.
+        Note: Only available after bootstrap
 
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
-        or None if ApiVersion is not supported by the kafka cluster.
         """
-        return self._api_versions
+        assert self.broker_version_data is not None
+        return self.broker_version_data.api_versions
 
     def check_version(self, node_id=None, timeout=None, **kwargs):
         """Attempt to guess the version of a Kafka broker.
@@ -985,8 +971,8 @@ class KafkaClient:
                     timeout_ms = min((end - time.monotonic()) * 1000, 200)
                     self.poll(timeout_ms=timeout_ms)
 
-                if conn._api_version is not None:
-                    return conn._api_version
+                if conn.broker_version_data is not None:
+                    return conn.broker_version_data.broker_version
                 else:
                     log.debug('Failed to identify api_version after connection attempt to %s', conn)
 
@@ -998,41 +984,8 @@ class KafkaClient:
                     raise Errors.NoBrokersAvailable()
 
     def api_version(self, operation, max_version=None):
-        """Find the latest version of the protocol operation supported by both
-        this library and the broker.
-
-        This resolves to the lesser of either the latest api version this
-        library supports, or the max version supported by the broker.
-
-        Arguments:
-            operation: A list of protocol operation versions from kafka.protocol.
-
-        Keyword Arguments:
-            max_version (int, optional): Provide an alternate maximum api version
-                to reflect limitations in user code.
-
-        Returns:
-            int: The highest api version number compatible between client and broker.
-
-        Raises: IncompatibleBrokerVersion if no matching version is found
-        """
-        # Cap max_version at the largest available version in operation list
-        max_version = min(len(operation) - 1, max_version if max_version is not None else float('inf'))
-        broker_api_versions = self._api_versions
-        api_key = operation[0].API_KEY
-        if broker_api_versions is None or api_key not in broker_api_versions:
-            raise Errors.IncompatibleBrokerVersion(
-                "Kafka broker does not support the '{}' Kafka protocol."
-                .format(operation[0].__name__))
-        broker_min_version, broker_max_version = broker_api_versions[api_key]
-        version = min(max_version, broker_max_version)
-        if version < broker_min_version:
-            # max library version is less than min broker version. Currently,
-            # no Kafka versions specify a min msg version. Maybe in the future?
-            raise Errors.IncompatibleBrokerVersion(
-                "No version of the '{}' Kafka protocol is supported by both the client and broker."
-                .format(operation[0].__name__))
-        return version
+        assert self.broker_version_data is not None
+        return self.broker_version_data.api_version(operation, max_version=max_version)
 
     def wakeup(self):
         if self._closed or self._waking or self._wake_w is None:
@@ -1071,6 +1024,15 @@ class KafkaClient:
             idle_ms = (time.monotonic() - ts) * 1000
             log.info('Closing idle connection %s, last active %d ms ago', conn_id, idle_ms)
             self.close(node_id=conn_id)
+
+    def get_broker_version(self, timeout_ms=None):
+        self.poll(future=self.broker_version_data_future, timeout_ms=timeout_ms)
+        if not self.broker_version_data_future.is_done:
+            raise Errors.KafkaTimeoutError('Timeout attempting to get broker api version!')
+        elif self.broker_version_data_future.failed():
+            raise self.broker_version_data_future.exception
+        else:
+            return self.broker_version_data.broker_version
 
     def bootstrap_connected(self):
         """Return True if a bootstrap node is connected"""

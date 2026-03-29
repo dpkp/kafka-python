@@ -12,10 +12,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.new.metadata import ApiVersionsRequest
-from kafka.protocol.broker_api_versions import (
-    BROKER_API_VERSIONS, VERSION_CHECKS,
-    infer_broker_version_from_api_versions,
-)
+from kafka.protocol.broker_version_data import BrokerVersionData, VERSION_CHECKS
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.new.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
 from kafka.protocol.new.schemas.fields.codecs import Int32
@@ -195,7 +192,6 @@ class BrokerConnection:
         'ssl_crlfile': None,
         'ssl_password': None,
         'ssl_ciphers': None,
-        'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda node_id, sock, conn: True,
@@ -212,14 +208,13 @@ class BrokerConnection:
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
 
-    def __init__(self, host, port, afi, **configs):
+    def __init__(self, host, port, afi, broker_version_data=None, **configs):
         self.host = host
         self.port = port
         self.afi = afi
         self._sock_afi = afi
         self._sock_addr = None
-        self._api_versions = None
-        self._api_version = None
+        self.broker_version_data = broker_version_data
         self._check_version_idx = None
         self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
         self._api_versions_future = None
@@ -283,11 +278,17 @@ class BrokerConnection:
                                                     self.config['metric_group_prefix'],
                                                     self.node_id)
 
+    @property
+    def broker_version(self):
+        if self.broker_version_data is None:
+            return None
+        return self.broker_version_data.broker_version
+
     def _new_protocol_parser(self):
         return KafkaProtocol(
             ident=f'node={self.node_id}[{self.host}:{self.port}]',
             client_id=self.config['client_id'],
-            api_version=self.config['api_version'])
+            api_version=self.broker_version)
 
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
@@ -490,13 +491,8 @@ class BrokerConnection:
 
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
-            if self.config['api_version'] is not None:
-                self._api_version = self.config['api_version']
-                # api_version will be normalized by KafkaClient, so this should not happen
-                if self._api_version not in BROKER_API_VERSIONS:
-                    raise Errors.UnrecognizedBrokerVersion('api_version %s not found in kafka.protocol.broker_api_versions' % (self._api_version,))
-                self._api_versions = BROKER_API_VERSIONS[self._api_version]
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self._api_version)
+            if self.broker_version_data is not None:
+                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
                 return True
             elif self._check_version_idx is None:
                 version = self._api_versions_idx
@@ -516,6 +512,7 @@ class BrokerConnection:
                 self.config['state_change_callback'](self.node_id, self._sock, self)
             elif self._check_version_idx < len(VERSION_CHECKS):
                 version, request = VERSION_CHECKS[self._check_version_idx]
+                log.debug('%s: Probing version %s with %s', self, version, request)
                 future = Future()
                 self._api_versions_check_timeout /= 2
                 response = self._send(request, blocking=True, request_timeout_ms=self._api_versions_check_timeout)
@@ -559,13 +556,13 @@ class BrokerConnection:
             else:
                 self.close(error=error_type())
             return
-        self._api_versions = dict([
+        api_versions = dict([
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
             for api_version_data in response.api_keys
         ])
-        self._api_version = infer_broker_version_from_api_versions(self._api_versions)
-        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self._api_version)))
-        future.success(self._api_version)
+        self.broker_version_data = BrokerVersionData(api_versions=api_versions)
+        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version_data.broker_version)))
+        future.success(self.broker_version_data.broker_version)
         self.connect()
 
     def _handle_api_versions_failure(self, future, ex):
@@ -583,8 +580,7 @@ class BrokerConnection:
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, version)))
         log.info('Set configuration api_version=%s to skip auto'
                  ' check_version requests on startup', version)
-        self._api_versions = BROKER_API_VERSIONS[version]
-        self._api_version = version
+        self.broker_version_data = BrokerVersionData(version)
         future.success(version)
         self.connect()
 
@@ -594,13 +590,13 @@ class BrokerConnection:
         # after failure connection is closed, so state should already be DISCONNECTED
 
     def _sasl_handshake_version(self):
-        if self._api_versions is None:
-            raise RuntimeError('_api_versions not set')
-        if SaslHandshakeRequest[0].API_KEY not in self._api_versions:
+        if self.broker_version_data is None:
+            raise RuntimeError('broker_version not set')
+        if SaslHandshakeRequest[0].API_KEY not in self.broker_version_data.api_versions:
             raise Errors.UnsupportedVersionError('SaslHandshake')
 
         # Build a SaslHandshakeRequest message
-        min_version, max_version = self._api_versions[SaslHandshakeRequest[0].API_KEY]
+        min_version, max_version = self.broker_version_data.api_versions[SaslHandshakeRequest[0].API_KEY]
         if min_version > 1:
             raise Errors.UnsupportedVersionError('SaslHandshake %s' % min_version)
         return min(max_version, 1)
@@ -1049,7 +1045,7 @@ class BrokerConnection:
             return
         # Client side throttling enabled in v2.0 brokers
         # prior to that throttling (if present) was managed broker-side
-        if self.config['api_version'] is not None and self.config['api_version'] >= (2, 0):
+        if self.broker_version_data is not None and self.broker_version_data.broker_version >= (2, 0):
             throttle_time = time.monotonic() + throttle_time_ms / 1000
             self._throttle_time = max(throttle_time, self._throttle_time or 0)
         log.warning("%s: %s throttled by broker (%d ms)", self,
@@ -1166,9 +1162,10 @@ class BrokerConnection:
                 return float('inf')
 
     def __str__(self):
-        return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
-            self.config['client_id'], self.node_id, self.host, self.port, self.state,
-            AFI_NAMES[self._sock_afi], self._sock_addr)
+        return "<BrokerConnection client_id=%s node_id=%s version=%s host=%s:%d%s %s [%s %s]>" % (
+            self.config['client_id'], self.node_id, self.broker_version,
+            self.host, self.port, '<-%d' % self._sock.getsockname()[1] if self._sock is not None else '',
+            self.state, AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
 class BrokerConnectionMetrics:

@@ -15,7 +15,7 @@ from kafka.coordinator.base import Generation, MemberState, HeartbeatThread
 from kafka.coordinator.consumer import ConsumerCoordinator
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.broker_api_versions import BROKER_API_VERSIONS
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.new.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
@@ -462,7 +462,7 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, version):
     expect_node = 0
-    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
+    patched_coord._client.broker_version_data = BrokerVersionData(api_version)
 
     patched_coord._send_offset_commit_request(offsets)
     (node, request), _ = patched_coord._client.send.call_args
@@ -577,7 +577,7 @@ def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, version):
     # assuming fixture sets coordinator=0, least_loaded_node=1
     expect_node = 0
-    patched_coord._client._api_versions = BROKER_API_VERSIONS[api_version]
+    patched_coord._client.broker_version_data = BrokerVersionData(api_version)
 
     patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args

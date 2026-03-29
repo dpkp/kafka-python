@@ -379,20 +379,10 @@ class KafkaConsumer:
         else:
             self._metrics = None
 
-        # api_version was previously a str. Accept old format for now
-        if isinstance(self.config['api_version'], str):
-            str_version = self.config['api_version']
-            if str_version == 'auto':
-                self.config['api_version'] = None
-            else:
-                self.config['api_version'] = tuple(map(int, str_version.split('.')))
-            log.warning('use api_version=%s [tuple] -- "%s" as str is deprecated',
-                        str(self.config['api_version']), str_version)
-
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
 
         # Get auto-discovered / normalized version from client
-        self.config['api_version'] = self._client.config['api_version']
+        self.config['api_version'] = self._client.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
 
         # Coordinator configurations are different for older brokers
         # max_poll_interval_ms is not supported directly -- it must the be
