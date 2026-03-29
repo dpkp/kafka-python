@@ -215,7 +215,6 @@ class KafkaClient:
         self._wake_lock = threading.Lock()
 
         self.cluster = ClusterMetadata(**self.config)
-        self._metadata_refresh_in_progress = False
         self._conns = Dict()  # object to support weakrefs
         self._api_versions = None
         self._connecting = set()
@@ -555,7 +554,7 @@ class KafkaClient:
         # if we need to update our metadata now declare all requests unready to
         # make metadata requests first priority
         if metadata_priority:
-            if self._metadata_refresh_in_progress:
+            if self.cluster.metadata_refresh_in_progress:
                 return False
             if self.cluster.ttl() == 0:
                 return False
@@ -882,10 +881,7 @@ class KafkaClient:
         Returns:
             float: milliseconds until next refresh
         """
-        ttl = self.cluster.ttl()
-        wait_for_in_progress_ms = self.config['request_timeout_ms'] if self._metadata_refresh_in_progress else 0
-        metadata_timeout = max(ttl, wait_for_in_progress_ms)
-
+        metadata_timeout = self.cluster.ttl()
         if metadata_timeout > 0:
             return metadata_timeout
 
@@ -925,12 +921,6 @@ class KafkaClient:
             future = self.send(node_id, request, wakeup=wakeup)
             future.add_callback(self.cluster.update_metadata)
             future.add_errback(self.cluster.failed_update)
-
-            self._metadata_refresh_in_progress = True
-            def refresh_done(val_or_error):
-                self._metadata_refresh_in_progress = False
-            future.add_callback(refresh_done)
-            future.add_errback(refresh_done)
             return self.config['request_timeout_ms']
 
         # Should only get here if still connecting
