@@ -6,16 +6,15 @@ from kafka.util import classproperty
 
 
 class MetadataRequest(ApiMessage):
-    @classproperty
-    def ALL_TOPICS(cls) -> list | None: # pylint: disable=E0213
-        if cls._class_version == 0: # pylint: disable=E1101  # ty: ignore[unresolved-attribute]
-            return []
-        else:
-            return None
+    ALL_TOPICS = None
+    NO_TOPICS = []
 
-    @classproperty
-    def NO_TOPICS(cls) -> list: # pylint: disable=E0213
-        return []
+    def encode(self, version=None, header=False, framed=False):
+        # Fixup v0 ALL_TOPICS => []
+        if version == 0 or self.API_VERSION == 0:
+            if self.topics is None: # pylint: disable=E0203
+                self.topics = []
+        return super().encode(version=version, header=header, framed=framed)
 
 
 class MetadataResponse(ApiMessage):

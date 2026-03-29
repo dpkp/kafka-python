@@ -945,6 +945,8 @@ class BrokerConnection:
         return self._send(request, blocking=blocking, request_timeout_ms=request_timeout_ms)
 
     def _send(self, request, blocking=True, request_timeout_ms=None):
+        if request.API_VERSION is None:
+            request.API_VERSION = self.broker_version_data.api_version(request)
         request_timeout_ms = request_timeout_ms or self.config['request_timeout_ms']
         future = Future()
         with self._lock:
