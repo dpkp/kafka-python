@@ -496,12 +496,9 @@ class BrokerConnection:
                 return True
             elif self._check_version_idx is None:
                 version = self._api_versions_idx
-                if version >= 3:
-                    request = ApiVersionsRequest[version](
-                        client_software_name=self.config['client_software_name'],
-                        client_software_version=self.config['client_software_version'])
-                else:
-                    request = ApiVersionsRequest[version]()
+                request = ApiVersionsRequest(version=version,
+                                             client_software_name=self.config['client_software_name'],
+                                             client_software_version=self.config['client_software_version'])
                 future = Future()
                 self._api_versions_check_timeout /= 2
                 response = self._send(request, blocking=True, request_timeout_ms=self._api_versions_check_timeout)
