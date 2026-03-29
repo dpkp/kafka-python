@@ -492,9 +492,12 @@ class BrokerConnection:
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
             if self.broker_version_data is not None:
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
-                return True
-            elif self._check_version_idx is None:
+                try:
+                    self._api_versions_idx = self.broker_version_data.api_version(ApiVersionsRequest)
+                except Errors.IncompatibleBrokerVersion:
+                    log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
+                    return True
+            if self._api_versions_idx is not None:
                 version = self._api_versions_idx
                 request = ApiVersionsRequest(version=version,
                                              client_software_name=self.config['client_software_name'],
@@ -507,7 +510,8 @@ class BrokerConnection:
                 self._api_versions_future = future
                 self.state = ConnectionStates.API_VERSIONS_RECV
                 self.config['state_change_callback'](self.node_id, self._sock, self)
-            elif self._check_version_idx < len(VERSION_CHECKS):
+            # Fallback for early brokers without ApiVersions api support
+            elif self._check_version_idx is not None and self._check_version_idx < len(VERSION_CHECKS):
                 version, request = VERSION_CHECKS[self._check_version_idx]
                 log.debug('%s: Probing version %s with %s', self, version, request)
                 future = Future()
@@ -566,10 +570,13 @@ class BrokerConnection:
         future.failure(ex)
         # Modern brokers should not disconnect on unrecognized api-versions request,
         # but in case they do we always want to try v0 as a fallback
-        # otherwise switch to check_version probe.
         if self._api_versions_idx > 0:
             self._api_versions_idx = 0
-        else:
+        # Only attempt fallback checks if we dont know anything about the cluster.
+        # Once we have a cached broker_version_data (i.e., after bootstrap)
+        # this is skipped.
+        elif self.broker_version_data is None:
+            self._api_versions_idx = None
             self._check_version_idx = 0
         # after failure connection is closed, so state should already be DISCONNECTED
 
