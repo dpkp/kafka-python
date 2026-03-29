@@ -12,7 +12,7 @@ def main_parser():
     )
     parser.add_argument(
         '-b', '--bootstrap-servers', type=str, action='append', required=True,
-        help='host:port for cluster bootstrap servers')
+        help='host:port for cluster bootstrap server. Can be provided multiple times.')
     parser.add_argument(
         '-t', '--topic', type=str, action='append', dest='topics', required=True,
         help='subscribe to topic')
@@ -25,6 +25,12 @@ def main_parser():
     parser.add_argument(
         '-l', '--log-level', type=str, default='CRITICAL',
         help='logging level, passed to logging.basicConfig')
+    parser.add_argument(
+        '-L', '--enable-logger', type=str, action='append',
+        help='enable a specific logger. Can be provided multiple times. If not provided, all loggers are enabled')
+    parser.add_argument(
+        '-DL', '--disable-logger', type=str, action='append',
+        help='disable a specific logger. Can be provided multiple times.')
     parser.add_argument(
         '-f', '--format', type=str, default='str',
         help='output format: str|raw|full')
@@ -57,8 +63,22 @@ def build_kwargs(props):
 def run_cli(args=None):
     parser = main_parser()
     config = parser.parse_args(args)
-    if config.log_level:
+
+    if config.enable_logger is not None:
+        log_level = _LOGGING_LEVELS[config.log_level.upper()]
+        handler = logging.StreamHandler()
+        handler.setLevel(log_level)
+        handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+        for name in config.enable_logger:
+            logger = logging.getLogger(name)
+            logger.setLevel(log_level)
+            logger.addHandler(handler)
+    else:
         logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
+    if config.disable_logger is not None:
+        for name in config.disable_logger:
+            logging.getLogger(name).setLevel(logging.CRITICAL + 1)
+
     if config.format not in ('str', 'raw', 'full'):
         raise ValueError('Unrecognized format: %s' % config.format)
     logger = logging.getLogger(__name__)

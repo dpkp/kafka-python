@@ -25,6 +25,12 @@ def main_parser():
         '-l', '--log-level', type=str, default='CRITICAL',
         help='logging level, passed to logging.basicConfig')
     parser.add_argument(
+        '-L', '--enable-logger', type=str, action='append',
+        help='enable a specific logger. Can be provided multiple times. If not provided, all loggers are enabled')
+    parser.add_argument(
+        '-DL', '--disable-logger', type=str, action='append',
+        help='disable a specific logger. Can be provided multiple times.')
+    parser.add_argument(
         '-f', '--format', type=str, default='raw',
         help='output format: raw|json')
     return parser
@@ -57,10 +63,23 @@ def run_cli(args=None):
     for cmd in [ClusterSubCommand, ConfigsSubCommand, LogDirsSubCommand,
                 TopicsSubCommand, ConsumerGroupsSubCommand]:
         cmd.add_subparser(subparsers)
-
     config = parser.parse_args(args)
-    if config.log_level:
+
+    if config.enable_logger is not None:
+        log_level = _LOGGING_LEVELS[config.log_level.upper()]
+        handler = logging.StreamHandler()
+        handler.setLevel(log_level)
+        handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+        for name in config.enable_logger:
+            logger = logging.getLogger(name)
+            logger.setLevel(log_level)
+            logger.addHandler(handler)
+    else:
         logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
+    if config.disable_logger is not None:
+        for name in config.disable_logger:
+            logging.getLogger(name).setLevel(logging.CRITICAL + 1)
+
     if config.format not in ('raw', 'json'):
         raise ValueError('Unrecognized format: %s' % config.format)
     logger = logging.getLogger(__name__)
