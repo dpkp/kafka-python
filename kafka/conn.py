@@ -216,7 +216,7 @@ class BrokerConnection:
         self._sock_addr = None
         self.broker_version_data = broker_version_data
         self._check_version_idx = None
-        self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
+        self._api_versions_idx = ApiVersionsRequest.max_version # version to try on first connect
         self._api_versions_future = None
         self._throttle_time = None
         self._socks5_proxy = None
