@@ -541,8 +541,9 @@ class BrokerConnection:
     def _handle_api_versions_response(self, future, response):
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
-            future.failure(error_type())
             if error_type is Errors.UnsupportedVersionError:
+                future.failure(error_type())
+                self._api_versions_future = None
                 self._api_versions_idx -= 1
                 for api_version_data in response.api_keys:
                     api_key, min_version, max_version = api_version_data[:3]
@@ -551,11 +552,10 @@ class BrokerConnection:
                         self._api_versions_idx = min(self._api_versions_idx, max_version)
                         break
                 if self._api_versions_idx >= 0:
-                    self._api_versions_future = None
                     self.state = ConnectionStates.API_VERSIONS_SEND
                     self.config['state_change_callback'](self.node_id, self._sock, self)
-            else:
-                self.close(error=error_type())
+                    return
+            self.close(error=error_type())
             return
         api_versions = dict([
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
