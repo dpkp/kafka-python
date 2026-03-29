@@ -278,11 +278,17 @@ class BrokerConnection:
                                                     self.config['metric_group_prefix'],
                                                     self.node_id)
 
+    @property
+    def broker_version(self):
+        if self.broker_version_data is None:
+            return None
+        return self.broker_version_data.broker_version
+
     def _new_protocol_parser(self):
         return KafkaProtocol(
             ident=f'node={self.node_id}[{self.host}:{self.port}]',
             client_id=self.config['client_id'],
-            api_version=self.broker_version_data.broker_version if self.broker_version_data is not None else None)
+            api_version=self.broker_version)
 
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
@@ -486,7 +492,7 @@ class BrokerConnection:
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
             if self.broker_version_data is not None:
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version_data.broker_version)
+                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
                 return True
             elif self._check_version_idx is None:
                 version = self._api_versions_idx
@@ -1157,7 +1163,7 @@ class BrokerConnection:
 
     def __str__(self):
         return "<BrokerConnection client_id=%s node_id=%s version=%s host=%s:%d%s %s [%s %s]>" % (
-            self.config['client_id'], self.node_id, self.broker_version_data.broker_version if self.broker_version_data is not None else None,
+            self.config['client_id'], self.node_id, self.broker_version,
             self.host, self.port, '<-%d' % self._sock.getsockname()[1] if self._sock is not None else '',
             self.state, AFI_NAMES[self._sock_afi], self._sock_addr)
 
