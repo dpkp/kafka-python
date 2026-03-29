@@ -10,8 +10,10 @@ class MetadataRequest(ApiMessage):
     NO_TOPICS = []
 
     def encode(self, version=None, header=False, framed=False):
-        if version == 0 and self.topics is None: # pylint: disable=E0203
-            self.topics = []
+        # Fixup v0 ALL_TOPICS => []
+        if version == 0 or self.API_VERSION == 0:
+            if self.topics is None: # pylint: disable=E0203
+                self.topics = []
         return super().encode(version=version, header=header, framed=framed)
 
 
