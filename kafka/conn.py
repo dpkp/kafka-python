@@ -522,8 +522,8 @@ class BrokerConnection:
                 self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
                 return False
 
-        for r, f in self.recv():
-            f.success(r)
+        # Handle any immediate responses
+        self.recv(resolve_futures=True)
 
         # A connection error during blocking send could trigger close() which will reset the future
         if self._api_versions_future is None:
@@ -1055,12 +1055,13 @@ class BrokerConnection:
         max_ifrs = self.config['max_in_flight_requests_per_connection']
         return len(self.in_flight_requests) < max_ifrs
 
-    def recv(self):
+    def recv(self, responses=None, resolve_futures=False):
         """Non-blocking network receive.
 
         Return list of (response, future) tuples
         """
-        responses = self._recv()
+        if responses is None:
+            responses = self._recv()
         if not responses and self.requests_timed_out():
             timed_out = self.timed_out_ifrs()
             timeout_ms = (timed_out[0][2] - timed_out[0][1]) * 1000
@@ -1087,6 +1088,9 @@ class BrokerConnection:
             self._maybe_throttle(response)
             responses[i] = (response, future)
 
+        if resolve_futures:
+            for r, f in responses:
+                f.success(r)
         return responses
 
     def _recv(self):
