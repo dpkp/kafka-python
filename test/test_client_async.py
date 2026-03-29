@@ -47,7 +47,7 @@ def test_bootstrap(mocker, conn):
     assert args == ('localhost', 9092, socket.AF_UNSPEC)
     kwargs.pop('state_change_callback')
     kwargs.pop('node_id')
-    kwargs.pop('broker_version')
+    kwargs.pop('broker_version_data')
     assert kwargs == cli.config
     conn.send.assert_called_once_with(MetadataRequest[7]([], True), blocking=False, request_timeout_ms=None)
     assert cli._bootstrap_fails == 0

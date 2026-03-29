@@ -15,7 +15,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Rate
 from kafka.metrics.stats.rate import TimeUnit
-from kafka.protocol.broker_api_versions import BrokerVersionData
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.new.metadata import MetadataRequest
 from kafka.util import Dict, Timer, WeakMethod
 from kafka.version import __version__
@@ -216,8 +216,8 @@ class KafkaClient:
 
         self.cluster = ClusterMetadata(**self.config)
         self._conns = Dict()  # object to support weakrefs
-        self.broker_version = None # set on bootstrap or via user config
-        self.broker_version_future = Future()
+        self.broker_version_data = None # set on bootstrap or via user config
+        self.broker_version_data_future = Future()
         self._connecting = set()
         self._sending = set()
 
@@ -243,8 +243,8 @@ class KafkaClient:
         if self.config['api_version'] is None:
             self.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
         else:
-            self.broker_version = BrokerVersionData(self.config['api_version'])
-            self.broker_version_future.success(self.broker_version)
+            self.broker_version_data = BrokerVersionData(self.config['api_version'])
+            self.broker_version_data_future.success(self.broker_version_data)
 
     def _init_wakeup_socketpair(self):
         self._wake_r, self._wake_w = socket.socketpair()
@@ -316,9 +316,9 @@ class KafkaClient:
 
                 if self.cluster.is_bootstrap(node_id):
                     self._bootstrap_fails = 0
-                    if self.broker_version is None:
-                        self.broker_version = conn.broker_version
-                        self.broker_version_future.success(self.broker_version)
+                    if self.broker_version_data is None:
+                        self.broker_version_data = conn.broker_version_data
+                        self.broker_version_data_future.success(self.broker_version_data)
 
                 else:
                     for node_id in list(self._conns.keys()):
@@ -416,7 +416,7 @@ class KafkaClient:
                 conn = BrokerConnection(host, broker.port, afi,
                                         state_change_callback=cb,
                                         node_id=node_id,
-                                        broker_version=self.broker_version,
+                                        broker_version_data=self.broker_version_data,
                                         **self.config)
                 self._conns[node_id] = conn
 
@@ -923,7 +923,7 @@ class KafkaClient:
         Returns: a map of dict mapping {api_key : (min_version, max_version)},
         or None if ApiVersion is not supported by the kafka cluster.
         """
-        return self.broker_version.api_versions
+        return self.broker_version_data.api_versions
 
     def check_version(self, node_id=None, timeout=None, **kwargs):
         """Attempt to guess the version of a Kafka broker.
@@ -971,8 +971,8 @@ class KafkaClient:
                     timeout_ms = min((end - time.monotonic()) * 1000, 200)
                     self.poll(timeout_ms=timeout_ms)
 
-                if conn.broker_version is not None:
-                    return conn.broker_version.broker_version
+                if conn.broker_version_data is not None:
+                    return conn.broker_version_data.broker_version
                 else:
                     log.debug('Failed to identify api_version after connection attempt to %s', conn)
 
@@ -984,8 +984,8 @@ class KafkaClient:
                     raise Errors.NoBrokersAvailable()
 
     def api_version(self, operation, max_version=None):
-        assert self.broker_version is not None
-        return self.broker_version.api_version(operation, max_version=max_version)
+        assert self.broker_version_data is not None
+        return self.broker_version_data.api_version(operation, max_version=max_version)
 
     def wakeup(self):
         if self._closed or self._waking or self._wake_w is None:
@@ -1026,13 +1026,13 @@ class KafkaClient:
             self.close(node_id=conn_id)
 
     def get_broker_version(self, timeout_ms=None):
-        self.poll(future=self.broker_version_future, timeout_ms=timeout_ms)
-        if not self.broker_version_future.is_done:
+        self.poll(future=self.broker_version_data_future, timeout_ms=timeout_ms)
+        if not self.broker_version_data_future.is_done:
             raise Errors.KafkaTimeoutError('Timeout attempting to get broker api version!')
-        elif self.broker_version_future.failed():
-            raise self.broker_version_future.exception
+        elif self.broker_version_data_future.failed():
+            raise self.broker_version_data_future.exception
         else:
-            return self.broker_version.broker_version
+            return self.broker_version_data.broker_version
 
     def bootstrap_connected(self):
         """Return True if a bootstrap node is connected"""

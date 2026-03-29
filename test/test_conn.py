@@ -11,7 +11,7 @@ from kafka.future import Future
 from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VERSION_CHECKS
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
-from kafka.protocol.broker_api_versions import BrokerVersionData
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.new.consumer import HeartbeatResponse
 from kafka.protocol.new.metadata import MetadataRequest
 from kafka.protocol.new.producer import ProduceRequest
@@ -411,12 +411,12 @@ def test_maybe_throttle(conn):
 
     with mock.patch("time.monotonic", return_value=1000) as time:
         # server-side throttling in v1.0
-        conn.broker_version = BrokerVersionData((1, 0))
+        conn.broker_version_data = BrokerVersionData((1, 0))
         conn._maybe_throttle(HeartbeatResponse[1](throttle_time_ms=1000, error_code=0))
         assert not conn.throttled()
 
         # client-side throttling in v2.0
-        conn.broker_version = BrokerVersionData((2, 0))
+        conn.broker_version_data = BrokerVersionData((2, 0))
         conn._maybe_throttle(HeartbeatResponse[2](throttle_time_ms=1000, error_code=0))
         assert conn.throttled()
 
