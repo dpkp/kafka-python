@@ -241,7 +241,7 @@ class KafkaClient:
 
         # Check Broker Version if not set explicitly
         if self.config['api_version'] is None:
-            self.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
+            self.config['api_version'] = self.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
         else:
             self.broker_version = BrokerVersionData(self.config['api_version'])
             self.broker_version_future.success(self.broker_version)
