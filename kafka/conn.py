@@ -192,7 +192,6 @@ class BrokerConnection:
         'ssl_crlfile': None,
         'ssl_password': None,
         'ssl_ciphers': None,
-        'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'state_change_callback': lambda node_id, sock, conn: True,
@@ -209,13 +208,13 @@ class BrokerConnection:
     }
     SECURITY_PROTOCOLS = ('PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL')
 
-    def __init__(self, host, port, afi, **configs):
+    def __init__(self, host, port, afi, broker_version=None, **configs):
         self.host = host
         self.port = port
         self.afi = afi
         self._sock_afi = afi
         self._sock_addr = None
-        self.broker_version = None
+        self.broker_version = broker_version
         self._check_version_idx = None
         self._api_versions_idx = 4 # version of ApiVersionsRequest to try on first connect
         self._api_versions_future = None
@@ -283,7 +282,7 @@ class BrokerConnection:
         return KafkaProtocol(
             ident=f'node={self.node_id}[{self.host}:{self.port}]',
             client_id=self.config['client_id'],
-            api_version=self.config['api_version'])
+            api_version=self.broker_version.broker_version if self.broker_version is not None else None)
 
     def _init_sasl_mechanism(self):
         if self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL'):
@@ -486,8 +485,7 @@ class BrokerConnection:
 
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
-            if self.config['api_version'] is not None:
-                self.broker_version = BrokerVersionData(self.config['api_version'])
+            if self.broker_version is not None:
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version.broker_version)
                 return True
             elif self._check_version_idx is None:
@@ -508,6 +506,7 @@ class BrokerConnection:
                 self.config['state_change_callback'](self.node_id, self._sock, self)
             elif self._check_version_idx < len(VERSION_CHECKS):
                 version, request = VERSION_CHECKS[self._check_version_idx]
+                log.debug('%s: Probing version %s with %s', self, version, request)
                 future = Future()
                 self._api_versions_check_timeout /= 2
                 response = self._send(request, blocking=True, request_timeout_ms=self._api_versions_check_timeout)
@@ -1040,7 +1039,7 @@ class BrokerConnection:
             return
         # Client side throttling enabled in v2.0 brokers
         # prior to that throttling (if present) was managed broker-side
-        if self.config['api_version'] is not None and self.config['api_version'] >= (2, 0):
+        if self.broker_version is not None and self.broker_version.broker_version >= (2, 0):
             throttle_time = time.monotonic() + throttle_time_ms / 1000
             self._throttle_time = max(throttle_time, self._throttle_time or 0)
         log.warning("%s: %s throttled by broker (%d ms)", self,
@@ -1157,9 +1156,10 @@ class BrokerConnection:
                 return float('inf')
 
     def __str__(self):
-        return "<BrokerConnection client_id=%s, node_id=%s host=%s:%d %s [%s %s]>" % (
-            self.config['client_id'], self.node_id, self.host, self.port, self.state,
-            AFI_NAMES[self._sock_afi], self._sock_addr)
+        return "<BrokerConnection client_id=%s node_id=%s version=%s host=%s:%d%s %s [%s %s]>" % (
+            self.config['client_id'], self.node_id, self.broker_version.broker_version if self.broker_version is not None else None,
+            self.host, self.port, '<-%d' % self._sock.getsockname()[1] if self._sock is not None else '',
+            self.state, AFI_NAMES[self._sock_afi], self._sock_addr)
 
 
 class BrokerConnectionMetrics:
