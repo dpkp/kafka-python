@@ -268,3 +268,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
         if hdr is not None:
             ret._header = hdr
         return ret
+
+    def __eq__(self, other):
+        if self.version != other.version:
+            return False
+        return super().__eq__(other)

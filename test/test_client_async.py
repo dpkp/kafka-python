@@ -49,7 +49,7 @@ def test_bootstrap(mocker, conn):
     kwargs.pop('node_id')
     kwargs.pop('broker_version_data')
     assert kwargs == cli.config
-    conn.send.assert_called_once_with(MetadataRequest[7]([], True), blocking=False, request_timeout_ms=None)
+    conn.send.assert_called_once_with(MetadataRequest(topics=[]), blocking=False, request_timeout_ms=None)
     assert cli._bootstrap_fails == 0
     assert cli.cluster.brokers() == list([MetadataResponse.MetadataResponseBroker(0, 'foo', 12, None),
                                           MetadataResponse.MetadataResponseBroker(1, 'bar', 34, None)])

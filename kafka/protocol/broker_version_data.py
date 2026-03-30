@@ -89,6 +89,10 @@ class BrokerVersionData:
                 .format(operation[0].__name__))
         return version
 
+    def __eq__(self, other):
+        return self.broker_version == other.broker_version and self.api_versions == other.api_versions
+
+
 def infer_broker_version_from_api_versions(api_versions):
     # The logic here is to check the list of supported request versions
     # in reverse order. As soon as we find one that works, return it

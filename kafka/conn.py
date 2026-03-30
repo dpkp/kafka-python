@@ -214,10 +214,10 @@ class BrokerConnection:
         self.afi = afi
         self._sock_afi = afi
         self._sock_addr = None
-        self.broker_version_data = broker_version_data
-        self._check_version_idx = None
-        self._api_versions_idx = ApiVersionsRequest.max_version # version to try on first connect
+        self._api_versions_idx = None
         self._api_versions_future = None
+        self._broker_version_data = None
+        self._check_version_idx = None
         self._throttle_time = None
         self._socks5_proxy = None
 
@@ -227,6 +227,9 @@ class BrokerConnection:
                 self.config[key] = configs[key]
 
         self.node_id = self.config.pop('node_id')
+
+        # Accept cached data if provided
+        self.broker_version_data = broker_version_data
 
         if self.config['receive_buffer_bytes'] is not None:
             self.config['socket_options'].append(
@@ -267,7 +270,6 @@ class BrokerConnection:
         self._ssl_context = None
         if self.config['ssl_context'] is not None:
             self._ssl_context = self.config['ssl_context']
-        self._api_versions_future = None
         self._api_versions_check_timeout = self.config['api_version_auto_timeout_ms']
         self._sasl_auth_future = None
         self.last_attempt = 0
@@ -283,6 +285,28 @@ class BrokerConnection:
         if self.broker_version_data is None:
             return None
         return self.broker_version_data.broker_version
+
+    @property
+    def broker_version_data(self):
+        return self._broker_version_data
+
+    @broker_version_data.setter
+    def broker_version_data(self, value):
+        if value is None:
+            self._api_versions_idx = ApiVersionsRequest.max_version
+            self._check_version_idx = 0
+        elif not isinstance(value, BrokerVersionData):
+            raise TypeError('expected BrokerVersionData')
+        else:
+            self._broker_version_data = value
+            # If we got cached broker data, we'll skip to the max supported ApiVersionsRequest
+            # or, if not supported at all, we'll just rely on the cached api_versions data
+            try:
+                self._api_versions_idx = self._broker_version_data.api_version(ApiVersionsRequest)
+            except Errors.IncompatibleBrokerVersion:
+                self._api_versions_idx = None
+            self._check_version_idx = None
+        self._api_versions_check_timeout = self.config['api_version_auto_timeout_ms']
 
     def _new_protocol_parser(self):
         return KafkaProtocol(
@@ -491,12 +515,6 @@ class BrokerConnection:
 
     def _try_api_versions_check(self):
         if self._api_versions_future is None:
-            if self.broker_version_data is not None:
-                try:
-                    self._api_versions_idx = self.broker_version_data.api_version(ApiVersionsRequest)
-                except Errors.IncompatibleBrokerVersion:
-                    log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
-                    return True
             if self._api_versions_idx is not None:
                 version = self._api_versions_idx
                 request = ApiVersionsRequest(version=version,
@@ -522,9 +540,12 @@ class BrokerConnection:
                 self._api_versions_future = future
                 self.state = ConnectionStates.API_VERSIONS_RECV
                 self.config['state_change_callback'](self.node_id, self._sock, self)
-            else:
+            elif self.broker_version_data is None:
                 self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
                 return False
+            else:
+                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
+                return True
 
         # Handle any immediate responses
         self.recv(resolve_futures=True)
@@ -572,12 +593,10 @@ class BrokerConnection:
         # but in case they do we always want to try v0 as a fallback
         if self._api_versions_idx > 0:
             self._api_versions_idx = 0
-        # Only attempt fallback checks if we dont know anything about the cluster.
-        # Once we have a cached broker_version_data (i.e., after bootstrap)
-        # this is skipped.
-        elif self.broker_version_data is None:
+        # If we have VERSION_CHECKS fallback enabled, disable api versions
+        elif self._check_version_idx is not None:
             self._api_versions_idx = None
-            self._check_version_idx = 0
+        # Otherwise, we'll just keep repeating api versions request on reconnect
         # after failure connection is closed, so state should already be DISCONNECTED
 
     def _handle_check_version_response(self, future, version, _response):
