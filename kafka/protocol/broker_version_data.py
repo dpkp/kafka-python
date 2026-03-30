@@ -78,7 +78,7 @@ class BrokerVersionData:
         if broker_api_versions is None or api_key not in broker_api_versions:
             raise Errors.IncompatibleBrokerVersion(
                 "Kafka broker does not support the '{}' Kafka protocol."
-                .format(operation[0].__name__))
+                .format(operation.name))
         broker_min_version, broker_max_version = broker_api_versions[api_key]
         version = min(max_version, broker_max_version)
         if version < broker_min_version:
@@ -86,8 +86,11 @@ class BrokerVersionData:
             # no Kafka versions specify a min msg version. Maybe in the future?
             raise Errors.IncompatibleBrokerVersion(
                 "No version of the '{}' Kafka protocol is supported by both the client and broker."
-                .format(operation[0].__name__))
+                .format(operation.name))
         return version
+
+    def __str__(self):
+        return '<BrokerVersionData %s>' % '.'.join(map(str, self.broker_version))
 
     def __eq__(self, other):
         return self.broker_version == other.broker_version and self.api_versions == other.api_versions
