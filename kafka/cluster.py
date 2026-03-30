@@ -135,6 +135,9 @@ class ClusterMetadata:
         """
         return list(self._brokers.values()) or list(self._bootstrap_brokers.values())
 
+    def bootstrap_brokers(self):
+        return list(self._bootstrap_brokers.values())
+
     def broker_metadata(self, broker_id):
         """Get MetadataResponseBroker
 
