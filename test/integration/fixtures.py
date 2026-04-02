@@ -262,7 +262,8 @@ class KafkaFixture(Fixture):
                  sasl_mechanism=None, auto_create_topic=True,
                  tmp_dir=None, external=False):
         super(KafkaFixture, self).__init__()
-
+        self.external = external
+        self.running = False
         self.host = host
         self.controller_bootstrap_host = host
         if port is None:
@@ -309,7 +310,6 @@ class KafkaFixture(Fixture):
         self.partitions = partitions
 
         self.tmp_dir = tmp_dir
-        self.external = external
 
         if self.external:
             self.child = ExternalService(self.host, self.port)
@@ -398,7 +398,7 @@ class KafkaFixture(Fixture):
 
     @property
     def sasl_enabled(self):
-        return self.transport in ('SASL', 'SASL_SSL')
+        return self.transport in ('SASL_PLAINTEXT', 'SASL_SSL')
 
     def bootstrap_server(self):
         return '%s:%d' % (self.host, self.port)
