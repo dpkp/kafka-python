@@ -24,6 +24,8 @@ def env_kafka_version():
     """
     if 'KAFKA_VERSION' not in os.environ:
         return ()
+    elif os.environ['KAFKA_VERSION'] == 'trunk':
+        return (float('inf'),)
     return tuple(map(int, os.environ['KAFKA_VERSION'].split('.')))
 
 

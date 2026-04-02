@@ -34,20 +34,21 @@ def gen_ssl_resources(directory):
     cd {0}
     echo Generating SSL resources in {0}
 
-    # Step 1
+    # Step 1: Generate server keystore
     keytool -keystore kafka.server.keystore.jks -alias localhost -validity 1 \
-      -genkey -storepass foobar -keypass foobar \
+      -genkey -keyalg RSA -storepass foobar -keypass foobar \
       -dname "CN=localhost, OU=kafka-python, O=kafka-python, L=SF, ST=CA, C=US" \
       -ext SAN=dns:localhost
 
-    # Step 2
+    # Step 2: Generate CA and truststore
     openssl genrsa -out ca-key 2048
     openssl req -new -x509 -key ca-key -out ca-cert -days 1 \
-      -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=mydomain.com"
+      -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=mydomain.com" \
+      -addext "keyUsage=critical,keyCertSign,cRLSign"
     keytool -keystore kafka.server.truststore.jks -alias CARoot -import \
       -file ca-cert -storepass foobar -noprompt
 
-    # Step 3
+    # Step 3: Sign server cert with CA
     keytool -keystore kafka.server.keystore.jks -alias localhost -certreq \
       -file cert-file -storepass foobar
     openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed \
@@ -77,6 +78,14 @@ class Fixture:
         path = os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
         if os.path.isfile(path):
             return path
+        if env_kafka_version() < (1, 0):
+            one_resource = os.path.join(cls.project_root, "servers", "resources", "0.0", filename)
+            if os.path.isfile(one_resource):
+                return one_resource
+        elif env_kafka_version() < (4, 0):
+            one_resource = os.path.join(cls.project_root, "servers", "resources", "1.0", filename)
+            if os.path.isfile(one_resource):
+                return one_resource
         return os.path.join(cls.project_root, "servers", "resources", "default", filename)
 
     @classmethod
@@ -253,7 +262,8 @@ class KafkaFixture(Fixture):
                  sasl_mechanism=None, auto_create_topic=True,
                  tmp_dir=None, external=False):
         super(KafkaFixture, self).__init__()
-
+        self.external = external
+        self.running = False
         self.host = host
         self.controller_bootstrap_host = host
         if port is None:
@@ -270,9 +280,11 @@ class KafkaFixture(Fixture):
         self.transport = transport.upper()
         if sasl_mechanism is not None:
             self.sasl_mechanism = sasl_mechanism.upper()
+            assert self.sasl_enabled, 'sasl_mechanism defined without enabling SASL transport'
         else:
             self.sasl_mechanism = None
-        self.ssl_dir = self.test_resource('ssl')
+            assert not self.sasl_enabled, 'SASL transport requires sasl_mechanism'
+        self.ssl_dir = None
 
         # TODO: checking for port connection would be better than scanning logs
         # until then, we need the pattern to work across all supported broker versions
@@ -285,6 +297,9 @@ class KafkaFixture(Fixture):
             self.start_pattern = r"\[KafkaRaftServer nodeId=%d\] Kafka Server started" % (broker_id,)
             self.scram_pattern = r"Replayed UserScramCredentialRecord creating new entry for %s" % (self.broker_user,)
 
+        if env_kafka_version() < (0, 9):
+            assert not self.ssl_enabled, 'Kafka broker version %s does not support SSL' % (env_kafka_version(),)
+
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
         # Add the attributes below for the template binding
@@ -295,7 +310,6 @@ class KafkaFixture(Fixture):
         self.partitions = partitions
 
         self.tmp_dir = tmp_dir
-        self.external = external
 
         if self.external:
             self.child = ExternalService(self.host, self.port)
@@ -306,6 +320,8 @@ class KafkaFixture(Fixture):
             self.running = False
 
         self.sasl_config = ''
+        self.ssl_config = ''
+        self.acl_config = ''
         self.jaas_config = ''
 
     def _gen_cluster_id(self):
@@ -320,6 +336,43 @@ class KafkaFixture(Fixture):
             'sasl.mechanism.inter.broker.protocol={mechanism}\n'
         )
         return sasl_config.format(mechanism=self.sasl_mechanism)
+
+    @property
+    def ssl_enabled(self):
+        return self.transport in ('SSL', 'SASL_SSL')
+
+    def _ssl_config(self):
+        if not self.ssl_enabled:
+            return ''
+        self.ssl_dir = os.path.join(self.tmp_dir.strpath, 'ssl')
+        os.makedirs(self.ssl_dir, exist_ok=True)
+        gen_ssl_resources(self.ssl_dir)
+        return (
+            'ssl.keystore.location={ssl_dir}/kafka.server.keystore.jks\n'
+            'ssl.keystore.password=foobar\n'
+            'ssl.key.password=foobar\n'
+            'ssl.truststore.location={ssl_dir}/kafka.server.truststore.jks\n'
+            'ssl.truststore.password=foobar'
+        ).format(ssl_dir=self.ssl_dir)
+
+    def _acl_config(self):
+        if env_kafka_version() < (0, 9):
+            return ''
+        elif env_kafka_version() < (2, 4):
+            return (
+                'authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
+        elif env_kafka_version() < (4, 0):
+            return (
+                'authorizer.class.name=kafka.security.authorizer.AclAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
+        else:
+            return (
+                'authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
 
     def _jaas_config(self):
         if not self.sasl_enabled:
@@ -365,7 +418,7 @@ class KafkaFixture(Fixture):
 
     @property
     def sasl_enabled(self):
-        return self.sasl_mechanism is not None
+        return self.transport in ('SASL_PLAINTEXT', 'SASL_SSL')
 
     def bootstrap_server(self):
         return '%s:%d' % (self.host, self.port)
@@ -501,6 +554,8 @@ class KafkaFixture(Fixture):
             self._format_log_dirs()
 
         self.sasl_config = self._sasl_config()
+        self.ssl_config = self._ssl_config()
+        self.acl_config = self._acl_config()
         self.jaas_config = self._jaas_config()
         self.start()
 
@@ -680,12 +735,15 @@ class KafkaFixture(Fixture):
         for key, value in defaults.items():
             params.setdefault(key, value)
         params.setdefault('bootstrap_servers', self.bootstrap_server())
+        params.setdefault('security_protocol', self.transport)
         if self.sasl_enabled:
             params.setdefault('sasl_mechanism', self.sasl_mechanism)
-            params.setdefault('security_protocol', self.transport)
             if self.sasl_mechanism in ('PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'):
                 params.setdefault('sasl_plain_username', self.broker_user)
                 params.setdefault('sasl_plain_password', self.broker_password)
+        if self.ssl_enabled:
+            params.setdefault('ssl_cafile', os.path.join(self.ssl_dir, 'ca-cert'))
+            params.setdefault('ssl_check_hostname', False)
         return params
 
     @staticmethod
