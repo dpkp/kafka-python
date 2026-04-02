@@ -271,8 +271,10 @@ class KafkaFixture(Fixture):
         self.transport = transport.upper()
         if sasl_mechanism is not None:
             self.sasl_mechanism = sasl_mechanism.upper()
+            assert self.sasl_enabled, 'sasl_mechanism defined without enabling SASL transport'
         else:
             self.sasl_mechanism = None
+            assert not self.sasl_enabled, 'SASL transport requires sasl_mechanism'
         self.ssl_dir = None
 
         # TODO: checking for port connection would be better than scanning logs
@@ -385,7 +387,7 @@ class KafkaFixture(Fixture):
 
     @property
     def sasl_enabled(self):
-        return self.sasl_mechanism is not None
+        return self.transport in ('SASL', 'SASL_SSL')
 
     def bootstrap_server(self):
         return '%s:%d' % (self.host, self.port)
