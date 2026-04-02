@@ -78,6 +78,14 @@ class Fixture:
         path = os.path.join(cls.project_root, "servers", cls.kafka_version, "resources", filename)
         if os.path.isfile(path):
             return path
+        if env_kafka_version() < (1, 0):
+            one_resource = os.path.join(cls.project_root, "servers", "resources", "0.0", filename)
+            if os.path.isfile(one_resource):
+                return one_resource
+        elif env_kafka_version() < (4, 0):
+            one_resource = os.path.join(cls.project_root, "servers", "resources", "1.0", filename)
+            if os.path.isfile(one_resource):
+                return one_resource
         return os.path.join(cls.project_root, "servers", "resources", "default", filename)
 
     @classmethod
