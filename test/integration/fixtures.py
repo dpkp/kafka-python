@@ -321,6 +321,7 @@ class KafkaFixture(Fixture):
 
         self.sasl_config = ''
         self.ssl_config = ''
+        self.acl_config = ''
         self.jaas_config = ''
 
     def _gen_cluster_id(self):
@@ -353,6 +354,25 @@ class KafkaFixture(Fixture):
             'ssl.truststore.location={ssl_dir}/kafka.server.truststore.jks\n'
             'ssl.truststore.password=foobar'
         ).format(ssl_dir=self.ssl_dir)
+
+    def _acl_config(self):
+        if env_kafka_version() < (0, 9):
+            return ''
+        elif env_kafka_version() < (2, 4):
+            return (
+                'authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
+        elif env_kafka_version() < (4, 0):
+            return (
+                'authorizer.class.name=kafka.security.authorizer.AclAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
+        else:
+            return (
+                'authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer\n'
+                'allow.everyone.if.no.acl.found=true'
+            )
 
     def _jaas_config(self):
         if not self.sasl_enabled:
@@ -535,6 +555,7 @@ class KafkaFixture(Fixture):
 
         self.sasl_config = self._sasl_config()
         self.ssl_config = self._ssl_config()
+        self.acl_config = self._acl_config()
         self.jaas_config = self._jaas_config()
         self.start()
 
