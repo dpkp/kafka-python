@@ -1,18 +1,19 @@
 import copy
 import logging
 import re
+import selectors
 import socket
 import time
 
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
 
-from kafka.client_async import KafkaClient, selectors
 from kafka.consumer.fetcher import Fetcher
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
+from kafka.net.compat import KafkaNetClient
 from kafka.protocol.consumer import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import Timer
@@ -339,7 +340,7 @@ class KafkaConsumer:
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'socks5_proxy': None,
-        'kafka_client': KafkaClient,
+        'kafka_client': KafkaNetClient,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
 
