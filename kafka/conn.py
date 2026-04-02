@@ -458,7 +458,7 @@ class BrokerConnection:
         assert self.config['security_protocol'] in ('SSL', 'SASL_SSL')
         if self._ssl_context is None:
             log.debug('%s: configuring default SSL Context', self)
-            self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)  # pylint: disable=no-member
+            self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             self._ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
             self._ssl_context.verify_mode = ssl.CERT_OPTIONAL
             if self.config['ssl_check_hostname']:
@@ -482,7 +482,6 @@ class BrokerConnection:
                     raise RuntimeError('This version of Python does not support ssl_crlfile!')
                 log.info('%s: Loading SSL CRL from %s', self, self.config['ssl_crlfile'])
                 self._ssl_context.load_verify_locations(self.config['ssl_crlfile'])
-                # pylint: disable=no-member
                 self._ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
             if self.config['ssl_ciphers']:
                 log.info('%s: Setting SSL Ciphers: %s', self, self.config['ssl_ciphers'])
