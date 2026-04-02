@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 @pytest.fixture(scope='module')
 def ssl_kafka(request, tmp_path_factory):
     tmp = tmp_path_factory.mktemp('ssl-kafka')
-    # Use py.path for compatibility with fixtures.py
     tmp = py.path.local(str(tmp)) # pylint: disable=no-member
     broker = KafkaFixture.instance(0, tmp_dir=tmp, transport='SSL')
     broker.start()
@@ -35,18 +34,16 @@ class TestSSLConnection:
         assert ssock.version() is not None
         ssock.close()
 
-    def test_admin_client_ssl(self, ssl_kafka):
-        """Test KafkaAdminClient over SSL."""
-        from kafka.admin import KafkaAdminClient, NewTopic
-        import time
+    def test_kafka_client_ssl(self, ssl_kafka):
+        """Test KafkaClient can connect and fetch metadata over SSL."""
+        from kafka.client_async import KafkaClient
 
-        admin = KafkaAdminClient(
+        client = KafkaClient(
             bootstrap_servers='localhost:%d' % ssl_kafka.port,
             security_protocol='SSL',
             ssl_cafile=os.path.join(ssl_kafka.ssl_dir, 'ca-cert'),
             ssl_check_hostname=False,
         )
-        topic = 'test-ssl-%d' % int(time.time())
-        admin.create_topics([NewTopic(topic, 1, 1)])
-        admin.delete_topics([topic])
-        admin.close()
+        client.poll(timeout_ms=5000)
+        assert client.cluster.brokers()
+        client.close()
