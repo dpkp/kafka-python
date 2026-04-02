@@ -3,6 +3,7 @@ import os
 import socket
 import ssl
 
+import py
 import pytest
 
 from test.integration.fixtures import KafkaFixture
@@ -15,8 +16,7 @@ log = logging.getLogger(__name__)
 def ssl_kafka(request, tmp_path_factory):
     tmp = tmp_path_factory.mktemp('ssl-kafka')
     # Use py.path for compatibility with fixtures.py
-    import py
-    tmp = py.path.local(str(tmp))
+    tmp = py.path.local(str(tmp)) # pylint: disable=no-member
     broker = KafkaFixture.instance(0, tmp_dir=tmp, transport='SSL')
     broker.start()
     yield broker
