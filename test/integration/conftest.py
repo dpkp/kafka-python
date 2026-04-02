@@ -76,11 +76,14 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     """Return a KafkaConsumer factory fixture"""
     consumer = None
 
-    def factory(topics=(topic,), **params):
+    def factory(topics=(topic,), **override_params):
         nonlocal consumer
-        params = client_params(kafka_broker, request.node.name,
-                                heartbeat_interval_ms=500, auto_offset_reset='earliest',
-                                **params)
+        params = {
+            'heartbeat_interval_ms': 500,
+            'auto_offset_reset': 'earliest',
+        }
+        params.update(override_params)
+        params = client_params(kafka_broker, request.node.name, **params)
         consumer = KafkaConsumer(*topics, **params)
         return consumer
 
