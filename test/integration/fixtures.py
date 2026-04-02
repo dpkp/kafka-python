@@ -11,14 +11,49 @@ import uuid
 
 import py
 
-from kafka import errors, KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
-from kafka.errors import InvalidReplicationFactorError, KafkaTimeoutError
-from kafka.protocol.new.admin import CreateTopicsRequest
-from kafka.protocol.new.metadata import MetadataRequest
+from kafka import errors, KafkaAdminClient
+from kafka.errors import InvalidReplicationFactorError
 from test.testutil import env_kafka_version, random_string
 from test.service import ExternalService, SpawnedService
 
 log = logging.getLogger(__name__)
+
+
+def create_topics(broker, topic_names, num_partitions=None, replication_factor=None):
+    """Create topics on the given broker fixture.
+
+    Uses KafkaAdminClient for Kafka 0.10.1+, falls back to CLI.
+    """
+    if num_partitions is None:
+        num_partitions = broker.partitions
+    if replication_factor is None:
+        replication_factor = broker.replicas
+    if env_kafka_version() >= (0, 10, 1, 0):
+        _create_topics_via_admin(broker, topic_names, num_partitions, replication_factor)
+    else:
+        for topic_name in topic_names:
+            # TODO: verify kafka-topics.sh support for early 0.8 brokers
+            broker._create_topic_via_cli(topic_name, num_partitions, replication_factor)
+
+
+def _create_topics_via_admin(broker, topic_names, num_partitions, replication_factor):
+    from kafka.admin import NewTopic
+    params = broker._enrich_client_params({}, client_id='topic_creator')
+    admin = KafkaAdminClient(**params)
+    try:
+        topics = [NewTopic(name, num_partitions, replication_factor) for name in topic_names]
+        admin.create_topics(topics)
+    except InvalidReplicationFactorError:
+        time.sleep(0.5)
+        topics = [NewTopic(name, num_partitions, replication_factor) for name in topic_names]
+        admin.create_topics(topics)
+    finally:
+        admin.close()
+
+
+def client_params(broker, client_id='client', **overrides):
+    """Build connection params for a client from a broker fixture."""
+    return broker._enrich_client_params(overrides, client_id='%s_%s' % (client_id, random_string(4)))
 
 
 def get_open_port():
@@ -313,10 +348,8 @@ class KafkaFixture(Fixture):
 
         if self.external:
             self.child = ExternalService(self.host, self.port)
-            self._client = next(self.get_clients(1, client_id='_internal_client'))
             self.running = True
         else:
-            self._client = None
             self.running = False
 
         self.sasl_config = ''
@@ -500,8 +533,6 @@ class KafkaFixture(Fixture):
         else:
             raise RuntimeError('Failed to start KafkaInstance before max_timeout')
 
-        self._client = next(self.get_clients(1, client_id='_internal_client'))
-
         self.out("Done!")
         self.running = True
 
@@ -603,82 +634,6 @@ class KafkaFixture(Fixture):
             raise RuntimeError("Failed to format log dirs!")
         return True
 
-    def _send_request(self, request, timeout=None):
-        def _failure(error):
-            raise error
-        retries = 10
-        while True:
-            node_id = self._client.least_loaded_node()
-            for connect_retry in range(40):
-                self._client.maybe_connect(node_id)
-                if self._client.connected(node_id):
-                    break
-                self._client.poll(timeout_ms=100)
-            else:
-                raise RuntimeError('Could not connect to broker with node id %s' % (node_id,))
-
-            try:
-                future = self._client.send(node_id, request)
-                future.error_on_callbacks = True
-                future.add_errback(_failure)
-                self._client.poll(future=future, timeout_ms=timeout)
-                if not future.is_done:
-                    raise KafkaTimeoutError()
-                return future.value
-            except Exception as exc:
-                time.sleep(1)
-                retries -= 1
-                if retries == 0:
-                    raise exc
-                else:
-                    pass # retry
-
-    def _create_topic(self, topic_name, num_partitions=None, replication_factor=None, timeout_ms=10000):
-        if num_partitions is None:
-            num_partitions = self.partitions
-        if replication_factor is None:
-            replication_factor = self.replicas
-
-        # Try different methods to create a topic, from the fastest to the slowest
-        if self.auto_create_topic and num_partitions == self.partitions and replication_factor == self.replicas:
-            self._create_topic_via_metadata(topic_name, timeout_ms)
-        elif env_kafka_version() >= (0, 10, 1, 0):
-            try:
-                self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
-            except InvalidReplicationFactorError:
-                # wait and try again
-                # in CI the brokers sometimes take a while to find themselves
-                time.sleep(0.5)
-                self._create_topic_via_admin_api(topic_name, num_partitions, replication_factor, timeout_ms)
-        else:
-            self._create_topic_via_cli(topic_name, num_partitions, replication_factor)
-
-    def _create_topic_via_metadata(self, topic_name, timeout_ms=10000):
-        timeout_at = time.time() + timeout_ms / 1000
-        while time.time() < timeout_at:
-            response = self._send_request(MetadataRequest[0]([topic_name]), timeout_ms)
-            if response.topics[0][0] == 0:
-                return
-            log.warning("Unable to create topic via MetadataRequest: err %d", response.topics[0][0])
-            time.sleep(1)
-        else:
-            raise RuntimeError('Unable to create topic via MetadataRequest')
-
-    def _create_topic_via_admin_api(self, topic_name, num_partitions, replication_factor, timeout_ms=10000):
-        version = self._client.api_version(CreateTopicsRequest, max_version=7)
-        topic = CreateTopicsRequest.CreatableTopic(
-            name=topic_name,
-            num_partitions=num_partitions,
-            replication_factor=replication_factor,
-            assignments=[],
-            configs=[]
-        )
-        request = CreateTopicsRequest[version](topics=[topic], timeout_ms=timeout_ms)
-        response = self._send_request(request, timeout=timeout_ms)
-        for topic_result in response.topics:
-            if topic_result.error_code != 0:
-                raise errors.for_code(topic_result.error_code)
-
     def _create_topic_via_cli(self, topic_name, num_partitions, replication_factor):
         args = self.run_script('kafka-topics.sh',
                                '--create',
@@ -726,10 +681,6 @@ class KafkaFixture(Fixture):
             raise RuntimeError("Failed to list topics!")
         return stdout.decode().splitlines(False)
 
-    def create_topics(self, topic_names, num_partitions=None, replication_factor=None):
-        for topic_name in topic_names:
-            self._create_topic(topic_name, num_partitions, replication_factor)
-
     def _enrich_client_params(self, params, **defaults):
         params = params.copy()
         for key, value in defaults.items():
@@ -746,34 +697,6 @@ class KafkaFixture(Fixture):
             params.setdefault('ssl_check_hostname', False)
         return params
 
-    @staticmethod
-    def _create_many_clients(cnt, cls, *args, **params):
-        client_id = params['client_id']
-        for _ in range(cnt):
-            params['client_id'] = '%s_%s' % (client_id, random_string(4))
-            yield cls(*args, **params)
-
-    def get_clients(self, cnt=1, **params):
-        params = self._enrich_client_params(params, client_id='client')
-        for client in self._create_many_clients(cnt, KafkaClient, **params):
-            yield client
-
-    def get_admin_clients(self, cnt, **params):
-        params = self._enrich_client_params(params, client_id='admin_client')
-        for client in self._create_many_clients(cnt, KafkaAdminClient, **params):
-            yield client
-
-    def get_consumers(self, cnt, topics, **params):
-        params = self._enrich_client_params(
-            params, client_id='consumer', heartbeat_interval_ms=500, auto_offset_reset='earliest'
-        )
-        for client in self._create_many_clients(cnt, KafkaConsumer, *topics, **params):
-            yield client
-
-    def get_producers(self, cnt, **params):
-        params = self._enrich_client_params(params, client_id='producer')
-        for client in self._create_many_clients(cnt, KafkaProducer, **params):
-            yield client
 
 
 def get_api_versions():

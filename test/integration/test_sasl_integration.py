@@ -4,9 +4,11 @@ import time
 
 import pytest
 
+from kafka import KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
 from kafka.protocol.new.metadata import MetadataRequest
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
+from test.integration.fixtures import client_params, create_topics
 
 
 @pytest.fixture(
@@ -32,15 +34,15 @@ def sasl_kafka(request, kafka_broker_factory):
 
 def test_admin(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
-    admin, = sasl_kafka.get_admin_clients(1)
+    admin = KafkaAdminClient(**client_params(sasl_kafka, 'admin'))
     admin.create_topics([NewTopic(topic_name, 1, 1)])
     assert topic_name in sasl_kafka.get_topic_names()
 
 
 def test_produce_and_consume(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
-    sasl_kafka.create_topics([topic_name], num_partitions=2)
-    producer, = sasl_kafka.get_producers(1)
+    create_topics(sasl_kafka, [topic_name], num_partitions=2)
+    producer = KafkaProducer(**client_params(sasl_kafka, 'producer'))
 
     messages_and_futures = []  # [(message, produce_future),]
     for i in range(100):
@@ -52,7 +54,7 @@ def test_produce_and_consume(request, sasl_kafka):
     for (msg, f) in messages_and_futures:
         assert f.succeeded()
 
-    consumer, = sasl_kafka.get_consumers(1, [topic_name])
+    consumer = KafkaConsumer(topic_name, **client_params(sasl_kafka, 'consumer', auto_offset_reset='earliest'))
     messages = {0: [], 1: []}
     for i, message in enumerate(consumer, 1):
         logging.debug("Consumed message %s", repr(message))
@@ -66,9 +68,9 @@ def test_produce_and_consume(request, sasl_kafka):
 
 def test_client(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
-    sasl_kafka.create_topics([topic_name], num_partitions=1)
+    create_topics(sasl_kafka, [topic_name], num_partitions=1)
 
-    client, = sasl_kafka.get_clients(1)
+    client = KafkaClient(**client_params(sasl_kafka, 'client'))
     request = MetadataRequest(topics=None, version=1)
     timeout_at = time.time() + 1
     while not client.is_ready(0):
