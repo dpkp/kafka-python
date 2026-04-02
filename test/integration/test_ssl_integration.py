@@ -23,6 +23,7 @@ def ssl_kafka(request, tmp_path_factory):
     broker.close()
 
 
+@pytest.mark.skipif(env_kafka_version() < (0, 9), reason="SSL support requires broker >=0.9")
 class TestSSLConnection:
     def test_ssl_handshake(self, ssl_kafka):
         """Verify raw SSL handshake works with the broker."""

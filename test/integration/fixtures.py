@@ -297,7 +297,7 @@ class KafkaFixture(Fixture):
             self.scram_pattern = r"Replayed UserScramCredentialRecord creating new entry for %s" % (self.broker_user,)
 
         if env_kafka_version() < (0, 9):
-            assert not self.ssl_enabled, 'Kafka broker version %s does not support SSL' % env_kafka_version()
+            assert not self.ssl_enabled, 'Kafka broker version %s does not support SSL' % (env_kafka_version(),)
 
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
