@@ -288,6 +288,9 @@ class KafkaFixture(Fixture):
             self.start_pattern = r"\[KafkaRaftServer nodeId=%d\] Kafka Server started" % (broker_id,)
             self.scram_pattern = r"Replayed UserScramCredentialRecord creating new entry for %s" % (self.broker_user,)
 
+        if env_kafka_version() < (0, 9):
+            assert not self.ssl_enabled, 'Kafka broker version %s does not support SSL' % env_kafka_version()
+
         self.zookeeper = zookeeper
         self.zk_chroot = zk_chroot
         # Add the attributes below for the template binding
