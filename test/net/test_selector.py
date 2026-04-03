@@ -51,7 +51,7 @@ class TestInitializeCoro:
         c = coro()
         result = _initialize_coro(c)
         assert result is c
-        c.close()
+        c.close() # pylint: disable-msg=no-member
 
     def test_coroutine_function(self):
         async def coro():
