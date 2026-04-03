@@ -8,8 +8,8 @@ import time
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.new.consumer import FetchRequest
-from kafka.protocol.new.consumer import (
+from kafka.protocol.consumer import FetchRequest
+from kafka.protocol.consumer import (
     ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
 )
 from kafka.record import MemoryRecords

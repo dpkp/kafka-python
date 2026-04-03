@@ -10,7 +10,7 @@ from kafka.coordinator.assignors.abstract import ConsumerProtocolAssignment
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-from kafka.protocol.new.consumer import JoinGroupResponse
+from kafka.protocol.consumer import JoinGroupResponse
 
 
 @pytest.fixture()

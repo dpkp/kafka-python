@@ -6,8 +6,8 @@ import logging
 import threading
 
 import kafka.errors as Errors
-from kafka.protocol.new.metadata import FindCoordinatorRequest
-from kafka.protocol.new.producer import (
+from kafka.protocol.metadata import FindCoordinatorRequest
+from kafka.protocol.producer import (
     AddOffsetsToTxnRequest, AddPartitionsToTxnRequest,
     EndTxnRequest, InitProducerIdRequest, TxnOffsetCommitRequest,
 )

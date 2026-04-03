@@ -1,4 +1,4 @@
-from kafka.protocol.new.api_data import ApiData
+from kafka.protocol.api_data import ApiData
 
 
 class StickyAssignorUserData(ApiData, load_json=__package__):

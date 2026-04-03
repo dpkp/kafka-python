@@ -9,7 +9,7 @@ import time
 from kafka import errors as Errors
 from kafka.conn import get_ip_port_afi
 from kafka.future import Future
-from kafka.protocol.new.metadata import MetadataRequest, MetadataResponse
+from kafka.protocol.metadata import MetadataRequest, MetadataResponse
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
 

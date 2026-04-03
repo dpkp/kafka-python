@@ -14,7 +14,7 @@ from kafka.consumer.subscription_state import SubscriptionState
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_version_data import BrokerVersionData
-from kafka.protocol.new.consumer import (
+from kafka.protocol.consumer import (
     FetchRequest, FetchResponse,
     ListOffsetsResponse, OffsetResetStrategy,
 )

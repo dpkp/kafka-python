@@ -1,6 +1,6 @@
 import abc
 
-from kafka.protocol.new.consumer.metadata import (
+from kafka.protocol.consumer.metadata import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
 

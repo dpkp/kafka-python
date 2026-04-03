@@ -7,7 +7,7 @@ from ..abstract import AbstractPartitionAssignor
 from .partition_movements import PartitionMovements
 from .sorted_set import SortedSet
 from .user_data import StickyAssignorUserData
-from kafka.protocol.new.consumer.metadata import (
+from kafka.protocol.consumer.metadata import (
     ConsumerProtocolSubscription,
     ConsumerProtocolAssignment,
 )

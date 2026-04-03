@@ -51,10 +51,10 @@ clean:
 	rm -rf dist
 
 stubs:
-	python -m kafka.protocol.new.generate_stubs
+	python -m kafka.protocol.generate_stubs
 
 check-stubs:
-	python -m kafka.protocol.new.generate_stubs --check
+	python -m kafka.protocol.generate_stubs --check
 
 bench-protocol:
 	python kafka/benchmarks/protocol_old_vs_new.py

@@ -2,10 +2,10 @@ from collections import namedtuple
 import logging
 
 import kafka.errors as Errors
-from kafka.protocol.new.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
-from kafka.protocol.new.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest
-from kafka.protocol.new.metadata import FindCoordinatorRequest, MetadataRequest
-from kafka.protocol.new.producer import ProduceRequest
+from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
+from kafka.protocol.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest
+from kafka.protocol.metadata import FindCoordinatorRequest, MetadataRequest
+from kafka.protocol.producer import ProduceRequest
 
 log = logging.getLogger('kafka.protocol')
 
