@@ -2,6 +2,7 @@ from collections import deque
 import logging
 import selectors
 import socket
+import ssl
 import time
 
 import kafka.errors as Errors
@@ -115,7 +116,7 @@ class KafkaTCPTransport:
                 else:
                     recvd.append(data)
 
-            except (BlockingIOError, InterruptedError): #, SSLWantReadError, SSLWantWriteError):
+            except (BlockingIOError, InterruptedError):
                 break
             except BaseException as e:
                 log.exception('%s: Error receiving network data'
@@ -202,7 +203,7 @@ class KafkaTCPTransport:
                     sent_bytes = self._sock.send(next_chunk)
                     total_bytes += sent_bytes
                     next_chunk = next_chunk[sent_bytes:]
-                except (BlockingIOError, InterruptedError): # SSLWantReadError, SSLWantWriteError):
+                except (BlockingIOError, InterruptedError):
                     self._write_buffer.appendleft(next_chunk)
                     return total_bytes, err
                 except BaseException as e:
@@ -316,5 +317,72 @@ class KafkaTCPTransport:
         """
         return self.writelines(data)
 
+    async def handshake(self):
+        pass
+
     def __str__(self):
         return ("<KafkaTCPTransport [%s:%d]" % self.getPeer()[0:2]) + (" (closed)>" if self._closed else ">")
+
+
+class KafkaSSLTransport(KafkaTCPTransport):
+    def __init__(self, net, sock, ssl_context, server_hostname=None):
+        self._ssl_context = ssl_context
+        sock = ssl_context.wrap_socket(
+            sock, server_hostname=server_hostname, do_handshake_on_connect=False)
+        super().__init__(net, sock)
+
+    async def handshake(self):
+        while True:
+            try:
+                self._sock.do_handshake()
+                return
+            except ssl.SSLWantReadError:
+                await self._net.wait_read(self._sock)
+            except ssl.SSLWantWriteError:
+                await self._net.wait_write(self._sock)
+
+    def _sock_recv(self):
+        recvd = []
+        err = None
+        while True:
+            try:
+                data = self._sock.recv(4096)
+                if not data:
+                    log.error('%s: socket disconnected', self)
+                    err = Errors.KafkaConnectionError('socket disconnected')
+                    break
+                else:
+                    recvd.append(data)
+            except (BlockingIOError, InterruptedError,
+                    ssl.SSLWantReadError, ssl.SSLWantWriteError):
+                break
+            except BaseException as e:
+                log.exception('%s: Error receiving network data'
+                              ' closing socket', self)
+                err = Errors.KafkaConnectionError(e)
+                break
+        recvd_data = b''.join(recvd)
+        return recvd_data, err
+
+    def _sock_send(self):
+        total_bytes = 0
+        err = None
+        while self._write_buffer:
+            next_chunk = self._write_buffer.popleft()
+            while next_chunk:
+                try:
+                    sent_bytes = self._sock.send(next_chunk)
+                    total_bytes += sent_bytes
+                    next_chunk = next_chunk[sent_bytes:]
+                except (BlockingIOError, InterruptedError,
+                        ssl.SSLWantReadError, ssl.SSLWantWriteError):
+                    self._write_buffer.appendleft(next_chunk)
+                    return total_bytes, err
+                except BaseException as e:
+                    log.exception("%s: Error sending request data: %s", self, e)
+                    err = Errors.KafkaConnectionError(e)
+                    return total_bytes, err
+        return total_bytes, err
+
+    def __str__(self):
+        return ("<KafkaSSLTransport [%s:%d]" % self.getPeer()[0:2]) + (" (closed)>" if self._closed else ">")

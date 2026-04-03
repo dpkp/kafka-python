@@ -154,7 +154,7 @@ class KafkaConnection:
             try:
                 (req_correlation_id, future, sent_time, _timeout_at) = self.in_flight_requests.popleft()
             except IndexError:
-                return self.close(Errors.KafakConnectionError('Received response with no in-flight-requests!'))
+                return self.close(Errors.KafkaConnectionError('Received response with no in-flight-requests!'))
 
             if req_correlation_id != resp_correlation_id:
                 return self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))

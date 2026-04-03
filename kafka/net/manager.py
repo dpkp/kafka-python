@@ -2,11 +2,12 @@ import copy
 import logging
 import random
 import socket
+import ssl
 import time
 
 from .inet import create_connection
 from .connection import KafkaConnection
-from .transport import KafkaTCPTransport
+from .transport import KafkaSSLTransport, KafkaTCPTransport
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.future import Future
@@ -23,6 +24,14 @@ class KafkaConnectionManager:
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
         'max_in_flight_requests_per_connection': 5,
         'connections_max_idle_ms': 9 * 60 * 1000,
+        'security_protocol': 'PLAINTEXT',
+        'ssl_context': None,
+        'ssl_check_hostname': True,
+        'ssl_cafile': None,
+        'ssl_certfile': None,
+        'ssl_keyfile': None,
+        'ssl_password': None,
+        'ssl_crlfile': None,
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -112,6 +121,31 @@ class KafkaConnectionManager:
         log.debug('next idle close check in %d secs', next_idle_at - time.monotonic())
         self._net.call_at(next_idle_at, self.close_idle_connections)
 
+    @property
+    def ssl_enabled(self):
+        return self.config['security_protocol'] in ('SSL', 'SASL_SSL')
+
+    def _build_ssl_context(self):
+        if self.config['ssl_context'] is not None:
+            return self.config['ssl_context']
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.check_hostname = self.config['ssl_check_hostname']
+        if self.config['ssl_cafile']:
+            ctx.load_verify_locations(self.config['ssl_cafile'])
+        else:
+            ctx.load_default_certs()
+        if self.config['ssl_certfile']:
+            ctx.load_cert_chain(
+                certfile=self.config['ssl_certfile'],
+                keyfile=self.config['ssl_keyfile'],
+                password=self.config['ssl_password'],
+            )
+        if self.config['ssl_crlfile']:
+            ctx.load_verify_locations(crl=self.config['ssl_crlfile'])
+            ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+        return ctx
+
     async def _connect(self, node, conn):
         conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
         conn.close_future.add_errback(lambda _: self.cluster.request_update())
@@ -124,7 +158,20 @@ class KafkaConnectionManager:
             self.update_backoff(node.node_id)
             return
 
-        conn.connection_made(KafkaTCPTransport(self._net, sock))
+        if self.ssl_enabled:
+            hostname = node.host if self.config['ssl_check_hostname'] else None
+            transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(), hostname)
+        else:
+            transport = KafkaTCPTransport(self._net, sock)
+
+        try:
+            await transport.handshake()
+        except Exception as e:
+            conn.connection_lost(Errors.KafkaConnectionError('Handshake failed: %s' % e))
+            self.update_backoff(node.node_id)
+            return
+
+        conn.connection_made(transport)
 
         try:
             await conn.init_future
