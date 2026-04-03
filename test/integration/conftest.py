@@ -4,8 +4,9 @@ import uuid
 
 import pytest
 
+from kafka import KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
 from test.testutil import env_kafka_version, random_string
-from test.integration.fixtures import KafkaFixture, ZookeeperFixture
+from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_topics, client_params
 
 
 @pytest.fixture(scope="module")
@@ -55,10 +56,11 @@ def kafka_broker_factory():
             zk.close()
 
 
+
 @pytest.fixture
 def kafka_client(kafka_broker, request):
     """Return a KafkaClient fixture"""
-    (client,) = kafka_broker.get_clients(cnt=1, client_id='%s_client' % (request.node.name,))
+    client = KafkaClient(**client_params(kafka_broker, request.node.name))
     yield client
     client.close()
 
@@ -72,19 +74,23 @@ def kafka_consumer(kafka_consumer_factory):
 @pytest.fixture
 def kafka_consumer_factory(kafka_broker, topic, request):
     """Return a KafkaConsumer factory fixture"""
-    _consumer = [None]
+    consumer = None
 
-    def factory(topics=(topic,), **kafka_consumer_params):
-        params = {} if kafka_consumer_params is None else kafka_consumer_params.copy()
-        params.setdefault('client_id', 'consumer_%s' % (request.node.name,))
-        params.setdefault('auto_offset_reset', 'earliest')
-        _consumer[0] = next(kafka_broker.get_consumers(cnt=1, topics=list(topics), **params))
-        return _consumer[0]
+    def factory(topics=(topic,), **override_params):
+        nonlocal consumer
+        params = {
+            'heartbeat_interval_ms': 500,
+            'auto_offset_reset': 'earliest',
+        }
+        params.update(override_params)
+        params = client_params(kafka_broker, request.node.name, **params)
+        consumer = KafkaConsumer(*topics, **params)
+        return consumer
 
     yield factory
 
-    if _consumer[0]:
-        _consumer[0].close()
+    if consumer:
+        consumer.close()
 
 
 @pytest.fixture
@@ -95,19 +101,19 @@ def kafka_producer(kafka_producer_factory):
 
 @pytest.fixture
 def kafka_producer_factory(kafka_broker, request):
-    """Return a KafkaProduce factory fixture"""
-    _producer = [None]
+    """Return a KafkaProducer factory fixture"""
+    producer = None
 
-    def factory(**kafka_producer_params):
-        params = {} if kafka_producer_params is None else kafka_producer_params.copy()
-        params.setdefault('client_id', 'producer_%s' % (request.node.name,))
-        _producer[0] = next(kafka_broker.get_producers(cnt=1, **params))
-        return _producer[0]
+    def factory(**params):
+        nonlocal producer
+        params = client_params(kafka_broker, request.node.name, **params)
+        producer = KafkaProducer(**params)
+        return producer
 
     yield factory
 
-    if _producer[0]:
-        _producer[0].close()
+    if producer:
+        producer.close()
 
 
 @pytest.fixture
@@ -119,24 +125,25 @@ def kafka_admin_client(kafka_admin_client_factory):
 @pytest.fixture
 def kafka_admin_client_factory(kafka_broker):
     """Return a KafkaAdminClient factory fixture"""
-    _admin_client = [None]
+    admin_client = None
 
-    def factory(**kafka_admin_client_params):
-        params = {} if kafka_admin_client_params is None else kafka_admin_client_params.copy()
-        _admin_client[0] = next(kafka_broker.get_admin_clients(cnt=1, **params))
-        return _admin_client[0]
+    def factory(**params):
+        nonlocal admin_client
+        params = client_params(kafka_broker, 'admin', **params)
+        admin_client = KafkaAdminClient(**params)
+        return admin_client
 
     yield factory
 
-    if _admin_client[0]:
-        _admin_client[0].close()
+    if admin_client:
+        admin_client.close()
 
 
 @pytest.fixture
 def topic(kafka_broker, request):
     """Return a topic fixture"""
     topic_name = '%s_%s' % (request.node.name, random_string(10))
-    kafka_broker.create_topics([topic_name])
+    create_topics(kafka_broker, [topic_name])
     return topic_name
 
 

@@ -17,6 +17,7 @@ from kafka.errors import (
 )
 from kafka.structs import TopicPartition
 from test.testutil import env_kafka_version, random_string
+from test.integration.fixtures import create_topics
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="ACL features require broker >=0.11")
@@ -329,7 +330,7 @@ def test_delete_consumergroups_with_errors(kafka_admin_client, kafka_consumer_fa
 def _topic2(kafka_broker, request):
     """Same as `topic` fixture, but a different name if you need to topics."""
     topic_name = '%s_%s' % (request.node.name, random_string(10))
-    kafka_broker.create_topics([topic_name])
+    create_topics(kafka_broker, [topic_name])
     return topic_name
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Delete records requires broker >=0.11.0")
