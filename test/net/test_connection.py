@@ -217,3 +217,143 @@ class TestKafkaConnectionTimeout:
         timeout_at = connection._timeout_at(now=now, timeout_ms=5000)
         expected = now + 5.0
         assert abs(timeout_at - expected) < 0.001
+
+
+class TestKafkaConnectionSasl:
+    def test_sasl_enabled(self, net):
+        conn = KafkaConnection(net, node_id='test', security_protocol='SASL_PLAINTEXT')
+        assert conn.sasl_enabled
+
+    def test_sasl_not_enabled_plaintext(self, connection):
+        assert not connection.sasl_enabled
+
+    def test_sasl_not_enabled_ssl(self, net):
+        conn = KafkaConnection(net, node_id='test', security_protocol='SSL')
+        assert not conn.sasl_enabled
+
+    def test_sasl_enabled_sasl_ssl(self, net):
+        conn = KafkaConnection(net, node_id='test', security_protocol='SASL_SSL')
+        assert conn.sasl_enabled
+
+    def test_sasl_authenticate_handshake_error(self, net):
+        conn = KafkaConnection(net, node_id='test',
+                               security_protocol='SASL_PLAINTEXT',
+                               sasl_mechanism='PLAIN')
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        from kafka.protocol.broker_version_data import BrokerVersionData
+        from kafka.protocol.sasl import SaslHandshakeRequest
+        api_versions = {SaslHandshakeRequest[0].API_KEY: (0, 1)}
+        conn.broker_version_data = BrokerVersionData(api_versions=api_versions)
+
+        handshake_response = MagicMock()
+        handshake_response.error_code = 33  # UnsupportedSaslMechanismError
+        handshake_response.mechanisms = ['GSSAPI']
+
+        f = Future()
+        f.success(handshake_response)
+        conn._send_request = MagicMock(return_value=f)
+
+        net.run_until_done(conn._sasl_authenticate())
+        transport.abort.assert_called_once()
+
+    def test_sasl_authenticate_mechanism_not_supported(self, net):
+        conn = KafkaConnection(net, node_id='test',
+                               security_protocol='SASL_PLAINTEXT',
+                               sasl_mechanism='PLAIN')
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        from kafka.protocol.broker_version_data import BrokerVersionData
+        from kafka.protocol.sasl import SaslHandshakeRequest
+        api_versions = {SaslHandshakeRequest[0].API_KEY: (0, 1)}
+        conn.broker_version_data = BrokerVersionData(api_versions=api_versions)
+
+        handshake_response = MagicMock()
+        handshake_response.error_code = 0
+        handshake_response.mechanisms = ['GSSAPI', 'SCRAM-SHA-256']
+
+        f = Future()
+        f.success(handshake_response)
+        conn._send_request = MagicMock(return_value=f)
+
+        net.run_until_done(conn._sasl_authenticate())
+        transport.abort.assert_called_once()
+
+    def test_sasl_authenticate_success(self, net):
+        conn = KafkaConnection(net, node_id='test',
+                               security_protocol='SASL_PLAINTEXT',
+                               sasl_mechanism='PLAIN',
+                               sasl_plain_username='user',
+                               sasl_plain_password='pass')
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        from kafka.protocol.broker_version_data import BrokerVersionData
+        from kafka.protocol.sasl import SaslHandshakeRequest
+        api_versions = {SaslHandshakeRequest[0].API_KEY: (0, 1)}
+        conn.broker_version_data = BrokerVersionData(api_versions=api_versions)
+
+        # Handshake response
+        handshake_response = MagicMock()
+        handshake_response.error_code = 0
+        handshake_response.mechanisms = ['PLAIN']
+
+        # Auth response
+        auth_response = MagicMock()
+        auth_response.error_code = 0
+        auth_response.auth_bytes = b''
+
+        responses = iter([handshake_response, auth_response])
+        def mock_send_request(request):
+            f = Future()
+            f.success(next(responses))
+            return f
+        conn._send_request = mock_send_request
+
+        net.run_until_done(conn._sasl_authenticate())
+        # Should not have closed -- auth succeeded
+        assert conn.initializing  # still initializing, _init_complete not called by _sasl_authenticate
+
+    def test_sasl_authenticate_auth_failure(self, net):
+        conn = KafkaConnection(net, node_id='test',
+                               security_protocol='SASL_PLAINTEXT',
+                               sasl_mechanism='PLAIN',
+                               sasl_plain_username='user',
+                               sasl_plain_password='wrong')
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        from kafka.protocol.broker_version_data import BrokerVersionData
+        from kafka.protocol.sasl import SaslHandshakeRequest
+        api_versions = {SaslHandshakeRequest[0].API_KEY: (0, 1)}
+        conn.broker_version_data = BrokerVersionData(api_versions=api_versions)
+
+        # Handshake succeeds
+        handshake_response = MagicMock()
+        handshake_response.error_code = 0
+        handshake_response.mechanisms = ['PLAIN']
+
+        # Auth fails
+        auth_response = MagicMock()
+        auth_response.error_code = 58  # SaslAuthenticationFailedError
+        auth_response.error_message = 'Authentication failed'
+
+        responses = iter([handshake_response, auth_response])
+        def mock_send_request(request):
+            f = Future()
+            f.success(next(responses))
+            return f
+        conn._send_request = mock_send_request
+
+        net.run_until_done(conn._sasl_authenticate())
+        transport.abort.assert_called_once()
