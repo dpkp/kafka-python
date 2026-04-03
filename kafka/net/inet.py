@@ -3,41 +3,47 @@ import logging
 import socket
 
 import kafka.errors as Errors
+from kafka.socks5_wrapper import Socks5Wrapper
 
 
 log = logging.getLogger(__name__)
 
 
-async def create_connection(net, host, port, socket_options=()):
+async def create_connection(net, host, port, socket_options=(), socks5_proxy=None):
     """Connect to host:port; raises KafkaConnectionError on failure"""
+    if socks5_proxy and Socks5Wrapper.use_remote_lookup(socks5_proxy):
+        addrs = [(socket.AF_UNSPEC, socket.SOCK_STREAM, 0, '', (host, port))]
+    else:
+        addrs = dns_lookup(host, port)
+
     exceptions = [Errors.KafkaConnectionError('DNS Resolution failure')]
-    for res in dns_lookup(host, port):
+    for res in addrs:
         af, _socktype, _proto, _canonname, sa = res
-        # TODO: socks5 proxy
         try:
-            sock = socket.socket(af, socket.SOCK_STREAM)
+            proxy = Socks5Wrapper(socks5_proxy, af) if socks5_proxy else None
+            sock = (proxy or socket).socket(af, socket.SOCK_STREAM)
+            sock.setblocking(False)
             for option in socket_options:
                 sock.setsockopt(*option)
-            sock.setblocking(False)
+            sock = await connect_sock(net, sock, sa, proxy=proxy)
         except (socket.error, OSError) as e:
-            exceptions.append(Errors.KafkaConnectionError('unable to initialize socket object: %s' % (e,)))
+            exceptions.append(Errors.KafkaConnectionError('unable to connect: %s' % (e,)))
             continue
-        try:
-            sock = await connect_sock(net, sock, sa)
         except Errors.KafkaConnectionError as e:
             exceptions.append(e)
+            continue
         else:
-            exceptions = []
             return sock
-    else:
-        raise exceptions[-1]
+    raise exceptions[-1]
 
 
-async def connect_sock(net, sock, sockaddr):
+async def connect_sock(net, sock, sockaddr, proxy=None):
     while True:
         ret = None
         try:
-            ret = sock.connect_ex(sockaddr)
+            ret = (proxy or sock).connect_ex(sockaddr)
+        except BlockingIOError:
+            ret = errno.EWOULDBLOCK
         except socket.error as err:
             ret = err.errno
 

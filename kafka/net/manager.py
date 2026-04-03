@@ -39,6 +39,7 @@ class KafkaConnectionManager:
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'socks5_proxy': None,
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -159,7 +160,8 @@ class KafkaConnectionManager:
 
         try:
             sock = await create_connection(self._net, node.host, node.port,
-                                           self.config['socket_options'])
+                                           self.config['socket_options'],
+                                           socks5_proxy=self.config['socks5_proxy'])
         except Errors.KafkaConnectionError as e:
             conn.connection_lost(e)
             self.update_backoff(node.node_id)
