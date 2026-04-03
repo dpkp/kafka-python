@@ -82,6 +82,13 @@ class Future:
         self.add_errback(future.failure)
         return self
 
+    def __await__(self):
+        if not self.is_done:
+            yield self
+        if self.exception:
+            raise self.exception
+        return self.value
+
     def _call_backs(self, back_type, backs, value):
         for f in backs:
             try:
