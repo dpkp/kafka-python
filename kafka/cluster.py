@@ -133,7 +133,7 @@ class ClusterMetadata:
         Returns:
             set: {MetadataResponseBroker, ...}
         """
-        return list(self._brokers.values()) or list(self._bootstrap_brokers.values())
+        return list(self._brokers.values())
 
     def bootstrap_brokers(self):
         return list(self._bootstrap_brokers.values())
