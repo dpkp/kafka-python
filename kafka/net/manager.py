@@ -32,6 +32,13 @@ class KafkaConnectionManager:
         'ssl_keyfile': None,
         'ssl_password': None,
         'ssl_crlfile': None,
+        'sasl_mechanism': None,
+        'sasl_plain_username': None,
+        'sasl_plain_password': None,
+        'sasl_kerberos_name': None,
+        'sasl_kerberos_service_name': 'kafka',
+        'sasl_kerberos_domain_name': None,
+        'sasl_oauth_token_provider': None,
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)

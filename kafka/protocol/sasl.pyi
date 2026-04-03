@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.api_data import ApiData
 
-__all__ = ['SaslHandshakeRequest', 'SaslHandshakeResponse', 'SaslAuthenticateRequest', 'SaslAuthenticateResponse']
+__all__ = ['SaslHandshakeRequest', 'SaslHandshakeResponse', 'SaslAuthenticateRequest', 'SaslAuthenticateResponse', 'SaslBytesRequest', 'SaslBytesResponse']
 
 class SaslHandshakeRequest(ApiMessage):
     mechanism: str
@@ -118,3 +118,9 @@ class SaslAuthenticateResponse(ApiMessage):
     def is_request(cls) -> bool: ...
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class SaslBytesRequest:
+    API_VERSION: int
+
+class SaslBytesResponse:
+    ...
