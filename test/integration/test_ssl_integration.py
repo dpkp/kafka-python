@@ -45,6 +45,5 @@ class TestSSLConnection:
             ssl_cafile=os.path.join(ssl_kafka.ssl_dir, 'ca-cert'),
             ssl_check_hostname=False,
         )
-        client.poll(timeout_ms=5000)
-        assert client.cluster.brokers()
+        assert client.broker_version_data
         client.close()

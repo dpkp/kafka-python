@@ -815,7 +815,7 @@ class KafkaClient:
         Returns:
             node_id or None if no suitable node was found
         """
-        nodes = [broker.node_id for broker in self.cluster.brokers()]
+        nodes = [broker.node_id for broker in self.cluster.brokers() or self.cluster.bootstrap_brokers()]
         random.shuffle(nodes)
 
         inflight = float('inf')
@@ -851,7 +851,7 @@ class KafkaClient:
         Returns:
            float: delay_ms
         """
-        return min([self._refresh_delay_ms(broker.node_id) for broker in self.cluster.brokers()])
+        return min([self._refresh_delay_ms(broker.node_id) for broker in self.cluster.brokers() or self.cluster.bootstrap_brokers()])
 
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
