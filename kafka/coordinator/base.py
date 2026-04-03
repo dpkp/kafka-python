@@ -11,8 +11,8 @@ from kafka import errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.new.metadata import FindCoordinatorRequest
-from kafka.protocol.new.consumer import (
+from kafka.protocol.metadata import FindCoordinatorRequest
+from kafka.protocol.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
     DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
 )

@@ -8,14 +8,14 @@ from kafka.coordinator.base import BaseCoordinator, Generation
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-from kafka.protocol.new.consumer.metadata import (
+from kafka.protocol.consumer.metadata import (
     ConsumerProtocolType, ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.new.consumer import OffsetCommitRequest, OffsetFetchRequest
+from kafka.protocol.consumer import OffsetCommitRequest, OffsetFetchRequest
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import Timer, WeakMethod
 

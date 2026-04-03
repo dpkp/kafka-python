@@ -12,10 +12,10 @@ from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VE
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
 from kafka.protocol.broker_version_data import BrokerVersionData, VERSION_CHECKS
-from kafka.protocol.new.admin import ListGroupsResponse
-from kafka.protocol.new.consumer import HeartbeatResponse
-from kafka.protocol.new.metadata import MetadataRequest, ApiVersionsRequest, ApiVersionsResponse
-from kafka.protocol.new.producer import ProduceRequest
+from kafka.protocol.admin import ListGroupsResponse
+from kafka.protocol.consumer import HeartbeatResponse
+from kafka.protocol.metadata import MetadataRequest, ApiVersionsRequest, ApiVersionsResponse
+from kafka.protocol.producer import ProduceRequest
 from kafka.version import __version__
 
 import kafka.errors as Errors

@@ -10,7 +10,7 @@ from . import ConfigResourceType
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType, valid_acl_operations
 from kafka.client_async import KafkaClient, selectors
-from kafka.protocol.new.consumer.metadata import (
+from kafka.protocol.consumer.metadata import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment, ConsumerProtocolType,
 )
 import kafka.errors as Errors
@@ -19,12 +19,12 @@ from kafka.errors import (
     UnrecognizedBrokerVersion, IllegalArgumentError)
 from kafka.future import Future
 from kafka.metrics import MetricConfig, Metrics
-from kafka.protocol.new.admin import (
+from kafka.protocol.admin import (
     CreateTopicsRequest, DeleteTopicsRequest, DescribeConfigsRequest, AlterConfigsRequest, CreatePartitionsRequest,
     ListGroupsRequest, DescribeGroupsRequest, DescribeAclsRequest, CreateAclsRequest, DeleteAclsRequest,
     DeleteGroupsRequest, DeleteRecordsRequest, DescribeLogDirsRequest, ElectLeadersRequest, ElectionType)
-from kafka.protocol.new.consumer import OffsetFetchRequest
-from kafka.protocol.new.metadata import MetadataRequest, FindCoordinatorRequest
+from kafka.protocol.consumer import OffsetFetchRequest
+from kafka.protocol.metadata import MetadataRequest, FindCoordinatorRequest
 from kafka.structs import TopicPartition, OffsetAndMetadata, MemberInformation, GroupInformation
 from kafka.version import __version__
 

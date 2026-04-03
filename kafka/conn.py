@@ -11,11 +11,11 @@ import time
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.new.metadata import ApiVersionsRequest
+from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.broker_version_data import BrokerVersionData, VERSION_CHECKS
 from kafka.protocol.parser import KafkaProtocol
-from kafka.protocol.new.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
-from kafka.protocol.new.schemas.fields.codecs import Int32
+from kafka.protocol.sasl import SaslAuthenticateRequest, SaslHandshakeRequest
+from kafka.protocol.schemas.fields.codecs import Int32
 from kafka.sasl import get_sasl_mechanism
 from kafka.socks5_wrapper import Socks5Wrapper
 from kafka.version import __version__

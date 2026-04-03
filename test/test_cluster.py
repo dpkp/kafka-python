@@ -3,7 +3,7 @@
 import socket
 
 from kafka.cluster import ClusterMetadata, collect_hosts
-from kafka.protocol.new.metadata import MetadataResponse
+from kafka.protocol.metadata import MetadataResponse
 
 Broker = MetadataResponse.MetadataResponseBroker
 Topic = MetadataResponse.MetadataResponseTopic

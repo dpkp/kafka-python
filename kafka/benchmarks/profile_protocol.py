@@ -19,8 +19,8 @@ import pstats
 import sys
 import time
 
-from kafka.protocol.new.metadata.metadata import MetadataResponse as NewMetadataResp
-from kafka.protocol.new.consumer.fetch import FetchResponse as NewFetchResp
+from kafka.protocol.metadata.metadata import MetadataResponse as NewMetadataResp
+from kafka.protocol.consumer.fetch import FetchResponse as NewFetchResp
 
 # === Test data (same as benchmark script) ===
 _BROKERS = [(i, 'broker-%d.example.com' % i, 9092 + i) for i in range(3)]

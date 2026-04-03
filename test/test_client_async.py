@@ -8,8 +8,8 @@ from kafka.client_async import KafkaClient, IdleConnectionManager
 from kafka.conn import ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.protocol.new.metadata import MetadataRequest, MetadataResponse
-from kafka.protocol.new.producer import ProduceRequest
+from kafka.protocol.metadata import MetadataRequest, MetadataResponse
+from kafka.protocol.producer import ProduceRequest
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
-from kafka.protocol.new.consumer import OffsetResetStrategy
+from kafka.protocol.consumer import OffsetResetStrategy
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import Timer
 from kafka.version import __version__

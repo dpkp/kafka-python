@@ -35,15 +35,15 @@ from kafka.protocol.old.produce import (
 )
 
 # === New system imports ===
-from kafka.protocol.new.metadata.api_versions import (
+from kafka.protocol.metadata.api_versions import (
     ApiVersionsRequest as NewApiVersionsReq,
     ApiVersionsResponse as NewApiVersionsResp,
 )
-from kafka.protocol.new.consumer.fetch import (
+from kafka.protocol.consumer.fetch import (
     FetchRequest as NewFetchReq,
     FetchResponse as NewFetchResp,
 )
-from kafka.protocol.new.producer.produce import (
+from kafka.protocol.producer.produce import (
     ProduceRequest as NewProduceReq,
     ProduceResponse as NewProduceResp,
 )

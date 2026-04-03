@@ -13,7 +13,7 @@ from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.producer.kafka import KafkaProducer
-from kafka.protocol.new.producer import ProduceRequest
+from kafka.protocol.producer import ProduceRequest
 from kafka.producer.future import FutureRecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.producer.record_accumulator import RecordAccumulator

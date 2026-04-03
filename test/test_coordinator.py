@@ -16,12 +16,12 @@ from kafka.coordinator.consumer import ConsumerCoordinator
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.broker_version_data import BrokerVersionData
-from kafka.protocol.new.consumer import (
+from kafka.protocol.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
     JoinGroupResponse,
 )
-from kafka.protocol.new.metadata import MetadataResponse
+from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import WeakMethod
 
