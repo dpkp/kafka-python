@@ -8,10 +8,10 @@ import pytest
 
 from kafka.conn import BrokerConnection, ConnectionStates
 from kafka.future import Future
-from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError, VERSION_CHECKS
+from kafka.conn import BrokerConnection, ConnectionStates, SSLWantWriteError
 from kafka.metrics.metrics import Metrics
 from kafka.metrics.stats.sensor import Sensor
-from kafka.protocol.broker_version_data import BrokerVersionData, VERSION_CHECKS
+from kafka.protocol.broker_version_data import BrokerVersionData, BROKER_API_VERSIONS, VERSION_CHECKS
 from kafka.protocol.admin import ListGroupsResponse
 from kafka.protocol.consumer import HeartbeatResponse
 from kafka.protocol.metadata import MetadataRequest, ApiVersionsRequest, ApiVersionsResponse
@@ -131,13 +131,14 @@ def test_api_versions_unsupported_versions(_socket, mocker):
 
     # If we sent a higher-than-supported version, the broker sends back the min/max
     # We should skip to the max supported for our next try.
+    # Note: this only happens for brokers >= 2.4
     api_versions_error = ApiVersionsResponse(
         version=0,
         error_code=Errors.UnsupportedVersionError.errno,
-        api_keys=[(ApiVersionsRequest.API_KEY, 0, 1)]
+        api_keys=[(ApiVersionsRequest.API_KEY, 0, 3)]
     )
     conn.recv(responses=[(1, api_versions_error)], resolve_futures=True)
-    assert conn._api_versions_idx == 1
+    assert conn._api_versions_idx == 3
     assert conn._api_versions_future is None
     assert conn.state is ConnectionStates.API_VERSIONS_SEND
 
@@ -145,18 +146,18 @@ def test_api_versions_unsupported_versions(_socket, mocker):
     assert conn.connecting() is True
     assert conn.state is ConnectionStates.API_VERSIONS_RECV
     conn._send.assert_called_with(
-        ApiVersionsRequest(version=1, client_software_name='kafka-python', client_software_version=__version__),
+        ApiVersionsRequest(version=3, client_software_name='kafka-python', client_software_version=__version__),
         blocking=True,
         request_timeout_ms=500.0
     )
 
     api_versions_response = ApiVersionsResponse(
-        version=1, error_code=0,
-        api_keys=[(ApiVersionsRequest.API_KEY, 0, 1)]
+        version=3, error_code=0,
+        api_keys=[(key, *vals) for key, vals in BROKER_API_VERSIONS[(2, 4)].items()],
     )
     conn.recv(responses=[(2, api_versions_response)], resolve_futures=True)
-    assert conn.broker_version_data.broker_version == (0, 10, 0)
-    assert conn.broker_version_data.api_versions == {ApiVersionsRequest.API_KEY: (0, 1)}
+    assert conn.broker_version_data.broker_version == (2, 4)
+    assert conn.broker_version_data.api_versions == BROKER_API_VERSIONS[(2, 4)]
     assert conn.state is ConnectionStates.CONNECTED
 
     conn.close()
@@ -166,7 +167,72 @@ def test_api_versions_unsupported_versions(_socket, mocker):
     conn.connect()
     assert conn.state is ConnectionStates.API_VERSIONS_RECV
     conn._send.assert_called_with(
-        ApiVersionsRequest(version=1, client_software_name='kafka-python', client_software_version=__version__),
+        ApiVersionsRequest(version=3, client_software_name='kafka-python', client_software_version=__version__),
+        blocking=True,
+        request_timeout_ms=1000.0
+    )
+
+
+def test_api_versions_unsupported_versions_empty(_socket, mocker):
+    conn = BrokerConnection('localhost', 9092, socket.AF_INET)
+    mocker.patch.object(conn, 'send_pending_requests')
+    mocker.patch.object(conn, 'connection_delay', return_value=0)
+    mocker.spy(conn, '_send')
+    assert conn._api_versions_future is None
+    conn.connect()
+    assert conn._api_versions_future is not None
+    assert conn.connecting() is True
+    assert conn.state is ConnectionStates.API_VERSIONS_RECV
+    conn._send.assert_called_with(
+        ApiVersionsRequest(version=ApiVersionsRequest.max_version, client_software_name='kafka-python', client_software_version=__version__),
+        blocking=True,
+        request_timeout_ms=1000.0
+    )
+    send_call_count = conn._send.call_count
+
+    assert conn._try_api_versions_check() is False
+    assert conn._send.call_count == send_call_count
+    assert conn.connecting() is True
+    assert conn.state is ConnectionStates.API_VERSIONS_RECV
+
+    # For broker versions < 2.4, the UnsupportedVersionError does not include api_keys
+    # We should fallback to v0
+    api_versions_error = ApiVersionsResponse(
+        version=0,
+        error_code=Errors.UnsupportedVersionError.errno,
+        api_keys=[]
+    )
+    conn.recv(responses=[(1, api_versions_error)], resolve_futures=True)
+    assert conn._api_versions_idx == 0
+    assert conn._api_versions_future is None
+    assert conn.state is ConnectionStates.API_VERSIONS_SEND
+
+    assert conn._try_api_versions_check() is False
+    assert conn.connecting() is True
+    assert conn.state is ConnectionStates.API_VERSIONS_RECV
+    conn._send.assert_called_with(
+        ApiVersionsRequest(version=0, client_software_name='kafka-python', client_software_version=__version__),
+        blocking=True,
+        request_timeout_ms=500.0
+    )
+
+    api_versions_response = ApiVersionsResponse(
+        version=0, error_code=0,
+        api_keys=[(key, *vals) for key, vals in BROKER_API_VERSIONS[(2, 0)].items()],
+    )
+    conn.recv(responses=[(2, api_versions_response)], resolve_futures=True)
+    assert conn.broker_version_data.broker_version == (2, 0)
+    assert conn.broker_version_data.api_versions == BROKER_API_VERSIONS[(2, 0)]
+    assert conn.state is ConnectionStates.CONNECTED
+
+    conn.close()
+    assert conn.state is ConnectionStates.DISCONNECTED
+
+    # Reconnect uses the max supported api versions check (v2 for 2.0 brokers)
+    conn.connect()
+    assert conn.state is ConnectionStates.API_VERSIONS_RECV
+    conn._send.assert_called_with(
+        ApiVersionsRequest(version=2, client_software_name='kafka-python', client_software_version=__version__),
         blocking=True,
         request_timeout_ms=1000.0
     )
@@ -197,22 +263,6 @@ def test_api_versions_fallback(_socket, mocker):
     future = conn._api_versions_future
     assert not future.is_done
     conn.close(Errors.RequestTimedOutError())
-    assert future.failed()
-    assert future.exception == Errors.RequestTimedOutError()
-    assert conn._api_versions_idx == 0
-    assert conn._api_versions_future is None
-    assert conn.state is ConnectionStates.DISCONNECTED
-
-    conn.connect()
-    assert conn.connecting() is True
-    assert conn.state is ConnectionStates.API_VERSIONS_RECV
-    conn._send.assert_called_with(
-        ApiVersionsRequest(version=0, client_software_name='kafka-python', client_software_version=__version__),
-        blocking=True,
-        request_timeout_ms=500.0
-    )
-
-    conn.close(Errors.RequestTimedOutError())
     assert conn._api_versions_idx == None
     assert conn._api_versions_future is None
     assert conn._check_version_idx == 0
@@ -224,7 +274,7 @@ def test_api_versions_fallback(_socket, mocker):
     conn._send.assert_called_with(
         VERSION_CHECKS[0][1],
         blocking=True,
-        request_timeout_ms=250.0
+        request_timeout_ms=500.0
     )
 
     conn.recv(responses=[(1, ListGroupsResponse())], resolve_futures=True)
@@ -262,31 +312,12 @@ def test_api_versions_check_with_broker_version_data(_socket, mocker):
     assert conn.connecting() is True
     assert conn.state is ConnectionStates.API_VERSIONS_RECV
 
-    api_versions_error = ApiVersionsResponse(
-        version=0,
-        error_code=Errors.UnsupportedVersionError.errno,
-        api_keys=[(ApiVersionsRequest.API_KEY, 0, 1)]
-    )
-    conn.recv(responses=[(1, api_versions_error)], resolve_futures=True)
-    assert conn._api_versions_idx == 0
-    assert conn._api_versions_future is None
-    assert conn.state is ConnectionStates.API_VERSIONS_SEND
-
-    assert conn._try_api_versions_check() is False
-    assert conn.connecting() is True
-    assert conn.state is ConnectionStates.API_VERSIONS_RECV
-    conn._send.assert_called_with(
-        ApiVersionsRequest(version=0, client_software_name='kafka-python', client_software_version=__version__),
-        blocking=True,
-        request_timeout_ms=500.0
-    )
-
     future = conn._api_versions_future
     assert not future.is_done
     conn.close(Errors.RequestTimedOutError())
     assert future.failed()
     assert future.exception == Errors.RequestTimedOutError()
-    assert conn._api_versions_idx == 0
+    assert conn._api_versions_idx == 1
     assert conn._api_versions_future is None
     assert conn.state is ConnectionStates.DISCONNECTED
 
@@ -294,25 +325,40 @@ def test_api_versions_check_with_broker_version_data(_socket, mocker):
     assert conn.connecting() is True
     assert conn.state is ConnectionStates.API_VERSIONS_RECV
     conn._send.assert_called_with(
-        ApiVersionsRequest(version=0, client_software_name='kafka-python', client_software_version=__version__),
+        ApiVersionsRequest(version=1, client_software_name='kafka-python', client_software_version=__version__),
+        blocking=True,
+        request_timeout_ms=500.0
+    )
+    
+    # Even if we connect to a newer broker, we should still use the cached broker_version_data
+    api_versions_response = ApiVersionsResponse(
+        version=0, error_code=0,
+        api_keys=[(key, *vals) for key, vals in BROKER_API_VERSIONS[(2, 0)].items()],
+    )
+    conn.recv(responses=[(1, api_versions_response)], resolve_futures=True)
+    assert conn.broker_version_data.broker_version == (1, 0)
+    assert conn.broker_version_data.api_versions == BROKER_API_VERSIONS[(1, 0)]
+    assert conn.state is ConnectionStates.CONNECTED
+
+    conn.close()
+    conn.connect()
+    assert conn.connecting() is True
+    assert conn.state is ConnectionStates.API_VERSIONS_RECV
+    conn._send.assert_called_with(
+        ApiVersionsRequest(version=1, client_software_name='kafka-python', client_software_version=__version__),
         blocking=True,
         request_timeout_ms=250.0
     )
-
-    conn.close(Errors.RequestTimedOutError())
-    assert conn._api_versions_idx == 0
-    assert conn._api_versions_future is None
-    assert conn._check_version_idx is None
-    assert conn.state is ConnectionStates.DISCONNECTED
-
-    conn.connect()
-    assert conn.connecting() is True
-    assert conn.state is ConnectionStates.API_VERSIONS_RECV
-    conn._send.assert_called_with(
-        ApiVersionsRequest(version=0, client_software_name='kafka-python', client_software_version=__version__),
-        blocking=True,
-        request_timeout_ms=125.0
+    
+    # But if we connect to an older broker, we should use it instead of the cached broker_version_data
+    api_versions_response = ApiVersionsResponse(
+        version=0, error_code=0,
+        api_keys=[(key, *vals) for key, vals in BROKER_API_VERSIONS[(0, 11)].items()],
     )
+    conn.recv(responses=[(1, api_versions_response)], resolve_futures=True)
+    assert conn.broker_version_data.broker_version == (0, 11)
+    assert conn.broker_version_data.api_versions == BROKER_API_VERSIONS[(0, 11)]
+    assert conn.state is ConnectionStates.CONNECTED
 
 
 def test_connect_timeout(_socket, conn):

@@ -542,7 +542,7 @@ class BrokerConnection:
                 self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
                 return False
             else:
-                log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
+                log.debug('%s: Using pre-configured broker_version %s.', self, self.broker_version)
                 return True
 
         # Handle any immediate responses
@@ -563,14 +563,18 @@ class BrokerConnection:
             if error_type is Errors.UnsupportedVersionError:
                 future.failure(error_type())
                 self._api_versions_future = None
-                self._api_versions_idx -= 1
-                for api_version_data in response.api_keys:
-                    api_key, min_version, max_version = api_version_data[:3]
-                    # If broker provides a lower max_version, skip to that
-                    if api_key == response.API_KEY:
-                        self._api_versions_idx = min(self._api_versions_idx, max_version)
-                        break
-                if self._api_versions_idx >= 0:
+                # Look for fallback ApiVersionsRequest if needed
+                # Starting with 2.4, brokers return the max supported version in api_keys
+                # Prior to that, just use version 0.
+                if self._api_versions_idx > 0:
+                    for api_version_data in response.api_keys:
+                        api_key, min_version, max_version = api_version_data[:3]
+                        # If broker provides a lower max_version, skip to that
+                        if api_key == response.API_KEY:
+                            self._api_versions_idx = min(self._api_versions_idx, max_version)
+                            break
+                    else:
+                        self._api_versions_idx = 0
                     self.state = ConnectionStates.API_VERSIONS_SEND
                     self.config['state_change_callback'](self.node_id, self._sock, self)
                     return
@@ -580,19 +584,23 @@ class BrokerConnection:
             (api_version_data[0], (api_version_data[1], api_version_data[2]))
             for api_version_data in response.api_keys
         ])
-        self.broker_version_data = BrokerVersionData(api_versions=api_versions)
-        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version_data.broker_version)))
-        future.success(self.broker_version_data.broker_version)
+        discovered_bvd = BrokerVersionData(api_versions=api_versions)
+        if self.broker_version_data is None:
+            self.broker_version_data = discovered_bvd
+            log.info('%s: Broker version identified as %s.', self, '.'.join(map(str, self.broker_version_data.broker_version)))
+        elif discovered_bvd < self.broker_version_data:
+            log.warning('%s: Broker version identified as %s. Ignoring pre-configured broker_version %s.', self,
+                        discovered_bvd.broker_version, self.broker_version_data.broker_version)
+            self.broker_version_data = discovered_bvd
+        else:
+            log.debug('%s: Using pre-configured broker_version %s.', self, self.broker_version)
+        future.success(self.broker_version)
         self.connect()
 
     def _handle_api_versions_failure(self, future, ex):
         future.failure(ex)
-        # Modern brokers should not disconnect on unrecognized api-versions request,
-        # but in case they do we always want to try v0 as a fallback
-        if self._api_versions_idx > 0:
-            self._api_versions_idx = 0
         # If we have VERSION_CHECKS fallback enabled, disable api versions
-        elif self._check_version_idx is not None:
+        if self._check_version_idx is not None:
             self._api_versions_idx = None
         # Otherwise, we'll just keep repeating api versions request on reconnect
         # after failure connection is closed, so state should already be DISCONNECTED
