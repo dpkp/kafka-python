@@ -41,6 +41,7 @@ class KafkaConnectionManager:
         'sasl_oauth_token_provider': None,
         'socks5_proxy': None,
         'api_version': None,
+        'api_version_auto_timeout_ms': 2000,
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)

@@ -32,6 +32,7 @@ class KafkaConnection:
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'api_version_auto_timeout_ms': 2000,
     }
 
     def __init__(self, net, node_id=None, broker_version_data=None, **configs):
@@ -310,7 +311,7 @@ class KafkaConnection:
             self._throttle_time = 0
             self.unpause('throttle')
 
-    async def _check_version(self):
+    async def _check_version(self, timeout_ms=None):
         if self.broker_version_data is not None:
             try:
                 self._api_versions_idx = self.broker_version_data.api_version(ApiVersionsRequest)
@@ -319,7 +320,10 @@ class KafkaConnection:
                 self._init_complete()
                 return
 
-        while self._api_versions_idx >= 0:
+        if timeout_ms is not None:
+            timeout_ms = self.config['api_version_auto_timeout_ms']
+        timeout_at = self._timeout_at(timeout_ms=timeout_ms)
+        while timeout_at > time.monotonic():
             version = self._api_versions_idx
             request = ApiVersionsRequest(
                 version=version,
@@ -327,33 +331,34 @@ class KafkaConnection:
                 client_software_version=self.config['client_software_version'],
             )
             try:
-                response = await self._send_request(request)
+                response = await self._send_request(request, timeout_at=timeout_at)
             except Exception as exc:
                 self.close(exc)
                 return
 
             error_type = Errors.for_code(response.error_code)
-            if error_type is Errors.UnsupportedVersionError:
-                self._api_versions_idx -= 1
+            if error_type is Errors.NoError:
+                break
+            elif error_type is Errors.UnsupportedVersionError:
                 for api_version in response.api_keys:
                     if api_version.api_key == response.API_KEY:
                         self._api_versions_idx = min(self._api_versions_idx, api_version.max_version)
                         break
-            elif error_type is not Errors.NoError:
+                else:
+                    self._api_versions_idx = 0
+                continue
+            else:
                 self.close(error_type())
                 return
-            else:
-                api_versions = {api_version.api_key: (api_version.min_version, api_version.max_version)
-                                for api_version in response.api_keys}
-                self.broker_version_data = BrokerVersionData(api_versions=api_versions)
-                log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version)))
-                if self.sasl_enabled:
-                    await self._sasl_authenticate()
-                if self.initializing:
-                    self._init_complete()
-                return
 
-        self.close(Errors.KafkaConnectionError('Unable to determine broker version.'))
+        api_versions = {api_version.api_key: (api_version.min_version, api_version.max_version)
+                        for api_version in response.api_keys}
+        self.broker_version_data = BrokerVersionData(api_versions=api_versions)
+        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version)))
+        if self.sasl_enabled:
+            await self._sasl_authenticate()
+        if self.initializing:
+            self._init_complete()
 
     @property
     def sasl_enabled(self):
