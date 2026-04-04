@@ -1,5 +1,6 @@
 from collections import namedtuple
 import logging
+import functools
 
 import kafka.errors as Errors
 from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
@@ -10,6 +11,7 @@ from kafka.protocol.producer import ProduceRequest
 log = logging.getLogger('kafka.protocol')
 
 
+@functools.total_ordering
 class BrokerVersionData:
     __slots__ = ('broker_version', 'api_versions')
     def __init__(self, broker_version=None, api_versions=None):
@@ -94,6 +96,9 @@ class BrokerVersionData:
 
     def __eq__(self, other):
         return self.broker_version == other.broker_version and self.api_versions == other.api_versions
+
+    def __lt__(self, other):
+        return self.broker_version < other.broker_version
 
 
 def infer_broker_version_from_api_versions(api_versions):
