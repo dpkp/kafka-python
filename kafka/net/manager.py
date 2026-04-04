@@ -93,6 +93,10 @@ class KafkaConnectionManager:
             try:
                 response = await self.send(self.cluster.metadata_request(), node_id=bootstrap_broker.node_id)
                 self.cluster.update_metadata(response)
+                if not self.cluster.brokers():
+                    log.warning('Bootstrap metadata response has no brokers. Retrying.')
+                    await self._net.sleep(self.config['reconnect_backoff_ms'] / 1000)
+                    continue
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
                 future.success(True)
                 return
