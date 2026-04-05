@@ -162,19 +162,10 @@ class KafkaConnectionManager:
             ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         return ctx
 
-    async def _connect(self, node, conn):
-        conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
-        conn.close_future.add_errback(lambda _: self.cluster.request_update())
-
-        try:
-            sock = await create_connection(self._net, node.host, node.port,
-                                           self.config['socket_options'],
-                                           socks5_proxy=self.config['socks5_proxy'])
-        except Errors.KafkaConnectionError as e:
-            conn.connection_lost(e)
-            self.update_backoff(node.node_id)
-            return
-
+    async def _build_transport(self, node):
+        sock = await create_connection(self._net, node.host, node.port,
+                                       self.config['socket_options'],
+                                       socks5_proxy=self.config['socks5_proxy'])
         if self.ssl_enabled:
             hostname = node.host if self.config['ssl_check_hostname'] else None
             transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(), hostname)
@@ -184,21 +175,26 @@ class KafkaConnectionManager:
         try:
             await transport.handshake()
         except Exception as e:
-            conn.connection_lost(Errors.KafkaConnectionError('Handshake failed: %s' % e))
-            self.update_backoff(node.node_id)
-            return
+            raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
+        else:
+            return transport
 
-        conn.connection_made(transport)
-
+    async def _connect(self, node, conn):
+        conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
+        conn.close_future.add_errback(lambda _: self.cluster.request_update())
         try:
+            transport = await self._build_transport(node)
+            conn.connection_made(transport)
             await conn.init_future
-        except Exception:
+        except Exception as e:
+            conn.connection_lost(e)
             self.update_backoff(node.node_id)
             return
 
         self.reset_backoff(node.node_id)
-        if self.cluster.is_bootstrap(node.node_id):
-            self.broker_version_data = conn.broker_version_data
+        if conn.broker_version_data is not None:
+            if self.cluster.is_bootstrap(node.node_id):
+                self.broker_version_data = conn.broker_version_data
 
     def get_connection(self, node_id):
         if node_id is None:
