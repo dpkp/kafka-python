@@ -78,12 +78,12 @@ class KafkaConnectionManager:
                 delay = self.connection_delay(bootstrap_broker.node_id)
                 if deadline is not None:
                     delay = min(delay, max(0, deadline - time.monotonic()))
-                log.debug('bootstrap %s NodeNotReadyError: backoff %s', bootstrap_broker, delay)
+                log.debug('Bootstrap %s NodeNotReadyError: backoff %s', bootstrap_broker, delay)
                 await self._net.sleep(delay)
                 continue
 
             if not conn.connected:
-                log.debug('attempting bootstrap with %s', bootstrap_broker)
+                log.debug('Attempting bootstrap with %s', bootstrap_broker)
                 self.cluster.request_update()
                 try:
                     await conn.init_future
@@ -102,6 +102,7 @@ class KafkaConnectionManager:
                     await self._net.sleep(self.config['reconnect_backoff_ms'] / 1000)
                     continue
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
+                log.info('Bootstrap complete: %s', self.cluster)
                 future.success(True)
                 return
             except Exception as e:
