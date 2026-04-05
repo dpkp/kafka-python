@@ -106,7 +106,8 @@ class TestKafkaNetClientBootstrap:
         assert client.bootstrap_connected()
 
     def test_get_broker_version(self, client, manager):
-        assert client.get_broker_version() is None
+        with pytest.raises(Errors.KafkaTimeoutError):
+            client.get_broker_version(timeout_ms=0)
         from kafka.protocol.broker_version_data import BrokerVersionData
         manager.broker_version_data = BrokerVersionData(api_versions={0: (0, 9), 1: (0, 9)})
         result = client.get_broker_version()
@@ -171,7 +172,8 @@ class TestKafkaNetClientVersion:
         assert isinstance(result, tuple)
 
     def test_get_broker_version_none(self, client, manager):
-        assert client.get_broker_version() is None
+        with pytest.raises(Errors.KafkaTimeoutError):
+            assert client.get_broker_version(timeout_ms=0) is None
 
     def test_check_version_returns_tuple(self, client, manager):
         from kafka.protocol.broker_version_data import BrokerVersionData

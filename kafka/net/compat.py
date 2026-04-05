@@ -92,18 +92,18 @@ class KafkaNetClient:
         return self._manager.bootstrapped
 
     def get_broker_version(self, timeout_ms=None):
-        if self._manager.broker_version_data is None:
-            if timeout_ms is not None:
-                self.check_version(timeout_ms=timeout_ms)
-            else:
-                return None
-        return self._manager.broker_version_data.broker_version
+        if self._manager.broker_version_data is not None:
+            return self._manager.broker_version_data.broker_version
+        else:
+            return self.check_version(timeout_ms=timeout_ms)
 
     def check_version(self, node_id=None, timeout_ms=10000):
-        f = self._manager.bootstrap(timeout_ms=timeout_ms)
+        f = self._manager.bootstrap()
         self._manager.poll(timeout_ms=timeout_ms, future=f)
         if f.failed():
             raise f.exception
+        elif not f.is_done:
+            raise Errors.KafkaTimeoutError('check_version failed to complete within %s ms' % timeout_ms)
         return self._manager.broker_version_data.broker_version
 
     # Request sending
