@@ -73,7 +73,7 @@ class KafkaConnectionManager:
                 return
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
             try:
-                conn = self.get_connection(bootstrap_broker.node_id)
+                conn = self.get_connection(bootstrap_broker.node_id, pop_on_close=False, refresh_metadata_on_err=False)
             except Errors.NodeNotReadyError:
                 delay = self.connection_delay(bootstrap_broker.node_id)
                 if deadline is not None:
@@ -180,8 +180,6 @@ class KafkaConnectionManager:
             return transport
 
     async def _connect(self, node, conn):
-        conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
-        conn.close_future.add_errback(lambda _: self.cluster.request_update())
         try:
             transport = await self._build_transport(node)
             conn.connection_made(transport)
@@ -196,7 +194,7 @@ class KafkaConnectionManager:
             if self.cluster.is_bootstrap(node.node_id):
                 self.broker_version_data = conn.broker_version_data
 
-    def get_connection(self, node_id):
+    def get_connection(self, node_id, pop_on_close=True, refresh_metadata_on_err=True):
         if node_id is None:
             raise Errors.NodeNotReadyError()
         elif self.connection_delay(node_id) > 0:
@@ -207,6 +205,10 @@ class KafkaConnectionManager:
         if node is None:
             raise Errors.NodeNotReadyError(node_id)
         conn = KafkaConnection(self._net, node_id=node_id, broker_version_data=self.broker_version_data, **self.config)
+        if pop_on_close:
+            conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
+        if refresh_metadata_on_err:
+            conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn
         self._net.call_soon(lambda: self._connect(node, conn))
         self._net.call_later(self.config['socket_connection_timeout_ms'] / 1000,
