@@ -8,6 +8,7 @@ from kafka.net.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest
+from kafka.protocol.parser import KafkaProtocol
 import kafka.errors as Errors
 
 
@@ -27,6 +28,7 @@ class TestKafkaConnectionInit:
         assert connection.transport is None
         assert connection.connected is False
         assert connection.initializing is True
+        assert connection.parser is None
         assert not connection.init_future.is_done
         assert not connection.close_future.is_done
         assert len(connection.in_flight_requests) == 0
