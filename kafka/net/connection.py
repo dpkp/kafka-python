@@ -73,7 +73,7 @@ class KafkaConnection:
             state = 'paused'
         else:
             state = 'connected'
-        host_port = ' host=[%s:%d]' % self.transport.getPeer()[0:2] if self.transport else ''
+        host_port = ' host=[%s]' % self.transport.host_port() if self.transport else ''
         broker_version = self.broker_version if self.broker_version is not None else 'unknown'
         return f'<KafkaConnection node_id={self.node_id}{host_port} broker_version={broker_version} ({state})>'
 
