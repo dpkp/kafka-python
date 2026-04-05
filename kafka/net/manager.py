@@ -205,7 +205,7 @@ class KafkaConnectionManager:
         node = self.cluster.broker_metadata(node_id)
         if node is None:
             raise Errors.NodeNotReadyError(node_id)
-        conn = KafkaConnection(self._net, node_id=node_id, **self.config)
+        conn = KafkaConnection(self._net, node_id=node_id, broker_version_data=self.broker_version_data, **self.config)
         self._conns[node_id] = conn
         self._net.call_soon(lambda: self._connect(node, conn))
         self._net.call_later(self.config['socket_connection_timeout_ms'] / 1000,
