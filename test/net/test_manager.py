@@ -236,6 +236,7 @@ class TestKafkaConnectionManagerMetadataRefresh:
         # Simulate a connected node
         conn = MagicMock()
         conn.connected = True
+        conn.init_future = Future().success(True)
         conn.paused = set()
         conn.in_flight_requests = []
         conn.send_request.return_value = Future()

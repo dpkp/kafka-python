@@ -295,10 +295,12 @@ class KafkaConnectionManager:
                 log.debug("No node available for metadata request, retrying in %ss", delay)
                 await self._net.sleep(delay)
                 continue
-            request = self.cluster.metadata_request()
-            log.debug("Sending metadata request %s to node %s", request, node_id)
+            conn = self.get_connection(node_id)
             try:
-                response = await self.send(request, node_id=node_id)
+                await conn.init_future
+                request = self.cluster.metadata_request()
+                log.debug("Sending metadata request %s to node %s", request, node_id)
+                response = await conn.send_request(request)
                 self.cluster.update_metadata(response)
                 future.success(True)
             except Exception as exc:
