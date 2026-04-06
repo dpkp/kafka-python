@@ -85,6 +85,7 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     def factory(topics=(topic,), **override_params):
         nonlocal consumer
         params = {
+            'api_version': env_kafka_version(),
             'heartbeat_interval_ms': 500,
             'auto_offset_reset': 'earliest',
         }
@@ -110,8 +111,12 @@ def kafka_producer_factory(kafka_broker, request):
     """Return a KafkaProducer factory fixture"""
     producer = None
 
-    def factory(**params):
+    def factory(**override_params):
         nonlocal producer
+        params = {
+            'api_version': env_kafka_version(),
+        }
+        params.update(override_params)
         params = client_params(kafka_broker, request.node.name, **params)
         producer = KafkaProducer(**params)
         return producer
@@ -133,8 +138,12 @@ def kafka_admin_client_factory(kafka_broker):
     """Return a KafkaAdminClient factory fixture"""
     admin_client = None
 
-    def factory(**params):
+    def factory(**override_params):
         nonlocal admin_client
+        params = {
+            'api_version': env_kafka_version(),
+        }
+        params.update(override_params)
         params = client_params(kafka_broker, 'admin', **params)
         admin_client = KafkaAdminClient(**params)
         return admin_client
