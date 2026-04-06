@@ -6,6 +6,8 @@ import pytest
 from kafka.future import Future
 from kafka.net.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
+from kafka.protocol.broker_version_data import BrokerVersionData
+from kafka.protocol.metadata import ApiVersionsRequest
 import kafka.errors as Errors
 
 
@@ -39,6 +41,112 @@ class TestKafkaConnectionInit:
         s = str(connection)
         assert 'initializing' in s
         assert 'test-0' in s
+
+
+class TestKafkaConnectionCheckVersion:
+    """Test ApiVersionsRequest version negotiation in _check_version."""
+
+    def _make_conn(self, net, **kwargs):
+        conn = KafkaConnection(net, node_id='test-0', **kwargs)
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+        return conn
+
+    def _make_api_versions_response(self, error_code=0, api_keys=None, broker_version=None):
+        response = MagicMock()
+        response.error_code = error_code
+        response.API_KEY = ApiVersionsRequest.API_KEY
+        if broker_version:
+            response.api_keys = [MagicMock(api_key=key, min_version=val[0], max_version=val[1])
+                                 for key, val in BrokerVersionData(broker_version).api_versions.items()]
+        else:
+            response.api_keys = api_keys or []
+        return response
+
+    def _run_check_version(self, net, conn, responses):
+        """Run _check_version with mocked _send_request returning given responses.
+        Returns list of (request_version,) for each call."""
+        requests_sent = []
+        response_iter = iter(responses)
+
+        original_send = conn._send_request
+        def mock_send_request(request, **kwargs):
+            requests_sent.append(request.API_VERSION)
+            f = Future()
+            try:
+                resp = next(response_iter)
+            except StopIteration:
+                f.failure(Errors.KafkaConnectionError('no more responses'))
+                return f
+            if isinstance(resp, Exception):
+                f.failure(resp)
+            else:
+                f.success(resp)
+            return f
+
+        conn._send_request = mock_send_request
+        net.run_until_done(conn._check_version())
+        return requests_sent
+
+    def test_first_request_is_max_version(self, net):
+        conn = self._make_conn(net)
+        response = self._make_api_versions_response(error_code=0, broker_version=(1, 0))
+        versions = self._run_check_version(net, conn, [response])
+        assert versions[0] == ApiVersionsRequest.max_version
+        assert conn.broker_version == (1, 0)
+
+    def test_unsupported_version_with_api_keys_uses_response_version(self, net):
+        conn = self._make_conn(net)
+        # First response: UnsupportedVersionError with api_keys indicating max_version=2
+        api_key_entry = MagicMock(
+            api_key=ApiVersionsRequest.API_KEY,
+            min_version=0,
+            max_version=2,
+        )
+        unsupported = self._make_api_versions_response(
+            error_code=35, api_keys=[api_key_entry])  # 35 = UnsupportedVersionError
+        # Second response: success at version 2
+        versions = self._run_check_version(net, conn, [unsupported])
+        assert versions[0] == ApiVersionsRequest.max_version
+        assert versions[1] == 2
+
+    def test_unsupported_version_no_api_keys_falls_to_zero(self, net):
+        conn = self._make_conn(net)
+        # First response: UnsupportedVersionError with no matching api_key
+        unsupported = self._make_api_versions_response(error_code=35, api_keys=[])
+        # Second response: success at version 0
+        versions = self._run_check_version(net, conn, [unsupported])
+        assert versions[0] == ApiVersionsRequest.max_version
+        assert versions[1] == 0
+
+    def test_preconfigured_broker_version_data(self, net):
+        # Pre-configure with 1.0, which supports ApiVersions 0+1
+        conn = self._make_conn(net)
+        conn.broker_version_data = BrokerVersionData((1, 0))
+        versions = self._run_check_version(net, conn, [])
+        assert versions[0] == 1
+
+    def test_preconfigured_version_without_api_versions_skips(self, net):
+        # Pre-configure with old version that doesn't support ApiVersions
+        conn = self._make_conn(net)
+        conn.broker_version_data = BrokerVersionData((0, 9))
+        # Should not send any request -- just call _init_complete
+        versions = self._run_check_version(net, conn, [])
+        assert versions == []
+        assert conn.connected
+        assert conn.init_future.succeeded()
+
+    def test_request_failure_closes_connection(self, net):
+        conn = self._make_conn(net)
+        versions = self._run_check_version(
+            net, conn, [Errors.KafkaConnectionError('disconnected')])
+        assert versions == [ApiVersionsRequest.max_version]
+        # Connection should be closed
+        transport = conn.transport
+        if transport:
+            transport.abort.assert_called()
 
 
 class TestKafkaConnectionPause:
