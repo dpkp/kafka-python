@@ -35,7 +35,6 @@ def admin_factory(**kwargs):
         admin.close()
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_end_to_end(kafka_broker, compression):
     maybe_skip_unsupported_compression(compression)
@@ -84,7 +83,6 @@ def test_end_to_end(kafka_broker, compression):
         assert msgs == set(['msg %d' % (i,) for i in range(messages)])
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_kafka_producer_proper_record_metadata(kafka_broker, compression):
     maybe_skip_unsupported_compression(compression)

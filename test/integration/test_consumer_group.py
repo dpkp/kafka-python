@@ -5,7 +5,6 @@ import time
 
 import pytest
 
-from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
 from kafka.coordinator.base import MemberState
 from kafka.structs import TopicPartition
@@ -17,19 +16,15 @@ def get_connect_str(kafka_broker):
     return kafka_broker.host + ':' + str(kafka_broker.port)
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_consumer(kafka_broker, topic):
     # The `topic` fixture is included because
     # 0.8.2 brokers need a topic to function well
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     consumer.poll(timeout_ms=500)
-    assert len(consumer._client._conns) > 0
-    node_id = list(consumer._client._conns.keys())[0]
-    assert consumer._client._conns[node_id].state is ConnectionStates.CONNECTED
+    assert consumer._client.cluster.brokers()
     consumer.close()
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_consumer_topics(kafka_broker, topic):
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     # Necessary to drive the IO
@@ -148,7 +143,6 @@ def test_group(kafka_broker, topic):
             threads[c] = None
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_paused(kafka_broker, topic):
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     topics = [TopicPartition(topic, 1)]
