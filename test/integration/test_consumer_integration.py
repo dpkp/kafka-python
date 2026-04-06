@@ -11,7 +11,6 @@ from kafka.structs import TopicPartition, OffsetAndTimestamp
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory()
     actual_ver_major_minor = env_kafka_version()[:2]
@@ -22,7 +21,6 @@ def test_kafka_version_infer(kafka_consumer_factory):
         "Was expecting inferred broker version to be %s but was %s" % (expected_ver_major_minor, inferred_ver_major_minor)
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer(kafka_consumer_factory, send_messages):
     """Test KafkaConsumer"""
     consumer = kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=2000)
@@ -41,7 +39,6 @@ def test_kafka_consumer(kafka_consumer_factory, send_messages):
     assert_message_count(messages[1], 100)
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer_unsupported_encoding(
         topic, kafka_producer_factory, kafka_consumer_factory):
     # Send a compressed message
@@ -59,7 +56,6 @@ def test_kafka_consumer_unsupported_encoding(
             consumer.poll(timeout_ms=2000)
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
     TIMEOUT_MS = 500
     consumer = kafka_consumer_factory(auto_offset_reset='earliest',
@@ -275,7 +271,6 @@ def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_pro
     }
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 @pytest.mark.skipif(env_kafka_version() >= (0, 10, 1), reason="Requires KAFKA_VERSION < 0.10.1")
 def test_kafka_consumer_offsets_for_time_old(kafka_consumer, topic):
     consumer = kafka_consumer
@@ -299,7 +294,6 @@ def test_kafka_consumer_offsets_for_times_errors(kafka_consumer_factory, topic):
         consumer.offsets_for_times({bad_tp: 0})
 
 
-@pytest.mark.skipif(not env_kafka_version(), reason="No KAFKA_VERSION set")
 def test_kafka_consumer_position_after_seek_to_end(kafka_consumer_factory, topic, send_messages):
     send_messages(range(0, 10), partition=0)
 

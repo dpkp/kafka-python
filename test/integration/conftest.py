@@ -9,6 +9,12 @@ from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_topics, client_params
 
 
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if not env_kafka_version():
+            item.add_marker(pytest.mark.skip(reason="No KAFKA_VERSION set"))
+
+
 @pytest.fixture(scope="module")
 def zookeeper():
     """Return a Zookeeper fixture"""
