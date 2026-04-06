@@ -40,6 +40,7 @@ class KafkaConnectionManager:
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'socks5_proxy': None,
+        'api_version': None,
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -57,6 +58,8 @@ class KafkaConnectionManager:
         self.broker_version_data = None
         self._bootstrap_future = None
         self._metadata_future = None
+        if self.config['api_version'] is not None:
+            self.broker_version_data = BrokerVersionData(self.config['api_version'])
 
     def least_used_connections(self):
         return sorted(filter(lambda conn: conn.connected, self._conns.values()), key=lambda conn: conn.transport.last_activity)
