@@ -16,7 +16,7 @@ def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory()
     actual = BrokerVersionData(env_kafka_version())
     assert consumer.config['api_version'] == actual.broker_version, \
-        "Was expecting inferred broker version to be %s but was %s" % (expected_ver_major_minor, inferred_ver_major_minor)
+        "Was expecting inferred broker version to be %s but was %s" % (actual.broker_version, consumer.config['api_version'])
 
 
 def test_kafka_consumer(kafka_consumer_factory, send_messages):
