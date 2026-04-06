@@ -172,7 +172,7 @@ class TestKafkaConnectionManagerBootstrap:
             f = Future()
             f.success(MagicMock())
             return f
-        conn.send_request = mock_send_request
+        conn.send_request.side_effect = mock_send_request
 
         manager._conns['bootstrap-0'] = conn
 
