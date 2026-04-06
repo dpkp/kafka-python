@@ -165,6 +165,41 @@ class TestKafkaConnectionManagerBootstrap:
         manager._bootstrap_future.success(True)
         assert manager.bootstrapped
 
+    def test_bootstrap_retries_empty_brokers(self, net):
+        cluster = ClusterMetadata(bootstrap_servers=['localhost:9092'])
+        manager = KafkaConnectionManager(net, cluster,
+                                         socket_connection_timeout_ms=1000,
+                                         reconnect_backoff_ms=10)
+        conn = MagicMock()
+        conn.connected = True
+        conn.init_future = Future()
+        conn.init_future.success(True)
+        conn.close_future = Future()
+        conn.paused = set()
+        conn.in_flight_requests = []
+
+        call_count = [0]
+        def mock_send_request(request):
+            call_count[0] += 1
+            f = Future()
+            f.success(MagicMock())
+            return f
+        conn.send_request.side_effect = mock_send_request
+
+        manager._conns['bootstrap-0'] = conn
+
+        # First update_metadata leaves brokers empty; second populates them
+        def mock_update_metadata(response):
+            if call_count[0] >= 2:
+                cluster._brokers = {1: MagicMock(node_id=1)}
+
+        with patch.object(cluster, 'update_metadata', side_effect=mock_update_metadata):
+            f = manager.bootstrap(timeout_ms=2000)
+            manager.poll(timeout_ms=2000, future=f)
+
+        assert f.succeeded()
+        assert call_count[0] >= 2
+
 
 class TestKafkaConnectionManagerLeastLoaded:
     def test_no_brokers_before_bootstrap(self, manager):
@@ -248,6 +283,7 @@ class TestKafkaConnectionManagerMetadataRefresh:
         # Simulate a connected node
         conn = MagicMock()
         conn.connected = True
+        conn.init_future = Future().success(True)
         conn.paused = set()
         conn.in_flight_requests = []
         conn.send_request.return_value = Future()
