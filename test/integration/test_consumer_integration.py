@@ -6,6 +6,7 @@ import pytest
 
 import kafka.codec
 from kafka.errors import KafkaTimeoutError, UnsupportedCodecError, UnsupportedVersionError
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
@@ -13,11 +14,8 @@ from test.testutil import Timer, assert_message_count, env_kafka_version, random
 
 def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory()
-    actual_ver_major_minor = env_kafka_version()[:2]
-    client = consumer._client
-    inferred_ver_major_minor = client.check_version()[:2]
-    expected_ver_major_minor = min(actual_ver_major_minor, (2, 6))
-    assert expected_ver_major_minor == inferred_ver_major_minor, \
+    actual = BrokerVersionData(env_kafka_version())
+    assert consumer.config['api_version'] == actual.broker_version, \
         "Was expecting inferred broker version to be %s but was %s" % (expected_ver_major_minor, inferred_ver_major_minor)
 
 
