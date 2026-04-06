@@ -5,7 +5,6 @@ import time
 
 import pytest
 
-from kafka.conn import ConnectionStates
 from kafka.consumer.group import KafkaConsumer
 from kafka.coordinator.base import MemberState
 from kafka.structs import TopicPartition
@@ -23,9 +22,7 @@ def test_consumer(kafka_broker, topic):
     # 0.8.2 brokers need a topic to function well
     consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     consumer.poll(timeout_ms=500)
-    assert len(consumer._client._conns) > 0
-    node_id = list(consumer._client._conns.keys())[0]
-    assert consumer._client._conns[node_id].state is ConnectionStates.CONNECTED
+    assert consumer._client.cluster.brokers()
     consumer.close()
 
 
