@@ -12,6 +12,7 @@ from kafka.structs import TopicPartition, OffsetAndTimestamp
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
 
 
+@pytest.mark.skipif(env_kafka_version() < (0, 10), reason="Requires KAFKA_VERSION >= 0.10")
 def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory(api_version=None)
     actual = BrokerVersionData(env_kafka_version())
