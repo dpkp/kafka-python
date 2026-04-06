@@ -43,14 +43,14 @@ class KafkaTCPTransport:
         if not self._closed:
             log.info('%s: Closing transport', self)
             self._closed = True
-            self.pause_reading()
+            self._read = False
             if not self._write_buffer:
                 self._close()
 
     def set_protocol(self, protocol):
         """Set a new protocol."""
         self._protocol = protocol
-        log.info('%s: Set protocol %s', self, protocol)
+        log.debug('%s: Set protocol %s', self, protocol)
 
     def get_protocol(self):
         """Return the current protocol."""
@@ -320,8 +320,14 @@ class KafkaTCPTransport:
     async def handshake(self):
         pass
 
+    def host_port(self):
+        host, port = self.getPeer()[0:2]
+        local_port = self._sock.getsockname()[1]
+        return '%s:%d<-%d' % (host, port, local_port)
+
     def __str__(self):
-        return ("<KafkaTCPTransport [%s:%d]" % self.getPeer()[0:2]) + (" (closed)>" if self._closed else ">")
+        state = ' (closed)' if self._closed else ''
+        return f"<KafkaTCPTransport [{self.host_port()}]{state}>"
 
 
 class KafkaSSLTransport(KafkaTCPTransport):

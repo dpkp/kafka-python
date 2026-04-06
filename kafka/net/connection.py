@@ -44,7 +44,7 @@ class KafkaConnection:
         self.node_id = node_id
         self.net = net
         self.transport = None
-        self.parser = KafkaProtocol(client_id=self.config['client_id'])
+        self.parser = None
         self._request_buffer = collections.deque()
         self.paused = set()
         self.connected = False
@@ -73,7 +73,7 @@ class KafkaConnection:
             state = 'paused'
         else:
             state = 'connected'
-        host_port = ' host=[%s:%d]' % self.transport.getPeer()[0:2] if self.transport else ''
+        host_port = ' host=[%s]' % self.transport.host_port() if self.transport else ''
         broker_version = self.broker_version if self.broker_version is not None else 'unknown'
         return f'<KafkaConnection node_id={self.node_id}{host_port} broker_version={broker_version} ({state})>'
 
@@ -235,6 +235,7 @@ class KafkaConnection:
             self.transport.set_protocol(self)
         self.initializing = True
         self.transport.resume_reading()
+        self.parser = KafkaProtocol(client_id=self.config['client_id'])
         self.net.call_soon(self._check_version)
 
     def pause(self, v):
@@ -246,7 +247,7 @@ class KafkaConnection:
         except KeyError:
             pass
         else:
-            if not self.paused:
+            if not self.paused and self.parser and self.transport:
                 to_send = self.parser.send_bytes()
                 if to_send:
                     self.transport.write(to_send)

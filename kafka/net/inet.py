@@ -25,6 +25,7 @@ async def create_connection(net, host, port, socket_options=(), socks5_proxy=Non
             sock.setblocking(False)
             for option in socket_options:
                 sock.setsockopt(*option)
+            log.debug('Attempting to connect %s -> %s (proxy=%s)', sock, sa, proxy)
             sock = await connect_sock(net, sock, sa, proxy=proxy)
         except (socket.error, OSError) as e:
             exceptions.append(Errors.KafkaConnectionError('unable to connect: %s' % (e,)))
@@ -49,7 +50,7 @@ async def connect_sock(net, sock, sockaddr, proxy=None):
 
         # Connection succeeded
         if not ret or ret == errno.EISCONN:
-            log.debug('Established TCP connection to %s', sockaddr)
+            log.debug('Connected: %s', sock)
             return sock
 
         # Needs retry

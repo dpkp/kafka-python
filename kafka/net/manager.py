@@ -53,7 +53,6 @@ class KafkaConnectionManager:
         self.cluster = cluster
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
-        log.debug('Starting close_idle_connections task')
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
         self.close_idle_connections()
         self.broker_version_data = None
@@ -73,17 +72,17 @@ class KafkaConnectionManager:
                 return
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
             try:
-                conn = self.get_connection(bootstrap_broker.node_id)
+                conn = self.get_connection(bootstrap_broker.node_id, pop_on_close=False, refresh_metadata_on_err=False)
             except Errors.NodeNotReadyError:
                 delay = self.connection_delay(bootstrap_broker.node_id)
                 if deadline is not None:
                     delay = min(delay, max(0, deadline - time.monotonic()))
-                log.debug('bootstrap %s NodeNotReadyError: backoff %s', bootstrap_broker, delay)
+                log.debug('Bootstrap %s NodeNotReadyError: backoff %s', bootstrap_broker, delay)
                 await self._net.sleep(delay)
                 continue
 
             if not conn.connected:
-                log.debug('attempting bootstrap with %s', bootstrap_broker)
+                log.debug('Attempting bootstrap with %s', bootstrap_broker)
                 self.cluster.request_update()
                 try:
                     await conn.init_future
@@ -102,6 +101,7 @@ class KafkaConnectionManager:
                     await self._net.sleep(self.config['reconnect_backoff_ms'] / 1000)
                     continue
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
+                log.info('Bootstrap complete: %s', self.cluster)
                 future.success(True)
                 return
             except Exception as e:
@@ -125,16 +125,16 @@ class KafkaConnectionManager:
         return conn.transport.last_activity + self._idle_check_delay
 
     def close_idle_connections(self):
-        log.debug('close_idle_connections')
         for conn in self.least_used_connections():
             next_idle_at = self._connection_idle_at(conn)
             if time.monotonic() >= next_idle_at:
+                log.info('Closing idle connection to node %s', conn.node_id)
                 conn.close()
             else:
                 break
         else:
             next_idle_at = time.monotonic() + self._idle_check_delay
-        log.debug('next idle close check in %d secs', next_idle_at - time.monotonic())
+        log.debug('Next idle connections check in %d secs', next_idle_at - time.monotonic())
         self._net.call_at(next_idle_at, self.close_idle_connections)
 
     @property
@@ -162,19 +162,10 @@ class KafkaConnectionManager:
             ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         return ctx
 
-    async def _connect(self, node, conn):
-        conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
-        conn.close_future.add_errback(lambda _: self.cluster.request_update())
-
-        try:
-            sock = await create_connection(self._net, node.host, node.port,
-                                           self.config['socket_options'],
-                                           socks5_proxy=self.config['socks5_proxy'])
-        except Errors.KafkaConnectionError as e:
-            conn.connection_lost(e)
-            self.update_backoff(node.node_id)
-            return
-
+    async def _build_transport(self, node):
+        sock = await create_connection(self._net, node.host, node.port,
+                                       self.config['socket_options'],
+                                       socks5_proxy=self.config['socks5_proxy'])
         if self.ssl_enabled:
             hostname = node.host if self.config['ssl_check_hostname'] else None
             transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(), hostname)
@@ -184,23 +175,26 @@ class KafkaConnectionManager:
         try:
             await transport.handshake()
         except Exception as e:
-            conn.connection_lost(Errors.KafkaConnectionError('Handshake failed: %s' % e))
-            self.update_backoff(node.node_id)
-            return
+            raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
+        else:
+            return transport
 
-        conn.connection_made(transport)
-
+    async def _connect(self, node, conn):
         try:
+            transport = await self._build_transport(node)
+            conn.connection_made(transport)
             await conn.init_future
-        except Exception:
+        except Exception as e:
+            conn.connection_lost(e)
             self.update_backoff(node.node_id)
             return
 
         self.reset_backoff(node.node_id)
-        if self.cluster.is_bootstrap(node.node_id):
-            self.broker_version_data = conn.broker_version_data
+        if conn.broker_version_data is not None:
+            if self.cluster.is_bootstrap(node.node_id):
+                self.broker_version_data = conn.broker_version_data
 
-    def get_connection(self, node_id):
+    def get_connection(self, node_id, pop_on_close=True, refresh_metadata_on_err=True):
         if node_id is None:
             raise Errors.NodeNotReadyError()
         elif self.connection_delay(node_id) > 0:
@@ -211,6 +205,10 @@ class KafkaConnectionManager:
         if node is None:
             raise Errors.NodeNotReadyError(node_id)
         conn = KafkaConnection(self._net, node_id=node_id, broker_version_data=self.broker_version_data, **self.config)
+        if pop_on_close:
+            conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
+        if refresh_metadata_on_err:
+            conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn
         self._net.call_soon(lambda: self._connect(node, conn))
         self._net.call_later(self.config['socket_connection_timeout_ms'] / 1000,
