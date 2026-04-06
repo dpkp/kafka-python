@@ -10,6 +10,7 @@ from kafka.net.selector import NetworkSelector
 from kafka.net.manager import KafkaConnectionManager
 from kafka.net.connection import KafkaConnection
 import kafka.errors as Errors
+from kafka.protocol.broker_version_data import BrokerVersionData
 
 
 @pytest.fixture
@@ -47,6 +48,10 @@ class TestKafkaConnectionManagerConfig:
         assert manager._backoff == {}
         assert manager.broker_version_data is None
         assert not manager.bootstrapped
+
+    def test_api_versions(self, net, cluster):
+        m = KafkaConnectionManager(net, cluster, api_version=(1, 0))
+        assert m.broker_version_data == BrokerVersionData((1, 0))
 
 
 class TestKafkaConnectionManagerBackoff:
@@ -95,11 +100,18 @@ class TestKafkaConnectionManagerGetConnection:
         assert isinstance(conn, KafkaConnection)
         assert conn.node_id == 'bootstrap-0'
         assert 'bootstrap-0' in manager._conns
+        assert conn.broker_version_data is None
 
     def test_get_connection_returns_cached(self, manager):
         conn1 = manager.get_connection('bootstrap-0')
         conn2 = manager.get_connection('bootstrap-0')
         assert conn1 is conn2
+
+    def test_get_connection_passes_broker_version_data(self, manager):
+        manager.broker_version_data = BrokerVersionData((4, 0))
+        conn = manager.get_connection('bootstrap-0')
+        assert isinstance(conn, KafkaConnection)
+        assert conn.broker_version_data == BrokerVersionData((4, 0))
 
 
 class TestKafkaConnectionManagerSend:
