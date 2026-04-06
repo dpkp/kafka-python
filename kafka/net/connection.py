@@ -34,7 +34,7 @@ class KafkaConnection:
         'sasl_oauth_token_provider': None,
     }
 
-    def __init__(self, net, node_id=None, **configs):
+    def __init__(self, net, node_id=None, broker_version_data=None, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -51,7 +51,7 @@ class KafkaConnection:
         self._init_future = Future()
         self._close_future = Future()
         self.in_flight_requests = collections.deque()
-        self.broker_version_data = None
+        self.broker_version_data = broker_version_data
         self._api_versions_idx = ApiVersionsRequest.max_version # version of ApiVersionsRequest to try on first connect
         self._throttle_time = 0
         self._init_future.add_errback(self.fail_in_flight_requests)
