@@ -53,7 +53,6 @@ class KafkaConnectionManager:
         self.cluster = cluster
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
-        log.debug('Starting close_idle_connections task')
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
         self.close_idle_connections()
         self.broker_version_data = None
@@ -126,16 +125,16 @@ class KafkaConnectionManager:
         return conn.transport.last_activity + self._idle_check_delay
 
     def close_idle_connections(self):
-        log.debug('close_idle_connections')
         for conn in self.least_used_connections():
             next_idle_at = self._connection_idle_at(conn)
             if time.monotonic() >= next_idle_at:
+                log.info('Closing idle connection to node %s', conn.node_id)
                 conn.close()
             else:
                 break
         else:
             next_idle_at = time.monotonic() + self._idle_check_delay
-        log.debug('next idle close check in %d secs', next_idle_at - time.monotonic())
+        log.debug('Next idle connections check in %d secs', next_idle_at - time.monotonic())
         self._net.call_at(next_idle_at, self.close_idle_connections)
 
     @property
