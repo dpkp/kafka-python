@@ -5,6 +5,7 @@ import uuid
 import pytest
 
 from kafka import KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
+from kafka.util import TOPIC_LEGAL_CHARS, TOPIC_MAX_LENGTH, ensure_valid_topic_name
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_topics, client_params
 
@@ -160,7 +161,9 @@ def kafka_admin_client_factory(kafka_broker):
 @pytest.fixture
 def topic(kafka_broker, request):
     """Return a topic fixture"""
-    topic_name = '%s_%s' % (request.node.name, random_string(10))
+    topic_name = ''.join(TOPIC_LEGAL_CHARS.findall(request.node.name))
+    topic_name = topic_name[:TOPIC_MAX_LENGTH - 11] + '_' + random_string(10)
+    ensure_valid_topic_name(topic_name)
     create_topics(kafka_broker, [topic_name])
     return topic_name
 
