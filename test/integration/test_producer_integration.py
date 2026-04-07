@@ -8,17 +8,8 @@ from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer, TopicPartition
 from test.testutil import env_kafka_version, random_string, maybe_skip_unsupported_compression
 
 
-@contextmanager
-def consumer_factory(**kwargs):
-    consumer = KafkaConsumer(**kwargs)
-    try:
-        yield consumer
-    finally:
-        consumer.close(timeout_ms=100)
-
-
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
-def test_end_to_end(kafka_broker, kafka_producer_factory, compression):
+def test_end_to_end(kafka_consumer_factory, kafka_producer_factory, compression):
     maybe_skip_unsupported_compression(compression)
     if compression == 'lz4':
         if env_kafka_version() < (0, 8, 2):
@@ -29,7 +20,6 @@ def test_end_to_end(kafka_broker, kafka_producer_factory, compression):
     if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
         pytest.skip('zstd requires kafka 2.1.0 or newer')
 
-    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     producer_args = {
         'retries': 5,
         'max_block_ms': 30000,
@@ -37,32 +27,31 @@ def test_end_to_end(kafka_broker, kafka_producer_factory, compression):
         'value_serializer': str.encode,
     }
     consumer_args = {
-        'bootstrap_servers': connect_str,
         'group_id': None,
         'consumer_timeout_ms': 30000,
         'auto_offset_reset': 'earliest',
         'value_deserializer': bytes.decode,
     }
-    with consumer_factory(**consumer_args) as consumer:
-        producer = kafka_producer_factory(**producer_args)
-        topic = random_string(5)
+    producer = kafka_producer_factory(**producer_args)
+    consumer = kafka_consumer_factory(topics=(), **consumer_args)
+    topic = random_string(5)
 
-        messages = 100
-        futures = []
-        for i in range(messages):
-            futures.append(producer.send(topic, 'msg %d' % i))
-        ret = [f.get(timeout=30) for f in futures]
-        assert len(ret) == messages
+    messages = 100
+    futures = []
+    for i in range(messages):
+        futures.append(producer.send(topic, 'msg %d' % i))
+    ret = [f.get(timeout=30) for f in futures]
+    assert len(ret) == messages
 
-        consumer.subscribe([topic])
-        msgs = set()
-        for i in range(messages):
-            try:
-                msgs.add(next(consumer).value)
-            except StopIteration:
-                break
+    consumer.subscribe([topic])
+    msgs = set()
+    for i in range(messages):
+        try:
+            msgs.add(next(consumer).value)
+        except StopIteration:
+            break
 
-        assert msgs == set(['msg %d' % (i,) for i in range(messages)])
+    assert msgs == set(['msg %d' % (i,) for i in range(messages)])
 
 
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
@@ -126,8 +115,7 @@ def test_idempotent_producer(kafka_producer_factory):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
-def test_transactional_producer_messages(kafka_producer_factory, kafka_broker):
-    connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
+def test_transactional_producer_messages(kafka_producer_factory, kafka_consumer_factory):
     producer = kafka_producer_factory(transactional_id='testing')
     producer.init_transactions()
     producer.begin_transaction()
@@ -141,19 +129,18 @@ def test_transactional_producer_messages(kafka_producer_factory, kafka_broker):
 
     messages = set()
     consumer_opts = {
-        'bootstrap_servers': connect_str,
         'group_id': None,
         'consumer_timeout_ms': 10000,
         'auto_offset_reset': 'earliest',
         'isolation_level': 'read_committed',
     }
-    with consumer_factory(**consumer_opts) as consumer:
-        consumer.assign([TopicPartition('transactional_test_topic', 0)])
-        for msg in consumer:
-            assert msg.value in {b'msg3', b'msg4'}
-            messages.add(msg.value)
-            if messages == {b'msg3', b'msg4'}:
-                break
+    consumer = kafka_consumer_factory(topics=(), **consumer_opts)
+    consumer.assign([TopicPartition('transactional_test_topic', 0)])
+    for msg in consumer:
+        assert msg.value in {b'msg3', b'msg4'}
+        messages.add(msg.value)
+        if messages == {b'msg3', b'msg4'}:
+            break
     assert messages == {b'msg3', b'msg4'}
 
 
