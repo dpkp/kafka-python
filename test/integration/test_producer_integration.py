@@ -26,15 +26,6 @@ def consumer_factory(**kwargs):
         consumer.close(timeout_ms=100)
 
 
-@contextmanager
-def admin_factory(**kwargs):
-    admin = KafkaAdminClient(**kwargs)
-    try:
-        yield admin
-    finally:
-        admin.close()
-
-
 @pytest.mark.parametrize("compression", [None, 'gzip', 'snappy', 'lz4', 'zstd'])
 def test_end_to_end(kafka_broker, compression):
     maybe_skip_unsupported_compression(compression)
@@ -181,7 +172,7 @@ def test_transactional_producer_messages(kafka_broker):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
-def test_transactional_producer_offsets(kafka_broker):
+def test_transactional_producer_offsets(kafka_broker, kafka_admin_client_factory):
     connect_str = ':'.join([kafka_broker.host, str(kafka_broker.port)])
     # Setting leader_epoch only supported in 2.1+
     if env_kafka_version() >= (2, 1):
@@ -200,5 +191,5 @@ def test_transactional_producer_offsets(kafka_broker):
         producer.send_offsets_to_transaction({TopicPartition('transactional_test_topic', 1): OffsetAndMetadata(1, 'bad', 1)}, 'txn-test-group')
         producer.abort_transaction()
 
-    with admin_factory(bootstrap_servers=connect_str) as admin:
-        assert admin.list_consumer_group_offsets('txn-test-group') == offsets
+    admin = kafka_admin_client_factory()
+    assert admin.list_consumer_group_offsets('txn-test-group') == offsets
