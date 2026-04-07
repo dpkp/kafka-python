@@ -513,7 +513,7 @@ class Sender(threading.Thread):
                 log.warning("%s: Got error produce response on topic-partition %s, retrying (%s attempts left): %s%s",
                             str(self), batch.topic_partition,
                             self.config['retries'] - batch.attempts - 1,
-                            error.__class__.__name__,
+                            error.__name__,
                             (". Error Message: %s" % partition_response.error_message) if partition_response.error_message else "")
 
                 # If idempotence is enabled only retry the request if the batch matches our current producer id and epoch
