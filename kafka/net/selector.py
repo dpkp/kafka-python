@@ -299,8 +299,7 @@ class NetworkSelector:
                     log.log(0, 'kernel event %s', event.method)
                     getattr(self, event.method)(*event.args)
                 elif isinstance(event, Future):
-                    task = self._current
-                    event.add_both(lambda _: self.call_soon(task))
+                    event.add_both(lambda _, task=self._current: self.call_soon(task))
                 else:
                     raise RuntimeError('Unhandled event type: %s' % event)
 
