@@ -56,6 +56,14 @@ def client_params(broker, client_id='client', **overrides):
     return broker._enrich_client_params(overrides, client_id='%s_%s' % (client_id, random_string(4)))
 
 
+def _extract_topic_command_error(stdout):
+    """Extract the error line from kafka-topics.sh output."""
+    for line in stdout.decode('utf-8', errors='replace').splitlines():
+        if line.startswith('Error while executing topic command'):
+            return line
+    return ''
+
+
 def get_open_port():
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
@@ -650,11 +658,12 @@ class KafkaFixture(Fixture):
         proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
-            if 'kafka.common.TopicExistsException' not in stdout:
+            error = _extract_topic_command_error(stdout)
+            if 'TopicExistsException' not in error and 'already exists' not in error:
                 self.out("Failed to create topic %s" % (topic_name,))
                 self.out(stdout)
                 self.out(stderr)
-                raise RuntimeError("Failed to create topic %s" % (topic_name,))
+                raise RuntimeError(error)
 
     def _cli_connect_args(self):
         if env_kafka_version() < (3, 0, 0):
