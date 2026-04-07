@@ -367,7 +367,7 @@ class KafkaAdminClient:
 
     def send_request(self, request, node_id=None):
         if node_id is None:
-            node_id = self._client.least_loaded_node()
+            node_id = self._client.least_loaded_node(bootstrap_fallback=True)
         self._client.await_ready(node_id)
         future = self._client.send(node_id, request)
         self._wait_for_futures([future]) # raises exception on failure
@@ -377,7 +377,7 @@ class KafkaAdminClient:
         futures = []
         for request, node_id in requests_and_node_ids:
             if node_id is None:
-                node_id = self._client.least_loaded_node()
+                node_id = self._client.least_loaded_node(bootstrap_fallback=True)
             self._client.await_ready(node_id)
             futures.append(self._client.send(node_id, request))
         self._wait_for_futures(futures)

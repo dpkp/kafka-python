@@ -803,7 +803,7 @@ class KafkaClient:
 
         return responses
 
-    def least_loaded_node(self):
+    def least_loaded_node(self, bootstrap_fallback=False):
         """Choose the node with fewest outstanding requests, with fallbacks.
 
         This method will prefer a node with an existing connection (not throttled)
@@ -815,7 +815,10 @@ class KafkaClient:
         Returns:
             node_id or None if no suitable node was found
         """
-        nodes = [broker.node_id for broker in self.cluster.brokers() or self.cluster.bootstrap_brokers()]
+        brokers = self.cluster.brokers()
+        if not brokers and bootstrap_fallback:
+            brokers = self.cluster.bootstrap_brokers()
+        nodes = [broker.node_id for broker in brokers]
         random.shuffle(nodes)
 
         inflight = float('inf')
@@ -842,7 +845,7 @@ class KafkaClient:
         else:
             return self.connection_delay(node_id)
 
-    def least_loaded_node_refresh_ms(self):
+    def least_loaded_node_refresh_ms(self, bootstrap_fallback=False):
         """Return connection or throttle delay in milliseconds for next available node.
 
         This method is used primarily for retry/backoff during metadata refresh
@@ -851,7 +854,10 @@ class KafkaClient:
         Returns:
            float: delay_ms
         """
-        return min([self._refresh_delay_ms(broker.node_id) for broker in self.cluster.brokers() or self.cluster.bootstrap_brokers()])
+        brokers = self.cluster.brokers()
+        if not brokers and bootstrap_fallback:
+            brokers = self.cluster.bootstrap_brokers()
+        return min([self._refresh_delay_ms(broker.node_id) for broker in brokers])
 
     def _next_ifr_request_timeout_ms(self):
         if self._conns:
@@ -873,9 +879,9 @@ class KafkaClient:
         # Beware that the behavior of this method and the computation of
         # timeouts for poll() are highly dependent on the behavior of
         # least_loaded_node()
-        node_id = self.least_loaded_node()
+        node_id = self.least_loaded_node(bootstrap_fallback=True)
         if node_id is None:
-            next_connect_ms = self.least_loaded_node_refresh_ms()
+            next_connect_ms = self.least_loaded_node_refresh_ms(bootstrap_fallback=True)
             log.debug("Give up sending metadata request since no node is available. (reconnect delay %d ms)", next_connect_ms)
             return next_connect_ms
 
