@@ -183,21 +183,20 @@ def test_kafka_consumer_max_bytes_one_msg(kafka_consumer_factory, send_messages)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
-def test_kafka_consumer_offsets_for_time(topic, kafka_consumer, kafka_producer):
+def test_kafka_consumer_offsets_for_time(topic, consumer, producer):
     late_time = int(time.time()) * 1000
     middle_time = late_time - 1000
     early_time = late_time - 2000
     tp = TopicPartition(topic, 0)
 
     timeout = 10
-    early_msg = kafka_producer.send(
+    early_msg = producer.send(
         topic, partition=0, value=b"first",
         timestamp_ms=early_time).get(timeout)
-    late_msg = kafka_producer.send(
+    late_msg = producer.send(
         topic, partition=0, value=b"last",
         timestamp_ms=late_time).get(timeout)
 
-    consumer = kafka_consumer
     offsets = consumer.offsets_for_times({tp: early_time})
     assert len(offsets) == 1
     assert offsets[tp].offset == early_msg.offset
@@ -232,20 +231,19 @@ def test_kafka_consumer_offsets_for_time(topic, kafka_consumer, kafka_producer):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
-def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_producer, topic):
+def test_kafka_consumer_offsets_search_many_partitions(consumer, producer, topic):
     tp0 = TopicPartition(topic, 0)
     tp1 = TopicPartition(topic, 1)
 
     send_time = int(time.time() * 1000)
     timeout = 10
-    p0msg = kafka_producer.send(
+    p0msg = producer.send(
         topic, partition=0, value=b"XXX",
         timestamp_ms=send_time).get(timeout)
-    p1msg = kafka_producer.send(
+    p1msg = producer.send(
         topic, partition=1, value=b"XXX",
         timestamp_ms=send_time).get(timeout)
 
-    consumer = kafka_consumer
     offsets = consumer.offsets_for_times({
         tp0: send_time,
         tp1: send_time
@@ -271,8 +269,7 @@ def test_kafka_consumer_offsets_search_many_partitions(kafka_consumer, kafka_pro
 
 
 @pytest.mark.skipif(env_kafka_version() >= (0, 10, 1), reason="Requires KAFKA_VERSION < 0.10.1")
-def test_kafka_consumer_offsets_for_time_old(kafka_consumer, topic):
-    consumer = kafka_consumer
+def test_kafka_consumer_offsets_for_time_old(consumer, topic):
     tp = TopicPartition(topic, 0)
 
     with pytest.raises(UnsupportedVersionError):

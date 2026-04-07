@@ -72,7 +72,7 @@ def kafka_client(kafka_broker, request):
 
 
 @pytest.fixture
-def kafka_consumer(kafka_consumer_factory):
+def consumer(kafka_consumer_factory):
     """Return a KafkaConsumer fixture"""
     return kafka_consumer_factory()
 
@@ -85,12 +85,13 @@ def kafka_consumer_factory(kafka_broker, topic, request):
     def factory(topics=(topic,), **override_params):
         nonlocal consumer
         params = {
+            'client_id': f'{request.node.name}_{random_string(4)}',
             'api_version': env_kafka_version(),
             'heartbeat_interval_ms': 500,
             'auto_offset_reset': 'earliest',
         }
         params.update(override_params)
-        params = client_params(kafka_broker, request.node.name, **params)
+        params = client_params(kafka_broker, **params)
         consumer = KafkaConsumer(*topics, **params)
         return consumer
 
@@ -101,7 +102,7 @@ def kafka_consumer_factory(kafka_broker, topic, request):
 
 
 @pytest.fixture
-def kafka_producer(kafka_producer_factory):
+def producer(kafka_producer_factory):
     """Return a KafkaProducer fixture"""
     yield kafka_producer_factory()
 
@@ -114,10 +115,11 @@ def kafka_producer_factory(kafka_broker, request):
     def factory(**override_params):
         nonlocal producer
         params = {
+            'client_id': f'{request.node.name}_{random_string(4)}',
             'api_version': env_kafka_version(),
         }
         params.update(override_params)
-        params = client_params(kafka_broker, request.node.name, **params)
+        params = client_params(kafka_broker, **params)
         producer = KafkaProducer(**params)
         return producer
 
@@ -141,10 +143,11 @@ def kafka_admin_client_factory(kafka_broker):
     def factory(**override_params):
         nonlocal admin_client
         params = {
+            'client_id': f'admin_{random_string(4)}',
             'api_version': env_kafka_version(),
         }
         params.update(override_params)
-        params = client_params(kafka_broker, 'admin', **params)
+        params = client_params(kafka_broker, **params)
         admin_client = KafkaAdminClient(**params)
         return admin_client
 
@@ -163,11 +166,11 @@ def topic(kafka_broker, request):
 
 
 @pytest.fixture()
-def send_messages(topic, kafka_producer, request):
+def send_messages(topic, producer, request):
     """A factory that returns a send_messages function with a pre-populated
     topic topic / producer."""
 
-    def _send_messages(number_range, partition=0, topic=topic, producer=kafka_producer, request=request):
+    def _send_messages(number_range, partition=0, topic=topic, producer=producer, request=request):
         """
             messages is typically `range(0,100)`
             partition is an int
@@ -176,9 +179,9 @@ def send_messages(topic, kafka_producer, request):
         for i in number_range:
             # request.node.name provides the test name (including parametrized values)
             encoded_msg = '{}-{}-{}'.format(i, request.node.name, uuid.uuid4()).encode('utf-8')
-            future = kafka_producer.send(topic, value=encoded_msg, partition=partition)
+            future = producer.send(topic, value=encoded_msg, partition=partition)
             messages_and_futures.append((encoded_msg, future))
-        kafka_producer.flush()
+        producer.flush()
         for (msg, f) in messages_and_futures:
             assert f.succeeded()
         return [msg for (msg, f) in messages_and_futures]
