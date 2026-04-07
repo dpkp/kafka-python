@@ -62,7 +62,7 @@ def test_group(kafka_consumer_factory, topic):
         while True:
             assert time.monotonic() < timeout, "timeout waiting for assignments"
             # Verify all consumers have been created
-            missing_consumers = set(consumers.keys()) - set(range(num_consumers))
+            missing_consumers =  set(range(num_consumers)) - set(consumers.keys())
             if missing_consumers:
                 logging.info('Waiting on consumer threads: %s', missing_consumers)
                 time.sleep(1)
