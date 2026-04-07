@@ -12,21 +12,15 @@ from kafka.structs import TopicPartition
 from test.testutil import env_kafka_version, random_string
 
 
-def get_connect_str(kafka_broker):
-    return kafka_broker.host + ':' + str(kafka_broker.port)
-
-
-def test_consumer(kafka_broker, topic):
+def test_consumer(consumer):
     # The `topic` fixture is included because
     # 0.8.2 brokers need a topic to function well
-    consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
     consumer.poll(timeout_ms=500)
     assert consumer._client.cluster.brokers()
     consumer.close()
 
 
-def test_consumer_topics(kafka_broker, topic):
-    consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
+def test_consumer_topics(consumer, topic):
     # Necessary to drive the IO
     consumer.poll(timeout_ms=500)
     assert topic in consumer.topics()
@@ -35,9 +29,8 @@ def test_consumer_topics(kafka_broker, topic):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 9), reason='Unsupported Kafka Version')
-def test_group(kafka_broker, topic):
+def test_group(kafka_consumer_factory, topic):
     num_partitions = 4
-    connect_str = get_connect_str(kafka_broker)
     consumers = {}
     stop = {}
     threads = {}
@@ -47,12 +40,9 @@ def test_group(kafka_broker, topic):
         assert i not in consumers
         assert i not in stop
         stop[i] = threading.Event()
-        consumers[i] = KafkaConsumer(topic,
-                                     bootstrap_servers=connect_str,
-                                     group_id=group_id,
-                                     client_id="consumer_thread-%s" % i,
-                                     api_version_auto_timeout_ms=5000,
-                                     heartbeat_interval_ms=500)
+        consumers[i] = kafka_consumer_factory(group_id=group_id,
+                                              client_id="consumer_thread-%s" % i,
+                                              api_version_auto_timeout_ms=5000)
         while not stop[i].is_set():
             for tp, records in consumers[i].poll(timeout_ms=200).items():
                 messages[i][tp].extend(records)
@@ -143,8 +133,8 @@ def test_group(kafka_broker, topic):
             threads[c] = None
 
 
-def test_paused(kafka_broker, topic):
-    consumer = KafkaConsumer(bootstrap_servers=get_connect_str(kafka_broker))
+def test_paused(kafka_consumer_factory, topic):
+    consumer = kafka_consumer_factory(topics=())
     topics = [TopicPartition(topic, 1)]
     consumer.assign(topics)
     assert set(topics) == consumer.assignment()
@@ -162,12 +152,9 @@ def test_paused(kafka_broker, topic):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 9), reason='Unsupported Kafka Version')
-def test_heartbeat_thread(kafka_broker, topic):
+def test_heartbeat_thread(kafka_consumer_factory):
     group_id = 'test-group-' + random_string(6)
-    consumer = KafkaConsumer(topic,
-                             bootstrap_servers=get_connect_str(kafka_broker),
-                             group_id=group_id,
-                             heartbeat_interval_ms=500)
+    consumer = kafka_consumer_factory(group_id=group_id)
 
     # poll until we have joined group / have assignment
     start = time.monotonic()
