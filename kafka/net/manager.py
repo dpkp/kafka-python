@@ -293,6 +293,9 @@ class KafkaConnectionManager:
         while not future.is_done:
             node_id = self.least_loaded_node()
             if node_id is None:
+                if not self.bootstrapped:
+                    await self.bootstrap()
+                    continue
                 delay = self.config['reconnect_backoff_ms'] / 1000
                 log.debug("No node available for metadata request, retrying in %ss", delay)
                 await self._net.sleep(delay)
