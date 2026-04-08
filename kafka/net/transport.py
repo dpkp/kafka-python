@@ -88,8 +88,8 @@ class KafkaTCPTransport:
             recvd_data, err = self._sock_recv()
             log.debug('%s: received %d bytes', self, len(recvd_data))
             self.last_read = time.monotonic()
-            # if self._sensors:
-            #     self._sensors.bytes_received.record(len(recvd_data))
+            if self._protocol and self._protocol._sensors:
+                self._protocol._sensors.bytes_received.record(len(recvd_data))
 
             try:
                 self._protocol.data_received(recvd_data)
@@ -188,6 +188,8 @@ class KafkaTCPTransport:
             total_bytes, err = self._sock_send()
             log.debug('%s: sent %d bytes', self, total_bytes)
             self.last_write = time.monotonic()
+            if self._protocol and self._protocol._sensors:
+                self._protocol._sensors.bytes_sent.record(total_bytes)
         if self._closed:
             self._close()
         elif not self._write:
