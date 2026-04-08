@@ -857,6 +857,8 @@ class KafkaClient:
         brokers = self.cluster.brokers()
         if not brokers and bootstrap_fallback:
             brokers = self.cluster.bootstrap_brokers()
+        if not brokers:
+            return self.config['retry_backoff_ms']
         return min([self._refresh_delay_ms(broker.node_id) for broker in brokers])
 
     def _next_ifr_request_timeout_ms(self):
