@@ -29,7 +29,7 @@ class Histogram:
         return self._hist
 
     def clear(self):
-        for i in range(self._hist):
+        for i in range(len(self._hist)):
             self._hist[i] = 0.0
         self._count = 0
 

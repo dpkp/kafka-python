@@ -26,7 +26,7 @@ class Percentiles(AbstractSampledStat, AbstractCompoundStat):
             if min_val != 0.0:
                 raise ValueError('Linear bucket sizing requires min_val'
                                  ' to be 0.0.')
-            self.bin_scheme = Histogram.LinearBinScheme(self._buckets, max_val)
+            self._bin_scheme = Histogram.LinearBinScheme(self._buckets, max_val)
         else:
             raise ValueError('Unknown bucket type: %s' % (bucketing,))
 

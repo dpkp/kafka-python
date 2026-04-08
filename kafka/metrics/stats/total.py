@@ -3,7 +3,7 @@ from kafka.metrics.measurable_stat import AbstractMeasurableStat
 
 class Total(AbstractMeasurableStat):
     """An un-windowed cumulative total maintained over all time."""
-    __slots__ = ('_total')
+    __slots__ = ('_total',)
 
     def __init__(self, value=0.0):
         self._total = value
