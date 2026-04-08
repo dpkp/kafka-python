@@ -771,3 +771,190 @@ def test_seek_before_exception(client, mocker):
     # Should not throw OffsetOutOfRangeError after the seek
     records, partial = fetcher.fetched_records()
     assert len(records) == 0
+
+
+class TestFetchOffsetsByTimes:
+    def _make_fetcher(self, client, mocker):
+        subscription_state = SubscriptionState()
+        subscription_state.subscribe(topics=['test'])
+        tp = TopicPartition('test', 0)
+        subscription_state.assign_from_subscribed([tp])
+        subscription_state.seek(tp, 0)
+        return Fetcher(client, subscription_state)
+
+    def test_empty_timestamps(self, client, metrics, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        assert fetcher._fetch_offsets_by_times({}) == {}
+
+    def test_success_no_retry(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+        expected_offset = OffsetAndTimestamp(10, 1000, -1)
+
+        future = Future()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        mocker.patch.object(fetcher._client, 'poll', side_effect=lambda **kw: future.success(({tp: expected_offset}, set())))
+
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+        assert result == {tp: expected_offset}
+
+    def test_success_with_retry(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp0 = TopicPartition('test', 0)
+        tp1 = TopicPartition('test', 1)
+        timestamps = {tp0: 1000, tp1: 2000}
+        offset0 = OffsetAndTimestamp(10, 1000, -1)
+        offset1 = OffsetAndTimestamp(20, 2000, -1)
+
+        # First call succeeds for tp0 but needs retry for tp1
+        future1 = Future()
+        future2 = Future()
+        futures = iter([future1, future2])
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+
+        def poll_side_effect(**kw):
+            f = kw.get('future')
+            if f is future1:
+                f.success(({tp0: offset0}, {tp1}))
+            elif f is future2:
+                f.success(({tp1: offset1}, set()))
+
+        mocker.patch.object(fetcher._client, 'poll', side_effect=poll_side_effect)
+
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+        assert result == {tp0: offset0, tp1: offset1}
+
+    def test_timeout_raises(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+
+        future = Future()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        # poll does not complete the future
+        mocker.patch.object(fetcher._client, 'poll')
+
+        with pytest.raises(Errors.KafkaTimeoutError):
+            fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+
+    def test_non_retriable_error_raises(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+
+        future = Future()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        # AuthorizationError is not retriable
+        error = Errors.TopicAuthorizationFailedError()
+        mocker.patch.object(fetcher._client, 'poll', side_effect=lambda **kw: future.failure(error))
+
+        with pytest.raises(Errors.TopicAuthorizationFailedError):
+            fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+
+    def test_retriable_invalid_metadata_triggers_refresh(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+        expected_offset = OffsetAndTimestamp(10, 1000, -1)
+
+        # First call fails with invalid_metadata error, second succeeds
+        future1 = Future()
+        future2 = Future()
+        futures = iter([future1, future2])
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+
+        refresh_future = Future()
+        mocker.patch.object(fetcher._client.cluster, 'request_update', return_value=refresh_future)
+
+        call_count = [0]
+        def poll_side_effect(**kw):
+            f = kw.get('future')
+            if f is future1:
+                f.failure(NotLeaderForPartitionError())
+            elif f is refresh_future:
+                refresh_future.success(None)
+            elif f is future2:
+                f.success(({tp: expected_offset}, set()))
+            call_count[0] += 1
+
+        mocker.patch.object(fetcher._client, 'poll', side_effect=poll_side_effect)
+
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+        assert result == {tp: expected_offset}
+        fetcher._client.cluster.request_update.assert_called_once()
+
+    def test_retriable_non_metadata_error_sleeps(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+        expected_offset = OffsetAndTimestamp(10, 1000, -1)
+
+        # RequestTimedOutError is retriable but not invalid_metadata
+        future1 = Future()
+        future2 = Future()
+        futures = iter([future1, future2])
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+
+        # Ensure cluster does not need update
+        mocker.patch.object(type(fetcher._client.cluster), 'need_update', new_callable=mocker.PropertyMock, return_value=False)
+
+        def poll_side_effect(**kw):
+            f = kw.get('future')
+            if f is future1:
+                f.failure(Errors.RequestTimedOutError())
+            elif f is future2:
+                f.success(({tp: expected_offset}, set()))
+
+        mocker.patch.object(fetcher._client, 'poll', side_effect=poll_side_effect)
+        mock_sleep = mocker.patch('time.sleep')
+
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+        assert result == {tp: expected_offset}
+        mock_sleep.assert_called_once()
+
+    def test_success_does_not_check_exception(self, client, mocker):
+        """Regression: successful future should not fall through to check future.exception."""
+        fetcher = self._make_fetcher(client, mocker)
+        tp0 = TopicPartition('test', 0)
+        tp1 = TopicPartition('test', 1)
+        timestamps = {tp0: 1000, tp1: 2000}
+        offset0 = OffsetAndTimestamp(10, 1000, -1)
+        offset1 = OffsetAndTimestamp(20, 2000, -1)
+
+        future1 = Future()
+        future2 = Future()
+        futures = iter([future1, future2])
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+
+        def poll_side_effect(**kw):
+            f = kw.get('future')
+            if f is future1:
+                # Succeeds but has retry partitions — the bug was that code
+                # would fall through to check future.exception (which is None),
+                # causing an AttributeError
+                f.success(({tp0: offset0}, {tp1}))
+            elif f is future2:
+                f.success(({tp1: offset1}, set()))
+
+        mocker.patch.object(fetcher._client, 'poll', side_effect=poll_side_effect)
+
+        # Should not raise AttributeError
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=10000)
+        assert result == {tp0: offset0, tp1: offset1}
+
+    def test_no_timeout_passes_none(self, client, mocker):
+        fetcher = self._make_fetcher(client, mocker)
+        tp = TopicPartition('test', 0)
+        timestamps = {tp: 1000}
+        expected_offset = OffsetAndTimestamp(10, 1000, -1)
+
+        future = Future()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        mocker.patch.object(fetcher._client, 'poll', side_effect=lambda **kw: future.success(({tp: expected_offset}, set())))
+
+        result = fetcher._fetch_offsets_by_times(timestamps, timeout_ms=None)
+        assert result == {tp: expected_offset}
+        # With timeout_ms=None, poll should receive None timeout
+        fetcher._client.poll.assert_called_once()
+        assert fetcher._client.poll.call_args[1]['timeout_ms'] is None
