@@ -250,16 +250,17 @@ class Fetcher(six.Iterator):
                 break
 
             if future.succeeded():
-                fetched_offsets.update(future.value[0])
-                if not future.value[1]:
+                offsets, retry = future.value
+                fetched_offsets.update(offsets)
+                if not retry:
                     return fetched_offsets
 
-                timestamps = {tp: timestamps[tp] for tp in future.value[1]}
+                timestamps = {tp: timestamps[tp] for tp in retry}
 
             elif not future.retriable():
                 raise future.exception  # pylint: disable-msg=raising-bad-type
 
-            if future.exception.invalid_metadata or self._client.cluster.need_update:
+            elif future.exception.invalid_metadata or self._client.cluster.need_update:
                 refresh_future = self._client.cluster.request_update()
                 self._client.poll(future=refresh_future, timeout_ms=timer.timeout_ms)
 
