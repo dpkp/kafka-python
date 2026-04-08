@@ -125,7 +125,7 @@ class TestKafkaNetClientDelegation:
         client.poll(timeout_ms=0)
 
     def test_least_loaded_node_before_bootstrap(self, client, manager):
-        assert client.least_loaded_node() == 'bootstrap-0'
+        assert client.least_loaded_node() is None
 
     def test_least_loaded_node_with_brokers(self, client, manager):
         from kafka.protocol.metadata import MetadataResponse
