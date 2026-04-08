@@ -1,7 +1,7 @@
 import abc
 
 
-class AbstractStat(object, metaclass=abc.ABCMeta):
+class AbstractStat(metaclass=abc.ABCMeta):
     """
     An AbstractStat is a quantity such as average, max, etc that is computed
     off the stream of updates to a sensor

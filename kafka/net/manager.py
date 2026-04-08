@@ -7,6 +7,7 @@ import time
 
 from .inet import create_connection
 from .connection import KafkaConnection
+from .metrics import KafkaManagerMetrics
 from .transport import KafkaSSLTransport, KafkaTCPTransport
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
@@ -42,6 +43,8 @@ class KafkaConnectionManager:
         'socks5_proxy': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
+        'metrics': None,
+        'metric_group_prefix': '',
     }
     def __init__(self, net, cluster, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -58,6 +61,11 @@ class KafkaConnectionManager:
         self.broker_version_data = None
         self._bootstrap_future = None
         self._metadata_future = None
+        if self.config['metrics']:
+            self._sensors = KafkaManagerMetrics(
+                self.config['metrics'], self.config['metric_group_prefix'], self._conns)
+        else:
+            self._sensors = None
         if self.config['api_version'] is not None:
             self.broker_version_data = BrokerVersionData(self.config['api_version'])
 
@@ -190,6 +198,8 @@ class KafkaConnectionManager:
             self.update_backoff(node.node_id)
             return
 
+        if self._sensors:
+            self._sensors.connection_created.record()
         self.reset_backoff(node.node_id)
         if conn.broker_version_data is not None:
             if self.cluster.is_bootstrap(node.node_id):
@@ -208,6 +218,8 @@ class KafkaConnectionManager:
         conn = KafkaConnection(self._net, node_id=node_id, broker_version_data=self.broker_version_data, **self.config)
         if pop_on_close:
             conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
+        if self._sensors:
+            conn.close_future.add_both(lambda _: self._sensors.connection_closed.record())
         if refresh_metadata_on_err:
             conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn

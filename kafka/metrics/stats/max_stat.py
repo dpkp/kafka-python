@@ -6,7 +6,7 @@ class Max(AbstractSampledStat):
     __slots__ = ('_initial_value', '_samples', '_current')
 
     def __init__(self):
-        super(Max, self).__init__(float('-inf'))
+        super().__init__(float('-inf'))
 
     def update(self, sample, config, value, now):
         sample.value = max(sample.value, value)

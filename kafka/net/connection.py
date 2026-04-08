@@ -6,6 +6,7 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.net.metrics import KafkaConnectionMetrics
 from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.sasl import SaslAuthenticateRequest, SaslHandshakeRequest, SaslBytesRequest
 from kafka.protocol.broker_version_data import BrokerVersionData
@@ -33,6 +34,8 @@ class KafkaConnection:
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'api_version_auto_timeout_ms': 2000,
+        'metrics': None,
+        'metric_group_prefix': '',
     }
 
     def __init__(self, net, node_id=None, broker_version_data=None, **configs):
@@ -55,6 +58,11 @@ class KafkaConnection:
         self.broker_version_data = broker_version_data
         self._api_versions_idx = ApiVersionsRequest.max_version # version of ApiVersionsRequest to try on first connect
         self._throttle_time = 0
+        if self.config['metrics']:
+            self._sensors = KafkaConnectionMetrics(
+                self.config['metrics'], self.config['metric_group_prefix'], node_id)
+        else:
+            self._sensors = None
         self._init_future.add_errback(self.fail_in_flight_requests)
         self._close_future.add_both(self.fail_in_flight_requests)
 
@@ -172,8 +180,8 @@ class KafkaConnection:
                 return self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
 
             latency_ms = (time.monotonic() - sent_time) * 1000
-            # if self._sensors:
-            #     self._sensors.request_time.record(latency_ms)
+            if self._sensors:
+                self._sensors.request_time.record(latency_ms)
 
             log.debug('%s: Response %d (%s ms): %s', self, resp_correlation_id, latency_ms, response)
             self._maybe_throttle(response)
@@ -292,8 +300,8 @@ class KafkaConnection:
 
     def _maybe_throttle(self, response):
         throttle_time_ms = getattr(response, 'throttle_time_ms', 0)
-        #if self._sensors:
-        #    self._sensors.throttle_time.record(throttle_time_ms)
+        if self._sensors:
+            self._sensors.throttle_time.record(throttle_time_ms)
         if not throttle_time_ms:
             return
         # Client side throttling enabled in v2.0 brokers
