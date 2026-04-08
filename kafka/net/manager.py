@@ -90,7 +90,8 @@ class KafkaConnectionManager:
                     log.error('Did you attempt to connect to a kafka controller (no metadata support)?')
                     future.failure(conn.init_future.exception)
                     return
-                except Exception:
+                except Exception as exc:
+                    self._conns.pop(bootstrap_broker.node_id, conn).close(exc)
                     continue
 
             try:
