@@ -157,6 +157,9 @@ class TestKafkaConnectionManagerBootstrap:
         manager.poll(timeout_ms=3000, future=f)
         assert f.failed()
         assert isinstance(f.exception, Errors.KafkaConnectionError)
+        assert not manager._conns
+        failures, _ = manager._backoff['bootstrap-0']
+        assert failures > 1
 
     def test_bootstrapped_property(self, manager):
         assert not manager.bootstrapped
