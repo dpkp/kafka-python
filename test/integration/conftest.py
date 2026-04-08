@@ -11,7 +11,10 @@ from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_top
 
 
 def pytest_collection_modifyitems(items):
+    current_dir = os.path.dirname(__file__)
     for item in items:
+        if not str(item.fspath).startswith(current_dir):
+            continue
         if not env_kafka_version():
             item.add_marker(pytest.mark.skip(reason="No KAFKA_VERSION set"))
 
