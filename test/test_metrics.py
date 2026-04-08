@@ -342,7 +342,7 @@ def test_duplicate_MetricName(metrics):
         metrics.sensor('test2').add(metrics.metric_name('test', 'grp1'), Total())
 
 
-def test_Quotas(metrics):
+def test_quotas(metrics):
     sensor = metrics.sensor('test')
     sensor.add(metrics.metric_name('test1.total', 'grp1'), Total(),
                MetricConfig(quota=Quota.upper_bound(5.0)))
@@ -360,7 +360,7 @@ def test_Quotas(metrics):
         sensor.record(-1.0)
 
 
-def test_Quotas_equality():
+def test_quotas_equality():
     quota1 = Quota.upper_bound(10.5)
     quota2 = Quota.lower_bound(10.5)
     assert quota1 != quota2, 'Quota with different upper values should not be equal'
@@ -369,7 +369,7 @@ def test_Quotas_equality():
     assert quota2 == quota3, 'Quota with same upper and bound values should be equal'
 
 
-def test_Percentiles(metrics):
+def test_percentiles(metrics):
     buckets = 100
     _percentiles = [
         Percentile(metrics.metric_name('test.p25', 'grp1'), 25),
