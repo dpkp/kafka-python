@@ -44,6 +44,23 @@ class TestSSLConnection:
             security_protocol='SSL',
             ssl_cafile=os.path.join(ssl_kafka.ssl_dir, 'ca-cert'),
             ssl_check_hostname=False,
+            api_version=env_kafka_version(),
         )
         assert client.broker_version_data
+        client.close()
+
+    def test_legacy_kafka_client_ssl(self, ssl_kafka):
+        """Test LegacyKafkaClient (kafka.net) can connect over SSL."""
+        from kafka.net.compat import KafkaNetClient
+
+        client = KafkaNetClient(
+            bootstrap_servers='localhost:%d' % ssl_kafka.port,
+            security_protocol='SSL',
+            ssl_cafile=os.path.join(ssl_kafka.ssl_dir, 'ca-cert'),
+            ssl_check_hostname=False,
+            api_version=env_kafka_version(),
+        )
+        version = client.check_version(timeout_ms=5000)
+        assert version is not None
+        assert client.cluster.brokers()
         client.close()

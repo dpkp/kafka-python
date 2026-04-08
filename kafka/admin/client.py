@@ -2,6 +2,7 @@ from collections import defaultdict
 import copy
 import itertools
 import logging
+import selectors
 import socket
 import time
 
@@ -9,7 +10,7 @@ from . import ConfigResourceType
 
 from kafka.admin.acl_resource import ACLOperation, ACLPermissionType, ACLFilter, ACL, ResourcePattern, ResourceType, \
     ACLResourcePatternType, valid_acl_operations
-from kafka.client_async import KafkaClient, selectors
+from kafka.net.compat import KafkaNetClient
 from kafka.protocol.consumer.metadata import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment, ConsumerProtocolType,
 )
@@ -191,7 +192,7 @@ class KafkaAdminClient:
         'metric_reporters': [],
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
-        'kafka_client': KafkaClient,
+        'kafka_client': KafkaNetClient,
     }
 
     def __init__(self, **configs):

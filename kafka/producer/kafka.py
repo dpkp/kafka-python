@@ -1,13 +1,14 @@
 import atexit
 import copy
 import logging
+import selectors
 import socket
 import threading
 import warnings
 import weakref
 
 import kafka.errors as Errors
-from kafka.client_async import KafkaClient, selectors
+from kafka.net.compat import KafkaNetClient
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd
 from kafka.metrics import MetricConfig, Metrics
 from kafka.partitioner.default import DefaultPartitioner
@@ -418,7 +419,7 @@ class KafkaProducer:
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
         'socks5_proxy': None,
-        'kafka_client': KafkaClient,
+        'kafka_client': KafkaNetClient,
     }
 
     DEPRECATED_CONFIGS = ('buffer_memory',)
