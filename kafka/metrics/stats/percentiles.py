@@ -16,7 +16,7 @@ class Percentiles(AbstractSampledStat, AbstractCompoundStat):
 
     def __init__(self, size_in_bytes, bucketing, max_val, min_val=0.0,
                  percentiles=None):
-        super(Percentiles, self).__init__(0.0)
+        super().__init__(0.0)
         self._percentiles = percentiles or []
         self._buckets = int(size_in_bytes / 4)
         if bucketing == BucketSizing.CONSTANT:
@@ -71,5 +71,5 @@ class Percentiles(AbstractSampledStat, AbstractCompoundStat):
 
     class HistogramSample(AbstractSampledStat.Sample):
         def __init__(self, scheme, now):
-            super(Percentiles.HistogramSample, self).__init__(0.0, now)
+            super().__init__(0.0, now)
             self.histogram = Histogram(scheme)
