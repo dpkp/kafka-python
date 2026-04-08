@@ -141,6 +141,7 @@ def test_metadata_v7():
 
 def test_unauthorized_topic():
     cluster = ClusterMetadata()
+    cluster.set_topics(['unauthorized-topic'])
     assert len(cluster.brokers()) == 0
 
     cluster.update_metadata(MetadataResponse[0](
@@ -176,58 +177,59 @@ def test_set_topics():
     assert cluster._need_update is False
 
 
-def test_collect_hosts__happy_path():
-    hosts = "127.0.0.1:1234,127.0.0.1"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('127.0.0.1', 1234, socket.AF_INET),
-        ('127.0.0.1', 9092, socket.AF_INET),
-    ])
+class TestClusterMetadataCollectHosts:
+    def test_collect_hosts__happy_path(self):
+        hosts = "127.0.0.1:1234,127.0.0.1"
+        results = collect_hosts(hosts)
+        assert set(results) == set([
+            ('127.0.0.1', 1234, socket.AF_INET),
+            ('127.0.0.1', 9092, socket.AF_INET),
+        ])
 
 
-def test_collect_hosts__ipv6():
-    hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_INET6),
-        ('2001:1000:2000::1', 9092, socket.AF_INET6),
-        ('2001:1000:2000::1', 1234, socket.AF_INET6),
-    ])
+    def test_collect_hosts__ipv6(self):
+        hosts = "[localhost]:1234,[2001:1000:2000::1],[2001:1000:2000::1]:1234"
+        results = collect_hosts(hosts)
+        assert set(results) == set([
+            ('localhost', 1234, socket.AF_INET6),
+            ('2001:1000:2000::1', 9092, socket.AF_INET6),
+            ('2001:1000:2000::1', 1234, socket.AF_INET6),
+        ])
 
 
-def test_collect_hosts__string_list():
-    hosts = [
-        'localhost:1234',
-        'localhost',
-        '[localhost]',
-        '2001::1',
-        '[2001::1]',
-        '[2001::1]:1234',
-    ]
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_INET6),
-        ('2001::1', 9092, socket.AF_INET6),
-        ('2001::1', 9092, socket.AF_INET6),
-        ('2001::1', 1234, socket.AF_INET6),
-    ])
+    def test_collect_hosts__string_list(self):
+        hosts = [
+            'localhost:1234',
+            'localhost',
+            '[localhost]',
+            '2001::1',
+            '[2001::1]',
+            '[2001::1]:1234',
+        ]
+        results = collect_hosts(hosts)
+        assert set(results) == set([
+            ('localhost', 1234, socket.AF_UNSPEC),
+            ('localhost', 9092, socket.AF_UNSPEC),
+            ('localhost', 9092, socket.AF_INET6),
+            ('2001::1', 9092, socket.AF_INET6),
+            ('2001::1', 9092, socket.AF_INET6),
+            ('2001::1', 1234, socket.AF_INET6),
+        ])
 
 
-def test_collect_hosts__with_spaces():
-    hosts = "localhost:1234, localhost"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('localhost', 1234, socket.AF_UNSPEC),
-        ('localhost', 9092, socket.AF_UNSPEC),
-    ])
+    def test_collect_hosts__with_spaces(self):
+        hosts = "localhost:1234, localhost"
+        results = collect_hosts(hosts)
+        assert set(results) == set([
+            ('localhost', 1234, socket.AF_UNSPEC),
+            ('localhost', 9092, socket.AF_UNSPEC),
+        ])
 
 
-def test_collect_hosts__protocol():
-    hosts = "SASL_SSL://foo.bar:1234,SASL_SSL://fizz.buzz:5678"
-    results = collect_hosts(hosts)
-    assert set(results) == set([
-        ('foo.bar', 1234, socket.AF_UNSPEC),
-        ('fizz.buzz', 5678, socket.AF_UNSPEC),
-    ])
+    def test_collect_hosts__protocol(self):
+        hosts = "SASL_SSL://foo.bar:1234,SASL_SSL://fizz.buzz:5678"
+        results = collect_hosts(hosts)
+        assert set(results) == set([
+            ('foo.bar', 1234, socket.AF_UNSPEC),
+            ('fizz.buzz', 5678, socket.AF_UNSPEC),
+        ])

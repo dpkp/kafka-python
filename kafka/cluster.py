@@ -343,6 +343,7 @@ class ClusterMetadata:
         _new_broker_partitions = collections.defaultdict(set)
         _new_unauthorized_topics = set()
         _new_internal_topics = set()
+        _retry_topics = set()
 
         for t in metadata.topics:
             topic = t.name
@@ -358,23 +359,25 @@ class ClusterMetadata:
                         _new_broker_partitions[p_data.leader_id].add(
                             TopicPartition(topic, partition))
 
-            # Specific topic errors can be ignored if this is a full metadata fetch
-            elif self.need_all_topic_metadata:
-                continue
-
-            elif error_type is Errors.LeaderNotAvailableError:
-                log.warning("Topic %s is not available during auto-create"
-                            " initialization", topic)
-            elif error_type is Errors.UnknownTopicOrPartitionError:
-                log.error("Topic %s not found in cluster metadata", topic)
-            elif error_type is Errors.TopicAuthorizationFailedError:
-                log.error("Topic %s is not authorized for this client", topic)
-                _new_unauthorized_topics.add(topic)
-            elif error_type is Errors.InvalidTopicError:
-                log.error("'%s' is not a valid topic name", topic)
-            else:
-                log.error("Error fetching metadata for topic %s: %s",
-                          topic, error_type)
+            # Only log errors for topics we are specifically tracking
+            elif topic in self._topics:
+                if error_type.retriable:
+                    _retry_topics.add(topic)
+                if error_type is Errors.LeaderNotAvailableError:
+                    log.warning("Topic %s is not available during auto-create"
+                                " initialization", topic)
+                elif error_type is Errors.UnknownTopicOrPartitionError:
+                    log.error("Topic %s not found in cluster metadata", topic)
+                elif error_type is Errors.TopicAuthorizationFailedError:
+                    log.error("Topic %s is not authorized for this client", topic)
+                    _new_unauthorized_topics.add(topic)
+                elif error_type is Errors.InvalidTopicError:
+                    log.error("'%s' is not a valid topic name", topic)
+                    if topic in self._topics:
+                        self._topics.remove(topic)
+                else:
+                    log.error("Error fetching metadata for topic %s: %s",
+                              topic, error_type)
 
         with self._lock:
             self._brokers = _new_brokers
@@ -384,12 +387,11 @@ class ClusterMetadata:
             self._broker_partitions = _new_broker_partitions
             self.unauthorized_topics = _new_unauthorized_topics
             self.internal_topics = _new_internal_topics
+            self._need_update = len(_retry_topics) > 0
             f = None
             if self._future:
                 f = self._future
             self._future = None
-            if self.need_all_topic_metadata or self._topics.issubset({t.name for t in metadata.topics}):
-                self._need_update = False
 
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
