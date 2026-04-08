@@ -307,8 +307,10 @@ class Sender(threading.Thread):
                         break
                 else:
                     target_node = self._client.least_loaded_node()
-                    if target_node is not None and not self._client.await_ready(target_node, timeout_ms=self.config['request_timeout_ms']):
-                        target_node = None
+                    if target_node is None:
+                        self._client.poll(future=self._metadata.request_update())
+                    elif not self._client.await_ready(target_node, timeout_ms=self.config['request_timeout_ms']):
+                        continue
 
                 if target_node is not None:
                     if next_request_handler.is_retry:
@@ -323,9 +325,6 @@ class Sender(threading.Thread):
                 if next_request_handler.needs_coordinator():
                     self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
                     break
-
-            time.sleep(self.config['retry_backoff_ms'] / 1000)
-            self._metadata.request_update()
 
         if target_node is None:
             self._transaction_manager.retry(next_request_handler)
@@ -366,7 +365,7 @@ class Sender(threading.Thread):
                     log.debug("%s, Could not find an available broker to send InitProducerIdRequest to." +
                               " Will back off and try again.", str(self))
                     time.sleep(self._client.least_loaded_node_refresh_ms() / 1000)
-                    continue
+                    return
                 version = self._client.api_version(InitProducerIdRequest, max_version=1)
                 request = InitProducerIdRequest[version](
                     transactional_id=self.config['transactional_id'],
