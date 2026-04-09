@@ -59,6 +59,17 @@ Project Infra
 * Bump actions/cache from 4 to 5 (#2702)
 * Bump actions/upload-artifact from 4 to 7 (#2789)
 
+# 2.3.1 (Apr 9, 2026)
+
+Fixes
+* Fix TaggedFields value encoding; add test coverage (#2725)
+* Fix zstd multi-frame decompression failure (#2717)
+* Fix KeyError in KafkaConsumer.committed() (#2710)
+* Fix VarInt/VarLong encoding; move tests to test/protocol/ (#2706)
+* Fix `Fetcher._fetch_offsets_by_times` retry handling (#2833)
+* Fixes to support integration testing with external KAFKA_URI (#2838)
+* Minor py2 fixes: consumer integration test; dont pip install python-snappy
+
 # 2.3.0 (Nov 20, 2025)
 
 CLI
@@ -90,6 +101,17 @@ Project Infra
 * Bump actions/checkout from 4 to 5 (#2669)
 * Bump actions/checkout from 5 to 6 (#2694)
 * NixOS helpers
+
+# 2.2.19 (Apr 9, 2026)
+
+Fixes
+* Fix TaggedFields value encoding; add test coverage (#2725)
+* Fix zstd multi-frame decompression failure (#2717)
+* Fix KeyError in KafkaConsumer.committed() (#2710)
+* Fix VarInt/VarLong encoding; move tests to test/protocol/ (#2706)
+* Fix `Fetcher._fetch_offsets_by_times retry handling` (#2833)
+* Fixes to support integration testing with external KAFKA_URI (#2838)
+* Minor py2 fixes: consumer integration test; done pip install python-snappy
 
 # 2.2.18 (Nov 20, 2025)
 
