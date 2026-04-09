@@ -319,6 +319,10 @@ class TransactionManager:
             else:
                 self._sequence_numbers[tp] += increment
 
+    def set_sequence_number(self, tp, sequence):
+        with self._lock:
+            self._sequence_numbers[tp] = sequence
+
     def reset_sequence_for_partition(self, tp):
         with self._lock:
             self._sequence_numbers.pop(tp, None)
