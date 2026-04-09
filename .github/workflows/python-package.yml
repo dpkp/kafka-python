@@ -33,7 +33,7 @@ jobs:
           - "3.0.2"
           - "3.5.2"
           - "3.9.0"
-          - "4.0.0"
+          - "4.2.0"
         python:
           - "3.14"
         include:
@@ -41,17 +41,17 @@ jobs:
           #  kafka: "2.6.0"
           #  experimental: true
           - python: "3.8"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
           - python: "3.9"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
           - python: "3.10"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
           - python: "3.11"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
           - python: "3.12"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
           - python: "3.13"
-            kafka: "4.0.0"
+            kafka: "4.2.0"
 
     steps:
       - uses: actions/checkout@v6
