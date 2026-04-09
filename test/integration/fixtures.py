@@ -710,8 +710,8 @@ class KafkaFixture(Fixture):
 
 def get_api_versions():
     logging.basicConfig(level=logging.ERROR)
-    zk = ZookeeperFixture.instance()
-    k = KafkaFixture.instance(0, zk)
+    k = KafkaFixture.instance(0)
+    zk = k.zookeeper
 
     from kafka import KafkaClient
     client = KafkaClient(bootstrap_servers='localhost:{}'.format(k.port))
@@ -719,11 +719,12 @@ def get_api_versions():
 
     from pprint import pprint
 
-    pprint(client.get_api_versions())
+    print(client.get_api_versions())
 
     client.close()
     k.close()
-    zk.close()
+    if zk:
+        zk.close()
 
 
 def run_brokers():

@@ -2,8 +2,9 @@
 
 SHELL = bash
 
-export KAFKA_VERSION ?= 4.0.0
-DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
+export KAFKA_VERSION ?= 4.2.0
+DIST_BASE_URL ?= https://downloads.apache.org/kafka/
+ARCHIVE_BASE_URL = https://archive.apache.org/dist/kafka/
 
 # Required to support testing old kafka versions on newer java releases
 # The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
@@ -70,20 +71,12 @@ doc:
 
 kafka_artifact_version=$(lastword $(subst -, ,$(1)))
 
-# Mappings for artifacts -> scala version; any unlisted will use default 2.12
-kafka_scala_0_8_0=2.8.0
-kafka_scala_0_8_1=2.10
-kafka_scala_0_8_1_1=2.10
-kafka_scala_0_8_2_0=2.11
-kafka_scala_0_8_2_1=2.11
-kafka_scala_0_8_2_2=2.11
-kafka_scala_0_9_0_0=2.11
-kafka_scala_0_9_0_1=2.11
-kafka_scala_0_10_0_0=2.11
-kafka_scala_0_10_0_1=2.11
-kafka_scala_0_10_1_0=2.11
-kafka_scala_4_0_0=2.13
-scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(kafka_scala_$(subst .,_,$(1))),$(kafka_scala_$(subst .,_,$(1))),2.12))
+# Version comparison: returns "yes" if $(1) >= $(2) (using sort -V)
+version_ge=$(shell printf '%s\n%s\n' '$(2)' '$(1)' | sort -V | head -n1 | grep -qx '$(2)' && echo yes)
+
+# Determine scala version based on kafka version thresholds
+# 0.8.0 => 2.8.0, >=0.8.1 => 2.10, >=0.8.2 => 2.11, >=0.11 => 2.12, >=4.0 => 2.13
+scala_version=$(if $(SCALA_VERSION),$(SCALA_VERSION),$(if $(call version_ge,$(1),4.0),2.13,$(if $(call version_ge,$(1),0.11),2.12,$(if $(call version_ge,$(1),0.8.2),2.11,$(if $(call version_ge,$(1),0.8.1),2.10,2.8.0)))))
 
 kafka_artifact_name=kafka_$(call scala_version,$(1))-$(1).$(if $(filter 0.8.0,$(1)),tar.gz,tgz)
 
@@ -93,8 +86,10 @@ servers/dist:
 	mkdir -p servers/dist
 
 servers/dist/kafka_%.tgz servers/dist/kafka_%.tar.gz:
+	$(eval artifact_path=$(call kafka_artifact_version,$*)/$(@F))
 	@echo "Downloading $(@F)"
-	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
+	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(artifact_path) || \
+	wget -nv -P servers/dist/ -N $(ARCHIVE_BASE_URL)$(artifact_path)
 
 servers/dist/jakarta.xml.bind-api-2.3.3.jar:
 	wget -nv -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
