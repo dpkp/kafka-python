@@ -12,7 +12,7 @@ pytest-cov
 pytest-mock
 pytest-pylint
 pytest-timeout
-python-snappy
+python-snappy; python_version > '2.7'
 Sphinx
 sphinx-rtd-theme
 xxhash
