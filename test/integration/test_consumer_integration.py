@@ -16,7 +16,7 @@ from test.testutil import Timer, assert_message_count, env_kafka_version, random
 def test_kafka_version_infer(kafka_consumer_factory):
     consumer = kafka_consumer_factory(api_version=None)
     actual = BrokerVersionData(env_kafka_version())
-    expected = min((4, 0), actual.broker_version)
+    expected = min((4, 2), actual.broker_version)
     assert consumer.config['api_version'] == expected, \
         "Was expecting inferred broker version to be %s but was %s" % (expected, consumer.config['api_version'])
 
