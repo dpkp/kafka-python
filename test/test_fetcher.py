@@ -930,7 +930,7 @@ class TestFetchOffsetsByTimes:
         def poll_side_effect(**kw):
             f = kw.get('future')
             if f is future1:
-                # Succeeds but has retry partitions — the bug was that code
+                # Succeeds but has retry partitions -- the bug was that code
                 # would fall through to check future.exception (which is None),
                 # causing an AttributeError
                 f.success(({tp0: offset0}, {tp1}))
