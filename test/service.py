@@ -35,7 +35,7 @@ class ExternalService:
 
 class SpawnedService(threading.Thread):
     def __init__(self, args=None, env=None):
-        super(SpawnedService, self).__init__()
+        super().__init__()
 
         if args is None:
             raise TypeError("args parameter is required")

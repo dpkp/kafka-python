@@ -30,7 +30,7 @@ class BaseApiVersionsResponse(Response):
         data.seek(curr)
         if err != 0:
             return ApiVersionsResponse_v0.decode(data, header=header, framed=framed)
-        return super(BaseApiVersionsResponse, cls).decode(data, header=header, framed=framed)
+        return super().decode(data, header=header, framed=framed)
 
 
 class ApiVersionsResponse_v0(Response):

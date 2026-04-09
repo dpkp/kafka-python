@@ -1089,7 +1089,7 @@ class GroupCoordinatorMetrics:
 
 class HeartbeatThread(threading.Thread):
     def __init__(self, coordinator):
-        super(HeartbeatThread, self).__init__()
+        super().__init__()
         self.name = coordinator.group_id + '-heartbeat'
         self.coordinator = coordinator
         self.enabled = False

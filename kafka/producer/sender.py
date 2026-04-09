@@ -42,7 +42,7 @@ class Sender(threading.Thread):
     }
 
     def __init__(self, client, metadata, accumulator, **configs):
-        super(Sender, self).__init__()
+        super().__init__()
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:

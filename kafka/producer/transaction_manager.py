@@ -524,7 +524,7 @@ class TransactionalRequestResult:
         return self._error
 
 
-class TxnRequestHandler(object, metaclass=abc.ABCMeta):
+class TxnRequestHandler(metaclass=abc.ABCMeta):
     def __init__(self, transaction_manager, result=None):
         self.transaction_manager = transaction_manager
         self.retry_backoff_ms = transaction_manager.retry_backoff_ms
@@ -612,7 +612,7 @@ class TxnRequestHandler(object, metaclass=abc.ABCMeta):
 
 class InitProducerIdHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, transaction_timeout_ms):
-        super(InitProducerIdHandler, self).__init__(transaction_manager)
+        super().__init__(transaction_manager)
 
         if transaction_manager._api_version >= (2, 0):
             version = 1
@@ -645,7 +645,7 @@ class InitProducerIdHandler(TxnRequestHandler):
 
 class AddPartitionsToTxnHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, topic_partitions):
-        super(AddPartitionsToTxnHandler, self).__init__(transaction_manager)
+        super().__init__(transaction_manager)
 
         if transaction_manager._api_version >= (2, 7):
             version = 2
@@ -740,7 +740,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
 
 class FindCoordinatorHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, coord_type, coord_key):
-        super(FindCoordinatorHandler, self).__init__(transaction_manager)
+        super().__init__(transaction_manager)
 
         self._coord_type = coord_type
         self._coord_key = coord_key
@@ -796,7 +796,7 @@ class FindCoordinatorHandler(TxnRequestHandler):
 
 class EndTxnHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, committed):
-        super(EndTxnHandler, self).__init__(transaction_manager)
+        super().__init__(transaction_manager)
 
         if self.transaction_manager._api_version >= (2, 7):
             version = 2
@@ -837,7 +837,7 @@ class EndTxnHandler(TxnRequestHandler):
 
 class AddOffsetsToTxnHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, consumer_group_id, offsets):
-        super(AddOffsetsToTxnHandler, self).__init__(transaction_manager)
+        super().__init__(transaction_manager)
 
         self.consumer_group_id = consumer_group_id
         self.offsets = offsets
@@ -887,7 +887,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
 
 class TxnOffsetCommitHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, consumer_group_id, offsets, result):
-        super(TxnOffsetCommitHandler, self).__init__(transaction_manager, result=result)
+        super().__init__(transaction_manager, result=result)
 
         self.consumer_group_id = consumer_group_id
         self.offsets = offsets

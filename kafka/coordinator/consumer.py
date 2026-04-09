@@ -86,7 +86,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 True the only way to receive records from an internal topic is
                 subscribing to it. Requires 0.10+. Default: True
         """
-        super(ConsumerCoordinator, self).__init__(client, **configs)
+        super().__init__(client, **configs)
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -149,7 +149,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
             except TypeError:
                 pass
-        super(ConsumerCoordinator, self).__del__()
+        super().__del__()
 
     def protocol_type(self):
         return ConsumerProtocolType
@@ -403,7 +403,7 @@ class ConsumerCoordinator(BaseCoordinator):
             and self._joined_subscription != self._subscription.subscription):
             return True
 
-        return super(ConsumerCoordinator, self).need_rejoin()
+        return super().need_rejoin()
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
@@ -477,7 +477,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if autocommit:
                 self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
         finally:
-            super(ConsumerCoordinator, self).close(timeout_ms=timeout_ms)
+            super().close(timeout_ms=timeout_ms)
 
     def _invoke_completed_offset_commit_callbacks(self):
         if self._async_commit_fenced:
