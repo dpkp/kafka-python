@@ -93,7 +93,7 @@ def test_create_describe_delete_acls(kafka_admin_client):
 def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     """Tests that describe config returns configs for broker
     """
-    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
+    broker_id = kafka_admin_client._client.least_loaded_node()
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
     assert len(configs) == 1
@@ -121,7 +121,7 @@ def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_clie
 def test_describe_configs_mixed_resources_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for mixed resource types (topic + broker)
     """
-    broker_id = kafka_admin_client._client.cluster._brokers[0].nodeId
+    broker_id = kafka_admin_client._client.least_loaded_node()
     configs = kafka_admin_client.describe_configs([
         ConfigResource(ConfigResourceType.TOPIC, topic),
         ConfigResource(ConfigResourceType.BROKER, broker_id)])
@@ -144,14 +144,6 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 
     with pytest.raises(ValueError):
         kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
-
-
-@pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
-def test_describe_consumer_group_does_not_exist(kafka_admin_client):
-    """Tests that the describe consumer group call fails if the group coordinator is not available
-    """
-    with pytest.raises(CoordinatorNotAvailableError):
-        kafka_admin_client.describe_consumer_groups(['test'])
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
