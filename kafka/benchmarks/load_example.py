@@ -11,7 +11,7 @@ from kafka import KafkaConsumer, KafkaProducer
 class Producer(threading.Thread):
 
     def __init__(self, bootstrap_servers, topic, stop_event, msg_size):
-        super(Producer, self).__init__()
+        super().__init__()
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
         self.stop_event = stop_event
@@ -30,7 +30,7 @@ class Producer(threading.Thread):
 
 class Consumer(threading.Thread):
     def __init__(self, bootstrap_servers, topic, stop_event, msg_size):
-        super(Consumer, self).__init__()
+        super().__init__()
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
         self.stop_event = stop_event

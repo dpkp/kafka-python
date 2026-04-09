@@ -1,7 +1,7 @@
 import abc
 
 
-class AbstractType(object, metaclass=abc.ABCMeta):
+class AbstractType(metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def encode(cls, value): # pylint: disable=no-self-argument

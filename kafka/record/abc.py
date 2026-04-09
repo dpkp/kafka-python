@@ -1,7 +1,7 @@
 import abc
 
 
-class ABCRecord(object, metaclass=abc.ABCMeta):
+class ABCRecord(metaclass=abc.ABCMeta):
     __slots__ = ()
 
     @abc.abstractproperty
@@ -52,7 +52,7 @@ class ABCRecord(object, metaclass=abc.ABCMeta):
         """
 
 
-class ABCRecordBatchBuilder(object, metaclass=abc.ABCMeta):
+class ABCRecordBatchBuilder(metaclass=abc.ABCMeta):
     __slots__ = ()
 
     @abc.abstractmethod
@@ -91,7 +91,7 @@ class ABCRecordBatchBuilder(object, metaclass=abc.ABCMeta):
         """
 
 
-class ABCRecordBatch(object, metaclass=abc.ABCMeta):
+class ABCRecordBatch(metaclass=abc.ABCMeta):
     """ For v2 encapsulates a RecordBatch, for v0/v1 a single (maybe
         compressed) message.
     """
@@ -119,7 +119,7 @@ class ABCRecordBatch(object, metaclass=abc.ABCMeta):
         """
 
 
-class ABCRecords(object, metaclass=abc.ABCMeta):
+class ABCRecords(metaclass=abc.ABCMeta):
     __slots__ = ()
 
     @abc.abstractmethod

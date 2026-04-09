@@ -71,7 +71,7 @@ class ConsumerPerformance:
 
 class StatsReporter(threading.Thread):
     def __init__(self, interval, consumer, event=None, raw_metrics=False):
-        super(StatsReporter, self).__init__()
+        super().__init__()
         self.interval = interval
         self.consumer = consumer
         self.event = event

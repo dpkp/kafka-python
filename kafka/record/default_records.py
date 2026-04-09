@@ -450,7 +450,7 @@ class ControlRecord(DefaultRecord):
     )
 
     def __init__(self, size_in_bytes, offset, timestamp, timestamp_type, key, value, headers):
-        super(ControlRecord, self).__init__(size_in_bytes, offset, timestamp, timestamp_type, key, value, headers)
+        super().__init__(size_in_bytes, offset, timestamp, timestamp_type, key, value, headers)
         (self._version, self._type) = self.KEY_STRUCT.unpack(self._key)
 
     # see https://kafka.apache.org/documentation/#controlbatch

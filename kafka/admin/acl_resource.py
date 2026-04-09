@@ -160,7 +160,7 @@ class ACL(ACLFilter):
             permission_type,
             resource_pattern
     ):
-        super(ACL, self).__init__(principal, host, operation, permission_type, resource_pattern)
+        super().__init__(principal, host, operation, permission_type, resource_pattern)
         self.validate()
 
     def validate(self):
@@ -231,7 +231,7 @@ class ResourcePattern(ResourcePatternFilter):
             resource_name,
             pattern_type=ACLResourcePatternType.LITERAL
     ):
-        super(ResourcePattern, self).__init__(resource_type, resource_name, pattern_type)
+        super().__init__(resource_type, resource_name, pattern_type)
         self.validate()
 
     def validate(self):

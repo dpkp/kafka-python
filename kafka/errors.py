@@ -11,7 +11,7 @@ class KafkaError(RuntimeError):
         if not self.args:
             return self.__class__.__name__
         return '{0}: {1}'.format(self.__class__.__name__,
-                               super(KafkaError, self).__str__())
+                               super().__str__())
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ and self.args == other.args
@@ -26,7 +26,7 @@ class CommitFailedError(KafkaError):
         if not args:
             args = ("Commit cannot be completed since the group has already"
                     " rebalanced and assigned the partitions to another member.",)
-        super(CommitFailedError, self).__init__(*args)
+        super().__init__(*args)
 
 
 class IllegalArgumentError(KafkaError):
@@ -113,7 +113,7 @@ class BrokerResponseError(KafkaError):
         """Add errno to standard KafkaError str"""
         return '[Error {0}] {1}'.format(
             self.errno,
-            super(BrokerResponseError, self).__str__())
+            super().__str__())
 
 
 class AuthorizationError(BrokerResponseError):

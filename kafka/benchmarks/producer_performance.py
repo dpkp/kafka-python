@@ -82,7 +82,7 @@ class ProducerPerformance:
 
 class StatsReporter(threading.Thread):
     def __init__(self, interval, producer, event=None, raw_metrics=False):
-        super(StatsReporter, self).__init__()
+        super().__init__()
         self.interval = interval
         self.producer = producer
         self.event = event

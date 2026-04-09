@@ -190,14 +190,14 @@ class ZookeeperFixture(Fixture):
         return fixture
 
     def __init__(self, host, port, external=False, tmp_dir=None):
-        super(ZookeeperFixture, self).__init__()
+        super().__init__()
         self.host = host
         self.port = port
         self.running = external
         self.tmp_dir = tmp_dir
 
     def kafka_run_class_env(self):
-        env = super(ZookeeperFixture, self).kafka_run_class_env()
+        env = super().kafka_run_class_env()
         env['LOG_DIR'] = self.tmp_dir.join('logs').strpath
         return env
 
@@ -304,7 +304,7 @@ class KafkaFixture(Fixture):
                  replicas=1, partitions=2, transport='PLAINTEXT',
                  sasl_mechanism=None, auto_create_topic=True,
                  tmp_dir=None, external=False):
-        super(KafkaFixture, self).__init__()
+        super().__init__()
         self.external = external
         self.running = False
         self.host = host
@@ -465,7 +465,7 @@ class KafkaFixture(Fixture):
         return '%s:%d' % (self.host, self.port)
 
     def kafka_run_class_env(self):
-        env = super(KafkaFixture, self).kafka_run_class_env()
+        env = super().kafka_run_class_env()
         env['LOG_DIR'] = self.tmp_dir.join('logs').strpath
         return env
 
@@ -624,7 +624,7 @@ class KafkaFixture(Fixture):
         self.out("Done!")
 
     def dump_logs(self):
-        super(KafkaFixture, self).dump_logs()
+        super().dump_logs()
         self.zookeeper.dump_logs()
 
     def _format_log_dirs(self):

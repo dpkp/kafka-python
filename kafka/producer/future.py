@@ -7,17 +7,17 @@ from kafka.future import Future
 
 class FutureProduceResult(Future):
     def __init__(self, topic_partition):
-        super(FutureProduceResult, self).__init__()
+        super().__init__()
         self.topic_partition = topic_partition
         self._latch = threading.Event()
 
     def success(self, value):
-        ret = super(FutureProduceResult, self).success(value)
+        ret = super().success(value)
         self._latch.set()
         return ret
 
     def failure(self, error):
-        ret = super(FutureProduceResult, self).failure(error)
+        ret = super().failure(error)
         self._latch.set()
         return ret
 
@@ -28,7 +28,7 @@ class FutureProduceResult(Future):
 
 class FutureRecordMetadata(Future):
     def __init__(self, produce_future, batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
-        super(FutureRecordMetadata, self).__init__()
+        super().__init__()
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
         self.args = (batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)

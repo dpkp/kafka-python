@@ -1,7 +1,7 @@
 import abc
 
 
-class SaslMechanism(object, metaclass=abc.ABCMeta):
+class SaslMechanism(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __init__(self, **config):
         pass
