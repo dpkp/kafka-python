@@ -162,11 +162,13 @@ class MemoryRecordsBuilder:
         # Exposed for testing compacted records
         self._next_offset += offsets_to_skip
 
-    def append(self, timestamp, key, value, headers=[]):
+    def append(self, timestamp, key, value, headers=None):
         """ Append a message to the buffer.
 
         Returns: RecordMetadata or None if unable to append
         """
+        if headers is None:
+            headers = []
         if self._closed:
             return None
 
