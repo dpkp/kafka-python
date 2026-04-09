@@ -15,8 +15,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -48,9 +46,6 @@ kafka = ["protocol/schemas/resources/*.json", "coordinator/assignors/sticky/*.js
 [tool.setuptools.packages.find]
 exclude = ["test"]
 namespaces = false
-
-[tool.distutils.bdist_wheel]
-universal = 1
 
 [tool.pylint.main]
 ignore-patterns = '.*\.pyi$'
