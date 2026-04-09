@@ -661,7 +661,9 @@ class KafkaProducer:
         else:
             return 0
 
-    def _estimate_size_in_bytes(self, key, value, headers=[]):
+    def _estimate_size_in_bytes(self, key, value, headers=None):
+        if headers is None:
+            headers = []
         magic = self.max_usable_produce_magic(self.config['api_version'])
         if magic == 2:
             return DefaultRecordBatchBuilder.estimate_size_in_bytes(
