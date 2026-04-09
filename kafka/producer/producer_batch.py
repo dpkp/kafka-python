@@ -27,6 +27,7 @@ class ProducerBatch:
         self.records = records
         self.topic_partition = tp
         self.produce_future = FutureProduceResult(tp)
+        self._record_futures = []
         self._retry = False
         self._final_state = None
 
@@ -66,6 +67,7 @@ class ProducerBatch:
             len(key) if key is not None else -1,
             len(value) if value is not None else -1,
             sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
+        self._record_futures.append(future)
         return future
 
     def abort(self, exception):

@@ -3,6 +3,7 @@ import threading
 
 from kafka import errors as Errors
 from kafka.future import Future
+from kafka.util import Timer
 
 
 class FutureProduceResult(Future):
@@ -57,11 +58,38 @@ class FutureRecordMetadata(Future):
                                       serialized_value_size, serialized_header_size)
             self.success(metadata)
 
+    def rebind(self, new_produce_future, new_batch_index):
+        """Rebind this future to a new produce future with a new batch index.
+
+        Used when a batch is split due to MESSAGE_TOO_LARGE. The original
+        FutureRecordMetadata is rebound to the new (smaller) batch's future.
+
+        This must be called from the sender thread while the old produce_future
+        has not been completed. Any user thread blocked in get() on the old
+        produce_future's latch will be woken and will re-wait on the new one.
+        """
+        old_produce_future = self._produce_future
+        self._produce_future = new_produce_future
+        _, timestamp_ms, checksum, sk, sv, sh = self.args
+        self.args = (new_batch_index, timestamp_ms, checksum, sk, sv, sh)
+        new_produce_future.add_callback(self._produce_success)
+        new_produce_future.add_errback(self.failure)
+        # Wake any thread blocked in get() so it re-waits on the new future.
+        # The old produce_future is never completed, so its stale callbacks
+        # (registered in __init__) will never fire.
+        old_produce_future._latch.set()
+
     def get(self, timeout=None):
-        if not self.is_done and not self._produce_future.wait(timeout):
-            raise Errors.KafkaTimeoutError(
-                "Timeout after waiting for %s secs." % (timeout,))
-        assert self.is_done
+        """Wait for up to timeout seconds for future to complete."""
+        # Loop because rebind() may wake us from the old produce_future's
+        # latch before the record is actually done. A batch may be split
+        # multiple times, so each rebind wakes us and we re-wait on the
+        # (possibly new) _produce_future.
+        timer = Timer(timeout * 1000 if timeout is not None else None)
+        while not self.is_done and not timer.expired:
+            if not self._produce_future.wait(timer.timeout_secs):
+                raise Errors.KafkaTimeoutError(
+                    "Timeout after waiting for %s secs." % (timeout,))
         if self.failed():
             raise self.exception # pylint: disable-msg=raising-bad-type
         return self.value

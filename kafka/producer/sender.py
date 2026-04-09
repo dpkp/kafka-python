@@ -507,7 +507,15 @@ class Sender(threading.Thread):
             error = None
 
         if error is not None:
-            if self._can_retry(batch, error):
+            if self._can_split(batch, error):
+                log.warning("%s: Got %s on topic-partition %s with %d records, splitting batch and retrying",
+                            str(self), error.__name__, batch.topic_partition, batch.record_count)
+                self._accumulator.split_and_reenqueue(batch)
+                self._maybe_remove_from_inflight_batches(batch)
+                self._accumulator.deallocate(batch)
+                if self._sensors:
+                    self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
+            elif self._can_retry(batch, error):
                 # retry
                 log.warning("%s: Got error produce response on topic-partition %s, retrying (%s attempts left): %s%s",
                             str(self), batch.topic_partition,
@@ -565,6 +573,17 @@ class Sender(threading.Thread):
                 batch.attempts < self.config['retries'] and
                 batch.final_state is None and
                 getattr(error, 'retriable', False))
+
+    def _can_split(self, batch, error):
+        """
+        We can split and retry a batch if the error indicates the batch is too
+        large for the broker, the batch contains more than one record (so it
+        can actually be split), and the delivery timeout has not been reached.
+        """
+        return (error in (Errors.MessageSizeTooLargeError, Errors.RecordListTooLargeError) and
+                batch.record_count > 1 and
+                batch.final_state is None and
+                not batch.has_reached_delivery_timeout(self._accumulator.delivery_timeout_ms))
 
     def _create_produce_requests(self, collated):
         """
