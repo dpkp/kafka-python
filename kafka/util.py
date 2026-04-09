@@ -36,6 +36,11 @@ class Timer:
             return int(remaining * 1000)
 
     @property
+    def timeout_secs(self):
+        timeout_ms = self.timeout_ms
+        return timeout_ms / 1000 if timeout_ms is not None else None
+
+    @property
     def elapsed_ms(self):
         return int(1000 * (time.monotonic() - self._start_at))
 

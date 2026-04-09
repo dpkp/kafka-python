@@ -6,7 +6,7 @@ import time
 
 import kafka.errors as Errors
 from kafka.producer.producer_batch import ProducerBatch
-from kafka.record.memory_records import MemoryRecordsBuilder
+from kafka.record.memory_records import MemoryRecords, MemoryRecordsBuilder
 from kafka.structs import TopicPartition
 
 
@@ -205,6 +205,88 @@ class RecordAccumulator:
                         self.maybe_update_next_batch_expiry_time(batch)
                         break
         return expired_batches
+
+    def split_and_reenqueue(self, batch, now=None):
+        """Split an oversized batch into smaller batches and reenqueue them.
+
+        When a produce request fails with MESSAGE_TOO_LARGE, this method splits
+        the batch into two sub-batches (by record count) and enqueues them at
+        the front of the partition's deque. The original FutureRecordMetadata
+        objects are rebound to the new batches' futures.
+
+        If the new batches are still too large, they will be split again on the
+        next MESSAGE_TOO_LARGE response.
+
+        Only supported for message_version >= 2 (DefaultRecordBatch).
+
+        Arguments:
+            batch (ProducerBatch): The oversized batch to split.
+
+        Returns:
+            int: The number of new batches created.
+        """
+        now = time.monotonic() if now is None else now
+        tp = batch.topic_partition
+
+        # Read all records from the closed batch
+        records_list = []
+        for record_batch in MemoryRecords(batch.records.buffer()):
+            for record in record_batch:
+                records_list.append(record)
+
+        # Split records into two halves by count
+        mid = (len(records_list) + 1) // 2
+        groups = [records_list[:mid], records_list[mid:]]
+
+        new_batches = []
+        future_index = 0
+        for group in groups:
+            if not group:
+                continue
+            builder = MemoryRecordsBuilder(
+                self.config['message_version'],
+                self.config['compression_attrs'],
+                self.config['batch_size'],
+            )
+            current_batch = ProducerBatch(tp, builder, now=now)
+            current_batch.created = batch.created
+
+            for record in group:
+                metadata = builder.append(record.timestamp, record.key, record.value, record.headers)
+                if metadata is None:
+                    # Record doesn't fit (extremely unlikely for split batches).
+                    # Finalize this batch and start a new one.
+                    new_batches.append(current_batch)
+                    builder = MemoryRecordsBuilder(
+                        self.config['message_version'],
+                        self.config['compression_attrs'],
+                        self.config['batch_size'],
+                    )
+                    current_batch = ProducerBatch(tp, builder, now=now)
+                    current_batch.created = batch.created
+                    metadata = builder.append(record.timestamp, record.key, record.value, record.headers)
+
+                # Rebind original future to new batch
+                if future_index < len(batch._record_futures):
+                    original_future = batch._record_futures[future_index]
+                    original_future.rebind(current_batch.produce_future, metadata.offset)
+                    current_batch._record_futures.append(original_future)
+                future_index += 1
+
+            new_batches.append(current_batch)
+
+        # Enqueue in reverse order so first batch is at front of deque
+        with self._tp_lock(tp):
+            dq = self._batches[tp]
+            for new_batch in reversed(new_batches):
+                new_batch.attempts = batch.attempts
+                new_batch.last_attempt = now
+                dq.appendleft(new_batch)
+                self._incomplete.add(new_batch)
+
+        log.info("Split oversized batch for %s into %d new batches (%d total records)",
+                 tp, len(new_batches), future_index)
+        return len(new_batches)
 
     def reenqueue(self, batch, now=None):
         """
