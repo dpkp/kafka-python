@@ -2,8 +2,9 @@
 
 SHELL = bash
 
-export KAFKA_VERSION ?= 4.0.0
-DIST_BASE_URL ?= https://archive.apache.org/dist/kafka/
+export KAFKA_VERSION ?= 4.2.0
+DIST_BASE_URL ?= https://downloads.apache.org/kafka/
+ARCHIVE_BASE_URL = https://archive.apache.org/dist/kafka/
 
 # Required to support testing old kafka versions on newer java releases
 # The performance opts defaults are set in each kafka brokers bin/kafka_run_class.sh file
@@ -85,8 +86,10 @@ servers/dist:
 	mkdir -p servers/dist
 
 servers/dist/kafka_%.tgz servers/dist/kafka_%.tar.gz:
+	$(eval artifact_path=$(call kafka_artifact_version,$*)/$(@F))
 	@echo "Downloading $(@F)"
-	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(call kafka_artifact_version,$*)/$(@F)
+	wget -nv -P servers/dist/ -N $(DIST_BASE_URL)$(artifact_path) || \
+	wget -nv -P servers/dist/ -N $(ARCHIVE_BASE_URL)$(artifact_path)
 
 servers/dist/jakarta.xml.bind-api-2.3.3.jar:
 	wget -nv -P servers/dist/ -N https://repo1.maven.org/maven2/jakarta/xml/bind/jakarta.xml.bind-api/2.3.3/jakarta.xml.bind-api-2.3.3.jar
