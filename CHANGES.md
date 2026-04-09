@@ -1,3 +1,64 @@
+# 3.0.0 (Unreleased)
+
+Breaking Changes
+* Drop python2 support (#2699, #2774, #2837)
+* Consumer: use assignor instances, not classes (#2775)
+
+Protocol
+* Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810)
+* Add .pyi type annotation stubs for generated protocol classes (#2784)
+* Protocol encode/decode optimization with inline compile/exec (#2785)
+* Protocol benchmarks and profiling (make bench-protocol) (#2783)
+* Add UUID protocol type (#2703)
+* Fix TaggedFields encoding/decoding (#2725)
+* Fix VarInt/VarLong encoding (#2706)
+* Migrate all internal usage to new protocol classes (#2764, #2765, #2766, #2767, #2768, #2772)
+* Replace kafka.structs BrokerMetadata/PartitionMetadata with MetadataResponse structs (#2794)
+* Add ConsumerProtocol data schemas (#2754)
+* Add StickyAssignorUserData json schema (#2755)
+
+Networking
+* kafka.net: Refactored async networking modules (generator-based coroutines) (#2812)
+* kafka.net: SSL transport support (#2813)
+* kafka.net: SASL authentication support (#2814)
+* kafka.net: SOCKS5 proxy support (#2815)
+* kafka.net: Metrics tracking (#2834)
+* KafkaNetClient: drop-in replacement for KafkaClient using kafka.net (#2816)
+* Future.__await__ support (#2811)
+* Pass task by value when adding call_soon callback to future (#2826)
+* Default SSLContext -> PROTOCOL_TLS_CLIENT; minimum version TLS 1.2 (#2807)
+
+Broker Version Check
+* BrokerVersionData: consolidated version checks (#2795)
+* BrokerVersionData: infer up to 4.2 (#2835, #2836)
+* Always send ApiVersionsRequest on connect (#2802)
+* Improve ApiVersionsRequest fallbacks (#2803, #2817, #2821)
+
+Client Bootstrap
+* Fix bootstrap connection error handling (#2831)
+* ClusterMetadata: bootstrap_brokers(), set_topics/add_topics/metadata_request (#2805, #2792, #2796, #2797)
+* Move bootstrap_brokers fallback from brokers() to least_loaded_node() (#2809)
+* KafkaClient.least_loaded_node: pass bootstrap_fallback=True if needed (#2830)
+
+Consumer
+* Fix KeyError in KafkaConsumer.committed() (#2710)
+* Fix `Fetcher._fetch_offsets_by_times` retry handling (#2833)
+* Retry metadata request if tracked topics have retriable errors (#2832)
+
+Producer
+* Fixup Sender error class logging (#2828)
+
+Fixes
+* Fix zstd multi-frame decompression failure (#2717)
+* Use time.monotonic() instead of time.time() for elapsed time calculations (#2714)
+
+Project Infra
+* Enable pylint workflow; disable/fix all outstanding errors (#2701)
+* Add coverage step to CI (#2786)
+* CI test matrix updated to Kafka 4.0-4.2
+* Bump actions/cache from 4 to 5 (#2702)
+* Bump actions/upload-artifact from 4 to 7 (#2789)
+
 # 2.3.0 (Nov 20, 2025)
 
 CLI
