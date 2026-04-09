@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 import time
 
@@ -8,6 +9,7 @@ from kafka.admin import NewTopic
 from kafka.protocol.metadata import MetadataRequest_v1
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 
+pytestmark = pytest.mark.skipif("KAFKA_URI" in os.environ, reason="Testing on external Kafka Broker")
 
 @pytest.fixture(
     params=[
