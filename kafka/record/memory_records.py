@@ -207,7 +207,11 @@ class MemoryRecordsBuilder:
         # see Issue 718
         if not self._closed:
             self._bytes_written = self._builder.size()
-            self._buffer = bytes(self._builder.build())
+            # Keep the buffer as bytearray to avoid a full-batch copy on
+            # close. Downstream consumers (MemoryRecords via memoryview and
+            # the protocol encoder via slice-assignment) handle bytearray
+            # without further copies.
+            self._buffer = self._builder.build()
             if self._magic == 2:
                 self._producer_id = self._builder.producer_id
                 self._producer_epoch = self._builder.producer_epoch
