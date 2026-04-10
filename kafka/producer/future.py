@@ -7,6 +7,8 @@ from kafka.util import Timer
 
 
 class FutureProduceResult(Future):
+    __slots__ = ('topic_partition', '_latch')
+
     def __init__(self, topic_partition):
         super().__init__()
         self.topic_partition = topic_partition
@@ -28,6 +30,7 @@ class FutureProduceResult(Future):
 
 
 class FutureRecordMetadata(Future):
+    __slots__ = ('_produce_future', 'args')
     def __init__(self, produce_future, batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
         super().__init__()
         self._produce_future = produce_future

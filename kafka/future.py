@@ -6,6 +6,7 @@ log = logging.getLogger(__name__)
 
 
 class Future:
+    __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock')
     error_on_callbacks = False # and errbacks
 
     def __init__(self):
