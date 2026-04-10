@@ -48,8 +48,13 @@ class ProducerBatch:
         return self.records.producer_epoch if self.records else None
 
     @property
+    def base_sequence(self):
+        return self.records.base_sequence if self.records else None
+
+    @property
     def has_sequence(self):
-        return self.records.has_sequence if self.records else False
+        base_seq = self.base_sequence
+        return base_seq is not None and base_seq != -1
 
     def try_append(self, timestamp_ms, key, value, headers, now=None):
         metadata = self.records.append(timestamp_ms, key, value, headers)
