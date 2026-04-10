@@ -20,7 +20,7 @@ from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
 from kafka.serializer import Serializer
 from kafka.structs import TopicPartition
-from kafka.util import Timer, ensure_valid_topic_name
+from kafka.util import Timer
 
 
 log = logging.getLogger(__name__)
@@ -810,7 +810,6 @@ class KafkaProducer:
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
-        ensure_valid_topic_name(topic)
         key_bytes = value_bytes = None
         timer = Timer(self.config['max_block_ms'], "Failed to assign partition for message in max_block_ms.")
         try:

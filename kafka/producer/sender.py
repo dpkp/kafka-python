@@ -11,6 +11,7 @@ from kafka.metrics.stats import Avg, Max, Rate
 from kafka.producer.transaction_manager import ProducerIdAndEpoch
 from kafka.protocol.producer import InitProducerIdRequest, ProduceRequest
 from kafka.structs import TopicPartition
+from kafka.util import ensure_valid_topic_name
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
@@ -354,6 +355,7 @@ class Sender(threading.Thread):
         # is ok where self._metadata._topics should never
         # remove topics for a producer instance, only add them.
         if topic not in self._metadata._topics:
+            ensure_valid_topic_name(topic)
             self._topics_to_add.add(topic)
             self.wakeup()
 
