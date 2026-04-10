@@ -51,9 +51,18 @@ class ProducerPerformance:
             print()
 
             def _benchmark():
+                # Hoist attribute lookups and use positional args to minimize
+                # per-iteration harness overhead. With a well-optimized
+                # producer.send(), kwargs dict packing and repeated attribute
+                # dereference on `args`/`producer` dominate main-thread CPU
+                # inside this loop and mask the library's true throughput.
                 results = []
-                for i in range(args.num_records):
-                    results.append(producer.send(topic=args.topic, value=record))
+                send = producer.send
+                append = results.append
+                topic = args.topic
+                num_records = args.num_records
+                for _ in range(num_records):
+                    append(send(topic, record))
                 print("Send complete...")
                 producer.flush()
                 producer.close()
@@ -95,11 +104,13 @@ class StatsReporter(threading.Thread):
         if self.raw_metrics:
             pprint.pprint(metrics)
         else:
-            print('{record-send-rate} records/sec ({byte-rate} B/sec),'
-                  ' {request-latency-avg} latency,'
-                  ' {record-size-avg} record size,'
-                  ' {batch-size-avg} batch size,'
-                  ' {records-per-request-avg} records/req'
+            print('{record-send-rate:.0f} records/sec ({byte-rate:.0f} B/sec),'
+                  ' {request-rate:.0f} avg requests/sec,'
+                  ' {request-latency-avg:.0f}ms avg latency,'
+                  ' {throttle-time-max:.0f}ms max throttle,'
+                  ' {record-size-avg:.0f} avg record size,'
+                  ' {batch-size-avg:.0f} avg batch size,'
+                  ' {records-per-request-avg:.0f} avg records/req'
                   .format(**metrics['producer-metrics']))
 
     def print_final(self):
