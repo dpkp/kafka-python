@@ -527,13 +527,9 @@ class KafkaProducer:
             if self.config['retries'] == 0:
                 raise Errors.KafkaConfigurationError("Must set 'retries' to non-zero when using the idempotent producer.")
 
-            if 'max_in_flight_requests_per_connection' not in user_provided_configs:
-                log.info("%s: Overriding the default 'max_in_flight_requests_per_connection' to 1 since idempontence is enabled.", str(self))
-                self.config['max_in_flight_requests_per_connection'] = 1
-            elif self.config['max_in_flight_requests_per_connection'] != 1:
-                raise Errors.KafkaConfigurationError("Must set 'max_in_flight_requests_per_connection' to 1 in order"
-                                                     " to use the idempotent producer."
-                                                     " Otherwise we cannot guarantee idempotence.")
+            if self.config['max_in_flight_requests_per_connection'] > 5:
+                raise Errors.KafkaConfigurationError("Must set 'max_in_flight_requests_per_connection' to at most 5"
+                                                     " to use the idempotent producer.")
 
             if 'acks' not in user_provided_configs:
                 log.info("%s: Overriding the default 'acks' config to 'all' since idempotence is enabled", str(self))

@@ -112,7 +112,7 @@ class KafkaConnection:
             self._request_buffer.append((request, future, timeout_at))
             return future
         elif self.paused:
-            return future.failure(Errors.NodeNotReadyError('Node paused: %s') % self.paused)
+            return future.failure(Errors.NodeNotReadyError(f'Node paused: {self.paused}'))
         elif not self.connected:
             return future.failure(Errors.KafkaConnectionError('Node not connected'))
         else:
@@ -145,10 +145,14 @@ class KafkaConnection:
         else:
             future.success(None)
 
+        # Write the current request's bytes before checking max_in_flight.
+        # Otherwise with max_in_flight=1, the first request would be added to
+        # in_flight_requests (len==1), trip the >= check, pause, and never be
+        # written to the transport — hanging forever.
+        if not self.paused:
+            self.transport.write(self.parser.send_bytes())
         if len(self.in_flight_requests) >= self.config['max_in_flight_requests_per_connection']:
             self.pause('max_in_flight')
-        elif not self.paused:
-            self.transport.write(self.parser.send_bytes())
         return future
 
     def send_buffered(self):

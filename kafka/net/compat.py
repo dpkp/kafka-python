@@ -67,6 +67,10 @@ class KafkaNetClient:
         conn = self._manager._conns.get(node_id)
         if conn is not None and not conn.init_future.is_done:
             self._manager.poll(timeout_ms=timeout_ms, future=conn.init_future)
+        # Connection may be initialized but paused (e.g. max_in_flight reached).
+        # Poll briefly to drain in-flight responses and unpause.
+        if conn is not None and conn.connected and conn.paused:
+            self._manager.poll(timeout_ms=min(timeout_ms, self._manager.config['request_timeout_ms']))
         if not self.is_ready(node_id):
             raise Errors.KafkaConnectionError('Node %s not ready after %s ms' % (node_id, timeout_ms))
         return True

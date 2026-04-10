@@ -228,6 +228,15 @@ class RecordAccumulator:
         now = time.monotonic() if now is None else now
         tp = batch.topic_partition
 
+        # Roll back the partition's sequence counter to the failed batch's
+        # base sequence. The failed batch was never committed by the broker,
+        # so its sequence range is free to be reused by the split batches.
+        # They will get fresh sequences assigned during drain.
+        if self._transaction_manager:
+            base_sequence = batch.records.base_sequence
+            if base_sequence is not None and base_sequence != -1:
+                self._transaction_manager.set_sequence_number(tp, base_sequence)
+
         # Read all records from the closed batch
         records_list = []
         for record_batch in MemoryRecords(batch.records.buffer()):
@@ -463,6 +472,10 @@ class RecordAccumulator:
                             sequence_number,
                             self._transaction_manager.is_transactional()
                         )
+                        # Increment sequence now so subsequent in-flight batches
+                        # for the same partition get the correct next sequence.
+                        self._transaction_manager.increment_sequence_number(
+                            batch.topic_partition, batch.records.next_offset())
                     batch.records.close()
                     size += batch.records.size_in_bytes()
                     ready.append(batch)

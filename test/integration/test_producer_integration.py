@@ -145,6 +145,70 @@ def test_transactional_producer_messages(kafka_producer_factory, kafka_consumer_
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+@pytest.mark.parametrize("max_in_flight", [1, 2, 5])
+def test_idempotent_producer_max_in_flight(kafka_producer_factory, kafka_consumer_factory, max_in_flight):
+    """Test idempotent producer with max_in_flight_requests_per_connection 1-5."""
+    producer = kafka_producer_factory(
+        enable_idempotence=True,
+        max_in_flight_requests_per_connection=max_in_flight,
+    )
+    topic = random_string(5)
+    messages = 100
+    futures = []
+    for i in range(messages):
+        futures.append(producer.send(topic, value=('msg %d' % i).encode()))
+    ret = [f.get(timeout=30) for f in futures]
+    assert len(ret) == messages
+
+    # Verify ordering: offsets should be monotonically increasing per partition
+    partition_offsets = {}
+    for metadata in ret:
+        offsets = partition_offsets.setdefault(metadata.partition, [])
+        offsets.append(metadata.offset)
+    for offsets in partition_offsets.values():
+        assert offsets == sorted(offsets), "Offsets should be monotonically increasing"
+
+    # Verify all messages are readable
+    consumer = kafka_consumer_factory(
+        topics=(),
+        group_id=None,
+        consumer_timeout_ms=30000,
+        auto_offset_reset='earliest',
+        value_deserializer=bytes.decode,
+    )
+    consumer.subscribe([topic])
+    received = set()
+    for _ in range(messages):
+        try:
+            received.add(next(consumer).value)
+        except StopIteration:
+            break
+    assert received == set('msg %d' % i for i in range(messages))
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
+def test_idempotent_producer_high_throughput(kafka_producer_factory):
+    """Test idempotent producer with max_in_flight=5 handles many concurrent batches."""
+    producer = kafka_producer_factory(
+        enable_idempotence=True,
+        max_in_flight_requests_per_connection=5,
+        batch_size=1024,  # Small batches to create more in-flight requests
+        linger_ms=5,
+    )
+    topic = random_string(5)
+    messages = 500
+    futures = []
+    for i in range(messages):
+        futures.append(producer.send(topic, value=('msg %d' % i).encode(), partition=0))
+    ret = [f.get(timeout=30) for f in futures]
+    assert len(ret) == messages
+
+    # All offsets should be unique and sequential for partition 0
+    offsets = [r.offset for r in ret]
+    assert offsets == list(range(messages))
+
+
+@pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
 def test_transactional_producer_offsets(kafka_producer_factory, kafka_admin_client_factory):
     # Setting leader_epoch only supported in 2.1+
     if env_kafka_version() >= (2, 1):

@@ -505,6 +505,14 @@ class Sender(threading.Thread):
         error = partition_response.error
         if error is Errors.NoError:
             error = None
+        elif error is Errors.DuplicateSequenceNumberError:
+            # With max_in_flight > 1 and retries, a retried batch may arrive
+            # after the broker already committed the original. The broker
+            # returns DUPLICATE_SEQUENCE_NUMBER, which means the records were
+            # already written successfully. Treat as success.
+            log.debug("%s: Received DUPLICATE_SEQUENCE_NUMBER for %s — records already committed, treating as success",
+                      str(self), batch.topic_partition)
+            error = None
 
         if error is not None:
             if self._can_split(batch, error):
@@ -554,11 +562,6 @@ class Sender(threading.Thread):
             if batch.complete(partition_response.base_offset, partition_response.log_append_time):
                 self._maybe_remove_from_inflight_batches(batch)
                 self._accumulator.deallocate(batch)
-
-            if self._transaction_manager and self._transaction_manager.producer_id_and_epoch.match(batch):
-                self._transaction_manager.increment_sequence_number(batch.topic_partition, batch.record_count)
-                log.debug("%s: Incremented sequence number for topic-partition %s to %s", str(self), batch.topic_partition,
-                          self._transaction_manager.sequence_number(batch.topic_partition))
 
         # Unmute the completed partition.
         if self.config['guarantee_message_order']:

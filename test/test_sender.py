@@ -18,7 +18,7 @@ from kafka.producer.future import FutureRecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.producer.sender import PartitionResponse, Sender
-from kafka.producer.transaction_manager import TransactionManager
+from kafka.producer.transaction_manager import ProducerIdAndEpoch, TransactionManager
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition
 
@@ -104,9 +104,15 @@ def test_complete_batch_transaction(sender, transaction_manager):
     assert sender._transaction_manager.sequence_number(batch.topic_partition) == 0
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
 
+    # Sequence is now incremented at drain time, not completion time.
+    # Simulate drain-time increment.
+    sender._transaction_manager.increment_sequence_number(batch.topic_partition, batch.record_count)
+    assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
+
     # No error, base_offset 0
     sender._complete_batch(batch, PartitionResponse(base_offset=0))
     assert batch.is_done
+    # Sequence should not change on completion (already incremented at drain)
     assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
 
 
@@ -684,3 +690,193 @@ def test_end_to_end_split_and_complete(accumulator):
         assert future.value.offset == i
         assert future.value.topic == 'foo'
         assert future.value.partition == 0
+
+
+# ---- KAFKA-5494: Idempotent producer with max_in_flight > 1 ----
+
+def test_idempotent_config_allows_max_in_flight_up_to_5():
+    """Idempotent producer allows max_in_flight 1-5."""
+    from kafka.producer.kafka import KafkaProducer
+    for max_in_flight in (1, 2, 3, 4, 5):
+        p = KafkaProducer(
+            enable_idempotence=True,
+            max_in_flight_requests_per_connection=max_in_flight,
+            api_version=(0, 11),
+        )
+        assert p.config['max_in_flight_requests_per_connection'] == max_in_flight
+        p.close(timeout=0)
+
+
+def test_idempotent_config_rejects_max_in_flight_above_5():
+    """Idempotent producer rejects max_in_flight > 5."""
+    from kafka.producer.kafka import KafkaProducer
+    with pytest.raises(Errors.KafkaConfigurationError, match="at most 5"):
+        KafkaProducer(
+            enable_idempotence=True,
+            max_in_flight_requests_per_connection=6,
+            api_version=(0, 11),
+        )
+
+
+def test_idempotent_default_max_in_flight():
+    """Idempotent producer defaults to max_in_flight=5 (no longer overridden to 1)."""
+    from kafka.producer.kafka import KafkaProducer
+    p = KafkaProducer(
+        enable_idempotence=True,
+        api_version=(0, 11),
+    )
+    assert p.config['max_in_flight_requests_per_connection'] == 5
+    p.close(timeout=0)
+
+
+def test_guarantee_message_order_only_when_max_in_flight_1():
+    """guarantee_message_order is True only when max_in_flight == 1."""
+    from kafka.producer.kafka import KafkaProducer
+    p1 = KafkaProducer(
+        enable_idempotence=True,
+        max_in_flight_requests_per_connection=1,
+        api_version=(0, 11),
+    )
+    assert p1._sender.config['guarantee_message_order'] is True
+    p1.close(timeout=0)
+
+    p5 = KafkaProducer(
+        enable_idempotence=True,
+        max_in_flight_requests_per_connection=5,
+        api_version=(0, 11),
+    )
+    assert p5._sender.config['guarantee_message_order'] is False
+    p5.close(timeout=0)
+
+
+def _setup_drain(client, transaction_manager, tp):
+    """Helper to set up cluster and transaction_manager for drain tests."""
+    transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(1000, 0))
+    client.cluster._partitions[tp] = None
+    client.cluster._broker_partitions = {0: [tp]}
+
+
+def test_sequence_number_incremented_at_drain_time(client, transaction_manager):
+    """Sequence numbers are incremented during drain, not on completion."""
+    accumulator = RecordAccumulator(transaction_manager=transaction_manager)
+    tp = TopicPartition('foo', 0)
+    _setup_drain(client, transaction_manager, tp)
+
+    accumulator.append(tp, 0, b'key-0', b'value-0', [])
+    accumulator.append(tp, 0, b'key-1', b'value-1', [])
+    assert transaction_manager.sequence_number(tp) == 0
+
+    batches = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches) == 1
+
+    # Sequence should be incremented at drain time
+    assert transaction_manager.sequence_number(tp) == 2
+
+
+def test_multiple_batches_get_different_sequences(client, transaction_manager):
+    """With max_in_flight > 1, successive drains assign different sequence numbers."""
+    accumulator = RecordAccumulator(batch_size=50, transaction_manager=transaction_manager)
+    tp = TopicPartition('foo', 0)
+    _setup_drain(client, transaction_manager, tp)
+
+    for i in range(10):
+        accumulator.append(tp, 0, b'key-%d' % i, b'value-%d' % i, [])
+
+    # First drain: gets first batch
+    batches1 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches1) == 1
+    seq_after_first = transaction_manager.sequence_number(tp)
+    assert seq_after_first > 0
+
+    # Second drain: gets next batch with higher sequence
+    batches2 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches2) == 1
+    seq_after_second = transaction_manager.sequence_number(tp)
+    assert seq_after_second > seq_after_first
+
+
+def test_retry_batch_keeps_sequence(client, transaction_manager):
+    """Retried batches keep their original sequence number (in_retry=True skips reassignment)."""
+    accumulator = RecordAccumulator(transaction_manager=transaction_manager)
+    tp = TopicPartition('foo', 0)
+    _setup_drain(client, transaction_manager, tp)
+
+    accumulator.append(tp, 0, b'key', b'value', [])
+
+    batches = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    batch = batches[0]
+    seq_after_drain = transaction_manager.sequence_number(tp)
+    assert seq_after_drain == 1  # Incremented at drain
+
+    # Re-enqueue for retry
+    accumulator.reenqueue(batch)
+    assert batch.in_retry()
+
+    # Re-drain after backoff expires — sequence should NOT change (batch is in_retry)
+    future_time = time.monotonic() + 1  # past retry_backoff_ms
+    batches2 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576, now=future_time)
+    assert len(batches2) == 1
+    assert transaction_manager.sequence_number(tp) == seq_after_drain
+
+
+def test_duplicate_sequence_number_treated_as_success(sender, accumulator):
+    """DuplicateSequenceNumberError is treated as successful completion."""
+    batch = producer_batch()
+    accumulator._incomplete.add(batch)
+
+    sender._complete_batch(batch, PartitionResponse(
+        error=Errors.DuplicateSequenceNumberError, base_offset=42, log_append_time=-1))
+
+    assert batch.is_done
+    assert batch.produce_future.succeeded()
+    assert batch.produce_future.value == (42, -1, None)
+
+
+def test_split_resets_sequence_number(client, transaction_manager):
+    """split_and_reenqueue rolls back the sequence counter so split batches reuse the range."""
+    accumulator = RecordAccumulator(transaction_manager=transaction_manager)
+    tp = TopicPartition('foo', 0)
+    _setup_drain(client, transaction_manager, tp)
+
+    # Append a batch with multiple records
+    for i in range(5):
+        accumulator.append(tp, 0, b'key-%d' % i, b'value-%d' % i, [])
+
+    assert transaction_manager.sequence_number(tp) == 0
+
+    # Drain — sequence advances to 5
+    batches = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches) == 1
+    batch = batches[0]
+    assert transaction_manager.sequence_number(tp) == 5
+
+    # Split — should roll back sequence to 0 (the failed batch's base_sequence)
+    accumulator.split_and_reenqueue(batch)
+    accumulator.deallocate(batch)
+    assert transaction_manager.sequence_number(tp) == 0
+
+    # Drain the split batches — each gets correct sequential sequences
+    dq = list(accumulator._batches[tp])
+    assert len(dq) == 2  # Split into two halves
+
+    batches1 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches1) == 1
+    seq_after_first = transaction_manager.sequence_number(tp)
+    assert seq_after_first == batches1[0].record_count  # e.g., 3
+
+    batches2 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
+    assert len(batches2) == 1
+    seq_after_second = transaction_manager.sequence_number(tp)
+    assert seq_after_second == 5  # Back to where it was: 3 + 2 = 5
+
+
+def test_split_without_idempotence_no_sequence_reset(accumulator):
+    """split_and_reenqueue works without transaction_manager (no sequence to reset)."""
+    tp = TopicPartition('foo', 0)
+    batch, futures = multi_record_batch(num_records=4)
+    accumulator._incomplete.add(batch)
+
+    # Should not raise even without a transaction_manager
+    num_new = accumulator.split_and_reenqueue(batch)
+    accumulator.deallocate(batch)
+    assert num_new == 2
