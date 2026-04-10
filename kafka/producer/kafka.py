@@ -602,12 +602,8 @@ class KafkaProducer:
             log.info('%s: Kafka producer closed', str(self))
             return
         if timeout is None:
-            # threading.TIMEOUT_MAX is available in Python3.3+
-            timeout = getattr(threading, 'TIMEOUT_MAX', float('inf'))
-        if getattr(threading, 'TIMEOUT_MAX', False):
-            assert 0 <= timeout <= getattr(threading, 'TIMEOUT_MAX')
-        else:
-            assert timeout >= 0
+            timeout = threading.TIMEOUT_MAX
+        assert 0 <= timeout <= threading.TIMEOUT_MAX
 
         log.info("%s: Closing the Kafka producer with %s secs timeout.", str(self), timeout)
         self.flush(timeout)
