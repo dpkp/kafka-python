@@ -523,6 +523,20 @@ class Sender(threading.Thread):
                 self._accumulator.deallocate(batch)
                 if self._sensors:
                     self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
+            elif self._is_retention_based_unknown_producer_id(batch, error, partition_response):
+                # KAFKA-5793: the broker's producer state aged out due to
+                # retention (log_start_offset > last_acked_offset), not
+                # actual data loss. Reset the partition sequence and retry.
+                log.warning("%s: UnknownProducerIdError for %s appears to be retention-based"
+                            " (log_start_offset=%s, last_acked_offset=%s); resetting sequence and retrying",
+                            str(self), batch.topic_partition,
+                            partition_response.log_start_offset,
+                            self._transaction_manager.last_acked_offset(batch.topic_partition))
+                self._transaction_manager.reset_sequence_for_partition(batch.topic_partition)
+                self._accumulator.reenqueue(batch)
+                self._maybe_remove_from_inflight_batches(batch)
+                if self._sensors:
+                    self._sensors.record_retries(batch.topic_partition.topic, batch.record_count)
             elif self._can_retry(batch, error):
                 # retry
                 log.warning("%s: Got error produce response on topic-partition %s, retrying (%s attempts left): %s%s",
@@ -563,6 +577,11 @@ class Sender(threading.Thread):
                 self._maybe_remove_from_inflight_batches(batch)
                 self._accumulator.deallocate(batch)
 
+            # Track last ack'd offset for KAFKA-5793 retention detection.
+            if self._transaction_manager and self._transaction_manager.producer_id_and_epoch.match(batch):
+                self._transaction_manager.update_last_acked_offset(
+                    batch.topic_partition, partition_response.base_offset, batch.record_count)
+
         # Unmute the completed partition.
         if self.config['guarantee_message_order']:
             self._accumulator.muted.remove(batch.topic_partition)
@@ -576,6 +595,32 @@ class Sender(threading.Thread):
                 batch.attempts < self.config['retries'] and
                 batch.final_state is None and
                 getattr(error, 'retriable', False))
+
+    def _is_retention_based_unknown_producer_id(self, batch, error, partition_response):
+        """Detect retention-based UnknownProducerIdError (KAFKA-5793).
+
+        The broker returns UnknownProducerIdError either because the producer
+        state was legitimately removed by retention, or because of actual
+        data loss. If the broker's log_start_offset is strictly greater than
+        the last offset we acknowledged for this partition, then the records
+        we previously wrote have been aged out — the producer can safely
+        reset its sequence to 0 and resume.
+        """
+        if error is not Errors.UnknownProducerIdError:
+            return False
+        if not self._transaction_manager:
+            return False
+        if not self._transaction_manager.producer_id_and_epoch.match(batch):
+            return False
+        if batch.has_reached_delivery_timeout(self._accumulator.delivery_timeout_ms):
+            return False
+        if batch.final_state is not None:
+            return False
+        log_start_offset = partition_response.log_start_offset
+        if log_start_offset is None or log_start_offset < 0:
+            return False
+        last_acked = self._transaction_manager.last_acked_offset(batch.topic_partition)
+        return log_start_offset > last_acked
 
     def _can_split(self, batch, error):
         """

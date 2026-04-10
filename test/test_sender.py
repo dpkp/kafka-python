@@ -880,3 +880,129 @@ def test_split_without_idempotence_no_sequence_reset(accumulator):
     num_new = accumulator.split_and_reenqueue(batch)
     accumulator.deallocate(batch)
     assert num_new == 2
+
+
+# ---- KAFKA-5793: Tighten OutOfOrderSequence semantics ----
+
+def test_update_last_acked_offset_on_success(sender, accumulator, transaction_manager):
+    """Sender updates last_acked_offset in TransactionManager on successful completion."""
+    sender._transaction_manager = transaction_manager
+    batch = producer_batch()  # 1 record
+    assert transaction_manager.last_acked_offset(batch.topic_partition) == -1
+
+    sender._complete_batch(batch, PartitionResponse(base_offset=42, log_append_time=-1))
+    # last_offset = base_offset(42) + record_count(1) - 1 = 42
+    assert transaction_manager.last_acked_offset(batch.topic_partition) == 42
+
+
+def test_update_last_acked_offset_monotonic(sender, accumulator, transaction_manager):
+    """last_acked_offset only increases (out-of-order acks don't decrease it)."""
+    sender._transaction_manager = transaction_manager
+    tp = TopicPartition('foo', 0)
+
+    transaction_manager.update_last_acked_offset(tp, 100, 5)  # last = 104
+    assert transaction_manager.last_acked_offset(tp) == 104
+
+    transaction_manager.update_last_acked_offset(tp, 50, 3)  # last = 52, should not overwrite
+    assert transaction_manager.last_acked_offset(tp) == 104
+
+    transaction_manager.update_last_acked_offset(tp, 200, 2)  # last = 201
+    assert transaction_manager.last_acked_offset(tp) == 201
+
+
+def test_update_last_acked_offset_ignores_invalid_base_offset(transaction_manager):
+    """Negative / invalid base_offset does not update last_acked_offset."""
+    tp = TopicPartition('foo', 0)
+    transaction_manager.update_last_acked_offset(tp, -1, 5)
+    assert transaction_manager.last_acked_offset(tp) == -1
+
+
+def test_retention_based_unknown_producer_id_retries(sender, accumulator, transaction_manager, mocker):
+    """UnknownProducerIdError with log_start_offset > last_acked_offset is retried."""
+    sender._transaction_manager = transaction_manager
+    mocker.patch.object(accumulator, 'reenqueue')
+
+    tp = TopicPartition('foo', 0)
+    # Simulate: previously acked records at offsets 0..9 (last_acked=9)
+    transaction_manager.update_last_acked_offset(tp, 0, 10)
+    assert transaction_manager.last_acked_offset(tp) == 9
+    # Sequence counter is at some value (set by prior drain)
+    transaction_manager.sequence_number(tp)  # populate defaultdict entry
+    transaction_manager.increment_sequence_number(tp, 10)
+    assert transaction_manager.sequence_number(tp) == 10
+
+    batch = producer_batch()
+    # Broker's log_start_offset is 100 — way past our last acked
+    sender._complete_batch(batch, PartitionResponse(
+        error=Errors.UnknownProducerIdError,
+        base_offset=-1,
+        log_start_offset=100,
+    ))
+
+    # Batch should be reenqueued (retried), not failed
+    accumulator.reenqueue.assert_called_with(batch)
+    assert not batch.is_done
+
+    # Sequence counter should be reset
+    assert transaction_manager.sequence_number(tp) == 0
+    # last_acked_offset is also cleared by reset_sequence_for_partition
+    assert transaction_manager.last_acked_offset(tp) == -1
+
+
+def test_real_data_loss_unknown_producer_id_fails(sender, accumulator, transaction_manager, mocker):
+    """UnknownProducerIdError with log_start_offset <= last_acked_offset is fatal."""
+    sender._transaction_manager = transaction_manager
+    mocker.patch.object(accumulator, 'reenqueue')
+
+    tp = TopicPartition('foo', 0)
+    # Previously acked records up to offset 99
+    transaction_manager.update_last_acked_offset(tp, 0, 100)
+    assert transaction_manager.last_acked_offset(tp) == 99
+
+    batch = producer_batch()
+    future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
+
+    # Broker's log_start_offset is 50 — within our acked range → real data loss
+    sender._complete_batch(batch, PartitionResponse(
+        error=Errors.UnknownProducerIdError,
+        base_offset=-1,
+        log_start_offset=50,
+    ))
+
+    # Batch should NOT be reenqueued — it should fail
+    accumulator.reenqueue.assert_not_called()
+    assert batch.is_done
+    assert future.failed()
+    assert isinstance(future.exception, Errors.UnknownProducerIdError)
+
+
+def test_unknown_producer_id_without_log_start_offset_fails(sender, accumulator, transaction_manager, mocker):
+    """UnknownProducerIdError without log_start_offset info (old broker) falls through to failure."""
+    sender._transaction_manager = transaction_manager
+    mocker.patch.object(accumulator, 'reenqueue')
+
+    tp = TopicPartition('foo', 0)
+    transaction_manager.update_last_acked_offset(tp, 0, 5)
+
+    batch = producer_batch()
+    # Old broker response: log_start_offset = -1 (unknown)
+    sender._complete_batch(batch, PartitionResponse(
+        error=Errors.UnknownProducerIdError,
+        base_offset=-1,
+        log_start_offset=-1,
+    ))
+
+    accumulator.reenqueue.assert_not_called()
+    assert batch.is_done
+
+
+def test_unknown_producer_id_without_transaction_manager_fails(sender, accumulator, mocker):
+    """UnknownProducerIdError without transaction_manager falls through to normal failure path."""
+    mocker.patch.object(accumulator, 'reenqueue')
+    batch = producer_batch()
+    sender._complete_batch(batch, PartitionResponse(
+        error=Errors.UnknownProducerIdError,
+        log_start_offset=100,
+    ))
+    accumulator.reenqueue.assert_not_called()
+    assert batch.is_done

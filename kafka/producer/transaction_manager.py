@@ -101,6 +101,11 @@ class TransactionManager:
         self._metadata = metadata
 
         self._sequence_numbers = collections.defaultdict(lambda: 0)
+        # The offset of the last ack'd record for each partition. Used to
+        # distinguish retention-based UnknownProducerIdError (broker's
+        # log_start_offset > last_acked_offset → safe to reset and retry)
+        # from actual data loss. See KAFKA-5793.
+        self._last_acked_offset = {}
 
         self.transactional_id = transactional_id
         self.transaction_timeout_ms = transaction_timeout_ms
@@ -326,6 +331,26 @@ class TransactionManager:
     def reset_sequence_for_partition(self, tp):
         with self._lock:
             self._sequence_numbers.pop(tp, None)
+            self._last_acked_offset.pop(tp, None)
+
+    def update_last_acked_offset(self, tp, base_offset, record_count):
+        """Record the offset of the last successfully-produced record for tp.
+
+        Called from the sender on each successful batch completion. The
+        last acked offset is used to detect whether a subsequent
+        UnknownProducerIdError reflects retention (safe to retry) vs. real
+        data loss (fatal). See KAFKA-5793.
+        """
+        if base_offset < 0:
+            return
+        last_offset = base_offset + record_count - 1
+        with self._lock:
+            if last_offset > self._last_acked_offset.get(tp, -1):
+                self._last_acked_offset[tp] = last_offset
+
+    def last_acked_offset(self, tp):
+        with self._lock:
+            return self._last_acked_offset.get(tp, -1)
 
     def next_request_handler(self, has_incomplete_batches):
         with self._lock:
