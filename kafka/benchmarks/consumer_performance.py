@@ -82,12 +82,12 @@ class StatsReporter(threading.Thread):
         if self.raw_metrics:
             pprint.pprint(metrics)
         else:
-            print('{records-consumed-rate} records/sec ({bytes-consumed-rate} B/sec),'
-                  ' {fetch-latency-avg} latency,'
-                  ' {fetch-rate} fetch/s,'
-                  ' {fetch-size-avg} fetch size,'
-                  ' {records-lag-max} max record lag,'
-                  ' {records-per-request-avg} records/req'
+            print('{records-consumed-rate:.0f} records/sec ({bytes-consumed-rate:.0f} B/sec),'
+                  ' {fetch-latency-avg:.0f}ms avg latency,'
+                  ' {fetch-rate:.0f} avg fetch requests/sec,'
+                  ' {fetch-size-avg:.0f} avg fetch size,'
+                  ' {records-lag-max:.0f} max record lag,'
+                  ' {records-per-request-avg:.0f} avg records/req'
                   .format(**metrics['consumer-fetch-manager-metrics']))
 
 
