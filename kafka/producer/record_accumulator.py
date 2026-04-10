@@ -233,9 +233,9 @@ class RecordAccumulator:
         # so its sequence range is free to be reused by the split batches.
         # They will get fresh sequences assigned during drain.
         if self._transaction_manager:
-            record_batch = MemoryRecords(batch.records.buffer()).next_batch()
-            if record_batch is not None and record_batch.base_sequence != -1:
-                self._transaction_manager.set_sequence_number(tp, record_batch.base_sequence)
+            base_sequence = batch.records.base_sequence
+            if base_sequence is not None and base_sequence != -1:
+                self._transaction_manager.set_sequence_number(tp, base_sequence)
 
         # Read all records from the closed batch
         records_list = []
