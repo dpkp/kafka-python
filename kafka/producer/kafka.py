@@ -810,64 +810,52 @@ class KafkaProducer:
         assert value is not None or self.config['api_version'] >= (0, 8, 1), (
             'Null messages require kafka >= 0.8.1')
         assert not (value is None and key is None), 'Need at least one: key or value'
-        key_bytes = value_bytes = None
-        timer = Timer(self.config['max_block_ms'], "Failed to assign partition for message in max_block_ms.")
-        try:
-            assigned_partition = None
-            while assigned_partition is None and not timer.expired:
-                self._wait_on_metadata(topic, timer.timeout_ms)
+        key_bytes = self._serialize(
+            self.config['key_serializer'],
+            topic, key)
+        value_bytes = self._serialize(
+            self.config['value_serializer'],
+            topic, value)
+        assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
+        assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
 
-                key_bytes = self._serialize(
-                    self.config['key_serializer'],
-                    topic, key)
-                value_bytes = self._serialize(
-                    self.config['value_serializer'],
-                    topic, value)
-                assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
-                assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
+        if self._metadata.partitions_for_topic(topic) is None:
+            try:
+                self._wait_on_metadata(topic, self.config['max_block_ms'])
+            except Errors.BrokerResponseError as e:
+                log.error("%s: Exception occurred waiting for metadata during message send: %s", str(self), e)
+                return FutureRecordMetadata(
+                    FutureProduceResult(TopicPartition(topic, partition)),
+                    -1, None, None,
+                    len(key_bytes) if key_bytes is not None else -1,
+                    len(value_bytes) if value_bytes is not None else -1,
+                    sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
+                ).failure(e)
 
-                assigned_partition = self._partition(topic, partition, key, value,
-                                                     key_bytes, value_bytes)
-            if assigned_partition is None:
-                raise Errors.KafkaTimeoutError("Failed to assign partition for message after %s secs." % timer.elapsed_ms / 1000)
-            else:
-                partition = assigned_partition
+        partition = self._partition(topic, partition, key, value, key_bytes, value_bytes)
+        assert partition is not None, f'Partitioner did not assign a partition for topic {topic}!'
 
-            if headers is None:
-                headers = []
-            assert isinstance(headers, list)
-            assert all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers)
+        if headers is None:
+            headers = []
+        assert isinstance(headers, list)
+        assert all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers)
 
-            message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
-            self._ensure_valid_record_size(message_size)
+        message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
+        self._ensure_valid_record_size(message_size)
 
-            tp = TopicPartition(topic, partition)
-            log.debug("%s: Sending (key=%r value=%r headers=%r) to %s", str(self), key, value, headers, tp)
+        tp = TopicPartition(topic, partition)
+        log.debug("%s: Sending (key=%r value=%r headers=%r) to %s", str(self), key, value, headers, tp)
 
-            if self._transaction_manager and self._transaction_manager.is_transactional():
-                self._transaction_manager.maybe_add_partition_to_transaction(tp)
+        if self._transaction_manager and self._transaction_manager.is_transactional():
+            self._transaction_manager.maybe_add_partition_to_transaction(tp)
 
-            result = self._accumulator.append(tp, timestamp_ms,
-                                              key_bytes, value_bytes, headers)
-            future, batch_is_full, new_batch_created = result
-            if batch_is_full or new_batch_created:
-                log.debug("%s: Waking up the sender since %s is either full or"
-                          " getting a new batch", str(self), tp)
-                self._sender.wakeup()
-
-            return future
-            # handling exceptions and record the errors;
-            # for API exceptions return them in the future,
-            # for other exceptions raise directly
-        except Errors.BrokerResponseError as e:
-            log.error("%s: Exception occurred during message send: %s", str(self), e)
-            return FutureRecordMetadata(
-                FutureProduceResult(TopicPartition(topic, partition)),
-                -1, None, None,
-                len(key_bytes) if key_bytes is not None else -1,
-                len(value_bytes) if value_bytes is not None else -1,
-                sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
-            ).failure(e)
+        result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers)
+        future, batch_is_full, new_batch_created = result
+        if batch_is_full or new_batch_created:
+            log.debug("%s: Waking up the sender since %s is either full or"
+                      " getting a new batch", str(self), tp)
+            self._sender.wakeup()
+        return future
 
     def flush(self, timeout=None):
         """
