@@ -21,7 +21,11 @@ class EncodeBuffer:
             self.buf = new_buf
 
     def result(self):
-        return bytes(self.buf[:self.pos])
+        # Return a bytearray slice (one copy) rather than bytes(self.buf[:pos])
+        # (two copies — the slice creates a bytearray, then bytes() copies
+        # again). Downstream consumers (protocol codec slice assignment,
+        # socket.send) accept bytearray transparently.
+        return self.buf[:self.pos]
 
 
 class EncodeBufferPool:

@@ -200,6 +200,10 @@ class KafkaTCPTransport:
         err = None
         while self._write_buffer:
             next_chunk = self._write_buffer.popleft()
+            # Wrap in memoryview so partial-send slicing is O(1) instead of
+            # copying the unsent tail on every BlockingIOError / short write.
+            if not isinstance(next_chunk, memoryview):
+                next_chunk = memoryview(next_chunk)
             while next_chunk:
                 try:
                     sent_bytes = self._sock.send(next_chunk)

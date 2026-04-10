@@ -17,7 +17,7 @@ class ApiVersionsResponse(ApiMessage):
     # ApiVersionsResponse body always decodes as version 0 when error is present
     @classmethod
     def decode(cls, data, version=None, header=False, framed=False):
-        if isinstance(data, bytes):
+        if not hasattr(data, 'tell'):
             data = io.BytesIO(data)
         if framed:
             size = Int32.decode(data)
