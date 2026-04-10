@@ -112,7 +112,7 @@ class KafkaConnection:
             self._request_buffer.append((request, future, timeout_at))
             return future
         elif self.paused:
-            return future.failure(Errors.NodeNotReadyError('Node paused: %s') % self.paused)
+            return future.failure(Errors.NodeNotReadyError(f'Node paused: {self.paused}'))
         elif not self.connected:
             return future.failure(Errors.KafkaConnectionError('Node not connected'))
         else:
