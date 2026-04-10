@@ -36,8 +36,7 @@ class FutureRecordMetadata(Future):
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
         self.args = (batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)
-        produce_future.add_callback(self._produce_success)
-        produce_future.add_errback(self.failure)
+        produce_future._add_cb_eb(self._produce_success, self.failure)
 
     def _produce_success(self, result):
         offset, produce_timestamp_ms, record_exceptions_fn = result
@@ -75,8 +74,7 @@ class FutureRecordMetadata(Future):
         self._produce_future = new_produce_future
         _, timestamp_ms, checksum, sk, sv, sh = self.args
         self.args = (new_batch_index, timestamp_ms, checksum, sk, sv, sh)
-        new_produce_future.add_callback(self._produce_success)
-        new_produce_future.add_errback(self.failure)
+        new_produce_future._add_cb_eb(self._produce_success, self.failure)
         # Wake any thread blocked in get() so it re-waits on the new future.
         # The old produce_future is never completed, so its stale callbacks
         # (registered in __init__) will never fire.
