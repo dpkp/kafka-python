@@ -97,23 +97,39 @@ CRC_INIT = 0
 _MASK = 0xFFFFFFFF
 
 
-def crc_update(crc, data):
+def crc_update(crc, data,
+               # Pull hot globals into the local namespace; the inner loop
+               # runs once per byte and LOAD_FAST is measurably faster than
+               # LOAD_GLOBAL in CPython.
+               _TABLE=CRC_TABLE, _M=_MASK):
     """Update CRC-32C checksum with data.
+
     Args:
         crc: 32-bit checksum to update as long.
-        data: byte array, string or iterable over bytes.
+        data: bytes, bytearray, memoryview, array.array("B"), or any
+            iterable yielding ints in [0, 255].
     Returns:
         32-bit updated CRC-32C as long.
     """
-    if not isinstance(data, array.array) or data.itemsize != 1:
-        buf = array.array("B", data)
-    else:
+    # Iterate directly over bytes / bytearray / memoryview(format='B'),
+    # which all yield ints in [0, 255] natively. Only fall back to the
+    # array.array copy for other input types (e.g. a string on py2, or
+    # a generic iterable of ints).
+    if isinstance(data, (bytes, bytearray)):
         buf = data
-    crc = crc ^ _MASK
+    elif isinstance(data, memoryview):
+        if data.format != 'B' or data.itemsize != 1:
+            buf = data.cast('B')  # reinterpret as bytes, still zero-copy
+        else:
+            buf = data
+    elif isinstance(data, array.array) and data.itemsize == 1:
+        buf = data
+    else:
+        buf = array.array("B", data)
+    crc ^= _M
     for b in buf:
-        table_index = (crc ^ b) & 0xff
-        crc = (CRC_TABLE[table_index] ^ (crc >> 8)) & _MASK
-    return crc ^ _MASK
+        crc = (_TABLE[(crc ^ b) & 0xff] ^ (crc >> 8)) & _M
+    return crc ^ _M
 
 
 def crc_finalize(crc):
