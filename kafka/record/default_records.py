@@ -359,7 +359,7 @@ class DefaultRecordBatch(DefaultRecordBase, ABCRecordBatch):
 
         crc = self.crc
         data_view = memoryview(self._buffer)[self.ATTRIBUTES_OFFSET:]
-        verify_crc = calc_crc32c(data_view.tobytes())
+        verify_crc = calc_crc32c(data_view)
         return crc == verify_crc
 
     def __str__(self):
@@ -646,7 +646,9 @@ class DefaultRecordBatchBuilder(DefaultRecordBase, ABCRecordBatchBuilder):
             self._base_sequence,
             self._num_records
         )
-        crc = calc_crc32c(self._buffer[self.ATTRIBUTES_OFFSET:])
+        # Use memoryview to avoid a full-body copy of ~batch_size bytes.
+        # The decode path at _check_crc already does this.
+        crc = calc_crc32c(memoryview(self._buffer)[self.ATTRIBUTES_OFFSET:])
         struct.pack_into(">I", self._buffer, self.CRC_OFFSET, crc)
 
     def _maybe_compress(self):

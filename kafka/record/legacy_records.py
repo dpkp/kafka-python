@@ -181,7 +181,8 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
         return self._magic
 
     def validate_crc(self):
-        crc = calc_crc32(self._buffer[self.MAGIC_OFFSET:])
+        # memoryview avoids a full-body copy when slicing the bytearray.
+        crc = calc_crc32(memoryview(self._buffer)[self.MAGIC_OFFSET:])
         return self._crc == crc
 
     def _decompress(self, key_offset):
@@ -249,7 +250,10 @@ class LegacyRecordBatch(ABCRecordBatch, LegacyRecordBase):
         return key, value
 
     def _crc_bytes(self, msg_pos, length):
-        return self._buffer[msg_pos + self.MAGIC_OFFSET:msg_pos + self.LOG_OVERHEAD + length]
+        # memoryview avoids copying the message bytes out of the batch buffer
+        # just to hand them to calc_crc32 later in LegacyRecord.validate_crc.
+        return memoryview(self._buffer)[
+            msg_pos + self.MAGIC_OFFSET:msg_pos + self.LOG_OVERHEAD + length]
 
     def __iter__(self):
         if self._magic == 1:
