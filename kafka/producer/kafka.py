@@ -919,19 +919,16 @@ class KafkaProducer:
         Raises:
             KafkaTimeoutError: if partitions for topic were not obtained before
                 specified max_wait timeout
+            TopicAuthorizationFailedError: if not authorized to access topic
+            Non-retriable errors that cause metadata refresh to fail
         """
-        # add topic to metadata topic list if it is not there already.
+        partitions = self._metadata.partitions_for_topic(topic)
+        if partitions is not None:
+            return partitions
         self._sender.add_topic(topic)
-        timer = Timer(max_wait_ms, "Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
-        metadata_event = None
-        while True:
-            partitions = self._metadata.partitions_for_topic(topic)
-            if partitions is not None:
-                return partitions
-            timer.maybe_raise()
-            if not metadata_event:
-                metadata_event = threading.Event()
-
+        timer = Timer(max_wait_ms)
+        metadata_event = threading.Event()
+        while not timer.expired:
             log.debug("%s: Requesting metadata update for topic %s", str(self), topic)
             metadata_event.clear()
             future = self._metadata.request_update()
@@ -947,6 +944,11 @@ class KafkaProducer:
                 raise Errors.TopicAuthorizationFailedError(set([topic]))
             else:
                 log.debug("%s: _wait_on_metadata woke after %s secs.", str(self), timer.elapsed_ms / 1000)
+            partitions = self._metadata.partitions_for_topic(topic)
+            if partitions is not None:
+                return partitions
+        else:
+            raise Errors.KafkaTimeoutError("Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
 
     def _serialize(self, f, topic, data):
         if not f:
