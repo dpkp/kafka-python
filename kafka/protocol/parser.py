@@ -68,10 +68,18 @@ class KafkaProtocol:
 
     def send_bytes(self):
         """Retrieve all pending bytes to send on the network"""
-        data = b''.join(self.bytes_to_send)
-        self.bytes_to_send = []
-        if data:
-            log.debug('%s Send: %r', self._ident, data)
+        # Short-circuit the common single-request case to avoid an extra
+        # full-request copy through b''.join.
+        n = len(self.bytes_to_send)
+        if n == 0:
+            return b''
+        if n == 1:
+            data = self.bytes_to_send[0]
+            self.bytes_to_send = []
+        else:
+            data = b''.join(self.bytes_to_send)
+            self.bytes_to_send = []
+        log.debug('%s Send: %r', self._ident, data)
         return data
 
     def receive_bytes(self, data):
