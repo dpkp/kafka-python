@@ -145,9 +145,9 @@ def test_transactional_producer_messages(kafka_producer_factory, kafka_consumer_
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Idempotent producer requires broker >=0.11")
-@pytest.mark.parametrize("max_in_flight", [2, 5])
+@pytest.mark.parametrize("max_in_flight", [1, 2, 5])
 def test_idempotent_producer_max_in_flight(kafka_producer_factory, kafka_consumer_factory, max_in_flight):
-    """Test idempotent producer with max_in_flight_requests_per_connection > 1."""
+    """Test idempotent producer with max_in_flight_requests_per_connection 1-5."""
     producer = kafka_producer_factory(
         enable_idempotence=True,
         max_in_flight_requests_per_connection=max_in_flight,
