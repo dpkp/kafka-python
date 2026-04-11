@@ -52,13 +52,21 @@ class TransactionState(IntEnum):
     ABORTING_TRANSACTION = 5
     ABORTABLE_ERROR = 6
     FATAL_ERROR = 7
+    # KIP-360: intermediate state entered when a recoverable sequence-related
+    # error is encountered. The producer sends an InitProducerIdRequest v3+
+    # with its current producer_id/epoch to bump the epoch, then transitions
+    # back to READY on success. Records in the accumulator will be sent under
+    # the bumped epoch with fresh sequence numbers. In-flight batches at the
+    # moment of the bump are lost (their futures fail). (TODO re KAFKA-5793)
+    BUMPING_PRODUCER_EPOCH = 8
 
     @classmethod
     def is_transition_valid(cls, source, target):
         if target == cls.INITIALIZING:
-            return source == cls.UNINITIALIZED
+            return source in (cls.UNINITIALIZED, cls.BUMPING_PRODUCER_EPOCH)
         elif target == cls.READY:
-            return source in (cls.INITIALIZING, cls.COMMITTING_TRANSACTION, cls.ABORTING_TRANSACTION)
+            return source in (cls.INITIALIZING, cls.COMMITTING_TRANSACTION,
+                              cls.ABORTING_TRANSACTION, cls.BUMPING_PRODUCER_EPOCH)
         elif target == cls.IN_TRANSACTION:
             return source == cls.READY
         elif target == cls.COMMITTING_TRANSACTION:
@@ -66,7 +74,16 @@ class TransactionState(IntEnum):
         elif target == cls.ABORTING_TRANSACTION:
             return source in (cls.IN_TRANSACTION, cls.ABORTABLE_ERROR)
         elif target == cls.ABORTABLE_ERROR:
-            return source in (cls.IN_TRANSACTION, cls.COMMITTING_TRANSACTION, cls.ABORTABLE_ERROR)
+            return source in (cls.IN_TRANSACTION, cls.COMMITTING_TRANSACTION,
+                              cls.ABORTABLE_ERROR, cls.BUMPING_PRODUCER_EPOCH)
+        elif target == cls.BUMPING_PRODUCER_EPOCH:
+            # A recoverable sequence-related error can arrive at any point in
+            # the producer's lifetime; the bump is a unilateral recovery
+            # action. Disallow only from UNINITIALIZED (no producer_id yet
+            # to bump) and the terminal error states.
+            return source in (cls.READY, cls.IN_TRANSACTION,
+                              cls.COMMITTING_TRANSACTION, cls.ABORTING_TRANSACTION,
+                              cls.ABORTABLE_ERROR)
         elif target == cls.UNINITIALIZED:
             # Disallow transitions to UNITIALIZED
             return False
@@ -245,6 +262,119 @@ class TransactionManager:
             return self._current_state in (
                 TransactionState.ABORTABLE_ERROR,
                 TransactionState.FATAL_ERROR)
+
+    def is_bumping_epoch(self):
+        with self._lock:
+            return self._current_state == TransactionState.BUMPING_PRODUCER_EPOCH
+
+    # KIP-360 error classification
+    #
+    # Errors whose correct recovery is to bump the producer epoch via
+    # InitProducerIdRequest v3+. On brokers that do not support the bump
+    # (api_version < 2.5) these degrade to FATAL for transactional producers
+    # and NEEDS_PRODUCER_ID_RESET for non-transactional idempotent producers,
+    # matching the pre-KIP-360 behavior.
+    _NEEDS_EPOCH_BUMP_ERRORS = frozenset({
+        Errors.OutOfOrderSequenceNumberError,
+        Errors.UnknownProducerIdError,
+        Errors.InvalidProducerEpochError,
+    })
+
+    # Errors that are always fatal regardless of broker version: auth
+    # failures, fencing, or structural state corruption where no recovery
+    # is possible without operator action.
+    _FATAL_ERRORS = frozenset({
+        Errors.ClusterAuthorizationFailedError,
+        Errors.TransactionalIdAuthorizationFailedError,
+        Errors.ProducerFencedError,
+        Errors.InvalidTxnStateError,
+    })
+
+    # Classification outcomes returned by classify_batch_error().
+    ERROR_CLASS_RETRIABLE = 'RETRIABLE'
+    ERROR_CLASS_ABORTABLE = 'ABORTABLE'
+    ERROR_CLASS_FATAL = 'FATAL'
+    ERROR_CLASS_NEEDS_EPOCH_BUMP = 'NEEDS_EPOCH_BUMP'
+    ERROR_CLASS_NEEDS_PRODUCER_ID_RESET = 'NEEDS_PRODUCER_ID_RESET'
+
+    def _supports_epoch_bump(self):
+        """Return True if the broker supports InitProducerIdRequest v3+ (KIP-360).
+
+        KIP-360 landed in Kafka 2.5. On older brokers we fall back to the
+        pre-KIP-360 recovery: reset producer id for idempotent producers,
+        fatal state for transactional producers.
+        """
+        return self._api_version >= (2, 5)
+
+    def classify_batch_error(self, error, batch, log_start_offset=-1):
+        """Categorize a batch-completion error into a recovery outcome.
+
+        Used by the Sender to decide what to do with a failed batch. This
+        method does not mutate any state — it is a pure classification
+        helper. The caller is responsible for dispatching to the
+        appropriate recovery path.
+
+        Arguments:
+            error (type or BaseException): The error class or instance.
+            batch (ProducerBatch): The batch that failed.
+            log_start_offset (int): log_start_offset from the broker's
+                PartitionProduceResponse, or -1 if unknown / client-side
+                failure. Used for KAFKA-5793 retention detection.
+
+        Returns one of:
+            ERROR_CLASS_RETRIABLE          — caller should retry the batch
+            ERROR_CLASS_ABORTABLE          — transactional producer only;
+                                              abort the transaction
+            ERROR_CLASS_FATAL              — unrecoverable; transition to
+                                              fatal error and fail the batch
+            ERROR_CLASS_NEEDS_EPOCH_BUMP   — recoverable via KIP-360 epoch
+                                              bump (only when broker supports
+                                              InitProducerIdRequest v3+)
+            ERROR_CLASS_NEEDS_PRODUCER_ID_RESET — non-transactional pre-KIP-360
+                                                   fallback: reset the
+                                                   producer id entirely
+
+        Note: this classification is for transactional/idempotent producers
+        only. Non-idempotent producers don't call this; the Sender uses
+        simpler retry/fail logic for them.
+        """
+        error_type = error if isinstance(error, type) else type(error)
+
+        if error_type in self._FATAL_ERRORS:
+            return self.ERROR_CLASS_FATAL
+
+        # KAFKA-5793: a retention-based UnknownProducerIdError is recoverable
+        # by resetting the partition's sequence (not a full epoch bump). The
+        # Sender checks this condition separately before consulting this
+        # classifier, but we mirror the logic here so the classifier alone
+        # gives the correct answer for callers that pass log_start_offset.
+        if error_type is Errors.UnknownProducerIdError and log_start_offset is not None and log_start_offset >= 0:
+            last_acked = self.last_acked_offset(batch.topic_partition)
+            if log_start_offset > last_acked:
+                return self.ERROR_CLASS_RETRIABLE
+
+        if error_type in self._NEEDS_EPOCH_BUMP_ERRORS:
+            if self._supports_epoch_bump():
+                return self.ERROR_CLASS_NEEDS_EPOCH_BUMP
+            # Pre-KIP-360 brokers: fall back to the older (lossier) recovery.
+            if self.is_transactional():
+                return self.ERROR_CLASS_FATAL
+            return self.ERROR_CLASS_NEEDS_PRODUCER_ID_RESET
+
+        # Retriable errors (broker-retriable or client connection errors)
+        # become ABORTABLE for transactional producers only if they're
+        # non-retriable AND we're in a transaction. The Sender's existing
+        # can_retry/can_split logic handles the actual retry decision; this
+        # classifier is only consulted for the FAIL branch.
+        if getattr(error_type, 'retriable', False):
+            return self.ERROR_CLASS_RETRIABLE
+
+        # Non-retriable, not in the bump or fatal sets: transactional
+        # producers should abort the current transaction; non-transactional
+        # idempotent producers just fail the batch without any state reset.
+        if self.is_transactional():
+            return self.ERROR_CLASS_ABORTABLE
+        return self.ERROR_CLASS_FATAL
 
     def is_aborting(self):
         with self._lock:
