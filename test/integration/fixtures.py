@@ -42,11 +42,11 @@ def _create_topics_via_admin(broker, topic_names, num_partitions, replication_fa
     admin = KafkaAdminClient(**params)
     try:
         topics = [NewTopic(name, num_partitions, replication_factor) for name in topic_names]
-        admin.create_topics(topics)
+        admin.create_topics(topics, wait_for_metadata=True)
     except InvalidReplicationFactorError:
         time.sleep(0.5)
         topics = [NewTopic(name, num_partitions, replication_factor) for name in topic_names]
-        admin.create_topics(topics)
+        admin.create_topics(topics, wait_for_metadata=True)
     finally:
         admin.close()
 
