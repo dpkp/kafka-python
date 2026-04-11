@@ -432,12 +432,96 @@ class TransactionManager:
         """
         with self._lock:
             if self.is_transactional():
-                raise Errors.IllegalStateError( 
+                raise Errors.IllegalStateError(
                     "Cannot reset producer state for a transactional producer."
                     " You must either abort the ongoing transaction or"
                     " reinitialize the transactional producer instead")
             self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
             self._sequence_numbers.clear()
+            self._last_acked_offset.clear()
+
+    def bump_producer_id_and_epoch(self):
+        """KIP-360: recover from a transient producer-state error by bumping
+        the epoch.
+
+        Transitions to BUMPING_PRODUCER_EPOCH and enqueues an
+        InitProducerIdRequest v3+ carrying the current producer_id/epoch.
+        When the broker responds with the bumped epoch, _complete_epoch_bump
+        transitions back to READY and the sender resumes producing under
+        the new epoch. Records in the accumulator that haven't been drained
+        yet will be stamped with the new epoch on the next drain.
+
+        TODO (KAFKA-5793 full): in-flight batches at the moment of the bump
+        are lost--their futures fail. Adding in-place rewrite of the
+        closed batch buffer (producer_id/epoch/base_sequence fields + CRC
+        recompute) would let us retry them under the new epoch without
+        losing records.
+
+        Requires broker >= 2.5 (InitProducerIdRequest v3+). On older
+        brokers, Sender falls back to reset_producer_id / fatal instead
+        via classify_batch_error.
+
+        Idempotent: if we're already in BUMPING_PRODUCER_EPOCH, this is a
+        no-op. This matters because with max_in_flight > 1, multiple
+        in-flight batches may all fail with the same epoch-bump-triggering
+        error in quick succession; only the first should drive the bump.
+        """
+        with self._lock:
+            if self._current_state == TransactionState.BUMPING_PRODUCER_EPOCH:
+                return
+            if self._current_state == TransactionState.FATAL_ERROR:
+                return
+            if not self._supports_epoch_bump():
+                raise Errors.IllegalStateError(
+                    "Cannot bump producer epoch: broker version %s does not support KIP-360 "
+                    "(InitProducerIdRequest v3+ requires Kafka 2.5+)" % (self._api_version,))
+            log.warning("Bumping producer epoch for %s after recoverable error",
+                        self.producer_id_and_epoch)
+            self._transition_to(TransactionState.BUMPING_PRODUCER_EPOCH)
+            # Drop all per-partition sequence state. The bumped epoch starts
+            # each partition at sequence 0. last_acked_offset is also cleared
+            # since it's tied to the pre-bump producer_id/epoch range.
+            self._sequence_numbers.clear()
+            self._last_acked_offset.clear()
+            # Transactional state: the broker aborts any in-flight
+            # transaction as part of processing InitProducerIdRequest v3+
+            # with a matching producer_id/epoch, so we clear our local
+            # view of which partitions are in the transaction. The user's
+            # ongoing begin/commit/abort coroutine (if any) will see the
+            # bump via the _result and can react accordingly.
+            self._transaction_started = False
+            self._partitions_in_transaction.clear()
+            self._new_partitions_in_transaction.clear()
+            self._pending_partitions_in_transaction.clear()
+            handler = InitProducerIdHandler(self, self.transaction_timeout_ms, is_epoch_bump=True)
+            self._enqueue_request(handler)
+
+    def _complete_epoch_bump(self):
+        """Called from InitProducerIdHandler on successful bump response.
+
+        Transitions BUMPING_PRODUCER_EPOCH -> READY so the sender resumes
+        producing under the new epoch.
+        """
+        # Caller (handle_response) already holds _lock.
+        self._transition_to(TransactionState.READY)
+        self._last_error = None
+
+    def _restart_epoch_bump_without_producer_id(self, transaction_timeout_ms, result):
+        """Called from InitProducerIdHandler when the broker rejects the bump
+        with INVALID_PRODUCER_EPOCH (our producer_id/epoch are stale).
+
+        Falls back to requesting a fresh producer_id by enqueuing a new
+        InitProducerIdRequest without the producer_id/epoch fields. The
+        original TransactionalRequestResult is re-used so the caller waits
+        on the overall bump-then-init sequence.
+        """
+        # Caller (handle_response) already holds _lock.
+        self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
+        # Stay in BUMPING_PRODUCER_EPOCH; the follow-up init will transition
+        # to READY on success via the regular (non-bump) code path.
+        handler = InitProducerIdHandler(self, transaction_timeout_ms, is_epoch_bump=False)
+        handler._result = result  # thread the caller's result through
+        self._enqueue_request(handler)
 
     def sequence_number(self, tp):
         with self._lock:
@@ -770,16 +854,41 @@ class TxnRequestHandler(metaclass=abc.ABCMeta):
 
 
 class InitProducerIdHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, transaction_timeout_ms):
+    def __init__(self, transaction_manager, transaction_timeout_ms, is_epoch_bump=False):
         super().__init__(transaction_manager)
 
-        if transaction_manager._api_version >= (2, 0):
+        self._is_epoch_bump = is_epoch_bump
+        api_version = transaction_manager._api_version
+        # KIP-360 / InitProducerIdRequest v3+ (Kafka 2.5+) lets us resume
+        # an existing producer_id by bumping its epoch rather than allocating
+        # a fresh one. v3+ takes producer_id + epoch fields; on broker match,
+        # the broker returns (same producer_id, epoch+1).
+        if api_version >= (2, 5):
+            version = 3
+        elif api_version >= (2, 4):
+            version = 2
+        elif api_version >= (2, 0):
             version = 1
         else:
             version = 0
-        self.request = InitProducerIdRequest[version](
-            transactional_id=self.transactional_id,
-            transaction_timeout_ms=transaction_timeout_ms)
+
+        if is_epoch_bump:
+            assert version >= 3, "KIP-360 epoch bump requires Kafka 2.5+ broker"
+            producer_id = transaction_manager.producer_id_and_epoch.producer_id
+            producer_epoch = transaction_manager.producer_id_and_epoch.epoch
+        else:
+            producer_id = NO_PRODUCER_ID
+            producer_epoch = NO_PRODUCER_EPOCH
+
+        kwargs = {
+            'version': version,
+            'transactional_id': self.transactional_id,
+            'transaction_timeout_ms': transaction_timeout_ms,
+        }
+        if version >= 3:
+            kwargs['producer_id'] = producer_id
+            kwargs['producer_epoch'] = producer_epoch
+        self.request = InitProducerIdRequest(**kwargs)
 
     @property
     def priority(self):
@@ -790,13 +899,29 @@ class InitProducerIdHandler(TxnRequestHandler):
 
         if error is Errors.NoError:
             self.transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(response.producer_id, response.producer_epoch))
-            self.transaction_manager._transition_to(TransactionState.READY)
+            if self._is_epoch_bump:
+                self.transaction_manager._complete_epoch_bump()
+            else:
+                self.transaction_manager._transition_to(TransactionState.READY)
             self._result.done()
         elif error in (Errors.NotCoordinatorError, Errors.CoordinatorNotAvailableError):
             self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
             self.reenqueue()
         elif error in (Errors.CoordinatorLoadInProgressError, Errors.ConcurrentTransactionsError):
             self.reenqueue()
+        elif error is Errors.InvalidProducerEpochError and self._is_epoch_bump:
+            # KIP-360: our (producer_id, epoch) are stale--the broker no
+            # longer recognizes them. Fall back to allocating a fresh
+            # producer_id by reissuing InitProducerIdRequest without
+            # producer_id/epoch fields.
+            log.info("InitProducerId bump rejected with INVALID_PRODUCER_EPOCH; "
+                     "falling back to a fresh producer id")
+            self.transaction_manager._restart_epoch_bump_without_producer_id(
+                self.request.transaction_timeout_ms, self._result)
+        elif error is Errors.ProducerFencedError:
+            # Another producer instance has taken over this transactional_id.
+            # Fatal--the application must rebuild the producer.
+            self.fatal_error(error())
         elif error is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error())
         else:

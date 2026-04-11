@@ -8,7 +8,7 @@ import time
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
-from kafka.producer.transaction_manager import ProducerIdAndEpoch
+from kafka.producer.transaction_manager import ProducerIdAndEpoch, TransactionManager
 from kafka.protocol.producer import InitProducerIdRequest, ProduceRequest, ProduceResponse
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
@@ -155,9 +155,13 @@ class Sender(threading.Thread):
                     self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
                     return
 
-                # do not continue sending if the transaction manager is in a failed state or if there
-                # is no producer id (for the idempotent case).
-                if self._transaction_manager.has_fatal_error() or not self._transaction_manager.has_producer_id():
+                # do not continue sending if the transaction manager is in a failed state, if there
+                # is no producer id (for the idempotent case), or if we're currently bumping the
+                # producer epoch (KIP-360) -- the InitProducerIdRequest has to complete before we
+                # can safely send any new produce requests under the new epoch.
+                if (self._transaction_manager.has_fatal_error()
+                        or not self._transaction_manager.has_producer_id()
+                        or self._transaction_manager.is_bumping_epoch()):
                     last_error = self._transaction_manager.last_error
                     if last_error is not None:
                         self._maybe_abort_batches(last_error)
@@ -547,36 +551,36 @@ class Sender(threading.Thread):
             self._maybe_remove_from_inflight_batches(batch)
             self._record_retries(batch)
         else:
-            # FAIL: transaction state transitions then batch finalization.
+            # FAIL: dispatch transaction state transition via the
+            # classifier (KIP-360), then finalize the batch.
             if self._transaction_manager:
-                if isinstance(exception, Errors.OutOfOrderSequenceNumberError) and \
-                        not self._transaction_manager.is_transactional() and \
-                        self._transaction_manager.has_producer_id(batch.producer_id):
-                    base_offset = partition_response.base_offset if partition_response is not None else -1
-                    log.error("%s: The broker received an out of order sequence number for topic-partition %s"
-                              " at offset %s. This indicates data loss on the broker, and should be investigated.",
-                              str(self), batch.topic_partition, base_offset)
-                    # Reset the producer state since we have hit an irrecoverable
-                    # exception and cannot make any guarantees about previously
-                    # committed messages. This discards the producer id and all
-                    # partition sequence numbers.
+                classification = self._transaction_manager.classify_batch_error(
+                    exception, batch, log_start_offset=log_start_offset)
+
+                if classification == TransactionManager.ERROR_CLASS_NEEDS_EPOCH_BUMP:
+                    # KIP-360 (Kafka 2.5+): bump the producer epoch and
+                    # continue. The accumulator's unsent records will be
+                    # drained under the new epoch. In-flight batches at
+                    # this moment are lost; their futures (including this
+                    # one) fail.
+                    self._transaction_manager.bump_producer_id_and_epoch()
+                elif classification == TransactionManager.ERROR_CLASS_NEEDS_PRODUCER_ID_RESET:
+                    # Pre-KIP-360 fallback (non-transactional idempotent
+                    # producer on < 2.5 broker).
+                    if isinstance(exception, Errors.OutOfOrderSequenceNumberError) and \
+                            self._transaction_manager.has_producer_id(batch.producer_id):
+                        base_offset = partition_response.base_offset if partition_response is not None else -1
+                        log.error("%s: The broker received an out of order sequence number for topic-partition %s"
+                                  " at offset %s. This indicates data loss on the broker, and should be investigated.",
+                                  str(self), batch.topic_partition, base_offset)
                     self._transaction_manager.reset_producer_id()
-                elif isinstance(exception, Errors.UnknownProducerIdError):
-                    # The broker has no state for this producer. It will accept a
-                    # write with sequence 0, so reset our sequence state for this
-                    # partition. All in-flight requests to this partition will
-                    # also fail with UnknownProducerId, so the sequence will
-                    # remain at 0. Note: if the broker supports epoch bumping,
-                    # KIP-360 will later reset all sequence numbers after
-                    # calling InitProducerId.
-                    self._transaction_manager.reset_sequence_for_partition(batch.topic_partition)
-                elif isinstance(exception, (Errors.ClusterAuthorizationFailedError,
-                                            Errors.TransactionalIdAuthorizationFailedError,
-                                            Errors.ProducerFencedError,
-                                            Errors.InvalidTxnStateError)):
+                elif classification == TransactionManager.ERROR_CLASS_FATAL:
                     self._transaction_manager.transition_to_fatal_error(exception)
-                elif self._transaction_manager.is_transactional():
+                elif classification == TransactionManager.ERROR_CLASS_ABORTABLE:
                     self._transaction_manager.transition_to_abortable_error(exception)
+                # ERROR_CLASS_RETRIABLE at this point means we couldn't
+                # retry (e.g. delivery-timeout hit or retries exhausted);
+                # just fail the batch without any state transition.
 
             if self._sensors:
                 self._sensors.record_errors(batch.topic_partition.topic, batch.record_count)
