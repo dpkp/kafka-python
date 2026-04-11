@@ -448,7 +448,8 @@ class KafkaAdminClient:
             ]
         )
 
-    def create_topics(self, new_topics, timeout_ms=None, validate_only=False, raise_errors=True):
+    def create_topics(self, new_topics, timeout_ms=None, validate_only=False, raise_errors=True,
+                      wait_for_metadata=False):
         """Create new topics in the cluster.
 
         Arguments:
@@ -460,10 +461,20 @@ class KafkaAdminClient:
             validate_only (bool, optional): If True, don't actually create new topics.
                 Not supported by all versions. Default: False
             raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
+            wait_for_metadata (bool, optional): If True, after the broker successfully
+                accepts the create request, block until each new topic is visible in
+                broker metadata with a leader assigned for every partition. Useful on
+                KRaft clusters, where CreateTopicsResponse returning NoError does not
+                guarantee that a subsequent MetadataRequest will see the topic. Has no
+                effect when ``validate_only`` is True. Uses a fixed 10-second timeout;
+                call :meth:`wait_for_topics` directly for finer control.
+                Mutually exclusive with validate_only. Default: False
 
         Returns:
             Appropriate version of CreateTopicResponse class.
         """
+        if validate_only and wait_for_metadata:
+            raise ValueError('validate_only and wait_for_metadata are mutually exclusive')
         version = self._client.api_version(CreateTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
         if version == 0:
@@ -487,7 +498,87 @@ class KafkaAdminClient:
         def get_response_errors(r):
             for topic in r.topics:
                 yield Errors.for_code(topic[1])
-        return self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
+        response = self._send_request_to_controller(request, get_errors_fn=get_response_errors, raise_errors=raise_errors)
+        if wait_for_metadata: # implies not validate_only
+            self.wait_for_topics([new_topic.name for new_topic in new_topics])
+        return response
+
+    def wait_for_topics(self, topic_names, timeout_ms=10000):
+        """Block until each of the given topics is ready to use.
+
+        CreateTopicsResponse only confirms that the broker accepted the create
+        request; propagating the new topics into the broker's metadata cache --
+        and electing a leader for every partition -- can lag behind, especially
+        on KRaft clusters. This method polls :meth:`describe_topics` at a fixed
+        interval until every requested topic both:
+
+          - is returned with ``error_code == 0`` (topic exists and is
+            visible in metadata), and
+          - has ``error_code == 0`` and a leader assigned (``leader_id >= 0``)
+            for every partition.
+
+        Useful after :meth:`create_topics` (including implicit creation via
+        ``allow_auto_topic_creation``) or after a delete+recreate sequence.
+
+        Arguments:
+            topic_names ([str]): Topic names to wait for.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): Maximum milliseconds to wait.
+                Default: 10000.
+
+        Raises:
+            KafkaTimeoutError: if any topic is still not ready when the
+                deadline expires. The exception message includes the
+                per-topic state from the final ``describe_topics`` call.
+        """
+        if not topic_names:
+            return
+        topic_names = list(topic_names)
+        deadline = time.monotonic() + (timeout_ms / 1000.0)
+        pending = {name: 'not yet queried' for name in topic_names}
+        while True:
+            try:
+                topics = self.describe_topics(topics=topic_names)
+            except Exception as exc:
+                log.debug('describe_topics failed while waiting for topic visibility: %s', exc)
+                topics = []
+            by_name = {t.get('name'): t for t in topics}
+            pending = {}
+            for name in topic_names:
+                reason = self._topic_not_ready_reason(by_name.get(name))
+                if reason is not None:
+                    pending[name] = reason
+            if not pending:
+                return
+            if time.monotonic() >= deadline:
+                raise Errors.KafkaTimeoutError(
+                    'Topics not ready after %sms: %s' % (timeout_ms, pending))
+            time.sleep(0.1)
+
+    @staticmethod
+    def _topic_not_ready_reason(topic_info):
+        """Return a string reason if ``topic_info`` isn't ready, else None."""
+        if topic_info is None:
+            return 'missing from metadata response'
+        error_code = topic_info.get('error_code', 0)
+        if error_code != 0:
+            return Errors.for_code(error_code).__name__
+        partitions = topic_info.get('partitions') or []
+        if not partitions:
+            return 'no partitions reported'
+        bad = []
+        for p in partitions:
+            p_err = p.get('error_code', 0)
+            idx = p.get('partition_index')
+            if p_err != 0:
+                bad.append('p%s=%s' % (idx, Errors.for_code(p_err).__name__))
+                continue
+            if p.get('leader_id', -1) < 0:
+                bad.append('p%s=no leader' % idx)
+        if bad:
+            return ','.join(bad)
+        return None
 
     def delete_topics(self, topics, timeout_ms=None, raise_errors=True):
         """Delete topics from the cluster.
