@@ -266,7 +266,7 @@ def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, tra
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Errors.OutOfOrderSequenceNumberError
-    # OutOfOrderSequenceNumber is non-retriable — hits the FAIL branch of
+    # OutOfOrderSequenceNumber is non-retriable -- hits the FAIL branch of
     # _dispatch_error, which resets the producer id for non-transactional
     # idempotent producers.
     sender._complete_batch_with_exception(batch, error)
@@ -600,7 +600,7 @@ class TestSplitAndReenqueue:
         future = FutureRecordMetadata(old_pf, 0, 1000, None, 3, 5, -1)
         future.rebind(new_pf, 0)
 
-        # Complete the new produce_future — should resolve the record future once
+        # Complete the new produce_future -- should resolve the record future once
         new_pf.success((100, -1, None))
         assert future.is_done
         assert future.succeeded()
@@ -634,7 +634,7 @@ class TestSplitAndReenqueue:
         time.sleep(0.05)
         assert t.is_alive()
 
-        # Rebind to a new produce_future — this wakes the blocked thread
+        # Rebind to a new produce_future -- this wakes the blocked thread
         new_pf = FutureProduceResult(tp)
         future.rebind(new_pf, 0)
 
@@ -827,7 +827,7 @@ class TestIdempotentProducerMaxInFlight:
         accumulator.reenqueue(batch)
         assert batch.in_retry()
 
-        # Re-drain after backoff expires — sequence should NOT change (batch is in_retry)
+        # Re-drain after backoff expires -- sequence should NOT change (batch is in_retry)
         future_time = time.monotonic() + 1  # past retry_backoff_ms
         batches2 = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576, now=future_time)
         assert len(batches2) == 1
@@ -857,18 +857,18 @@ class TestIdempotentProducerMaxInFlight:
 
         assert transaction_manager.sequence_number(tp) == 0
 
-        # Drain — sequence advances to 5
+        # Drain -- sequence advances to 5
         batches = accumulator.drain_batches_for_one_node(client.cluster, 0, 1048576)
         assert len(batches) == 1
         batch = batches[0]
         assert transaction_manager.sequence_number(tp) == 5
 
-        # Split — should roll back sequence to 0 (the failed batch's base_sequence)
+        # Split -- should roll back sequence to 0 (the failed batch's base_sequence)
         accumulator.split_and_reenqueue(batch)
         accumulator.deallocate(batch)
         assert transaction_manager.sequence_number(tp) == 0
 
-        # Drain the split batches — each gets correct sequential sequences
+        # Drain the split batches -- each gets correct sequential sequences
         dq = list(accumulator._batches[tp])
         assert len(dq) == 2  # Split into two halves
 
@@ -944,7 +944,7 @@ class TestTransactionManagerLastAckedOffset:
         assert transaction_manager.sequence_number(tp) == 10
 
         batch = producer_batch()
-        # Broker's log_start_offset is 100 — way past our last acked
+        # Broker's log_start_offset is 100 -- way past our last acked
         sender._complete_batch(batch, _partition_response(
             error_cls=Errors.UnknownProducerIdError,
             base_offset=-1,
@@ -973,14 +973,14 @@ class TestTransactionManagerLastAckedOffset:
         batch = producer_batch()
         future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
 
-        # Broker's log_start_offset is 50 — within our acked range → real data loss
+        # Broker's log_start_offset is 50 -- within our acked range -> real data loss
         sender._complete_batch(batch, _partition_response(
             error_cls=Errors.UnknownProducerIdError,
             base_offset=-1,
             log_start_offset=50,
         ))
 
-        # Batch should NOT be reenqueued — it should fail
+        # Batch should NOT be reenqueued -- it should fail
         accumulator.reenqueue.assert_not_called()
         assert batch.is_done
         assert future.failed()
@@ -1015,3 +1015,155 @@ class TestTransactionManagerLastAckedOffset:
         ))
         accumulator.reenqueue.assert_not_called()
         assert batch.is_done
+
+
+class TestKip360SenderIntegration:
+    def _make_txn_manager(self, transactional_id=None):
+        """Transaction manager on a KIP-360-capable broker version with a
+        valid producer_id already set (simulating post-InitProducerId state)."""
+        from kafka.producer.transaction_manager import TransactionState as _TS
+        tm = TransactionManager(
+            transactional_id=transactional_id,
+            transaction_timeout_ms=60000,
+            retry_backoff_ms=100,
+            api_version=(2, 5),
+            metadata=ClusterMetadata(),
+        )
+        tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
+        tm._current_state = _TS.READY
+        return tm
+
+    def test_out_of_order_sequence_triggers_epoch_bump(self, sender, accumulator, mocker):
+        """OutOfOrderSequenceNumberError on a 2.5+ broker routes through
+        bump_producer_id_and_epoch(), not reset_producer_id()."""
+        tm = self._make_txn_manager()
+        sender._transaction_manager = tm
+        mocker.patch.object(tm, 'bump_producer_id_and_epoch')
+        mocker.patch.object(tm, 'reset_producer_id')
+        batch = producer_batch()
+        # Match the batch's producer_id/epoch to the manager's so
+        # has_producer_id(batch.producer_id) returns True.
+        batch.records._producer_id = tm.producer_id_and_epoch.producer_id
+        batch.records._producer_epoch = tm.producer_id_and_epoch.epoch
+
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.OutOfOrderSequenceNumberError))
+
+        tm.bump_producer_id_and_epoch.assert_called_once()
+        tm.reset_producer_id.assert_not_called()
+        assert batch.is_done
+
+    def test_unknown_producer_id_triggers_epoch_bump(self, sender, accumulator, mocker):
+        """UnknownProducerIdError (non-retention case) triggers a bump on 2.5+."""
+        tm = self._make_txn_manager()
+        sender._transaction_manager = tm
+        mocker.patch.object(tm, 'bump_producer_id_and_epoch')
+        batch = producer_batch()
+        batch.records._producer_id = tm.producer_id_and_epoch.producer_id
+        batch.records._producer_epoch = tm.producer_id_and_epoch.epoch
+        # last_acked_offset=49, log_start_offset=10 -> real data loss (not retention)
+        tm.update_last_acked_offset(batch.topic_partition, 0, 50)
+
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
+            log_start_offset=10,
+        ))
+
+        tm.bump_producer_id_and_epoch.assert_called_once()
+
+    def test_retention_based_unknown_producer_id_does_not_bump(self, sender, accumulator, mocker):
+        """Retention-based UnknownProducerIdError still takes the
+        retention-reset retry path (classifier returns RETRIABLE), not bump."""
+        tm = self._make_txn_manager()
+        sender._transaction_manager = tm
+        mocker.patch.object(tm, 'bump_producer_id_and_epoch')
+        mocker.patch.object(accumulator, 'reenqueue')
+        batch = producer_batch()
+        batch.records._producer_id = tm.producer_id_and_epoch.producer_id
+        batch.records._producer_epoch = tm.producer_id_and_epoch.epoch
+        tm.update_last_acked_offset(batch.topic_partition, 0, 5)  # last_acked=4
+
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
+            log_start_offset=100,  # well past last_acked=4 -> retention
+        ))
+
+        tm.bump_producer_id_and_epoch.assert_not_called()
+        accumulator.reenqueue.assert_called_once()
+
+    def test_old_broker_falls_back_to_reset_producer_id(self, sender, accumulator, mocker):
+        """On a < 2.5 broker, OutOfOrderSequenceNumberError for a
+        non-transactional idempotent producer still calls reset_producer_id
+        (pre-KIP-360 fallback)."""
+        from kafka.producer.transaction_manager import TransactionState as _TS
+        tm = TransactionManager(
+            transactional_id=None,
+            transaction_timeout_ms=60000,
+            retry_backoff_ms=100,
+            api_version=(2, 0),  # pre-KIP-360
+            metadata=ClusterMetadata(),
+        )
+        tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
+        tm._current_state = _TS.READY
+        sender._transaction_manager = tm
+        mocker.patch.object(tm, 'bump_producer_id_and_epoch')
+        mocker.patch.object(tm, 'reset_producer_id')
+        batch = producer_batch()
+        batch.records._producer_id = tm.producer_id_and_epoch.producer_id
+        batch.records._producer_epoch = tm.producer_id_and_epoch.epoch
+
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.OutOfOrderSequenceNumberError))
+
+        tm.bump_producer_id_and_epoch.assert_not_called()
+        tm.reset_producer_id.assert_called_once()
+
+    def test_second_in_flight_error_does_not_cascade_bumps(self, sender, accumulator, mocker):
+        """With max_in_flight > 1, multiple in-flight batches may fail with
+        OutOfOrderSequenceNumberError at roughly the same time. Only the
+        first should drive the bump; subsequent calls must be no-ops."""
+        tm = self._make_txn_manager()
+        sender._transaction_manager = tm
+
+        batch_a = producer_batch()
+        batch_b = producer_batch(topic='bar')
+        for b in (batch_a, batch_b):
+            b.records._producer_id = tm.producer_id_and_epoch.producer_id
+            b.records._producer_epoch = tm.producer_id_and_epoch.epoch
+
+        # First failure triggers the bump
+        sender._complete_batch(batch_a, _partition_response(
+            error_cls=Errors.OutOfOrderSequenceNumberError))
+        assert tm.is_bumping_epoch()
+        # The bump has enqueued exactly one InitProducerIdHandler
+        from kafka.producer.transaction_manager import InitProducerIdHandler
+        first_init_handlers = [h for _, _, h in tm._pending_requests
+                               if isinstance(h, InitProducerIdHandler)]
+        assert len(first_init_handlers) == 1
+
+        # Second in-flight batch fails with the same error -- should NOT
+        # enqueue a second InitProducerIdHandler
+        sender._complete_batch(batch_b, _partition_response(
+            error_cls=Errors.OutOfOrderSequenceNumberError))
+
+        second_init_handlers = [h for _, _, h in tm._pending_requests
+                                if isinstance(h, InitProducerIdHandler)]
+        assert len(second_init_handlers) == 1  # still just one
+
+    def test_sender_loop_gates_on_bumping_state(self, sender, accumulator, mocker):
+        """When in BUMPING_PRODUCER_EPOCH, run_once short-circuits before
+        sending produce data."""
+        from kafka.producer.transaction_manager import TransactionState as _TS
+        tm = self._make_txn_manager()
+        sender._transaction_manager = tm
+        tm._current_state = _TS.BUMPING_PRODUCER_EPOCH
+        mocker.patch.object(sender, '_send_producer_data')
+        mocker.patch.object(sender._client, 'poll')
+        # is_transactional() is False (no transactional_id), so the sender
+        # runs _maybe_wait_for_producer_id() -- mock that to a no-op
+        mocker.patch.object(sender, '_maybe_wait_for_producer_id')
+
+        sender.run_once()
+
+        sender._send_producer_data.assert_not_called()
+        sender._client.poll.assert_called_once()
