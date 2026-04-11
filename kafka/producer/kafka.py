@@ -147,6 +147,17 @@ class KafkaProducer:
             defaults to be suitable. If the values are set to something
             incompatible with the idempotent producer, a KafkaConfigurationError
             will be raised.
+
+            On Kafka 2.5+ brokers, the idempotent producer automatically
+            recovers from transient producer-state errors (OutOfOrderSequence,
+            UnknownProducerId, InvalidProducerEpoch) by bumping its producer
+            epoch via InitProducerIdRequest v3+ (KIP-360). On older brokers,
+            these errors remain fatal for transactional producers and reset
+            the producer id for non-transactional idempotent producers.
+            Batches that are in-flight at the moment of a bump will have
+            their futures fail--their records are lost. Records still in
+            the accumulator (not yet drained) are produced under the bumped
+            epoch on the next drain.
         delivery_timeout_ms (float): An upper bound on the time to report success
             or failure after producer.send() returns. This limits the total time
             that a record will be delayed prior to sending, the time to await
