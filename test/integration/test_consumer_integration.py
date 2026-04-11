@@ -56,7 +56,9 @@ def test_kafka_version_infer(kafka_consumer_factory):
 
 def test_kafka_consumer(kafka_consumer_factory, send_messages):
     """Test KafkaConsumer"""
-    consumer = kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=2000)
+    # consumer_timeout_ms must exceed worst-case broker+CI latency for 200
+    # records; 30s gives plenty of margin without masking real hangs.
+    consumer = kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=30000)
     send_messages(range(0, 100), partition=0)
     send_messages(range(0, 100), partition=1)
     cnt = 0
