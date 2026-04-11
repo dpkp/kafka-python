@@ -1,0 +1,139 @@
+# Manual stress-repro workflow for flakey integration tests.
+#
+# Run a single pytest node id many times, in parallel, under CPU pressure,
+# to maximize the chance of catching timing-sensitive flakes. Uploads the
+# pytest log from any shard that catches a failure.
+#
+# Trigger from the Actions UI via "Run workflow" (workflow_dispatch only) —
+# does NOT run on PRs or pushes, to avoid burning runner minutes on every
+# commit. Defaults target the test_heartbeat_thread rejoin hang, but any
+# pytest node id can be supplied.
+#
+name: Flakey test repro
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_node:
+        description: "pytest node id to stress"
+        required: true
+        default: "test/integration/test_consumer_group.py::test_heartbeat_thread"
+      count:
+        description: "pytest-repeat --count per shard"
+        required: true
+        default: "100"
+      parallelism:
+        description: "pytest-xdist workers per shard"
+        required: true
+        default: "4"
+      cpu_load:
+        description: "stress-ng CPU workers running alongside (0 disables)"
+        required: true
+        default: "2"
+      kafka_version:
+        description: "Kafka broker version"
+        required: true
+        default: "4.2.0"
+      python_version:
+        description: "Python version"
+        required: true
+        default: "3.14"
+
+env:
+  FORCE_COLOR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    name: "Stress shard ${{ matrix.shard }}"
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # Four independent shards on four runners. Each shard runs the same
+        # stress config; multiplying shards multiplies aggregate iterations
+        # without serializing. A shard that catches the bug exits fast (-x);
+        # other shards continue so we get as many traces as possible.
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ github.event.inputs.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ github.event.inputs.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          sudo apt install -y libsnappy-dev libzstd-dev stress-ng
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install pytest-repeat pytest-xdist
+
+      - name: Setup java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 23
+
+      - name: Restore cached kafka releases
+        id: cache-servers-dist-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: servers/dist
+          key: servers-dist-${{ github.event.inputs.kafka_version }}
+
+      - name: Install Kafka release
+        run: make servers/${{ github.event.inputs.kafka_version }}/kafka-bin
+
+      - name: Update kafka release cache
+        uses: actions/cache/save@v5
+        with:
+          path: servers/dist
+          key: ${{ steps.cache-servers-dist-restore.outputs.cache-primary-key }}
+
+      - name: Start CPU load
+        if: github.event.inputs.cpu_load != '0'
+        run: |
+          # Background stress-ng; capture PID so we can stop it in the
+          # cleanup step regardless of whether pytest passed or failed.
+          stress-ng --cpu ${{ github.event.inputs.cpu_load }} \
+                    --timeout 3600s \
+                    --metrics-brief &
+          echo "STRESS_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Run stress test
+        id: pytest
+        run: |
+          # -x stops on first failure so a shard that catches the bug exits
+          # fast and uploads logs. --log-cli-level=DEBUG surfaces the debug
+          # statements already in the coordinator for task #12.
+          pytest "${{ github.event.inputs.test_node }}" \
+              --count=${{ github.event.inputs.count }} \
+              -n ${{ github.event.inputs.parallelism }} \
+              --timeout=120 \
+              -x \
+              -v \
+              --log-cli-level=DEBUG \
+              2>&1 | tee pytest.log
+        env:
+          KAFKA_VERSION: ${{ github.event.inputs.kafka_version }}
+
+      - name: Stop CPU load
+        if: always() && env.STRESS_PID != ''
+        run: kill "$STRESS_PID" || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repro-logs-shard-${{ matrix.shard }}
+          path: |
+            pytest.log
+          if-no-files-found: warn
