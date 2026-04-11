@@ -17,7 +17,50 @@ from kafka.protocol.producer import ProduceRequest
 from kafka.producer.future import FutureRecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.producer.record_accumulator import RecordAccumulator
-from kafka.producer.sender import PartitionResponse, Sender
+from kafka.producer.sender import Sender
+from kafka.protocol.producer import ProduceResponse
+
+_PartitionProduceResponse = ProduceResponse.TopicProduceResponse.PartitionProduceResponse
+
+
+def _partition_response(error_cls=None, **kwargs):
+    """Test helper that constructs a PartitionProduceResponse.
+
+    Accepts the old PartitionResponse-style kwargs (base_offset,
+    log_append_time, log_start_offset, error_message) and maps them to
+    PartitionProduceResponse fields (base_offset, log_append_time_ms,
+    log_start_offset, error_message).
+
+    If error_cls is provided it must be a broker error class with an
+    errno; its errno is used for error_code. For client-side errors, call
+    sender._complete_batch_with_exception directly instead.
+    """
+    if 'log_append_time' in kwargs:
+        kwargs['log_append_time_ms'] = kwargs.pop('log_append_time')
+    if error_cls is not None:
+        kwargs.setdefault('error_code', error_cls.errno)
+    else:
+        kwargs.setdefault('error_code', 0)
+    return _PartitionProduceResponse(**kwargs)
+
+
+def _is_broker_error(error_cls):
+    """Return True if the error class is a broker error with an errno."""
+    return hasattr(error_cls, 'errno') and error_cls.errno != -1
+
+
+def _complete(sender, batch, error_cls=None, **kwargs):
+    """Call the appropriate sender entry point based on the error type.
+
+    For broker errors (those with an errno), calls _complete_batch with a
+    synthetic PartitionProduceResponse. For client-side errors (exceptions
+    raised locally like KafkaConnectionError), calls
+    _complete_batch_with_exception.
+    """
+    if error_cls is not None and not _is_broker_error(error_cls):
+        sender._complete_batch_with_exception(batch, error_cls)
+    else:
+        sender._complete_batch(batch, _partition_response(error_cls=error_cls, **kwargs))
 from kafka.producer.transaction_manager import ProducerIdAndEpoch, TransactionManager
 from kafka.record.memory_records import MemoryRecordsBuilder
 from kafka.structs import TopicPartition
@@ -91,7 +134,7 @@ def test_complete_batch_success(sender):
     assert not batch.produce_future.is_done
 
     # No error, base_offset 0
-    sender._complete_batch(batch, PartitionResponse(base_offset=0, log_append_time=123))
+    sender._complete_batch(batch, _partition_response(base_offset=0, log_append_time=123))
     assert batch.is_done
     assert batch.produce_future.is_done
     assert batch.produce_future.succeeded()
@@ -110,7 +153,7 @@ def test_complete_batch_transaction(sender, transaction_manager):
     assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
 
     # No error, base_offset 0
-    sender._complete_batch(batch, PartitionResponse(base_offset=0))
+    sender._complete_batch(batch, _partition_response(base_offset=0))
     assert batch.is_done
     # Sequence should not change on completion (already incremented at drain)
     assert sender._transaction_manager.sequence_number(batch.topic_partition) == batch.record_count
@@ -140,7 +183,7 @@ def test_complete_batch_error(sender, error, refresh_metadata):
     assert sender._client.cluster.ttl() > 0
     batch = producer_batch()
     future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
-    sender._complete_batch(batch, PartitionResponse(error=error))
+    _complete(sender, batch, error_cls=error)
     if refresh_metadata:
         assert sender._client.cluster.ttl() == 0
     else:
@@ -172,12 +215,12 @@ def test_complete_batch_retry(sender, accumulator, mocker, error, retry):
     mocker.patch.object(accumulator, 'reenqueue')
     batch = producer_batch()
     future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
-    sender._complete_batch(batch, PartitionResponse(error=error))
+    _complete(sender, batch, error_cls=error)
     if retry:
         assert not batch.is_done
         accumulator.reenqueue.assert_called_with(batch)
         batch.attempts += 1 # normally handled by accumulator.reenqueue, but it's mocked
-        sender._complete_batch(batch, PartitionResponse(error=error))
+        _complete(sender, batch, error_cls=error)
         assert batch.is_done
         assert future.failed()
         assert isinstance(future.exception, error)
@@ -194,12 +237,12 @@ def test_complete_batch_producer_id_changed_no_retry(sender, accumulator, transa
     error = Errors.NotLeaderForPartitionError
     batch = producer_batch()
     future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
-    sender._complete_batch(batch, PartitionResponse(error=error))
+    _complete(sender, batch, error_cls=error)
     assert not batch.is_done
     accumulator.reenqueue.assert_called_with(batch)
     batch.records._producer_id = 123 # simulate different producer_id
     assert batch.producer_id != sender._transaction_manager.producer_id_and_epoch.producer_id
-    sender._complete_batch(batch, PartitionResponse(error=error))
+    _complete(sender, batch, error_cls=error)
     assert batch.is_done
     assert future.failed()
     assert isinstance(future.exception, error)
@@ -211,7 +254,7 @@ def test_fail_batch(sender, accumulator, transaction_manager, mocker):
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Errors.KafkaError
-    sender._fail_batch(batch, PartitionResponse(error=error))
+    sender._complete_batch_with_exception(batch, error)
     batch.done.assert_called_with(top_level_exception=error(None), record_exceptions_fn=mocker.ANY)
 
 
@@ -223,7 +266,10 @@ def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, tra
     mocker.patch.object(batch, 'done')
     assert sender._transaction_manager.producer_id_and_epoch.producer_id == batch.producer_id
     error = Errors.OutOfOrderSequenceNumberError
-    sender._fail_batch(batch, PartitionResponse(base_offset=0, log_append_time=None, error=error))
+    # OutOfOrderSequenceNumber is non-retriable — hits the FAIL branch of
+    # _dispatch_error, which resets the producer id for non-transactional
+    # idempotent producers.
+    sender._complete_batch_with_exception(batch, error)
     sender._transaction_manager.reset_producer_id.assert_called_once()
     batch.done.assert_called_with(top_level_exception=error(None), record_exceptions_fn=mocker.ANY)
 
@@ -233,13 +279,13 @@ def test_handle_produce_response():
 
 
 def test_failed_produce(sender, mocker):
-    mocker.patch.object(sender, '_complete_batch')
+    mocker.patch.object(sender, '_complete_batch_with_exception')
     mock_batches = ['foo', 'bar', 'fizzbuzz']
     sender._failed_produce(mock_batches, 0, 'error')
-    sender._complete_batch.assert_has_calls([
-        call('foo', PartitionResponse(error='error')),
-        call('bar', PartitionResponse(error='error')),
-        call('fizzbuzz', PartitionResponse(error='error')),
+    sender._complete_batch_with_exception.assert_has_calls([
+        call('foo', 'error'),
+        call('bar', 'error'),
+        call('fizzbuzz', 'error'),
     ])
 
 
@@ -275,7 +321,7 @@ def test__record_exceptions_fn(sender):
     assert record_exceptions_fn(0) == Errors.KafkaError('err-0')
 
 
-class SplitAndReenqueTests:
+class TestSplitAndReenqueue:
     def multi_record_batch(self, num_records=5, topic='foo', partition=0, batch_size=100000):
         """Create a ProducerBatch with multiple records for split testing."""
         tp = TopicPartition(topic, partition)
@@ -418,7 +464,7 @@ class SplitAndReenqueTests:
         batch, futures = self.multi_record_batch(num_records=5)
         accumulator._incomplete.add(batch)
 
-        sender._complete_batch(batch, PartitionResponse(error=Errors.MessageSizeTooLargeError))
+        sender._complete_batch(batch, _partition_response(error_cls=Errors.MessageSizeTooLargeError))
 
         # Original batch should be deallocated (not in incomplete set)
         assert batch not in accumulator._incomplete.all()
@@ -440,7 +486,7 @@ class SplitAndReenqueTests:
         batch, futures = self.multi_record_batch(num_records=5)
         accumulator._incomplete.add(batch)
 
-        sender._complete_batch(batch, PartitionResponse(error=Errors.RecordListTooLargeError))
+        sender._complete_batch(batch, _partition_response(error_cls=Errors.RecordListTooLargeError))
 
         dq = accumulator._batches[tp]
         assert len(dq) >= 2
@@ -453,7 +499,7 @@ class SplitAndReenqueTests:
         accumulator._incomplete.add(batch)
         sender.config['retries'] = 0
 
-        sender._complete_batch(batch, PartitionResponse(error=Errors.MessageSizeTooLargeError))
+        sender._complete_batch(batch, _partition_response(error_cls=Errors.MessageSizeTooLargeError))
 
         assert batch.is_done
         assert futures[0].is_done
@@ -469,7 +515,7 @@ class SplitAndReenqueTests:
         batch, _ = self.multi_record_batch(num_records=5, topic='foo', partition=0)
         accumulator._incomplete.add(batch)
 
-        sender._complete_batch(batch, PartitionResponse(error=Errors.MessageSizeTooLargeError))
+        sender._complete_batch(batch, _partition_response(error_cls=Errors.MessageSizeTooLargeError))
 
         assert tp not in accumulator.muted
 
@@ -673,7 +719,7 @@ class SplitAndReenqueTests:
             assert future.value.partition == 0
 
 
-class IdempotentProducerMaxInFlightTests:
+class TestIdempotentProducerMaxInFlight:
     def test_idempotent_config_allows_max_in_flight_up_to_5(self):
         """Idempotent producer allows max_in_flight 1-5."""
         for max_in_flight in (1, 2, 3, 4, 5):
@@ -792,8 +838,8 @@ class IdempotentProducerMaxInFlightTests:
         batch = producer_batch()
         accumulator._incomplete.add(batch)
 
-        sender._complete_batch(batch, PartitionResponse(
-            error=Errors.DuplicateSequenceNumberError, base_offset=42, log_append_time=-1))
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.DuplicateSequenceNumberError, base_offset=42, log_append_time=-1))
 
         assert batch.is_done
         assert batch.produce_future.succeeded()
@@ -839,7 +885,11 @@ class IdempotentProducerMaxInFlightTests:
     def test_split_without_idempotence_no_sequence_reset(self, accumulator):
         """split_and_reenqueue works without transaction_manager (no sequence to reset)."""
         tp = TopicPartition('foo', 0)
-        batch, futures = self.multi_record_batch(num_records=4)
+        tp_records = MemoryRecordsBuilder(magic=2, compression_type=0, batch_size=100000)
+        batch = ProducerBatch(tp, tp_records)
+        for i in range(4):
+            batch.try_append(0, b'key-%d' % i, b'value-%d' % i, [])
+        batch.records.close()
         accumulator._incomplete.add(batch)
 
         # Should not raise even without a transaction_manager
@@ -848,14 +898,14 @@ class IdempotentProducerMaxInFlightTests:
         assert num_new == 2
 
 
-class TransactionManagerLastAckedOffsetTests:
+class TestTransactionManagerLastAckedOffset:
     def test_update_last_acked_offset_on_success(self, sender, accumulator, transaction_manager):
         """Sender updates last_acked_offset in TransactionManager on successful completion."""
         sender._transaction_manager = transaction_manager
         batch = producer_batch()  # 1 record
         assert transaction_manager.last_acked_offset(batch.topic_partition) == -1
 
-        sender._complete_batch(batch, PartitionResponse(base_offset=42, log_append_time=-1))
+        sender._complete_batch(batch, _partition_response(base_offset=42, log_append_time=-1))
         # last_offset = base_offset(42) + record_count(1) - 1 = 42
         assert transaction_manager.last_acked_offset(batch.topic_partition) == 42
 
@@ -895,8 +945,8 @@ class TransactionManagerLastAckedOffsetTests:
 
         batch = producer_batch()
         # Broker's log_start_offset is 100 — way past our last acked
-        sender._complete_batch(batch, PartitionResponse(
-            error=Errors.UnknownProducerIdError,
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
             base_offset=-1,
             log_start_offset=100,
         ))
@@ -924,8 +974,8 @@ class TransactionManagerLastAckedOffsetTests:
         future = FutureRecordMetadata(batch.produce_future, -1, -1, -1, -1, -1, -1)
 
         # Broker's log_start_offset is 50 — within our acked range → real data loss
-        sender._complete_batch(batch, PartitionResponse(
-            error=Errors.UnknownProducerIdError,
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
             base_offset=-1,
             log_start_offset=50,
         ))
@@ -946,8 +996,8 @@ class TransactionManagerLastAckedOffsetTests:
 
         batch = producer_batch()
         # Old broker response: log_start_offset = -1 (unknown)
-        sender._complete_batch(batch, PartitionResponse(
-            error=Errors.UnknownProducerIdError,
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
             base_offset=-1,
             log_start_offset=-1,
         ))
@@ -959,8 +1009,8 @@ class TransactionManagerLastAckedOffsetTests:
         """UnknownProducerIdError without transaction_manager falls through to normal failure path."""
         mocker.patch.object(accumulator, 'reenqueue')
         batch = producer_batch()
-        sender._complete_batch(batch, PartitionResponse(
-            error=Errors.UnknownProducerIdError,
+        sender._complete_batch(batch, _partition_response(
+            error_cls=Errors.UnknownProducerIdError,
             log_start_offset=100,
         ))
         accumulator.reenqueue.assert_not_called()
