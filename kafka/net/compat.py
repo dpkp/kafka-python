@@ -129,7 +129,7 @@ class KafkaNetClient:
 
     def poll(self, timeout_ms=None, future=None):
         with self._lock:
-            if self._manager.cluster.need_update:
+            if self._manager.cluster.ttl() == 0:
                 self._manager.update_metadata()
             return self._manager.poll(timeout_ms=timeout_ms, future=future)
 
