@@ -1,13 +1,17 @@
 # Manual stress-repro workflow for flakey integration tests.
 #
-# Run a single pytest node id many times, in parallel, under CPU pressure,
-# to maximize the chance of catching timing-sensitive flakes. Uploads the
-# pytest log from any shard that catches a failure.
+# Runs one pytest session per shard against a list of test files, with
+# each test repeated --count times via pytest-repeat. Broker setup/teardown
+# is amortized across the whole session, so cross-test state accumulates
+# (topics, coordinator records, broker memory) the way it does in a normal
+# `make test` run. This is the "middle ground" configuration between raw
+# iteration count and shell-loop sequence fidelity; see task #12 discussion.
 #
 # Trigger from the Actions UI via "Run workflow" (workflow_dispatch only) —
 # does NOT run on PRs or pushes, to avoid burning runner minutes on every
-# commit. Defaults target the test_heartbeat_thread rejoin hang, but any
-# pytest node id can be supplied.
+# commit. Default test_node stacks test_admin_integration.py and
+# test_consumer_group.py so test_heartbeat_thread runs against a broker
+# that has seen the same prior tests it would in `make test`.
 #
 name: Flakey test repro
 
@@ -15,17 +19,13 @@ on:
   workflow_dispatch:
     inputs:
       test_node:
-        description: "pytest node id to stress"
+        description: "pytest node id(s) to stress (space-separated, word-split)"
         required: true
-        default: "test/integration/test_consumer_group.py::test_heartbeat_thread"
+        default: "test/integration/test_admin_integration.py test/integration/test_consumer_group.py"
       count:
-        description: "pytest-repeat --count per shard"
+        description: "pytest-repeat --count (each test repeated this many times per session)"
         required: true
-        default: "100"
-      parallelism:
-        description: "pytest-xdist workers per shard"
-        required: true
-        default: "4"
+        default: "20"
       cpu_load:
         description: "stress-ng CPU workers running alongside (0 disables)"
         required: true
@@ -74,7 +74,7 @@ jobs:
           sudo apt install -y libsnappy-dev libzstd-dev stress-ng
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install pytest-repeat pytest-xdist
+          pip install pytest-repeat
 
       - name: Setup java
         uses: actions/setup-java@v5
@@ -111,16 +111,37 @@ jobs:
       - name: Run stress test
         id: pytest
         run: |
-          # -x stops on first failure so a shard that catches the bug exits
-          # fast and uploads logs. --log-cli-level=DEBUG surfaces the debug
-          # statements already in the coordinator for task #12.
-          pytest "${{ github.event.inputs.test_node }}" \
+          # Single pytest session, one broker setup/teardown amortized
+          # across the whole run. pytest-repeat --count=N parametrizes
+          # each test N times (grouped by test, in source order within
+          # a file) so cross-test state accumulates on the broker the
+          # way it does in `make test`. No xdist: serialized execution
+          # preserves ordering and keeps the test-to-broker-state
+          # relationship deterministic.
+          #
+          # -x stops on first failure so a shard that catches the bug
+          # exits fast and uploads its pytest log.
+          #
+          # --log-level=DEBUG (NOT --log-cli-level) sets the capture
+          # level so DEBUG messages get caught per test, but doesn't
+          # stream them live. pytest discards captured output for
+          # passing tests and includes it in the failure report for
+          # failing tests, so passing runs produce a small log file
+          # and failing runs still get full debug traces from the
+          # test that actually broke. --log-format adds thread names
+          # and millisecond timestamps for race debugging.
+          #
+          # test_node is deliberately unquoted so space-separated input
+          # like "file_a.py file_b.py" word-splits into separate pytest
+          # arguments.
+          pytest ${{ github.event.inputs.test_node }} \
               --count=${{ github.event.inputs.count }} \
-              -n ${{ github.event.inputs.parallelism }} \
               --timeout=120 \
               -x \
               -v \
-              --log-cli-level=DEBUG \
+              --log-level=DEBUG \
+              --log-format="%(asctime)s.%(msecs)03d %(levelname)-5s %(threadName)s %(name)-30s %(message)s" \
+              --log-date-format="%H:%M:%S" \
               2>&1 | tee pytest.log
         env:
           KAFKA_VERSION: ${{ github.event.inputs.kafka_version }}
