@@ -23,6 +23,8 @@ def test_consumer(consumer):
 
 
 def test_consumer_topics(consumer, topic):
+    # The `topic` fixture waits for the topic to be visible in broker
+    # metadata before returning, so a single poll + fetch is sufficient here.
     consumer.poll(timeout_ms=500)
     assert topic in consumer.topics()
     assert len(consumer.partitions_for_topic(topic)) > 0
