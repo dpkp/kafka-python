@@ -388,22 +388,31 @@ class ConsumerCoordinator(BaseCoordinator):
             bool: True if consumer should rejoin group, False otherwise
         """
         if not self._subscription.partitions_auto_assigned():
+            log.debug("need_rejoin: False (partitions not auto-assigned)")
             return False
 
         if self._auto_assign_all_partitions():
+            log.debug("need_rejoin: False (auto-assign all partitions)")
             return False
 
         # we need to rejoin if we performed the assignment and metadata has changed
         if (self._assignment_snapshot is not None
             and self._assignment_snapshot != self._metadata_snapshot):
+            log.debug("need_rejoin: True (assignment_snapshot != metadata_snapshot: %s != %s)",
+                      self._assignment_snapshot, self._metadata_snapshot)
             return True
 
         # we need to join if our subscription has changed since the last join
         if (self._joined_subscription is not None
             and self._joined_subscription != self._subscription.subscription):
+            log.debug("need_rejoin: True (joined_subscription != subscription: %s != %s)",
+                      self._joined_subscription, self._subscription.subscription)
             return True
 
-        return super().need_rejoin()
+        parent = super().need_rejoin()
+        log.debug("need_rejoin: %s (from base.rejoin_needed; assignment_snapshot=%s metadata_snapshot=%s joined_subscription=%s)",
+                  parent, self._assignment_snapshot, self._metadata_snapshot, self._joined_subscription)
+        return parent
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""

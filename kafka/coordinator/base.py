@@ -397,6 +397,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             # This ensures that we do not mistakenly attempt to rejoin
             # before the pending rebalance has completed.
             if self.join_future is None:
+                log.debug("_initiate_join_group: creating new join_future (state=%s)", self.state)
                 self.state = MemberState.REBALANCING
                 self.join_future = self._send_join_group_request()
 
@@ -409,6 +410,9 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 # If the join completes after having been woken up, the
                 # exception is ignored and we will rejoin
                 self.join_future.add_errback(self._handle_join_failure)
+            else:
+                log.debug("_initiate_join_group: returning existing join_future (is_done=%s, exception=%s, state=%s)",
+                          self.join_future.is_done, self.join_future.exception, self.state)
 
         return self.join_future
 
@@ -490,18 +494,24 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
             future = self._initiate_join_group()
             self._client.poll(future=future, timeout_ms=timer.timeout_ms)
+            log.debug("join_group: after poll, future.is_done=%s future.exception=%s future is self.join_future=%s state=%s",
+                      future.is_done, future.exception, future is self.join_future, self.state)
             if future.is_done:
                 self._reset_join_group_future()
             else:
                 return False
 
+            log.debug("join_group: checking future.succeeded()=%s (is_done=%s exception=%s)",
+                      future.succeeded(), future.is_done, future.exception)
             if future.succeeded():
                 self.rejoining = False
                 self.rejoin_needed = False
+                log.debug("join_group: about to call _on_join_complete (generation=%s)", self._generation)
                 self._on_join_complete(self._generation.generation_id,
                                        self._generation.member_id,
                                        self._generation.protocol,
                                        future.value)
+                log.debug("join_group: _on_join_complete returned")
                 return True
             else:
                 exception = future.exception
