@@ -119,7 +119,7 @@ class KafkaConnectionManager:
         if self._bootstrap_future is not None and not self._bootstrap_future.is_done:
             return self._bootstrap_future
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
-        self._bootstrap_future = self.call_soon(self._do_bootstrap(deadline))
+        self._bootstrap_future = self.call_soon(self._do_bootstrap, deadline)
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
 
@@ -337,29 +337,30 @@ class KafkaConnectionManager:
     def poll(self, timeout_ms=None, future=None):
         return self._net.poll(timeout_ms=timeout_ms, future=future)
 
-    def call_soon(self, coro):
+    def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.
 
         Returns: Future
         """
+        if hasattr(coro, '__await__'):
+            assert not args, 'initiated coroutine does not accept args'
         future = Future()
         async def wrapper():
             try:
                 if inspect.iscoroutinefunction(coro):
-                    future.success(await coro())
+                    future.success(await coro(*args))
                 elif hasattr(coro, '__await__'):
                     future.success(await coro)
                 else:
-                    future.success(coro())
+                    future.success(coro(*args))
             except Exception as exc:
                 future.failure(exc)
         self._net.call_soon(wrapper)
         return future
 
-    def run(self, coro):
-        """Schedules coro on the event loop, blocks until complete, returns value or raises.
-        """
-        future = self.call_soon(coro)
+    def run(self, coro, *args):
+        """Schedules coro on the event loop, blocks until complete, returns value or raises."""
+        future = self.call_soon(coro, *args)
         self.poll(future=future)
         if future.exception is not None:
             raise future.exception

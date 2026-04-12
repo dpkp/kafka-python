@@ -347,6 +347,11 @@ class TestKafkaConnectionManagerRun:
             return 100
         assert manager.run(test_coro) == 100
 
+    def test_run_async_coro_with_args(self, manager):
+        async def test_coro(foo):
+            return foo
+        assert manager.run(test_coro, 123) == 123
+
     def test_run_async_coro(self, manager):
         async def test_coro():
             return 49
