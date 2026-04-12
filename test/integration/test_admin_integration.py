@@ -8,7 +8,7 @@ from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType,
     ResourcePattern, ResourceType, ACL,
     ConfigResource, ConfigResourceType,
-    NewTopic,
+    NewPartitions, NewTopic,
 )
 from kafka.errors import (
     BrokerResponseError, NoError, CoordinatorNotAvailableError,
@@ -394,6 +394,26 @@ def test_create_delete_topics(kafka_admin_client):
     response = kafka_admin_client.delete_topics([topic_name])
     assert response.responses[0].name == topic_name
     assert response.responses[0].error_code == 0 # NoError
+
+
+@pytest.mark.skipif(env_kafka_version() < (1, 0), reason="CreatePartitions requires broker >=1.0")
+def test_create_partitions(kafka_admin_client, topic):
+    # topic fixture creates with 4 partitions by default
+    topic_metadata = kafka_admin_client.describe_topics([topic])
+    assert len(topic_metadata) == 1
+    original_count = len(topic_metadata[0]['partitions'])
+    assert original_count == 4
+
+    # Increase to 6 partitions
+    new_total = 6
+    response = kafka_admin_client.create_partitions({topic: NewPartitions(new_total, [[0], [0]])})
+    for result in response.results:
+        assert result[0] == topic
+        assert result[1] == 0  # NoError
+
+    # Verify the new partition count
+    topic_metadata = kafka_admin_client.describe_topics([topic])
+    assert len(topic_metadata[0]['partitions']) == new_total
 
 
 @pytest.mark.skipif(env_kafka_version() < (2, 2), reason="Leader Election requires broker >=2.2")
