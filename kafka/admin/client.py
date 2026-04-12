@@ -368,12 +368,7 @@ class KafkaAdminClient:
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
     def send_request(self, request, node_id=None):
-        if node_id is None:
-            node_id = self._client.least_loaded_node(bootstrap_fallback=True)
-        self._client.await_ready(node_id)
-        future = self._client.send(node_id, request)
-        self._wait_for_futures([future]) # raises exception on failure
-        return future.value
+        return self._manager.run(self._manager.send(request, node_id=node_id))
 
     def send_requests(self, requests_and_node_ids, response_fn=lambda x: x):
         futures = []
