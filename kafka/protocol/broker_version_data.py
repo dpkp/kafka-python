@@ -1,4 +1,5 @@
 from collections import namedtuple
+import inspect
 import logging
 import functools
 
@@ -54,18 +55,21 @@ class BrokerVersionData:
                         str(broker_version), str_version)
         return broker_version
 
-    def api_version(self, operation, max_version=None):
+    def api_version(self, operation, min_version=0, max_version=float('inf')):
         """Find the latest version of the protocol operation supported by both
         this library and the broker.
 
-        This resolves to the lesser of either the latest api version this
-        library supports, or the max version supported by the broker.
+        This resolves to the lesser of the latest api version this
+        library supports, the max version supported by the broker,
+        or optionally a max_version provided by the caller, or specified on
+        the request instance.
 
         Arguments:
-            operation: A list of protocol operation versions from kafka.protocol.
+            operation: A protocol request class or instance from kafka.protocol.
 
         Keyword Arguments:
-            max_version (int, optional): Provide an alternate maximum api version
+            min_version (int, optional): Provide an alternate minimum api version.
+            max_version (int, optional): Provide an alternate maximum api version.
                 to reflect limitations in user code.
 
         Returns:
@@ -73,23 +77,28 @@ class BrokerVersionData:
 
         Raises: IncompatibleBrokerVersion if no matching version is found
         """
-        # Cap max_version at the largest available version in operation list
-        max_version = min(operation.max_version, max_version if max_version is not None else float('inf'))
+        assert min_version <= max_version
+        # if _max_version is a data descriptor, operation is a protocol class so no request min/max
+        if inspect.isdatadescriptor(operation._max_version):
+            request_max = float('inf')
+            request_min = 0
+        else:
+            request_max = operation._max_version if operation._max_version is not None else float('inf')
+            request_min = operation._min_version if operation._min_version is not None else 0
+        max_version = min(max_version, operation.max_version, request_max)
+        min_version = max(min_version, operation.min_version, request_min)
         broker_api_versions = self.api_versions
         api_key = operation.API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
             raise Errors.IncompatibleBrokerVersion(
-                "Kafka broker does not support the '{}' Kafka protocol."
-                .format(operation.name))
+                f"Kafka broker does not support the '{operation.name}' Kafka protocol.")
         broker_min_version, broker_max_version = broker_api_versions[api_key]
-        version = min(max_version, broker_max_version)
-        if version < broker_min_version:
-            # max library version is less than min broker version. Currently,
-            # no Kafka versions specify a min msg version. Maybe in the future?
+        if min_version > broker_max_version or max_version < broker_min_version:
             raise Errors.IncompatibleBrokerVersion(
-                "No version of the '{}' Kafka protocol is supported by both the client and broker."
-                .format(operation.name))
-        return version
+                f"No version of the '{operation.name}' Kafka protocol is supported by both" \
+                f" the client [{min_version}-{max_version}]" \
+                f" and broker [{broker_min_version}-{broker_max_version}].")
+        return min(max_version, broker_max_version)
 
     def __str__(self):
         return '<BrokerVersionData %s>' % '.'.join(map(str, self.broker_version))

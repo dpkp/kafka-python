@@ -63,7 +63,7 @@ class ApiMessageData(VersionSubscriptable, JsonSchemaData):
 
 
 class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
-    __slots__ = ('_header')
+    __slots__ = ('_header', '_min_version', '_max_version')
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -89,6 +89,8 @@ class ApiMessage(DataContainer, metaclass=ApiMessageData, init=False):
 
     def __init__(self, *args, **kwargs):
         self._header = None
+        self._min_version = kwargs.pop('min_version', None)
+        self._max_version = kwargs.pop('max_version', None)
         super().__init__(*args, **kwargs)
 
     @classproperty
