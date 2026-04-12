@@ -609,7 +609,7 @@ class KafkaAdminClient:
             obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
         return obj
 
-    async def _get_cluster_metadata(self, topics=None):
+    async def _get_cluster_metadata(self, topics):
         """topics = [] for no topics, None for all."""
         request = MetadataRequest(
             topics=[
@@ -632,7 +632,7 @@ class KafkaAdminClient:
         Returns:
             A list of topic name strings.
         """
-        metadata = self._manager.run(self._get_cluster_metadata(topics=None))
+        metadata = self._manager.run(self._get_cluster_metadata, None) # None => request all topics
         return [t['name'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
@@ -645,7 +645,7 @@ class KafkaAdminClient:
         Returns:
             A list of dicts describing each topic (including partition info).
         """
-        metadata = self._manager.run(self._get_cluster_metadata(topics=topics))
+        metadata = self._manager.run(self._get_cluster_metadata, topics)
         return metadata['topics']
 
     def describe_cluster(self):
@@ -655,7 +655,7 @@ class KafkaAdminClient:
         Returns:
             A dict with cluster-wide metadata, excluding topic details.
         """
-        metadata = self._manager.run(self._get_cluster_metadata)
+        metadata = self._manager.run(self._get_cluster_metadata, []) # [] => no topics
         metadata.pop('topics')  # We have 'describe_topics' for this
         return metadata
 
@@ -1161,7 +1161,7 @@ class KafkaAdminClient:
         partitions = set(partitions)
         topics = set(tp.topic for tp in partitions)
 
-        metadata = self._manager.run(self._get_cluster_metadata(topics=topics))
+        metadata = self._manager.run(self._get_cluster_metadata, topics)
 
         leader2partitions = defaultdict(list)
         valid_partitions = set()
