@@ -312,6 +312,7 @@ class MockBroker:
                 #          to the right version without falling all the way to v0.
                 #
                 # Error is always encoded at v0 for backwards-compatibility.
+                ApiVersion = ApiVersionsResponse.ApiVersion
                 api_key = ApiVersion(api_key=18, min_version=0, max_version=self._api_versions_max)
                 error_response = ApiVersionsResponse(
                     version=0,
