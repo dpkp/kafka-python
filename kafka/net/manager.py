@@ -70,6 +70,12 @@ class KafkaConnectionManager:
         if self.config['api_version'] is not None:
             self.broker_version_data = BrokerVersionData(self.config['api_version'])
 
+    @property
+    def broker_version(self):
+        if self.broker_version_data is None:
+            return None
+        return self.broker_version_data.broker_version
+
     def least_used_connections(self):
         return sorted(filter(lambda conn: conn.connected, self._conns.values()), key=lambda conn: conn.transport.last_activity)
 
