@@ -73,12 +73,8 @@ class KafkaConnectionManager:
     def least_used_connections(self):
         return sorted(filter(lambda conn: conn.connected, self._conns.values()), key=lambda conn: conn.transport.last_activity)
 
-    async def _do_bootstrap(self, future, deadline):
-        while not future.is_done:
-            if deadline is not None and time.monotonic() >= deadline:
-                future.failure(Errors.KafkaConnectionError(
-                    'Unable to bootstrap from %s' % (self.cluster.config['bootstrap_servers'],)))
-                return
+    async def _do_bootstrap(self, deadline):
+        while deadline is None or time.monotonic() < deadline:
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
             try:
                 conn = self.get_connection(bootstrap_broker.node_id, pop_on_close=False, refresh_metadata_on_err=False)
@@ -97,8 +93,7 @@ class KafkaConnectionManager:
                     await conn.init_future
                 except Errors.IncompatibleBrokerVersion:
                     log.error('Did you attempt to connect to a kafka controller (no metadata support)?')
-                    future.failure(conn.init_future.exception)
-                    return
+                    raise
                 except Exception as exc:
                     self._conns.pop(bootstrap_broker.node_id, conn).close(exc)
                     continue
@@ -112,19 +107,20 @@ class KafkaConnectionManager:
                     continue
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
                 log.info('Bootstrap complete: %s', self.cluster)
-                future.success(True)
-                return
+                return True
             except Exception as e:
                 self.cluster.failed_update(e)
                 continue
+        else:
+            raise Errors.KafkaConnectionError(
+                'Unable to bootstrap from %s' % (self.cluster.config['bootstrap_servers'],))
 
     def bootstrap(self, timeout_ms=None):
         if self._bootstrap_future is not None and not self._bootstrap_future.is_done:
             return self._bootstrap_future
-        self._bootstrap_future = Future()
-        self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
-        self._net.call_soon(lambda: self._do_bootstrap(self._bootstrap_future, deadline))
+        self._bootstrap_future = self.call_soon(self._do_bootstrap(deadline))
+        self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
 
     @property
@@ -299,12 +295,11 @@ class KafkaConnectionManager:
         if self._metadata_future is not None and not self._metadata_future.is_done:
             return self._metadata_future
         self.cluster.request_update()
-        self._metadata_future = Future()
-        self._net.call_soon(lambda: self._do_update_metadata(self._metadata_future))
+        self._metadata_future = self.call_soon(self._do_update_metadata)
         return self._metadata_future
 
-    async def _do_update_metadata(self, future):
-        while not future.is_done:
+    async def _do_update_metadata(self):
+        while True:
             node_id = self.least_loaded_node()
             if node_id is None:
                 if not self.bootstrapped:
@@ -321,13 +316,14 @@ class KafkaConnectionManager:
                 log.debug("Sending metadata request %s to node %s", request, node_id)
                 response = await conn.send_request(request)
                 self.cluster.update_metadata(response)
-                future.success(True)
+                return True
             except Exception as exc:
                 self.cluster.failed_update(exc)
-                future.failure(exc)
-        # Schedule next periodic refresh
-        ttl = self.cluster.ttl() / 1000
-        self._net.call_later(max(0, ttl), self.update_metadata)
+                raise
+            finally:
+                # Schedule next periodic refresh
+                ttl = self.cluster.ttl() / 1000
+                self._net.call_later(max(0, ttl), self.update_metadata)
 
     def close(self, node_id=None):
         if node_id is not None:
