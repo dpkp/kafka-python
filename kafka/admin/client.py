@@ -450,30 +450,21 @@ class KafkaAdminClient:
         """
         if validate_only and wait_for_metadata:
             raise ValueError('validate_only and wait_for_metadata are mutually exclusive')
-        version = self._client.api_version(CreateTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        if version == 0:
-            if validate_only:
-                raise IncompatibleBrokerVersion(
-                    "validate_only requires CreateTopicsRequest >= v1, which is not supported by Kafka {}."
-                    .format(self._manager.broker_version))
-            request = CreateTopicsRequest[version](
-                topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
-                timeout_ms=timeout_ms
-            )
-        elif version <= 3:
-            request = CreateTopicsRequest[version](
-                topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
-                timeout_ms=timeout_ms,
-                validate_only=validate_only
-            )
-        else:
-            raise RuntimeError('Version check error: %s' % version)
-        # TODO convert structs to a more pythonic interface
-        def get_response_errors(r):
+        if validate_only and self._manager.broker_version < (0, 10, 2):
+            raise IncompatibleBrokerVersion(
+                "validate_only requires CreateTopicsRequest >= v1, which is not supported by Kafka {}."
+                .format(self._manager.broker_version))
+
+        request = CreateTopicsRequest(
+            topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
+            timeout_ms=timeout_ms,
+            validate_only=validate_only
+        )
+        def response_errors(r):
             for topic in r.topics:
-                yield Errors.for_code(topic[1])
-        response = self._manager.run(self._send_request_to_controller, request, get_response_errors, raise_errors)
+                yield Errors.for_code(topic.error_code)
+        response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
         if wait_for_metadata: # implies not validate_only
             self.wait_for_topics([new_topic.name for new_topic in new_topics])
         return response
@@ -569,13 +560,16 @@ class KafkaAdminClient:
         Returns:
             Appropriate version of DeleteTopicsResponse class.
         """
-        version = self._client.api_version(DeleteTopicsRequest, max_version=3)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = DeleteTopicsRequest[version](topic_names=topics, timeout_ms=timeout_ms)
-        def get_response_errors(r):
+        request = DeleteTopicsRequest(
+            topic_names=topics, # v0-v5
+            topics=[DeleteTopicsRequest.DeleteTopicState(name=topic) for topic in topics], # v6+
+            timeout_ms=timeout_ms,
+        )
+        def response_errors(r):
             for response in r.responses:
-                yield Errors.for_code(response[1])
-        return self._manager.run(self._send_request_to_controller, request, get_response_errors, raise_errors)
+                yield Errors.for_code(response.error_code)
+        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
 
     def _process_acl_operations(self, obj):
         if obj.get('authorized_operations', None) is not None:
@@ -1090,7 +1084,8 @@ class KafkaAdminClient:
         """Create additional partitions for an existing topic.
 
         Arguments:
-            topic_partitions: A map of topic name strings to NewPartition objects.
+            topic_partitions: A map of topic name strings to total partition count (int),
+                or if manual assignment is desired, a NewPartition object with assignments.
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Milliseconds to wait for new partitions to be
@@ -1102,17 +1097,28 @@ class KafkaAdminClient:
         Returns:
             Appropriate version of CreatePartitionsResponse class.
         """
-        version = self._client.api_version(CreatePartitionsRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = CreatePartitionsRequest[version](
-            topics=[self._convert_create_partitions_request(topic_name, new_partitions) for topic_name, new_partitions in topic_partitions.items()],
+        _Topic = CreatePartitionsRequest.CreatePartitionsTopic
+        _Assignment = CreatePartitionsRequest.CreatePartitionsTopic.CreatePartitionsAssignment
+        topics = []
+        for topic, count in topic_partitions.items():
+            if isinstance(count, int):
+                topics.append(_Topic(name=topic, count=count))
+            else:
+                topics.append(
+                    _Topic(
+                        name=topic,
+                        count=count.total_count,
+                        assignments=[_Assignment(broker_ids=broker_ids)
+                                     for broker_ids in count.new_assignments]))
+        request = CreatePartitionsRequest(
+            topics=topics,
             timeout_ms=timeout_ms,
-            validate_only=validate_only
-        )
-        def get_response_errors(r):
+            validate_only=validate_only)
+        def response_errors(r):
             for result in r.results:
-                yield Errors.for_code(result[1])
-        return self._manager.run(self._send_request_to_controller, request, get_response_errors, raise_errors)
+                yield Errors.for_code(result.error_code)
+        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
 
     def _get_leader_for_partitions(self, partitions, timeout_ms=None):
         """Finds ID of the leader node for every given topic partition.
@@ -1644,22 +1650,20 @@ class KafkaAdminClient:
         Returns:
             Appropriate version of ElectLeadersResponse class.
         """
-        version = self._client.api_version(ElectLeadersRequest, max_version=1)
         timeout_ms = self._validate_timeout(timeout_ms)
-        request = ElectLeadersRequest[version](
+        request = ElectLeadersRequest(
             election_type=ElectionType(election_type),
             topic_partitions=self._get_topic_partitions(topic_partitions),
             timeout_ms=timeout_ms,
         )
-        # TODO convert structs to a more pythonic interface
-        def get_response_errors(r):
+        def response_errors(r):
             if r.API_VERSION >= 1:
                 yield Errors.for_code(r.error_code)
             for result in r.replica_election_results:
-                for partition in result[1]:
-                    yield Errors.for_code(partition[1])
+                for partition in result.partition_result:
+                    yield Errors.for_code(partition.error_code)
         ignore_errors = (Errors.ElectionNotNeededError,)
-        return self._manager.run(self._send_request_to_controller, request, get_response_errors, raise_errors, ignore_errors)
+        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
 
     def describe_log_dirs(self):
         """Send a DescribeLogDirsRequest request to a broker.

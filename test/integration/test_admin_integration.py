@@ -388,12 +388,12 @@ def test_delete_records_with_errors(kafka_admin_client, topic, send_messages):
 def test_create_delete_topics(kafka_admin_client):
     topic_name = random_string(4)
     response = kafka_admin_client.create_topics([NewTopic(topic_name, 1, 1)])
-    assert response.topics[0][0] == topic_name
-    assert response.topics[0][1] == 0 # NoError
+    assert response.topics[0].name == topic_name
+    assert response.topics[0].error_code == 0 # NoError
 
     response = kafka_admin_client.delete_topics([topic_name])
-    assert response.responses[0][0] == topic_name
-    assert response.responses[0][1] == 0 # NoError
+    assert response.responses[0].name == topic_name
+    assert response.responses[0].error_code == 0 # NoError
 
 
 @pytest.mark.skipif(env_kafka_version() < (2, 2), reason="Leader Election requires broker >=2.2")
