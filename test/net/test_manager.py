@@ -334,3 +334,48 @@ class TestKafkaConnectionManagerClose:
     def test_close_no_connections(self, manager):
         # Should not raise
         manager.close()
+
+
+class TestKafkaConnectionManagerRun:
+    def test_run_function(self, manager):
+        def test_coro():
+            return 42
+        assert manager.run(test_coro) == 42
+
+    def test_run_async_coro_function(self, manager):
+        async def test_coro():
+            return 100
+        assert manager.run(test_coro) == 100
+
+    def test_run_async_coro_with_args(self, manager):
+        async def test_coro(foo):
+            return foo
+        assert manager.run(test_coro, 123) == 123
+
+    def test_run_async_coro(self, manager):
+        async def test_coro():
+            return 49
+        assert manager.run(test_coro()) == 49
+
+    def test_run_async_chain(self, manager):
+        async def test_coro_foo():
+            return 'foo!'
+        async def test_coro_bar():
+            return await test_coro_foo()
+        assert manager.run(test_coro_bar()) == 'foo!'
+
+    def test_run_raises(self, manager):
+        async def bad_coro():
+            raise ValueError('bad_coro')
+        with pytest.raises(ValueError, match='bad_coro'):
+            manager.run(bad_coro)
+
+    def test_call_soon_does_not_raise(self, manager):
+        async def bad_coro():
+            raise ValueError('bad_coro')
+        future = manager.call_soon(bad_coro)
+        assert not future.is_done
+        manager.poll(future=future)
+        assert future.failed()
+        assert isinstance(future.exception, ValueError)
+        assert future.exception.args[0] == 'bad_coro'
