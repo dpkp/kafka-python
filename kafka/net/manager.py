@@ -1,5 +1,6 @@
 import copy
 import logging
+import inspect
 import random
 import socket
 import ssl
@@ -339,3 +340,31 @@ class KafkaConnectionManager:
 
     def poll(self, timeout_ms=None, future=None):
         return self._net.poll(timeout_ms=timeout_ms, future=future)
+
+    def call_soon(self, coro):
+        """Accepts a coroutine / awaitable / function and schedules it on the event loop.
+
+        Returns: Future
+        """
+        future = Future()
+        async def wrapper():
+            try:
+                if inspect.iscoroutinefunction(coro):
+                    future.success(await coro())
+                elif hasattr(coro, '__await__'):
+                    future.success(await coro)
+                else:
+                    future.success(coro())
+            except Exception as exc:
+                future.failure(exc)
+        self._net.call_soon(wrapper)
+        return future
+
+    def run(self, coro):
+        """Schedules coro on the event loop, blocks until complete, returns value or raises.
+        """
+        future = self.call_soon(coro)
+        self.poll(future=future)
+        if future.exception is not None:
+            raise future.exception
+        return future.value
