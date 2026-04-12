@@ -4,7 +4,13 @@ from ..api_message import ApiMessage
 class CreateTopicsRequest(ApiMessage): pass
 class CreateTopicsResponse(ApiMessage): pass
 
-class DeleteTopicsRequest(ApiMessage): pass
+class DeleteTopicsRequest(ApiMessage):
+    def encode(self, version=None, header=False, framed=False):
+        # convert topics => topic_names
+        if self.topics and not self.topic_names:
+            self.topic_names = [topic.name for topic in self.topics]
+        return super().encode(version=version, header=header, framed=framed)
+
 class DeleteTopicsResponse(ApiMessage): pass
 
 class CreatePartitionsRequest(ApiMessage): pass
