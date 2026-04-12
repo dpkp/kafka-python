@@ -176,6 +176,7 @@ class KafkaAdminClient:
         'ssl_keyfile': None,
         'ssl_password': None,
         'ssl_crlfile': None,
+        'api_version': None,
         'bootstrap_timeout_ms': 2000,
         'selector': selectors.DefaultSelector,
         'sasl_mechanism': None,
