@@ -26,6 +26,12 @@ class ACLAdminMixin:
     _client: object
     config: dict
 
+    # ACL Helper for Metadata / DescribeGroups
+    def _process_acl_operations(self, obj):
+        if obj.get('authorized_operations', None) is not None:
+            obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
+        return obj
+
     def describe_acls(self, acl_filter):
         """Describe a set of ACLs
 

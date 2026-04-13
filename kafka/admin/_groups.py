@@ -133,21 +133,17 @@ class GroupAdminMixin:
     # -- List consumer groups --------------------------------------------------
 
     def _list_consumer_groups_request(self):
-        version = self._client.api_version(ListGroupsRequest, max_version=2)
-        return ListGroupsRequest[version]()
+        # TODO: KIP-518: StatesFilter
+        # TODO: KIP-848: TypesFilter
+        return ListGroupsRequest()
 
     def _list_consumer_groups_process_response(self, response):
         """Process a ListGroupsResponse into a list of groups."""
-        if response.API_VERSION <= 2:
-            error_type = Errors.for_code(response.error_code)
-            if error_type is not Errors.NoError:
-                raise error_type(
-                    "ListGroupsRequest failed with response '{}'."
-                    .format(response))
-        else:
-            raise NotImplementedError(
-                "Support for ListGroupsResponse_v{} has not yet been added to KafkaAdminClient."
-                .format(response.API_VERSION))
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "ListGroupsRequest failed with response '{}'."
+                .format(response))
         return [(group.group_id, group.protocol_type) for group in response.groups]
 
     async def _async_list_consumer_groups(self, broker_ids=None):
@@ -189,25 +185,25 @@ class GroupAdminMixin:
     # -- List consumer group offsets -------------------------------------------
 
     def _list_consumer_group_offsets_request(self, group_id, partitions=None):
-        version = self._client.api_version(OffsetFetchRequest, max_version=5)
+        _Topic = OffsetFetchRequest.OffsetFetchRequestTopic
         if partitions is None:
-            if version <= 1:
-                raise ValueError(
-                    """OffsetFetchRequest_v{} requires specifying the
-                    partitions for which to fetch offsets. Omitting the
-                    partitions is only supported on brokers >= 0.10.2.
-                    For details, see KIP-88.""".format(version))
-            topics_partitions = None
+            min_version = 1
+            topics = None
         else:
+            min_version = 0
             topics_partitions_dict = defaultdict(set)
             for topic, partition in partitions:
                 topics_partitions_dict[topic].add(partition)
-            topics_partitions = list(topics_partitions_dict.items())
-        return OffsetFetchRequest[version](group_id, topics_partitions)
+            topics = [
+                _Topic(name=name, partition_indexes=list(partitions))
+                for name, partitions in topics_partitions_dict.items()
+            ]
+        return OffsetFetchRequest(group_id=group_id, topics=topics,
+                                  min_version=min_version, max_version=6)
 
     def _list_consumer_group_offsets_process_response(self, response):
         """Process an OffsetFetchResponse."""
-        if response.API_VERSION <= 5:
+        if response.API_VERSION <= 6:
             if response.API_VERSION > 1:
                 error_type = Errors.for_code(response.error_code)
                 if error_type is not Errors.NoError:
@@ -271,12 +267,11 @@ class GroupAdminMixin:
     # -- Delete consumer groups ------------------------------------------------
 
     def _delete_consumer_groups_request(self, group_ids):
-        version = self._client.api_version(DeleteGroupsRequest, max_version=1)
-        return DeleteGroupsRequest[version](group_ids)
+        return DeleteGroupsRequest(groups_names=group_ids)
 
     def _convert_delete_groups_response(self, response):
         """Parse a DeleteGroupsResponse."""
-        if response.API_VERSION <= 1:
+        if response.API_VERSION <= 2:
             results = []
             for group_id, error_code in response.results:
                 results.append((group_id, Errors.for_code(error_code)))

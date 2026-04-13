@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import TYPE_CHECKING
+import uuid
 
 import kafka.errors as Errors
 from kafka.errors import IncompatibleBrokerVersion
@@ -25,26 +26,80 @@ class TopicAdminMixin:
     _client: object
     config: dict
 
+    def list_topics(self):
+        """Retrieve a list of all topic names in the cluster.
+
+        Returns:
+            A list of topic name strings.
+        """
+        metadata = self._manager.run(self._get_cluster_metadata, None)
+        return [t['name'] for t in metadata['topics']]
+
+    def describe_topics(self, topics=None):
+        """Fetch metadata for the specified topics or all topics if None.
+
+        Keyword Arguments:
+            topics ([str], optional) A list of topic names. If None, metadata for all
+                topics is retrieved.
+
+        Returns:
+            A list of dicts describing each topic (including partition info).
+        """
+        metadata = self._manager.run(self._get_cluster_metadata, topics)
+        return metadata['topics']
+
     @staticmethod
-    def _convert_new_topic_request(new_topic):
-        return (
-            new_topic.name,
-            new_topic.num_partitions,
-            new_topic.replication_factor,
-            [
-                (partition_id, replicas) for partition_id, replicas in new_topic.replica_assignments.items()
-            ],
-            [
-                (config_key, config_value) for config_key, config_value in new_topic.topic_configs.items()
-            ]
-        )
+    def _process_create_topics_input(new_topics):
+        _Topic = CreateTopicsRequest.CreatableTopic
+        _Assignment = _Topic.CreatableReplicaAssignment
+        _Config = _Topic.CreatableTopicConfig
+        topics = []
+        if isinstance(new_topics, dict):
+            # {topic_name: {num_partitions:, replication_factor:, assignments: {partition: [broker_ids]}, configs: {key: value}}
+            for topic, data in new_topics.items():
+                configs = data.get('configs', {})
+                topics.append(_Topic(
+                    name=topic,
+                    num_partitions=data.get('num_partitions', -1),
+                    replication_factor=data.get('replication_factor', -1),
+                    assignments=[_Assignment(partition_index=partition_id, broker_ids=replicas)
+                                 for partition_id, replicas in data.get('assignments', {}).items()],
+                    configs=[_Config(name=config_key, value=config_value)
+                             for config_key, config_value in data.get('configs', {}).items()]
+                ))
+        elif all(isinstance(v, str) for v in new_topics):
+            for new_topic in new_topics:
+                topics.append(_Topic(name=new_topic, num_partitions=-1, replication_factor=-1))
+        else:
+            if all(isinstance(v, NewTopic) for v in new_topics):
+                for new_topic in new_topics:
+                    topics.append(_Topic(
+                        name=new_topic.name,
+                        num_partitions=new_topic.num_partitions,
+                        replication_factor=new_topic.replication_factor,
+                        assignments=[_Assignment(partition_index=partition_id, broker_ids=replicas)
+                                     for partition_id, replicas in new_topic.replica_assignments.items()],
+                        configs=[_Config(name=config_key, value=config_value)
+                                 for config_key, config_value in new_topic.topic_configs.items()]
+                    ))
+        if not topics:
+            raise ValueError(f"No valid topics found in new_topics: {new_topics}")
+        return topics
 
     def create_topics(self, new_topics, timeout_ms=None, validate_only=False, raise_errors=True,
                       wait_for_metadata=False):
         """Create new topics in the cluster.
 
         Arguments:
-            new_topics: A list of NewTopic objects.
+            new_topics: A list of topic names,
+                or a dict of {topic_name: {num_partitions: int (default -1),
+                                           replication_factor: int (default -1),
+                                           assignments: {partition: [broker_ids]},
+                                           configs: {key: value}}}
+                    All keys are optional.
+                List of NewTopic objects is deprecated.
+                Note: for brokers < 2.4, num_partitions and replication_factor
+                are required and must be provided via dict or [NewTopic].
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Milliseconds to wait for new topics to be created
@@ -65,8 +120,15 @@ class TopicAdminMixin:
                 "validate_only requires CreateTopicsRequest >= v1, which is not supported by Kafka {}."
                 .format(self._manager.broker_version))
 
+        topics = self._process_create_topics_input(new_topics)
+        if self._manager.broker_version < (2, 4):
+            if any(topic.num_partitions == -1 or topic.replication_factor == -1 for topic in topics):
+                raise IncompatibleBrokerVersion(
+                    "Broker version {} requires explicit num_partitions and replication_factor"
+                    .format(self._manager.broker_version))
+
         request = CreateTopicsRequest(
-            topics=[self._convert_new_topic_request(new_topic) for new_topic in new_topics],
+            topics=topics,
             timeout_ms=timeout_ms,
             validate_only=validate_only,
             max_version=3,
@@ -76,7 +138,7 @@ class TopicAdminMixin:
                 yield Errors.for_code(topic.error_code)
         response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
         if wait_for_metadata:
-            self.wait_for_topics([new_topic.name for new_topic in new_topics])
+            self.wait_for_topics([new_topic.name for new_topic in request.topics])
         return response
 
     def wait_for_topics(self, topic_names, timeout_ms=10000):
@@ -155,7 +217,7 @@ class TopicAdminMixin:
         """Delete topics from the cluster.
 
         Arguments:
-            topics ([str]): A list of topic name strings.
+            topics ([str]): A list of topic name strings or uuid.UUID ids.
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Milliseconds to wait for topics to be deleted
@@ -166,14 +228,39 @@ class TopicAdminMixin:
             Appropriate version of DeleteTopicsResponse class.
         """
         timeout_ms = self._validate_timeout(timeout_ms)
+        _Topic = DeleteTopicsRequest.DeleteTopicState
         request = DeleteTopicsRequest(
-            topic_names=topics, timeout_ms=timeout_ms,
-            max_version=5,
-        )
+            topics=[_Topic(topic_id=topic) if isinstance(topic, uuid.UUID) else _Topic(name=topic)
+                    for topic in topics],
+            timeout_ms=timeout_ms)
         def response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response.error_code)
         return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+
+    @staticmethod
+    def _process_create_partitions_input(topic_partitions):
+        _Topic = CreatePartitionsRequest.CreatePartitionsTopic
+        _Assignment = CreatePartitionsRequest.CreatePartitionsTopic.CreatePartitionsAssignment
+        topics = []
+        for topic, count in topic_partitions.items():
+            if isinstance(count, int):
+                topics.append(_Topic(name=topic, count=count))
+            elif isinstance(count, dict):
+                topics.append(
+                    _Topic(
+                        name=topic,
+                        count=count['count'],
+                        assignments=[_Assignment(broker_ids=broker_ids)
+                                     for broker_ids in count['assignments']]))
+            else:
+                topics.append(
+                    _Topic(
+                        name=topic,
+                        count=count.total_count,
+                        assignments=[_Assignment(broker_ids=broker_ids)
+                                     for broker_ids in count.new_assignments]))
+        return topics
 
     def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False, raise_errors=True):
         """Create additional partitions for an existing topic.
@@ -195,29 +282,8 @@ class TopicAdminMixin:
             Appropriate version of CreatePartitionsResponse class.
         """
         timeout_ms = self._validate_timeout(timeout_ms)
-        _Topic = CreatePartitionsRequest.CreatePartitionsTopic
-        _Assignment = CreatePartitionsRequest.CreatePartitionsTopic.CreatePartitionsAssignment
-        topics = []
-        for topic, count in topic_partitions.items():
-            if isinstance(count, int):
-                topics.append(_Topic(name=topic, count=count))
-            elif isinstance(count, dict):
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count['count'],
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count['assignments']]))
-
-            else:
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count.total_count,
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count.new_assignments]))
         request = CreatePartitionsRequest(
-            topics=topics,
+            topics=self._process_create_partitions_input(topic_partitions),
             timeout_ms=timeout_ms,
             validate_only=validate_only)
 
@@ -228,7 +294,7 @@ class TopicAdminMixin:
 
 
 class NewTopic:
-    """A class for new topic creation.
+    """DEPRECATED: A class for new topic creation.
 
     Arguments:
         name (string): name of the topic
@@ -251,7 +317,7 @@ class NewTopic:
 
 
 class NewPartitions:
-    """A class for new partition creation on existing topics.
+    """DEPRECATED: A class for new partition creation on existing topics.
 
     Note that the length of new_assignments, if specified, must be the
     difference between the new total number of partitions and the existing
