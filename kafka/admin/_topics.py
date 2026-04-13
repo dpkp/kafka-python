@@ -11,48 +11,6 @@ from typing import TYPE_CHECKING
 
 import kafka.errors as Errors
 from kafka.errors import IncompatibleBrokerVersion
-
-
-class NewTopic:
-    """A class for new topic creation.
-
-    Arguments:
-        name (string): name of the topic
-        num_partitions (int): number of partitions, or -1 if
-            replica_assignment has been specified
-        replication_factor (int): replication factor, or -1 if
-            replica assignment is specified
-        replica_assignments (dict of int: [int]): A mapping containing
-            partition id and replicas to assign to it.
-        topic_configs (dict of str: str): A mapping of config key
-            and value for the topic.
-    """
-    def __init__(self, name, num_partitions=-1, replication_factor=-1,
-                 replica_assignments=None, topic_configs=None):
-        self.name = name
-        self.num_partitions = num_partitions
-        self.replication_factor = replication_factor
-        self.replica_assignments = replica_assignments or {}
-        self.topic_configs = topic_configs or {}
-
-
-class NewPartitions:
-    """A class for new partition creation on existing topics.
-
-    Note that the length of new_assignments, if specified, must be the
-    difference between the new total number of partitions and the existing
-    number of partitions.
-
-    Arguments:
-        total_count (int): the total number of partitions that should exist
-            on the topic
-        new_assignments ([[int]]): an array of arrays of replica assignments
-            for new partitions. If not set, broker assigns replicas per an
-            internal algorithm.
-    """
-    def __init__(self, total_count, new_assignments=None):
-        self.total_count = total_count
-        self.new_assignments = new_assignments
 from kafka.protocol.admin import CreateTopicsRequest, DeleteTopicsRequest, CreatePartitionsRequest
 
 if TYPE_CHECKING:
@@ -267,3 +225,45 @@ class TopicAdminMixin:
             for result in r.results:
                 yield Errors.for_code(result.error_code)
         return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+
+
+class NewTopic:
+    """A class for new topic creation.
+
+    Arguments:
+        name (string): name of the topic
+        num_partitions (int): number of partitions, or -1 if
+            replica_assignment has been specified
+        replication_factor (int): replication factor, or -1 if
+            replica assignment is specified
+        replica_assignments (dict of int: [int]): A mapping containing
+            partition id and replicas to assign to it.
+        topic_configs (dict of str: str): A mapping of config key
+            and value for the topic.
+    """
+    def __init__(self, name, num_partitions=-1, replication_factor=-1,
+                 replica_assignments=None, topic_configs=None):
+        self.name = name
+        self.num_partitions = num_partitions
+        self.replication_factor = replication_factor
+        self.replica_assignments = replica_assignments or {}
+        self.topic_configs = topic_configs or {}
+
+
+class NewPartitions:
+    """A class for new partition creation on existing topics.
+
+    Note that the length of new_assignments, if specified, must be the
+    difference between the new total number of partitions and the existing
+    number of partitions.
+
+    Arguments:
+        total_count (int): the total number of partitions that should exist
+            on the topic
+        new_assignments ([[int]]): an array of arrays of replica assignments
+            for new partitions. If not set, broker assigns replicas per an
+            internal algorithm.
+    """
+    def __init__(self, total_count, new_assignments=None):
+        self.total_count = total_count
+        self.new_assignments = new_assignments

@@ -14,165 +14,6 @@ import kafka.errors as Errors
 from kafka.errors import IllegalArgumentError
 from kafka.protocol.admin import CreateAclsRequest, DeleteAclsRequest, DescribeAclsRequest
 
-
-# ---------------------------------------------------------------------------
-# ACL data types
-# ---------------------------------------------------------------------------
-
-
-class ResourceType(IntEnum):
-    """Type of kafka resource to set ACL for.
-
-    The ANY value is only valid in a filter context.
-    """
-    UNKNOWN = 0,
-    ANY = 1,
-    CLUSTER = 4,
-    DELEGATION_TOKEN = 6,
-    GROUP = 3,
-    TOPIC = 2,
-    TRANSACTIONAL_ID = 5
-
-
-class ACLOperation(IntEnum):
-    """Type of operation.
-
-    The ANY value is only valid in a filter context.
-    """
-    UNKNOWN = 0,
-    ANY = 1,
-    ALL = 2,
-    READ = 3,
-    WRITE = 4,
-    CREATE = 5,
-    DELETE = 6,
-    ALTER = 7,
-    DESCRIBE = 8,
-    CLUSTER_ACTION = 9,
-    DESCRIBE_CONFIGS = 10,
-    ALTER_CONFIGS = 11,
-    IDEMPOTENT_WRITE = 12,
-    CREATE_TOKENS = 13,
-    DESCRIBE_TOKENS = 14
-
-
-class ACLPermissionType(IntEnum):
-    """An enumerated type of permissions.
-
-    The ANY value is only valid in a filter context.
-    """
-    UNKNOWN = 0,
-    ANY = 1,
-    DENY = 2,
-    ALLOW = 3
-
-
-class ACLResourcePatternType(IntEnum):
-    """An enumerated type of resource patterns.
-
-    More details on the pattern types and how they work
-    can be found in KIP-290 (Support for prefixed ACLs).
-    """
-    UNKNOWN = 0,
-    ANY = 1,
-    MATCH = 2,
-    LITERAL = 3,
-    PREFIXED = 4
-
-
-class ResourcePatternFilter:
-    def __init__(self, resource_type, resource_name, pattern_type):
-        self.resource_type = resource_type
-        self.resource_name = resource_name
-        self.pattern_type = pattern_type
-        self.validate()
-
-    def validate(self):
-        if not isinstance(self.resource_type, ResourceType):
-            raise IllegalArgumentError("resource_type must be a ResourceType object")
-        if not isinstance(self.pattern_type, ACLResourcePatternType):
-            raise IllegalArgumentError("pattern_type must be an ACLResourcePatternType object")
-
-    def __repr__(self):
-        return "<ResourcePattern type={}, name={}, pattern={}>".format(
-            self.resource_type.name, self.resource_name, self.pattern_type.name)
-
-    def __eq__(self, other):
-        return all((
-            self.resource_type == other.resource_type,
-            self.resource_name == other.resource_name,
-            self.pattern_type == other.pattern_type,
-        ))
-
-    def __hash__(self):
-        return hash((self.resource_type, self.resource_name, self.pattern_type))
-
-
-class ResourcePattern(ResourcePatternFilter):
-    """A resource pattern to apply the ACL to."""
-    def __init__(self, resource_type, resource_name, pattern_type=ACLResourcePatternType.LITERAL):
-        super().__init__(resource_type, resource_name, pattern_type)
-        self.validate()
-
-    def validate(self):
-        if self.resource_type == ResourceType.ANY:
-            raise IllegalArgumentError("resource_type cannot be ANY")
-        if self.pattern_type in [ACLResourcePatternType.ANY, ACLResourcePatternType.MATCH]:
-            raise IllegalArgumentError(
-                "pattern_type cannot be {} on a concrete ResourcePattern".format(self.pattern_type.name))
-
-
-class ACLFilter:
-    """Represents a filter to use with describing and deleting ACLs."""
-    def __init__(self, principal, host, operation, permission_type, resource_pattern):
-        self.principal = principal
-        self.host = host
-        self.operation = operation
-        self.permission_type = permission_type
-        self.resource_pattern = resource_pattern
-        self.validate()
-
-    def validate(self):
-        if not isinstance(self.operation, ACLOperation):
-            raise IllegalArgumentError("operation must be an ACLOperation object, and cannot be ANY")
-        if not isinstance(self.permission_type, ACLPermissionType):
-            raise IllegalArgumentError("permission_type must be an ACLPermissionType object, and cannot be ANY")
-        if not isinstance(self.resource_pattern, ResourcePatternFilter):
-            raise IllegalArgumentError("resource_pattern must be a ResourcePatternFilter object")
-
-    def __repr__(self):
-        return "<ACL principal={principal}, resource={resource}, operation={operation}, type={type}, host={host}>".format(
-            principal=self.principal, host=self.host, operation=self.operation.name,
-            type=self.permission_type.name, resource=self.resource_pattern)
-
-    def __eq__(self, other):
-        return all((
-            self.principal == other.principal, self.host == other.host,
-            self.operation == other.operation, self.permission_type == other.permission_type,
-            self.resource_pattern == other.resource_pattern))
-
-    def __hash__(self):
-        return hash((self.principal, self.host, self.operation, self.permission_type, self.resource_pattern))
-
-
-class ACL(ACLFilter):
-    """Represents a concrete ACL for a specific ResourcePattern."""
-    def __init__(self, principal, host, operation, permission_type, resource_pattern):
-        super().__init__(principal, host, operation, permission_type, resource_pattern)
-        self.validate()
-
-    def validate(self):
-        if self.operation == ACLOperation.ANY:
-            raise IllegalArgumentError("operation cannot be ANY")
-        if self.permission_type == ACLPermissionType.ANY:
-            raise IllegalArgumentError("permission_type cannot be ANY")
-        if not isinstance(self.resource_pattern, ResourcePattern):
-            raise IllegalArgumentError("resource_pattern must be a ResourcePattern object")
-
-
-def valid_acl_operations(int_vals):
-    return set([ACLOperation(v) for v in int_vals if v not in (0, 1, 2)])
-
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
 
@@ -420,3 +261,162 @@ class ACLAdminMixin:
             )
         response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
+
+
+# ---------------------------------------------------------------------------
+# ACL data types
+# ---------------------------------------------------------------------------
+
+
+class ResourceType(IntEnum):
+    """Type of kafka resource to set ACL for.
+
+    The ANY value is only valid in a filter context.
+    """
+    UNKNOWN = 0
+    ANY = 1
+    TOPIC = 2
+    GROUP = 3
+    CLUSTER = 4
+    TRANSACTIONAL_ID = 5
+    DELEGATION_TOKEN = 6
+
+
+class ACLOperation(IntEnum):
+    """Type of operation.
+
+    The ANY value is only valid in a filter context.
+    """
+    UNKNOWN = 0
+    ANY = 1
+    ALL = 2
+    READ = 3
+    WRITE = 4
+    CREATE = 5
+    DELETE = 6
+    ALTER = 7
+    DESCRIBE = 8
+    CLUSTER_ACTION = 9
+    DESCRIBE_CONFIGS = 10
+    ALTER_CONFIGS = 11
+    IDEMPOTENT_WRITE = 12
+    CREATE_TOKENS = 13
+    DESCRIBE_TOKENS = 14
+
+
+class ACLPermissionType(IntEnum):
+    """An enumerated type of permissions.
+
+    The ANY value is only valid in a filter context.
+    """
+    UNKNOWN = 0
+    ANY = 1
+    DENY = 2
+    ALLOW = 3
+
+
+class ACLResourcePatternType(IntEnum):
+    """An enumerated type of resource patterns.
+
+    More details on the pattern types and how they work
+    can be found in KIP-290 (Support for prefixed ACLs).
+    """
+    UNKNOWN = 0
+    ANY = 1
+    MATCH = 2
+    LITERAL = 3
+    PREFIXED = 4
+
+
+class ResourcePatternFilter:
+    def __init__(self, resource_type, resource_name, pattern_type):
+        self.resource_type = resource_type
+        self.resource_name = resource_name
+        self.pattern_type = pattern_type
+        self.validate()
+
+    def validate(self):
+        if not isinstance(self.resource_type, ResourceType):
+            raise IllegalArgumentError("resource_type must be a ResourceType object")
+        if not isinstance(self.pattern_type, ACLResourcePatternType):
+            raise IllegalArgumentError("pattern_type must be an ACLResourcePatternType object")
+
+    def __repr__(self):
+        return "<ResourcePattern type={}, name={}, pattern={}>".format(
+            self.resource_type.name, self.resource_name, self.pattern_type.name)
+
+    def __eq__(self, other):
+        return all((
+            self.resource_type == other.resource_type,
+            self.resource_name == other.resource_name,
+            self.pattern_type == other.pattern_type,
+        ))
+
+    def __hash__(self):
+        return hash((self.resource_type, self.resource_name, self.pattern_type))
+
+
+class ResourcePattern(ResourcePatternFilter):
+    """A resource pattern to apply the ACL to."""
+    def __init__(self, resource_type, resource_name, pattern_type=ACLResourcePatternType.LITERAL):
+        super().__init__(resource_type, resource_name, pattern_type)
+        self.validate()
+
+    def validate(self):
+        if self.resource_type == ResourceType.ANY:
+            raise IllegalArgumentError("resource_type cannot be ANY")
+        if self.pattern_type in [ACLResourcePatternType.ANY, ACLResourcePatternType.MATCH]:
+            raise IllegalArgumentError(
+                "pattern_type cannot be {} on a concrete ResourcePattern".format(self.pattern_type.name))
+
+
+class ACLFilter:
+    """Represents a filter to use with describing and deleting ACLs."""
+    def __init__(self, principal, host, operation, permission_type, resource_pattern):
+        self.principal = principal
+        self.host = host
+        self.operation = operation
+        self.permission_type = permission_type
+        self.resource_pattern = resource_pattern
+        self.validate()
+
+    def validate(self):
+        if not isinstance(self.operation, ACLOperation):
+            raise IllegalArgumentError("operation must be an ACLOperation object, and cannot be ANY")
+        if not isinstance(self.permission_type, ACLPermissionType):
+            raise IllegalArgumentError("permission_type must be an ACLPermissionType object, and cannot be ANY")
+        if not isinstance(self.resource_pattern, ResourcePatternFilter):
+            raise IllegalArgumentError("resource_pattern must be a ResourcePatternFilter object")
+
+    def __repr__(self):
+        return "<ACL principal={principal}, resource={resource}, operation={operation}, type={type}, host={host}>".format(
+            principal=self.principal, host=self.host, operation=self.operation.name,
+            type=self.permission_type.name, resource=self.resource_pattern)
+
+    def __eq__(self, other):
+        return all((
+            self.principal == other.principal, self.host == other.host,
+            self.operation == other.operation, self.permission_type == other.permission_type,
+            self.resource_pattern == other.resource_pattern))
+
+    def __hash__(self):
+        return hash((self.principal, self.host, self.operation, self.permission_type, self.resource_pattern))
+
+
+class ACL(ACLFilter):
+    """Represents a concrete ACL for a specific ResourcePattern."""
+    def __init__(self, principal, host, operation, permission_type, resource_pattern):
+        super().__init__(principal, host, operation, permission_type, resource_pattern)
+        self.validate()
+
+    def validate(self):
+        if self.operation == ACLOperation.ANY:
+            raise IllegalArgumentError("operation cannot be ANY")
+        if self.permission_type == ACLPermissionType.ANY:
+            raise IllegalArgumentError("permission_type cannot be ANY")
+        if not isinstance(self.resource_pattern, ResourcePattern):
+            raise IllegalArgumentError("resource_pattern must be a ResourcePattern object")
+
+
+def valid_acl_operations(int_vals):
+    return set([ACLOperation(v) for v in int_vals if v not in (0, 1, 2)])
