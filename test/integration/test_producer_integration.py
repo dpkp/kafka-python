@@ -215,17 +215,29 @@ def test_transactional_producer_offsets(kafka_producer_factory, kafka_admin_clie
         leader_epoch = 0
     else:
         leader_epoch = -1
-    offsets = {TopicPartition('transactional_test_topic', 0): OffsetAndMetadata(0, 'metadata', leader_epoch)}
+    topic = 'transactional_test_topic'
+    offsets = {TopicPartition(topic, 0): OffsetAndMetadata(0, 'metadata', leader_epoch)}
     producer = kafka_producer_factory(transactional_id='testing')
     producer.init_transactions()
     producer.begin_transaction()
-    producer.send('transactional_test_topic', partition=0, value=b'msg1').get()
+    producer.send(topic, partition=0, value=b'msg1').get()
     producer.send_offsets_to_transaction(offsets, 'txn-test-group')
     producer.commit_transaction()
 
     producer.begin_transaction()
-    producer.send_offsets_to_transaction({TopicPartition('transactional_test_topic', 1): OffsetAndMetadata(1, 'bad', 1)}, 'txn-test-group')
+    producer.send_offsets_to_transaction({TopicPartition(topic, 1): OffsetAndMetadata(1, 'bad', 1)}, 'txn-test-group')
     producer.abort_transaction()
 
     admin = kafka_admin_client_factory()
-    assert admin.list_consumer_group_offsets('txn-test-group') == offsets
+    result = {
+        topic: {
+            0: {
+                'committed_offset': 0,
+                'error_code': 0,
+                'metadata': 'metadata',
+            },
+        }
+    }
+    if env_kafka_version() >= (2, 1):
+        result[topic][0]['committed_leader_epoch'] = leader_epoch
+    assert admin.list_consumer_group_offsets('txn-test-group') == result

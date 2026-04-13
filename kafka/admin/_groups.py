@@ -14,7 +14,7 @@ from kafka.protocol.consumer import OffsetFetchRequest
 from kafka.protocol.consumer.metadata import (
     ConsumerProtocolAssignment, ConsumerProtocolSubscription, ConsumerProtocolType,
 )
-from kafka.structs import GroupInformation, MemberInformation, OffsetAndMetadata, TopicPartition
+from kafka.structs import OffsetAndMetadata, TopicPartition
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -48,53 +48,13 @@ class GroupAdminMixin:
             raise NotImplementedError(
                 "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
                 .format(response.API_VERSION))
-
         assert len(response.groups) == 1
-        for response_name, response_field in response.fields.items():
-            if response_name == 'groups':
-                described_group = getattr(response, response_name)[0]
-                described_group_information_list = []
-                protocol_type_is_consumer = False
-                for group_information_name, group_information_field in response_field.fields.items():
-                    if not group_information_field.for_version_q(response.API_VERSION):
-                        continue
-                    described_group_information = getattr(described_group, group_information_name)
-                    if group_information_name == 'protocol_type':
-                        protocol_type = described_group_information
-                        protocol_type_is_consumer = (protocol_type == ConsumerProtocolType or not protocol_type)
-                    if group_information_name == 'members':
-                        member_information_list = []
-                        for member in described_group_information:
-                            member_information = []
-                            for attr_name, attr_field in group_information_field.fields.items():
-                                if not attr_field.for_version_q(response.API_VERSION):
-                                    continue
-                                attr_val = getattr(member, attr_name)
-                                if protocol_type_is_consumer:
-                                    if attr_name == 'member_metadata' and attr_val:
-                                        member_information.append(ConsumerProtocolSubscription.decode(attr_val))
-                                    elif attr_name == 'member_assignment' and attr_val:
-                                        member_information.append(ConsumerProtocolAssignment.decode(attr_val))
-                                    else:
-                                        member_information.append(attr_val)
-                            member_info_tuple = MemberInformation._make(member_information)
-                            member_information_list.append(member_info_tuple)
-                        described_group_information_list.append(member_information_list)
-                    else:
-                        described_group_information_list.append(described_group_information)
-                if response.API_VERSION >= 3:
-                    described_group_information_list[-1] = list(map(lambda acl: acl.name, valid_acl_operations(described_group_information_list[-1])))
-                else:
-                    described_group_information_list.append([])
-                group_description = GroupInformation._make(described_group_information_list)
-                error_code = group_description.error_code
-                error_type = Errors.for_code(error_code)
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "DescribeGroupsResponse failed with response '{}'."
-                        .format(response))
-                return group_description
-        assert False, "DescribeGroupsResponse parsing failed"
+        for group in response.groups:
+            for member in group.members:
+                member.member_metadata = ConsumerProtocolSubscription.decode(member.member_metadata)
+                member.member_assignment = ConsumerProtocolAssignment.decode(member.member_assignment)
+        # Return dict (key, val) tuples
+        return [(group.group_id, self._process_acl_operations(group.to_dict())) for group in response.groups]
 
     async def _async_describe_consumer_groups(self, group_ids, group_coordinator_id=None):
         results = []
@@ -103,7 +63,8 @@ class GroupAdminMixin:
             request = self._describe_consumer_groups_request(group_id)
             response = await self._manager.send(request, node_id=coordinator_id)
             results.append(self._describe_consumer_groups_process_response(response))
-        return results
+        # Combine key/vals from multiple requests into single dict
+        return dict(itertools.chain(*results))
 
     def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
@@ -123,10 +84,10 @@ class GroupAdminMixin:
                 have the same coordinator, otherwise it will error. Default: None.
 
         Returns:
-            A list of group descriptions. For now the group descriptions
-            are the raw results from the DescribeGroupsResponse. Long-term, we
-            plan to change this to return namedtuples as well as decoding the
-            partition assignments.
+            A dict of {group_id: {key: val}}. key/vals are simple to_dict translations
+                of the raw results from DescribeGroupsResponse (with inline decoding
+                of ConsumerSubscription and ConsumerAssignment metadata, and conversion
+                of acl set ints to semantic enums).
         """
         return self._manager.run(self._async_describe_consumer_groups, group_ids, group_coordinator_id)
 
@@ -144,17 +105,17 @@ class GroupAdminMixin:
             raise error_type(
                 "ListGroupsRequest failed with response '{}'."
                 .format(response))
-        return [(group.group_id, group.protocol_type) for group in response.groups]
+        return [group.to_dict() for group in response.groups]
 
     async def _async_list_consumer_groups(self, broker_ids=None):
         if broker_ids is None:
             broker_ids = [broker.node_id for broker in self._manager.cluster.brokers()]
-        consumer_groups = set()
+        consumer_groups = []
         for broker_id in broker_ids:
             request = self._list_consumer_groups_request()
             response = await self._manager.send(request, node_id=broker_id)
-            consumer_groups.update(self._list_consumer_groups_process_response(response))
-        return list(consumer_groups)
+            consumer_groups.extend(self._list_consumer_groups_process_response(response))
+        return consumer_groups
 
     def list_consumer_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
@@ -178,7 +139,7 @@ class GroupAdminMixin:
                 consumer groups are coordinated by those broker(s). Default: None
 
         Returns:
-            list: List of tuples of Consumer Groups.
+            List of group data dicts, with key/vals from ListGroupsRequest
         """
         return self._manager.run(self._async_list_consumer_groups, broker_ids)
 
@@ -203,32 +164,20 @@ class GroupAdminMixin:
 
     def _list_consumer_group_offsets_process_response(self, response):
         """Process an OffsetFetchResponse."""
-        if response.API_VERSION <= 6:
-            if response.API_VERSION > 1:
-                error_type = Errors.for_code(response.error_code)
-                if error_type is not Errors.NoError:
-                    raise error_type(
-                        "OffsetFetchResponse failed with response '{}'."
-                        .format(response))
-            offsets = {}
-            for topic, partitions in response.topics:
-                for partition_data in partitions:
-                    if response.API_VERSION <= 4:
-                        partition, offset, metadata, error_code = partition_data
-                        leader_epoch = -1
-                    else:
-                        partition, offset, leader_epoch, metadata, error_code = partition_data
-                    error_type = Errors.for_code(error_code)
-                    if error_type is not Errors.NoError:
-                        raise error_type(
-                            "Unable to fetch consumer group offsets for topic {}, partition {}"
-                            .format(topic, partition))
-                    offsets[TopicPartition(topic, partition)] = OffsetAndMetadata(offset, metadata, leader_epoch)
-        else:
-            raise NotImplementedError(
-                "Support for OffsetFetchResponse_v{} has not yet been added to KafkaAdminClient."
-                .format(response.API_VERSION))
-        return offsets
+        if response.API_VERSION > 1:
+            error_type = Errors.for_code(response.error_code)
+            if error_type is not Errors.NoError:
+                raise error_type(
+                    "OffsetFetchResponse failed with response '{}'."
+                    .format(response))
+        def _partitions_to_dict(partitions):
+            d = {}
+            for p in partitions:
+                d[p.partition_index] = p.to_dict()
+                d[p.partition_index].pop('partition_index')
+            return d
+        return {topic.name: _partitions_to_dict(topic.partitions)
+                for topic in response.topics}
 
     async def _async_list_consumer_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         if group_coordinator_id is None:
@@ -259,8 +208,7 @@ class GroupAdminMixin:
                 known offsets for the consumer group. Default: None.
 
         Returns:
-            dictionary: A dictionary with TopicPartition keys and
-            OffsetAndMetadata values.
+            dict: {topic: [{partition data}]} key/vals from OffsetCommitResponse}]}
         """
         return self._manager.run(self._async_list_consumer_group_offsets, group_id, group_coordinator_id, partitions)
 
@@ -271,15 +219,11 @@ class GroupAdminMixin:
 
     def _convert_delete_groups_response(self, response):
         """Parse a DeleteGroupsResponse."""
-        if response.API_VERSION <= 2:
-            results = []
-            for group_id, error_code in response.results:
-                results.append((group_id, Errors.for_code(error_code)))
-            return results
-        else:
-            raise NotImplementedError(
-                "Support for DeleteGroupsResponse_v{} has not yet been added to KafkaAdminClient."
-                    .format(response.API_VERSION))
+        results = []
+        for group_id, error_code in response.results:
+            res = 'OK' if error_code == 0 else Errors.for_code(error_code).__name__
+            results.append((group_id, res))
+        return results
 
     async def _async_delete_consumer_groups(self, group_ids, group_coordinator_id=None):
         coordinators_groups = defaultdict(list)
@@ -295,7 +239,7 @@ class GroupAdminMixin:
             request = self._delete_consumer_groups_request(coordinator_group_ids)
             response = await self._manager.send(request, node_id=coordinator_id)
             results.extend(self._convert_delete_groups_response(response))
-        return results
+        return dict(results)
 
     def delete_consumer_groups(self, group_ids, group_coordinator_id=None):
         """Delete Consumer Group Offsets for given consumer groups.

@@ -224,16 +224,16 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
         output = kafka_admin_client.describe_consumer_groups(group_id_list)
         assert len(output) == 2
         consumer_groups = set()
-        for consumer_group in output:
-            assert(consumer_group.group in group_id_list)
-            if consumer_group.group == group_id_list[0]:
-                assert(len(consumer_group.members) == 2)
+        for consumer_group in output.values():
+            assert(consumer_group['group_id'] in group_id_list)
+            if consumer_group['group_id'] == group_id_list[0]:
+                assert(len(consumer_group['members']) == 2)
             else:
-                assert(len(consumer_group.members) == 1)
-            for member in consumer_group.members:
-                    assert(member.member_metadata.topics[0] == topic)
-                    assert(member.member_assignment.assigned_partitions[0][0] == topic)
-            consumer_groups.add(consumer_group.group)
+                assert(len(consumer_group['members']) == 1)
+            for member in consumer_group['members']:
+                    assert(member['member_metadata']['topics'] == [topic])
+                    assert(member['member_assignment']['assigned_partitions'][0]['topic'] == topic)
+            consumer_groups.add(consumer_group['group_id'])
         assert(sorted(list(consumer_groups)) == group_id_list)
     finally:
         info('Shutting down %s consumers', num_consumers)
@@ -266,20 +266,17 @@ def test_delete_consumer_groups(kafka_admin_client, kafka_consumer_factory, send
     next(consumer3)
     consumer3.close()
 
-    groups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
     assert group1 in groups
     assert group2 in groups
     assert group3 in groups
 
-    delete_results = {
-        group_id: error
-        for group_id, error in kafka_admin_client.delete_consumer_groups([group1, group2])
-    }
-    assert delete_results[group1] == NoError
-    assert delete_results[group2] == NoError
+    delete_results = kafka_admin_client.delete_consumer_groups([group1, group2])
+    assert delete_results[group1] == 'OK'
+    assert delete_results[group2] == 'OK'
     assert group3 not in delete_results
 
-    groups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
     assert group1 not in groups
     assert group2 not in groups
     assert group3 in groups
@@ -300,23 +297,21 @@ def test_delete_consumer_groups_with_errors(kafka_admin_client, kafka_consumer_f
     consumer2 = kafka_consumer_factory(group_id=group2)
     next(consumer2)
 
-    groups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
     assert group1 in groups
     assert group2 in groups
     assert group3 not in groups
 
-    delete_results = {
-        group_id: error
-        for group_id, error in kafka_admin_client.delete_consumer_groups([group1, group2, group3])
-    }
-    assert delete_results[group1] == NoError
-    assert delete_results[group2] == NonEmptyGroupError
-    assert delete_results[group3] == GroupIdNotFoundError
+    delete_results = kafka_admin_client.delete_consumer_groups([group1, group2, group3])
+    assert delete_results[group1] == 'OK'
+    assert delete_results[group2] == 'NonEmptyGroupError'
+    assert delete_results[group3] == 'GroupIdNotFoundError'
 
-    groups = {group_id for group_id, _ in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
     assert group1 not in groups
     assert group2 in groups
     assert group3 not in groups
+
 
 @pytest.fixture(name="topic2")
 def _topic2(kafka_broker, request):
@@ -389,21 +384,30 @@ def test_delete_records_with_errors(kafka_admin_client, topic, send_messages):
 def test_create_delete_topics(kafka_admin_client):
     topic_name = random_string(4)
     response = kafka_admin_client.create_topics([NewTopic(topic_name, 1, 1)])
-    assert response.topics[0].name == topic_name
-    assert response.topics[0].error_code == 0 # NoError
+    assert response['topics'][0]['name'] == topic_name
+    assert response['topics'][0]['error_code'] == 0 # NoError
 
     response = kafka_admin_client.delete_topics([topic_name])
-    assert response.responses[0].name == topic_name
-    assert response.responses[0].error_code == 0 # NoError
+    assert response['responses'][0]['name'] == topic_name
+    assert response['responses'][0]['error_code'] == 0 # NoError
+
+    topic_name = random_string(4)
+    response = kafka_admin_client.create_topics([topic_name])
+    assert response['topics'][0]['name'] == topic_name
+    assert response['topics'][0]['error_code'] == 0 # NoError
+
+    response = kafka_admin_client.delete_topics([topic_name])
+    assert response['responses'][0]['name'] == topic_name
+    assert response['responses'][0]['error_code'] == 0 # NoError
 
     topic_name = random_string(4)
     response = kafka_admin_client.create_topics({topic_name: {'num_partitions': 1, 'replication_factor': 1}})
-    assert response.topics[0].name == topic_name
-    assert response.topics[0].error_code == 0 # NoError
+    assert response['topics'][0]['name'] == topic_name
+    assert response['topics'][0]['error_code'] == 0 # NoError
 
     response = kafka_admin_client.delete_topics([topic_name])
-    assert response.responses[0].name == topic_name
-    assert response.responses[0].error_code == 0 # NoError
+    assert response['responses'][0]['name'] == topic_name
+    assert response['responses'][0]['error_code'] == 0 # NoError
 
     # Create topics requires explicit num_partitions/replication_factor on < 2.4
     if env_kafka_version() < (2, 4):
