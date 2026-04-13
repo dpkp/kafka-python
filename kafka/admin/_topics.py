@@ -96,8 +96,10 @@ class TopicAdminMixin:
                                            replication_factor: int (default -1),
                                            assignments: {partition: [broker_ids]},
                                            configs: {key: value}}}
-                All dict keys are optional.
+                    All keys are optional.
                 List of NewTopic objects is deprecated.
+                Note: for brokers < 2.4, num_partitions and replication_factor
+                are required and must be provided via dict or [NewTopic].
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Milliseconds to wait for new topics to be created
@@ -118,8 +120,15 @@ class TopicAdminMixin:
                 "validate_only requires CreateTopicsRequest >= v1, which is not supported by Kafka {}."
                 .format(self._manager.broker_version))
 
+        topics = self._process_create_topics_input(new_topics)
+        if self._manager.broker_version < (2, 4):
+            if any(topic.num_partitions == -1 or topic.replication_factor == -1 for topic in topics):
+                raise IncompatibleBrokerVersion(
+                    "Broker version {} requires explicit num_partitions and replication_factor"
+                    .format(self._manager.broker_version))
+
         request = CreateTopicsRequest(
-            topics=self._process_create_topics_input(new_topics),
+            topics=topics,
             timeout_ms=timeout_ms,
             validate_only=validate_only,
             max_version=3,
