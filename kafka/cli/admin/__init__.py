@@ -95,6 +95,10 @@ def run_cli(args=None):
                 result = result.to_dict()
             print(json.dumps(result))
         return 0
+    except AttributeError as exc:
+        logger.exception(exc)
+        parser.print_help()
+        return 1
     except Exception:
         logger.critical('Error!', exc_info=True)
         return 1
