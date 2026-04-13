@@ -118,29 +118,20 @@ class RecordAdminMixin:
         """
         return self._manager.run(self._async_delete_records, records_to_delete, timeout_ms, partition_leader_id)
 
-    @staticmethod
-    def _convert_topic_partitions(topic_partitions):
-        return [
-            (
-                topic,
-                partitions
-            )
-            for topic, partitions in topic_partitions.items()
-        ]
-
-    def _get_all_topic_partitions(self):
+    def _get_all_topic_partitions(self, topics=None):
         return [
             (
                 topic['name'],
                 [p['partition_index'] for p in topic['partitions']]
             )
-            for topic in self.describe_topics()
+            for topic in self.describe_topics(topics)
         ]
 
     def _get_topic_partitions(self, topic_partitions):
-        if topic_partitions is None:
-            return self._get_all_topic_partitions()
-        return self._convert_topic_partitions(topic_partitions)
+        if isinstance(topic_partitions, dict):
+            return topic_partitions.items()
+        else:
+            return self._get_all_topic_partitions(topic_partitions)
 
     def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None, raise_errors=True):
         """Trigger leader election for the specified topic partitions.
@@ -149,8 +140,11 @@ class RecordAdminMixin:
             election_type: Type of election to attempt. 0 for Preferred, 1 for Unclean
 
         Keyword Arguments:
-            topic_partitions (dict): A map of topic name strings to partition ids list.
-                By default, will run on all topic partitions
+            topic_partitions (dict, list, optional):
+                Either: dict of {topic_name: [partition ids]}.
+                Or:     list of [topic_name], and election will run on all partitions for topic.
+                Or:     None, and election runs against all topics / all partitions.
+                Default: None
             timeout_ms (num, optional): Milliseconds to wait for the leader election process.
             raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
 
@@ -190,6 +184,7 @@ class RecordAdminMixin:
         Keyword Arguments:
             topic_partitions (dict, list, optional):
                 Either: dict of {topic_name: [partition ids]}.
+                Or:     list of [topic_name], to query all partitions for topic.
                 Or:     None, to query all topics / all partitions.
                 Default: None
             brokers (list, optional): List of [node_id] for brokers to query.
