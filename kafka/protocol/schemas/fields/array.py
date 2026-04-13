@@ -118,5 +118,10 @@ class ArrayField(BaseField):
         return [self.array_of.decode(data, version=version, compact=compact, tagged=tagged)
                 for _ in range(size)]
 
+    def to_json(self, val):
+        if val is None:
+            return None
+        return [self.array_of.to_json(i) for i in val]
+
     def __repr__(self):
         return 'ArrayField(%s)' % self._json

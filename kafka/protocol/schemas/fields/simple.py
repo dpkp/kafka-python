@@ -104,5 +104,21 @@ class SimpleField(BaseField):
     def decode(self, data, version=None, compact=False, tagged=False):
         return self._type.decode(data, compact=compact)
 
+    def to_json(self, val):
+        if val is None:
+            return None
+        if self._type is UUID:
+            return str(val)
+        elif self._type is Bytes:
+            if not isinstance(val, (bytes, bytearray, memoryview)):
+                val = val.encode()
+            if not isinstance(val, memoryview):
+                val = val.tobytes()
+            return val.decode(errors='backslashreplace')
+        elif self._type is BitField:
+            return list(val)
+        else:
+            return val
+
     def __repr__(self):
         return 'SimpleField(%s)' % self._json
