@@ -142,12 +142,7 @@ class DataContainer(metaclass=SlotsBuilder):
                 yield (field.name, [dict(val._to_dict_vals(meta=meta, json=json)) for val in getattr(self, field.name)])
             else:
                 val = getattr(self, field.name)
-                if json:
-                    if isinstance(val, bytes):
-                        val = val.decode()
-                    elif isinstance(val, set):
-                        val = list(val)
-                yield (field.name, val)
+                yield (field.name, field.to_json(val) if json else val)
 
     def to_dict(self, meta=False, json=True):
         """Use meta=True to include top-level version; meta='all' to include all internal versions
