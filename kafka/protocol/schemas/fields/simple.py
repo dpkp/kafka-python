@@ -110,11 +110,14 @@ class SimpleField(BaseField):
         if self._type is UUID:
             return str(val)
         elif self._type is Bytes:
-            if not isinstance(val, (bytes, bytearray, memoryview)):
-                val = val.encode()
-            if not isinstance(val, memoryview):
+            if isinstance(val, memoryview):
                 val = val.tobytes()
+            if hasattr(val, 'to_dict'):
+                return val.to_dict()
+            elif not isinstance(val, (bytes, bytearray)):
+                val = val.encode()
             return val.decode(errors='backslashreplace')
+
         elif self._type is BitField:
             return list(val)
         else:
