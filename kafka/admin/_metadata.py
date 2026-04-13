@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from kafka.admin._acls import valid_acl_operations
 from kafka.protocol.metadata import MetadataRequest
 
 if TYPE_CHECKING:
@@ -17,11 +16,6 @@ log = logging.getLogger(__name__)
 class MetadataAdminMixin:
     """Mixin providing cluster metadata methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
-
-    def _process_acl_operations(self, obj):
-        if obj.get('authorized_operations', None) is not None:
-            obj['authorized_operations'] = list(map(lambda acl: acl.name, valid_acl_operations(obj['authorized_operations'])))
-        return obj
 
     async def _get_cluster_metadata(self, topics):
         """topics = [] for no topics, None for all."""
