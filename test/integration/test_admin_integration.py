@@ -396,6 +396,24 @@ def test_create_delete_topics(kafka_admin_client):
     assert response.responses[0].name == topic_name
     assert response.responses[0].error_code == 0 # NoError
 
+    topic_name = random_string(4)
+    response = kafka_admin_client.create_topics([topic_name])
+    assert response.topics[0].name == topic_name
+    assert response.topics[0].error_code == 0 # NoError
+
+    response = kafka_admin_client.delete_topics([topic_name])
+    assert response.responses[0].name == topic_name
+    assert response.responses[0].error_code == 0 # NoError
+
+    topic_name = random_string(4)
+    response = kafka_admin_client.create_topics({topic_name: {'num_partitions': 1, 'replication_factor': 1}})
+    assert response.topics[0].name == topic_name
+    assert response.topics[0].error_code == 0 # NoError
+
+    response = kafka_admin_client.delete_topics([topic_name])
+    assert response.responses[0].name == topic_name
+    assert response.responses[0].error_code == 0 # NoError
+
 
 @pytest.mark.skipif(env_kafka_version() < (1, 0), reason="CreatePartitions requires broker >=1.0")
 def test_create_partitions(kafka_admin_client, topic):
