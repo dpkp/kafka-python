@@ -1,9 +1,7 @@
-from kafka.admin.acl_resource import ACL
-from kafka.admin.acl_resource import ACLOperation
-from kafka.admin.acl_resource import ACLPermissionType
-from kafka.admin.acl_resource import ResourcePattern
-from kafka.admin.acl_resource import ResourceType
-from kafka.admin.acl_resource import ACLResourcePatternType
+from kafka.admin import (
+    ACL, ACLOperation, ACLPermissionType, ResourcePattern,
+    ResourceType, ACLResourcePatternType,
+)
 
 
 def test_different_acls_are_different():
