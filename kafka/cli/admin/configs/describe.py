@@ -18,5 +18,11 @@ class DescribeConfigs:
         for broker in args.brokers:
             resources.append(ConfigResource('BROKER', broker))
 
-        response = client.describe_configs(resources)
-        return list(zip([(r.resource_type.name, r.name) for r in resources], [{str(vals[0]): vals[1] for vals in r.resources[0][4]} for r in response]))
+        responses = client.describe_configs(resources)
+        # Return shape is list of (resource, configs) tuples
+        #  resource => (type, name)
+        #  configs =>  {key: value}
+        return [(
+            (resources[i].resource_type.name, resources[i].name),
+            {str(config.name): config.value for config in r.results[0].configs}
+        ) for i, r in enumerate(responses)]
