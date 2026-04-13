@@ -131,11 +131,18 @@ class ClusterMetadata:
         """Get all MetadataResponseBroker
 
         Returns:
-            set: {MetadataResponseBroker, ...}
+            list: [MetadataResponseBroker, ...]
         """
         return list(self._brokers.values())
 
     def bootstrap_brokers(self):
+        """Get bootstrap brokers only, extracted from the
+        bootstrap_servers config option. Node ids are synthesized
+        as 'bootstrap-0' etc.
+
+        Returns:
+            list: [MetadataResponseBroker, ...]
+        """
         return list(self._bootstrap_brokers.values())
 
     def broker_metadata(self, broker_id):
