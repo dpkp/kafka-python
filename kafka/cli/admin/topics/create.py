@@ -1,6 +1,3 @@
-from kafka.admin.new_topic import NewTopic
-
-
 class CreateTopic:
 
     @classmethod
@@ -13,4 +10,4 @@ class CreateTopic:
 
     @classmethod
     def command(cls, client, args):
-        return client.create_topics([NewTopic(args.topic, args.num_partitions, args.replication_factor)])
+        return client.create_topics({args.topic: {'num_partitions': args.num_partitions, 'replication_factor': args.replication_factor}})
