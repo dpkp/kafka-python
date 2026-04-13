@@ -6,8 +6,8 @@ class DeleteTopic:
     @classmethod
     def add_subparser(cls, subparsers):
         parser = subparsers.add_parser('delete', help='Delete Kafka Topic')
-        parser.add_argument('-t', '--topic', type=str, action='append', dest='topics', help='topic name')
-        parser.add_argument('--id', type=str, action='append', dest='topic_ids', help='topic UUID')
+        parser.add_argument('-t', '--topic', type=str, action='append', dest='topics', default=[], help='topic name')
+        parser.add_argument('--id', type=str, action='append', dest='topic_ids', default=[], help='topic UUID')
         parser.set_defaults(command=cls.command)
 
     @classmethod

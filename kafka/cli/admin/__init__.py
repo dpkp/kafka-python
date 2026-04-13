@@ -91,6 +91,8 @@ def run_cli(args=None):
         if config.format == 'raw':
             pprint(result)
         elif config.format == 'json':
+            if hasattr(result, 'to_dict'):
+                result = result.to_dict()
             print(json.dumps(result))
         return 0
     except Exception:
