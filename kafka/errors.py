@@ -79,6 +79,10 @@ class NodeNotReadyError(KafkaError):
     retriable = True
 
 
+class UnknownBrokerIdError(KafkaError):
+    pass
+
+
 class QuotaViolationError(KafkaError):
     pass
 
