@@ -26,6 +26,28 @@ class TopicAdminMixin:
     _client: object
     config: dict
 
+    def list_topics(self):
+        """Retrieve a list of all topic names in the cluster.
+
+        Returns:
+            A list of topic name strings.
+        """
+        metadata = self._manager.run(self._get_cluster_metadata, None)
+        return [t['name'] for t in metadata['topics']]
+
+    def describe_topics(self, topics=None):
+        """Fetch metadata for the specified topics or all topics if None.
+
+        Keyword Arguments:
+            topics ([str], optional) A list of topic names. If None, metadata for all
+                topics is retrieved.
+
+        Returns:
+            A list of dicts describing each topic (including partition info).
+        """
+        metadata = self._manager.run(self._get_cluster_metadata, topics)
+        return metadata['topics']
+
     @staticmethod
     def _process_create_topics_input(new_topics):
         _Topic = CreateTopicsRequest.CreatableTopic

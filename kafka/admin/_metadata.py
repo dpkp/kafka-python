@@ -34,28 +34,6 @@ class MetadataAdminMixin:
             self._process_acl_operations(topic)
         return metadata
 
-    def list_topics(self):
-        """Retrieve a list of all topic names in the cluster.
-
-        Returns:
-            A list of topic name strings.
-        """
-        metadata = self._manager.run(self._get_cluster_metadata, None)
-        return [t['name'] for t in metadata['topics']]
-
-    def describe_topics(self, topics=None):
-        """Fetch metadata for the specified topics or all topics if None.
-
-        Keyword Arguments:
-            topics ([str], optional) A list of topic names. If None, metadata for all
-                topics is retrieved.
-
-        Returns:
-            A list of dicts describing each topic (including partition info).
-        """
-        metadata = self._manager.run(self._get_cluster_metadata, topics)
-        return metadata['topics']
-
     def describe_cluster(self):
         """Fetch cluster-wide metadata such as the list of brokers, the controller ID,
         and the cluster ID.
