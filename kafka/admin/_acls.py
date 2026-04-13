@@ -80,36 +80,24 @@ class ACLAdminMixin:
             A tuple of (list_of_acl_objects, error) where error is an instance
                  of KafkaError (NoError if successful).
         """
+        error_type = Errors.for_code(describe_response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "Request '{}' failed with response '{}'."
+                    .format("DescribeAclsRequest", describe_response))
         acl_list = []
         for resource in describe_response.resources:
-            if describe_response.API_VERSION == 0:
-                error_code, resource_type, resource_name, acls = resource
-                resource_pattern_type = ACLResourcePatternType.LITERAL.value
-            else:
-                error_code, resource_type, resource_name, resource_pattern_type, acls = resource
-            error_type = Errors.for_code(error_code)
-            if error_type is not Errors.NoError:
-                raise error_type(
-                    "Request '{}' failed with response '{}'."
-                        .format("DescribeAclsRequest", describe_response))
-            for acl in acls:
-                if describe_response.API_VERSION == 0:
-                    principal, host, operation, permission_type = acl
-                else:
-                    principal, host, operation, permission_type = acl[:4]
+            for acl in resource.acls:
                 acl_list.append(
                     ACL(
-                        principal=principal,
-                        host=host,
-                        operation=ACLOperation(operation),
-                        permission_type=ACLPermissionType(permission_type),
+                        principal=acl.principal,
+                        host=acl.host,
+                        operation=ACLOperation(acl.operation),
+                        permission_type=ACLPermissionType(acl.permission_type),
                         resource_pattern=ResourcePattern(
-                            resource_type=ResourceType(resource_type),
-                            resource_name=resource_name,
-                            pattern_type=ACLResourcePatternType(resource_pattern_type)
-                        )
-                    )
-                )
+                            resource_type=ResourceType(resource.resource_type),
+                            resource_name=resource.resource_name,
+                            pattern_type=ACLResourcePatternType(resource.pattern_type))))
         return acl_list, Errors.NoError
 
     @staticmethod
@@ -140,12 +128,14 @@ class ACLAdminMixin:
     @staticmethod
     def _convert_create_acls_response_to_acls(acls, create_response):
         """Parse a CreateAclsResponse, returning a dict of successes and failures."""
-        acl_results = []
+        results = {'succeeded': [], 'failed': []}
         for i, result in enumerate(create_response.results):
-            error_type = Errors.for_code(result.error_code)
             acl = acls[i]
-            acl_results.append({"acl": acl, "error": error_type})
-        return acl_results
+            if result.error_code == 0:
+                results['succeeded'].append(acl)
+            else:
+                results['failed'].append(Errors.for_code(result.error_code))
+        return results
 
     def create_acls(self, acls):
         """Create a list of ACLs
@@ -209,26 +199,18 @@ class ACLAdminMixin:
             acl_filter = acl_filters[i]
             error_type = Errors.for_code(result.error_code)
             matching_acls = []
-            for matching_acl in result.matching_acls:
-                matching_error = Errors.for_code(matching_acl.error_code)
-                if delete_response.API_VERSION == 0:
-                    resource_type, resource_name, principal, host, operation, permission_type = matching_acl[1:]
-                    resource_pattern_type = ACLResourcePatternType.LITERAL.value
-                else:
-                    resource_type, resource_name, resource_pattern_type, principal, host, operation, permission_type = matching_acl[1:]
+            for acl in result.matching_acls:
+                error = Errors.for_code(acl.error_code)
                 matching_acls.append(
                     ACL(
-                        principal=principal,
-                        host=host,
-                        operation=ACLOperation(operation),
-                        permission_type=ACLPermissionType(permission_type),
+                        principal=acl.principal,
+                        host=acl.host,
+                        operation=ACLOperation(acl.operation),
+                        permission_type=ACLPermissionType(acl.permission_type),
                         resource_pattern=ResourcePattern(
-                            resource_type=ResourceType(resource_type),
-                            resource_name=resource_name,
-                            pattern_type=ACLResourcePatternType(resource_pattern_type)
-                        )
-                    )
-                )
+                            resource_type=ResourceType(acl.resource_type),
+                            resource_name=acl.resource_name,
+                            pattern_type=ACLResourcePatternType(acl.pattern_type))))
             results.append((acl_filter, matching_acls, error_type))
         return results
 
