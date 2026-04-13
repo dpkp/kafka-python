@@ -162,14 +162,13 @@ class RecordAdminMixin:
             election_type=ElectionType(election_type),
             topic_partitions=self._get_topic_partitions(topic_partitions),
             timeout_ms=timeout_ms,
-            max_version=1,
         )
         def response_errors(r):
             if r.API_VERSION >= 1:
                 yield Errors.for_code(r.error_code)
             for result in r.replica_election_results:
-                for partition in result[1]:
-                    yield Errors.for_code(partition[1])
+                for partition in result.partition_result:
+                    yield Errors.for_code(partition.error_code)
         ignore_errors = (Errors.ElectionNotNeededError,)
         return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
 
