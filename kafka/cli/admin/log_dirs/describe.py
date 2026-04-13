@@ -3,4 +3,6 @@ class DescribeLogDirs:
     @classmethod
     def add_subparser(cls, subparsers):
         parser = subparsers.add_parser('describe', help='Get topic log directories for brokers')
-        parser.set_defaults(command=lambda cli, _args: cli.describe_log_dirs())
+        parser.add_argument('-b', '--broker', type=int, action='append', dest='brokers', help='Query specific broker(s)')
+        parser.add_argument('-t', '--topic', type=str, action='append', dest='topics', help='Get additional data about specific topic(s)')
+        parser.set_defaults(command=lambda cli, args: cli.describe_log_dirs(topic_partitions=args.topics, brokers=args.brokers))

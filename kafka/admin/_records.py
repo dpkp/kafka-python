@@ -172,14 +172,31 @@ class RecordAdminMixin:
         ignore_errors = (Errors.ElectionNotNeededError,)
         return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
 
-    async def _async_describe_log_dirs(self):
-        version = self._client.api_version(DescribeLogDirsRequest, max_version=0)
-        return await self._manager.send(DescribeLogDirsRequest[version]())
+    async def _async_describe_log_dirs(self, topic_partitions=(), brokers=None):
+        request = DescribeLogDirsRequest(topics=topic_partitions)
+        responses = []
+        if brokers is None:
+            brokers = [broker.node_id for broker in self._manager.cluster.brokers()]
+        for node_id in brokers:
+            response = await self._manager.send(request, node_id=node_id)
+            responses.append((node_id, response.to_dict()))
+        for node_id, result in responses:
+            result['broker'] = self._manager.cluster.broker_metadata(node_id).to_dict()
+        return dict(responses)
 
-    def describe_log_dirs(self):
+    def describe_log_dirs(self, topic_partitions=None, brokers=None):
         """Send a DescribeLogDirsRequest request to a broker.
+
+        Keyword Arguments:
+            topic_partitions (dict, list, optional):
+                Either: dict of {topic_name: [partition ids]}.
+                Or:     None, to query all topics / all partitions.
+                Default: None
+            brokers (list, optional): List of [node_id] for brokers to query.
+                If None, query is sent to all brokers. Default: None
 
         Returns:
             DescribeLogDirsResponse object
         """
-        return self._manager.run(self._async_describe_log_dirs)
+        topic_partitions = self._get_topic_partitions(topic_partitions)
+        return self._manager.run(self._async_describe_log_dirs, topic_partitions, brokers)
