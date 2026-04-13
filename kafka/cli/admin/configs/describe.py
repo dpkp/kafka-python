@@ -1,4 +1,4 @@
-from kafka.admin.config_resource import ConfigResource
+from kafka.admin import ConfigResource
 
 
 class DescribeConfigs:
