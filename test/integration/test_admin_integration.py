@@ -469,3 +469,16 @@ def test_perform_leader_election(kafka_admin_client, topic):
         partition_set.remove(partition[0])
         assert partition[1] == ElectionNotNeededError.errno
     assert partition_set == set()
+
+
+@pytest.mark.skipif(env_kafka_version() < (1, 0), reason="DescribeLogDirsRequest requires broker >= 1.0")
+def test_describe_log_dirs(kafka_admin_client):
+    log_dirs = kafka_admin_client.describe_log_dirs()
+    assert log_dirs
+    broker_map = {result['broker']: result for result in log_dirs}
+    for broker in kafka_admin_client._manager.cluster.brokers():
+        assert broker.node_id in broker_map
+        assert len(broker_map[broker.node_id]['log_dirs']) > 0
+        for log_dir in broker_map[broker.node_id]['log_dirs']:
+            assert 'log_dir' in log_dir
+            assert log_dir['error_code'] == 0
