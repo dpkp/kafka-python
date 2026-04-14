@@ -173,10 +173,8 @@ class RecordAdminMixin:
             brokers = [broker.node_id for broker in self._manager.cluster.brokers()]
         for node_id in brokers:
             response = await self._manager.send(request, node_id=node_id)
-            responses.append((node_id, response.to_dict()))
-        for node_id, result in responses:
-            result['broker'] = self._manager.cluster.broker_metadata(node_id).to_dict()
-        return dict(responses)
+            responses.append({"broker": node_id, "log_dirs": [result.to_dict() for result in response.results]})
+        return responses
 
     def describe_log_dirs(self, topic_partitions=None, brokers=None):
         """Send a DescribeLogDirsRequest request to a broker.
@@ -191,7 +189,7 @@ class RecordAdminMixin:
                 If None, query is sent to all brokers. Default: None
 
         Returns:
-            DescribeLogDirsResponse object
+            list of dicts, containing per-broker log-dir data
         """
         topic_partitions = self._get_topic_partitions(topic_partitions)
         return self._manager.run(self._async_describe_log_dirs, topic_partitions, brokers)
