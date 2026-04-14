@@ -14,9 +14,9 @@ from kafka.protocol.metadata import MetadataRequest, FindCoordinatorRequest
 from kafka.version import __version__
 
 from kafka.admin._acls import ACLAdminMixin
+from kafka.admin._cluster import ClusterAdminMixin
 from kafka.admin._configs import ConfigAdminMixin
 from kafka.admin._groups import GroupAdminMixin
-from kafka.admin._metadata import MetadataAdminMixin
 from kafka.admin._records import RecordAdminMixin
 from kafka.admin._topics import TopicAdminMixin
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 class KafkaAdminClient(
     TopicAdminMixin,
-    MetadataAdminMixin,
+    ClusterAdminMixin,
     ACLAdminMixin,
     ConfigAdminMixin,
     GroupAdminMixin,
