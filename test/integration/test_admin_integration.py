@@ -105,14 +105,23 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
     assert len(configs) == 1
-    assert configs[0].results[0][2] == ConfigResourceType.BROKER
-    assert configs[0].results[0][3] == str(broker_id)
-    assert len(configs[0].results[0][4]) > 1
+    assert len(configs['broker']) == 1
+    if env_kafka_version() >= (4, 0):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['config_source'] == 'STATIC_BROKER_CONFIG'
+    elif env_kafka_version() >= (1, 1):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['config_source'] == 'DEFAULT_CONFIG'
+    if env_kafka_version() >= (2, 6):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['config_type'] in ('LIST', 'STRING')
+    if env_kafka_version() >= (4, 0):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['read_only'] is True
+    elif env_kafka_version() >= (1, 0):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['read_only'] is False
+    assert configs['broker'][str(broker_id)]['advertised.listeners']['is_sensitive'] is False
+    if env_kafka_version() >= (1, 1):
+        assert configs['broker'][str(broker_id)]['advertised.listeners']['synonyms'] == []
+    assert 'value' in configs['broker'][str(broker_id)]['advertised.listeners']
 
 
-@pytest.mark.xfail(condition=True,
-                   reason="https://github.com/dpkp/kafka-python/issues/1929",
-                   raises=AssertionError)
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
 def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for topic
@@ -120,9 +129,16 @@ def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_clie
     configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.TOPIC, topic)])
 
     assert len(configs) == 1
-    assert configs[0].results[0][2] == ConfigResourceType.TOPIC
-    assert configs[0].results[0][3] == topic
-    assert len(configs[0].results[0][4]) > 1
+    assert len(configs['topic']) == 1
+    if env_kafka_version() >= (1, 1):
+        assert configs['topic'][topic]['retention.bytes']['config_source'] == 'DEFAULT_CONFIG'
+    if env_kafka_version() >= (2, 6):
+        assert configs['topic'][topic]['retention.bytes']['config_type'] == 'LONG'
+    assert configs['topic'][topic]['retention.bytes']['read_only'] is False
+    assert configs['topic'][topic]['retention.bytes']['is_sensitive'] is False
+    if env_kafka_version() >= (1, 1):
+        assert configs['topic'][topic]['retention.bytes']['synonyms'] == []
+    assert configs['topic'][topic]['retention.bytes']['value'] == '-1'
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")
@@ -135,13 +151,10 @@ def test_describe_configs_mixed_resources_returns_configs(topic, kafka_admin_cli
         ConfigResource(ConfigResourceType.BROKER, broker_id)])
 
     assert len(configs) == 2
-
-    for config in configs:
-        assert (config.results[0][2] == ConfigResourceType.TOPIC
-                and config.results[0][3] == topic) or \
-               (config.results[0][2] == ConfigResourceType.BROKER
-                and config.results[0][3] == str(broker_id))
-        assert len(config.results[0][4]) > 1
+    assert topic in configs['topic']
+    assert len(configs['topic'][topic]) > 1
+    assert str(broker_id) in configs['broker']
+    assert len(configs['broker'][str(broker_id)]) > 1
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason="Describe config features require broker >=0.11")

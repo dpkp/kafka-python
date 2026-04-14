@@ -5,8 +5,9 @@ Also defines ConfigResource and ConfigResourceType data classes.
 
 from __future__ import annotations
 
-import logging
+from collections import defaultdict
 from enum import IntEnum
+import logging
 from typing import TYPE_CHECKING
 
 from kafka.errors import IncompatibleBrokerVersion
@@ -29,18 +30,22 @@ class ConfigAdminMixin:
         return (
             config_resource.resource_type,
             config_resource.name,
-            [config_key for config_key, config_value in config_resource.configs.items()] if config_resource.configs else None
+            list(config_resource.configs.keys()) if isinstance(config_resource.configs, dict) else config_resource.configs
         )
 
     async def _async_describe_configs(self, config_resources, include_synonyms=False):
-        broker_resources = []
-        topic_resources = []
+        broker_resources = defaultdict(list)
+        other_resources = []
 
         for config_resource in config_resources:
-            if config_resource.resource_type == ConfigResourceType.BROKER:
-                broker_resources.append(self._convert_describe_config_resource_request(config_resource))
+            if config_resource.resource_type in (ConfigResourceType.BROKER, ConfigResourceType.BROKER_LOGGER):
+                try:
+                    broker_id = int(config_resource.name)
+                except ValueError:
+                    raise ValueError("Broker resource names must be an integer or a string represented integer")
+                broker_resources[broker_id].append(self._convert_describe_config_resource_request(config_resource))
             else:
-                topic_resources.append(self._convert_describe_config_resource_request(config_resource))
+                other_resources.append(self._convert_describe_config_resource_request(config_resource))
 
         version = self._client.api_version(DescribeConfigsRequest, max_version=2)
         if include_synonyms and version == 0:
@@ -48,28 +53,34 @@ class ConfigAdminMixin:
                 "include_synonyms requires DescribeConfigsRequest >= v1, which is not supported by Kafka {}."
                     .format(self._manager.broker_version))
 
-        results = []
-        for broker_resource in broker_resources:
-            try:
-                broker_id = int(broker_resource[1])
-            except ValueError:
-                raise ValueError("Broker resource names must be an integer or a string represented integer")
-            if version == 0:
-                request = DescribeConfigsRequest[version](resources=[broker_resource])
-            else:
-                request = DescribeConfigsRequest[version](
-                    resources=[broker_resource],
-                    include_synonyms=include_synonyms)
-            results.append(await self._manager.send(request, node_id=broker_id))
+        responses = []
+        for broker_id, resources in broker_resources.items():
+            request = DescribeConfigsRequest(
+                resources=resources,
+                include_synonyms=include_synonyms)
+            responses.append(await self._manager.send(request, node_id=broker_id))
+        if other_resources:
+            request = DescribeConfigsRequest(resources=other_resources, include_synonyms=include_synonyms)
+            responses.append(await self._manager.send(request))
 
-        if topic_resources:
-            if version == 0:
-                request = DescribeConfigsRequest[version](resources=topic_resources)
-            else:
-                request = DescribeConfigsRequest[version](resources=topic_resources, include_synonyms=include_synonyms)
-            results.append(await self._manager.send(request))
+        ret = defaultdict(dict)
+        for response in responses:
+            for result in response.results:
+                result_type = ConfigResourceType(result.resource_type).name.lower()
+                ret[result_type][result.resource_name] = {}
+                for config in result.configs:
+                    config = config.to_dict()
+                    name = config.pop('name')
+                    if 'config_source' in config:
+                        config['config_source'] = ConfigSourceType(config['config_source']).name
+                    if 'synonyms' in config:
+                        for synonym in config['synonyms']:
+                            synonym['source'] = ConfigSourceType(synonym['source']).name
 
-        return results
+                    if 'config_type' in config:
+                        config['config_type'] = ConfigType(config['config_type']).name
+                    ret[result_type][result.resource_name][name] = config
+        return dict(ret)
 
     def describe_configs(self, config_resources, include_synonyms=False):
         """Fetch configuration parameters for one or more Kafka resources.
@@ -125,9 +136,12 @@ class ConfigAdminMixin:
 
 
 class ConfigResourceType(IntEnum):
-    """An enumerated type of config resources"""
-    BROKER = 4
+    UNKNOWN = 0
     TOPIC = 2
+    BROKER = 4
+    BROKER_LOGGER = 8
+    CLIENT_METRICS = 16
+    GROUP = 32
 
 
 class ConfigResource:
@@ -136,7 +150,7 @@ class ConfigResource:
     Arguments:
         resource_type (ConfigResourceType): the type of kafka resource
         name (string): The name of the kafka resource
-        configs ({key : value}): A maps of config keys to values.
+        configs ([key] or {key : value}): config keys (values required to alter)
     """
     def __init__(self, resource_type, name, configs=None):
         if not isinstance(resource_type, ConfigResourceType):
@@ -146,7 +160,32 @@ class ConfigResource:
         self.configs = configs
 
     def __str__(self):
-        return "ConfigResource %s=%s" % (self.resource_type, self.name)
+        return f"ConfigResource {self.name}={self.resource_type}"
 
     def __repr__(self):
-        return "ConfigResource(%s, %s, %s)" % (self.resource_type, self.name, self.configs)
+        return f"ConfigResource({self.resource_type}, {self.name}, {self.configs})"
+
+
+class ConfigType(IntEnum):
+    UNKNOWN  = 0
+    BOOLEAN  = 1
+    STRING   = 2
+    INT      = 3
+    SHORT    = 4
+    LONG     = 5
+    DOUBLE   = 6
+    LIST     = 7
+    CLASS    = 8
+    PASSWORD = 9
+
+
+class ConfigSourceType(IntEnum):
+    UNKNOWN = 0
+    TOPIC_CONFIG = 1
+    DYNAMIC_BROKER_CONFIG = 2
+    DYNAMIC_DEFAULT_BROKER_CONFIG = 3
+    STATIC_BROKER_CONFIG = 4
+    DEFAULT_CONFIG = 5
+    DYNAMIC_BROKER_LOGGER_CONFIG = 6
+    CLIENT_METRICS_CONFIG = 7
+    GROUP_CONFIG = 8
