@@ -104,7 +104,13 @@ def run_cli(args=None):
 
 
 # Commands TODO:
+    # [acls]
+    # describe
+    # create
+    # delete
+
     # [configs]
+    # alter
     # IncrementalAlterConfigs (not supported yet)
 
     # [consumer-groups]
@@ -132,6 +138,8 @@ def run_cli(args=None):
     # delete-offsets (OffsetDelete - not supported yet)
     # alter-reassignments (AlterPartitionReassignments - not supported yet)
     # list-reassignments (ListPartitionReassignments - not supported yet)
+    # create-partitions
+    # elect-leaders
 
     # [cluster]
     # describe-features (DescribeFeatures - not supported yet)

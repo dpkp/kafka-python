@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import kafka.errors as Errors
 from kafka.errors import UnknownTopicOrPartitionError
-from kafka.protocol.admin import DeleteRecordsRequest, DescribeLogDirsRequest, ElectLeadersRequest, ElectionType
+from kafka.protocol.admin import DeleteRecordsRequest, ElectLeadersRequest, ElectionType
 from kafka.structs import TopicPartition
 
 if TYPE_CHECKING:

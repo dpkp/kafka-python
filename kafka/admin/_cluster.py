@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.admin import DescribeLogDirsRequest
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
