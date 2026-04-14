@@ -7,7 +7,6 @@ from kafka.admin.client import KafkaAdminClient
 from .cluster import ClusterSubCommand
 from .configs import ConfigsSubCommand
 from .consumer_groups import ConsumerGroupsSubCommand
-from .log_dirs import LogDirsSubCommand
 from .topics import TopicsSubCommand
 
 def main_parser():
@@ -60,7 +59,7 @@ def build_kwargs(props):
 def run_cli(args=None):
     parser = main_parser()
     subparsers = parser.add_subparsers(help='subcommands')
-    for cmd in [ClusterSubCommand, ConfigsSubCommand, LogDirsSubCommand,
+    for cmd in [ClusterSubCommand, ConfigsSubCommand,
                 TopicsSubCommand, ConsumerGroupsSubCommand]:
         cmd.add_subparser(subparsers)
     config = parser.parse_args(args)
@@ -105,38 +104,13 @@ def run_cli(args=None):
 
 
 # Commands TODO:
-    # [acls]
-    # describe
-    # create
-    # delete
-
     # [configs]
-    # alter
     # IncrementalAlterConfigs (not supported yet)
-
-    # [partitions]
-    # create
-    # alter-reassignments (AlterPartitionReassignments - not supported yet)
-    # list-reassignments (ListPartitionReassignments - not supported yet)
-
-    # [records]
-    # delete
 
     # [consumer-groups]
     # remove-members (not supported yet)
     # delete-offsets (not supported yet)
     # alter-offsets (not supported yet)
-
-    # [offsets]
-    # list (not supported yet)
-    # delete (OffsetDelete - not supported yet)
-
-    # leader-election
-    # perform_leader_election
-
-    # [log-dirs]
-    # describe (currently broken)
-    # alter (AlterReplicaLogDirs - not supported yet)
 
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
@@ -154,12 +128,14 @@ def run_cli(args=None):
 
     # [topics]
     # describe-partitions (DescribeTopicPartitions - not supported yet)
+    # list-offsets (not supported yet)
+    # delete-offsets (OffsetDelete - not supported yet)
+    # alter-reassignments (AlterPartitionReassignments - not supported yet)
+    # list-reassignments (ListPartitionReassignments - not supported yet)
 
     # [cluster]
     # describe-features (DescribeFeatures - not supported yet)
     # update-features (UpdateFeatures - not supported yet)
     # version
     # api-versions
-
-
-
+    # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
