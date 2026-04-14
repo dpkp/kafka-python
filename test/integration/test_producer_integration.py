@@ -59,7 +59,7 @@ def test_kafka_producer_proper_record_metadata(kafka_producer_factory, compressi
     maybe_skip_unsupported_compression(compression)
     if compression == 'zstd' and env_kafka_version() < (2, 1, 0):
         pytest.skip('zstd requires 2.1.0 or more')
-    producer = kafka_producer_factory(retries=5, max_block_ms=30000, compression_type=compression)
+    producer = kafka_producer_factory(max_block_ms=30000, compression_type=compression)
     magic = producer.max_usable_produce_magic(producer.config['api_version'])
 
     # record headers are supported in 0.11.0
