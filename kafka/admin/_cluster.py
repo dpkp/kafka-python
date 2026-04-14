@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class MetadataAdminMixin:
-    """Mixin providing cluster metadata methods for KafkaAdminClient."""
+class ClusterAdminMixin:
+    """Mixin providing cluster management methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
 
     async def _get_cluster_metadata(self, topics):
