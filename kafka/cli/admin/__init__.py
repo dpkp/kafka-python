@@ -8,27 +8,14 @@ from .cluster import ClusterSubCommand
 from .configs import ConfigsSubCommand
 from .consumer_groups import ConsumerGroupsSubCommand
 from .topics import TopicsSubCommand
+from ..common import add_common_cli_args
 
 def main_parser():
     parser = argparse.ArgumentParser(
         prog='python -m kafka.admin',
         description='Kafka admin client',
     )
-    parser.add_argument(
-        '-b', '--bootstrap-servers', type=str, action='append', required=True,
-        help='host:port for cluster bootstrap servers')
-    parser.add_argument(
-        '-c', '--extra-config', type=str, action='append',
-        help='additional configuration properties for admin client')
-    parser.add_argument(
-        '-l', '--log-level', type=str, default='CRITICAL',
-        help='logging level, passed to logging.basicConfig')
-    parser.add_argument(
-        '-L', '--enable-logger', type=str, action='append',
-        help='enable a specific logger. Can be provided multiple times. If not provided, all loggers are enabled')
-    parser.add_argument(
-        '-DL', '--disable-logger', type=str, action='append',
-        help='disable a specific logger. Can be provided multiple times.')
+    add_common_cli_args(parser)
     parser.add_argument(
         '-f', '--format', type=str, default='raw',
         help='output format: raw|json')
@@ -84,7 +71,13 @@ def run_cli(args=None):
     logger = logging.getLogger(__name__)
 
     kwargs = build_kwargs(config.extra_config)
-    client = KafkaAdminClient(bootstrap_servers=config.bootstrap_servers, **kwargs)
+    client = KafkaAdminClient(
+        bootstrap_servers=config.bootstrap_servers,
+        security_protocol=config.security_protocol,
+        sasl_mechanism=config.sasl_mechanism,
+        sasl_plain_username=config.sasl_user,
+        sasl_plain_password=config.sasl_password,
+        **kwargs)
     try:
         result = config.command(client, config)
         if config.format == 'raw':

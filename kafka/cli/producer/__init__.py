@@ -3,6 +3,7 @@ import logging
 import sys
 
 from kafka import KafkaProducer
+from ..common import add_common_cli_args
 
 
 def main_parser():
@@ -10,24 +11,10 @@ def main_parser():
         prog='python -m kafka.producer',
         description='Kafka console producer',
     )
-    parser.add_argument(
-        '-b', '--bootstrap-servers', type=str, action='append', required=True,
-        help='host:port for cluster bootstrap servers')
+    add_common_cli_args(parser)
     parser.add_argument(
         '-t', '--topic', type=str, required=True,
         help='publish to topic')
-    parser.add_argument(
-        '-c', '--extra-config', type=str, action='append',
-        help='additional configuration properties for kafka producer')
-    parser.add_argument(
-        '-l', '--log-level', type=str, default='CRITICAL',
-        help='logging level, passed to logging.basicConfig')
-    parser.add_argument(
-        '-L', '--enable-logger', type=str, action='append',
-        help='enable a specific logger. Can be provided multiple times. If not provided, all loggers are enabled')
-    parser.add_argument(
-        '-DL', '--disable-logger', type=str, action='append',
-        help='disable a specific logger. Can be provided multiple times.')
     parser.add_argument(
         '--encoding', type=str, default='utf-8',
         help='byte encoding for produced messages')
