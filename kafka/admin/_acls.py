@@ -260,6 +260,7 @@ class ResourceType(IntEnum):
     CLUSTER = 4
     TRANSACTIONAL_ID = 5
     DELEGATION_TOKEN = 6
+    USER = 7
 
 
 class ACLOperation(IntEnum):
