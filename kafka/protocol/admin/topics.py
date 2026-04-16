@@ -1,3 +1,5 @@
+from enum import IntEnum
+
 from ..api_message import ApiMessage
 
 
@@ -30,6 +32,14 @@ class ListPartitionReassignmentsResponse(ApiMessage): pass
 class DeleteRecordsRequest(ApiMessage): pass
 class DeleteRecordsResponse(ApiMessage): pass
 
+class ElectLeadersRequest(ApiMessage): pass
+class ElectLeadersResponse(ApiMessage): pass
+
+class ElectionType(IntEnum):
+    """Leader election type"""
+    PREFERRED = 0
+    UNCLEAN = 1
+
 
 __all__ = [
     'CreateTopicsRequest', 'CreateTopicsResponse',
@@ -39,4 +49,5 @@ __all__ = [
     'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse',
     'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse',
     'DeleteRecordsRequest', 'DeleteRecordsResponse',
+    'ElectLeadersRequest', 'ElectLeadersResponse', 'ElectionType',
 ]
