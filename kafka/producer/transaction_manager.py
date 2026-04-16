@@ -918,10 +918,12 @@ class InitProducerIdHandler(TxnRequestHandler):
                      "falling back to a fresh producer id")
             self.transaction_manager._restart_epoch_bump_without_producer_id(
                 self.request.transaction_timeout_ms, self._result)
-        elif error_type is Errors.ProducerFencedError:
+        elif error_type in (Errors.ProducerFencedError, Errors.InvalidProducerEpochError):
             # Another producer instance has taken over this transactional_id.
-            # Fatal--the application must rebuild the producer.
-            self.fatal_error(error_type())
+            # Fatal--the application must rebuild the producer. Mirrors the
+            # Java client, which normalizes INVALID_PRODUCER_EPOCH to
+            # PRODUCER_FENCED on the non-bump InitProducerId path.
+            self.fatal_error(Errors.ProducerFencedError())
         elif error_type is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error_type())
         else:
@@ -969,8 +971,10 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
                     self.maybe_override_retry_backoff_ms()
                 self.reenqueue()
                 return
-            elif error_type is Errors.InvalidProducerEpochError:
-                self.fatal_error(error_type())
+            elif error_type in (Errors.InvalidProducerEpochError, Errors.ProducerFencedError):
+                # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
+                # on the txn-coordinator RPC paths (KIP-360).
+                self.fatal_error(Errors.ProducerFencedError())
                 return
             elif error_type is Errors.TransactionalIdAuthorizationFailedError:
                 self.fatal_error(error_type())
@@ -1104,8 +1108,10 @@ class EndTxnHandler(TxnRequestHandler):
             if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
                 self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
             self.reenqueue()
-        elif error_type is Errors.InvalidProducerEpochError:
-            self.fatal_error(error_type())
+        elif error_type in (Errors.InvalidProducerEpochError, Errors.ProducerFencedError):
+            # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
+            # on the txn-coordinator RPC paths (KIP-360).
+            self.fatal_error(Errors.ProducerFencedError())
         elif error_type is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error_type())
         elif error_type is Errors.InvalidTxnStateError:
@@ -1155,7 +1161,11 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             self.reenqueue()
         elif error_type in (Errors.CoordinatorLoadInProgressError, Errors.ConcurrentTransactionsError):
             self.reenqueue()
-        elif error_type in (Errors.InvalidProducerEpochError, Errors.TransactionalIdAuthorizationFailedError):
+        elif error_type in (Errors.InvalidProducerEpochError, Errors.ProducerFencedError):
+            # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
+            # on the txn-coordinator RPC paths (KIP-360).
+            self.fatal_error(Errors.ProducerFencedError())
+        elif error_type is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error_type())
         elif error_type is Errors.GroupAuthorizationFailedError:
             self.abortable_error(error_type(self.consumer_group_id))
@@ -1226,8 +1236,12 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
             elif error_type is Errors.GroupAuthorizationFailedError:
                 self.abortable_error(error_type(self.consumer_group_id))
                 return
+            elif error_type in (Errors.InvalidProducerEpochError, Errors.ProducerFencedError):
+                # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
+                # on the txn-coordinator RPC paths (KIP-360).
+                self.fatal_error(Errors.ProducerFencedError())
+                return
             elif error_type in (Errors.TransactionalIdAuthorizationFailedError,
-                                Errors.InvalidProducerEpochError,
                                 Errors.UnsupportedForMessageFormatError):
                 self.fatal_error(error_type())
                 return

@@ -221,11 +221,15 @@ class TestInitProducerIdHandlerMockBroker:
         assert handler._result.is_done
         assert not handler._result.failed
 
-    @pytest.mark.parametrize("error", [
-        Errors.ProducerFencedError,
-        Errors.TransactionalIdAuthorizationFailedError,
+    @pytest.mark.parametrize("error,expected", [
+        (Errors.ProducerFencedError, Errors.ProducerFencedError),
+        # Java client normalizes non-bump INVALID_PRODUCER_EPOCH to
+        # PRODUCER_FENCED on the InitProducerId path (KIP-360).
+        (Errors.InvalidProducerEpochError, Errors.ProducerFencedError),
+        (Errors.TransactionalIdAuthorizationFailedError,
+         Errors.TransactionalIdAuthorizationFailedError),
     ])
-    def test_fatal_error(self, broker, client, error):
+    def test_fatal_error(self, broker, client, error, expected):
         tm = _make_manager(client)
         tm._current_state = TransactionState.INITIALIZING
         handler = self._enqueue_init(tm)
@@ -239,7 +243,7 @@ class TestInitProducerIdHandlerMockBroker:
 
         assert tm._current_state == TransactionState.FATAL_ERROR
         assert tm.has_fatal_error()
-        assert isinstance(tm.last_error, error)
+        assert isinstance(tm.last_error, expected)
         assert handler._result.failed
         assert handler not in _pending_handlers(tm)
 
@@ -394,13 +398,17 @@ class TestAddPartitionsToTxnHandlerMockBroker:
         assert handler not in _pending_handlers(tm)
         assert handler._result.is_done and not handler._result.failed
 
-    @pytest.mark.parametrize("error", [
-        Errors.InvalidProducerEpochError,
-        Errors.TransactionalIdAuthorizationFailedError,
-        Errors.InvalidProducerIdMappingError,
-        Errors.InvalidTxnStateError,
+    @pytest.mark.parametrize("error,expected", [
+        # Java client normalizes INVALID_PRODUCER_EPOCH and PRODUCER_FENCED to
+        # PRODUCER_FENCED on the txn-coordinator RPC paths (KIP-360).
+        (Errors.InvalidProducerEpochError, Errors.ProducerFencedError),
+        (Errors.ProducerFencedError, Errors.ProducerFencedError),
+        (Errors.TransactionalIdAuthorizationFailedError,
+         Errors.TransactionalIdAuthorizationFailedError),
+        (Errors.InvalidProducerIdMappingError, Errors.KafkaError),
+        (Errors.InvalidTxnStateError, Errors.KafkaError),
     ])
-    def test_fatal_partition_error(self, broker, client, error):
+    def test_fatal_partition_error(self, broker, client, error, expected):
         tm = _make_manager(client)
         handler, tp = self._enqueue_add_partitions(tm)
 
@@ -412,6 +420,7 @@ class TestAddPartitionsToTxnHandlerMockBroker:
 
         assert tm._current_state == TransactionState.FATAL_ERROR
         assert tm.has_fatal_error()
+        assert isinstance(tm.last_error, expected)
         assert handler._result.failed
         assert handler not in _pending_handlers(tm)
 
@@ -625,12 +634,16 @@ class TestEndTxnHandlerMockBroker:
         assert not tm._partitions_in_transaction
         assert handler._result.is_done and not handler._result.failed
 
-    @pytest.mark.parametrize("error", [
-        Errors.InvalidProducerEpochError,
-        Errors.TransactionalIdAuthorizationFailedError,
-        Errors.InvalidTxnStateError,
+    @pytest.mark.parametrize("error,expected", [
+        # Java client normalizes INVALID_PRODUCER_EPOCH and PRODUCER_FENCED to
+        # PRODUCER_FENCED on the txn-coordinator RPC paths (KIP-360).
+        (Errors.InvalidProducerEpochError, Errors.ProducerFencedError),
+        (Errors.ProducerFencedError, Errors.ProducerFencedError),
+        (Errors.TransactionalIdAuthorizationFailedError,
+         Errors.TransactionalIdAuthorizationFailedError),
+        (Errors.InvalidTxnStateError, Errors.InvalidTxnStateError),
     ])
-    def test_fatal_error(self, broker, client, error):
+    def test_fatal_error(self, broker, client, error, expected):
         tm = _make_manager(client)
         handler = self._enqueue_end_txn(tm)
 
@@ -641,7 +654,7 @@ class TestEndTxnHandlerMockBroker:
 
         assert tm._current_state == TransactionState.FATAL_ERROR
         assert tm.has_fatal_error()
-        assert isinstance(tm.last_error, error)
+        assert isinstance(tm.last_error, expected)
         assert handler._result.failed
         assert handler not in _pending_handlers(tm)
 
@@ -736,11 +749,15 @@ class TestAddOffsetsToTxnHandlerMockBroker:
         assert not handler._result.is_done
         assert tm._pending_txn_offset_commits == offsets
 
-    @pytest.mark.parametrize("error", [
-        Errors.InvalidProducerEpochError,
-        Errors.TransactionalIdAuthorizationFailedError,
+    @pytest.mark.parametrize("error,expected", [
+        # Java client normalizes INVALID_PRODUCER_EPOCH and PRODUCER_FENCED to
+        # PRODUCER_FENCED on the txn-coordinator RPC paths (KIP-360).
+        (Errors.InvalidProducerEpochError, Errors.ProducerFencedError),
+        (Errors.ProducerFencedError, Errors.ProducerFencedError),
+        (Errors.TransactionalIdAuthorizationFailedError,
+         Errors.TransactionalIdAuthorizationFailedError),
     ])
-    def test_fatal_error(self, broker, client, error):
+    def test_fatal_error(self, broker, client, error, expected):
         tm = _make_manager(client)
         handler, _, _ = self._enqueue_add_offsets(tm)
 
@@ -751,7 +768,7 @@ class TestAddOffsetsToTxnHandlerMockBroker:
         _poll_for_future(client, future)
 
         assert tm._current_state == TransactionState.FATAL_ERROR
-        assert isinstance(tm.last_error, error)
+        assert isinstance(tm.last_error, expected)
         assert handler._result.failed
 
     def test_group_authz_failed_is_abortable(self, broker, client):
@@ -872,12 +889,17 @@ class TestTxnOffsetCommitHandlerMockBroker:
         assert handler._result.is_done and not handler._result.failed
         assert tp not in tm._pending_txn_offset_commits
 
-    @pytest.mark.parametrize("error", [
-        Errors.TransactionalIdAuthorizationFailedError,
-        Errors.InvalidProducerEpochError,
-        Errors.UnsupportedForMessageFormatError,
+    @pytest.mark.parametrize("error,expected", [
+        # Java client normalizes INVALID_PRODUCER_EPOCH and PRODUCER_FENCED to
+        # PRODUCER_FENCED on the txn-coordinator RPC paths (KIP-360).
+        (Errors.InvalidProducerEpochError, Errors.ProducerFencedError),
+        (Errors.ProducerFencedError, Errors.ProducerFencedError),
+        (Errors.TransactionalIdAuthorizationFailedError,
+         Errors.TransactionalIdAuthorizationFailedError),
+        (Errors.UnsupportedForMessageFormatError,
+         Errors.UnsupportedForMessageFormatError),
     ])
-    def test_fatal_partition_error(self, broker, client, error):
+    def test_fatal_partition_error(self, broker, client, error, expected):
         tm = _make_manager(client)
         handler, tp = self._enqueue_offset_commit(tm)
 
@@ -889,7 +911,7 @@ class TestTxnOffsetCommitHandlerMockBroker:
         _poll_for_future(client, future)
 
         assert tm._current_state == TransactionState.FATAL_ERROR
-        assert isinstance(tm.last_error, error)
+        assert isinstance(tm.last_error, expected)
         assert handler._result.failed
 
     def test_group_authz_failed_is_abortable(self, broker, client):
