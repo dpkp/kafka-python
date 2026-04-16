@@ -110,7 +110,8 @@ class TopicAdminMixin:
             wait_for_metadata (bool, optional): If True, block until each new topic is visible
                 in broker metadata with a leader assigned for every partition. Default: False
 
-        Returns: CreateTopicResponse
+        Returns:
+            dict of CreateTopicResponse key/vals
         """
         if validate_only and wait_for_metadata:
             raise ValueError('validate_only and wait_for_metadata are mutually exclusive')
@@ -139,7 +140,9 @@ class TopicAdminMixin:
         response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
         if wait_for_metadata:
             self.wait_for_topics([new_topic.name for new_topic in request.topics])
-        return response
+        result = response.to_dict()
+        result.pop('throttle_time_ms', None)
+        return result
 
     def wait_for_topics(self, topic_names, timeout_ms=10000):
         """Block until each of the given topics is ready to use.
@@ -225,7 +228,7 @@ class TopicAdminMixin:
             raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
 
         Returns:
-            Appropriate version of DeleteTopicsResponse class.
+            dict of DeleteTopicsResponse key/vals (version-dependent)
         """
         timeout_ms = self._validate_timeout(timeout_ms)
         _Topic = DeleteTopicsRequest.DeleteTopicState
@@ -236,7 +239,11 @@ class TopicAdminMixin:
         def response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response.error_code)
-        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+        response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+        result = response.to_dict()
+        result.pop('throttle_time_ms', None)
+        result['topics'] = result.pop('responses')
+        return result
 
     @staticmethod
     def _process_create_partitions_input(topic_partitions):

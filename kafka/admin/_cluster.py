@@ -44,6 +44,7 @@ class ClusterAdminMixin:
         """
         metadata = self._manager.run(self._get_cluster_metadata, [])
         metadata.pop('topics')
+        metadata.pop('throttle_time_ms', None)
         return metadata
 
     async def _async_describe_log_dirs(self, topic_partitions=(), brokers=None):
