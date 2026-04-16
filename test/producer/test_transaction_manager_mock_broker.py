@@ -221,6 +221,73 @@ class TestInitProducerIdHandlerMockBroker:
         assert handler._result.is_done
         assert not handler._result.failed
 
+    @pytest.mark.parametrize("error", [
+        Errors.ProducerFencedError,
+        Errors.TransactionalIdAuthorizationFailedError,
+    ])
+    def test_fatal_error(self, broker, client, error):
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.INITIALIZING
+        handler = self._enqueue_init(tm)
+
+        broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+            throttle_time_ms=0, error_code=error.errno,
+            producer_id=-1, producer_epoch=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert tm.has_fatal_error()
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+        assert handler not in _pending_handlers(tm)
+
+    def test_unknown_error_is_fatal(self, broker, client):
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.INITIALIZING
+        handler = self._enqueue_init(tm)
+
+        # UnsupportedForMessageFormatError is not retriable, not in any of
+        # the handler's named-error branches -- falls through to the catch-all
+        # fatal_error.
+        broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+            throttle_time_ms=0,
+            error_code=Errors.UnsupportedForMessageFormatError.errno,
+            producer_id=-1, producer_epoch=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
+
+    def test_bump_invalid_epoch_falls_back_to_fresh_init(self, broker, client):
+        tm = _make_manager(client)
+        # Bump from READY: bump_producer_id_and_epoch enqueues an epoch-bump
+        # InitProducerIdHandler and transitions to BUMPING_PRODUCER_EPOCH.
+        tm.bump_producer_id_and_epoch()
+        assert tm.is_bumping_epoch()
+
+        broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+            throttle_time_ms=0,
+            error_code=Errors.InvalidProducerEpochError.errno,
+            producer_id=-1, producer_epoch=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        # INVALID_PRODUCER_EPOCH during a bump means our producer_id/epoch
+        # are stale -- fall back to a fresh (non-bump) init. Manager stays
+        # in BUMPING_PRODUCER_EPOCH; producer_id is reset; a new non-bump
+        # InitProducerIdHandler is enqueued sharing the original result.
+        assert tm.is_bumping_epoch()
+        assert tm.producer_id_and_epoch.producer_id == -1
+        fallbacks = [h for h in _pending_handlers(tm)
+                     if isinstance(h, InitProducerIdHandler)]
+        assert len(fallbacks) == 1
+        assert fallbacks[0]._is_epoch_bump is False
+
 
 # ---------------------------------------------------------------------------
 # AddPartitionsToTxnHandler
@@ -327,6 +394,61 @@ class TestAddPartitionsToTxnHandlerMockBroker:
         assert handler not in _pending_handlers(tm)
         assert handler._result.is_done and not handler._result.failed
 
+    @pytest.mark.parametrize("error", [
+        Errors.InvalidProducerEpochError,
+        Errors.TransactionalIdAuthorizationFailedError,
+        Errors.InvalidProducerIdMappingError,
+        Errors.InvalidTxnStateError,
+    ])
+    def test_fatal_partition_error(self, broker, client, error):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_add_partitions(tm)
+
+        broker.respond(AddPartitionsToTxnResponse,
+                       self._response(tp.topic, tp.partition, error.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert tm.has_fatal_error()
+        assert handler._result.failed
+        assert handler not in _pending_handlers(tm)
+
+    def test_topic_auth_failed_is_abortable(self, broker, client):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_add_partitions(tm)
+
+        broker.respond(AddPartitionsToTxnResponse,
+                       self._response(tp.topic, tp.partition,
+                                      Errors.TopicAuthorizationFailedError.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        # Abortable: application can abort the transaction and continue.
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert tm.has_abortable_error()
+        assert isinstance(tm.last_error, Errors.TopicAuthorizationFailedError)
+        # Handler reports the unauthorized topic via the error's args.
+        assert tp.topic in tm.last_error.args[0]
+        assert handler._result.failed
+
+    def test_operation_not_attempted_is_abortable(self, broker, client):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_add_partitions(tm)
+
+        broker.respond(AddPartitionsToTxnResponse,
+                       self._response(tp.topic, tp.partition,
+                                      Errors.OperationNotAttemptedError.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        # has_partition_errors path -> abortable with a generic KafkaError
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert handler._result.failed
+
 
 # ---------------------------------------------------------------------------
 # FindCoordinatorHandler
@@ -381,6 +503,57 @@ class TestFindCoordinatorHandlerMockBroker:
 
         assert tm._transaction_coordinator is not None
         assert handler._result.is_done and not handler._result.failed
+
+    def test_transactional_id_authz_failed_is_fatal(self, broker, client):
+        tm = _make_manager(client, seed_coord=False)
+        handler = FindCoordinatorHandler(tm, 'transaction', _TXN_ID)
+        tm._enqueue_request(handler)
+
+        broker.respond(FindCoordinatorResponse, self._response(
+            error_code=Errors.TransactionalIdAuthorizationFailedError.errno,
+            node_id=-1, host='', port=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
+
+    def test_group_authz_failed_is_abortable(self, broker, client):
+        # Group-coordinator lookups happen inside an active transaction
+        # (via send_offsets_to_transaction), so GROUP_AUTHORIZATION_FAILED
+        # aborts the transaction rather than being fatal.
+        tm = _make_manager(client, seed_coord=False)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        handler = FindCoordinatorHandler(tm, 'group', 'my-group')
+        tm._enqueue_request(handler)
+
+        broker.respond(FindCoordinatorResponse, self._response(
+            error_code=Errors.GroupAuthorizationFailedError.errno,
+            node_id=-1, host='', port=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, Errors.GroupAuthorizationFailedError)
+        assert handler._result.failed
+
+    def test_unknown_error_is_fatal(self, broker, client):
+        tm = _make_manager(client, seed_coord=False)
+        handler = FindCoordinatorHandler(tm, 'transaction', _TXN_ID)
+        tm._enqueue_request(handler)
+
+        # InvalidRequestError is non-retriable and not in any named branch.
+        broker.respond(FindCoordinatorResponse, self._response(
+            error_code=Errors.InvalidRequestError.errno,
+            node_id=-1, host='', port=-1))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +624,39 @@ class TestEndTxnHandlerMockBroker:
         assert not tm._transaction_started
         assert not tm._partitions_in_transaction
         assert handler._result.is_done and not handler._result.failed
+
+    @pytest.mark.parametrize("error", [
+        Errors.InvalidProducerEpochError,
+        Errors.TransactionalIdAuthorizationFailedError,
+        Errors.InvalidTxnStateError,
+    ])
+    def test_fatal_error(self, broker, client, error):
+        tm = _make_manager(client)
+        handler = self._enqueue_end_txn(tm)
+
+        broker.respond(EndTxnResponse, self._response(error_code=error.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert tm.has_fatal_error()
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+        assert handler not in _pending_handlers(tm)
+
+    def test_unknown_error_is_fatal(self, broker, client):
+        tm = _make_manager(client)
+        handler = self._enqueue_end_txn(tm)
+
+        broker.respond(EndTxnResponse,
+                       self._response(Errors.InvalidRequestError.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +735,51 @@ class TestAddOffsetsToTxnHandlerMockBroker:
         # AddOffsets result is not done yet--it completes when the commit does.
         assert not handler._result.is_done
         assert tm._pending_txn_offset_commits == offsets
+
+    @pytest.mark.parametrize("error", [
+        Errors.InvalidProducerEpochError,
+        Errors.TransactionalIdAuthorizationFailedError,
+    ])
+    def test_fatal_error(self, broker, client, error):
+        tm = _make_manager(client)
+        handler, _, _ = self._enqueue_add_offsets(tm)
+
+        broker.respond(AddOffsetsToTxnResponse,
+                       self._response(error_code=error.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+
+    def test_group_authz_failed_is_abortable(self, broker, client):
+        tm = _make_manager(client)
+        handler, group_id, _ = self._enqueue_add_offsets(tm)
+
+        broker.respond(AddOffsetsToTxnResponse, self._response(
+            error_code=Errors.GroupAuthorizationFailedError.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, Errors.GroupAuthorizationFailedError)
+        assert handler._result.failed
+
+    def test_unknown_error_is_fatal(self, broker, client):
+        tm = _make_manager(client)
+        handler, _, _ = self._enqueue_add_offsets(tm)
+
+        broker.respond(AddOffsetsToTxnResponse, self._response(
+            error_code=Errors.InvalidRequestError.errno))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
 
 
 # ---------------------------------------------------------------------------
@@ -620,6 +871,57 @@ class TestTxnOffsetCommitHandlerMockBroker:
 
         assert handler._result.is_done and not handler._result.failed
         assert tp not in tm._pending_txn_offset_commits
+
+    @pytest.mark.parametrize("error", [
+        Errors.TransactionalIdAuthorizationFailedError,
+        Errors.InvalidProducerEpochError,
+        Errors.UnsupportedForMessageFormatError,
+    ])
+    def test_fatal_partition_error(self, broker, client, error):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_offset_commit(tm)
+
+        broker.respond(
+            TxnOffsetCommitResponse,
+            self._response({(tp.topic, tp.partition): error.errno}))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+
+    def test_group_authz_failed_is_abortable(self, broker, client):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_offset_commit(tm)
+
+        broker.respond(
+            TxnOffsetCommitResponse,
+            self._response({(tp.topic, tp.partition):
+                            Errors.GroupAuthorizationFailedError.errno}))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, Errors.GroupAuthorizationFailedError)
+        assert handler._result.failed
+
+    def test_unknown_partition_error_is_fatal(self, broker, client):
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_offset_commit(tm)
+
+        broker.respond(
+            TxnOffsetCommitResponse,
+            self._response({(tp.topic, tp.partition):
+                            Errors.InvalidRequestError.errno}))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert handler._result.failed
 
     def test_partial_retriable_retries_only_failed(self, broker, client):
         """If one partition succeeds and another is retriable, the retry
