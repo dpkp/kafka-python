@@ -727,10 +727,10 @@ def get_api_versions():
         zk.close()
 
 
-def run_brokers():
+def run_brokers(args=()):
     logging.basicConfig(level=logging.ERROR)
     params = {}
-    if len(sys.argv) == 3 and sys.argv[2] == '--sasl':
+    if len(args) == 1 and args[0] == '--sasl':
         params['transport'] = "SASL_PLAINTEXT"
         params['sasl_mechanism'] = 'SCRAM-SHA-512'
     k = KafkaFixture.instance(0, **params)
@@ -756,7 +756,7 @@ if __name__ == '__main__':
     if cmd == 'get_api_versions':
         get_api_versions()
     elif cmd == 'kafka':
-        run_brokers()
+        run_brokers(sys.argv[2:])
     else:
         print("Unknown cmd: %s", cmd)
         exit(1)
