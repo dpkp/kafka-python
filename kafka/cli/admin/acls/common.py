@@ -1,6 +1,6 @@
 from kafka.admin._acls import (
-    ACLFilter, ACLOperation, ACLPermissionType, ACLResourcePatternType,
-    ResourceType, ResourcePatternFilter
+    ACL, ACLFilter, ACLOperation, ACLPermissionType, ACLResourcePatternType,
+    ResourceType, ResourcePattern, ResourcePatternFilter
 )
 
 

@@ -11,7 +11,7 @@ class CreateACLs:
 
     @classmethod
     def command(cls, client, args):
-        acls = acl_from_args(args)
+        acl = acl_from_args(args)
         result = client.create_acls([acl])
         return {
             'succeeded': [repr(a) for a in result['succeeded']],
