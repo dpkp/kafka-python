@@ -67,12 +67,6 @@ class ACLAdminMixin:
                 permission_type=acl_filter.permission_type
             )
         response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
-        error_type = Errors.for_code(response.error_code)
-        if error_type is not Errors.NoError:
-            raise error_type(
-                "Request '{}' failed with response '{}'."
-                    .format(request, response))
-
         return self._convert_describe_acls_response_to_acls(response)
 
     @staticmethod
@@ -88,9 +82,7 @@ class ACLAdminMixin:
         """
         error_type = Errors.for_code(describe_response.error_code)
         if error_type is not Errors.NoError:
-            raise error_type(
-                "Request '{}' failed with response '{}'."
-                    .format("DescribeAclsRequest", describe_response))
+            raise error_type(describe_response.error_message)
         acl_list = []
         for resource in describe_response.resources:
             for acl in resource.acls:
