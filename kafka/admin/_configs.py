@@ -26,41 +26,43 @@ class ConfigAdminMixin:
     config: dict
 
     @staticmethod
-    def _convert_describe_config_resource_request(config_resource):
-        return (
-            config_resource.resource_type,
-            config_resource.name,
-            list(config_resource.configs.keys()) if isinstance(config_resource.configs, dict) else config_resource.configs
-        )
+    def _convert_config_resource(config_resource, key_only=True):
+        if key_only:
+            values = list(config_resource.configs.keys()) if isinstance(config_resource.configs, dict) else config_resource.configs
+        else:
+            assert isinstance(config_resource.configs, dict)
+            values = list(config_resource.configs.items())
+        return (config_resource.resource_type, config_resource.name, values)
 
-    async def _async_describe_configs(self, config_resources, include_synonyms=False):
+    def _group_config_resources(self, config_resources, key_only=True):
         broker_resources = defaultdict(list)
         other_resources = []
-
         for config_resource in config_resources:
             if config_resource.resource_type in (ConfigResourceType.BROKER, ConfigResourceType.BROKER_LOGGER):
                 try:
                     broker_id = int(config_resource.name)
                 except ValueError:
                     raise ValueError("Broker resource names must be an integer or a string represented integer")
-                broker_resources[broker_id].append(self._convert_describe_config_resource_request(config_resource))
+                broker_resources[broker_id].append(self._convert_config_resource(config_resource, key_only=key_only))
             else:
-                other_resources.append(self._convert_describe_config_resource_request(config_resource))
+                other_resources.append(self._convert_config_resource(config_resource, key_only=key_only))
+        return broker_resources, other_resources
 
-        version = self._client.api_version(DescribeConfigsRequest, max_version=2)
-        if include_synonyms and version == 0:
-            raise IncompatibleBrokerVersion(
-                "include_synonyms requires DescribeConfigsRequest >= v1, which is not supported by Kafka {}."
-                    .format(self._manager.broker_version))
-
+    async def _async_describe_configs(self, config_resources, include_synonyms=False):
+        min_version = 1 if include_synonyms else 0
+        broker_resources, other_resources = self._group_config_resources(config_resources, key_only=True)
         responses = []
         for broker_id, resources in broker_resources.items():
             request = DescribeConfigsRequest(
                 resources=resources,
-                include_synonyms=include_synonyms)
+                include_synonyms=include_synonyms,
+                min_version=min_version)
             responses.append(await self._manager.send(request, node_id=broker_id))
         if other_resources:
-            request = DescribeConfigsRequest(resources=other_resources, include_synonyms=include_synonyms)
+            request = DescribeConfigsRequest(
+                resources=other_resources,
+                include_synonyms=include_synonyms,
+                min_version=min_version)
             responses.append(await self._manager.send(request))
 
         ret = defaultdict(dict)
@@ -100,31 +102,23 @@ class ConfigAdminMixin:
         """
         return self._manager.run(self._async_describe_configs, config_resources, include_synonyms)
 
-    @staticmethod
-    def _convert_alter_config_resource_request(config_resource):
-        return (
-            config_resource.resource_type,
-            config_resource.name,
-            [
-                (config_key, config_value) for config_key, config_value in config_resource.configs.items()
-            ]
-        )
+    async def _async_alter_configs(self, config_resources, validate_only=False):
+        broker_resources, other_resources = self._group_config_resources(config_resources, key_only=False)
+        responses = []
+        for broker_id, resources in broker_resources.items():
+            request = AlterConfigsRequest(
+                resources=resources,
+                validate_only=validate_only)
+            responses.append(await self._manager.send(request, node_id=broker_id))
+        if other_resources:
+            request = AlterConfigsRequest(
+                resources=other_resources,
+                validate_only=validate_only)
+            responses.append(await self._manager.send(request))
+        return responses
 
-    async def _async_alter_configs(self, config_resources):
-        version = self._client.api_version(AlterConfigsRequest, max_version=1)
-        request = AlterConfigsRequest[version](
-            resources=[self._convert_alter_config_resource_request(config_resource) for config_resource in config_resources]
-        )
-        # TODO: BROKER resources should be sent to the specific broker
-        return await self._manager.send(request)
-
-    def alter_configs(self, config_resources):
+    def alter_configs(self, config_resources, validate_only=False):
         """Alter configuration parameters of one or more Kafka resources.
-
-        Warning:
-            This is currently broken for BROKER resources because those must be
-            sent to that specific broker, versus this always picks the
-            least-loaded node.
 
         Arguments:
             config_resources: A list of ConfigResource objects.
@@ -132,7 +126,7 @@ class ConfigAdminMixin:
         Returns:
             Appropriate version of AlterConfigsResponse class.
         """
-        return self._manager.run(self._async_alter_configs, config_resources)
+        return self._manager.run(self._async_alter_configs, config_resources, validate_only)
 
 
 class ConfigResourceType(IntEnum):
