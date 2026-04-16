@@ -788,7 +788,7 @@ class TxnRequestHandler(metaclass=abc.ABCMeta):
         return self.transaction_manager.producer_id_and_epoch.epoch
 
     def fatal_error(self, exc):
-        log.error(f'Fatal Error handling request {self.request.name if self.request else 'none'}: {exc}')
+        log.error(f'Fatal Error handling request {self.request.name if self.request else "none"}: {exc}')
         self.transaction_manager.transition_to_fatal_error(exc)
         self._result.done(error=exc)
 
