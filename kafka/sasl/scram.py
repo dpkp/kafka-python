@@ -17,8 +17,8 @@ def xor_bytes(left, right):
 
 class SaslMechanismScram(SaslMechanism):
     def __init__(self, **config):
-        assert 'sasl_plain_username' in config, 'sasl_plain_username required for SCRAM sasl'
-        assert 'sasl_plain_password' in config, 'sasl_plain_password required for SCRAM sasl'
+        assert config.get('sasl_plain_username', ''), 'sasl_plain_username required for SCRAM sasl'
+        assert config.get('sasl_plain_password', ''), 'sasl_plain_password required for SCRAM sasl'
         assert config.get('sasl_mechanism', '') in ScramClient.MECHANISMS, 'Unrecognized SCRAM mechanism'
         if config.get('security_protocol', '') == 'SASL_PLAINTEXT':
             log.warning('Exchanging credentials in the clear during Sasl Authentication')

@@ -389,6 +389,7 @@ class KafkaConnection:
 
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
+            log.error('%s: SaslHandshake failed: %s', self, error_type.__name__)
             self.close(error_type())
             return
 
@@ -399,8 +400,12 @@ class KafkaConnection:
             return
 
         # Step 2: SASL authentication exchange
-        mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
-            host=self.transport.getPeer()[0], **self.config)
+        try:
+            mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
+                host=self.transport.getPeer()[0], **self.config)
+        except Exception as exc:
+            self.close(exc)
+            return
 
         while not mechanism.is_done():
             token = mechanism.auth_bytes()
