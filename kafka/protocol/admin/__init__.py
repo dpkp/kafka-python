@@ -16,4 +16,8 @@ from .groups import __all__ as groups_all
 from .topics import *
 from .topics import __all__ as topics_all
 
-__all__ = acl_all + client_quotas_all + cluster_all + configs_all + groups_all + topics_all
+from .users import *
+from .users import __all__ as users_all
+
+
+__all__ = acl_all + client_quotas_all + cluster_all + configs_all + groups_all + topics_all + users_all

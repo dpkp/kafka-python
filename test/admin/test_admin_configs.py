@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.admin import KafkaAdminClient, ConfigResource, ConfigResourceType
+from kafka.admin import ConfigResource, ConfigResourceType
 
 
 def test_config_resource():

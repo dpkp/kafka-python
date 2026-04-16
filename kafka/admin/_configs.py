@@ -11,7 +11,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from kafka.errors import IncompatibleBrokerVersion
-from kafka.protocol.admin import AlterConfigsRequest, DescribeConfigsRequest
+from kafka.protocol.admin import (
+    AlterConfigsRequest,
+    DescribeConfigsRequest,
+)
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
