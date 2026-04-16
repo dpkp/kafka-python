@@ -9,6 +9,7 @@ from kafka.admin import (
 from kafka.errors import IllegalArgumentError
 from kafka.protocol.admin import (
     AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse,
+    DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse,
 )
 
 from test.mock_broker import MockBroker
@@ -199,3 +200,152 @@ class TestAlterUserScramCredentialsMockBroker:
         assert ups.salt == salt
         assert ups.salted_password == hashlib.pbkdf2_hmac(
             'sha512', b'secret', salt, 2048)
+
+
+class TestDescribeUserScramCredentialsMockBroker:
+
+    def test_returns_credentials_per_user(self):
+        broker = MockBroker()
+        Result = DescribeUserScramCredentialsResponse.DescribeUserScramCredentialsResult
+        CI = Result.CredentialInfo
+        broker.respond(
+            DescribeUserScramCredentialsRequest,
+            DescribeUserScramCredentialsResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                results=[
+                    Result(user='alice', error_code=0, error_message=None,
+                           credential_infos=[
+                               CI(mechanism=1, iterations=4096),
+                               CI(mechanism=2, iterations=8192),
+                           ]),
+                    Result(user='bob', error_code=0, error_message=None,
+                           credential_infos=[CI(mechanism=2, iterations=16384)]),
+                ],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.describe_user_scram_credentials(['alice', 'bob'])
+        finally:
+            admin.close()
+
+        assert result == {
+            'alice': {
+                'error': None,
+                'credential_infos': [
+                    {'mechanism': ScramMechanism.SCRAM_SHA_256, 'iterations': 4096},
+                    {'mechanism': ScramMechanism.SCRAM_SHA_512, 'iterations': 8192},
+                ],
+            },
+            'bob': {
+                'error': None,
+                'credential_infos': [
+                    {'mechanism': ScramMechanism.SCRAM_SHA_512, 'iterations': 16384},
+                ],
+            },
+        }
+
+    def test_per_user_error_reported(self):
+        broker = MockBroker()
+        Result = DescribeUserScramCredentialsResponse.DescribeUserScramCredentialsResult
+        broker.respond(
+            DescribeUserScramCredentialsRequest,
+            DescribeUserScramCredentialsResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                results=[
+                    Result(user='missing', error_code=68,
+                           error_message='resource not found',
+                           credential_infos=[]),
+                ],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.describe_user_scram_credentials(['missing'])
+        finally:
+            admin.close()
+
+        assert result == {
+            'missing': {
+                'error': 'resource not found',
+                'credential_infos': [],
+            },
+        }
+
+    def test_top_level_error_raises(self):
+        broker = MockBroker()
+        broker.respond(
+            DescribeUserScramCredentialsRequest,
+            DescribeUserScramCredentialsResponse(
+                throttle_time_ms=0,
+                error_code=58,  # UnsupportedSaslMechanismError
+                error_message='SCRAM not configured',
+                results=[],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(Exception) as exc_info:
+                admin.describe_user_scram_credentials(['alice'])
+            assert 'SCRAM not configured' in str(exc_info.value)
+        finally:
+            admin.close()
+
+    def test_describe_all_users_sends_null(self):
+        broker = MockBroker()
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = DescribeUserScramCredentialsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['request'] = decoded
+            return DescribeUserScramCredentialsResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                results=[],
+            )
+
+        broker.respond_fn(DescribeUserScramCredentialsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.describe_user_scram_credentials()
+        finally:
+            admin.close()
+
+        assert result == {}
+        assert captured['request'].users is None
+
+    def test_describe_specific_users_encodes_names(self):
+        broker = MockBroker()
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = DescribeUserScramCredentialsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['request'] = decoded
+            return DescribeUserScramCredentialsResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                results=[],
+            )
+
+        broker.respond_fn(DescribeUserScramCredentialsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.describe_user_scram_credentials(['alice', 'bob'])
+        finally:
+            admin.close()
+
+        request_users = captured['request'].users
+        assert [u.name for u in request_users] == ['alice', 'bob']

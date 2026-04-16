@@ -12,9 +12,11 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+import kafka.errors as Errors
 from kafka.errors import IllegalArgumentError
 from kafka.protocol.admin import (
     AlterUserScramCredentialsRequest,
+    DescribeUserScramCredentialsRequest,
 )
 
 if TYPE_CHECKING:
@@ -69,6 +71,54 @@ class UserAdminMixin:
             A dict mapping user name -> error message (or None on success).
         """
         return self._manager.run(self._async_alter_user_scram_credentials, alterations)
+
+    async def _async_describe_user_scram_credentials(self, users=None):
+        if users is None:
+            users_field = None
+        else:
+            users_field = [(user,) for user in users]
+        request = DescribeUserScramCredentialsRequest(users=users_field)
+        response = await self._manager.send(request)
+
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "DescribeUserScramCredentialsRequest failed: %s"
+                % (response.error_message,))
+
+        ret = {}
+        for result in response.results:
+            if result.error_code:
+                ret[result.user] = {
+                    'error': result.error_message,
+                    'credential_infos': [],
+                }
+            else:
+                ret[result.user] = {
+                    'error': None,
+                    'credential_infos': [
+                        {
+                            'mechanism': ScramMechanism(ci.mechanism),
+                            'iterations': ci.iterations,
+                        }
+                        for ci in result.credential_infos
+                    ],
+                }
+        return ret
+
+    def describe_user_scram_credentials(self, users=None):
+        """Describe SCRAM credentials for one or more users.
+
+        Arguments:
+            users (list of str, optional): User names to describe. If None,
+                describe all users with SCRAM credentials.
+
+        Returns:
+            A dict mapping user name to a dict with keys
+            ``'error'`` (None or error message) and ``'credential_infos'``
+            (list of {'mechanism': ScramMechanism, 'iterations': int}).
+        """
+        return self._manager.run(self._async_describe_user_scram_credentials, users)
 
 
 class ScramMechanism(IntEnum):
