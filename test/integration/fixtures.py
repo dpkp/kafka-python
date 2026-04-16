@@ -729,7 +729,11 @@ def get_api_versions():
 
 def run_brokers():
     logging.basicConfig(level=logging.ERROR)
-    k = KafkaFixture.instance(0)
+    params = {}
+    if len(sys.argv) == 3 and sys.argv[2] == '--sasl':
+        params['transport'] = "SASL_PLAINTEXT"
+        params['sasl_mechanism'] = 'SCRAM-SHA-512'
+    k = KafkaFixture.instance(0, **params)
     zk = k.zookeeper
 
     print("Kafka", k.kafka_version, "running on port:", k.port)
