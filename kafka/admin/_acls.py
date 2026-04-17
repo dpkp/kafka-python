@@ -23,7 +23,6 @@ log = logging.getLogger(__name__)
 class ACLAdminMixin:
     """Mixin providing ACL management methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
-    _client: object
     config: dict
 
     # ACL Helper for Metadata / DescribeGroups
@@ -45,27 +44,17 @@ class ACLAdminMixin:
         Returns:
             tuple of a list of matching ACL objects and a KafkaError (NoError if successful)
         """
-
-        version = self._client.api_version(DescribeAclsRequest, max_version=1)
-        if version == 0:
-            request = DescribeAclsRequest[version](
-                resource_type_filter=acl_filter.resource_pattern.resource_type,
-                resource_name_filter=acl_filter.resource_pattern.resource_name,
-                principal_filter=acl_filter.principal,
-                host_filter=acl_filter.host,
-                operation=acl_filter.operation,
-                permission_type=acl_filter.permission_type
-            )
-        elif version <= 1:
-            request = DescribeAclsRequest[version](
-                resource_type_filter=acl_filter.resource_pattern.resource_type,
-                resource_name_filter=acl_filter.resource_pattern.resource_name,
-                pattern_type_filter=acl_filter.resource_pattern.pattern_type,
-                principal_filter=acl_filter.principal,
-                host_filter=acl_filter.host,
-                operation=acl_filter.operation,
-                permission_type=acl_filter.permission_type
-            )
+        min_version = 3 if acl_filter.resource_pattern.resource_type == ResourceType.USER else 0
+        request = DescribeAclsRequest(
+            min_version=min_version,
+            resource_type_filter=acl_filter.resource_pattern.resource_type,
+            resource_name_filter=acl_filter.resource_pattern.resource_name,
+            pattern_type_filter=acl_filter.resource_pattern.pattern_type,
+            principal_filter=acl_filter.principal,
+            host_filter=acl_filter.host,
+            operation=acl_filter.operation,
+            permission_type=acl_filter.permission_type
+        )
         response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
         return self._convert_describe_acls_response_to_acls(response)
 
@@ -99,28 +88,17 @@ class ACLAdminMixin:
         return acl_list, Errors.NoError
 
     @staticmethod
-    def _convert_create_acls_resource_request_v0(acl):
-        """Convert an ACL object into the CreateAclsRequest v0 format."""
-        return (
-            acl.resource_pattern.resource_type,
-            acl.resource_pattern.resource_name,
-            acl.principal,
-            acl.host,
-            acl.operation,
-            acl.permission_type
-        )
-
-    @staticmethod
-    def _convert_create_acls_resource_request_v1(acl):
-        """Convert an ACL object into the CreateAclsRequest v1 format."""
-        return (
-            acl.resource_pattern.resource_type,
-            acl.resource_pattern.resource_name,
-            acl.resource_pattern.pattern_type,
-            acl.principal,
-            acl.host,
-            acl.operation,
-            acl.permission_type
+    def _convert_create_acls_resource_request(acl):
+        """Convert an ACL object into the CreateAclsRequest format."""
+        _AclCreate = CreateAclsRequest.AclCreation
+        return _AclCreate(
+            resource_type=acl.resource_pattern.resource_type,
+            resource_name=acl.resource_pattern.resource_name,
+            resource_pattern_type=acl.resource_pattern.pattern_type,
+            principal=acl.principal,
+            host=acl.host,
+            operation=acl.operation,
+            permission_type=acl.permission_type
         )
 
     @staticmethod
@@ -147,46 +125,28 @@ class ACLAdminMixin:
         Returns:
             dict of successes and failures
         """
-
         for acl in acls:
             if not isinstance(acl, ACL):
                 raise IllegalArgumentError("acls must contain ACL objects")
 
-        version = self._client.api_version(CreateAclsRequest, max_version=1)
-        if version == 0:
-            request = CreateAclsRequest[version](
-                creations=[self._convert_create_acls_resource_request_v0(acl) for acl in acls]
-            )
-        elif version <= 1:
-            request = CreateAclsRequest[version](
-                creations=[self._convert_create_acls_resource_request_v1(acl) for acl in acls]
-            )
+        creations = [self._convert_create_acls_resource_request(acl) for acl in acls]
+        min_version = 3 if any(creation.resource_type == ResourceType.USER for creation in creations) else 0
+        request = CreateAclsRequest(creations=creations, min_version=min_version)
         response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
         return self._convert_create_acls_response_to_acls(acls, response)
 
     @staticmethod
-    def _convert_delete_acls_resource_request_v0(acl):
-        """Convert an ACLFilter object into the DeleteAclsRequest v0 format."""
-        return (
-            acl.resource_pattern.resource_type,
-            acl.resource_pattern.resource_name,
-            acl.principal,
-            acl.host,
-            acl.operation,
-            acl.permission_type
-        )
-
-    @staticmethod
-    def _convert_delete_acls_resource_request_v1(acl):
-        """Convert an ACLFilter object into the DeleteAclsRequest v1 format."""
-        return (
-            acl.resource_pattern.resource_type,
-            acl.resource_pattern.resource_name,
-            acl.resource_pattern.pattern_type,
-            acl.principal,
-            acl.host,
-            acl.operation,
-            acl.permission_type
+    def _convert_delete_acls_resource_request(acl):
+        """Convert an ACLFilter object into the DeleteAclsRequest format."""
+        _AclsFilter = DeleteAclsRequest.DeleteAclsFilter
+        return _AclsFilter(
+            resource_type_filter=acl.resource_pattern.resource_type,
+            resource_name_filter=acl.resource_pattern.resource_name,
+            pattern_type_filter=acl.resource_pattern.pattern_type,
+            principal_filter=acl.principal,
+            host_filter=acl.host,
+            operation=acl.operation,
+            permission_type=acl.permission_type
         )
 
     @staticmethod
@@ -224,21 +184,13 @@ class ACLAdminMixin:
             a list of 3-tuples corresponding to the list of input filters.
                  The tuples hold (the input ACLFilter, list of affected ACLs, KafkaError instance)
         """
-
         for acl in acl_filters:
             if not isinstance(acl, ACLFilter):
                 raise IllegalArgumentError("acl_filters must contain ACLFilter type objects")
 
-        version = self._client.api_version(DeleteAclsRequest, max_version=1)
-
-        if version == 0:
-            request = DeleteAclsRequest[version](
-                filters=[self._convert_delete_acls_resource_request_v0(acl) for acl in acl_filters]
-            )
-        elif version <= 1:
-            request = DeleteAclsRequest[version](
-                filters=[self._convert_delete_acls_resource_request_v1(acl) for acl in acl_filters]
-            )
+        filters = [self._convert_delete_acls_resource_request(acl) for acl in acl_filters]
+        min_version = 3 if any(_filter.resource_type_filter == ResourceType.USER for _filter in filters) else 0
+        request = DeleteAclsRequest(filters=filters, min_version=min_version)
         response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 

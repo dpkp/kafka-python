@@ -25,7 +25,6 @@ log = logging.getLogger(__name__)
 class ConfigAdminMixin:
     """Mixin providing configuration management methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
-    _client: object
     config: dict
 
     @staticmethod
