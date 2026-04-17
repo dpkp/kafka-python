@@ -39,10 +39,6 @@ class GroupAdminMixin:
 
     def _describe_consumer_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
-        if response.API_VERSION > 3:
-            raise NotImplementedError(
-                "Support for DescribeGroupsResponse_v{} has not yet been added to KafkaAdminClient."
-                .format(response.API_VERSION))
         assert len(response.groups) == 1
         for group in response.groups:
             for member in group.members:
