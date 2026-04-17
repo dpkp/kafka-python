@@ -27,6 +27,9 @@ test: build-integration
 fixture: build-integration
 	python -m test.integration.fixtures kafka
 
+sasl: build-integration
+	python -m test.integration.fixtures kafka --sasl
+
 test-coverage: build-integration
 	pytest --cov=kafka --cov-report html test
 	@echo "open file://`pwd`/htmlcov/index.html"

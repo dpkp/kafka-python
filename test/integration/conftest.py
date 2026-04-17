@@ -54,7 +54,6 @@ def kafka_broker_factory():
         broker = KafkaFixture.instance(node_id, **params)
         _brokers.append(broker)
         return broker
-
     yield factory
 
     zks = set()
@@ -64,7 +63,6 @@ def kafka_broker_factory():
     for zk in zks:
         if zk:
             zk.close()
-
 
 
 @pytest.fixture

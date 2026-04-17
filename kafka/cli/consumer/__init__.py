@@ -3,6 +3,7 @@ import logging
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
+from ..common import add_common_cli_args
 
 
 def main_parser():
@@ -10,27 +11,13 @@ def main_parser():
         prog='python -m kafka.consumer',
         description='Kafka console consumer',
     )
-    parser.add_argument(
-        '-b', '--bootstrap-servers', type=str, action='append', required=True,
-        help='host:port for cluster bootstrap server. Can be provided multiple times.')
+    add_common_cli_args(parser)
     parser.add_argument(
         '-t', '--topic', type=str, action='append', dest='topics', required=True,
         help='subscribe to topic')
     parser.add_argument(
         '-g', '--group', type=str, required=True,
         help='consumer group')
-    parser.add_argument(
-        '-c', '--extra-config', type=str, action='append',
-        help='additional configuration properties for kafka consumer')
-    parser.add_argument(
-        '-l', '--log-level', type=str, default='CRITICAL',
-        help='logging level, passed to logging.basicConfig')
-    parser.add_argument(
-        '-L', '--enable-logger', type=str, action='append',
-        help='enable a specific logger. Can be provided multiple times. If not provided, all loggers are enabled')
-    parser.add_argument(
-        '-DL', '--disable-logger', type=str, action='append',
-        help='disable a specific logger. Can be provided multiple times.')
     parser.add_argument(
         '-f', '--format', type=str, default='str',
         help='output format: str|raw|full')
