@@ -1,4 +1,4 @@
-"""Record deletion and cluster operation mixin for KafkaAdminClient."""
+"""Partition management mixin for KafkaAdminClient."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class RecordAdminMixin:
-    """Mixin providing record deletion and cluster operation methods."""
+class PartitionAdminMixin:
+    """Mixin providing partition and record management methods."""
     _manager: KafkaConnectionManager
     config: dict
 

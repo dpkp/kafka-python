@@ -17,7 +17,7 @@ from kafka.admin._acls import ACLAdminMixin
 from kafka.admin._cluster import ClusterAdminMixin
 from kafka.admin._configs import ConfigAdminMixin
 from kafka.admin._groups import GroupAdminMixin
-from kafka.admin._records import RecordAdminMixin
+from kafka.admin._partitions import PartitionAdminMixin
 from kafka.admin._topics import TopicAdminMixin
 from kafka.admin._users import UserAdminMixin
 
@@ -29,7 +29,7 @@ class KafkaAdminClient(
     ClusterAdminMixin,
     ConfigAdminMixin,
     GroupAdminMixin,
-    RecordAdminMixin,
+    PartitionAdminMixin,
     TopicAdminMixin,
     UserAdminMixin,
 ):
