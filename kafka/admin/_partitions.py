@@ -187,7 +187,7 @@ class PartitionAdminMixin:
         else:
             return self._get_all_topic_partitions(topic_partitions)
 
-    def perform_leader_election(self, election_type, topic_partitions=None, timeout_ms=None, raise_errors=True):
+    def elect_leaders(self, election_type, topic_partitions=None, timeout_ms=None, raise_errors=True):
         """Trigger leader election for the specified topic partitions.
 
         Arguments:
