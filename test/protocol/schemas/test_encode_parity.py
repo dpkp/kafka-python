@@ -2,6 +2,11 @@
 non-optimized StructField.encode() output byte-for-byte, across a variety
 of schemas and versions. Does the same for compiled_decode_from vs the
 reference decode().
+
+These tests exercise the nullable-struct null-prefix handling added to
+emit_encode_into/emit_decode_from (and the matching reference paths in
+encode/encode_into/decode), plus the StructArrayField._nullable_versions
+reset that protects non-nullable struct-array elements.
 """
 import io
 import uuid
@@ -10,6 +15,8 @@ import pytest
 
 from kafka.protocol.admin import (
     AlterPartitionReassignmentsRequest,
+    DescribeTopicPartitionsRequest,
+    DescribeTopicPartitionsResponse,
     ListPartitionReassignmentsResponse,
 )
 from kafka.protocol.metadata import MetadataRequest, MetadataResponse
@@ -136,6 +143,80 @@ def test_parity_alter_partition_reassignments_request():
 
 
 # ---------------------------------------------------------------------------
+# Parity: nullable nested struct (DescribeTopicPartitionsResponse.cursor)
+# ---------------------------------------------------------------------------
+
+
+def test_parity_describe_topic_partitions_request_cursor_present():
+    _Topic = DescribeTopicPartitionsRequest.TopicRequest
+    _Cursor = DescribeTopicPartitionsRequest.Cursor
+    req = DescribeTopicPartitionsRequest(
+        version=0,
+        topics=[_Topic(name='t1'), _Topic(name='t2')],
+        response_partition_limit=500,
+        cursor=_Cursor(topic_name='t1', partition_index=3),
+    )
+    assert _reference_encode(req) == _codegen_encode(req)
+
+
+def test_parity_describe_topic_partitions_request_cursor_null():
+    _Topic = DescribeTopicPartitionsRequest.TopicRequest
+    req = DescribeTopicPartitionsRequest(
+        version=0,
+        topics=[_Topic(name='t1')],
+        response_partition_limit=2000,
+        cursor=None,
+    )
+    assert _reference_encode(req) == _codegen_encode(req)
+
+
+def test_parity_describe_topic_partitions_response_cursor_present():
+    _Topic = DescribeTopicPartitionsResponse.DescribeTopicPartitionsResponseTopic
+    _Cursor = DescribeTopicPartitionsResponse.Cursor
+    resp = DescribeTopicPartitionsResponse(
+        version=0,
+        throttle_time_ms=0,
+        topics=[],
+        next_cursor=_Cursor(topic_name='t1', partition_index=7),
+    )
+    assert _reference_encode(resp) == _codegen_encode(resp)
+
+
+def test_parity_describe_topic_partitions_response_cursor_null():
+    resp = DescribeTopicPartitionsResponse(
+        version=0, throttle_time_ms=0, topics=[], next_cursor=None)
+    assert _reference_encode(resp) == _codegen_encode(resp)
+
+
+def test_parity_describe_topic_partitions_response_with_elr():
+    _Topic = DescribeTopicPartitionsResponse.DescribeTopicPartitionsResponseTopic
+    _Partition = _Topic.DescribeTopicPartitionsResponsePartition
+    resp = DescribeTopicPartitionsResponse(
+        version=0,
+        throttle_time_ms=0,
+        topics=[
+            _Topic(
+                error_code=0,
+                name='t1',
+                topic_id=uuid.uuid4(),
+                is_internal=False,
+                partitions=[
+                    _Partition(
+                        error_code=0, partition_index=0, leader_id=1,
+                        leader_epoch=5, replica_nodes=[1, 2, 3],
+                        isr_nodes=[1, 2], eligible_leader_replicas=[3],
+                        last_known_elr=[2], offline_replicas=[],
+                    ),
+                ],
+                topic_authorized_operations=0,
+            ),
+        ],
+        next_cursor=None,
+    )
+    assert _reference_encode(resp) == _codegen_encode(resp)
+
+
+# ---------------------------------------------------------------------------
 # Parity: nullable error_message (flexible compact nullable string) in a
 # list/response with struct arrays
 # ---------------------------------------------------------------------------
@@ -169,6 +250,24 @@ def test_parity_list_partition_reassignments_response():
 
 
 @pytest.mark.parametrize('cls,kwargs,version', [
+    (DescribeTopicPartitionsRequest,
+     dict(topics=[DescribeTopicPartitionsRequest.TopicRequest(name='t1')],
+          response_partition_limit=10,
+          cursor=DescribeTopicPartitionsRequest.Cursor(
+              topic_name='t1', partition_index=2)),
+     0),
+    (DescribeTopicPartitionsRequest,
+     dict(topics=[DescribeTopicPartitionsRequest.TopicRequest(name='t1')],
+          response_partition_limit=10, cursor=None),
+     0),
+    (DescribeTopicPartitionsResponse,
+     dict(throttle_time_ms=0, topics=[], next_cursor=None),
+     0),
+    (DescribeTopicPartitionsResponse,
+     dict(throttle_time_ms=0, topics=[],
+          next_cursor=DescribeTopicPartitionsResponse.Cursor(
+              topic_name='t1', partition_index=5)),
+     0),
     (MetadataRequest,
      dict(topics=['a', 'b']),
      0),

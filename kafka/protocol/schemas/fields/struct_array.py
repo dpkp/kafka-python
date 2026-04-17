@@ -26,6 +26,10 @@ class StructArrayField(ArrayField):
             array_of = self.parse_inner_type(json)
             assert array_of is not None, 'json does not contain a StructArray!'
         super().__init__(json, array_of=array_of)
+        # nullableVersions on the JSON describes the array's nullability, not
+        # the inner struct's. Clear it on the inner struct so StructField does
+        # not try to emit a per-element null-prefix when encoding/decoding.
+        array_of._nullable_versions = None
         # map_key will be (idx, field) of the mapKey field if found
         self.map_key = next(filter(lambda x: x[1]._json.get('mapKey'), enumerate(self._fields)), None)
 

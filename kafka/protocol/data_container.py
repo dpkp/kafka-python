@@ -137,9 +137,11 @@ class DataContainer(metaclass=SlotsBuilder):
             if self._version is not None and not field.for_version_q(self._version):
                 continue
             if field.is_struct():
-                yield (field.name, dict(getattr(self, field.name)._to_dict_vals(meta=meta, json=json)))
+                val = getattr(self, field.name)
+                yield (field.name, None if val is None else dict(val._to_dict_vals(meta=meta, json=json)))
             elif field.is_struct_array():
-                yield (field.name, [dict(val._to_dict_vals(meta=meta, json=json)) for val in getattr(self, field.name)])
+                val = getattr(self, field.name)
+                yield (field.name, None if val is None else [dict(v._to_dict_vals(meta=meta, json=json)) for v in val])
             else:
                 val = getattr(self, field.name)
                 yield (field.name, field.to_json(val) if json else val)
