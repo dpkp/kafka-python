@@ -3,7 +3,8 @@ from kafka.admin._acls import (ACL, ACLFilter, ResourcePattern, ResourcePatternF
                                 ResourceType, ACLPermissionType, ACLResourcePatternType)
 from kafka.admin._configs import (
     ConfigResource, ConfigResourceType, ConfigType, ConfigSourceType)
-from kafka.admin._topics import NewTopic, NewPartitions
+from kafka.admin._topics import NewTopic
+from kafka.admin._partitions import NewPartitions
 from kafka.admin._users import (
     ScramMechanism, UserScramCredentialDeletion, UserScramCredentialUpsertion)
 
