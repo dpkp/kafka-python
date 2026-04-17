@@ -3,6 +3,8 @@ import uuid
 import pytest
 
 from kafka.protocol.admin import (
+    AlterPartitionReassignmentsRequest, AlterPartitionReassignmentsResponse,
+    ListPartitionReassignmentsRequest, ListPartitionReassignmentsResponse,
     DescribeTopicPartitionsRequest, DescribeTopicPartitionsResponse,
 )
 
@@ -10,6 +12,100 @@ from kafka.protocol.admin import (
 def _versions(cls):
     lo, hi = cls._valid_versions
     return range(lo, hi + 1)
+
+
+@pytest.mark.parametrize("version", _versions(AlterPartitionReassignmentsRequest))
+def test_alter_partition_reassignments_request_roundtrip(version):
+    Topic = AlterPartitionReassignmentsRequest.ReassignableTopic
+    Partition = Topic.ReassignablePartition
+    request = AlterPartitionReassignmentsRequest(
+        timeout_ms=30000,
+        topics=[
+            Topic(
+                name='topic-a',
+                partitions=[
+                    Partition(partition_index=0, replicas=[1, 2, 3]),
+                    Partition(partition_index=1, replicas=None),
+                ],
+            ),
+        ],
+    )
+    encoded = request.encode(version=version)
+    decoded = AlterPartitionReassignmentsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", _versions(AlterPartitionReassignmentsResponse))
+def test_alter_partition_reassignments_response_roundtrip(version):
+    Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
+    Partition = Topic.ReassignablePartitionResponse
+    response = AlterPartitionReassignmentsResponse(
+        throttle_time_ms=5,
+        error_code=0,
+        error_message=None,
+        responses=[
+            Topic(
+                name='topic-a',
+                partitions=[
+                    Partition(partition_index=0, error_code=0, error_message=None),
+                    Partition(partition_index=1, error_code=37, error_message='invalid'),
+                ],
+            ),
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = AlterPartitionReassignmentsResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
+@pytest.mark.parametrize("version", _versions(ListPartitionReassignmentsRequest))
+def test_list_partition_reassignments_request_roundtrip(version):
+    Topic = ListPartitionReassignmentsRequest.ListPartitionReassignmentsTopics
+    request = ListPartitionReassignmentsRequest(
+        timeout_ms=30000,
+        topics=[
+            Topic(name='topic-a', partition_indexes=[0, 1]),
+            Topic(name='topic-b', partition_indexes=[2]),
+        ],
+    )
+    encoded = request.encode(version=version)
+    decoded = ListPartitionReassignmentsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", _versions(ListPartitionReassignmentsRequest))
+def test_list_partition_reassignments_request_null_topics(version):
+    request = ListPartitionReassignmentsRequest(timeout_ms=30000, topics=None)
+    encoded = request.encode(version=version)
+    decoded = ListPartitionReassignmentsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", _versions(ListPartitionReassignmentsResponse))
+def test_list_partition_reassignments_response_roundtrip(version):
+    Topic = ListPartitionReassignmentsResponse.OngoingTopicReassignment
+    Partition = Topic.OngoingPartitionReassignment
+    response = ListPartitionReassignmentsResponse(
+        throttle_time_ms=5,
+        error_code=0,
+        error_message=None,
+        topics=[
+            Topic(
+                name='topic-a',
+                partitions=[
+                    Partition(
+                        partition_index=0,
+                        replicas=[1, 2, 3],
+                        adding_replicas=[4],
+                        removing_replicas=[2],
+                    ),
+                ],
+            ),
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = ListPartitionReassignmentsResponse.decode(encoded, version=version)
+    assert decoded == response
 
 
 def test_describe_topic_partitions_raw_bytes():

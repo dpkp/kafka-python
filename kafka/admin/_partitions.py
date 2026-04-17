@@ -11,7 +11,15 @@ from typing import TYPE_CHECKING
 
 import kafka.errors as Errors
 from kafka.errors import UnknownTopicOrPartitionError
-from kafka.protocol.admin import DeleteRecordsRequest, ElectLeadersRequest, ElectionType
+from kafka.protocol.admin import (
+    AlterPartitionReassignmentsRequest,
+    CreatePartitionsRequest,
+    DeleteRecordsRequest,
+    DescribeTopicPartitionsRequest,
+    ElectLeadersRequest,
+    ElectionType,
+    ListPartitionReassignmentsRequest,
+)
 from kafka.structs import TopicPartition
 
 if TYPE_CHECKING:
@@ -219,6 +227,197 @@ class PartitionAdminMixin:
                     yield Errors.for_code(partition.error_code)
         ignore_errors = (Errors.ElectionNotNeededError,)
         return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
+
+    @staticmethod
+    def _process_alter_partition_reassignments_input(reassignments):
+        _Topic = AlterPartitionReassignmentsRequest.ReassignableTopic
+        _Partition = _Topic.ReassignablePartition
+        topic2partitions = defaultdict(list)
+        for tp, replicas in reassignments.items():
+            topic2partitions[tp.topic].append(_Partition(
+                partition_index=tp.partition,
+                replicas=list(replicas) if replicas is not None else None,
+            ))
+        return [_Topic(name=topic, partitions=parts) for topic, parts in topic2partitions.items()]
+
+    def alter_partition_reassignments(self, reassignments, timeout_ms=None, raise_errors=True):
+        """Alter the replica sets for the given partitions.
+
+        Arguments:
+            reassignments (dict): A dict mapping
+                :class:`~kafka.TopicPartition` to a list of broker IDs for
+                the new replica set, or ``None`` to cancel a pending
+                reassignment for that partition.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): The time in ms to wait for the
+                request to complete.
+            raise_errors (bool, optional): Whether to raise errors as
+                exceptions. Default True.
+
+        Returns:
+            Decoded AlterPartitionReassignmentsResponse (as a dict).
+        """
+        timeout_ms = self._validate_timeout(timeout_ms)
+
+        def response_errors(r):
+            yield Errors.for_code(r.error_code)
+            for topic in r.responses:
+                for partition in topic.partitions:
+                    yield Errors.for_code(partition.error_code)
+
+        request = AlterPartitionReassignmentsRequest(
+            timeout_ms=timeout_ms,
+            topics=self._process_alter_partition_reassignments_input(reassignments),
+        )
+        response = self._manager.run(
+            self._send_request_to_controller, request, response_errors, raise_errors)
+        return response.to_dict()
+
+    async def _async_list_partition_reassignments(self, topic_partitions=None, timeout_ms=None):
+        timeout_ms = self._validate_timeout(timeout_ms)
+
+        if topic_partitions is None:
+            topics_field = None
+        else:
+            _Topic = ListPartitionReassignmentsRequest.ListPartitionReassignmentsTopics
+            if isinstance(topic_partitions, dict):
+                topics_field = [
+                    _Topic(name=topic, partition_indexes=list(partitions))
+                    for topic, partitions in topic_partitions.items()
+                ]
+            else:
+                topic2partitions = defaultdict(list)
+                for tp in topic_partitions:
+                    topic2partitions[tp.topic].append(tp.partition)
+                topics_field = [
+                    _Topic(name=topic, partition_indexes=partitions)
+                    for topic, partitions in topic2partitions.items()
+                ]
+
+        request = ListPartitionReassignmentsRequest(
+            timeout_ms=timeout_ms,
+            topics=topics_field,
+        )
+        response = await self._manager.send(request)
+
+        top_level_error = Errors.for_code(response.error_code)
+        if top_level_error is not Errors.NoError:
+            raise top_level_error(
+                "ListPartitionReassignmentsRequest failed: %s" % response.error_message)
+
+        ret = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                ret[TopicPartition(topic.name, partition.partition_index)] = {
+                    'replicas': list(partition.replicas),
+                    'adding_replicas': list(partition.adding_replicas),
+                    'removing_replicas': list(partition.removing_replicas),
+                }
+        return ret
+
+    def list_partition_reassignments(self, topic_partitions=None, timeout_ms=None):
+        """List the current ongoing partition reassignments.
+
+        Arguments:
+            topic_partitions (dict, list, optional):
+                Either: a dict of ``{topic_name: [partition_ids]}``,
+                or a list of :class:`~kafka.TopicPartition`,
+                or ``None`` to list ongoing reassignments for all partitions.
+                Default: None.
+
+        Keyword Arguments:
+            timeout_ms (numeric, optional): The time in ms to wait for the
+                request to complete.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to a dict
+            with keys ``'replicas'``, ``'adding_replicas'``, and
+            ``'removing_replicas'`` (each a list of broker IDs).
+        """
+        return self._manager.run(
+            self._async_list_partition_reassignments, topic_partitions, timeout_ms)
+
+    async def _async_describe_topic_partitions(self, topics, response_partition_limit, cursor):
+        _Topic = DescribeTopicPartitionsRequest.TopicRequest
+        _Cursor = DescribeTopicPartitionsRequest.Cursor
+
+        if cursor is not None:
+            cursor_field = _Cursor(
+                topic_name=cursor['topic_name'],
+                partition_index=cursor['partition_index'],
+            )
+        else:
+            cursor_field = None
+
+        request = DescribeTopicPartitionsRequest(
+            topics=[_Topic(name=t) for t in topics],
+            response_partition_limit=response_partition_limit,
+            cursor=cursor_field,
+        )
+        response = await self._manager.send(request)
+
+        result = []
+        for topic in response.topics:
+            topic_dict = {
+                'error_code': topic.error_code,
+                'name': topic.name,
+                'topic_id': topic.topic_id,
+                'is_internal': topic.is_internal,
+                'partitions': [
+                    {
+                        'error_code': p.error_code,
+                        'partition_index': p.partition_index,
+                        'leader_id': p.leader_id,
+                        'leader_epoch': p.leader_epoch,
+                        'replica_nodes': list(p.replica_nodes),
+                        'isr_nodes': list(p.isr_nodes),
+                        'eligible_leader_replicas': list(p.eligible_leader_replicas) if p.eligible_leader_replicas else None,
+                        'last_known_elr': list(p.last_known_elr) if p.last_known_elr else None,
+                        'offline_replicas': list(p.offline_replicas),
+                    }
+                    for p in topic.partitions
+                ],
+                'topic_authorized_operations': topic.topic_authorized_operations,
+            }
+            result.append(topic_dict)
+
+        next_cursor = None
+        if response.next_cursor is not None:
+            next_cursor = {
+                'topic_name': response.next_cursor.topic_name,
+                'partition_index': response.next_cursor.partition_index,
+            }
+
+        return {'topics': result, 'next_cursor': next_cursor}
+
+    def describe_topic_partitions(self, topics, response_partition_limit=2000, cursor=None):
+        """Describe topics with fine-grained partition-level control (KIP-966).
+
+        Unlike :meth:`describe_topics`, this uses the DescribeTopicPartitions
+        API (apiKey 75, broker 3.7+) which supports pagination via a cursor
+        and partition-level ELR (Eligible Leader Replicas) information.
+
+        Arguments:
+            topics ([str]): A list of topic names.
+
+        Keyword Arguments:
+            response_partition_limit (int, optional): Maximum number of
+                partitions to include in the response. Default: 2000.
+            cursor (dict, optional): Dict with ``'topic_name'`` and
+                ``'partition_index'`` keys to start pagination from. Default:
+                None.
+
+        Returns:
+            dict: ``{'topics': [...], 'next_cursor': None | {...}}``.
+            ``topics`` is a list of dicts (one per topic) with keys
+            ``error_code``, ``name``, ``topic_id``, ``is_internal``,
+            ``partitions``, and ``topic_authorized_operations``.
+            ``next_cursor`` is None if pagination is complete, otherwise a
+            dict with the next page's ``topic_name`` and ``partition_index``.
+        """
+        return self._manager.run(
+            self._async_describe_topic_partitions, topics, response_partition_limit, cursor)
 
 
 class NewPartitions:

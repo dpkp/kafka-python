@@ -490,3 +490,65 @@ def test_describe_log_dirs(kafka_admin_client):
         for log_dir in broker_map[broker.node_id]['log_dirs']:
             assert 'log_dir' in log_dir
             assert log_dir['error_code'] == 0
+
+
+@pytest.mark.skipif(env_kafka_version() < (2, 4), reason="AlterPartitionReassignments requires broker >=2.4")
+def test_alter_partition_reassignments(kafka_admin_client, topic):
+    topic_metadata = kafka_admin_client.describe_topics([topic])[0]
+    brokers = [b.node_id for b in kafka_admin_client._manager.cluster.brokers()]
+    # Single-broker cluster: only valid reassignment target is [broker]
+    tp = TopicPartition(topic, 0)
+
+    result = kafka_admin_client.alter_partition_reassignments({tp: brokers})
+    assert result['error_code'] == 0
+    assert len(result['responses']) == 1
+    assert result['responses'][0]['name'] == topic
+
+
+@pytest.mark.skipif(env_kafka_version() < (2, 4), reason="ListPartitionReassignments requires broker >=2.4")
+def test_list_partition_reassignments(kafka_admin_client, topic):
+    # No reassignments in progress on a freshly-created topic
+    result = kafka_admin_client.list_partition_reassignments()
+    assert isinstance(result, dict)
+
+    # Scoped lookup for specific partitions also returns an (empty) dict
+    tp = TopicPartition(topic, 0)
+    result = kafka_admin_client.list_partition_reassignments([tp])
+    assert isinstance(result, dict)
+    for key, value in result.items():
+        assert isinstance(key, TopicPartition)
+        assert set(value.keys()) == {'replicas', 'adding_replicas', 'removing_replicas'}
+
+
+@pytest.mark.skipif(env_kafka_version() < (3, 9), reason="DescribeTopicPartitions requires broker >=3.9 (KRaft)")
+def test_describe_topic_partitions(kafka_admin_client, topic):
+    result = kafka_admin_client.describe_topic_partitions([topic])
+    assert 'topics' in result
+    assert 'next_cursor' in result
+    assert len(result['topics']) == 1
+    t = result['topics'][0]
+    assert t['name'] == topic
+    assert t['error_code'] == 0
+    # topic fixture creates 4 partitions
+    assert len(t['partitions']) == 4
+    for p in t['partitions']:
+        assert p['error_code'] == 0
+        assert p['partition_index'] in {0, 1, 2, 3}
+        assert p['leader_id'] >= 0
+        assert len(p['replica_nodes']) >= 1
+
+
+@pytest.mark.skipif(env_kafka_version() < (3, 9), reason="DescribeTopicPartitions requires broker >=3.9 (KRaft)")
+def test_describe_topic_partitions_pagination(kafka_admin_client, topic):
+    # Request only 1 partition per page; we should get a cursor back.
+    result = kafka_admin_client.describe_topic_partitions(
+        [topic], response_partition_limit=1)
+    # Small clusters may still satisfy the request without a cursor if the
+    # broker ignores the partition limit — tolerate either outcome but verify
+    # the cursor round-trips when present.
+    if result['next_cursor'] is not None:
+        cursor = result['next_cursor']
+        assert cursor['topic_name'] == topic
+        next_result = kafka_admin_client.describe_topic_partitions(
+            [topic], response_partition_limit=10, cursor=cursor)
+        assert next_result['topics']
