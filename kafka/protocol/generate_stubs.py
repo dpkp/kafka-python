@@ -37,6 +37,13 @@ SIMPLE_TYPE_MAP = {
 
 # Modules containing protocol classes, relative to kafka.protocol
 MESSAGE_MODULES = [
+    'kafka.protocol.admin.acl',
+    'kafka.protocol.admin.client_quotas',
+    'kafka.protocol.admin.cluster',
+    'kafka.protocol.admin.configs',
+    'kafka.protocol.admin.groups',
+    'kafka.protocol.admin.topics',
+    'kafka.protocol.admin.users',
     'kafka.protocol.consumer.fetch',
     'kafka.protocol.consumer.group',
     'kafka.protocol.consumer.metadata',
@@ -46,11 +53,6 @@ MESSAGE_MODULES = [
     'kafka.protocol.metadata.metadata',
     'kafka.protocol.producer.produce',
     'kafka.protocol.producer.transaction',
-    'kafka.protocol.admin.acl',
-    'kafka.protocol.admin.client_quotas',
-    'kafka.protocol.admin.cluster',
-    'kafka.protocol.admin.groups',
-    'kafka.protocol.admin.topics',
     'kafka.protocol.sasl',
 ]
 
