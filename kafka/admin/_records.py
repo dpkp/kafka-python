@@ -20,7 +20,6 @@ log = logging.getLogger(__name__)
 class RecordAdminMixin:
     """Mixin providing record deletion and cluster operation methods."""
     _manager: KafkaConnectionManager
-    _client: object
     config: dict
 
     async def _async_get_leader_for_partitions(self, partitions):
@@ -50,8 +49,6 @@ class RecordAdminMixin:
 
     async def _async_delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
         timeout_ms = self._validate_timeout(timeout_ms)
-        version = self._client.api_version(DeleteRecordsRequest, max_version=0)
-
         if partition_leader_id is None:
             leader2partitions = await self._async_get_leader_for_partitions(set(records_to_delete))
         else:
@@ -63,7 +60,7 @@ class RecordAdminMixin:
             for partition in partitions:
                 topic2partitions[partition.topic].append(partition)
 
-            request = DeleteRecordsRequest[version](
+            request = DeleteRecordsRequest(
                 topics=[
                     (topic, [(tp.partition, records_to_delete[tp]) for tp in partitions])
                     for topic, partitions in topic2partitions.items()

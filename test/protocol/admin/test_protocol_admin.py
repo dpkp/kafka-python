@@ -12,6 +12,8 @@ from kafka.protocol.admin import (
     DescribeClusterRequest, DescribeClusterResponse,
     DescribeConfigsRequest, DescribeConfigsResponse,
     AlterConfigsRequest, AlterConfigsResponse,
+    AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse,
+    DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse,
     CreateAclsRequest, CreateAclsResponse,
     DeleteAclsRequest, DeleteAclsResponse,
     DescribeAclsRequest, DescribeAclsResponse,
@@ -391,6 +393,87 @@ def test_alter_configs_response_roundtrip(version):
     )
     encoded = response.encode(version=version)
     decoded = AlterConfigsResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
+@pytest.mark.parametrize("version", range(AlterUserScramCredentialsRequest.min_version, AlterUserScramCredentialsRequest.max_version + 1))
+def test_alter_user_scram_credentials_request_roundtrip(version):
+    Deletion = AlterUserScramCredentialsRequest.ScramCredentialDeletion
+    Upsertion = AlterUserScramCredentialsRequest.ScramCredentialUpsertion
+    request = AlterUserScramCredentialsRequest(
+        deletions=[
+            Deletion(name='alice', mechanism=1),
+        ],
+        upsertions=[
+            Upsertion(
+                name='bob',
+                mechanism=2,
+                iterations=8192,
+                salt=b'\x00\x01\x02\x03',
+                salted_password=b'\xaa\xbb\xcc\xdd',
+            ),
+        ],
+    )
+    encoded = request.encode(version=version)
+    decoded = AlterUserScramCredentialsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", range(AlterUserScramCredentialsResponse.min_version, AlterUserScramCredentialsResponse.max_version + 1))
+def test_alter_user_scram_credentials_response_roundtrip(version):
+    Result = AlterUserScramCredentialsResponse.AlterUserScramCredentialsResult
+    response = AlterUserScramCredentialsResponse(
+        throttle_time_ms=123,
+        results=[
+            Result(user='alice', error_code=0, error_message=None),
+            Result(user='bob', error_code=58, error_message='bad mechanism'),
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = AlterUserScramCredentialsResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
+@pytest.mark.parametrize("version", range(DescribeUserScramCredentialsRequest.min_version, DescribeUserScramCredentialsRequest.max_version + 1))
+def test_describe_user_scram_credentials_request_roundtrip(version):
+    User = DescribeUserScramCredentialsRequest.UserName
+    request = DescribeUserScramCredentialsRequest(
+        users=[User(name='alice'), User(name='bob')],
+    )
+    encoded = request.encode(version=version)
+    decoded = DescribeUserScramCredentialsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", range(DescribeUserScramCredentialsRequest.min_version, DescribeUserScramCredentialsRequest.max_version + 1))
+def test_describe_user_scram_credentials_request_null_users(version):
+    # null Users means "describe all users"
+    request = DescribeUserScramCredentialsRequest(users=None)
+    encoded = request.encode(version=version)
+    decoded = DescribeUserScramCredentialsRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", range(DescribeUserScramCredentialsResponse.min_version, DescribeUserScramCredentialsResponse.max_version + 1))
+def test_describe_user_scram_credentials_response_roundtrip(version):
+    Result = DescribeUserScramCredentialsResponse.DescribeUserScramCredentialsResult
+    CredentialInfo = Result.CredentialInfo
+    response = DescribeUserScramCredentialsResponse(
+        throttle_time_ms=7,
+        error_code=0,
+        error_message=None,
+        results=[
+            Result(user='alice', error_code=0, error_message=None,
+                   credential_infos=[
+                       CredentialInfo(mechanism=1, iterations=4096),
+                       CredentialInfo(mechanism=2, iterations=8192),
+                   ]),
+            Result(user='bob', error_code=68, error_message='resource not found',
+                   credential_infos=[]),
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = DescribeUserScramCredentialsResponse.decode(encoded, version=version)
     assert decoded == response
 
 

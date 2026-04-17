@@ -23,7 +23,6 @@ log = logging.getLogger(__name__)
 class TopicAdminMixin:
     """Mixin providing topic management methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
-    _client: object
     config: dict
 
     def list_topics(self):

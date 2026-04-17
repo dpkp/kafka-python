@@ -4,10 +4,12 @@ import logging
 from pprint import pprint
 
 from kafka.admin.client import KafkaAdminClient
+from .acls import ACLsSubCommand
 from .cluster import ClusterSubCommand
 from .configs import ConfigsSubCommand
 from .consumer_groups import ConsumerGroupsSubCommand
 from .topics import TopicsSubCommand
+from .users import UsersSubCommand
 from ..common import add_common_cli_args
 
 def main_parser():
@@ -46,8 +48,8 @@ def build_kwargs(props):
 def run_cli(args=None):
     parser = main_parser()
     subparsers = parser.add_subparsers(help='subcommands')
-    for cmd in [ClusterSubCommand, ConfigsSubCommand,
-                TopicsSubCommand, ConsumerGroupsSubCommand]:
+    for cmd in [ACLsSubCommand, ClusterSubCommand, ConfigsSubCommand,
+                TopicsSubCommand, ConsumerGroupsSubCommand, UsersSubCommand]:
         cmd.add_subparser(subparsers)
     config = parser.parse_args(args)
 
@@ -97,11 +99,6 @@ def run_cli(args=None):
 
 
 # Commands TODO:
-    # [acls]
-    # describe
-    # create
-    # delete
-
     # [configs]
     # alter
     # IncrementalAlterConfigs (not supported yet)

@@ -19,17 +19,19 @@ from kafka.admin._configs import ConfigAdminMixin
 from kafka.admin._groups import GroupAdminMixin
 from kafka.admin._records import RecordAdminMixin
 from kafka.admin._topics import TopicAdminMixin
+from kafka.admin._users import UserAdminMixin
 
 log = logging.getLogger(__name__)
 
 
 class KafkaAdminClient(
-    TopicAdminMixin,
-    ClusterAdminMixin,
     ACLAdminMixin,
+    ClusterAdminMixin,
     ConfigAdminMixin,
     GroupAdminMixin,
     RecordAdminMixin,
+    TopicAdminMixin,
+    UserAdminMixin,
 ):
     """A class for administering the Kafka cluster.
 

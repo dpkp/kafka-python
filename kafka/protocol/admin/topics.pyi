@@ -2,10 +2,11 @@
 import uuid
 from typing import Any, Self
 
+from enum import IntEnum
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['CreateTopicsRequest', 'CreateTopicsResponse', 'DeleteTopicsRequest', 'DeleteTopicsResponse', 'CreatePartitionsRequest', 'CreatePartitionsResponse', 'AlterPartitionRequest', 'AlterPartitionResponse', 'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse', 'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse', 'DeleteRecordsRequest', 'DeleteRecordsResponse']
+__all__ = ['CreateTopicsRequest', 'CreateTopicsResponse', 'DeleteTopicsRequest', 'DeleteTopicsResponse', 'CreatePartitionsRequest', 'CreatePartitionsResponse', 'AlterPartitionRequest', 'AlterPartitionResponse', 'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse', 'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse', 'DeleteRecordsRequest', 'DeleteRecordsResponse', 'ElectLeadersRequest', 'ElectLeadersResponse', 'ElectionType']
 
 class CreateTopicsRequest(ApiMessage):
     class CreatableTopic(DataContainer):
@@ -862,3 +863,114 @@ class DeleteRecordsResponse(ApiMessage):
     def is_request(cls) -> bool: ...
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class ElectLeadersRequest(ApiMessage):
+    class TopicPartitions(DataContainer):
+        topic: str
+        partitions: list[int]
+        def __init__(
+            self,
+            *args: Any,
+            topic: str = ...,
+            partitions: list[int] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    election_type: int
+    topic_partitions: list[TopicPartitions] | None
+    timeout_ms: int
+    def __init__(
+        self,
+        *args: Any,
+        election_type: int = ...,
+        topic_partitions: list[TopicPartitions] | None = ...,
+        timeout_ms: int = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class ElectLeadersResponse(ApiMessage):
+    class ReplicaElectionResult(DataContainer):
+        class PartitionResult(DataContainer):
+            partition_id: int
+            error_code: int
+            error_message: str | None
+            def __init__(
+                self,
+                *args: Any,
+                partition_id: int = ...,
+                error_code: int = ...,
+                error_message: str | None = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        topic: str
+        partition_result: list[PartitionResult]
+        def __init__(
+            self,
+            *args: Any,
+            topic: str = ...,
+            partition_result: list[PartitionResult] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    error_code: int
+    replica_election_results: list[ReplicaElectionResult]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        error_code: int = ...,
+        replica_election_results: list[ReplicaElectionResult] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class ElectionType(IntEnum):
+    PREFERRED: int
+    UNCLEAN: int

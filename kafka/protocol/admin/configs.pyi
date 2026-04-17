@@ -5,18 +5,48 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['DescribeClusterRequest', 'DescribeClusterResponse', 'DescribeLogDirsRequest', 'DescribeLogDirsResponse']
+__all__ = ['AlterConfigsRequest', 'AlterConfigsResponse', 'DescribeConfigsRequest', 'DescribeConfigsResponse']
 
-class DescribeClusterRequest(ApiMessage):
-    include_cluster_authorized_operations: bool
-    endpoint_type: int
-    include_fenced_brokers: bool
+class AlterConfigsRequest(ApiMessage):
+    class AlterConfigsResource(DataContainer):
+        class AlterableConfig(DataContainer):
+            name: str
+            value: str | None
+            def __init__(
+                self,
+                *args: Any,
+                name: str = ...,
+                value: str | None = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        resource_type: int
+        resource_name: str
+        configs: list[AlterableConfig]
+        def __init__(
+            self,
+            *args: Any,
+            resource_type: int = ...,
+            resource_name: str = ...,
+            configs: list[AlterableConfig] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    resources: list[AlterConfigsResource]
+    validate_only: bool
     def __init__(
         self,
         *args: Any,
-        include_cluster_authorized_operations: bool = ...,
-        endpoint_type: int = ...,
-        include_fenced_brokers: bool = ...,
+        resources: list[AlterConfigsResource] = ...,
+        validate_only: bool = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -37,21 +67,19 @@ class DescribeClusterRequest(ApiMessage):
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
-class DescribeClusterResponse(ApiMessage):
-    class DescribeClusterBroker(DataContainer):
-        broker_id: int
-        host: str
-        port: int
-        rack: str | None
-        is_fenced: bool
+class AlterConfigsResponse(ApiMessage):
+    class AlterConfigsResourceResponse(DataContainer):
+        error_code: int
+        error_message: str | None
+        resource_type: int
+        resource_name: str
         def __init__(
             self,
             *args: Any,
-            broker_id: int = ...,
-            host: str = ...,
-            port: int = ...,
-            rack: str | None = ...,
-            is_fenced: bool = ...,
+            error_code: int = ...,
+            error_message: str | None = ...,
+            resource_type: int = ...,
+            resource_name: str = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -60,24 +88,12 @@ class DescribeClusterResponse(ApiMessage):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     throttle_time_ms: int
-    error_code: int
-    error_message: str | None
-    endpoint_type: int
-    cluster_id: str
-    controller_id: int
-    brokers: list[DescribeClusterBroker]
-    cluster_authorized_operations: set[int]
+    responses: list[AlterConfigsResourceResponse]
     def __init__(
         self,
         *args: Any,
         throttle_time_ms: int = ...,
-        error_code: int = ...,
-        error_message: str | None = ...,
-        endpoint_type: int = ...,
-        cluster_id: str = ...,
-        controller_id: int = ...,
-        brokers: list[DescribeClusterBroker] = ...,
-        cluster_authorized_operations: set[int] = ...,
+        responses: list[AlterConfigsResourceResponse] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -98,15 +114,17 @@ class DescribeClusterResponse(ApiMessage):
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
-class DescribeLogDirsRequest(ApiMessage):
-    class DescribableLogDirTopic(DataContainer):
-        topic: str
-        partitions: list[int]
+class DescribeConfigsRequest(ApiMessage):
+    class DescribeConfigsResource(DataContainer):
+        resource_type: int
+        resource_name: str
+        configuration_keys: list[str] | None
         def __init__(
             self,
             *args: Any,
-            topic: str = ...,
-            partitions: list[int] = ...,
+            resource_type: int = ...,
+            resource_name: str = ...,
+            configuration_keys: list[str] | None = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -114,11 +132,15 @@ class DescribeLogDirsRequest(ApiMessage):
         def version(self) -> int | None: ...
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
-    topics: list[DescribableLogDirTopic] | None
+    resources: list[DescribeConfigsResource]
+    include_synonyms: bool
+    include_documentation: bool
     def __init__(
         self,
         *args: Any,
-        topics: list[DescribableLogDirTopic] | None = ...,
+        resources: list[DescribeConfigsResource] = ...,
+        include_synonyms: bool = ...,
+        include_documentation: bool = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -139,21 +161,19 @@ class DescribeLogDirsRequest(ApiMessage):
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
 
-class DescribeLogDirsResponse(ApiMessage):
-    class DescribeLogDirsResult(DataContainer):
-        class DescribeLogDirsTopic(DataContainer):
-            class DescribeLogDirsPartition(DataContainer):
-                partition_index: int
-                partition_size: int
-                offset_lag: int
-                is_future_key: bool
+class DescribeConfigsResponse(ApiMessage):
+    class DescribeConfigsResult(DataContainer):
+        class DescribeConfigsResourceResult(DataContainer):
+            class DescribeConfigsSynonym(DataContainer):
+                name: str
+                value: str | None
+                source: int
                 def __init__(
                     self,
                     *args: Any,
-                    partition_index: int = ...,
-                    partition_size: int = ...,
-                    offset_lag: int = ...,
-                    is_future_key: bool = ...,
+                    name: str = ...,
+                    value: str | None = ...,
+                    source: int = ...,
                     version: int | None = None,
                     **kwargs: Any,
                 ) -> None: ...
@@ -162,12 +182,26 @@ class DescribeLogDirsResponse(ApiMessage):
                 def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
             name: str
-            partitions: list[DescribeLogDirsPartition]
+            value: str | None
+            read_only: bool
+            config_source: int
+            is_default: bool
+            is_sensitive: bool
+            synonyms: list[DescribeConfigsSynonym]
+            config_type: int
+            documentation: str | None
             def __init__(
                 self,
                 *args: Any,
                 name: str = ...,
-                partitions: list[DescribeLogDirsPartition] = ...,
+                value: str | None = ...,
+                read_only: bool = ...,
+                config_source: int = ...,
+                is_default: bool = ...,
+                is_sensitive: bool = ...,
+                synonyms: list[DescribeConfigsSynonym] = ...,
+                config_type: int = ...,
+                documentation: str | None = ...,
                 version: int | None = None,
                 **kwargs: Any,
             ) -> None: ...
@@ -176,18 +210,18 @@ class DescribeLogDirsResponse(ApiMessage):
             def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
         error_code: int
-        log_dir: str
-        topics: list[DescribeLogDirsTopic]
-        total_bytes: int
-        usable_bytes: int
+        error_message: str | None
+        resource_type: int
+        resource_name: str
+        configs: list[DescribeConfigsResourceResult]
         def __init__(
             self,
             *args: Any,
             error_code: int = ...,
-            log_dir: str = ...,
-            topics: list[DescribeLogDirsTopic] = ...,
-            total_bytes: int = ...,
-            usable_bytes: int = ...,
+            error_message: str | None = ...,
+            resource_type: int = ...,
+            resource_name: str = ...,
+            configs: list[DescribeConfigsResourceResult] = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...
@@ -196,14 +230,12 @@ class DescribeLogDirsResponse(ApiMessage):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     throttle_time_ms: int
-    error_code: int
-    results: list[DescribeLogDirsResult]
+    results: list[DescribeConfigsResult]
     def __init__(
         self,
         *args: Any,
         throttle_time_ms: int = ...,
-        error_code: int = ...,
-        results: list[DescribeLogDirsResult] = ...,
+        results: list[DescribeConfigsResult] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
