@@ -29,6 +29,9 @@ class AlterPartitionReassignmentsResponse(ApiMessage): pass
 class ListPartitionReassignmentsRequest(ApiMessage): pass
 class ListPartitionReassignmentsResponse(ApiMessage): pass
 
+class DescribeTopicPartitionsRequest(ApiMessage): pass
+class DescribeTopicPartitionsResponse(ApiMessage): pass
+
 class DeleteRecordsRequest(ApiMessage): pass
 class DeleteRecordsResponse(ApiMessage): pass
 
@@ -48,6 +51,7 @@ __all__ = [
     'AlterPartitionRequest', 'AlterPartitionResponse',
     'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse',
     'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse',
+    'DescribeTopicPartitionsRequest', 'DescribeTopicPartitionsResponse',
     'DeleteRecordsRequest', 'DeleteRecordsResponse',
     'ElectLeadersRequest', 'ElectLeadersResponse', 'ElectionType',
 ]

@@ -6,7 +6,7 @@ from enum import IntEnum
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['CreateTopicsRequest', 'CreateTopicsResponse', 'DeleteTopicsRequest', 'DeleteTopicsResponse', 'CreatePartitionsRequest', 'CreatePartitionsResponse', 'AlterPartitionRequest', 'AlterPartitionResponse', 'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse', 'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse', 'DeleteRecordsRequest', 'DeleteRecordsResponse', 'ElectLeadersRequest', 'ElectLeadersResponse', 'ElectionType']
+__all__ = ['CreateTopicsRequest', 'CreateTopicsResponse', 'DeleteTopicsRequest', 'DeleteTopicsResponse', 'CreatePartitionsRequest', 'CreatePartitionsResponse', 'AlterPartitionRequest', 'AlterPartitionResponse', 'AlterPartitionReassignmentsRequest', 'AlterPartitionReassignmentsResponse', 'ListPartitionReassignmentsRequest', 'ListPartitionReassignmentsResponse', 'DescribeTopicPartitionsRequest', 'DescribeTopicPartitionsResponse', 'DeleteRecordsRequest', 'DeleteRecordsResponse', 'ElectLeadersRequest', 'ElectLeadersResponse', 'ElectionType']
 
 class CreateTopicsRequest(ApiMessage):
     class CreatableTopic(DataContainer):
@@ -726,6 +726,161 @@ class ListPartitionReassignmentsResponse(ApiMessage):
         error_code: int = ...,
         error_message: str | None = ...,
         topics: list[OngoingTopicReassignment] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class DescribeTopicPartitionsRequest(ApiMessage):
+    class TopicRequest(DataContainer):
+        name: str
+        def __init__(
+            self,
+            *args: Any,
+            name: str = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    class Cursor(DataContainer):
+        topic_name: str
+        partition_index: int
+        def __init__(
+            self,
+            *args: Any,
+            topic_name: str = ...,
+            partition_index: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    topics: list[TopicRequest]
+    response_partition_limit: int
+    cursor: Cursor | None
+    def __init__(
+        self,
+        *args: Any,
+        topics: list[TopicRequest] = ...,
+        response_partition_limit: int = ...,
+        cursor: Cursor | None = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class DescribeTopicPartitionsResponse(ApiMessage):
+    class DescribeTopicPartitionsResponseTopic(DataContainer):
+        class DescribeTopicPartitionsResponsePartition(DataContainer):
+            error_code: int
+            partition_index: int
+            leader_id: int
+            leader_epoch: int
+            replica_nodes: list[int]
+            isr_nodes: list[int]
+            eligible_leader_replicas: list[int] | None
+            last_known_elr: list[int] | None
+            offline_replicas: list[int]
+            def __init__(
+                self,
+                *args: Any,
+                error_code: int = ...,
+                partition_index: int = ...,
+                leader_id: int = ...,
+                leader_epoch: int = ...,
+                replica_nodes: list[int] = ...,
+                isr_nodes: list[int] = ...,
+                eligible_leader_replicas: list[int] | None = ...,
+                last_known_elr: list[int] | None = ...,
+                offline_replicas: list[int] = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        error_code: int
+        name: str | None
+        topic_id: uuid.UUID
+        is_internal: bool
+        partitions: list[DescribeTopicPartitionsResponsePartition]
+        topic_authorized_operations: int
+        def __init__(
+            self,
+            *args: Any,
+            error_code: int = ...,
+            name: str | None = ...,
+            topic_id: uuid.UUID = ...,
+            is_internal: bool = ...,
+            partitions: list[DescribeTopicPartitionsResponsePartition] = ...,
+            topic_authorized_operations: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    class Cursor(DataContainer):
+        topic_name: str
+        partition_index: int
+        def __init__(
+            self,
+            *args: Any,
+            topic_name: str = ...,
+            partition_index: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    topics: list[DescribeTopicPartitionsResponseTopic]
+    next_cursor: Cursor | None
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        topics: list[DescribeTopicPartitionsResponseTopic] = ...,
+        next_cursor: Cursor | None = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...

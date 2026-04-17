@@ -113,6 +113,11 @@ class BaseField:
     def for_version_q(self, version):
         return self._versions[0] <= version <= self._versions[1]
 
+    def nullable_for_version_q(self, version):
+        if self._nullable_versions is None:
+            return False
+        return self._nullable_versions[0] <= version <= self._nullable_versions[1]
+
     def tagged_field_q(self, version):
         if self._tag is None or self._tagged_versions is None:
             return False

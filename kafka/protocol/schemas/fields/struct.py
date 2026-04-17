@@ -72,6 +72,15 @@ class StructField(BaseField):
         return self._untagged_fields_cache[version]
 
     def encode(self, item, version=None, compact=False, tagged=False):
+        # Nested nullable struct: 1-byte prefix (0 = null, 1 = present).
+        # Top-level message structs never have nullableVersions set, so this
+        # check is safe without a top-level guard.
+        if self.nullable_for_version_q(version):
+            if item is None:
+                return b'\x00'
+            prefix = b'\x01'
+        else:
+            prefix = b''
         fields = self.untagged_fields(version)
         if isinstance(item, tuple):
             getter = lambda item, i, field: item[i]
@@ -94,10 +103,26 @@ class StructField(BaseField):
             encoded.append(self.tagged_fields(version).encode(tags, version=version))
         elif tagged is None:
             encoded.append(TaggedFields.encode_empty())
-        return b''.join(encoded)
+        return prefix + b''.join(encoded)
 
     def emit_encode_into(self, ctx, item_expr, indent, version=None, compact=False,
                           tagged=False, tuple_access=False):
+        # Top-level struct (item_expr == 'item') has its nullability handled
+        # by the parent struct; only inline null-prefix when this is a nested
+        # nullable struct field.
+        inline_nullable = (
+            self.nullable_for_version_q(version)
+            and item_expr != 'item'
+            and not tuple_access
+        )
+        if inline_nullable:
+            ctx.emit(indent, 'if %s is None:' % item_expr)
+            ctx.emit(indent, '    buf[pos] = 0')
+            ctx.emit(indent, '    pos += 1')
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, '    buf[pos] = 1')
+            ctx.emit(indent, '    pos += 1')
+            indent = indent + '    '
         fields = self.untagged_fields(version)
         for i, field in enumerate(fields):
             if tuple_access:
@@ -117,6 +142,14 @@ class StructField(BaseField):
             ctx.emit(indent, 'pos += 1')
 
     def encode_into(self, item, out, version=None, compact=False, tagged=False):
+        if self.nullable_for_version_q(version):
+            out.ensure(1)
+            if item is None:
+                out.buf[out.pos] = 0
+                out.pos += 1
+                return
+            out.buf[out.pos] = 1
+            out.pos += 1
         fields = self.untagged_fields(version)
         if isinstance(item, tuple):
             for i, field in enumerate(fields):
@@ -162,6 +195,19 @@ class StructField(BaseField):
 
         Batches adjacent batchable fields into single unpack_from calls.
         """
+        # Top-level struct decode (var_name == 'obj') has no outer null-prefix;
+        # only a nested nullable struct field consumes one.
+        inline_nullable = (
+            self.nullable_for_version_q(version)
+            and var_name != 'obj'
+        )
+        if inline_nullable:
+            ctx.emit(indent, 'if data[pos] == 0:')
+            ctx.emit(indent, '    pos += 1')
+            ctx.emit(indent, '    %s = None' % var_name)
+            ctx.emit(indent, 'else:')
+            ctx.emit(indent, '    pos += 1')
+            indent = indent + '    '
         fields = self.untagged_fields(version)
         data_class = self.data_class
 
@@ -279,6 +325,9 @@ class StructField(BaseField):
         return self._compiled_encoders[key]
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
+        if self.nullable_for_version_q(version):
+            if data.read(1) == b'\x00':
+                return None
         if data_class is None:
             data_class = self.data_class
         decoded = {
