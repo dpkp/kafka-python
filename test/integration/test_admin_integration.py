@@ -168,7 +168,7 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
-def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_factory, topic):
+def test_describe_group_exists(kafka_admin_client, kafka_consumer_factory, topic):
     """Tests that the describe consumer group call returns valid consumer group information
     This test takes inspiration from the test 'test_group' in test_consumer_group.py.
     """
@@ -234,20 +234,20 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
             sleep(1)
 
         info('Group stabilized; verifying assignment')
-        output = kafka_admin_client.describe_consumer_groups(group_id_list)
+        output = kafka_admin_client.describe_groups(group_id_list)
         assert len(output) == 2
-        consumer_groups = set()
-        for consumer_group in output.values():
-            assert(consumer_group['group_id'] in group_id_list)
-            if consumer_group['group_id'] == group_id_list[0]:
-                assert(len(consumer_group['members']) == 2)
+        groups = set()
+        for group in output.values():
+            assert(group['group_id'] in group_id_list)
+            if group['group_id'] == group_id_list[0]:
+                assert(len(group['members']) == 2)
             else:
-                assert(len(consumer_group['members']) == 1)
-            for member in consumer_group['members']:
+                assert(len(group['members']) == 1)
+            for member in group['members']:
                     assert(member['member_metadata']['topics'] == [topic])
                     assert(member['member_assignment']['assigned_partitions'][0]['topic'] == topic)
-            consumer_groups.add(consumer_group['group_id'])
-        assert(sorted(list(consumer_groups)) == group_id_list)
+            groups.add(group['group_id'])
+        assert(sorted(list(groups)) == group_id_list)
     finally:
         info('Shutting down %s consumers', num_consumers)
         for c in range(num_consumers):
@@ -260,7 +260,7 @@ def test_describe_consumer_group_exists(kafka_admin_client, kafka_consumer_facto
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
-def test_delete_consumer_groups(kafka_admin_client, kafka_consumer_factory, send_messages):
+def test_delete_groups(kafka_admin_client, kafka_consumer_factory, send_messages):
     random_group_id = 'test-group-' + random_string(6)
     group1 = random_group_id + "_1"
     group2 = random_group_id + "_2"
@@ -279,24 +279,24 @@ def test_delete_consumer_groups(kafka_admin_client, kafka_consumer_factory, send
     next(consumer3)
     consumer3.close()
 
-    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 in groups
     assert group2 in groups
     assert group3 in groups
 
-    delete_results = kafka_admin_client.delete_consumer_groups([group1, group2])
+    delete_results = kafka_admin_client.delete_groups([group1, group2])
     assert delete_results[group1] == 'OK'
     assert delete_results[group2] == 'OK'
     assert group3 not in delete_results
 
-    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 not in groups
     assert group2 not in groups
     assert group3 in groups
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")
-def test_delete_consumer_groups_with_errors(kafka_admin_client, kafka_consumer_factory, send_messages):
+def test_delete_groups_with_errors(kafka_admin_client, kafka_consumer_factory, send_messages):
     random_group_id = 'test-group-' + random_string(6)
     group1 = random_group_id + "_1"
     group2 = random_group_id + "_2"
@@ -310,17 +310,17 @@ def test_delete_consumer_groups_with_errors(kafka_admin_client, kafka_consumer_f
     consumer2 = kafka_consumer_factory(group_id=group2)
     next(consumer2)
 
-    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 in groups
     assert group2 in groups
     assert group3 not in groups
 
-    delete_results = kafka_admin_client.delete_consumer_groups([group1, group2, group3])
+    delete_results = kafka_admin_client.delete_groups([group1, group2, group3])
     assert delete_results[group1] == 'OK'
     assert delete_results[group2] == 'NonEmptyGroupError'
     assert delete_results[group3] == 'GroupIdNotFoundError'
 
-    groups = {group['group_id'] for group in kafka_admin_client.list_consumer_groups()}
+    groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 not in groups
     assert group2 in groups
     assert group3 not in groups
