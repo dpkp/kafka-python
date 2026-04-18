@@ -106,8 +106,6 @@ def run_cli(args=None):
 
     # [groups]
     # remove-members (not supported yet [uses LeaveGroupRequest])
-    # delete-offsets (not supported yet [uses OffsetDeleteRequest])
-    # alter-offsets (not supported yet [uses OffsetCommitRequest])
 
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
