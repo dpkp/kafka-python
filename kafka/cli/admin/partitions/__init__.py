@@ -16,11 +16,11 @@ class PartitionsSubCommand:
         commands = parser.add_subparsers()
         for cmd in [
             CreatePartitions,
+            DescribeTopicPartitions,
+            ListPartitionReassignments,
+            AlterPartitionReassignments,
             DeleteRecords,
             ElectLeaders,
-            AlterPartitionReassignments,
-            ListPartitionReassignments,
-            DescribeTopicPartitions,
         ]:
             cmd.add_subparser(commands)
         parser.set_defaults(command=lambda *_args: parser.print_help() or sys.exit(2))

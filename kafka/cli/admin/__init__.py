@@ -7,7 +7,7 @@ from kafka.admin.client import KafkaAdminClient
 from .acls import ACLsSubCommand
 from .cluster import ClusterSubCommand
 from .configs import ConfigsSubCommand
-from .consumer_groups import ConsumerGroupsSubCommand
+from .groups import GroupsSubCommand
 from .partitions import PartitionsSubCommand
 from .topics import TopicsSubCommand
 from .users import UsersSubCommand
@@ -51,7 +51,7 @@ def run_cli(args=None):
     subparsers = parser.add_subparsers(help='subcommands')
     for cmd in [ACLsSubCommand, ClusterSubCommand, ConfigsSubCommand,
                 TopicsSubCommand, PartitionsSubCommand,
-                ConsumerGroupsSubCommand, UsersSubCommand]:
+                GroupsSubCommand, UsersSubCommand]:
         cmd.add_subparser(subparsers)
     config = parser.parse_args(args)
 
@@ -104,16 +104,9 @@ def run_cli(args=None):
     # [configs]
     # IncrementalAlterConfigs (not supported yet)
 
-    # [consumer-groups]
-    # remove-members (not supported yet)
-    # delete-offsets (not supported yet)
-    # alter-offsets (not supported yet)
-
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
     # alter (AlterClientQuotas - not supported yet)
-
-    # DescribeQuorum (not supported yet)
 
     # [producers]
     # describe (DescribeProducers - not supported yet)
@@ -125,7 +118,6 @@ def run_cli(args=None):
 
     # [topics]
     # list-offsets (not supported yet)
-    # delete-offsets (OffsetDelete - not supported yet)
 
     # [cluster]
     # describe-features (DescribeFeatures - not supported yet)
@@ -133,3 +125,13 @@ def run_cli(args=None):
     # version
     # api-versions
     # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
+    # DescribeQuorum (not supported yet)
+    # UnregisterBroker
+    # AddRaftVoter
+    # RemoveRaftVoter
+
+    # [tokens] *DelegationTokenRequest
+    # create
+    # describe
+    # renew
+    # expire

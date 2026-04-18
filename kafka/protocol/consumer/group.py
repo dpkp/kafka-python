@@ -22,6 +22,9 @@ class OffsetFetchResponse(ApiMessage): pass
 class OffsetCommitRequest(ApiMessage): pass
 class OffsetCommitResponse(ApiMessage): pass
 
+class OffsetDeleteRequest(ApiMessage): pass
+class OffsetDeleteResponse(ApiMessage): pass
+
 
 __all__ = [
     'DEFAULT_GENERATION_ID', 'UNKNOWN_MEMBER_ID',
@@ -31,4 +34,5 @@ __all__ = [
     'HeartbeatRequest', 'HeartbeatResponse',
     'OffsetFetchRequest', 'OffsetFetchResponse',
     'OffsetCommitRequest', 'OffsetCommitResponse',
+    'OffsetDeleteRequest', 'OffsetDeleteResponse',
 ]

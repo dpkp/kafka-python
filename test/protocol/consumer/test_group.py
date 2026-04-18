@@ -9,6 +9,7 @@ from kafka.protocol.consumer import (
     HeartbeatRequest, HeartbeatResponse,
     OffsetFetchRequest, OffsetFetchResponse,
     OffsetCommitRequest, OffsetCommitResponse,
+    OffsetDeleteRequest, OffsetDeleteResponse,
 )
 from kafka.protocol.consumer.metadata import ConsumerProtocolSubscription
 
@@ -330,6 +331,49 @@ def test_offset_commit_response_roundtrip(version):
     )
     encoded = response.encode(version=version)
     decoded = OffsetCommitResponse.decode(encoded, version=version)
+    assert decoded == response
+
+
+@pytest.mark.parametrize("version", range(OffsetDeleteRequest.min_version, OffsetDeleteRequest.max_version + 1))
+def test_offset_delete_request_roundtrip(version):
+    Topic = OffsetDeleteRequest.OffsetDeleteRequestTopic
+    Partition = Topic.OffsetDeleteRequestPartition
+    request = OffsetDeleteRequest(
+        group_id="test-group",
+        topics=[
+            Topic(
+                name="topic-1",
+                partitions=[
+                    Partition(partition_index=0),
+                    Partition(partition_index=1),
+                ],
+            ),
+        ],
+    )
+    encoded = request.encode(version=version)
+    decoded = OffsetDeleteRequest.decode(encoded, version=version)
+    assert decoded == request
+
+
+@pytest.mark.parametrize("version", range(OffsetDeleteResponse.min_version, OffsetDeleteResponse.max_version + 1))
+def test_offset_delete_response_roundtrip(version):
+    Topic = OffsetDeleteResponse.OffsetDeleteResponseTopic
+    Partition = Topic.OffsetDeleteResponsePartition
+    response = OffsetDeleteResponse(
+        error_code=0,
+        throttle_time_ms=100,
+        topics=[
+            Topic(
+                name="topic-1",
+                partitions=[
+                    Partition(partition_index=0, error_code=0),
+                    Partition(partition_index=1, error_code=28),
+                ],
+            ),
+        ],
+    )
+    encoded = response.encode(version=version)
+    decoded = OffsetDeleteResponse.decode(encoded, version=version)
     assert decoded == response
 
 

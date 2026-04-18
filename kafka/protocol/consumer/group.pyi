@@ -6,7 +6,7 @@ from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.api_data import ApiData
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['DEFAULT_GENERATION_ID', 'UNKNOWN_MEMBER_ID', 'JoinGroupRequest', 'JoinGroupResponse', 'SyncGroupRequest', 'SyncGroupResponse', 'LeaveGroupRequest', 'LeaveGroupResponse', 'HeartbeatRequest', 'HeartbeatResponse', 'OffsetFetchRequest', 'OffsetFetchResponse', 'OffsetCommitRequest', 'OffsetCommitResponse']
+__all__ = ['DEFAULT_GENERATION_ID', 'UNKNOWN_MEMBER_ID', 'JoinGroupRequest', 'JoinGroupResponse', 'SyncGroupRequest', 'SyncGroupResponse', 'LeaveGroupRequest', 'LeaveGroupResponse', 'HeartbeatRequest', 'HeartbeatResponse', 'OffsetFetchRequest', 'OffsetFetchResponse', 'OffsetCommitRequest', 'OffsetCommitResponse', 'OffsetDeleteRequest', 'OffsetDeleteResponse']
 
 DEFAULT_GENERATION_ID: int
 
@@ -679,6 +679,122 @@ class OffsetCommitResponse(ApiMessage):
         *args: Any,
         throttle_time_ms: int = ...,
         topics: list[OffsetCommitResponseTopic] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class OffsetDeleteRequest(ApiMessage):
+    class OffsetDeleteRequestTopic(DataContainer):
+        class OffsetDeleteRequestPartition(DataContainer):
+            partition_index: int
+            def __init__(
+                self,
+                *args: Any,
+                partition_index: int = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        name: str
+        partitions: list[OffsetDeleteRequestPartition]
+        def __init__(
+            self,
+            *args: Any,
+            name: str = ...,
+            partitions: list[OffsetDeleteRequestPartition] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    group_id: str
+    topics: list[OffsetDeleteRequestTopic]
+    def __init__(
+        self,
+        *args: Any,
+        group_id: str = ...,
+        topics: list[OffsetDeleteRequestTopic] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class OffsetDeleteResponse(ApiMessage):
+    class OffsetDeleteResponseTopic(DataContainer):
+        class OffsetDeleteResponsePartition(DataContainer):
+            partition_index: int
+            error_code: int
+            def __init__(
+                self,
+                *args: Any,
+                partition_index: int = ...,
+                error_code: int = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        name: str
+        partitions: list[OffsetDeleteResponsePartition]
+        def __init__(
+            self,
+            *args: Any,
+            name: str = ...,
+            partitions: list[OffsetDeleteResponsePartition] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    error_code: int
+    throttle_time_ms: int
+    topics: list[OffsetDeleteResponseTopic]
+    def __init__(
+        self,
+        *args: Any,
+        error_code: int = ...,
+        throttle_time_ms: int = ...,
+        topics: list[OffsetDeleteResponseTopic] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
