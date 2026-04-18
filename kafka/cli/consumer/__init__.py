@@ -19,6 +19,9 @@ def main_parser():
         '-g', '--group', type=str, required=True,
         help='consumer group')
     parser.add_argument(
+        '-i', '--group-instance-id', type=str,
+        help='static group membership identifier')
+    parser.add_argument(
         '-f', '--format', type=str, default='str',
         help='output format: str|raw|full')
     parser.add_argument(
@@ -71,7 +74,11 @@ def run_cli(args=None):
     logger = logging.getLogger(__name__)
 
     kwargs = build_kwargs(config.extra_config)
-    consumer = KafkaConsumer(bootstrap_servers=config.bootstrap_servers, group_id=config.group, **kwargs)
+    consumer = KafkaConsumer(
+        bootstrap_servers=config.bootstrap_servers,
+        group_id=config.group,
+        group_instance_id=config.group_instance_id,
+        **kwargs)
     consumer.subscribe(config.topics)
     try:
         for m in consumer:
