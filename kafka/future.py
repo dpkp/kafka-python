@@ -35,11 +35,15 @@ class Future:
         # release (cheaper than `with`), callbacks snapshot under the lock,
         # dispatch outside the lock, inlined callback loop (avoids an extra
         # Python frame per completion).
+        # Clearing the lists releases any reference cycle held via stored
+        # bound methods (e.g. FutureProduceResult<->FutureRecordMetadata).
         lock = self._lock
         lock.acquire()
         self.value = value
         self.is_done = True
         callbacks = self._callbacks
+        self._callbacks = None
+        self._errbacks = None
         lock.release()
         if callbacks:
             error_on_callbacks = self.error_on_callbacks
@@ -61,6 +65,8 @@ class Future:
         self.exception = exception
         self.is_done = True
         errbacks = self._errbacks
+        self._callbacks = None
+        self._errbacks = None
         lock.release()
         if errbacks:
             error_on_callbacks = self.error_on_callbacks
