@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING
 import kafka.errors as Errors
 from kafka.admin._acls import valid_acl_operations
 from kafka.protocol.admin import DeleteGroupsRequest, DescribeGroupsRequest, ListGroupsRequest
-from kafka.protocol.consumer import OffsetFetchRequest
+from kafka.protocol.consumer import (
+    OffsetCommitRequest, OffsetDeleteRequest, OffsetFetchRequest,
+)
+from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.protocol.consumer.metadata import (
     ConsumerProtocolAssignment, ConsumerProtocolSubscription, ConsumerProtocolType,
 )
@@ -252,3 +255,138 @@ class GroupAdminMixin:
             A list of tuples (group_id, KafkaError)
         """
         return self._manager.run(self._async_delete_groups, group_ids, group_coordinator_id)
+
+    # -- Alter group offsets -----------------------------------------------
+
+    @staticmethod
+    def _alter_group_offsets_request(group_id, offsets):
+        _Topic = OffsetCommitRequest.OffsetCommitRequestTopic
+        _Partition = _Topic.OffsetCommitRequestPartition
+        topic2partitions = defaultdict(list)
+        for tp, oam in offsets.items():
+            topic2partitions[tp.topic].append(_Partition(
+                partition_index=tp.partition,
+                committed_offset=oam.offset,
+                committed_leader_epoch=-1 if oam.leader_epoch is None else oam.leader_epoch,
+                committed_metadata=oam.metadata,
+            ))
+        return OffsetCommitRequest(
+            group_id=group_id,
+            generation_id_or_member_epoch=DEFAULT_GENERATION_ID,
+            member_id=UNKNOWN_MEMBER_ID,
+            group_instance_id=None,
+            retention_time_ms=-1,
+            topics=[_Topic(name=name, partitions=parts)
+                    for name, parts in topic2partitions.items()],
+        )
+
+    @staticmethod
+    def _alter_group_offsets_process_response(response):
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                results[TopicPartition(topic.name, partition.partition_index)] = \
+                    Errors.for_code(partition.error_code)
+        return results
+
+    async def _async_alter_group_offsets(self, group_id, offsets, group_coordinator_id=None):
+        if not offsets:
+            return {}
+        if group_coordinator_id is None:
+            group_coordinator_id = await self._find_coordinator_id(group_id)
+        request = self._alter_group_offsets_request(group_id, offsets)
+        response = await self._manager.send(request, node_id=group_coordinator_id)
+        return self._alter_group_offsets_process_response(response)
+
+    def alter_group_offsets(self, group_id, offsets, group_coordinator_id=None):
+        """Alter committed offsets for a consumer group.
+
+        Mirrors Java's ``Admin.alterConsumerGroupOffsets``. The group must
+        have no active members (i.e. be empty or dead) for the commit to
+        succeed; otherwise individual partitions may return
+        ``UNKNOWN_MEMBER_ID`` or similar errors.
+
+        Arguments:
+            group_id (str): The consumer group id.
+            offsets (dict): A dict mapping :class:`~kafka.TopicPartition` to
+                :class:`~kafka.structs.OffsetAndMetadata`.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's
+                coordinator broker. If None, the cluster will be queried to
+                locate the coordinator. Default: None.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to the
+            partition-level :class:`~kafka.errors.KafkaError` class
+            (``NoError`` on success).
+        """
+        return self._manager.run(
+            self._async_alter_group_offsets, group_id, offsets, group_coordinator_id)
+
+    # -- Delete group offsets ----------------------------------------------
+
+    @staticmethod
+    def _delete_group_offsets_request(group_id, partitions):
+        _Topic = OffsetDeleteRequest.OffsetDeleteRequestTopic
+        _Partition = _Topic.OffsetDeleteRequestPartition
+        topic2partitions = defaultdict(list)
+        for tp in partitions:
+            topic2partitions[tp.topic].append(
+                _Partition(partition_index=tp.partition))
+        return OffsetDeleteRequest(
+            group_id=group_id,
+            topics=[_Topic(name=name, partitions=parts)
+                    for name, parts in topic2partitions.items()],
+        )
+
+    @staticmethod
+    def _delete_group_offsets_process_response(response):
+        top_level = Errors.for_code(response.error_code)
+        if top_level is not Errors.NoError:
+            raise top_level(
+                "OffsetDeleteRequest failed with response '{}'.".format(response))
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                results[TopicPartition(topic.name, partition.partition_index)] = \
+                    Errors.for_code(partition.error_code)
+        return results
+
+    async def _async_delete_group_offsets(self, group_id, partitions, group_coordinator_id=None):
+        if not partitions:
+            return {}
+        if group_coordinator_id is None:
+            group_coordinator_id = await self._find_coordinator_id(group_id)
+        request = self._delete_group_offsets_request(group_id, partitions)
+        response = await self._manager.send(request, node_id=group_coordinator_id)
+        return self._delete_group_offsets_process_response(response)
+
+    def delete_group_offsets(self, group_id, partitions, group_coordinator_id=None):
+        """Delete committed offsets for a consumer group.
+
+        Mirrors Java's ``Admin.deleteConsumerGroupOffsets``. The group must
+        have no active members subscribed to the given topics; otherwise
+        individual partitions may fail with ``GROUP_SUBSCRIBED_TO_TOPIC``.
+
+        Arguments:
+            group_id (str): The consumer group id.
+            partitions: An iterable of :class:`~kafka.TopicPartition` whose
+                committed offsets should be deleted.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's
+                coordinator broker. If None, the cluster will be queried to
+                locate the coordinator. Default: None.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to the
+            partition-level :class:`~kafka.errors.KafkaError` class
+            (``NoError`` on success).
+
+        Raises:
+            KafkaError: If the response contains a top-level error (e.g.
+                ``GroupIdNotFoundError``, ``NonEmptyGroupError``).
+        """
+        return self._manager.run(
+            self._async_delete_group_offsets, group_id, partitions, group_coordinator_id)
