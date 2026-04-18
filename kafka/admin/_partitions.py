@@ -20,7 +20,9 @@ from kafka.protocol.admin import (
     ElectionType,
     ListPartitionReassignmentsRequest,
 )
-from kafka.structs import TopicPartition
+from kafka.protocol.consumer import ListOffsetsRequest, IsolationLevel, OffsetSpec
+from kafka.structs import TopicPartition, OffsetAndTimestamp
+
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -418,6 +420,100 @@ class PartitionAdminMixin:
         """
         return self._manager.run(
             self._async_describe_topic_partitions, topics, response_partition_limit, cursor)
+
+    # -- List partition offsets --------------------------------------------
+
+    @staticmethod
+    def _list_partition_offsets_request(partition_timestamps, isolation_level_int):
+        min_version = max(ListOffsetsRequest.min_version_for_isolation_level(isolation_level_int), 0)
+        _Topic = ListOffsetsRequest.ListOffsetsTopic
+        _Partition = _Topic.ListOffsetsPartition
+        topic2partitions = defaultdict(list)
+        for tp, ts in partition_timestamps.items():
+            if not isinstance(ts, (int, OffsetSpec)):
+                raise TypeError(f'Unsupported ts type {type(ts)}, expected int or OffsetSpec')
+            elif int(ts) < 0:
+                min_version = max(ListOffsetsRequest.min_version_for_timestamp(ts), min_version)
+            topic2partitions[tp.topic].append(
+                _Partition(partition_index=tp.partition, timestamp=ts))
+        return ListOffsetsRequest(
+            replica_id=-1,
+            isolation_level=isolation_level_int,
+            topics=[_Topic(name=name, partitions=parts)
+                    for name, parts in topic2partitions.items()],
+            min_version=min_version,
+        )
+
+    @staticmethod
+    def _list_partition_offsets_process_response(response):
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                err = Errors.for_code(partition.error_code)
+                if err is not Errors.NoError:
+                    raise err(
+                        "ListOffsetsRequest failed for %s: %s" % (tp, err.__name__))
+                leader_epoch = getattr(partition, 'leader_epoch', -1)
+                results[tp] = OffsetAndTimestamp(
+                    offset=partition.offset,
+                    timestamp=partition.timestamp,
+                    leader_epoch=leader_epoch if leader_epoch >= 0 else None,
+                )
+        return results
+
+    async def _async_list_partition_offsets(self, topic_partitions, isolation_level='read_uncommitted'):
+        if not topic_partitions:
+            return {}
+
+        if isinstance(isolation_level, str):
+            try:
+                isolation_level = IsolationLevel[isolation_level.upper()]
+            except KeyError:
+                raise ValueError(f'Unrecognized isolation_level: {isolation_level}')
+        elif isinstance(isolation_level, int):
+            isolation_level = IsolationLevel(isolation_level)
+
+        leader2partitions = await self._async_get_leader_for_partitions(set(topic_partitions.keys()))
+
+        results = {}
+        for leader, partitions in leader2partitions.items():
+            request = self._list_partition_offsets_request(
+                {tp: spec for tp, spec in topic_partitions.items() if tp in partitions},
+                isolation_level.value)
+            response = await self._manager.send(request, node_id=leader)
+            results.update(self._list_partition_offsets_process_response(response))
+        return results
+
+    def list_partition_offsets(self, topic_partitions, isolation_level='read_uncommitted'):
+        """Look up offsets for the given partitions by spec.
+
+        Partitions are routed to their respective leader brokers via cluster
+        metadata; one ``ListOffsetsRequest`` is sent per leader.
+
+        Arguments:
+            topic_partitions: dict mapping :class:`~kafka.TopicPartition` to
+                :class:`OffsetSpec` (or a raw integer timestamp /
+                wire-level sentinel).
+
+        Keyword Arguments:
+            isolation_level (str, optional): One of ``'read_uncommitted'``
+                (default) or ``'read_committed'``. ``read_committed`` requires
+                broker support for ListOffsets v2+.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to
+            :class:`~kafka.structs.OffsetAndTimestamp`
+
+        Raises:
+            KafkaError: If any partition response carries an error code.
+            UnknownTopicOrPartitionError: If a requested partition is not
+                known to the cluster.
+            UnsupportedVersionError: If the broker does not support a version
+                of ListOffsetsRequest compatible with the requested specs.
+        """
+        return self._manager.run(
+            self._async_list_partition_offsets, topic_partitions, isolation_level)
 
 
 class NewPartitions:
