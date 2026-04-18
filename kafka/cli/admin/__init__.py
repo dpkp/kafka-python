@@ -104,16 +104,14 @@ def run_cli(args=None):
     # [configs]
     # IncrementalAlterConfigs (not supported yet)
 
-    # [consumer-groups]
-    # remove-members (not supported yet)
-    # delete-offsets (not supported yet)
-    # alter-offsets (not supported yet)
+    # [groups]
+    # remove-members (not supported yet [uses LeaveGroupRequest])
+    # delete-offsets (not supported yet [uses OffsetDeleteRequest])
+    # alter-offsets (not supported yet [uses OffsetCommitRequest])
 
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
     # alter (AlterClientQuotas - not supported yet)
-
-    # DescribeQuorum (not supported yet)
 
     # [producers]
     # describe (DescribeProducers - not supported yet)
@@ -133,3 +131,4 @@ def run_cli(args=None):
     # version
     # api-versions
     # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
+    # DescribeQuorum (not supported yet)
