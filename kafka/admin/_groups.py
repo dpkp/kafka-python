@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import logging
 from collections import defaultdict
+import struct
 from typing import TYPE_CHECKING
 
 import kafka.errors as Errors
@@ -45,8 +46,18 @@ class GroupAdminMixin:
         assert len(response.groups) == 1
         for group in response.groups:
             for member in group.members:
-                member.member_metadata = ConsumerProtocolSubscription.decode(member.member_metadata)
-                member.member_assignment = ConsumerProtocolAssignment.decode(member.member_assignment)
+                if member.member_metadata:
+                    try:
+                        member.member_metadata = ConsumerProtocolSubscription.decode(member.member_metadata)
+                    except struct.error:
+                        log.warn(f'Unable to decode member_metadata for {group}/{member.member_id}')
+                        pass
+                if member.member_assignment:
+                    try:
+                        member.member_assignment = ConsumerProtocolAssignment.decode(member.member_assignment)
+                    except struct.error:
+                        log.warn(f'Unable to decode member_assignment for {group}/{member.member_id}')
+                        pass
         # Return dict (key, val) tuples
         return [(group.group_id, self._process_acl_operations(group.to_dict())) for group in response.groups]
 
