@@ -21,7 +21,7 @@ def add_acl_filter_args(parser):
     parser.add_argument('--resource-type', type=str, default='any',
                         choices=_enum_names(ResourceType),
                         help='Resource type (default: any)')
-    parser.add_argument('--resource-name', type=str, default=None, help='Resource name')
+    parser.add_argument('--resource-name', type=str, default=None, help='Resource name (* wildcards accepted)')
     parser.add_argument('--pattern-type', type=str, default='any',
                         choices=_enum_names(ACLResourcePatternType),
                         help='Resource pattern type (default: any)')
@@ -40,7 +40,7 @@ def add_acl_args(parser, required=False):
     parser.add_argument('--resource-type', type=str, required=required,
                         choices=_enum_names(ResourceType),
                         help='Resource type')
-    parser.add_argument('--resource-name', type=str, required=required, help='Resource name')
+    parser.add_argument('--resource-name', type=str, required=required, help='Resource name (* wildcards accepted)')
     parser.add_argument('--pattern-type', type=str, default='literal',
                         choices=_enum_names(ACLResourcePatternType),
                         help='Resource pattern type (default: literal)')
