@@ -301,9 +301,8 @@ class GroupAdminMixin:
     def alter_group_offsets(self, group_id, offsets, group_coordinator_id=None):
         """Alter committed offsets for a consumer group.
 
-        Mirrors Java's ``Admin.alterConsumerGroupOffsets``. The group must
-        have no active members (i.e. be empty or dead) for the commit to
-        succeed; otherwise individual partitions may return
+        The group must have no active members (i.e. be empty or dead) for
+        the commit to succeed; otherwise individual partitions may return
         ``UNKNOWN_MEMBER_ID`` or similar errors.
 
         Arguments:
@@ -365,9 +364,8 @@ class GroupAdminMixin:
     def delete_group_offsets(self, group_id, partitions, group_coordinator_id=None):
         """Delete committed offsets for a consumer group.
 
-        Mirrors Java's ``Admin.deleteConsumerGroupOffsets``. The group must
-        have no active members subscribed to the given topics; otherwise
-        individual partitions may fail with ``GROUP_SUBSCRIBED_TO_TOPIC``.
+        The group must have no active members subscribed to the given topics;
+        otherwise partitions may fail with ``GROUP_SUBSCRIBED_TO_TOPIC``.
 
         Arguments:
             group_id (str): The consumer group id.
