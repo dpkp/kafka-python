@@ -118,7 +118,6 @@ def run_cli(args=None):
 
     # [topics]
     # list-offsets (not supported yet)
-    # delete-offsets (OffsetDelete - not supported yet)
 
     # [cluster]
     # describe-features (DescribeFeatures - not supported yet)
@@ -127,3 +126,12 @@ def run_cli(args=None):
     # api-versions
     # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
     # DescribeQuorum (not supported yet)
+    # UnregisterBroker
+    # AddRaftVoter
+    # RemoveRaftVoter
+
+    # [tokens] *DelegationTokenRequest
+    # create
+    # describe
+    # renew
+    # expire
