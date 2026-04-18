@@ -72,12 +72,12 @@ class StructField(BaseField):
         return self._untagged_fields_cache[version]
 
     def encode(self, item, version=None, compact=False, tagged=False):
-        # Nested nullable struct: 1-byte prefix (0 = null, 1 = present).
-        # Top-level message structs never have nullableVersions set, so this
-        # check is safe without a top-level guard.
+        # Nested nullable struct (KIP-893): 1-byte INT8 prefix, -1 = null,
+        # 1 = present. Top-level message structs never have nullableVersions
+        # set, so this check is safe without a top-level guard.
         if self.nullable_for_version_q(version):
             if item is None:
-                return b'\x00'
+                return b'\xff'
             prefix = b'\x01'
         else:
             prefix = b''
@@ -117,7 +117,7 @@ class StructField(BaseField):
         )
         if inline_nullable:
             ctx.emit(indent, 'if %s is None:' % item_expr)
-            ctx.emit(indent, '    buf[pos] = 0')
+            ctx.emit(indent, '    buf[pos] = 0xff')
             ctx.emit(indent, '    pos += 1')
             ctx.emit(indent, 'else:')
             ctx.emit(indent, '    buf[pos] = 1')
@@ -145,7 +145,7 @@ class StructField(BaseField):
         if self.nullable_for_version_q(version):
             out.ensure(1)
             if item is None:
-                out.buf[out.pos] = 0
+                out.buf[out.pos] = 0xff
                 out.pos += 1
                 return
             out.buf[out.pos] = 1
@@ -202,7 +202,7 @@ class StructField(BaseField):
             and var_name != 'obj'
         )
         if inline_nullable:
-            ctx.emit(indent, 'if data[pos] == 0:')
+            ctx.emit(indent, 'if data[pos] == 0xff:')
             ctx.emit(indent, '    pos += 1')
             ctx.emit(indent, '    %s = None' % var_name)
             ctx.emit(indent, 'else:')
@@ -326,7 +326,7 @@ class StructField(BaseField):
 
     def decode(self, data, version=None, compact=False, tagged=False, data_class=None):
         if self.nullable_for_version_q(version):
-            if data.read(1) == b'\x00':
+            if data.read(1) == b'\xff':
                 return None
         if data_class is None:
             data_class = self.data_class

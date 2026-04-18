@@ -323,8 +323,9 @@ def test_nullable_child_wire_format_null():
     # Build inner child class via the field's data_class (set by __init_subclass__).
     item = Outer(version=0, x=7, child=None)
     encoded = struct.encode(item, version=0, compact=True, tagged=None)
-    # int32 x=7 (4 bytes), nullable struct prefix 0x00, empty tagged fields 0x00
-    assert encoded == b'\x00\x00\x00\x07\x00\x00'
+    # int32 x=7 (4 bytes), nullable struct prefix 0xff (KIP-893 null = -1),
+    # empty tagged fields 0x00
+    assert encoded == b'\x00\x00\x00\x07\xff\x00'
 
 
 def test_nullable_child_wire_format_present():

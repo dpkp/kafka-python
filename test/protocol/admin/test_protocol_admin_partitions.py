@@ -12,6 +12,14 @@ def _versions(cls):
     return range(lo, hi + 1)
 
 
+def test_describe_topic_partitions_raw_bytes():
+    # bytes encoding from java client
+    data = bytes.fromhex('00 4b 00 00 00 00 00 7b 00 09 6d 79 2d 63 6c 69 65 6e 74 00 02 04 66 6f 6f 00 00 00 07 d0 ff 00')
+    request = DescribeTopicPartitionsRequest.decode(data, version=0, header=True, framed=False)
+    _TopicRequest = DescribeTopicPartitionsRequest.TopicRequest
+    assert request == DescribeTopicPartitionsRequest(version=0, topics=[_TopicRequest(version=0, name='foo')], response_partition_limit=2000, cursor=None)
+
+
 @pytest.mark.parametrize("version", _versions(DescribeTopicPartitionsRequest))
 def test_describe_topic_partitions_request_roundtrip(version):
     Topic = DescribeTopicPartitionsRequest.TopicRequest
