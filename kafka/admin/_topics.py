@@ -1,6 +1,6 @@
 """Topic management mixin for KafkaAdminClient.
 
-Also defines NewTopic and NewPartitions data classes.
+Also defines NewTopic data class.
 """
 
 from __future__ import annotations
@@ -244,60 +244,6 @@ class TopicAdminMixin:
         result['topics'] = result.pop('responses')
         return result
 
-    @staticmethod
-    def _process_create_partitions_input(topic_partitions):
-        _Topic = CreatePartitionsRequest.CreatePartitionsTopic
-        _Assignment = CreatePartitionsRequest.CreatePartitionsTopic.CreatePartitionsAssignment
-        topics = []
-        for topic, count in topic_partitions.items():
-            if isinstance(count, int):
-                topics.append(_Topic(name=topic, count=count))
-            elif isinstance(count, dict):
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count['count'],
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count['assignments']]))
-            else:
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count.total_count,
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count.new_assignments]))
-        return topics
-
-    def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False, raise_errors=True):
-        """Create additional partitions for an existing topic.
-
-        Arguments:
-            topic_partitions: A dict of topic name strings to total partition count (int),
-                or a dict of {topic_name: {count: int, assignments: [[broker_ids]]}}
-                if manual assignment is desired.
-                dict of {topic_name: NewPartition} is deprecated.
-
-        Keyword Arguments:
-            timeout_ms (numeric, optional): Milliseconds to wait for new partitions to be
-                created before the broker returns.
-            validate_only (bool, optional): If True, don't actually create new partitions.
-                Default: False
-            raise_errors (bool, optional): Whether to raise errors as exceptions. Default True.
-
-        Returns:
-            Appropriate version of CreatePartitionsResponse class.
-        """
-        timeout_ms = self._validate_timeout(timeout_ms)
-        request = CreatePartitionsRequest(
-            topics=self._process_create_partitions_input(topic_partitions),
-            timeout_ms=timeout_ms,
-            validate_only=validate_only)
-
-        def response_errors(r):
-            for result in r.results:
-                yield Errors.for_code(result.error_code)
-        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
-
 
 class NewTopic:
     """DEPRECATED: A class for new topic creation.
@@ -320,22 +266,3 @@ class NewTopic:
         self.replication_factor = replication_factor
         self.replica_assignments = replica_assignments or {}
         self.topic_configs = topic_configs or {}
-
-
-class NewPartitions:
-    """DEPRECATED: A class for new partition creation on existing topics.
-
-    Note that the length of new_assignments, if specified, must be the
-    difference between the new total number of partitions and the existing
-    number of partitions.
-
-    Arguments:
-        total_count (int): the total number of partitions that should exist
-            on the topic
-        new_assignments ([[int]]): an array of arrays of replica assignments
-            for new partitions. If not set, broker assigns replicas per an
-            internal algorithm.
-    """
-    def __init__(self, total_count, new_assignments=None):
-        self.total_count = total_count
-        self.new_assignments = new_assignments
