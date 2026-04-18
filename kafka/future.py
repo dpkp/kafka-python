@@ -37,6 +37,10 @@ class Future(object):
             self.is_done = True
         if self._callbacks:
             self._call_backs('callback', self._callbacks, self.value)
+        # Clearing the lists releases any reference cycle held via stored
+        # bound methods (e.g. FutureProduceResult<->FutureRecordMetadata).
+        self._callbacks = None
+        self._errbacks = None
         return self
 
     def failure(self, e):
@@ -48,6 +52,10 @@ class Future(object):
             self.exception = exception
             self.is_done = True
         self._call_backs('errback', self._errbacks, self.exception)
+        # Clearing the lists releases any reference cycle held via stored
+        # bound methods (e.g. FutureProduceResult<->FutureRecordMetadata).
+        self._callbacks = None
+        self._errbacks = None
         return self
 
     def add_callback(self, f, *args, **kwargs):
