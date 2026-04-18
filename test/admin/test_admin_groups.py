@@ -1,13 +1,15 @@
 import pytest
 
-from kafka.admin import KafkaAdminClient
+from kafka.admin import KafkaAdminClient, MemberToRemove
 from kafka.errors import (
     GroupIdNotFoundError,
     GroupSubscribedToTopicError,
     NoError,
     UnknownMemberIdError,
+    UnsupportedVersionError,
 )
 from kafka.protocol.consumer import (
+    LeaveGroupRequest, LeaveGroupResponse,
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetDeleteRequest, OffsetDeleteResponse,
 )
@@ -301,3 +303,204 @@ class TestDeleteGroupOffsetsMockBroker:
         finally:
             admin.close()
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# remove_group_members
+# ---------------------------------------------------------------------------
+
+
+class TestRemoveGroupMembersMockBroker:
+
+    def test_batch_success_returns_member_to_noerror(self):
+        broker = MockBroker()  # broker_version=(4, 2) -> LeaveGroup v5
+        _MemberResp = LeaveGroupResponse.MemberResponse
+        broker.respond(
+            LeaveGroupRequest,
+            LeaveGroupResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                members=[
+                    _MemberResp(member_id='m1', group_instance_id=None, error_code=0),
+                    _MemberResp(member_id='', group_instance_id='static-1', error_code=0),
+                ],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.remove_group_members(
+                'g1',
+                [
+                    MemberToRemove(member_id='m1'),
+                    MemberToRemove(group_instance_id='static-1'),
+                ],
+                group_coordinator_id=0,
+            )
+        finally:
+            admin.close()
+
+        assert result == {
+            MemberToRemove(member_id='m1'): NoError,
+            MemberToRemove(group_instance_id='static-1'): NoError,
+        }
+
+    def test_batch_request_fields(self):
+        broker = MockBroker()
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['version'] = api_version
+            captured['request'] = LeaveGroupRequest.decode(
+                request_bytes, version=api_version, header=True)
+            return LeaveGroupResponse(
+                throttle_time_ms=0, error_code=0, members=[])
+
+        broker.respond_fn(LeaveGroupRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.remove_group_members(
+                'g1',
+                [
+                    MemberToRemove(member_id='m1', reason='rebalance'),
+                    MemberToRemove(group_instance_id='inst-2', reason='shutdown'),
+                ],
+                group_coordinator_id=0,
+            )
+        finally:
+            admin.close()
+
+        assert captured['version'] >= 3
+        req = captured['request']
+        assert req.group_id == 'g1'
+        assert len(req.members) == 2
+        m1 = req.members[0]
+        assert m1.member_id == 'm1'
+        assert m1.group_instance_id is None
+        m2 = req.members[1]
+        assert m2.member_id == ''
+        assert m2.group_instance_id == 'inst-2'
+        if captured['version'] >= 5:
+            assert m1.reason == 'rebalance'
+            assert m2.reason == 'shutdown'
+
+    def test_batch_top_level_error_raises(self):
+        broker = MockBroker()
+        broker.respond(
+            LeaveGroupRequest,
+            LeaveGroupResponse(
+                throttle_time_ms=0,
+                error_code=GroupIdNotFoundError.errno,
+                members=[],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(GroupIdNotFoundError):
+                admin.remove_group_members(
+                    'g1',
+                    [MemberToRemove(member_id='m1')],
+                    group_coordinator_id=0,
+                )
+        finally:
+            admin.close()
+
+    def test_batch_per_member_error_returned(self):
+        broker = MockBroker()
+        _MemberResp = LeaveGroupResponse.MemberResponse
+        broker.respond(
+            LeaveGroupRequest,
+            LeaveGroupResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                members=[
+                    _MemberResp(member_id='m1', group_instance_id=None,
+                                error_code=UnknownMemberIdError.errno),
+                ],
+            ),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.remove_group_members(
+                'g1',
+                [MemberToRemove(member_id='m1')],
+                group_coordinator_id=0,
+            )
+        finally:
+            admin.close()
+
+        assert result == {MemberToRemove(member_id='m1'): UnknownMemberIdError}
+
+    def test_empty_members_is_noop(self):
+        broker = MockBroker()
+        admin = _make_admin(broker)
+        try:
+            result = admin.remove_group_members('g1', [], group_coordinator_id=0)
+        finally:
+            admin.close()
+        assert result == {}
+
+    def test_fallback_fans_out_one_request_per_member(self):
+        # (2, 3) broker: LeaveGroup v0-v2 only, no batch support
+        broker = MockBroker(broker_version=(2, 3))
+        captured = []
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured.append(LeaveGroupRequest.decode(
+                request_bytes, version=api_version, header=True))
+            return LeaveGroupResponse(
+                version=api_version, throttle_time_ms=0, error_code=0)
+
+        broker.respond_fn(LeaveGroupRequest, handler)
+        broker.respond_fn(LeaveGroupRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.remove_group_members(
+                'g1',
+                [
+                    MemberToRemove(member_id='m1'),
+                    MemberToRemove(member_id='m2'),
+                ],
+                group_coordinator_id=0,
+            )
+        finally:
+            admin.close()
+
+        assert len(captured) == 2
+        assert captured[0].group_id == 'g1'
+        assert captured[0].member_id == 'm1'
+        assert captured[1].member_id == 'm2'
+        assert result == {
+            MemberToRemove(member_id='m1'): NoError,
+            MemberToRemove(member_id='m2'): NoError,
+        }
+
+    def test_fallback_rejects_group_instance_id(self):
+        broker = MockBroker(broker_version=(2, 3))
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(UnsupportedVersionError):
+                admin.remove_group_members(
+                    'g1',
+                    [MemberToRemove(group_instance_id='inst-1')],
+                    group_coordinator_id=0,
+                )
+        finally:
+            admin.close()
+
+    def test_fallback_requires_member_id(self):
+        broker = MockBroker(broker_version=(2, 3))
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(ValueError):
+                admin.remove_group_members(
+                    'g1',
+                    [MemberToRemove()],
+                    group_coordinator_id=0,
+                )
+        finally:
+            admin.close()

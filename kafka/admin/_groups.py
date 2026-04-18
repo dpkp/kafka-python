@@ -11,7 +11,7 @@ import kafka.errors as Errors
 from kafka.admin._acls import valid_acl_operations
 from kafka.protocol.admin import DeleteGroupsRequest, DescribeGroupsRequest, ListGroupsRequest
 from kafka.protocol.consumer import (
-    OffsetCommitRequest, OffsetDeleteRequest, OffsetFetchRequest,
+    LeaveGroupRequest, OffsetCommitRequest, OffsetDeleteRequest, OffsetFetchRequest,
 )
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.protocol.consumer.metadata import (
@@ -388,3 +388,146 @@ class GroupAdminMixin:
         """
         return self._manager.run(
             self._async_delete_group_offsets, group_id, partitions, group_coordinator_id)
+
+    # -- Remove group members ---------------------------------------------
+
+    @staticmethod
+    def _remove_group_members_batch_request(group_id, members, version):
+        _Member = LeaveGroupRequest.MemberIdentity
+        identities = []
+        for m in members:
+            kwargs = {
+                'member_id': m.member_id if m.member_id is not None else '',
+                'group_instance_id': m.group_instance_id,
+            }
+            if version >= 5:
+                kwargs['reason'] = m.reason
+            identities.append(_Member(**kwargs))
+        return LeaveGroupRequest(
+            group_id=group_id,
+            members=identities,
+            min_version=3,
+            max_version=version,
+        )
+
+    @staticmethod
+    def _remove_group_members_process_batch_response(response):
+        top_level = Errors.for_code(response.error_code)
+        if top_level is not Errors.NoError:
+            raise top_level(
+                "LeaveGroupRequest failed with response '{}'.".format(response))
+        return {
+            MemberToRemove(
+                member_id=m.member_id or None,
+                group_instance_id=m.group_instance_id,
+                reason=None,
+            ): Errors.for_code(m.error_code)
+            for m in response.members
+        }
+
+    async def _async_remove_group_members(self, group_id, members,
+                                          group_coordinator_id=None):
+        if not members:
+            return {}
+        if group_coordinator_id is None:
+            group_coordinator_id = await self._find_coordinator_id(group_id)
+
+        version = self._manager.broker_version_data.api_version(LeaveGroupRequest)
+        batch_supported = version >= 3
+
+        if batch_supported:
+            request = self._remove_group_members_batch_request(
+                group_id, members, version)
+            response = await self._manager.send(request, node_id=group_coordinator_id)
+            return self._remove_group_members_process_batch_response(response)
+
+        results = {}
+        for m in members:
+            if m.group_instance_id is not None:
+                raise Errors.UnsupportedVersionError(
+                    "Broker does not support removing members by group.instance.id; "
+                    "requires LeaveGroup v3+ (Kafka 2.3+).")
+            if not m.member_id:
+                raise ValueError(
+                    "MemberToRemove.member_id is required when broker does not "
+                    "support batched LeaveGroupRequest (v3+).")
+            request = LeaveGroupRequest(
+                group_id=group_id,
+                member_id=m.member_id,
+                max_version=2,
+            )
+            response = await self._manager.send(request, node_id=group_coordinator_id)
+            results[m] = Errors.for_code(response.error_code)
+        return results
+
+    def remove_group_members(self, group_id, members, group_coordinator_id=None):
+        """Remove members from a consumer group.
+
+        On brokers supporting LeaveGroup v3+ (Kafka 2.3+), a single batched
+        request is sent. On older brokers, falls back to one single-member
+        LeaveGroupRequest per member (in which case ``group_instance_id`` is
+        not supported and ``member_id`` is required).
+
+        Arguments:
+            group_id (str): The consumer group id.
+            members: An iterable of :class:`~kafka.admin.MemberToRemove`.
+                Each entry must set at least one of ``member_id`` or,
+                if brokers support LeaveGroup v3+, ``group_instance_id``.
+                ``reason`` is only sent to brokers supporting
+                LeaveGroup v5+ (KIP-800).
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's
+                coordinator broker. If None, the cluster will be queried to
+                locate the coordinator. Default: None.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.admin.MemberToRemove` to the
+            per-member :class:`~kafka.errors.KafkaError` class
+            (``NoError`` on success). The key's ``reason`` is always None in
+            the result (not echoed by the broker).
+
+        Raises:
+            KafkaError: If a batched response contains a top-level error.
+            UnsupportedVersionError: If the broker does not support batched
+                LeaveGroupRequest and any member uses ``group_instance_id``.
+        """
+        return self._manager.run(
+            self._async_remove_group_members, group_id, members, group_coordinator_id)
+
+
+class MemberToRemove:
+    """A consumer group member to remove via Admin.remove_group_members
+
+    At least one of ``member_id`` (identifying a dynamic group member)
+    or ``group_instance_id`` (identifying a static group member) must be set.
+
+    Keyword Arguments:
+        member_id (str or None): The dynamic member id (as assigned by the
+            coordinator in JoinGroupResponse). Use None for static-only removal.
+        group_instance_id (str or None): The static member instance id (the
+            ``group.instance.id`` configured on the member). Requires LeaveGroup
+            v3+ (Kafka 2.3+).
+        reason (str or None): Optional reason for removal (propagated to the
+            broker on LeaveGroup v5+; ignored on older brokers).
+    """
+    __slots__ = ('member_id', 'group_instance_id', 'reason')
+
+    def __init__(self, member_id=None, group_instance_id=None, reason=None):
+        self.member_id = member_id
+        self.group_instance_id = group_instance_id
+        self.reason = reason
+
+    def __repr__(self):
+        return "<MemberToRemove member_id={}, group_instance_id={}, reason={}>".format(
+            self.member_id, self.group_instance_id, self.reason)
+
+    def __eq__(self, other):
+        return all((
+            self.member_id == other.member_id,
+            self.group_instance_id == other.group_instance_id,
+            self.reason == other.reason,
+        ))
+
+    def __hash__(self):
+        return hash((self.member_id, self.group_instance_id, self.reason))
