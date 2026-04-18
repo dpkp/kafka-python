@@ -520,7 +520,7 @@ def test_list_partition_reassignments(kafka_admin_client, topic):
         assert set(value.keys()) == {'replicas', 'adding_replicas', 'removing_replicas'}
 
 
-@pytest.mark.skipif(env_kafka_version() < (3, 9), reason="DescribeTopicPartitions requires broker >=3.9 (KRaft)")
+@pytest.mark.skipif(env_kafka_version() < (4, 0), reason="DescribeTopicPartitions requires broker >=4.0 (KRaft)")
 def test_describe_topic_partitions(kafka_admin_client, topic):
     result = kafka_admin_client.describe_topic_partitions([topic])
     assert 'topics' in result
@@ -538,7 +538,7 @@ def test_describe_topic_partitions(kafka_admin_client, topic):
         assert len(p['replica_nodes']) >= 1
 
 
-@pytest.mark.skipif(env_kafka_version() < (3, 9), reason="DescribeTopicPartitions requires broker >=3.9 (KRaft)")
+@pytest.mark.skipif(env_kafka_version() < (4, 0), reason="DescribeTopicPartitions requires broker >=4.0 (KRaft)")
 def test_describe_topic_partitions_pagination(kafka_admin_client, topic):
     # Request only 1 partition per page; we should get a cursor back.
     result = kafka_admin_client.describe_topic_partitions(
