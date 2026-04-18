@@ -1,4 +1,4 @@
-"""Consumer group management mixin for KafkaAdminClient."""
+"""Group management mixin for KafkaAdminClient."""
 
 from __future__ import annotations
 
@@ -28,16 +28,16 @@ class GroupAdminMixin:
     _coordinator_cache: dict
     config: dict
 
-    # -- Describe consumer groups ----------------------------------------------
+    # -- Describe groups ----------------------------------------------
 
-    def _describe_consumer_groups_request(self, group_id):
+    def _describe_groups_request(self, group_id):
         request = DescribeGroupsRequest(
             groups=[group_id],
             include_authorized_operations=True
         )
         return request
 
-    def _describe_consumer_groups_process_response(self, response):
+    def _describe_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
         assert len(response.groups) == 1
         for group in response.groups:
@@ -47,17 +47,17 @@ class GroupAdminMixin:
         # Return dict (key, val) tuples
         return [(group.group_id, self._process_acl_operations(group.to_dict())) for group in response.groups]
 
-    async def _async_describe_consumer_groups(self, group_ids, group_coordinator_id=None):
+    async def _async_describe_groups(self, group_ids, group_coordinator_id=None):
         results = []
         for group_id in group_ids:
             coordinator_id = group_coordinator_id or await self._find_coordinator_id(group_id)
-            request = self._describe_consumer_groups_request(group_id)
+            request = self._describe_groups_request(group_id)
             response = await self._manager.send(request, node_id=coordinator_id)
-            results.append(self._describe_consumer_groups_process_response(response))
+            results.append(self._describe_groups_process_response(response))
         # Combine key/vals from multiple requests into single dict
         return dict(itertools.chain(*results))
 
-    def describe_consumer_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
+    def describe_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
 
         Any errors are immediately raised.
@@ -80,16 +80,16 @@ class GroupAdminMixin:
                 of ConsumerSubscription and ConsumerAssignment metadata, and conversion
                 of acl set ints to semantic enums).
         """
-        return self._manager.run(self._async_describe_consumer_groups, group_ids, group_coordinator_id)
+        return self._manager.run(self._async_describe_groups, group_ids, group_coordinator_id)
 
-    # -- List consumer groups --------------------------------------------------
+    # -- List groups --------------------------------------------------
 
-    def _list_consumer_groups_request(self):
+    def _list_groups_request(self):
         # TODO: KIP-518: StatesFilter
         # TODO: KIP-848: TypesFilter
         return ListGroupsRequest()
 
-    def _list_consumer_groups_process_response(self, response):
+    def _list_groups_process_response(self, response):
         """Process a ListGroupsResponse into a list of groups."""
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
@@ -98,20 +98,20 @@ class GroupAdminMixin:
                 .format(response))
         return [group.to_dict() for group in response.groups]
 
-    async def _async_list_consumer_groups(self, broker_ids=None):
+    async def _async_list_groups(self, broker_ids=None):
         if broker_ids is None:
             broker_ids = [broker.node_id for broker in self._manager.cluster.brokers()]
-        consumer_groups = []
+        groups = []
         for broker_id in broker_ids:
-            request = self._list_consumer_groups_request()
+            request = self._list_groups_request()
             response = await self._manager.send(request, node_id=broker_id)
-            consumer_groups.extend(self._list_consumer_groups_process_response(response))
-        return consumer_groups
+            groups.extend(self._list_groups_process_response(response))
+        return groups
 
-    def list_consumer_groups(self, broker_ids=None):
+    def list_groups(self, broker_ids=None):
         """List all consumer groups known to the cluster.
 
-        This returns a list of Consumer Group tuples. The tuples are
+        This returns a list of Group dicts. The tuples are
         composed of the consumer group name and the consumer group protocol
         type.
 
@@ -132,11 +132,11 @@ class GroupAdminMixin:
         Returns:
             List of group data dicts, with key/vals from ListGroupsRequest
         """
-        return self._manager.run(self._async_list_consumer_groups, broker_ids)
+        return self._manager.run(self._async_list_groups, broker_ids)
 
-    # -- List consumer group offsets -------------------------------------------
+    # -- List group offsets -------------------------------------------
 
-    def _list_consumer_group_offsets_request(self, group_id, partitions=None):
+    def _list_group_offsets_request(self, group_id, partitions=None):
         _Topic = OffsetFetchRequest.OffsetFetchRequestTopic
         if partitions is None:
             min_version = 1
@@ -153,7 +153,7 @@ class GroupAdminMixin:
         return OffsetFetchRequest(group_id=group_id, topics=topics,
                                   min_version=min_version, max_version=6)
 
-    def _list_consumer_group_offsets_process_response(self, response):
+    def _list_group_offsets_process_response(self, response):
         """Process an OffsetFetchResponse."""
         if response.API_VERSION > 1:
             error_type = Errors.for_code(response.error_code)
@@ -170,16 +170,16 @@ class GroupAdminMixin:
         return {topic.name: _partitions_to_dict(topic.partitions)
                 for topic in response.topics}
 
-    async def _async_list_consumer_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
+    async def _async_list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         if group_coordinator_id is None:
             group_coordinator_id = await self._find_coordinator_id(group_id)
-        request = self._list_consumer_group_offsets_request(group_id, partitions)
+        request = self._list_group_offsets_request(group_id, partitions)
         response = await self._manager.send(request, node_id=group_coordinator_id)
-        return self._list_consumer_group_offsets_process_response(response)
+        return self._list_group_offsets_process_response(response)
 
-    def list_consumer_group_offsets(self, group_id, group_coordinator_id=None,
+    def list_group_offsets(self, group_id, group_coordinator_id=None,
                                     partitions=None):
-        """Fetch Consumer Offsets for a single consumer group.
+        """Fetch committed offsets for a single consumer group.
 
         Note:
         This does not verify that the group_id or partitions actually exist
@@ -201,11 +201,11 @@ class GroupAdminMixin:
         Returns:
             dict: {topic: [{partition data}]} key/vals from OffsetCommitResponse}]}
         """
-        return self._manager.run(self._async_list_consumer_group_offsets, group_id, group_coordinator_id, partitions)
+        return self._manager.run(self._async_list_group_offsets, group_id, group_coordinator_id, partitions)
 
-    # -- Delete consumer groups ------------------------------------------------
+    # -- Delete groups ------------------------------------------------
 
-    def _delete_consumer_groups_request(self, group_ids):
+    def _delete_groups_request(self, group_ids):
         return DeleteGroupsRequest(groups_names=group_ids)
 
     def _convert_delete_groups_response(self, response):
@@ -216,7 +216,7 @@ class GroupAdminMixin:
             results.append((group_id, res))
         return results
 
-    async def _async_delete_consumer_groups(self, group_ids, group_coordinator_id=None):
+    async def _async_delete_groups(self, group_ids, group_coordinator_id=None):
         coordinators_groups = defaultdict(list)
         if group_coordinator_id is not None:
             coordinators_groups[group_coordinator_id] = group_ids
@@ -227,13 +227,13 @@ class GroupAdminMixin:
 
         results = []
         for coordinator_id, coordinator_group_ids in coordinators_groups.items():
-            request = self._delete_consumer_groups_request(coordinator_group_ids)
+            request = self._delete_groups_request(coordinator_group_ids)
             response = await self._manager.send(request, node_id=coordinator_id)
             results.extend(self._convert_delete_groups_response(response))
         return dict(results)
 
-    def delete_consumer_groups(self, group_ids, group_coordinator_id=None):
-        """Delete Consumer Group Offsets for given consumer groups.
+    def delete_groups(self, group_ids, group_coordinator_id=None):
+        """Delete Group Offsets for given consumer groups.
 
         Note:
         This does not verify that the group ids actually exist and
@@ -251,4 +251,4 @@ class GroupAdminMixin:
         Returns:
             A list of tuples (group_id, KafkaError)
         """
-        return self._manager.run(self._async_delete_consumer_groups, group_ids, group_coordinator_id)
+        return self._manager.run(self._async_delete_groups, group_ids, group_coordinator_id)
