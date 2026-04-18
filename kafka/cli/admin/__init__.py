@@ -104,9 +104,6 @@ def run_cli(args=None):
     # [configs]
     # IncrementalAlterConfigs (not supported yet)
 
-    # [groups]
-    # remove-members (not supported yet [uses LeaveGroupRequest])
-
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
     # alter (AlterClientQuotas - not supported yet)
