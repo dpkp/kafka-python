@@ -39,4 +39,4 @@ class RemoveGroupMembers:
         result = client.remove_group_members(
             args.group_id, members,
             group_coordinator_id=args.group_coordinator_id)
-        return {(m.member_id or m.group_instance_id): err.__name__ for m, err in result.items()}
+        return {m: err.__name__ for m, err in result.items()}
