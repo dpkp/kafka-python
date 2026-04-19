@@ -428,11 +428,7 @@ class GroupAdminMixin:
             raise top_level(
                 "LeaveGroupRequest failed with response '{}'.".format(response))
         return {
-            MemberToRemove(
-                member_id=m.member_id or None,
-                group_instance_id=m.group_instance_id,
-                reason=None,
-            ): Errors.for_code(m.error_code)
+            (m.member_id or m.group_instance_id): Errors.for_code(m.error_code)
             for m in response.members
         }
 
@@ -468,7 +464,7 @@ class GroupAdminMixin:
                 max_version=2,
             )
             response = await self._manager.send(request, node_id=group_coordinator_id)
-            results[m] = Errors.for_code(response.error_code)
+            results[m.member_id or m.group_instance_id] = Errors.for_code(response.error_code)
         return results
 
     def remove_group_members(self, group_id, members, group_coordinator_id=None):

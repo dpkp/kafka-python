@@ -341,8 +341,8 @@ class TestRemoveGroupMembersMockBroker:
             admin.close()
 
         assert result == {
-            MemberToRemove(member_id='m1'): NoError,
-            MemberToRemove(group_instance_id='static-1'): NoError,
+            'm1': NoError,
+            'static-1': NoError,
         }
 
     def test_batch_request_fields(self):
@@ -432,7 +432,7 @@ class TestRemoveGroupMembersMockBroker:
         finally:
             admin.close()
 
-        assert result == {MemberToRemove(member_id='m1'): UnknownMemberIdError}
+        assert result == {'m1': UnknownMemberIdError}
 
     def test_empty_members_is_noop(self):
         broker = MockBroker()
@@ -475,8 +475,8 @@ class TestRemoveGroupMembersMockBroker:
         assert captured[0].member_id == 'm1'
         assert captured[1].member_id == 'm2'
         assert result == {
-            MemberToRemove(member_id='m1'): NoError,
-            MemberToRemove(member_id='m2'): NoError,
+            'm1': NoError,
+            'm2': NoError,
         }
 
     def test_fallback_rejects_group_instance_id(self):
