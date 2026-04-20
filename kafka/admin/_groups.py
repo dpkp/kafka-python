@@ -64,7 +64,7 @@ class GroupAdminMixin:
             group_id = group.group_id
             result = self._process_acl_operations(group.to_dict())
             error_code = result.pop('error_code')
-            error_message = result.pop('error_message')
+            error_message = result.pop('error_message', '') # v6+
             result['error'] = str(Errors.for_code(error_code)(error_message)) if error_code else None
             results[group_id] = result
         return results
