@@ -175,14 +175,20 @@ class GroupAdminMixin:
                 raise error_type(
                     "OffsetFetchResponse failed with response '{}'."
                     .format(response))
-        def _partitions_to_dict(partitions):
-            d = {}
-            for p in partitions:
-                d[p.partition_index] = p.to_dict()
-                d[p.partition_index].pop('partition_index')
-            return d
-        return {topic.name: _partitions_to_dict(topic.partitions)
-                for topic in response.topics}
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                error_type = Errors.for_code(partition.error_code)
+                if error_type is not Errors.NoError:
+                    raise error_type(
+                        f"OffsetFetchResponse failed for partition {tp.partition}")
+                results[tp] = OffsetAndMetadata(
+                    offset=partition.committed_offset,
+                    metadata=partition.metadata,
+                    leader_epoch=partition.committed_leader_epoch
+                )
+        return results
 
     async def _async_list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         if group_coordinator_id is None:
@@ -191,8 +197,7 @@ class GroupAdminMixin:
         response = await self._manager.send(request, node_id=group_coordinator_id)
         return self._list_group_offsets_process_response(response)
 
-    def list_group_offsets(self, group_id, group_coordinator_id=None,
-                                    partitions=None):
+    def list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         """Fetch committed offsets for a single consumer group.
 
         Note:
@@ -213,7 +218,8 @@ class GroupAdminMixin:
                 known offsets for the consumer group. Default: None.
 
         Returns:
-            dict: {topic: [{partition data}]} key/vals from OffsetCommitResponse}]}
+            A dict mapping :class:`~kafka.TopicPartition` to
+                :class:`~kafka.structs.OffsetAndMetadata`.
         """
         return self._manager.run(self._async_list_group_offsets, group_id, group_coordinator_id, partitions)
 
