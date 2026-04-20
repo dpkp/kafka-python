@@ -96,22 +96,21 @@ class PartitionAdminMixin:
 
         metadata = await self._get_cluster_metadata(topics)
 
-        leader2partitions = defaultdict(list)
+        leader2partitions = defaultdict(set)
         valid_partitions = set()
         for topic in metadata.get("topics", ()):
             for partition in topic.get("partitions", ()):
                 t2p = TopicPartition(topic=topic["name"], partition=partition["partition_index"])
                 if t2p in partitions:
-                    leader2partitions[partition["leader_id"]].append(t2p)
+                    leader2partitions[partition["leader_id"]].add(t2p)
                     valid_partitions.add(t2p)
 
-        if len(partitions) != len(valid_partitions):
-            unknown = set(partitions) - valid_partitions
+        if partitions != valid_partitions:
+            unknown = partitions - valid_partitions
             raise UnknownTopicOrPartitionError(
                 "The following partitions are not known: %s"
                 % ", ".join(str(x) for x in unknown)
             )
-
         return leader2partitions
 
     async def _async_delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
