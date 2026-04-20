@@ -386,9 +386,8 @@ class GroupAdminMixin:
                 locate the coordinator. Default: None.
 
         Returns:
-            dict: A dict mapping :class:`~kafka.TopicPartition` to the
-            partition-level :class:`~kafka.errors.KafkaError` class
-            (``NoError`` on success).
+            dict: A dict mapping :class:`~kafka.TopicPartition` to dict of
+            {'error': :class:`~kafka.errors.KafkaError` class, 'offset': int}
         """
         return self._manager.run(
             self._async_reset_group_offsets, group_id, offset_specs, group_coordinator_id)
