@@ -340,6 +340,60 @@ class GroupAdminMixin:
         return self._manager.run(
             self._async_alter_group_offsets, group_id, offsets, group_coordinator_id)
 
+    # -- Reset group offsets ----------------------------------------------
+
+    @staticmethod
+    def _reset_group_offsets_process_response(response, to_reset):
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                results[tp] = {
+                    'error': Errors.for_code(partition.error_code),
+                    'offset': to_reset[tp].offset
+                }
+        return results
+
+    async def _async_reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
+        if not offset_specs:
+            return {}
+        if group_coordinator_id is None:
+            group_coordinator_id = await self._find_coordinator_id(group_id)
+        current = await self._async_list_group_offsets(group_id, group_coordinator_id, offset_specs.keys())
+        offsets = await self._async_list_partition_offsets(offset_specs)
+        to_reset = {}
+        for tp in offsets:
+            if current[tp].offset != offsets[tp].offset:
+                to_reset[tp] = current[tp]._replace(offset=offsets[tp].offset)
+        request = self._alter_group_offsets_request(group_id, to_reset)
+        response = await self._manager.send(request, node_id=group_coordinator_id)
+        return self._reset_group_offsets_process_response(response, to_reset)
+
+    def reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
+        """Reset committed offsets for a consumer group to earliest or latest.
+
+        The group must have no active members (i.e. be empty or dead) for
+        the reset to succeed; otherwise individual partitions may return
+        ``UNKNOWN_MEMBER_ID`` or similar errors.
+
+        Arguments:
+            group_id (str): The consumer group id.
+            offset_specs (dict): A dict mapping :class:`~kafka.TopicPartition` to
+                :class:`~kafka.admin.OffsetSpec`.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's
+                coordinator broker. If None, the cluster will be queried to
+                locate the coordinator. Default: None.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to the
+            partition-level :class:`~kafka.errors.KafkaError` class
+            (``NoError`` on success).
+        """
+        return self._manager.run(
+            self._async_reset_group_offsets, group_id, offset_specs, group_coordinator_id)
+
     # -- Delete group offsets ----------------------------------------------
 
     @staticmethod
