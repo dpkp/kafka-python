@@ -461,10 +461,7 @@ class PartitionAdminMixin:
                 )
         return results
 
-    async def _async_list_partition_offsets(self, topic_partitions, isolation_level='read_uncommitted'):
-        if not topic_partitions:
-            return {}
-
+    async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted'):
         if isinstance(isolation_level, str):
             try:
                 isolation_level = IsolationLevel[isolation_level.upper()]
@@ -473,15 +470,21 @@ class PartitionAdminMixin:
         elif isinstance(isolation_level, int):
             isolation_level = IsolationLevel(isolation_level)
 
-        leader2partitions = await self._async_get_leader_for_partitions(set(topic_partitions.keys()))
-
         results = {}
-        for leader, partitions in leader2partitions.items():
-            request = self._list_partition_offsets_request(
-                {tp: spec for tp, spec in topic_partitions.items() if tp in partitions},
-                isolation_level.value)
-            response = await self._manager.send(request, node_id=leader)
-            results.update(self._list_partition_offsets_process_response(response))
+        topic_partitions = set(topic_partition_specs.keys())
+        while topic_partitions:
+            leader2partitions = await self._async_get_leader_for_partitions(topic_partitions)
+
+            for leader, partitions in leader2partitions.items():
+                request = self._list_partition_offsets_request(
+                    {tp: spec for tp, spec in topic_partition_specs.items() if tp in partitions},
+                    isolation_level.value)
+                try:
+                    response = await self._manager.send(request, node_id=leader)
+                    results.update(self._list_partition_offsets_process_response(response))
+                    topic_partitions -= partitions
+                except Errors.NotLeaderForPartitionError:
+                    continue
         return results
 
     def list_partition_offsets(self, topic_partitions, isolation_level='read_uncommitted'):
