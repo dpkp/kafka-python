@@ -541,6 +541,11 @@ class KafkaFixture(Fixture):
         else:
             raise RuntimeError('Failed to start KafkaInstance before max_timeout')
 
+        if env_kafka_version() < (0, 9):
+            # broker requires at least one topic for bootstrap to return brokers list
+            log.info('Creating _bootstrap_fixup_ topic for broker %s', (env_kafka_version(),))
+            create_topics(self, ['_bootstrap_fixup_'])
+
         self.out("Done!")
         self.running = True
 
