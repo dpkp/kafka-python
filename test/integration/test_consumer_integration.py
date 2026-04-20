@@ -16,8 +16,6 @@ from test.testutil import Timer, assert_message_count, env_kafka_version, random
 
 
 def test_consumer(consumer):
-    # The `topic` fixture is included because
-    # 0.8.2 brokers need a topic to function well
     consumer.poll(timeout_ms=500)
     assert consumer._client.cluster.brokers()
 
