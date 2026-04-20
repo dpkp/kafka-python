@@ -59,17 +59,25 @@ class GroupAdminMixin:
                         log.warn(f'Unable to decode member_assignment for {group}/{member.member_id}')
                         pass
         # Return dict (key, val) tuples
-        return [(group.group_id, self._process_acl_operations(group.to_dict())) for group in response.groups]
+        results = {}
+        for group in response.groups:
+            group_id = group.group_id
+            result = self._process_acl_operations(group.to_dict())
+            error_code = result.pop('error_code')
+            error_message = result.pop('error_message')
+            result['error'] = str(Errors.for_code(error_code)(error_message)) if error_code else None
+            results[group_id] = result
+        return results
 
     async def _async_describe_groups(self, group_ids, group_coordinator_id=None):
-        results = []
+        results = {}
         for group_id in group_ids:
             coordinator_id = group_coordinator_id or await self._find_coordinator_id(group_id)
             request = self._describe_groups_request(group_id)
             response = await self._manager.send(request, node_id=coordinator_id)
-            results.append(self._describe_groups_process_response(response))
+            results.update(self._describe_groups_process_response(response))
         # Combine key/vals from multiple requests into single dict
-        return dict(itertools.chain(*results))
+        return results
 
     def describe_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
