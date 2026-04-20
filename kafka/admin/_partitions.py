@@ -487,14 +487,14 @@ class PartitionAdminMixin:
                     continue
         return results
 
-    def list_partition_offsets(self, topic_partitions, isolation_level='read_uncommitted'):
+    def list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted'):
         """Look up offsets for the given partitions by spec.
 
         Partitions are routed to their respective leader brokers via cluster
         metadata; one ``ListOffsetsRequest`` is sent per leader.
 
         Arguments:
-            topic_partitions: dict mapping :class:`~kafka.TopicPartition` to
+            topic_partition_specs: dict mapping :class:`~kafka.TopicPartition` to
                 :class:`OffsetSpec` (or a raw integer timestamp /
                 wire-level sentinel).
 
@@ -515,7 +515,7 @@ class PartitionAdminMixin:
                 of ListOffsetsRequest compatible with the requested specs.
         """
         return self._manager.run(
-            self._async_list_partition_offsets, topic_partitions, isolation_level)
+            self._async_list_partition_offsets, topic_partition_specs, isolation_level)
 
 
 class NewPartitions:
