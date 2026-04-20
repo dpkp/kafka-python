@@ -12,6 +12,8 @@ from .partitions import PartitionsSubCommand
 from .topics import TopicsSubCommand
 from .users import UsersSubCommand
 from ..common import add_common_cli_args
+from kafka.errors import BrokerResponseError
+
 
 def main_parser():
     parser = argparse.ArgumentParser(
@@ -91,6 +93,12 @@ def run_cli(args=None):
                 result = result.to_dict()
             print(json.dumps(result))
         return 0
+    except BrokerResponseError as exc:
+        print(exc)
+        return 1
+    except ValueError as exc:
+        print(exc.args[0])
+        return 1
     except AttributeError as exc:
         logger.exception(exc)
         parser.print_help()
