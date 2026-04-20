@@ -12,8 +12,14 @@ class ListPartitionOffsets:
             'list-offsets',
             help='List offsets for partitions by spec (earliest/latest/timestamp)')
         parser.add_argument(
+            '-t', '--topic', type=str)
+        parser.add_argument(
+            '-s', '--spec', type=str,
+            help='Spec may be one of earliest, latest, max-timestamp, earliest-local, '
+            'latest-tiered, or a millisecond timestamp.')
+        parser.add_argument(
             '-p', '--partition', type=str, action='append',
-            dest='partitions', default=[], required=True,
+            dest='partitions', default=[],
             help='TOPIC:PARTITION:SPEC triple (repeatable). PARTITION may be a '
                  'single partition, a closed range (0-2), an open range (1-), or '
                  'a single wildcard "*" for all partitions. SPEC may be one of '
@@ -23,7 +29,7 @@ class ListPartitionOffsets:
 
     @classmethod
     def command(cls, client, args):
-        tp_offsets = cls._parse_partition_specs(client, args.partitions)
+        tp_offsets = cls._parse_partition_specs(client, args)
         output = defaultdict(dict)
         result = client.list_partition_offsets(tp_offsets)
         for tp, info in result.items():
@@ -48,7 +54,13 @@ class ListPartitionOffsets:
             raise ValueError(f'{spec_key} is not a valid OffsetSpec')
 
     @classmethod
-    def _parse_partition_specs(cls, client, partitions):
+    def _parse_partition_specs(cls, client, args):
+        if args.partitions:
+            assert not args.topic and not args.spec, "Either --partition or (--topic and --spec) is supported, but not both."
+            partitions = args.partitions
+        else:
+            assert args.topic and args.spec, "Both --topic and --spec must be provided."
+            partitions = [f'{args.topic}:*:{args.spec}']
         tp_offsets = {}
         for entry in partitions:
             topic, partition, spec_str = entry.rsplit(':', 2)
