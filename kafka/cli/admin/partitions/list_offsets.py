@@ -24,16 +24,16 @@ class ListPartitionOffsets:
     @classmethod
     def command(cls, client, args):
         tp_offsets = cls._parse_partition_specs(client, args.partitions)
-        output = {}
+        output = defaultdict(dict)
         result = client.list_partition_offsets(tp_offsets)
         for tp, info in result.items():
-            output[f'{tp.topic}:{tp.partition}'] = {
+            output[tp.topic][tp.partition] = {
                 'offset': info.offset,
                 'timestamp': info.timestamp,
                 'leader_epoch': info.leader_epoch,
                 'spec': tp_offsets[tp]
             }
-        return output
+        return dict(output)
 
     @staticmethod
     def _parse_spec(spec):
