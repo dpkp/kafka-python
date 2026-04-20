@@ -4,7 +4,6 @@ import pytest
 
 from kafka.admin import KafkaAdminClient, OffsetSpec
 from kafka.errors import (
-    NotLeaderForPartitionError,
     UnknownTopicOrPartitionError,
     IncompatibleBrokerVersion,
 )
@@ -621,13 +620,13 @@ class TestListPartitionOffsetsMockBroker:
         broker.respond(
             ListOffsetsRequest,
             _list_offsets_response([
-                ('topic-a', 0, -1, -1, -1, NotLeaderForPartitionError.errno),
+                ('topic-a', 0, -1, -1, -1, UnknownTopicOrPartitionError.errno),
             ]),
         )
 
         admin = _make_admin(broker)
         try:
-            with pytest.raises(NotLeaderForPartitionError):
+            with pytest.raises(UnknownTopicOrPartitionError):
                 admin.list_partition_offsets({
                     TopicPartition('topic-a', 0): OffsetSpec.LATEST,
                 })
