@@ -109,6 +109,9 @@ def run_cli(args=None):
 
 
 # Commands TODO:
+    # --dry-run support
+    # --trace ?
+
     # [configs]
     # IncrementalAlterConfigs (not supported yet)
 
