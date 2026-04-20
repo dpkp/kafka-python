@@ -8,7 +8,7 @@ from kafka.admin import (
     ACLFilter, ACLOperation, ACLPermissionType,
     ResourcePattern, ResourceType, ACL,
     ConfigResource, ConfigResourceType,
-    NewPartitions, NewTopic,
+    NewPartitions, NewTopic, OffsetSpec
 )
 from kafka.errors import (
     BrokerResponseError, NoError, CoordinatorNotAvailableError,
@@ -16,7 +16,7 @@ from kafka.errors import (
     UnknownTopicOrPartitionError, ElectionNotNeededError,
     KafkaTimeoutError, IncompatibleBrokerVersion
 )
-from kafka.structs import TopicPartition
+from kafka.structs import TopicPartition, OffsetAndTimestamp
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import create_topics
 
@@ -552,3 +552,10 @@ def test_describe_topic_partitions_pagination(kafka_admin_client, topic):
         next_result = kafka_admin_client.describe_topic_partitions(
             [topic], response_partition_limit=10, cursor=cursor)
         assert next_result['topics']
+
+
+def test_list_partition_offsets(kafka_admin_client, topic):
+    tp = TopicPartition(topic, 0)
+    result = kafka_admin_client.list_partition_offsets({tp: OffsetSpec.LATEST})
+    assert tp in result
+    assert isinstance(result[tp], OffsetAndTimestamp)

@@ -5,6 +5,7 @@ from .create import CreatePartitions
 from .delete_records import DeleteRecords
 from .describe import DescribeTopicPartitions
 from .elect_leaders import ElectLeaders
+from .list_offsets import ListPartitionOffsets
 from .list_reassignments import ListPartitionReassignments
 
 
@@ -17,6 +18,7 @@ class PartitionsSubCommand:
         for cmd in [
             CreatePartitions,
             DescribeTopicPartitions,
+            ListPartitionOffsets,
             ListPartitionReassignments,
             AlterPartitionReassignments,
             DeleteRecords,

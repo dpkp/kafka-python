@@ -2,14 +2,19 @@ import uuid
 
 import pytest
 
-from kafka.admin import KafkaAdminClient
+from kafka.admin import KafkaAdminClient, OffsetSpec
+from kafka.errors import (
+    UnknownTopicOrPartitionError,
+    IncompatibleBrokerVersion,
+)
 from kafka.protocol.admin import (
     AlterPartitionReassignmentsRequest, AlterPartitionReassignmentsResponse,
     ListPartitionReassignmentsRequest, ListPartitionReassignmentsResponse,
     DescribeTopicPartitionsRequest, DescribeTopicPartitionsResponse,
 )
+from kafka.protocol.consumer import ListOffsetsRequest, ListOffsetsResponse
 from kafka.protocol.metadata import MetadataResponse
-from kafka.structs import TopicPartition
+from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 from test.mock_broker import MockBroker
 
@@ -433,3 +438,296 @@ class TestDescribeTopicPartitionsMockBroker:
         assert cursor is not None
         assert cursor.topic_name == 'topic-a'
         assert cursor.partition_index == 3
+
+
+# ---------------------------------------------------------------------------
+# list_partition_offsets
+# ---------------------------------------------------------------------------
+
+
+def _set_metadata_for_topic(broker, name, num_partitions, leader_id=0, brokers=None):
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    if brokers is None:
+        Broker = MetadataResponse.MetadataResponseBroker
+        brokers = [Broker(node_id=0, host=broker.host, port=broker.port, rack=None)]
+    broker.set_metadata(
+        topics=[Topic(
+            version=8, error_code=0, name=name, is_internal=False,
+            partitions=[
+                Partition(version=8, error_code=0, partition_index=i,
+                          leader_id=leader_id if not isinstance(leader_id, dict) else leader_id[i],
+                          leader_epoch=0,
+                          replica_nodes=[0], isr_nodes=[0], offline_replicas=[])
+                for i in range(num_partitions)
+            ])],
+        brokers=brokers,
+    )
+
+
+def _list_offsets_response(per_partition):
+    """per_partition: list of (topic, partition, offset, timestamp, leader_epoch, error_code)."""
+    Topic = ListOffsetsResponse.ListOffsetsTopicResponse
+    Partition = Topic.ListOffsetsPartitionResponse
+    by_topic = {}
+    for topic, partition, offset, ts, le, err in per_partition:
+        by_topic.setdefault(topic, []).append(Partition(
+            partition_index=partition, error_code=err, timestamp=ts,
+            offset=offset, leader_epoch=le))
+    return ListOffsetsResponse(
+        throttle_time_ms=0,
+        topics=[Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+    )
+
+
+class TestListPartitionOffsetsMockBroker:
+
+    def test_returns_result_info(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
+        broker.respond(
+            ListOffsetsRequest,
+            _list_offsets_response([
+                ('topic-a', 0, 100, 1234, 5, 0),
+                ('topic-a', 1, 200, 5678, 7, 0),
+            ]),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
+                TopicPartition('topic-a', 1): OffsetSpec.LATEST,
+            })
+        finally:
+            admin.close()
+
+        assert result == {
+            TopicPartition('topic-a', 0): OffsetAndTimestamp(
+                offset=100, timestamp=1234, leader_epoch=5),
+            TopicPartition('topic-a', 1): OffsetAndTimestamp(
+                offset=200, timestamp=5678, leader_epoch=7),
+        }
+
+    def test_request_uses_spec_timestamp_sentinels(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['version'] = api_version
+            captured['request'] = ListOffsetsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            return _list_offsets_response([
+                ('topic-a', 0, 0, -1, -1, 0),
+                ('topic-a', 1, 0, -1, -1, 0),
+            ])
+
+        broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
+                TopicPartition('topic-a', 1): OffsetSpec.LATEST,
+            })
+        finally:
+            admin.close()
+
+        req = captured['request']
+        assert req.replica_id == -1
+        assert req.isolation_level == 0
+        topic = req.topics[0]
+        timestamps = {p.partition_index: p.timestamp for p in topic.partitions}
+        assert timestamps == {0: -2, 1: -1}
+
+    def test_offset_timestamp_passed_through(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['request'] = ListOffsetsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            return _list_offsets_response([('topic-a', 0, 42, 1700000000, 0, 0)])
+
+        broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            result = admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): 1700000000,
+            })
+        finally:
+            admin.close()
+
+        assert captured['request'].topics[0].partitions[0].timestamp == 1700000000
+        assert result[TopicPartition('topic-a', 0)].offset == 42
+
+    def test_groups_partitions_by_leader(self):
+        # Two partitions, two different leaders => two requests.
+        broker = MockBroker()
+        Broker = MetadataResponse.MetadataResponseBroker
+        Topic = MetadataResponse.MetadataResponseTopic
+        Partition = Topic.MetadataResponsePartition
+        broker.set_metadata(
+            topics=[Topic(
+                version=8, error_code=0, name='topic-a', is_internal=False,
+                partitions=[
+                    Partition(version=8, error_code=0, partition_index=0,
+                              leader_id=0, leader_epoch=0,
+                              replica_nodes=[0], isr_nodes=[0], offline_replicas=[]),
+                    Partition(version=8, error_code=0, partition_index=1,
+                              leader_id=1, leader_epoch=0,
+                              replica_nodes=[1], isr_nodes=[1], offline_replicas=[]),
+                ])],
+            brokers=[
+                Broker(node_id=0, host=broker.host, port=broker.port, rack=None),
+                Broker(node_id=1, host=broker.host, port=broker.port, rack=None),
+            ],
+        )
+
+        captured = []
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            req = ListOffsetsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured.append(req)
+            partitions = [(t.name, p.partition_index, 0, -1, -1, 0)
+                          for t in req.topics for p in t.partitions]
+            return _list_offsets_response(partitions)
+
+        broker.respond_fn(ListOffsetsRequest, handler)
+        broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): OffsetSpec.LATEST,
+                TopicPartition('topic-a', 1): OffsetSpec.LATEST,
+            })
+        finally:
+            admin.close()
+
+        # One request per leader, each carrying exactly one partition.
+        assert len(captured) == 2
+        for req in captured:
+            assert sum(len(t.partitions) for t in req.topics) == 1
+
+    def test_partition_error_raises(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(
+            ListOffsetsRequest,
+            _list_offsets_response([
+                ('topic-a', 0, -1, -1, -1, UnknownTopicOrPartitionError.errno),
+            ]),
+        )
+
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(UnknownTopicOrPartitionError):
+                admin.list_partition_offsets({
+                    TopicPartition('topic-a', 0): OffsetSpec.LATEST,
+                })
+        finally:
+            admin.close()
+
+    def test_unknown_partition_raises(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(UnknownTopicOrPartitionError):
+                admin.list_partition_offsets({
+                    TopicPartition('topic-a', 99): OffsetSpec.LATEST,
+                })
+        finally:
+            admin.close()
+
+    def test_max_timestamp_requires_v7(self):
+        # (2, 7) broker -> ListOffsets max v6 -> MAX_TIMESTAMP unsupported
+        broker = MockBroker(broker_version=(2, 7))
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(IncompatibleBrokerVersion):
+                admin.list_partition_offsets({
+                    TopicPartition('topic-a', 0): OffsetSpec.MAX_TIMESTAMP,
+                })
+        finally:
+            admin.close()
+
+    def test_invalid_timestamp_raises(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(ValueError):
+                admin.list_partition_offsets({TopicPartition('topic-a', 0): -100}, 0)
+        finally:
+            admin.close()
+
+    def test_invalid_isolation_level_raises(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        admin = _make_admin(broker)
+        try:
+            with pytest.raises(ValueError):
+                admin.list_partition_offsets(
+                    {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
+                    isolation_level='wat',
+                )
+        finally:
+            admin.close()
+
+    def test_empty_input_is_noop(self):
+        broker = MockBroker()
+        admin = _make_admin(broker)
+        try:
+            assert admin.list_partition_offsets({}) == {}
+        finally:
+            admin.close()
+
+    def test_int_timestamp_accepted_directly(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['request'] = ListOffsetsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            return _list_offsets_response([('topic-a', 0, 0, -1, -1, 0)])
+
+        broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.list_partition_offsets({TopicPartition('topic-a', 0): -2})
+        finally:
+            admin.close()
+
+        assert captured['request'].topics[0].partitions[0].timestamp == -2
+
+    def test_read_committed_uses_isolation_level_1(self):
+        broker = MockBroker()
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['request'] = ListOffsetsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            return _list_offsets_response([('topic-a', 0, 0, -1, -1, 0)])
+
+        broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = _make_admin(broker)
+        try:
+            admin.list_partition_offsets(
+                {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
+                isolation_level='read_committed',
+            )
+        finally:
+            admin.close()
+
+        assert captured['request'].isolation_level == 1

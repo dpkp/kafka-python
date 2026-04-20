@@ -2,10 +2,11 @@
 import uuid
 from typing import Any, Self
 
+from enum import IntEnum
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['UNKNOWN_OFFSET', 'OffsetResetStrategy', 'ListOffsetsRequest', 'ListOffsetsResponse', 'OffsetForLeaderEpochRequest', 'OffsetForLeaderEpochResponse']
+__all__ = ['UNKNOWN_OFFSET', 'OffsetResetStrategy', 'IsolationLevel', 'OffsetSpec', 'ListOffsetsRequest', 'ListOffsetsResponse', 'OffsetForLeaderEpochRequest', 'OffsetForLeaderEpochResponse']
 
 UNKNOWN_OFFSET: int
 
@@ -13,6 +14,17 @@ class OffsetResetStrategy:
     LATEST: int
     EARLIEST: int
     NONE: int
+
+class IsolationLevel(IntEnum):
+    READ_UNCOMMITTED: int
+    READ_COMMITTED: int
+
+class OffsetSpec(IntEnum):
+    LATEST: int
+    EARLIEST: int
+    MAX_TIMESTAMP: int
+    EARLIEST_LOCAL: int
+    LATEST_TIERED: int
 
 class ListOffsetsRequest(ApiMessage):
     class ListOffsetsTopic(DataContainer):
@@ -79,6 +91,10 @@ class ListOffsetsRequest(ApiMessage):
     def is_request(cls) -> bool: ...
     def expect_response(self) -> bool: ...
     def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+    @classmethod
+    def min_version_for_timestamp(cls, ts: Any) -> Any: ...
+    @classmethod
+    def min_version_for_isolation_level(cls, il: Any) -> Any: ...
 
 class ListOffsetsResponse(ApiMessage):
     class ListOffsetsTopicResponse(DataContainer):
