@@ -34,6 +34,10 @@ class ResetGroupOffsets:
             raise ValueError('One of --spec or --partition is required')
         elif args.spec and args.partitions:
             raise ValueError('Only one of --spec and --partition are allowed')
+        group = client.describe_groups([args.group_id])
+        state = group[args.group_id]['group_state']
+        if state not in ('Empty', 'Dead'):
+            raise RuntimeError(f'Group {args.group_id} is {state}, expecting Empty or Dead!')
         offset_specs = {}
         if args.spec:
             offsets = client.list_group_offsets(args.group_id)
