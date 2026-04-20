@@ -124,9 +124,6 @@ def run_cli(args=None):
     # list (ListTransactions - not supported yet)
     # abort (not supported yet)
 
-    # [topics]
-    # list-offsets (not supported yet)
-
     # [cluster]
     # describe-features (DescribeFeatures - not supported yet)
     # update-features (UpdateFeatures - not supported yet)
