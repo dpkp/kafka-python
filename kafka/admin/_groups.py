@@ -363,6 +363,9 @@ class GroupAdminMixin:
         offsets = await self._async_list_partition_offsets(offset_specs)
         to_reset = {}
         for tp in offsets:
+            if offsets[tp].offset < 0:
+                log.debug('Skipping reset to negative offset for %s -> %s', tp, offsets[tp].offset)
+                continue
             if current[tp].offset != offsets[tp].offset:
                 to_reset[tp] = current[tp]._replace(offset=offsets[tp].offset)
         request = self._alter_group_offsets_request(group_id, to_reset)
