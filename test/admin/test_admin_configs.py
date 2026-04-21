@@ -1,9 +1,11 @@
 import pytest
 
 from kafka.admin import ConfigResource, ConfigResourceType, KafkaAdminClient
+from kafka.errors import ClusterAuthorizationFailedError
 from kafka.protocol.admin import (
     AlterConfigsRequest, AlterConfigsResponse,
     DescribeConfigsRequest, DescribeConfigsResponse,
+    ListConfigResourcesRequest, ListConfigResourcesResponse,
 )
 
 from test.mock_broker import MockBroker
@@ -290,3 +292,104 @@ class TestResetConfigsMockBroker:
             validate_only=True)
 
         assert captured['request'].validate_only is True
+
+
+# ---------------------------------------------------------------------------
+# list_config_resources
+# ---------------------------------------------------------------------------
+
+
+def _list_config_resources_response(resources, error_code=0):
+    """resources: iterable of (resource_name, resource_type)."""
+    Resource = ListConfigResourcesResponse.ConfigResource
+    return ListConfigResourcesResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        config_resources=[
+            Resource(resource_name=name, resource_type=rtype)
+            for name, rtype in resources
+        ],
+    )
+
+
+def _capture_list_config_resources(captured, response):
+    def handler(api_key, api_version, correlation_id, request_bytes):
+        captured['request'] = ListConfigResourcesRequest.decode(
+            request_bytes, version=api_version, header=True)
+        captured['version'] = api_version
+        return response
+    return handler
+
+
+class TestListConfigResourcesMockBroker:
+
+    def test_groups_results_by_resource_type(self, mock_broker, admin):
+        mock_broker.respond(
+            ListConfigResourcesRequest,
+            _list_config_resources_response([
+                ('topic-a', ConfigResourceType.TOPIC.value),
+                ('topic-b', ConfigResourceType.TOPIC.value),
+                ('mygroup', ConfigResourceType.GROUP.value),
+                ('metrics-1', ConfigResourceType.CLIENT_METRICS.value),
+            ]),
+        )
+        result = admin.list_config_resources()
+        assert result == {
+            'topic': ['topic-a', 'topic-b'],
+            'group': ['mygroup'],
+            'client_metrics': ['metrics-1'],
+        }
+
+    def test_no_resource_types_sends_empty_filter(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(
+            ListConfigResourcesRequest,
+            _capture_list_config_resources(
+                captured, _list_config_resources_response([])))
+
+        admin.list_config_resources()
+        assert captured['request'].resource_types == []
+
+    def test_string_filter_is_normalized_and_sent_as_int8(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(
+            ListConfigResourcesRequest,
+            _capture_list_config_resources(
+                captured, _list_config_resources_response([])))
+
+        admin.list_config_resources(
+            resource_types=['topic', 'Client-Metrics'])
+        assert set(captured['request'].resource_types) == {
+            ConfigResourceType.TOPIC.value,
+            ConfigResourceType.CLIENT_METRICS.value,
+        }
+
+    def test_enum_filter_accepted(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(
+            ListConfigResourcesRequest,
+            _capture_list_config_resources(
+                captured, _list_config_resources_response([])))
+
+        admin.list_config_resources(
+            resource_types=[ConfigResourceType.GROUP])
+        assert captured['request'].resource_types == [
+            ConfigResourceType.GROUP.value]
+
+    def test_unrecognized_type_raises(self, admin):
+        with pytest.raises(ValueError, match='Unrecognized ConfigResourceType'):
+            admin.list_config_resources(resource_types=['bogus'])
+
+    def test_error_code_raises(self, mock_broker, admin):
+        mock_broker.respond(
+            ListConfigResourcesRequest,
+            _list_config_resources_response(
+                [], error_code=ClusterAuthorizationFailedError.errno))
+        with pytest.raises(ClusterAuthorizationFailedError):
+            admin.list_config_resources()
+
+    def test_empty_response_returns_empty_dict(self, mock_broker, admin):
+        mock_broker.respond(
+            ListConfigResourcesRequest,
+            _list_config_resources_response([]))
+        assert admin.list_config_resources() == {}

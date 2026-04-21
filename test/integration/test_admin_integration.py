@@ -561,3 +561,9 @@ def test_list_partition_offsets(kafka_admin_client, topic):
     result = kafka_admin_client.list_partition_offsets({tp: OffsetSpec.LATEST})
     assert tp in result
     assert isinstance(result[tp], OffsetAndTimestamp)
+
+
+@pytest.mark.skipif(env_kafka_version() < (4, 1), reason="ListConfigResources requires broker >=4.1 (KRaft)")
+def test_list_config_resources(kafka_admin_client):
+    result = kafka_admin_client.list_config_resources()
+    assert 'broker' in result
