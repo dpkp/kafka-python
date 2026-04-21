@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['AlterConfigsRequest', 'AlterConfigsResponse', 'DescribeConfigsRequest', 'DescribeConfigsResponse', 'ListConfigResourcesRequest', 'ListConfigResourcesResponse']
+__all__ = ['AlterConfigsRequest', 'AlterConfigsResponse', 'DescribeConfigsRequest', 'DescribeConfigsResponse', 'IncrementalAlterConfigsRequest', 'IncrementalAlterConfigsResponse', 'ListConfigResourcesRequest', 'ListConfigResourcesResponse']
 
 class AlterConfigsRequest(ApiMessage):
     class AlterConfigsResource(DataContainer):
@@ -236,6 +236,115 @@ class DescribeConfigsResponse(ApiMessage):
         *args: Any,
         throttle_time_ms: int = ...,
         results: list[DescribeConfigsResult] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class IncrementalAlterConfigsRequest(ApiMessage):
+    class AlterConfigsResource(DataContainer):
+        class AlterableConfig(DataContainer):
+            name: str
+            config_operation: int
+            value: str | None
+            def __init__(
+                self,
+                *args: Any,
+                name: str = ...,
+                config_operation: int = ...,
+                value: str | None = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        resource_type: int
+        resource_name: str
+        configs: list[AlterableConfig]
+        def __init__(
+            self,
+            *args: Any,
+            resource_type: int = ...,
+            resource_name: str = ...,
+            configs: list[AlterableConfig] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    resources: list[AlterConfigsResource]
+    validate_only: bool
+    def __init__(
+        self,
+        *args: Any,
+        resources: list[AlterConfigsResource] = ...,
+        validate_only: bool = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class IncrementalAlterConfigsResponse(ApiMessage):
+    class AlterConfigsResourceResponse(DataContainer):
+        error_code: int
+        error_message: str | None
+        resource_type: int
+        resource_name: str
+        def __init__(
+            self,
+            *args: Any,
+            error_code: int = ...,
+            error_message: str | None = ...,
+            resource_type: int = ...,
+            resource_name: str = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    responses: list[AlterConfigsResourceResponse]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        responses: list[AlterConfigsResourceResponse] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
