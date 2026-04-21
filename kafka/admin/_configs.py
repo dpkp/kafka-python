@@ -50,7 +50,12 @@ class ConfigAdminMixin:
                 other_resources.append(self._convert_config_resource(config_resource, key_only=key_only))
         return broker_resources, other_resources
 
-    async def _async_describe_configs(self, config_resources, include_synonyms=False):
+    async def _async_describe_configs(self, config_resources, include_synonyms=False, config_filter='modified'):
+        if isinstance(config_filter, str):
+            try:
+                config_filter = ConfigFilterType[config_filter.upper()]
+            except KeyError:
+                raise ValueError(f'{config_filter} is not a valid ConfigFilterType')
         min_version = 1 if include_synonyms else 0
         broker_resources, other_resources = self._group_config_resources(config_resources, key_only=True)
         responses = []
@@ -70,23 +75,35 @@ class ConfigAdminMixin:
         ret = defaultdict(dict)
         for response in responses:
             for result in response.results:
-                result_type = ConfigResourceType(result.resource_type).name.lower()
-                ret[result_type][result.resource_name] = {}
+                resource_type = ConfigResourceType(result.resource_type)
+                resource_configs = {}
                 for config in result.configs:
                     config = config.to_dict()
                     name = config.pop('name')
+                    if config_filter == ConfigFilterType.DYNAMIC and config['read_only']:
+                        continue
                     if 'config_source' in config:
-                        config['config_source'] = ConfigSourceType(config['config_source']).name
+                        config_source = ConfigSourceType(config['config_source'])
+                    elif config['read_only'] and resource_type is ConfigResourceType.BROKER:
+                        config_source = ConfigSourceType.STATIC_BROKER_CONFIG
+                    elif config['is_default']:
+                        config_source = ConfigSourceType.DEFAULT_CONFIG
+                    else:
+                        config_source = ConfigSourceType.dynamic_for_resource_type(resource_type)
+                    if config_filter.should_skip(config_source):
+                        continue
+                    config['config_source'] = config_source.name
                     if 'synonyms' in config:
                         for synonym in config['synonyms']:
                             synonym['source'] = ConfigSourceType(synonym['source']).name
 
                     if 'config_type' in config:
                         config['config_type'] = ConfigType(config['config_type']).name
-                    ret[result_type][result.resource_name][name] = config
+                    resource_configs[name] = config
+                ret[resource_type.name.lower()][result.resource_name] = resource_configs
         return dict(ret)
 
-    def describe_configs(self, config_resources, include_synonyms=False):
+    def describe_configs(self, config_resources, include_synonyms=False, config_filter='modified'):
         """Fetch configuration parameters for one or more Kafka resources.
 
         Arguments:
@@ -98,11 +115,15 @@ class ConfigAdminMixin:
         Keyword Arguments:
             include_synonyms (bool, optional): If True, return synonyms in response. Not
                 supported by all versions. Default: False.
+            config_filter (ConfigFilterType or str): Modified returns only keys that have
+                non-default values; Dynamic returns all keys that can be modified with
+                alter_configs; All returns all available keys. Default: Modified.
 
         Returns:
-            List of DescribeConfigsResponses.
+            dict of {resource_type (str): {resource_name (str): {config_key: {config data}}}}
         """
-        return self._manager.run(self._async_describe_configs, config_resources, include_synonyms)
+        return self._manager.run(self._async_describe_configs, config_resources,
+                                 include_synonyms, config_filter)
 
     async def _async_alter_configs(self, config_resources, validate_only=False):
         broker_resources, other_resources = self._group_config_resources(config_resources, key_only=False)
@@ -142,6 +163,23 @@ class ConfigAdminMixin:
             Appropriate version of AlterConfigsResponse class.
         """
         return self._manager.run(self._async_alter_configs, config_resources, validate_only)
+
+
+class ConfigFilterType(IntEnum):
+    ALL = 0
+    DYNAMIC = 1
+    MODIFIED = 2
+    DEFAULT = 3
+    STATIC = 4
+
+    def should_skip(self, config_source):
+        if self is ConfigFilterType.MODIFIED:
+            return not config_source.is_modified()
+        elif self is ConfigFilterType.DEFAULT:
+            return config_source.is_modified()
+        elif self is ConfigFilterType.STATIC:
+            return config_source is not ConfigSourceType.STATIC_BROKER_CONFIG
+        return False
 
 
 class ConfigResourceType(IntEnum):
@@ -190,11 +228,31 @@ class ConfigType(IntEnum):
 
 class ConfigSourceType(IntEnum):
     UNKNOWN = 0
-    TOPIC_CONFIG = 1
+    DYNAMIC_TOPIC_CONFIG = 1
     DYNAMIC_BROKER_CONFIG = 2
     DYNAMIC_DEFAULT_BROKER_CONFIG = 3
     STATIC_BROKER_CONFIG = 4
     DEFAULT_CONFIG = 5
     DYNAMIC_BROKER_LOGGER_CONFIG = 6
-    CLIENT_METRICS_CONFIG = 7
-    GROUP_CONFIG = 8
+    DYNAMIC_CLIENT_METRICS_CONFIG = 7
+    DYNAMIC_GROUP_CONFIG = 8
+
+    def is_modified(self):
+        return self.value not in (3, 4, 5)
+
+    @classmethod
+    def dynamic_for_resource_type(cls, resource_type):
+        if resource_type is ConfigResourceType.UNKNOWN:
+            return ConfigSourceType.UNKNOWN
+        elif resource_type is ConfigResourceType.TOPIC:
+            return ConfigSourceType.DYNAMIC_TOPIC_CONFIG
+        elif resource_type is ConfigResourceType.BROKER:
+            return ConfigSourceType.DYNAMIC_BROKER_CONFIG
+        elif resource_type is ConfigResourceType.BROKER_LOGGER:
+            return ConfigSourceType.DYNAMIC_BROKER_LOGGER_CONFIG
+        elif resource_type is ConfigResourceType.CLIENT_METRICS:
+            return ConfigSourceType.DYNAMIC_CLIENT_METRICS_CONFIG
+        elif resource_type is ConfigResourceType.GROUP:
+            return ConfigSourceType.DYNAMIC_GROUP_CONFIG
+        else:
+            raise RuntimeError(f'Unrecognized resource type {resource_type}')
