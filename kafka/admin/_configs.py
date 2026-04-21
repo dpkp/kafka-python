@@ -10,7 +10,7 @@ from enum import IntEnum
 import logging
 from typing import TYPE_CHECKING
 
-from kafka.errors import IncompatibleBrokerVersion
+import kafka.errors as Errors
 from kafka.protocol.admin import (
     AlterConfigsRequest,
     DescribeConfigsRequest,
@@ -111,16 +111,29 @@ class ConfigAdminMixin:
             request = AlterConfigsRequest(
                 resources=resources,
                 validate_only=validate_only)
-            responses.append(await self._manager.send(request, node_id=broker_id))
+            response = await self._manager.send(request, node_id=broker_id)
+            responses.extend(response.responses)
         if other_resources:
             request = AlterConfigsRequest(
                 resources=other_resources,
                 validate_only=validate_only)
-            responses.append(await self._manager.send(request))
-        return responses
+            response = await self._manager.send(request)
+            responses.extend(response.responses)
+        ret = defaultdict(dict)
+        for response in responses:
+            error = Errors.for_code(response.error_code)(response.error_message)
+            result_type = ConfigResourceType(response.resource_type).name.lower()
+            ret[result_type][response.resource_name] = error
+        return dict(ret)
 
     def alter_configs(self, config_resources, validate_only=False):
         """Alter configuration parameters of one or more Kafka resources.
+
+        NOTE: This API sets/resets *all* dynamic configs for the resource.
+            Any missing keys will be reset to default values!
+            The method currently *does not* attempt to find / copy missing
+            keys with non-default values to avoid inadvertently
+            overwriting non-default values.
 
         Arguments:
             config_resources: A list of ConfigResource objects.
