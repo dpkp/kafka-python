@@ -150,9 +150,23 @@ class ConfigAdminMixin:
         for resource, missing in zip(config_resources, missing_resource_configs):
             resource.configs.update(missing)
 
-    async def _async_alter_configs(self, config_resources, validate_only=False):
+    async def _validate_dynamic_configs(self, config_resources):
+        resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]
+        dynamic_configs = await self._async_describe_configs(resource_lookups, config_filter='dynamic', flat=True)
+        for resource, describe in zip(config_resources, dynamic_configs):
+            unknown = set(resource.configs) - set(describe)
+            if unknown:
+                raise ValueError(f'Unrecognized configs: {unknown}')
+
+    async def _async_alter_configs(self, config_resources, validate_only=False, raise_on_unknown=True):
         # Broker Version <  (2, 3): use alter configs
         # Broker Version >= (2, 3): use incremental alter configs
+        if raise_on_unknown:
+            await self._validate_dynamic_configs(config_resources)
+        await self._add_missing_dynamic_configs(config_resources)
+        return await self._send_alter_configs_requests(config_resources, validate_only=validate_only)
+
+    async def _send_alter_configs_requests(self, config_resources, validate_only=False):
         broker_resources, other_resources = self._group_config_resources(config_resources, key_only=False)
         responses = []
         for broker_id, resources in broker_resources.items():
@@ -174,16 +188,20 @@ class ConfigAdminMixin:
             ret[result_type][response.resource_name] = error
         return dict(ret)
 
-    def alter_configs(self, config_resources, validate_only=False):
+    def alter_configs(self, config_resources, validate_only=False, raise_on_unknown=True):
         """Alter configuration parameters of one or more Kafka resources.
 
         Arguments:
             config_resources: A list of ConfigResource objects.
+            validate_only (bool, optional): If True, changes are sent to broker for
+                validation only. Changes will not be applied. Default: False
+            raise_on_unknown (bool, optional): If True, raises ValueError if any
+                config key is not recognized as a dynamic config for the resource.
 
         Returns:
             Appropriate version of AlterConfigsResponse class.
         """
-        return self._manager.run(self._async_alter_configs, config_resources, validate_only)
+        return self._manager.run(self._async_alter_configs, config_resources, validate_only, raise_on_unknown)
 
 
 class ConfigFilterType(IntEnum):
