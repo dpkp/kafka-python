@@ -3,17 +3,19 @@
 from collections import namedtuple
 
 
-"""A topic and partition tuple
+TopicPartition = namedtuple("TopicPartition",
+    ["topic", "partition"])
+TopicPartition.__doc__ = """A topic and partition tuple
 
 Keyword Arguments:
     topic (str): A topic name
     partition (int): A partition id
 """
-TopicPartition = namedtuple("TopicPartition",
-    ["topic", "partition"])
 
 
-"""The Kafka offset commit API
+OffsetAndMetadata = namedtuple("OffsetAndMetadata",
+    ["offset", "metadata", "leader_epoch"], defaults=[None, '', -1])
+OffsetAndMetadata.__doc__ = """Container for committed group offset data.
 
 The Kafka offset commit API allows users to provide additional metadata
 (in the form of a string) when an offset is committed. This can be useful
@@ -25,26 +27,14 @@ Keyword Arguments:
     metadata (str): Non-null metadata
     leader_epoch (int): The last known epoch from the leader / broker
 """
-OffsetAndMetadata = namedtuple("OffsetAndMetadata",
-    ["offset", "metadata", "leader_epoch"])
 
 
-"""An offset and timestamp tuple
+OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
+    ["offset", "timestamp", "leader_epoch"])
+OffsetAndTimestamp.__doc__ = """An offset and timestamp tuple
 
 Keyword Arguments:
     offset (int): An offset
     timestamp (int): The timestamp associated to the offset
     leader_epoch (int): The last known epoch from the leader / broker
 """
-OffsetAndTimestamp = namedtuple("OffsetAndTimestamp",
-    ["offset", "timestamp", "leader_epoch"])
-
-"""Define retry policy for async producer
-
-Keyword Arguments:
-    Limit (int): Number of retries. limit >= 0, 0 means no retries
-    backoff_ms (int): Milliseconds to backoff.
-    retry_on_timeouts:
-"""
-RetryOptions = namedtuple("RetryOptions",
-    ["limit", "backoff_ms", "retry_on_timeouts"])

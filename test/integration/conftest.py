@@ -4,7 +4,8 @@ import uuid
 
 import pytest
 
-from kafka import KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
+from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
+from kafka.client_async import KafkaClient
 from kafka.util import TOPIC_LEGAL_CHARS, TOPIC_MAX_LENGTH, ensure_valid_topic_name
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_topics, client_params
