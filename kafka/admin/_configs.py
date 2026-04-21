@@ -50,7 +50,7 @@ class ConfigAdminMixin:
                 other_resources.append(self._convert_config_resource(config_resource, key_only=key_only))
         return broker_resources, other_resources
 
-    async def _async_describe_configs(self, config_resources, include_synonyms=False, config_filter='modified'):
+    async def _async_describe_configs(self, config_resources, include_synonyms=False, config_filter='modified', flat=False):
         if isinstance(config_filter, str):
             try:
                 config_filter = ConfigFilterType[config_filter.upper()]
@@ -101,7 +101,11 @@ class ConfigAdminMixin:
                         config['config_type'] = ConfigType(config['config_type']).name
                     resource_configs[name] = config
                 ret[resource_type.name.lower()][result.resource_name] = resource_configs
-        return dict(ret)
+        if flat:
+            return [ret[resource.resource_type.name.lower()][resource.name]
+                    for resource in config_resources]
+        else:
+            return dict(ret)
 
     def describe_configs(self, config_resources, include_synonyms=False, config_filter='modified'):
         """Fetch configuration parameters for one or more Kafka resources.
@@ -125,16 +129,31 @@ class ConfigAdminMixin:
         return self._manager.run(self._async_describe_configs, config_resources,
                                  include_synonyms, config_filter)
 
+    async def _add_missing_dynamic_configs(self, resources):
+        # Add missing dynamic config values to resource list to avoid accidental resets
+        resource_lookups = [ConfigResource(resource[0], resource[1]) for resource in resources]
+        dynamic_configs = await self._async_describe_configs(resource_lookups, config_filter='modified', flat=True)
+        for resource, describe in zip(resources, dynamic_configs):
+            configs = dict(resource[2])
+            for config_key in describe:
+                if config_key not in configs:
+                    to_add = (config_key, describe[config_key]['value'])
+                    resource[2].append(to_add)
+
     async def _async_alter_configs(self, config_resources, validate_only=False):
+        # Broker Version <  (2, 3): use alter configs
+        # Broker Version >= (2, 3): use incremental alter configs
         broker_resources, other_resources = self._group_config_resources(config_resources, key_only=False)
         responses = []
         for broker_id, resources in broker_resources.items():
+            await self._add_missing_dynamic_configs(resources)
             request = AlterConfigsRequest(
                 resources=resources,
                 validate_only=validate_only)
             response = await self._manager.send(request, node_id=broker_id)
             responses.extend(response.responses)
         if other_resources:
+            await self._add_missing_dynamic_configs(other_resources)
             request = AlterConfigsRequest(
                 resources=other_resources,
                 validate_only=validate_only)
@@ -149,12 +168,6 @@ class ConfigAdminMixin:
 
     def alter_configs(self, config_resources, validate_only=False):
         """Alter configuration parameters of one or more Kafka resources.
-
-        NOTE: This API sets/resets *all* dynamic configs for the resource.
-            Any missing keys will be reset to default values!
-            The method currently *does not* attempt to find / copy missing
-            keys with non-default values to avoid inadvertently
-            overwriting non-default values.
 
         Arguments:
             config_resources: A list of ConfigResource objects.
