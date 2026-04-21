@@ -42,7 +42,7 @@ def conn(mocker):
 
 @pytest.fixture
 def client(conn, mocker):
-    from kafka import KafkaClient
+    from kafka.client_async import KafkaClient
 
     cli = KafkaClient(api_version=(0, 9))
     mocker.patch.object(cli, '_init_connect', return_value=True)

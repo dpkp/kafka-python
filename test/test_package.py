@@ -6,17 +6,17 @@ class TestPackage:
         assert kafka1.codec.__name__ == "kafka.codec"
 
     def test_submodule_namespace(self):
-        import kafka.client_async as client1
-        assert client1.__name__ == "kafka.client_async"
+        import kafka.net as net1
+        assert net1.__name__ == "kafka.net"
 
-        from kafka import client_async as client2
-        assert client2.__name__ == "kafka.client_async"
+        from kafka import net as net2
+        assert net2.__name__ == "kafka.net"
 
-        from kafka.client_async import KafkaClient as KafkaClient1
-        assert KafkaClient1.__name__ == "KafkaClient"
+        from kafka import KafkaConsumer as KafkaConsumer1
+        assert KafkaConsumer1.__name__ == "KafkaConsumer"
 
-        from kafka import KafkaClient as KafkaClient2
-        assert KafkaClient2.__name__ == "KafkaClient"
+        from kafka import KafkaConsumer as KafkaConsumer2
+        assert KafkaConsumer2.__name__ == "KafkaConsumer"
 
         from kafka.codec import gzip_encode as gzip_encode1
         assert gzip_encode1.__name__ == "gzip_encode"

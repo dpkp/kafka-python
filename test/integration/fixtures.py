@@ -718,7 +718,7 @@ def get_api_versions():
     k = KafkaFixture.instance(0)
     zk = k.zookeeper
 
-    from kafka import KafkaClient
+    from kafka.client_async import KafkaClient
     client = KafkaClient(bootstrap_servers='localhost:{}'.format(k.port))
     client.check_version()
 

@@ -5,8 +5,9 @@ import time
 
 import pytest
 
-from kafka import KafkaAdminClient, KafkaClient, KafkaConsumer, KafkaProducer
+from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
+from kafka.client_async import KafkaClient
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 from test.integration.fixtures import client_params, create_topics
