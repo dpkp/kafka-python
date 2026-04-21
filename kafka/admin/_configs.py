@@ -98,7 +98,6 @@ class ConfigAdminMixin:
                     if 'synonyms' in config:
                         for synonym in config['synonyms']:
                             synonym['source'] = ConfigSourceType(synonym['source']).name
-
                     if 'config_type' in config:
                         config['config_type'] = ConfigType(config['config_type']).name
                     resource_configs[name] = config
