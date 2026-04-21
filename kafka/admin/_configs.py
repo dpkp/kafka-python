@@ -129,16 +129,26 @@ class ConfigAdminMixin:
         return self._manager.run(self._async_describe_configs, config_resources,
                                  include_synonyms, config_filter)
 
-    async def _add_missing_dynamic_configs(self, resources):
-        # Add missing dynamic config values to resource list to avoid accidental resets
-        resource_lookups = [ConfigResource(resource[0], resource[1]) for resource in resources]
+    async def _get_missing_dynamic_configs(self, config_resources):
+        resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]
         dynamic_configs = await self._async_describe_configs(resource_lookups, config_filter='modified', flat=True)
-        for resource, describe in zip(resources, dynamic_configs):
-            configs = dict(resource[2])
+        missing_resource_configs = []
+        for resource, describe in zip(config_resources, dynamic_configs):
+            missing = {}
             for config_key in describe:
-                if config_key not in configs:
-                    to_add = (config_key, describe[config_key]['value'])
-                    resource[2].append(to_add)
+                if config_key not in resource.configs:
+                    config_value = describe[config_key]['value']
+                    if config_value is None:
+                        continue
+                    missing[config_key] = config_value
+            missing_resource_configs.append(missing)
+        return missing_resource_configs
+
+    async def _add_missing_dynamic_configs(self, config_resources):
+        # Add missing dynamic config values to resource list to avoid accidental resets
+        missing_resource_configs = await self._get_missing_dynamic_configs(config_resources)
+        for resource, missing in zip(config_resources, missing_resource_configs):
+            resource.configs.update(missing)
 
     async def _async_alter_configs(self, config_resources, validate_only=False):
         # Broker Version <  (2, 3): use alter configs
@@ -146,14 +156,12 @@ class ConfigAdminMixin:
         broker_resources, other_resources = self._group_config_resources(config_resources, key_only=False)
         responses = []
         for broker_id, resources in broker_resources.items():
-            await self._add_missing_dynamic_configs(resources)
             request = AlterConfigsRequest(
                 resources=resources,
                 validate_only=validate_only)
             response = await self._manager.send(request, node_id=broker_id)
             responses.extend(response.responses)
         if other_resources:
-            await self._add_missing_dynamic_configs(other_resources)
             request = AlterConfigsRequest(
                 resources=other_resources,
                 validate_only=validate_only)
