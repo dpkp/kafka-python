@@ -31,6 +31,8 @@ class ConfigAdminMixin:
     def _convert_config_resource(config_resource, key_only=True):
         if key_only:
             values = list(config_resource.configs.keys()) if isinstance(config_resource.configs, dict) else config_resource.configs
+        elif not config_resource.configs:
+            values = []
         else:
             assert isinstance(config_resource.configs, dict)
             values = list(config_resource.configs.items())
@@ -205,6 +207,28 @@ class ConfigAdminMixin:
             dict of {resource_type (str): {resource_name (str): Error/Result}}
         """
         return self._manager.run(self._async_alter_configs, config_resources, validate_only, raise_on_unknown)
+
+    async def _async_reset_configs(self, config_resources, validate_only=False, raise_on_unknown=True):
+        if raise_on_unknown:
+            await self._validate_dynamic_configs(config_resources)
+        # if no keys provided, submit as-is -- full reset
+        # if keys are provided, replace with missing -- partial reset
+        partial_resets = [resource for resource in config_resources if resource.configs]
+        missing_resource_configs = await self._get_missing_dynamic_configs(partial_resets)
+        for resource, missing in zip(partial_resets, missing_resource_configs):
+            resource.configs = missing
+        return await self._send_alter_configs_requests(config_resources, validate_only=validate_only)
+
+    def reset_configs(self, config_resources, validate_only=False, raise_on_unknown=True):
+        """Reset configuration parameters of one or more Kafka resources.
+
+        Arguments:
+            config_resources: A list of ConfigResource objects.
+
+        Returns:
+            dict of {resource_type (str): {resource_name (str): Error/Result}}
+        """
+        return self._manager.run(self._async_reset_configs, config_resources, validate_only, raise_on_unknown)
 
 
 class ConfigFilterType(IntEnum):
