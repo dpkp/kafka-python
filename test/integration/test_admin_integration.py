@@ -102,7 +102,7 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
     """Tests that describe config returns configs for broker
     """
     broker_id = kafka_admin_client._client.least_loaded_node()
-    configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
+    configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)], config_filter='all')
 
     assert len(configs) == 1
     assert len(configs['broker']) == 1
@@ -114,7 +114,7 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
         assert configs['broker'][str(broker_id)]['advertised.listeners']['config_type'] in ('LIST', 'STRING')
     if env_kafka_version() >= (4, 0):
         assert configs['broker'][str(broker_id)]['advertised.listeners']['read_only'] is True
-    elif env_kafka_version() >= (1, 0):
+    elif env_kafka_version() >= (1, 1):
         assert configs['broker'][str(broker_id)]['advertised.listeners']['read_only'] is False
     assert configs['broker'][str(broker_id)]['advertised.listeners']['is_sensitive'] is False
     if env_kafka_version() >= (1, 1):
@@ -126,7 +126,7 @@ def test_describe_configs_broker_resource_returns_configs(kafka_admin_client):
 def test_describe_configs_topic_resource_returns_configs(topic, kafka_admin_client):
     """Tests that describe config returns configs for topic
     """
-    configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.TOPIC, topic)])
+    configs = kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.TOPIC, topic)], config_filter='all')
 
     assert len(configs) == 1
     assert len(configs['topic']) == 1
@@ -146,9 +146,11 @@ def test_describe_configs_mixed_resources_returns_configs(topic, kafka_admin_cli
     """Tests that describe config returns configs for mixed resource types (topic + broker)
     """
     broker_id = kafka_admin_client._client.least_loaded_node()
-    configs = kafka_admin_client.describe_configs([
-        ConfigResource(ConfigResourceType.TOPIC, topic),
-        ConfigResource(ConfigResourceType.BROKER, broker_id)])
+    configs = kafka_admin_client.describe_configs(
+        [ConfigResource(ConfigResourceType.TOPIC, topic),
+         ConfigResource(ConfigResourceType.BROKER, broker_id)],
+        config_filter='all',
+    )
 
     assert len(configs) == 2
     assert topic in configs['topic']
@@ -164,7 +166,7 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
     broker_id = "str"
 
     with pytest.raises(ValueError):
-        kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)])
+        kafka_admin_client.describe_configs([ConfigResource(ConfigResourceType.BROKER, broker_id)], config_filter='all')
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
