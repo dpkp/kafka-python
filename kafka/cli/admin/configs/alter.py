@@ -10,7 +10,7 @@ class AlterConfigs:
         parser.add_argument('-b', '--broker', type=str, action='append', dest='brokers', default=[])
         parser.add_argument('--broker-logger', type=str, action='append', dest='broker_loggers', default=[])
         parser.add_argument('-g', '--group', type=str, action='append', dest='groups', default=[])
-        parser.add_argument('-c', '--config', type=str, action='append', dest='configs', default=None, help='key=value to alter')
+        parser.add_argument('-c', '--config', type=str, action='append', dest='configs', required=True, help='key=value to alter')
         parser.add_argument('-v', '--validate-only', action='store_true', default=False)
         parser.add_argument('--allow-unknown', action='store_false', dest='raise_on_unknown', default=True)
         parser.set_defaults(command=cls.command)
@@ -20,12 +20,20 @@ class AlterConfigs:
         configs = dict(config.split('=') for config in args.configs)
         resources = []
         for topic in args.topics:
+            if resources:
+                raise ValueError('Only one resource type per request')
             resources.append(ConfigResource('TOPIC', topic, configs))
         for broker in args.brokers:
+            if resources:
+                raise ValueError('Only one resource type per request')
             resources.append(ConfigResource('BROKER', broker, configs))
         for broker in args.broker_loggers:
+            if resources:
+                raise ValueError('Only one resource type per request')
             resources.append(ConfigResource('BROKER_LOGGER', broker, configs))
         for group in args.groups:
+            if resources:
+                raise ValueError('Only one resource type per request')
             resources.append(ConfigResource('GROUP', group, configs))
         return client.alter_configs(resources,
                                     validate_only=args.validate_only,
