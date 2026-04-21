@@ -14,6 +14,7 @@ import kafka.errors as Errors
 from kafka.protocol.admin import (
     AlterConfigsRequest,
     DescribeConfigsRequest,
+    ListConfigResourcesRequest,
 )
 
 if TYPE_CHECKING:
@@ -129,6 +130,49 @@ class ConfigAdminMixin:
         """
         return self._manager.run(self._async_describe_configs, config_resources,
                                  include_synonyms, config_filter)
+
+    @staticmethod
+    def _list_config_resources_process_response(response):
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "ListConfigResourcesRequest failed with response '{}'.".format(response))
+        ret = defaultdict(list)
+        for resource in response.config_resources:
+            resource_type = ConfigResourceType(resource.resource_type)
+            ret[resource_type.name.lower()].append(resource.resource_name)
+        return dict(ret)
+
+    async def _async_list_config_resources(self, resource_types=None):
+        wire_types = []
+        for rt in resource_types or []:
+            if not isinstance(rt, ConfigResourceType):
+                try:
+                    rt = ConfigResourceType[str(rt).upper().replace('-', '_')]
+                except KeyError:
+                    raise ValueError(f'Unrecognized ConfigResourceType: {rt}')
+            wire_types.append(rt.value)
+        request = ListConfigResourcesRequest(resource_types=wire_types)
+        response = await self._manager.send(request)
+        return self._list_config_resources_process_response(response)
+
+    def list_config_resources(self, resource_types=None):
+        """List config resources known to the cluster.
+
+        Useful for discovering resource types that have no separate enumeration
+        API (e.g. ``CLIENT_METRICS``, ``GROUP``). For ``TOPIC`` and ``BROKER``
+        the data is also available via ``Metadata`` / cluster descriptions.
+
+        Keyword Arguments:
+            resource_types (list, optional): Filter by resource type. Each entry
+                may be a :class:`ConfigResourceType` or its name (e.g. ``'TOPIC'``).
+                If None or empty, the broker returns all supported types.
+                Requires broker >= 4.1 for anything other than ``CLIENT_METRICS``.
+
+        Returns:
+            dict of {resource_type (str): [resource_name (str)]}
+        """
+        return self._manager.run(self._async_list_config_resources, resource_types)
 
     async def _get_missing_dynamic_configs(self, config_resources):
         resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]

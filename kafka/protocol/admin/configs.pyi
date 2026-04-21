@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['AlterConfigsRequest', 'AlterConfigsResponse', 'DescribeConfigsRequest', 'DescribeConfigsResponse']
+__all__ = ['AlterConfigsRequest', 'AlterConfigsResponse', 'DescribeConfigsRequest', 'DescribeConfigsResponse', 'ListConfigResourcesRequest', 'ListConfigResourcesResponse']
 
 class AlterConfigsRequest(ApiMessage):
     class AlterConfigsResource(DataContainer):
@@ -236,6 +236,77 @@ class DescribeConfigsResponse(ApiMessage):
         *args: Any,
         throttle_time_ms: int = ...,
         results: list[DescribeConfigsResult] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class ListConfigResourcesRequest(ApiMessage):
+    resource_types: list[int]
+    def __init__(
+        self,
+        *args: Any,
+        resource_types: list[int] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class ListConfigResourcesResponse(ApiMessage):
+    class ConfigResource(DataContainer):
+        resource_name: str
+        resource_type: int
+        def __init__(
+            self,
+            *args: Any,
+            resource_name: str = ...,
+            resource_type: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    error_code: int
+    config_resources: list[ConfigResource]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        error_code: int = ...,
+        config_resources: list[ConfigResource] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
