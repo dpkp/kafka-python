@@ -113,6 +113,7 @@ def run_cli(args=None):
     # --trace ?
 
     # [configs]
+    # ListConfigResources
     # IncrementalAlterConfigs (not supported yet)
 
     # [client-quotas]
