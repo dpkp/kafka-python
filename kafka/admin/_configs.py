@@ -183,9 +183,12 @@ class ConfigAdminMixin:
             responses.extend(response.responses)
         ret = defaultdict(dict)
         for response in responses:
-            error = Errors.for_code(response.error_code)(response.error_message)
+            if response.error_code == 0:
+                result = 'OK'
+            else:
+                result = str(Errors.for_code(response.error_code)(response.error_message))
             result_type = ConfigResourceType(response.resource_type).name.lower()
-            ret[result_type][response.resource_name] = error
+            ret[result_type][response.resource_name] = result
         return dict(ret)
 
     def alter_configs(self, config_resources, validate_only=False, raise_on_unknown=True):
@@ -199,7 +202,7 @@ class ConfigAdminMixin:
                 config key is not recognized as a dynamic config for the resource.
 
         Returns:
-            Appropriate version of AlterConfigsResponse class.
+            dict of {resource_type (str): {resource_name (str): Error/Result}}
         """
         return self._manager.run(self._async_alter_configs, config_resources, validate_only, raise_on_unknown)
 
