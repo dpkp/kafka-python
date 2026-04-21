@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from kafka.structs import TopicPartition
 from kafka.admin import OffsetSpec
 
@@ -13,10 +15,15 @@ class ListGroupOffsets:
     @classmethod
     def command(cls, client, args):
         offsets = client.list_group_offsets(args.group_id)
-        partitions = [TopicPartition(topic, partition) for topic in offsets for partition in offsets[topic]]
-        latest = client.list_partition_offsets({tp: OffsetSpec.LATEST for tp in partitions})
+        latest = client.list_partition_offsets({tp: OffsetSpec.LATEST for tp in offsets})
+        results = defaultdict(dict)
         for tp in latest:
-            part_res = offsets[tp.topic][tp.partition]
-            part_res['latest_offset'] = latest[tp].offset
-            part_res['lag'] = latest[tp].offset - part_res['committed_offset']
-        return offsets
+            committed = offsets[tp]
+            results[tp.topic][tp.partition] = {
+                'offset': committed.offset,
+                'leader_epoch': committed.leader_epoch,
+                'metadata': committed.metadata,
+                'latest_offset': latest[tp].offset,
+                'lag': latest[tp].offset - committed.offset,
+            }
+        return dict(results)

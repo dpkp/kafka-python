@@ -59,17 +59,25 @@ class GroupAdminMixin:
                         log.warn(f'Unable to decode member_assignment for {group}/{member.member_id}')
                         pass
         # Return dict (key, val) tuples
-        return [(group.group_id, self._process_acl_operations(group.to_dict())) for group in response.groups]
+        results = {}
+        for group in response.groups:
+            group_id = group.group_id
+            result = self._process_acl_operations(group.to_dict())
+            error_code = result.pop('error_code')
+            error_message = result.pop('error_message', '') # v6+
+            result['error'] = str(Errors.for_code(error_code)(error_message)) if error_code else None
+            results[group_id] = result
+        return results
 
     async def _async_describe_groups(self, group_ids, group_coordinator_id=None):
-        results = []
+        results = {}
         for group_id in group_ids:
             coordinator_id = group_coordinator_id or await self._find_coordinator_id(group_id)
             request = self._describe_groups_request(group_id)
             response = await self._manager.send(request, node_id=coordinator_id)
-            results.append(self._describe_groups_process_response(response))
+            results.update(self._describe_groups_process_response(response))
         # Combine key/vals from multiple requests into single dict
-        return dict(itertools.chain(*results))
+        return results
 
     def describe_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
         """Describe a set of consumer groups.
@@ -175,14 +183,20 @@ class GroupAdminMixin:
                 raise error_type(
                     "OffsetFetchResponse failed with response '{}'."
                     .format(response))
-        def _partitions_to_dict(partitions):
-            d = {}
-            for p in partitions:
-                d[p.partition_index] = p.to_dict()
-                d[p.partition_index].pop('partition_index')
-            return d
-        return {topic.name: _partitions_to_dict(topic.partitions)
-                for topic in response.topics}
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                error_type = Errors.for_code(partition.error_code)
+                if error_type is not Errors.NoError:
+                    raise error_type(
+                        f"OffsetFetchResponse failed for partition {tp.partition}")
+                results[tp] = OffsetAndMetadata(
+                    offset=partition.committed_offset,
+                    metadata=partition.metadata,
+                    leader_epoch=partition.committed_leader_epoch
+                )
+        return results
 
     async def _async_list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         if group_coordinator_id is None:
@@ -191,8 +205,7 @@ class GroupAdminMixin:
         response = await self._manager.send(request, node_id=group_coordinator_id)
         return self._list_group_offsets_process_response(response)
 
-    def list_group_offsets(self, group_id, group_coordinator_id=None,
-                                    partitions=None):
+    def list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
         """Fetch committed offsets for a single consumer group.
 
         Note:
@@ -213,7 +226,8 @@ class GroupAdminMixin:
                 known offsets for the consumer group. Default: None.
 
         Returns:
-            dict: {topic: [{partition data}]} key/vals from OffsetCommitResponse}]}
+            A dict mapping :class:`~kafka.TopicPartition` to
+                :class:`~kafka.structs.OffsetAndMetadata`.
         """
         return self._manager.run(self._async_list_group_offsets, group_id, group_coordinator_id, partitions)
 
@@ -333,6 +347,58 @@ class GroupAdminMixin:
         """
         return self._manager.run(
             self._async_alter_group_offsets, group_id, offsets, group_coordinator_id)
+
+    # -- Reset group offsets ----------------------------------------------
+
+    @staticmethod
+    def _reset_group_offsets_process_response(response, to_reset):
+        results = {}
+        for topic in response.topics:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                results[tp] = {
+                    'error': Errors.for_code(partition.error_code),
+                    'offset': to_reset[tp].offset
+                }
+        return results
+
+    async def _async_reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
+        if not offset_specs:
+            return {}
+        if group_coordinator_id is None:
+            group_coordinator_id = await self._find_coordinator_id(group_id)
+        current = await self._async_list_group_offsets(group_id, group_coordinator_id, offset_specs.keys())
+        offsets = await self._async_list_partition_offsets(offset_specs)
+        to_reset = {}
+        for tp in offsets:
+            to_reset[tp] = current[tp]._replace(offset=offsets[tp].offset)
+        request = self._alter_group_offsets_request(group_id, to_reset)
+        response = await self._manager.send(request, node_id=group_coordinator_id)
+        return self._reset_group_offsets_process_response(response, to_reset)
+
+    def reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
+        """Reset committed offsets for a consumer group to earliest or latest.
+
+        The group must have no active members (i.e. be empty or dead) for
+        the reset to succeed; otherwise individual partitions may return
+        ``UNKNOWN_MEMBER_ID`` or similar errors.
+
+        Arguments:
+            group_id (str): The consumer group id.
+            offset_specs (dict): A dict mapping :class:`~kafka.TopicPartition` to
+                :class:`~kafka.admin.OffsetSpec`.
+
+        Keyword Arguments:
+            group_coordinator_id (int, optional): The node_id of the group's
+                coordinator broker. If None, the cluster will be queried to
+                locate the coordinator. Default: None.
+
+        Returns:
+            dict: A dict mapping :class:`~kafka.TopicPartition` to dict of
+            {'error': :class:`~kafka.errors.KafkaError` class, 'offset': int}
+        """
+        return self._manager.run(
+            self._async_reset_group_offsets, group_id, offset_specs, group_coordinator_id)
 
     # -- Delete group offsets ----------------------------------------------
 
