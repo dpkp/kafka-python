@@ -150,13 +150,15 @@ class ConfigAdminMixin:
         # Add missing dynamic config values to resource list to avoid accidental resets
         missing_resource_configs = await self._get_missing_dynamic_configs(config_resources)
         for resource, missing in zip(config_resources, missing_resource_configs):
+            if not isinstance(missing, dict):
+                raise TypeError(f'missing configs: expected dict, found {type(missing)}')
             resource.configs.update(missing)
 
     async def _validate_dynamic_configs(self, config_resources):
         resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]
         dynamic_configs = await self._async_describe_configs(resource_lookups, config_filter='dynamic', flat=True)
         for resource, describe in zip(config_resources, dynamic_configs):
-            unknown = set(resource.configs) - set(describe)
+            unknown = set(resource.configs or []) - set(describe)
             if unknown:
                 raise ValueError(f'Unrecognized configs: {unknown}')
 
