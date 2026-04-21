@@ -11,6 +11,7 @@ class AlterConfigs:
         parser.add_argument('--broker-logger', type=str, action='append', dest='broker_loggers', default=[])
         parser.add_argument('-g', '--group', type=str, action='append', dest='groups', default=[])
         parser.add_argument('-c', '--config', type=str, action='append', dest='configs', default=None, help='key=value to alter')
+        parser.add_argument('-v', '--validate-only', action='store_true', default=False)
         parser.set_defaults(command=cls.command)
 
     @classmethod
@@ -25,4 +26,4 @@ class AlterConfigs:
             resources.append(ConfigResource('BROKER_LOGGER', broker, configs))
         for group in args.groups:
             resources.append(ConfigResource('GROUP', group, configs))
-        return client.alter_configs(resources)
+        return client.alter_configs(resources, validate_only=args.validate_only)
