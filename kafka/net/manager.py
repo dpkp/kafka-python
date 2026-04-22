@@ -23,7 +23,10 @@ class KafkaConnectionManager:
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,
         'socket_connection_timeout_ms': 5000,
-        'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        'socket_options': [
+            (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+        ],
         'max_in_flight_requests_per_connection': 5,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'security_protocol': 'PLAINTEXT',
