@@ -3,7 +3,8 @@ from kafka.admin._acls import (
     ACL, ACLFilter, ResourcePattern, ResourcePatternFilter, ACLOperation,
     ResourceType, ACLPermissionType, ACLResourcePatternType)
 from kafka.admin._configs import (
-    AlterConfigOp, ConfigResource, ConfigResourceType, ConfigType, ConfigSourceType)
+    AlterConfigOp, ConfigFilterType, ConfigResource, ConfigResourceType,
+    ConfigType, ConfigSourceType)
 from kafka.admin._groups import MemberToRemove
 from kafka.admin._partitions import NewPartitions, OffsetSpec
 from kafka.admin._topics import NewTopic

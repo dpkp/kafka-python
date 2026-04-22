@@ -1,6 +1,7 @@
 from enum import IntEnum
 
 from ..api_message import ApiMessage
+from kafka.util import EnumHelper
 
 
 UNKNOWN_OFFSET = -1
@@ -11,12 +12,12 @@ class OffsetResetStrategy:
     NONE = 0
 
 
-class IsolationLevel(IntEnum):
+class IsolationLevel(EnumHelper, IntEnum):
     READ_UNCOMMITTED = 0
     READ_COMMITTED = 1
 
 
-class OffsetSpec(IntEnum):
+class OffsetSpec(EnumHelper, IntEnum):
     # Any >= 0:         # earliest offset whose timestamp is greater than or equal to the given timestamp and the timestamp of that record.
     LATEST = -1         # offset of the next message that will be appended to the log and a timestamp of -1
     EARLIEST = -2       # first offset on the partition, including remote-storage, and a timestamp of -1

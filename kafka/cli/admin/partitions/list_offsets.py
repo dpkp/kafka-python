@@ -41,18 +41,6 @@ class ListPartitionOffsets:
             }
         return dict(output)
 
-    @staticmethod
-    def _parse_spec(spec):
-        try:
-            return int(spec)
-        except ValueError:
-            pass
-        try:
-            spec_key = spec.upper().replace('-', '_')
-            return OffsetSpec[spec_key]
-        except KeyError:
-            raise ValueError(f'{spec_key} is not a valid OffsetSpec')
-
     @classmethod
     def _parse_partition_specs(cls, client, args):
         if args.partitions:
@@ -64,7 +52,7 @@ class ListPartitionOffsets:
         tp_offsets = {}
         for entry in partitions:
             topic, partition, spec_str = entry.rsplit(':', 2)
-            spec = cls._parse_spec(spec_str)
+            spec = OffsetSpec.build_from(spec_str)
             for tp in cls._parse_tp(client, topic, partition):
                 if tp in tp_offsets:
                     # Passing multiple specs for a single partition results in an InvalidRequestError

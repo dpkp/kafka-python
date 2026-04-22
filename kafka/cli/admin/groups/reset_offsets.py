@@ -41,7 +41,7 @@ class ResetGroupOffsets:
         offset_specs = {}
         if args.spec:
             offsets = client.list_group_offsets(args.group_id)
-            spec = cls._parse_spec(args.spec)
+            spec = OffsetSpec.build_from(args.spec)
             offset_specs = {tp: spec for tp in offsets}
         else:
             offset_specs = cls._parse_partition_specs(args.partitions)
@@ -52,24 +52,12 @@ class ResetGroupOffsets:
             output[tp.topic][tp.partition] = res
         return dict(output)
 
-    @staticmethod
-    def _parse_spec(spec):
-        try:
-            return int(spec)
-        except ValueError:
-            pass
-        try:
-            spec_key = spec.upper().replace('-', '_')
-            return OffsetSpec[spec_key]
-        except KeyError:
-            raise ValueError(f'{spec_key} is not a valid OffsetSpec')
-
     @classmethod
     def _parse_partition_specs(cls, partitions):
         tp_offsets = {}
         for entry in partitions:
             topic, partition, spec_str = entry.rsplit(':', 2)
-            spec = cls._parse_spec(spec_str)
+            spec = OffsetSpec.build_from(spec_str)
             tp = TopicPartition(topic, int(partition))
             if tp in tp_offsets:
                 # Passing multiple specs for a single partition results in an InvalidRequestError

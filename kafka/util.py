@@ -135,6 +135,19 @@ class classproperty:
 
 class EnumHelper:
     @classmethod
+    def build_from(cls, val):
+        if isinstance(val, cls):
+            return val
+        try:
+            return cls(val)
+        except ValueError:
+            pass
+        try:
+            return cls[str(val).strip().upper().replace('-', '_')]
+        except KeyError:
+            raise ValueError(f'Unrecognized {cls.__name__}: {val}')
+
+    @classmethod
     def value_for(cls, val):
         if isinstance(val, cls):
             return val.value
