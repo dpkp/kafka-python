@@ -19,13 +19,24 @@ from kafka.structs import TopicPartition, OffsetAndTimestamp
 from test.mock_broker import MockBroker
 
 
-def _make_admin(broker):
-    return KafkaAdminClient(
+@pytest.fixture
+def broker(request):
+    # parametrize tests with indirect=True
+    broker_version = getattr(request, 'param', (4, 2))
+    return MockBroker(broker_version=broker_version)
+
+
+@pytest.fixture
+def admin(broker):
+    admin = KafkaAdminClient(
         kafka_client=broker.client_factory(),
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        api_version=broker.broker_version,
         request_timeout_ms=5000,
     )
+    try:
+        yield admin
+    finally:
+        admin.close()
 
 
 # ---------------------------------------------------------------------------
@@ -34,9 +45,7 @@ def _make_admin(broker):
 
 
 class TestAlterPartitionReassignmentsMockBroker:
-
-    def test_success_returns_dict(self):
-        broker = MockBroker()
+    def test_success_returns_dict(self, broker, admin):
         Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
         Partition = Topic.ReassignablePartitionResponse
         broker.respond(
@@ -56,20 +65,15 @@ class TestAlterPartitionReassignmentsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_partition_reassignments({
-                TopicPartition('topic-a', 0): [1, 2, 3],
-            })
-        finally:
-            admin.close()
+        result = admin.alter_partition_reassignments({
+            TopicPartition('topic-a', 0): [1, 2, 3],
+        })
 
         assert result['error_code'] == 0
         assert result['responses'][0]['name'] == 'topic-a'
         assert result['responses'][0]['partitions'][0]['error_code'] == 0
 
-    def test_cancel_reassignment_sends_null_replicas(self):
-        broker = MockBroker()
+    def test_cancel_reassignment_sends_null_replicas(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -81,14 +85,10 @@ class TestAlterPartitionReassignmentsMockBroker:
 
         broker.respond_fn(AlterPartitionReassignmentsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.alter_partition_reassignments({
-                TopicPartition('topic-a', 0): None,  # cancel
-                TopicPartition('topic-a', 1): [4, 5],
-            })
-        finally:
-            admin.close()
+        admin.alter_partition_reassignments({
+            TopicPartition('topic-a', 0): None,  # cancel
+            TopicPartition('topic-a', 1): [4, 5],
+        })
 
         req = captured['request']
         assert len(req.topics) == 1
@@ -97,8 +97,7 @@ class TestAlterPartitionReassignmentsMockBroker:
         assert by_index[0].replicas is None
         assert list(by_index[1].replicas) == [4, 5]
 
-    def test_partition_level_error_raises(self):
-        broker = MockBroker()
+    def test_partition_level_error_raises(self, broker, admin):
         Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
         Partition = Topic.ReassignablePartitionResponse
         broker.respond(
@@ -119,17 +118,12 @@ class TestAlterPartitionReassignmentsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(Exception):
-                admin.alter_partition_reassignments({
-                    TopicPartition('topic-a', 0): [1, 2, 3],
-                })
-        finally:
-            admin.close()
+        with pytest.raises(Exception):
+            admin.alter_partition_reassignments({
+                TopicPartition('topic-a', 0): [1, 2, 3],
+            })
 
-    def test_partition_error_suppressed_with_raise_errors_false(self):
-        broker = MockBroker()
+    def test_partition_error_suppressed_with_raise_errors_false(self, broker, admin):
         Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
         Partition = Topic.ReassignablePartitionResponse
         broker.respond(
@@ -149,14 +143,10 @@ class TestAlterPartitionReassignmentsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_partition_reassignments(
-                {TopicPartition('topic-a', 0): [1, 2, 3]},
-                raise_errors=False,
-            )
-        finally:
-            admin.close()
+        result = admin.alter_partition_reassignments(
+            {TopicPartition('topic-a', 0): [1, 2, 3]},
+            raise_errors=False,
+        )
 
         assert result['responses'][0]['partitions'][0]['error_code'] == 37
 
@@ -167,9 +157,7 @@ class TestAlterPartitionReassignmentsMockBroker:
 
 
 class TestListPartitionReassignmentsMockBroker:
-
-    def test_returns_tp_to_reassignment_dict(self):
-        broker = MockBroker()
+    def test_returns_tp_to_reassignment_dict(self, broker, admin):
         Topic = ListPartitionReassignmentsResponse.OngoingTopicReassignment
         Partition = Topic.OngoingPartitionReassignment
         broker.respond(
@@ -200,11 +188,7 @@ class TestListPartitionReassignmentsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.list_partition_reassignments()
-        finally:
-            admin.close()
+        result = admin.list_partition_reassignments()
 
         assert result == {
             TopicPartition('topic-a', 0): {
@@ -219,8 +203,7 @@ class TestListPartitionReassignmentsMockBroker:
             },
         }
 
-    def test_none_topic_partitions_sends_null_topics(self):
-        broker = MockBroker()
+    def test_none_topic_partitions_sends_null_topics(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -232,16 +215,11 @@ class TestListPartitionReassignmentsMockBroker:
 
         broker.respond_fn(ListPartitionReassignmentsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_reassignments()
-        finally:
-            admin.close()
+        admin.list_partition_reassignments()
 
         assert captured['request'].topics is None
 
-    def test_dict_input_encodes_topic_partitions(self):
-        broker = MockBroker()
+    def test_dict_input_encodes_topic_partitions(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -253,17 +231,12 @@ class TestListPartitionReassignmentsMockBroker:
 
         broker.respond_fn(ListPartitionReassignmentsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_reassignments({'topic-a': [0, 1], 'topic-b': [2]})
-        finally:
-            admin.close()
+        admin.list_partition_reassignments({'topic-a': [0, 1], 'topic-b': [2]})
 
         topics = {t.name: list(t.partition_indexes) for t in captured['request'].topics}
         assert topics == {'topic-a': [0, 1], 'topic-b': [2]}
 
-    def test_tp_list_input_groups_by_topic(self):
-        broker = MockBroker()
+    def test_tp_list_input_groups_by_topic(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -275,21 +248,16 @@ class TestListPartitionReassignmentsMockBroker:
 
         broker.respond_fn(ListPartitionReassignmentsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_reassignments([
-                TopicPartition('topic-a', 0),
-                TopicPartition('topic-a', 1),
-                TopicPartition('topic-b', 5),
-            ])
-        finally:
-            admin.close()
+        admin.list_partition_reassignments([
+            TopicPartition('topic-a', 0),
+            TopicPartition('topic-a', 1),
+            TopicPartition('topic-b', 5),
+        ])
 
         topics = {t.name: sorted(t.partition_indexes) for t in captured['request'].topics}
         assert topics == {'topic-a': [0, 1], 'topic-b': [5]}
 
-    def test_top_level_error_raises(self):
-        broker = MockBroker()
+    def test_top_level_error_raises(self, broker, admin):
         broker.respond(
             ListPartitionReassignmentsRequest,
             ListPartitionReassignmentsResponse(
@@ -300,13 +268,9 @@ class TestListPartitionReassignmentsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(Exception) as exc_info:
-                admin.list_partition_reassignments()
-            assert 'not controller' in str(exc_info.value)
-        finally:
-            admin.close()
+        with pytest.raises(Exception) as exc_info:
+            admin.list_partition_reassignments()
+        assert 'not controller' in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -315,9 +279,7 @@ class TestListPartitionReassignmentsMockBroker:
 
 
 class TestDescribeTopicPartitionsMockBroker:
-
-    def test_returns_topic_partition_details(self):
-        broker = MockBroker()
+    def test_returns_topic_partition_details(self, broker, admin):
         topic_id = uuid.uuid4()
         Topic = DescribeTopicPartitionsResponse.DescribeTopicPartitionsResponseTopic
         Partition = Topic.DescribeTopicPartitionsResponsePartition
@@ -351,11 +313,7 @@ class TestDescribeTopicPartitionsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.describe_topic_partitions(['topic-a'])
-        finally:
-            admin.close()
+        result = admin.describe_topic_partitions(['topic-a'])
 
         assert result['next_cursor'] is None
         assert len(result['topics']) == 1
@@ -368,8 +326,7 @@ class TestDescribeTopicPartitionsMockBroker:
         assert t['partitions'][0]['eligible_leader_replicas'] == [3]
         assert t['partitions'][0]['last_known_elr'] == [2]
 
-    def test_pagination_cursor_returned(self):
-        broker = MockBroker()
+    def test_pagination_cursor_returned(self, broker, admin):
         Cursor = DescribeTopicPartitionsResponse.Cursor
         broker.respond(
             DescribeTopicPartitionsRequest,
@@ -379,17 +336,10 @@ class TestDescribeTopicPartitionsMockBroker:
                 next_cursor=Cursor(topic_name='topic-next', partition_index=5),
             ),
         )
-
-        admin = _make_admin(broker)
-        try:
-            result = admin.describe_topic_partitions(['topic-a'])
-        finally:
-            admin.close()
-
+        result = admin.describe_topic_partitions(['topic-a'])
         assert result['next_cursor'] == {'topic_name': 'topic-next', 'partition_index': 5}
 
-    def test_request_encodes_topics_and_limit(self):
-        broker = MockBroker()
+    def test_request_encodes_topics_and_limit(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -401,20 +351,15 @@ class TestDescribeTopicPartitionsMockBroker:
 
         broker.respond_fn(DescribeTopicPartitionsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.describe_topic_partitions(
-                ['topic-a', 'topic-b'], response_partition_limit=100)
-        finally:
-            admin.close()
+        admin.describe_topic_partitions(
+            ['topic-a', 'topic-b'], response_partition_limit=100)
 
         req = captured['request']
         assert [t.name for t in req.topics] == ['topic-a', 'topic-b']
         assert req.response_partition_limit == 100
         assert req.cursor is None
 
-    def test_request_encodes_cursor(self):
-        broker = MockBroker()
+    def test_request_encodes_cursor(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -426,13 +371,9 @@ class TestDescribeTopicPartitionsMockBroker:
 
         broker.respond_fn(DescribeTopicPartitionsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.describe_topic_partitions(
-                ['topic-a'],
-                cursor={'topic_name': 'topic-a', 'partition_index': 3})
-        finally:
-            admin.close()
+        admin.describe_topic_partitions(
+            ['topic-a'],
+            cursor={'topic_name': 'topic-a', 'partition_index': 3})
 
         cursor = captured['request'].cursor
         assert cursor is not None
@@ -481,9 +422,7 @@ def _list_offsets_response(per_partition):
 
 
 class TestListPartitionOffsetsMockBroker:
-
-    def test_returns_result_info(self):
-        broker = MockBroker()
+    def test_returns_result_info(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
         broker.respond(
             ListOffsetsRequest,
@@ -493,14 +432,10 @@ class TestListPartitionOffsetsMockBroker:
             ]),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.list_partition_offsets({
-                TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
-                TopicPartition('topic-a', 1): OffsetSpec.LATEST,
-            })
-        finally:
-            admin.close()
+        result = admin.list_partition_offsets({
+            TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
+            TopicPartition('topic-a', 1): OffsetSpec.LATEST,
+        })
 
         assert result == {
             TopicPartition('topic-a', 0): OffsetAndTimestamp(
@@ -509,8 +444,7 @@ class TestListPartitionOffsetsMockBroker:
                 offset=200, timestamp=5678, leader_epoch=7),
         }
 
-    def test_request_uses_spec_timestamp_sentinels(self):
-        broker = MockBroker()
+    def test_request_uses_spec_timestamp_sentinels(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
         captured = {}
 
@@ -525,14 +459,10 @@ class TestListPartitionOffsetsMockBroker:
 
         broker.respond_fn(ListOffsetsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_offsets({
-                TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
-                TopicPartition('topic-a', 1): OffsetSpec.LATEST,
-            })
-        finally:
-            admin.close()
+        admin.list_partition_offsets({
+            TopicPartition('topic-a', 0): OffsetSpec.EARLIEST,
+            TopicPartition('topic-a', 1): OffsetSpec.LATEST,
+        })
 
         req = captured['request']
         assert req.replica_id == -1
@@ -541,8 +471,7 @@ class TestListPartitionOffsetsMockBroker:
         timestamps = {p.partition_index: p.timestamp for p in topic.partitions}
         assert timestamps == {0: -2, 1: -1}
 
-    def test_offset_timestamp_passed_through(self):
-        broker = MockBroker()
+    def test_offset_timestamp_passed_through(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
         captured = {}
 
@@ -553,20 +482,15 @@ class TestListPartitionOffsetsMockBroker:
 
         broker.respond_fn(ListOffsetsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.list_partition_offsets({
-                TopicPartition('topic-a', 0): 1700000000,
-            })
-        finally:
-            admin.close()
+        result = admin.list_partition_offsets({
+            TopicPartition('topic-a', 0): 1700000000,
+        })
 
         assert captured['request'].topics[0].partitions[0].timestamp == 1700000000
         assert result[TopicPartition('topic-a', 0)].offset == 42
 
-    def test_groups_partitions_by_leader(self):
+    def test_groups_partitions_by_leader(self, broker):
         # Two partitions, two different leaders => two requests.
-        broker = MockBroker()
         Broker = MetadataResponse.MetadataResponseBroker
         Topic = MetadataResponse.MetadataResponseTopic
         Partition = Topic.MetadataResponsePartition
@@ -600,7 +524,12 @@ class TestListPartitionOffsetsMockBroker:
         broker.respond_fn(ListOffsetsRequest, handler)
         broker.respond_fn(ListOffsetsRequest, handler)
 
-        admin = _make_admin(broker)
+        # cant use fixture because it bootstraps eagerly
+        admin = KafkaAdminClient(
+            kafka_client=broker.client_factory(),
+            bootstrap_servers='%s:%d' % (broker.host, broker.port),
+            request_timeout_ms=5000,
+        )
         try:
             admin.list_partition_offsets({
                 TopicPartition('topic-a', 0): OffsetSpec.LATEST,
@@ -614,8 +543,7 @@ class TestListPartitionOffsetsMockBroker:
         for req in captured:
             assert sum(len(t.partitions) for t in req.topics) == 1
 
-    def test_partition_error_raises(self):
-        broker = MockBroker()
+    def test_partition_error_raises(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
         broker.respond(
             ListOffsetsRequest,
@@ -624,73 +552,44 @@ class TestListPartitionOffsetsMockBroker:
             ]),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(UnknownTopicOrPartitionError):
-                admin.list_partition_offsets({
-                    TopicPartition('topic-a', 0): OffsetSpec.LATEST,
-                })
-        finally:
-            admin.close()
+        with pytest.raises(UnknownTopicOrPartitionError):
+            admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): OffsetSpec.LATEST,
+            })
 
-    def test_unknown_partition_raises(self):
-        broker = MockBroker()
+    def test_unknown_partition_raises(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(UnknownTopicOrPartitionError):
-                admin.list_partition_offsets({
-                    TopicPartition('topic-a', 99): OffsetSpec.LATEST,
-                })
-        finally:
-            admin.close()
+        with pytest.raises(UnknownTopicOrPartitionError):
+            admin.list_partition_offsets({
+                TopicPartition('topic-a', 99): OffsetSpec.LATEST,
+            })
 
-    def test_max_timestamp_requires_v7(self):
+    @pytest.mark.parametrize("broker", [(2, 7)], indirect=True)
+    def test_max_timestamp_requires_v7(self, broker, admin):
         # (2, 7) broker -> ListOffsets max v6 -> MAX_TIMESTAMP unsupported
-        broker = MockBroker(broker_version=(2, 7))
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(IncompatibleBrokerVersion):
-                admin.list_partition_offsets({
-                    TopicPartition('topic-a', 0): OffsetSpec.MAX_TIMESTAMP,
-                })
-        finally:
-            admin.close()
+        with pytest.raises(IncompatibleBrokerVersion):
+            admin.list_partition_offsets({
+                TopicPartition('topic-a', 0): OffsetSpec.MAX_TIMESTAMP,
+            })
 
-    def test_invalid_timestamp_raises(self):
-        broker = MockBroker()
+    def test_invalid_timestamp_raises(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(ValueError):
-                admin.list_partition_offsets({TopicPartition('topic-a', 0): -100}, 0)
-        finally:
-            admin.close()
+        with pytest.raises(ValueError):
+            admin.list_partition_offsets({TopicPartition('topic-a', 0): -100}, 0)
 
-    def test_invalid_isolation_level_raises(self):
-        broker = MockBroker()
+    def test_invalid_isolation_level_raises(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(ValueError):
-                admin.list_partition_offsets(
-                    {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
-                    isolation_level='wat',
-                )
-        finally:
-            admin.close()
+        with pytest.raises(ValueError):
+            admin.list_partition_offsets(
+                {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
+                isolation_level='wat',
+            )
 
-    def test_empty_input_is_noop(self):
-        broker = MockBroker()
-        admin = _make_admin(broker)
-        try:
-            assert admin.list_partition_offsets({}) == {}
-        finally:
-            admin.close()
+    def test_empty_input_is_noop(self, broker, admin):
+        assert admin.list_partition_offsets({}) == {}
 
-    def test_int_timestamp_accepted_directly(self):
-        broker = MockBroker()
+    def test_int_timestamp_accepted_directly(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
         captured = {}
 
@@ -701,16 +600,11 @@ class TestListPartitionOffsetsMockBroker:
 
         broker.respond_fn(ListOffsetsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_offsets({TopicPartition('topic-a', 0): -2})
-        finally:
-            admin.close()
+        admin.list_partition_offsets({TopicPartition('topic-a', 0): -2})
 
         assert captured['request'].topics[0].partitions[0].timestamp == -2
 
-    def test_read_committed_uses_isolation_level_1(self):
-        broker = MockBroker()
+    def test_read_committed_uses_isolation_level_1(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
         captured = {}
 
@@ -721,13 +615,9 @@ class TestListPartitionOffsetsMockBroker:
 
         broker.respond_fn(ListOffsetsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.list_partition_offsets(
-                {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
-                isolation_level='read_committed',
-            )
-        finally:
-            admin.close()
+        admin.list_partition_offsets(
+            {TopicPartition('topic-a', 0): OffsetSpec.LATEST},
+            isolation_level='read_committed',
+        )
 
         assert captured['request'].isolation_level == 1
