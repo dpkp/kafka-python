@@ -334,19 +334,22 @@ class ConfigAdminMixin:
             incremental = self._check_incremental_alter_configs_support()
 
         if not incremental:
-            # if no keys provided, submit as-is -- full reset
-            # if keys are provided, replace with missing -- partial reset
+            # if no keys provided (full reset), submit as-is
+            # if keys are provided (partial reset), replace with missing
             partial_resets = [resource for resource in config_resources if resource.configs]
             missing_resource_configs = await self._get_missing_modified_configs(partial_resets)
             for resource, missing in zip(partial_resets, missing_resource_configs):
                 resource.configs = missing
         else:
-            config_resources = [
-                ConfigResource(cr.resource_type, cr.name,
-                               {key: (AlterConfigOp.DELETE, None)
-                                for key in cr.configs})
-                for cr in config_resources
-            ]
+            # if no keys provided (full reset): mark all modified keys as DELETE
+            full_resets = [resource for resource in config_resources if not resource.configs]
+            missing_resource_configs = await self._get_missing_modified_configs(full_resets)
+            for resource, missing in zip(full_resets, missing_resource_configs):
+                resource.configs = missing
+            # Update all configs to DELETE:None
+            for resource in config_resources:
+                resource.configs = {key: (AlterConfigOp.DELETE, None)
+                                    for key in resource.configs}
         return await self._send_alter_configs_requests(config_resources, validate_only, incremental)
 
     def reset_configs(self, config_resources, validate_only=False, raise_on_unknown=True, incremental=None):
