@@ -113,23 +113,23 @@ def run_cli(args=None):
     # --trace ?
 
     # [producers]
-    # describe (DescribeProducers - not supported yet)
+    # describe (DescribeProducers)
 
     # [transactions]
-    # describe (DescribeTransactions - not supported yet)
-    # list (ListTransactions - not supported yet)
-    # abort (not supported yet)
+    # describe (DescribeTransactions)
+    # list (ListTransactions)
+    # abort (EndTxn)
 
     # [cluster]
-    # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
-    # describe-features (DescribeFeatures - not supported yet)
-    # update-features (UpdateFeatures - not supported yet)
+    # alter-log-dirs (AlterReplicaLogDirs)
+    # describe-features (ApiVersions)
+    # update-features (UpdateFeatures)
     # describe-quorum (DescribeQuorum)
     # unregister-broker (UnregisterBroker)
     # add-raft-voter (AddRaftVoter)
     # remove-raft-voter (RemoveRaftVoter)
-    # describe-quotas (DescribeClientQuotas - not supported yet)
-    # alter-quotas (AlterClientQuotas - not supported yet)
+    # describe-quotas (DescribeClientQuotas)
+    # alter-quotas (AlterClientQuotas)
 
     # [tokens] *DelegationTokenRequest
     # create
