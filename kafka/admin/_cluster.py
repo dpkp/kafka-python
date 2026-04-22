@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import kafka.errors as Errors
 from kafka.protocol.api_key import ApiKey
-from kafka.protocol.metadata import MetadataRequest
+from kafka.protocol.metadata import ApiVersionsRequest, MetadataRequest
 from kafka.protocol.admin import DescribeLogDirsRequest
 
 if TYPE_CHECKING:
@@ -87,3 +88,52 @@ class ClusterAdminMixin:
     def api_versions(self):
         api_versions = self._manager.broker_version_data.api_versions
         return {ApiKey(k): v for k, v in api_versions.items()}
+
+    async def _async_describe_features(self, send_request_to_controller=False):
+        request = ApiVersionsRequest(
+            client_software_name=self._manager.config['client_software_name'],
+            client_software_version=self._manager.config['client_software_version'],
+            min_version=3,
+        )
+        if send_request_to_controller:
+            response = await self._send_request_to_controller(request)
+        else:
+            response = await self._manager.send(request)
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(f"ApiVersionsRequest failed: {response}")
+        supported = {feature.name: (feature.min_version, feature.max_version)
+                     for feature in (response.supported_features or [])}
+        finalized = {feature.name: (feature.min_version_level, feature.max_version_level)
+                     for feature in (response.finalized_features or [])}
+        epoch = response.finalized_features_epoch
+        if epoch is None or epoch < 0:
+            epoch = None
+        return {
+            'supported_features': supported,
+            'finalized_features': finalized,
+            'finalized_features_epoch': epoch,
+        }
+
+    def describe_features(self, send_request_to_controller=False):
+        """Fetch the cluster's supported and finalized feature flags.
+
+        Features are broker-level capabilities (e.g. ``metadata.version``)
+        that can be finalized cluster-wide via ``update_features`` (KIP-584).
+        Requires broker >= 2.4.
+
+        Keyword Arguments:
+            send_request_to_controller (bool, optional): If True, route the
+                request to the active controller. By default the request is
+                sent to any available broker. Default: False.
+
+        Returns:
+            dict with keys:
+                - ``supported_features``: dict of
+                  ``{feature_name: (min_version, max_version)}``
+                - ``finalized_features``: dict of
+                  ``{feature_name: (min_version_level, max_version_level)}``
+                - ``finalized_features_epoch``: int, or None if unknown
+                  (broker did not report an epoch, or reported -1)
+        """
+        return self._manager.run(self._async_describe_features, send_request_to_controller)
