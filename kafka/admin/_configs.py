@@ -220,7 +220,7 @@ class ConfigAdminMixin:
         """
         return self._manager.run(self._async_list_config_resources, resource_types)
 
-    async def _get_missing_dynamic_configs(self, config_resources):
+    async def _get_missing_modified_configs(self, config_resources):
         resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]
         dynamic_configs = await self._async_describe_configs(resource_lookups, config_filter='modified', flat=True)
         missing_resource_configs = []
@@ -236,8 +236,8 @@ class ConfigAdminMixin:
         return missing_resource_configs
 
     async def _add_missing_dynamic_configs(self, config_resources):
-        # Add missing dynamic config values to resource list to avoid accidental resets
-        missing_resource_configs = await self._get_missing_dynamic_configs(config_resources)
+        # Add missing modified config values to resource list to avoid accidental resets
+        missing_resource_configs = await self._get_missing_modified_configs(config_resources)
         for resource, missing in zip(config_resources, missing_resource_configs):
             if not isinstance(missing, dict):
                 raise TypeError(f'missing configs: expected dict, found {type(missing)}')
@@ -337,7 +337,7 @@ class ConfigAdminMixin:
             # if no keys provided, submit as-is -- full reset
             # if keys are provided, replace with missing -- partial reset
             partial_resets = [resource for resource in config_resources if resource.configs]
-            missing_resource_configs = await self._get_missing_dynamic_configs(partial_resets)
+            missing_resource_configs = await self._get_missing_modified_configs(partial_resets)
             for resource, missing in zip(partial_resets, missing_resource_configs):
                 resource.configs = missing
         else:
