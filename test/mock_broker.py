@@ -182,8 +182,18 @@ class MockBroker:
         self.node_id = node_id
         self.host = host
         self.port = port
-        self.broker_version = broker_version
+        self.set_broker_version(broker_version)
+        self.set_metadata() # Default metadata: just this broker, no topics
 
+        # Scripted response queue: list of (api_key, response_object) pairs
+        self._response_queue = collections.deque()
+
+        # Counters for debugging
+        self.requests_received = 0
+        self.responses_sent = 0
+
+    def set_broker_version(self, broker_version):
+        self.broker_version = broker_version
         # Build the auto-response for ApiVersionsRequest
         self._broker_version_data = BrokerVersionData(broker_version)
         ApiVersion = ApiVersionsResponse.ApiVersion
@@ -199,24 +209,6 @@ class MockBroker:
         av_range = self._broker_version_data.api_versions.get(ApiVersionsRequest.API_KEY, (0, 0))
         self._api_versions_max = av_range[1]
 
-        # Default metadata: just this broker, no topics
-        Broker = MetadataResponse.MetadataResponseBroker
-        self._metadata_response = MetadataResponse(
-            version=min(8, MetadataResponse.max_version),
-            throttle_time_ms=0,
-            brokers=[Broker(node_id=node_id, host=host, port=port, rack=None)],
-            cluster_id='mock-cluster',
-            controller_id=node_id,
-            topics=[],
-        )
-
-        # Scripted response queue: list of (api_key, response_object) pairs
-        self._response_queue = collections.deque()
-
-        # Counters for debugging
-        self.requests_received = 0
-        self.responses_sent = 0
-
     def set_metadata(self, topics=None, brokers=None):
         """Configure the auto-response for MetadataRequest.
 
@@ -229,7 +221,7 @@ class MockBroker:
         if brokers is None:
             brokers = [Broker(node_id=self.node_id, host=self.host, port=self.port, rack=None)]
         self._metadata_response = MetadataResponse(
-            version=min(8, MetadataResponse.max_version),
+            version=self._broker_version_data.api_version(MetadataRequest, max_version=8),
             throttle_time_ms=0,
             brokers=brokers,
             cluster_id='mock-cluster',

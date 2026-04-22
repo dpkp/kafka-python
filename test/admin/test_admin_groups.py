@@ -19,13 +19,24 @@ from kafka.structs import OffsetAndMetadata, TopicPartition
 from test.mock_broker import MockBroker
 
 
-def _make_admin(broker):
-    return KafkaAdminClient(
+@pytest.fixture
+def broker(request):
+    # parametrize tests with indirect=True
+    broker_version = getattr(request, 'param', (4, 2))
+    return MockBroker(broker_version=broker_version)
+
+
+@pytest.fixture
+def admin(broker):
+    admin = KafkaAdminClient(
         kafka_client=broker.client_factory(),
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        api_version=broker.broker_version,
         request_timeout_ms=5000,
     )
+    try:
+        yield admin
+    finally:
+        admin.close()
 
 
 # ---------------------------------------------------------------------------
@@ -34,9 +45,7 @@ def _make_admin(broker):
 
 
 class TestAlterGroupOffsetsMockBroker:
-
-    def test_success_returns_tp_to_noerror(self):
-        broker = MockBroker()
+    def test_success_returns_tp_to_noerror(self, broker, admin):
         _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
         _Partition = _Topic.OffsetCommitResponsePartition
         broker.respond(
@@ -52,26 +61,21 @@ class TestAlterGroupOffsetsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_group_offsets(
-                'g1',
-                {
-                    TopicPartition('topic-a', 0): OffsetAndMetadata(10, '', None),
-                    TopicPartition('topic-a', 1): OffsetAndMetadata(20, 'm', 5),
-                },
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.alter_group_offsets(
+            'g1',
+            {
+                TopicPartition('topic-a', 0): OffsetAndMetadata(10, '', None),
+                TopicPartition('topic-a', 1): OffsetAndMetadata(20, 'm', 5),
+            },
+            group_coordinator_id=0,
+        )
 
         assert result == {
             TopicPartition('topic-a', 0): NoError,
             TopicPartition('topic-a', 1): NoError,
         }
 
-    def test_request_uses_standalone_member_fields(self):
-        broker = MockBroker()
+    def test_request_uses_standalone_member_fields(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -81,15 +85,11 @@ class TestAlterGroupOffsetsMockBroker:
 
         broker.respond_fn(OffsetCommitRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.alter_group_offsets(
-                'g1',
-                {TopicPartition('topic-a', 0): OffsetAndMetadata(10, 'meta', 7)},
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        admin.alter_group_offsets(
+            'g1',
+            {TopicPartition('topic-a', 0): OffsetAndMetadata(10, 'meta', 7)},
+            group_coordinator_id=0,
+        )
 
         req = captured['request']
         assert req.group_id == 'g1'
@@ -107,8 +107,7 @@ class TestAlterGroupOffsetsMockBroker:
         assert p.committed_metadata == 'meta'
         assert p.committed_leader_epoch == 7
 
-    def test_leader_epoch_none_sent_as_minus_one(self):
-        broker = MockBroker()
+    def test_leader_epoch_none_sent_as_minus_one(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -118,20 +117,15 @@ class TestAlterGroupOffsetsMockBroker:
 
         broker.respond_fn(OffsetCommitRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.alter_group_offsets(
-                'g1',
-                {TopicPartition('topic-a', 0): OffsetAndMetadata(10, '', None)},
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        admin.alter_group_offsets(
+            'g1',
+            {TopicPartition('topic-a', 0): OffsetAndMetadata(10, '', None)},
+            group_coordinator_id=0,
+        )
 
         assert captured['request'].topics[0].partitions[0].committed_leader_epoch == -1
 
-    def test_partition_level_error_returned_not_raised(self):
-        broker = MockBroker()
+    def test_partition_level_error_returned_not_raised(self, broker, admin):
         _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
         _Partition = _Topic.OffsetCommitResponsePartition
         broker.respond(
@@ -147,25 +141,16 @@ class TestAlterGroupOffsetsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_group_offsets(
-                'g1',
-                {TopicPartition('topic-a', 0): OffsetAndMetadata(1, '', None)},
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.alter_group_offsets(
+            'g1',
+            {TopicPartition('topic-a', 0): OffsetAndMetadata(1, '', None)},
+            group_coordinator_id=0,
+        )
 
         assert result == {TopicPartition('topic-a', 0): UnknownMemberIdError}
 
-    def test_empty_offsets_is_noop(self):
-        broker = MockBroker()
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_group_offsets('g1', {}, group_coordinator_id=0)
-        finally:
-            admin.close()
+    def test_empty_offsets_is_noop(self, broker, admin):
+        result = admin.alter_group_offsets('g1', {}, group_coordinator_id=0)
         assert result == {}
 
 
@@ -175,9 +160,7 @@ class TestAlterGroupOffsetsMockBroker:
 
 
 class TestDeleteGroupOffsetsMockBroker:
-
-    def test_success_returns_tp_to_noerror(self):
-        broker = MockBroker()
+    def test_success_returns_tp_to_noerror(self, broker, admin):
         _Topic = OffsetDeleteResponse.OffsetDeleteResponseTopic
         _Partition = _Topic.OffsetDeleteResponsePartition
         broker.respond(
@@ -194,23 +177,18 @@ class TestDeleteGroupOffsetsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.delete_group_offsets(
-                'g1',
-                [TopicPartition('topic-a', 0), TopicPartition('topic-a', 1)],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.delete_group_offsets(
+            'g1',
+            [TopicPartition('topic-a', 0), TopicPartition('topic-a', 1)],
+            group_coordinator_id=0,
+        )
 
         assert result == {
             TopicPartition('topic-a', 0): NoError,
             TopicPartition('topic-a', 1): NoError,
         }
 
-    def test_groups_partitions_by_topic(self):
-        broker = MockBroker()
+    def test_groups_partitions_by_topic(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -220,19 +198,15 @@ class TestDeleteGroupOffsetsMockBroker:
 
         broker.respond_fn(OffsetDeleteRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.delete_group_offsets(
-                'g1',
-                [
-                    TopicPartition('topic-a', 0),
-                    TopicPartition('topic-b', 2),
-                    TopicPartition('topic-a', 1),
-                ],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        admin.delete_group_offsets(
+            'g1',
+            [
+                TopicPartition('topic-a', 0),
+                TopicPartition('topic-b', 2),
+                TopicPartition('topic-a', 1),
+            ],
+            group_coordinator_id=0,
+        )
 
         req = captured['request']
         assert req.group_id == 'g1'
@@ -243,8 +217,7 @@ class TestDeleteGroupOffsetsMockBroker:
         assert a_indexes == [0, 1]
         assert b_indexes == [2]
 
-    def test_top_level_error_raises(self):
-        broker = MockBroker()
+    def test_top_level_error_raises(self, broker, admin):
         broker.respond(
             OffsetDeleteRequest,
             OffsetDeleteResponse(
@@ -254,19 +227,14 @@ class TestDeleteGroupOffsetsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(GroupIdNotFoundError):
-                admin.delete_group_offsets(
-                    'g1',
-                    [TopicPartition('topic-a', 0)],
-                    group_coordinator_id=0,
-                )
-        finally:
-            admin.close()
+        with pytest.raises(GroupIdNotFoundError):
+            admin.delete_group_offsets(
+                'g1',
+                [TopicPartition('topic-a', 0)],
+                group_coordinator_id=0,
+            )
 
-    def test_partition_level_error_returned_not_raised(self):
-        broker = MockBroker()
+    def test_partition_level_error_returned_not_raised(self, broker, admin):
         _Topic = OffsetDeleteResponse.OffsetDeleteResponseTopic
         _Partition = _Topic.OffsetDeleteResponsePartition
         broker.respond(
@@ -283,25 +251,16 @@ class TestDeleteGroupOffsetsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.delete_group_offsets(
-                'g1',
-                [TopicPartition('topic-a', 0)],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.delete_group_offsets(
+            'g1',
+            [TopicPartition('topic-a', 0)],
+            group_coordinator_id=0,
+        )
 
         assert result == {TopicPartition('topic-a', 0): GroupSubscribedToTopicError}
 
-    def test_empty_partitions_is_noop(self):
-        broker = MockBroker()
-        admin = _make_admin(broker)
-        try:
-            result = admin.delete_group_offsets('g1', [], group_coordinator_id=0)
-        finally:
-            admin.close()
+    def test_empty_partitions_is_noop(self, broker, admin):
+        result = admin.delete_group_offsets('g1', [], group_coordinator_id=0)
         assert result == {}
 
 
@@ -311,9 +270,8 @@ class TestDeleteGroupOffsetsMockBroker:
 
 
 class TestRemoveGroupMembersMockBroker:
-
-    def test_batch_success_returns_member_to_noerror(self):
-        broker = MockBroker()  # broker_version=(4, 2) -> LeaveGroup v5
+    def test_batch_success_returns_member_to_noerror(self, broker, admin):
+        # broker_version=(4, 2) -> LeaveGroup v5
         _MemberResp = LeaveGroupResponse.MemberResponse
         broker.respond(
             LeaveGroupRequest,
@@ -327,26 +285,21 @@ class TestRemoveGroupMembersMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.remove_group_members(
-                'g1',
-                [
-                    MemberToRemove(member_id='m1'),
-                    MemberToRemove(group_instance_id='static-1'),
-                ],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.remove_group_members(
+            'g1',
+            [
+                MemberToRemove(member_id='m1'),
+                MemberToRemove(group_instance_id='static-1'),
+            ],
+            group_coordinator_id=0,
+        )
 
         assert result == {
             'm1': NoError,
             'static-1': NoError,
         }
 
-    def test_batch_request_fields(self):
-        broker = MockBroker()
+    def test_batch_request_fields(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -358,18 +311,14 @@ class TestRemoveGroupMembersMockBroker:
 
         broker.respond_fn(LeaveGroupRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.remove_group_members(
-                'g1',
-                [
-                    MemberToRemove(member_id='m1', reason='rebalance'),
-                    MemberToRemove(group_instance_id='inst-2', reason='shutdown'),
-                ],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        admin.remove_group_members(
+            'g1',
+            [
+                MemberToRemove(member_id='m1', reason='rebalance'),
+                MemberToRemove(group_instance_id='inst-2', reason='shutdown'),
+            ],
+            group_coordinator_id=0,
+        )
 
         assert captured['version'] >= 3
         req = captured['request']
@@ -385,8 +334,7 @@ class TestRemoveGroupMembersMockBroker:
             assert m1.reason == 'rebalance'
             assert m2.reason == 'shutdown'
 
-    def test_batch_top_level_error_raises(self):
-        broker = MockBroker()
+    def test_batch_top_level_error_raises(self, broker, admin):
         broker.respond(
             LeaveGroupRequest,
             LeaveGroupResponse(
@@ -396,19 +344,14 @@ class TestRemoveGroupMembersMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(GroupIdNotFoundError):
-                admin.remove_group_members(
-                    'g1',
-                    [MemberToRemove(member_id='m1')],
-                    group_coordinator_id=0,
-                )
-        finally:
-            admin.close()
+        with pytest.raises(GroupIdNotFoundError):
+            admin.remove_group_members(
+                'g1',
+                [MemberToRemove(member_id='m1')],
+                group_coordinator_id=0,
+            )
 
-    def test_batch_per_member_error_returned(self):
-        broker = MockBroker()
+    def test_batch_per_member_error_returned(self, broker, admin):
         _MemberResp = LeaveGroupResponse.MemberResponse
         broker.respond(
             LeaveGroupRequest,
@@ -422,30 +365,21 @@ class TestRemoveGroupMembersMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.remove_group_members(
-                'g1',
-                [MemberToRemove(member_id='m1')],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.remove_group_members(
+            'g1',
+            [MemberToRemove(member_id='m1')],
+            group_coordinator_id=0,
+        )
 
         assert result == {'m1': UnknownMemberIdError}
 
-    def test_empty_members_is_noop(self):
-        broker = MockBroker()
-        admin = _make_admin(broker)
-        try:
-            result = admin.remove_group_members('g1', [], group_coordinator_id=0)
-        finally:
-            admin.close()
+    def test_empty_members_is_noop(self, broker, admin):
+        result = admin.remove_group_members('g1', [], group_coordinator_id=0)
         assert result == {}
 
-    def test_fallback_fans_out_one_request_per_member(self):
+    @pytest.mark.parametrize("broker", [(2, 3)], indirect=True)
+    def test_fallback_fans_out_one_request_per_member(self, broker, admin):
         # (2, 3) broker: LeaveGroup v0-v2 only, no batch support
-        broker = MockBroker(broker_version=(2, 3))
         captured = []
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -457,18 +391,14 @@ class TestRemoveGroupMembersMockBroker:
         broker.respond_fn(LeaveGroupRequest, handler)
         broker.respond_fn(LeaveGroupRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.remove_group_members(
-                'g1',
-                [
-                    MemberToRemove(member_id='m1'),
-                    MemberToRemove(member_id='m2'),
-                ],
-                group_coordinator_id=0,
-            )
-        finally:
-            admin.close()
+        result = admin.remove_group_members(
+            'g1',
+            [
+                MemberToRemove(member_id='m1'),
+                MemberToRemove(member_id='m2'),
+            ],
+            group_coordinator_id=0,
+        )
 
         assert len(captured) == 2
         assert captured[0].group_id == 'g1'
@@ -479,28 +409,20 @@ class TestRemoveGroupMembersMockBroker:
             'm2': NoError,
         }
 
-    def test_fallback_rejects_group_instance_id(self):
-        broker = MockBroker(broker_version=(2, 3))
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(UnsupportedVersionError):
-                admin.remove_group_members(
-                    'g1',
-                    [MemberToRemove(group_instance_id='inst-1')],
-                    group_coordinator_id=0,
-                )
-        finally:
-            admin.close()
+    @pytest.mark.parametrize("broker", [(2, 3)], indirect=True)
+    def test_fallback_rejects_group_instance_id(self, broker, admin):
+        with pytest.raises(UnsupportedVersionError):
+            admin.remove_group_members(
+                'g1',
+                [MemberToRemove(group_instance_id='inst-1')],
+                group_coordinator_id=0,
+            )
 
-    def test_fallback_requires_member_id(self):
-        broker = MockBroker(broker_version=(2, 3))
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(ValueError):
-                admin.remove_group_members(
-                    'g1',
-                    [MemberToRemove()],
-                    group_coordinator_id=0,
-                )
-        finally:
-            admin.close()
+    @pytest.mark.parametrize("broker", [(2, 3)], indirect=True)
+    def test_fallback_requires_member_id(self, broker, admin):
+        with pytest.raises(ValueError):
+            admin.remove_group_members(
+                'g1',
+                [MemberToRemove()],
+                group_coordinator_id=0,
+            )

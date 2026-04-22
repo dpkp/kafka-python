@@ -87,19 +87,28 @@ class TestUserScramCredentialUpsertion:
 # ---------------------------------------------------------------------------
 
 
-def _make_admin(broker):
-    return KafkaAdminClient(
+@pytest.fixture
+def broker(request):
+    # parametrize tests with indirect=True
+    broker_version = getattr(request, 'param', (4, 2))
+    return MockBroker(broker_version=broker_version)
+
+
+@pytest.fixture
+def admin(broker):
+    admin = KafkaAdminClient(
         kafka_client=broker.client_factory(),
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        api_version=broker.broker_version,
         request_timeout_ms=5000,
     )
+    try:
+        yield admin
+    finally:
+        admin.close()
 
 
 class TestAlterUserScramCredentialsMockBroker:
-
-    def test_all_success_returns_none_values(self):
-        broker = MockBroker()
+    def test_all_success_returns_none_values(self, broker, admin):
         Result = AlterUserScramCredentialsResponse.AlterUserScramCredentialsResult
         broker.respond(
             AlterUserScramCredentialsRequest,
@@ -111,22 +120,15 @@ class TestAlterUserScramCredentialsMockBroker:
                 ],
             ),
         )
-
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_user_scram_credentials([
-                UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
-                UserScramCredentialUpsertion(
-                    'bob', ScramMechanism.SCRAM_SHA_512,
-                    password='secret', iterations=4096, salt=b'fixed-salt'),
-            ])
-        finally:
-            admin.close()
-
+        result = admin.alter_user_scram_credentials([
+            UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
+            UserScramCredentialUpsertion(
+                'bob', ScramMechanism.SCRAM_SHA_512,
+                password='secret', iterations=4096, salt=b'fixed-salt'),
+        ])
         assert result == {'alice': None, 'bob': None}
 
-    def test_partial_errors_returned_in_dict(self):
-        broker = MockBroker()
+    def test_partial_errors_returned_in_dict(self, broker, admin):
         Result = AlterUserScramCredentialsResponse.AlterUserScramCredentialsResult
         broker.respond(
             AlterUserScramCredentialsRequest,
@@ -139,23 +141,16 @@ class TestAlterUserScramCredentialsMockBroker:
                 ],
             ),
         )
-
-        admin = _make_admin(broker)
-        try:
-            result = admin.alter_user_scram_credentials([
-                UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
-                UserScramCredentialDeletion('bob', ScramMechanism.SCRAM_SHA_512),
-            ])
-        finally:
-            admin.close()
-
+        result = admin.alter_user_scram_credentials([
+            UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
+            UserScramCredentialDeletion('bob', ScramMechanism.SCRAM_SHA_512),
+        ])
         assert result == {
             'alice': None,
             'bob': 'Unsupported SASL mechanism',
         }
 
-    def test_request_is_encoded_with_deletions_and_upsertions(self):
-        broker = MockBroker()
+    def test_request_is_encoded_with_deletions_and_upsertions(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -178,14 +173,10 @@ class TestAlterUserScramCredentialsMockBroker:
             'bob', ScramMechanism.SCRAM_SHA_512,
             password='secret', iterations=2048, salt=salt)
 
-        admin = _make_admin(broker)
-        try:
-            admin.alter_user_scram_credentials([
-                UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
-                upsertion,
-            ])
-        finally:
-            admin.close()
+        admin.alter_user_scram_credentials([
+            UserScramCredentialDeletion('alice', ScramMechanism.SCRAM_SHA_256),
+            upsertion,
+        ])
 
         request = captured['request']
         assert len(request.deletions) == 1
@@ -203,9 +194,7 @@ class TestAlterUserScramCredentialsMockBroker:
 
 
 class TestDescribeUserScramCredentialsMockBroker:
-
-    def test_returns_credentials_per_user(self):
-        broker = MockBroker()
+    def test_returns_credentials_per_user(self, broker, admin):
         Result = DescribeUserScramCredentialsResponse.DescribeUserScramCredentialsResult
         CI = Result.CredentialInfo
         broker.respond(
@@ -226,12 +215,7 @@ class TestDescribeUserScramCredentialsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.describe_user_scram_credentials(['alice', 'bob'])
-        finally:
-            admin.close()
-
+        result = admin.describe_user_scram_credentials(['alice', 'bob'])
         assert result == {
             'alice': {
                 'error': None,
@@ -248,8 +232,7 @@ class TestDescribeUserScramCredentialsMockBroker:
             },
         }
 
-    def test_per_user_error_reported(self):
-        broker = MockBroker()
+    def test_per_user_error_reported(self, broker, admin):
         Result = DescribeUserScramCredentialsResponse.DescribeUserScramCredentialsResult
         broker.respond(
             DescribeUserScramCredentialsRequest,
@@ -265,12 +248,7 @@ class TestDescribeUserScramCredentialsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.describe_user_scram_credentials(['missing'])
-        finally:
-            admin.close()
-
+        result = admin.describe_user_scram_credentials(['missing'])
         assert result == {
             'missing': {
                 'error': 'resource not found',
@@ -278,8 +256,7 @@ class TestDescribeUserScramCredentialsMockBroker:
             },
         }
 
-    def test_top_level_error_raises(self):
-        broker = MockBroker()
+    def test_top_level_error_raises(self, broker, admin):
         broker.respond(
             DescribeUserScramCredentialsRequest,
             DescribeUserScramCredentialsResponse(
@@ -290,16 +267,11 @@ class TestDescribeUserScramCredentialsMockBroker:
             ),
         )
 
-        admin = _make_admin(broker)
-        try:
-            with pytest.raises(Exception) as exc_info:
-                admin.describe_user_scram_credentials(['alice'])
-            assert 'SCRAM not configured' in str(exc_info.value)
-        finally:
-            admin.close()
+        with pytest.raises(Exception) as exc_info:
+            admin.describe_user_scram_credentials(['alice'])
+        assert 'SCRAM not configured' in str(exc_info.value)
 
-    def test_describe_all_users_sends_null(self):
-        broker = MockBroker()
+    def test_describe_all_users_sends_null(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -315,17 +287,11 @@ class TestDescribeUserScramCredentialsMockBroker:
 
         broker.respond_fn(DescribeUserScramCredentialsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            result = admin.describe_user_scram_credentials()
-        finally:
-            admin.close()
-
+        result = admin.describe_user_scram_credentials()
         assert result == {}
         assert captured['request'].users is None
 
-    def test_describe_specific_users_encodes_names(self):
-        broker = MockBroker()
+    def test_describe_specific_users_encodes_names(self, broker, admin):
         captured = {}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -341,11 +307,6 @@ class TestDescribeUserScramCredentialsMockBroker:
 
         broker.respond_fn(DescribeUserScramCredentialsRequest, handler)
 
-        admin = _make_admin(broker)
-        try:
-            admin.describe_user_scram_credentials(['alice', 'bob'])
-        finally:
-            admin.close()
-
+        admin.describe_user_scram_credentials(['alice', 'bob'])
         request_users = captured['request'].users
         assert [u.name for u in request_users] == ['alice', 'bob']
