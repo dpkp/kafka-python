@@ -89,6 +89,10 @@ class KafkaConnection:
     def init_future(self):
         return self._init_future
 
+    def __await__(self):
+        yield self.init_future
+        return self
+
     @property
     def close_future(self):
         return self._close_future
