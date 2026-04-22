@@ -112,9 +112,6 @@ def run_cli(args=None):
     # --dry-run support
     # --trace ?
 
-    # [configs]
-    # IncrementalAlterConfigs (not supported yet)
-
     # [client-quotas]
     # describe (DescribeClientQuotas - not supported yet)
     # alter (AlterClientQuotas - not supported yet)

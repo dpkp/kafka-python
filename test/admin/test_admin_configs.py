@@ -1,10 +1,12 @@
 import pytest
 
-from kafka.admin import ConfigResource, ConfigResourceType, KafkaAdminClient
-from kafka.errors import ClusterAuthorizationFailedError
+from kafka.admin import (
+    AlterConfigOp, ConfigResource, ConfigResourceType, KafkaAdminClient)
+from kafka.errors import ClusterAuthorizationFailedError, InvalidConfigurationError
 from kafka.protocol.admin import (
     AlterConfigsRequest, AlterConfigsResponse,
     DescribeConfigsRequest, DescribeConfigsResponse,
+    IncrementalAlterConfigsRequest, IncrementalAlterConfigsResponse,
     ListConfigResourcesRequest, ListConfigResourcesResponse,
 )
 
@@ -142,7 +144,7 @@ class TestAlterConfigsMockBroker:
         captured = {}
         mock_broker.respond_fn(AlterConfigsRequest, _capture_alter(captured))
 
-        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'new'})])
+        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'new'})], incremental=False)
 
         sent = _sent_configs(captured)
         assert sent == {'foo': 'new', 'bar': 'barval'}
@@ -156,7 +158,7 @@ class TestAlterConfigsMockBroker:
         captured = {}
         mock_broker.respond_fn(AlterConfigsRequest, _capture_alter(captured))
 
-        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'userval'})])
+        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'userval'})], incremental=False)
 
         assert _sent_configs(captured) == {'foo': 'userval'}
 
@@ -170,7 +172,7 @@ class TestAlterConfigsMockBroker:
         captured = {}
         mock_broker.respond_fn(AlterConfigsRequest, _capture_alter(captured))
 
-        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'userval'})])
+        admin.alter_configs([ConfigResource('TOPIC', 'topic-a', {'foo': 'userval'})], incremental=False)
 
         sent = _sent_configs(captured)
         assert sent == {'foo': 'userval'}
@@ -184,7 +186,8 @@ class TestAlterConfigsMockBroker:
 
         with pytest.raises(ValueError, match='Unrecognized configs'):
             admin.alter_configs(
-                [ConfigResource('TOPIC', 'topic-a', {'mystery': 'x'})])
+                [ConfigResource('TOPIC', 'topic-a', {'mystery': 'x'})],
+                incremental=False)
 
     def test_raise_on_unknown_false_submits_anyway(self, mock_broker, admin):
         # only add_missing describe (validation is skipped)
@@ -197,7 +200,8 @@ class TestAlterConfigsMockBroker:
 
         admin.alter_configs(
             [ConfigResource('TOPIC', 'topic-a', {'mystery': 'x'})],
-            raise_on_unknown=False)
+            raise_on_unknown=False,
+            incremental=False)
 
         sent = _sent_configs(captured)
         assert sent['mystery'] == 'x'
@@ -214,7 +218,8 @@ class TestAlterConfigsMockBroker:
 
         admin.alter_configs(
             [ConfigResource('TOPIC', 'topic-a', {'foo': 'new'})],
-            validate_only=True)
+            validate_only=True,
+            incremental=False)
 
         assert captured['request'].validate_only is True
 
@@ -233,7 +238,8 @@ class TestResetConfigsMockBroker:
         # configs=[] (empty iterable) opts out of validation + get_missing describe
         admin.reset_configs(
             [ConfigResource('TOPIC', 'topic-a', [])],
-            raise_on_unknown=False)
+            raise_on_unknown=False,
+            incremental=False)
 
         assert captured['request'].resources[0].configs == []
 
@@ -256,7 +262,7 @@ class TestResetConfigsMockBroker:
         captured = {}
         mock_broker.respond_fn(AlterConfigsRequest, _capture_alter(captured))
 
-        admin.reset_configs([ConfigResource('TOPIC', 'topic-a', ['foo'])])
+        admin.reset_configs([ConfigResource('TOPIC', 'topic-a', ['foo'])], incremental=False)
 
         sent = _sent_configs(captured)
         assert 'foo' not in sent
@@ -273,7 +279,7 @@ class TestResetConfigsMockBroker:
         captured = {}
         mock_broker.respond_fn(AlterConfigsRequest, _capture_alter(captured))
 
-        admin.reset_configs([ConfigResource('TOPIC', 'topic-a', ['foo', 'bar'])])
+        admin.reset_configs([ConfigResource('TOPIC', 'topic-a', ['foo', 'bar'])], incremental=False)
 
         assert _sent_configs(captured) == {}
 
@@ -289,7 +295,8 @@ class TestResetConfigsMockBroker:
 
         admin.reset_configs(
             [ConfigResource('TOPIC', 'topic-a', ['foo'])],
-            validate_only=True)
+            validate_only=True,
+            incremental=False)
 
         assert captured['request'].validate_only is True
 
@@ -393,3 +400,254 @@ class TestListConfigResourcesMockBroker:
             ListConfigResourcesRequest,
             _list_config_resources_response([]))
         assert admin.list_config_resources() == {}
+
+
+# ---------------------------------------------------------------------------
+# incremental_alter_configs
+# ---------------------------------------------------------------------------
+
+
+def _incremental_alter_configs_response(responses):
+    """responses: iterable of (resource_type, resource_name, error_code, error_message)."""
+    Response = IncrementalAlterConfigsResponse.AlterConfigsResourceResponse
+    return IncrementalAlterConfigsResponse(
+        throttle_time_ms=0,
+        responses=[
+            Response(
+                error_code=error_code,
+                error_message=error_message,
+                resource_type=rtype,
+                resource_name=rname,
+            ) for rtype, rname, error_code, error_message in responses
+        ],
+    )
+
+
+def _capture_incremental_alter(captured, response=None):
+    def handler(api_key, api_version, correlation_id, request_bytes):
+        captured['request'] = IncrementalAlterConfigsRequest.decode(
+            request_bytes, version=api_version, header=True)
+        captured['version'] = api_version
+        return response if response is not None else _incremental_alter_configs_response([
+            (_TOPIC, 'topic-a', 0, None),
+        ])
+    return handler
+
+
+def _sent_incremental(captured):
+    """Return a dict {name: (op, value)} from the captured IncrementalAlterConfigsRequest."""
+    assert len(captured['request'].resources) == 1
+    resource = captured['request'].resources[0]
+    return {c.name: (c.config_operation, c.value) for c in resource.configs}
+
+
+class TestIncrementalAlterConfigsMockBroker:
+
+    def test_set_op_sends_triples(self, mock_broker, admin):
+        # validation describe (dynamic filter)
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'old', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        result = admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'foo': (AlterConfigOp.SET, 'new')})],
+            incremental=True)
+
+        sent = _sent_incremental(captured)
+        assert sent == {'foo': (AlterConfigOp.SET.value, 'new')}
+        assert result == {'topic': {'topic-a': 'OK'}}
+
+    def test_bare_value_is_treated_as_set(self, mock_broker, admin):
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'old', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a', {'foo': 'new'})],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {'foo': (AlterConfigOp.SET.value, 'new')}
+
+    def test_delete_op_forces_null_value(self, mock_broker, admin):
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'old', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'foo': (AlterConfigOp.DELETE, 'ignored')})],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {'foo': (AlterConfigOp.DELETE.value, None)}
+
+    def test_append_and_subtract_ops(self, mock_broker, admin):
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('follower.replication.throttled.replicas', '*', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a', {
+                'follower.replication.throttled.replicas':
+                    (AlterConfigOp.APPEND, '1:0'),
+            })],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {
+            'follower.replication.throttled.replicas':
+                (AlterConfigOp.APPEND.value, '1:0'),
+        }
+
+        captured = {}
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('follower.replication.throttled.replicas', '*', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a', {
+                'follower.replication.throttled.replicas':
+                    ('subtract', '1:0'),
+            })],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {
+            'follower.replication.throttled.replicas':
+                (AlterConfigOp.SUBTRACT.value, '1:0'),
+        }
+
+    def test_string_op_is_normalized(self, mock_broker, admin):
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'val', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a', {'foo': ('set', 'v')})],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {'foo': (AlterConfigOp.SET.value, 'v')}
+
+    def test_unrecognized_op_raises(self, admin):
+        with pytest.raises(ValueError, match='Unrecognized AlterConfigOp'):
+            admin.alter_configs(
+                [ConfigResource('TOPIC', 'topic-a', {'foo': ('bogus', 'v')})],
+                raise_on_unknown=False,
+                incremental=True)
+
+    def test_raise_on_unknown_true_raises(self, mock_broker, admin):
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'val', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+
+        with pytest.raises(ValueError, match='Unrecognized configs'):
+            admin.alter_configs(
+                [ConfigResource('TOPIC', 'topic-a',
+                                {'mystery': (AlterConfigOp.SET, 'x')})],
+                incremental=True)
+
+    def test_raise_on_unknown_false_skips_describe(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'mystery': (AlterConfigOp.SET, 'x')})],
+            raise_on_unknown=False,
+            incremental=True)
+
+        assert _sent_incremental(captured) == {
+            'mystery': (AlterConfigOp.SET.value, 'x'),
+        }
+
+    def test_validate_only_propagates(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'foo': (AlterConfigOp.SET, 'v')})],
+            validate_only=True,
+            raise_on_unknown=False,
+            incremental=True)
+
+        assert captured['request'].validate_only is True
+
+    def test_does_not_fill_in_other_keys(self, mock_broker, admin):
+        """Unlike alter_configs, incremental should NOT send untouched keys."""
+        mock_broker.respond(DescribeConfigsRequest, _describe_configs_response(
+            _TOPIC, 'topic-a', [
+                ('foo', 'val', _SRC_DYNAMIC_TOPIC, False),
+                ('bar', 'barval', _SRC_DYNAMIC_TOPIC, False),
+            ]))
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(captured))
+
+        admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'foo': (AlterConfigOp.SET, 'new')})],
+            incremental=True)
+
+        assert _sent_incremental(captured) == {
+            'foo': (AlterConfigOp.SET.value, 'new'),
+        }
+
+    def test_broker_resource_routed_by_broker_id(self, mock_broker, admin):
+        captured = {}
+        mock_broker.respond_fn(IncrementalAlterConfigsRequest, _capture_incremental_alter(
+            captured,
+            _incremental_alter_configs_response([
+                (ConfigResourceType.BROKER.value, '0', 0, None),
+            ]),
+        ))
+
+        result = admin.alter_configs(
+            [ConfigResource('BROKER', '0',
+                            {'max.connections': (AlterConfigOp.SET, '100')})],
+            raise_on_unknown=False,
+            incremental=True)
+
+        assert len(captured['request'].resources) == 1
+        assert captured['request'].resources[0].resource_type == ConfigResourceType.BROKER.value
+        assert captured['request'].resources[0].resource_name == '0'
+        assert result == {'broker': {'0': 'OK'}}
+
+    def test_non_integer_broker_name_raises(self, admin):
+        with pytest.raises(ValueError, match='Broker resource names must be an integer'):
+            admin.alter_configs(
+                [ConfigResource('BROKER', 'not-an-int',
+                                {'foo': (AlterConfigOp.SET, 'v')})],
+                raise_on_unknown=False,
+                incremental=True)
+
+    def test_error_response_surfaces_in_result(self, mock_broker, admin):
+        mock_broker.respond(
+            IncrementalAlterConfigsRequest,
+            _incremental_alter_configs_response([
+                (_TOPIC, 'topic-a', InvalidConfigurationError.errno, 'bad value'),
+            ]))
+
+        result = admin.alter_configs(
+            [ConfigResource('TOPIC', 'topic-a',
+                            {'foo': (AlterConfigOp.SET, 'v')})],
+            raise_on_unknown=False,
+            incremental=True)
+
+        assert 'topic' in result
+        assert 'bad value' in result['topic']['topic-a']
