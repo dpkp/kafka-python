@@ -10,7 +10,7 @@ from kafka.protocol.admin import (
     ListConfigResourcesRequest, ListConfigResourcesResponse,
 )
 
-from test.broker import MockBroker
+from test.mock_broker import MockBroker
 
 
 # ConfigResourceType values (wire)
