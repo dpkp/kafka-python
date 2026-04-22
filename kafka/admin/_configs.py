@@ -307,12 +307,11 @@ class ConfigAdminMixin:
                 ``(op, value)`` (where ``op`` is an :class:`AlterConfigOp`,
                 its name, or its int value) or a bare value (interpreted as SET).
                 For DELETE operations the value is ignored and sent as null.
-                Note: if broker does not support IncrementalAlterConfigsRequest,
-                AlterConfigOp APPEND/SUBTRACT are only supported on 2.3+ brokers,
-                which support the IncrementalAlterConfigsRequest. For older brokers
-                the client will use AlterConfigsRequest, which requires submitting
-                all dynamic configs together (the client will fill in missing keys
-                as required, though be wary of the inherent race with this approach).
+                APPEND/SUBTRACT require broker >= 2.3. On older brokers only
+                SET is supported; non-SET ops raise ValueError. On older brokers
+                the client also fills in all other modified dynamic keys before
+                submitting, since AlterConfigsRequest resets any omitted key to
+                its default (be aware of the inherent race in that approach).
             validate_only (bool, optional): If True, changes are sent to broker for
                 validation only. Changes will not be applied. Default: False
             raise_on_unknown (bool, optional): If True, raises ValueError if any
