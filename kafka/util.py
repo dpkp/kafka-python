@@ -143,7 +143,7 @@ class EnumHelper:
         except ValueError:
             pass
         try:
-            return cls[str(val).strip().upper().replace('-', '_')]
+            return cls[str(val).strip().upper().replace('-', '_')] # pylint: disable=E1136
         except KeyError:
             raise ValueError(f'Unrecognized {cls.__name__}: {val}')
 
@@ -152,8 +152,8 @@ class EnumHelper:
         if isinstance(val, cls):
             return val.value
         if isinstance(val, int):
-            return cls(val).value
+            return cls(val).value # pylint: disable=E1101
         try:
-            return cls[str(val).upper().replace('-', '_')].value
+            return cls[str(val).upper().replace('-', '_')].value # pylint: disable=E1136
         except KeyError:
             raise ValueError(f'Unrecognized {cls.__name__}: {val}')
