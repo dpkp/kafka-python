@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from kafka.protocol.api_key import ApiKey
 from kafka.protocol.metadata import MetadataRequest
 from kafka.protocol.admin import DescribeLogDirsRequest
 
@@ -74,3 +75,15 @@ class ClusterAdminMixin:
         """
         topic_partitions = self._get_topic_partitions(topic_partitions)
         return self._manager.run(self._async_describe_log_dirs, topic_partitions, brokers)
+
+    async def _async_get_broker_version_data(self, broker_id):
+        conn = await self._manager.get_connection(broker_id)
+        return conn.broker_version_data
+
+    def get_broker_version_data(self, broker_id):
+        """Return BrokerVersionData for a specific broker"""
+        return self._manager.run(self._async_get_broker_version_data, broker_id)
+
+    def api_versions(self):
+        api_versions = self._manager.broker_version_data.api_versions
+        return {ApiKey(k): v for k, v in api_versions.items()}
