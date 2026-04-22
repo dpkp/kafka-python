@@ -112,10 +112,6 @@ def run_cli(args=None):
     # --dry-run support
     # --trace ?
 
-    # [client-quotas]
-    # describe (DescribeClientQuotas - not supported yet)
-    # alter (AlterClientQuotas - not supported yet)
-
     # [producers]
     # describe (DescribeProducers - not supported yet)
 
@@ -125,15 +121,15 @@ def run_cli(args=None):
     # abort (not supported yet)
 
     # [cluster]
+    # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
     # describe-features (DescribeFeatures - not supported yet)
     # update-features (UpdateFeatures - not supported yet)
-    # version
-    # api-versions
-    # alter-log-dirs (AlterReplicaLogDirs - not supported yet)
-    # DescribeQuorum (not supported yet)
-    # UnregisterBroker
-    # AddRaftVoter
-    # RemoveRaftVoter
+    # describe-quorum (DescribeQuorum)
+    # unregister-broker (UnregisterBroker)
+    # add-raft-voter (AddRaftVoter)
+    # remove-raft-voter (RemoveRaftVoter)
+    # describe-quotas (DescribeClientQuotas - not supported yet)
+    # alter-quotas (AlterClientQuotas - not supported yet)
 
     # [tokens] *DelegationTokenRequest
     # create
