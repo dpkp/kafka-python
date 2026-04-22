@@ -131,3 +131,16 @@ class classproperty:
         self.f = f
     def __get__(self, obj, owner):
         return self.f(owner)
+
+
+class EnumHelper:
+    @classmethod
+    def value_for(cls, val):
+        if isinstance(val, cls):
+            return val.value
+        if isinstance(val, int):
+            return cls(val).value
+        try:
+            return cls[str(val).upper().replace('-', '_')].value
+        except KeyError:
+            raise ValueError(f'Unrecognized {cls.__name__}: {val}')

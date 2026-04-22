@@ -17,6 +17,7 @@ from kafka.protocol.admin import (
     IncrementalAlterConfigsRequest,
     ListConfigResourcesRequest,
 )
+from kafka.util import EnumHelper
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -371,22 +372,11 @@ class ConfigAdminMixin:
         return self._manager.run(self._async_reset_configs, config_resources, validate_only, raise_on_unknown, incremental)
 
 
-class AlterConfigOp(IntEnum):
+class AlterConfigOp(EnumHelper, IntEnum):
     SET = 0
     DELETE = 1
     APPEND = 2
     SUBTRACT = 3
-
-    @staticmethod
-    def value_for(op):
-        if isinstance(op, AlterConfigOp):
-            return op.value
-        if isinstance(op, int):
-            return AlterConfigOp(op).value
-        try:
-            return AlterConfigOp[str(op).upper()].value
-        except KeyError:
-            raise ValueError(f'Unrecognized AlterConfigOp: {op}')
 
 
 class ConfigFilterType(IntEnum):
