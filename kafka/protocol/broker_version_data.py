@@ -4,10 +4,7 @@ import logging
 import functools
 
 import kafka.errors as Errors
-from kafka.protocol.admin import DescribeAclsRequest, DescribeClientQuotasRequest, ListGroupsRequest
-from kafka.protocol.consumer import OffsetFetchRequest, FetchRequest, ListOffsetsRequest, JoinGroupRequest
-from kafka.protocol.metadata import FindCoordinatorRequest, MetadataRequest
-from kafka.protocol.producer import ProduceRequest, AddPartitionsToTxnRequest
+from .api_key import ApiKey
 
 log = logging.getLogger('kafka.protocol')
 
@@ -79,7 +76,7 @@ class BrokerVersionData:
         """
         assert min_version <= max_version
         # if _max_version is a data descriptor, operation is a protocol class so no request min/max
-        if inspect.isdatadescriptor(operation._max_version):
+        if isinstance(operation, ApiKey) or inspect.isdatadescriptor(operation._max_version):
             request_max = float('inf')
             request_min = 0
         else:
@@ -88,7 +85,7 @@ class BrokerVersionData:
         max_version = min(max_version, operation.max_version, request_max)
         min_version = max(min_version, operation.min_version, request_min)
         broker_api_versions = self.api_versions
-        api_key = operation.API_KEY
+        api_key = operation.value if isinstance(operation, ApiKey) else operation.API_KEY
         if broker_api_versions is None or api_key not in broker_api_versions:
             raise Errors.IncompatibleBrokerVersion(
                 f"Kafka broker does not support the '{operation.name}' Kafka protocol.")
@@ -116,38 +113,38 @@ def infer_broker_version_from_api_versions(api_versions):
     test_cases = [
         # format (<broker version>, <needed struct>)
         # Make sure to update consumer_integration test check when adding newer versions.
-        ((4, 2), ListOffsetsRequest.API_KEY, 11),
-        ((4, 1), ProduceRequest.API_KEY, 13),
-        ((4, 0), ListOffsetsRequest.API_KEY, 10),
-        ((3, 9), FetchRequest.API_KEY, 17),
-        ((3, 8), ProduceRequest.API_KEY, 11),
-        ((3, 7), FetchRequest.API_KEY, 16),
-        ((3, 6), AddPartitionsToTxnRequest.API_KEY, 4),
-        ((3, 5), FetchRequest.API_KEY, 15),
-        ((3, 4), 4, 7), # StopReplicaRequest[3]), # broker-internal api...
-        ((3, 3), DescribeAclsRequest.API_KEY, 3),
-        ((3, 2), JoinGroupRequest.API_KEY, 9),
-        ((3, 1), FetchRequest.API_KEY, 13),
-        ((3, 0), ListOffsetsRequest.API_KEY, 7),
-        ((2, 8), ProduceRequest.API_KEY, 9),
-        ((2, 7), FetchRequest.API_KEY, 12),
-        ((2, 6), DescribeClientQuotasRequest.API_KEY, 0),
-        ((2, 5), DescribeAclsRequest.API_KEY, 2),
-        ((2, 4), ProduceRequest.API_KEY, 8),
-        ((2, 3), FetchRequest.API_KEY, 11),
-        ((2, 2), ListOffsetsRequest.API_KEY, 5),
-        ((2, 1), FetchRequest.API_KEY, 10),
-        ((2, 0), FetchRequest.API_KEY, 8),
-        ((1, 1), FetchRequest.API_KEY, 7),
-        ((1, 0), MetadataRequest.API_KEY, 5),
-        ((0, 11), MetadataRequest.API_KEY, 4),
-        ((0, 10, 2), OffsetFetchRequest.API_KEY, 2),
-        ((0, 10, 1), MetadataRequest.API_KEY, 2),
+        ((4, 2), ApiKey.ListOffsets, 11),
+        ((4, 1), ApiKey.Produce, 13),
+        ((4, 0), ApiKey.ListOffsets, 10),
+        ((3, 9), ApiKey.Fetch, 17),
+        ((3, 8), ApiKey.Produce, 11),
+        ((3, 7), ApiKey.Fetch, 16),
+        ((3, 6), ApiKey.AddPartitionsToTxn, 4),
+        ((3, 5), ApiKey.Fetch, 15),
+        ((3, 4), ApiKey.LeaderAndIsr, 7), # broker-internal api...
+        ((3, 3), ApiKey.DescribeAcls, 3),
+        ((3, 2), ApiKey.JoinGroup, 9),
+        ((3, 1), ApiKey.Fetch, 13),
+        ((3, 0), ApiKey.ListOffsets, 7),
+        ((2, 8), ApiKey.Produce, 9),
+        ((2, 7), ApiKey.Fetch, 12),
+        ((2, 6), ApiKey.DescribeClientQuotas, 0),
+        ((2, 5), ApiKey.DescribeAcls, 2),
+        ((2, 4), ApiKey.Produce, 8),
+        ((2, 3), ApiKey.Fetch, 11),
+        ((2, 2), ApiKey.ListOffsets, 5),
+        ((2, 1), ApiKey.Fetch, 10),
+        ((2, 0), ApiKey.Fetch, 8),
+        ((1, 1), ApiKey.Fetch, 7),
+        ((1, 0), ApiKey.Metadata, 5),
+        ((0, 11), ApiKey.Metadata, 4),
+        ((0, 10, 2), ApiKey.OffsetFetch, 2),
+        ((0, 10, 1), ApiKey.Metadata, 2),
     ]
 
     # Get the best match of test cases
     for broker_version, api_key, version in sorted(test_cases, reverse=True):
-        if api_key not in api_versions:
+        if api_key.value not in api_versions:
             continue
         min_version, max_version = api_versions[api_key]
         if min_version <= version <= max_version:
@@ -159,6 +156,9 @@ def infer_broker_version_from_api_versions(api_versions):
 
 
 # Fallback version checks for brokers that do not support ApiVersionsCheck
+from kafka.protocol.admin import ListGroupsRequest
+from kafka.protocol.consumer import OffsetFetchRequest
+from kafka.protocol.metadata import FindCoordinatorRequest, MetadataRequest
 VERSION_CHECKS = (
     ((0, 9), ListGroupsRequest[0]()),
     ((0, 8, 2), FindCoordinatorRequest[0]('kafka-python-default-group')),
