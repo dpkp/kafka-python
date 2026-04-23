@@ -1,8 +1,7 @@
-from .api_versions import GetApiVersions
-from .broker_version import GetBrokerVersion
 from .describe import DescribeCluster
-from .log_dirs import DescribeLogDirs, AlterLogDirs
 from .features import DescribeFeatures, UpdateFeatures
+from .log_dirs import DescribeLogDirs, AlterLogDirs
+from .versions import GetApiVersions, GetBrokerVersion
 
 
 class ClusterCommandGroup:
