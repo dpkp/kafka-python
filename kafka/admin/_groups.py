@@ -14,6 +14,7 @@ from kafka.admin._acls import valid_acl_operations
 from kafka.protocol.admin import DeleteGroupsRequest, DescribeGroupsRequest, ListGroupsRequest
 from kafka.protocol.consumer import (
     LeaveGroupRequest, OffsetCommitRequest, OffsetDeleteRequest, OffsetFetchRequest,
+    OffsetSpec, OffsetTimestamp,
 )
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.protocol.consumer.metadata import (
@@ -382,31 +383,83 @@ class GroupAdminMixin:
                 }
         return results
 
+    @staticmethod
+    def _clamp_offset(raw, earliest, latest):
+        if raw < 0 or raw > latest:
+            return latest
+        if raw < earliest:
+            return earliest
+        return raw
+
     async def _async_reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
         if not offset_specs:
             return {}
+        all_tps = set(offset_specs.keys())
+
+        explicit_offsets = {}
+        for tp, val in list(offset_specs.items()):
+            if isinstance(val, (OffsetSpec, OffsetTimestamp)):
+                pass
+            elif isinstance(val, int):
+                explicit_offsets[tp] = offset_specs.pop(tp)
+            else:
+                raise TypeError(
+                    f'Unsupported reset target for {tp}: {val!r} '
+                    '(expected OffsetSpec, OffsetTimestamp, or int offset)')
+
         if group_coordinator_id is None:
             group_coordinator_id = await self._find_coordinator_id(group_id)
-        current = await self._async_list_group_offsets(group_id, group_coordinator_id, offset_specs.keys())
-        offsets = await self._async_list_partition_offsets(offset_specs)
+
+        current = await self._async_list_group_offsets(group_id, group_coordinator_id, all_tps)
+        earliest = await self._async_list_partition_offsets({tp: OffsetSpec.EARLIEST for tp in all_tps})
+        latest = await self._async_list_partition_offsets({tp: OffsetSpec.LATEST for tp in all_tps})
+
+        offsets = {}
+        if offset_specs:
+            offsets = await self._async_list_partition_offsets(offset_specs)
+
         to_reset = {}
-        for tp in offsets:
-            to_reset[tp] = current[tp]._replace(offset=offsets[tp].offset)
+        for tp in all_tps:
+            if tp in offsets:
+                raw = offsets[tp].offset
+            else:
+                raw = explicit_offsets[tp]
+            clamped = self._clamp_offset(raw, earliest[tp].offset, latest[tp].offset)
+            if tp in current:
+                to_reset[tp] = current[tp]._replace(offset=clamped)
+            else:
+                to_reset[tp] = OffsetAndMetadata(offset=clamped, metadata='', leader_epoch=None)
+
         request = self._alter_group_offsets_request(group_id, to_reset)
         response = await self._manager.send(request, node_id=group_coordinator_id)
         return self._reset_group_offsets_process_response(response, to_reset)
 
     def reset_group_offsets(self, group_id, offset_specs, group_coordinator_id=None):
-        """Reset committed offsets for a consumer group to earliest or latest.
+        """Reset committed offsets for a consumer group.
 
         The group must have no active members (i.e. be empty or dead) for
         the reset to succeed; otherwise individual partitions may return
         ``UNKNOWN_MEMBER_ID`` or similar errors.
 
+        Each dict value selects how the target offset is produced. All
+        resulting offsets are clamped to the partition's
+        ``[earliest, latest]`` range; values that resolve to
+        ``UNKNOWN_OFFSET`` (e.g. a timestamp beyond the last record) are
+        clamped to ``latest``.
+
         Arguments:
             group_id (str): The consumer group id.
             offset_specs (dict): A dict mapping :class:`~kafka.TopicPartition` to
-                :class:`~kafka.admin.OffsetSpec`.
+                one of:
+
+                * :class:`~kafka.admin.OffsetSpec` (e.g. ``OffsetSpec.EARLIEST``,
+                  ``OffsetSpec.LATEST``, ``OffsetSpec.MAX_TIMESTAMP``):
+                  resolved server-side via ListOffsets.
+                * :class:`~kafka.admin.OffsetTimestamp` (ms since epoch):
+                  resolved server-side to the earliest offset whose timestamp
+                  is ``>=`` the given value.
+                * Plain ``int``: an explicit committed offset (no server-side
+                  resolution), which is still clamped to the valid range.
 
         Keyword Arguments:
             group_coordinator_id (int, optional): The node_id of the group's
@@ -415,7 +468,8 @@ class GroupAdminMixin:
 
         Returns:
             dict: A dict mapping :class:`~kafka.TopicPartition` to dict of
-            {'error': :class:`~kafka.errors.KafkaError` class, 'offset': int}
+            {'error': :class:`~kafka.errors.KafkaError` class, 'offset': int}.
+            The ``offset`` value is the post-clamp value that was committed.
         """
         return self._manager.run(
             self._async_reset_group_offsets, group_id, offset_specs, group_coordinator_id)

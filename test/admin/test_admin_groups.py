@@ -1,6 +1,10 @@
 import pytest
 
-from kafka.admin import GroupState, GroupType, KafkaAdminClient, MemberToRemove
+from kafka.admin import (
+    KafkaAdminClient,
+    GroupState, GroupType, MemberToRemove,
+    OffsetTimestamp,
+)
 import kafka.errors as Errors
 from kafka.errors import (
     GroupIdNotFoundError,
@@ -12,9 +16,12 @@ from kafka.errors import (
 from kafka.protocol.admin import ListGroupsRequest, ListGroupsResponse
 from kafka.protocol.consumer import (
     LeaveGroupRequest, LeaveGroupResponse,
+    ListOffsetsRequest, ListOffsetsResponse,
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetDeleteRequest, OffsetDeleteResponse,
+    OffsetFetchRequest, OffsetFetchResponse,
 )
+from kafka.protocol.metadata import MetadataResponse
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.structs import OffsetAndMetadata, TopicPartition
 
@@ -515,3 +522,192 @@ class TestListGroupsMockBroker:
     def test_types_filter_rejected_on_pre_848_broker(self, broker, admin):
         with pytest.raises(Errors.IncompatibleBrokerVersion):
             admin.list_groups(types_filter=['consumer'])
+
+
+# ---------------------------------------------------------------------------
+# reset_group_offsets
+# ---------------------------------------------------------------------------
+
+
+def _set_metadata_for_topic(broker, name, num_partitions, leader_id=0):
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    Broker = MetadataResponse.MetadataResponseBroker
+    brokers = [Broker(node_id=0, host=broker.host, port=broker.port, rack=None)]
+    broker.set_metadata(
+        topics=[Topic(
+            version=8, error_code=0, name=name, is_internal=False,
+            partitions=[
+                Partition(version=8, error_code=0, partition_index=i,
+                          leader_id=leader_id, leader_epoch=0,
+                          replica_nodes=[0], isr_nodes=[0], offline_replicas=[])
+                for i in range(num_partitions)
+            ])],
+        brokers=brokers,
+    )
+
+
+def _offset_fetch_response(partitions):
+    """partitions: list of (topic, partition, committed_offset, metadata, leader_epoch)."""
+    _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
+    _Partition = _Topic.OffsetFetchResponsePartition
+    by_topic = {}
+    for topic, part, offset, meta, le in partitions:
+        by_topic.setdefault(topic, []).append(_Partition(
+            partition_index=part, committed_offset=offset,
+            committed_leader_epoch=le, metadata=meta, error_code=0))
+    return OffsetFetchResponse(
+        throttle_time_ms=0, error_code=0,
+        topics=[_Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+    )
+
+
+def _list_offsets_response(partitions):
+    """partitions: list of (topic, partition, offset, timestamp, leader_epoch)."""
+    Topic = ListOffsetsResponse.ListOffsetsTopicResponse
+    Partition = Topic.ListOffsetsPartitionResponse
+    by_topic = {}
+    for topic, part, offset, ts, le in partitions:
+        by_topic.setdefault(topic, []).append(Partition(
+            partition_index=part, error_code=0, timestamp=ts,
+            offset=offset, leader_epoch=le))
+    return ListOffsetsResponse(
+        throttle_time_ms=0,
+        topics=[Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+    )
+
+
+def _offset_commit_response(partitions):
+    """partitions: list of (topic, partition, error_code)."""
+    _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
+    _Partition = _Topic.OffsetCommitResponsePartition
+    by_topic = {}
+    for topic, part, err in partitions:
+        by_topic.setdefault(topic, []).append(
+            _Partition(partition_index=part, error_code=err))
+    return OffsetCommitResponse(
+        throttle_time_ms=0,
+        topics=[_Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+    )
+
+
+class TestResetGroupOffsetsMockBroker:
+    def test_clamps_explicit_offset_above_latest(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(OffsetFetchRequest, _offset_fetch_response(
+            [('topic-a', 0, 50, '', 0)]))
+        # Bounds: earliest=10, latest=100
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 10, -1, 0)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 100, -1, 0)]))
+        committed = {}
+
+        def commit_handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetCommitRequest.decode(request_bytes, version=api_version, header=True)
+            for t in req.topics:
+                for p in t.partitions:
+                    committed[TopicPartition(t.name, p.partition_index)] = p.committed_offset
+            return _offset_commit_response([('topic-a', 0, 0)])
+
+        broker.respond_fn(OffsetCommitRequest, commit_handler)
+
+        tp = TopicPartition('topic-a', 0)
+        result = admin.reset_group_offsets(
+            'g1', {tp: 9999}, group_coordinator_id=0)
+
+        assert committed[tp] == 100
+        assert result[tp]['offset'] == 100
+        assert result[tp]['error'] is NoError
+
+    def test_clamps_explicit_offset_below_earliest(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(OffsetFetchRequest, _offset_fetch_response(
+            [('topic-a', 0, 50, '', 0)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 10, -1, 0)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 100, -1, 0)]))
+        committed = {}
+
+        def commit_handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetCommitRequest.decode(request_bytes, version=api_version, header=True)
+            for t in req.topics:
+                for p in t.partitions:
+                    committed[TopicPartition(t.name, p.partition_index)] = p.committed_offset
+            return _offset_commit_response([('topic-a', 0, 0)])
+
+        broker.respond_fn(OffsetCommitRequest, commit_handler)
+
+        tp = TopicPartition('topic-a', 0)
+        result = admin.reset_group_offsets(
+            'g1', {tp: 5}, group_coordinator_id=0)
+
+        assert committed[tp] == 10
+        assert result[tp]['offset'] == 10
+
+    def test_clamps_unknown_offset_to_latest(self, broker, admin):
+        # Simulate a timestamp beyond the last record: ListOffsets returns -1.
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(OffsetFetchRequest, _offset_fetch_response(
+            [('topic-a', 0, 50, '', 0)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 10, -1, 0)]))  # earliest
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 100, -1, 0)]))  # latest
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, -1, -1, -1)]))  # spec resolution: UNKNOWN
+        committed = {}
+
+        def commit_handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetCommitRequest.decode(request_bytes, version=api_version, header=True)
+            for t in req.topics:
+                for p in t.partitions:
+                    committed[TopicPartition(t.name, p.partition_index)] = p.committed_offset
+            return _offset_commit_response([('topic-a', 0, 0)])
+
+        broker.respond_fn(OffsetCommitRequest, commit_handler)
+
+        tp = TopicPartition('topic-a', 0)
+        result = admin.reset_group_offsets(
+            'g1', {tp: OffsetTimestamp(99999999999)}, group_coordinator_id=0)
+
+        assert committed[tp] == 100
+        assert result[tp]['offset'] == 100
+
+    def test_offset_in_range_not_clamped(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(OffsetFetchRequest, _offset_fetch_response(
+            [('topic-a', 0, 50, 'm', 3)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 10, -1, 0)]))
+        broker.respond(ListOffsetsRequest, _list_offsets_response(
+            [('topic-a', 0, 100, -1, 0)]))
+        committed = {}
+
+        def commit_handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetCommitRequest.decode(request_bytes, version=api_version, header=True)
+            for t in req.topics:
+                for p in t.partitions:
+                    committed[TopicPartition(t.name, p.partition_index)] = (
+                        p.committed_offset, p.committed_metadata, p.committed_leader_epoch)
+            return _offset_commit_response([('topic-a', 0, 0)])
+
+        broker.respond_fn(OffsetCommitRequest, commit_handler)
+
+        tp = TopicPartition('topic-a', 0)
+        result = admin.reset_group_offsets(
+            'g1', {tp: 42}, group_coordinator_id=0)
+
+        # Offset not clamped; existing metadata/leader_epoch preserved.
+        assert committed[tp] == (42, 'm', 3)
+        assert result[tp]['offset'] == 42
+
+    def test_empty_input_noop(self, broker, admin):
+        assert admin.reset_group_offsets('g1', {}, group_coordinator_id=0) == {}
+
+    def test_unsupported_value_type_raises(self, broker, admin):
+        tp = TopicPartition('topic-a', 0)
+        with pytest.raises(TypeError, match='Unsupported reset target'):
+            admin.reset_group_offsets(
+                'g1', {tp: 'earliest'}, group_coordinator_id=0)
