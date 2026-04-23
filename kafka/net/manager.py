@@ -13,12 +13,16 @@ from .transport import KafkaSSLTransport, KafkaTCPTransport
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.future import Future
+from kafka.version import __version__
 
 
 log = logging.getLogger(__name__)
 
 class KafkaConnectionManager:
     DEFAULT_CONFIG = {
+        'client_id': 'kafka-python-' + __version__,
+        'client_software_name': 'kafka-python',
+        'client_software_version': __version__,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,

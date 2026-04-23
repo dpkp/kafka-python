@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['DescribeClusterRequest', 'DescribeClusterResponse', 'DescribeLogDirsRequest', 'DescribeLogDirsResponse']
+__all__ = ['DescribeClusterRequest', 'DescribeClusterResponse', 'DescribeLogDirsRequest', 'DescribeLogDirsResponse', 'UpdateFeaturesRequest', 'UpdateFeaturesResponse']
 
 class DescribeClusterRequest(ApiMessage):
     include_cluster_authorized_operations: bool
@@ -204,6 +204,104 @@ class DescribeLogDirsResponse(ApiMessage):
         throttle_time_ms: int = ...,
         error_code: int = ...,
         results: list[DescribeLogDirsResult] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class UpdateFeaturesRequest(ApiMessage):
+    class FeatureUpdateKey(DataContainer):
+        feature: str
+        max_version_level: int
+        allow_downgrade: bool
+        upgrade_type: int
+        def __init__(
+            self,
+            *args: Any,
+            feature: str = ...,
+            max_version_level: int = ...,
+            allow_downgrade: bool = ...,
+            upgrade_type: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    timeout_ms: int
+    feature_updates: list[FeatureUpdateKey]
+    validate_only: bool
+    def __init__(
+        self,
+        *args: Any,
+        timeout_ms: int = ...,
+        feature_updates: list[FeatureUpdateKey] = ...,
+        validate_only: bool = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class UpdateFeaturesResponse(ApiMessage):
+    class UpdatableFeatureResult(DataContainer):
+        feature: str
+        error_code: int
+        error_message: str | None
+        def __init__(
+            self,
+            *args: Any,
+            feature: str = ...,
+            error_code: int = ...,
+            error_message: str | None = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    error_code: int
+    error_message: str | None
+    results: list[UpdatableFeatureResult]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        error_code: int = ...,
+        error_message: str | None = ...,
+        results: list[UpdatableFeatureResult] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...

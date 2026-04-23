@@ -11,8 +11,12 @@ class DescribeClusterResponse(ApiMessage):
 class DescribeLogDirsRequest(ApiMessage): pass
 class DescribeLogDirsResponse(ApiMessage): pass
 
+class UpdateFeaturesRequest(ApiMessage): pass
+class UpdateFeaturesResponse(ApiMessage): pass
+
 
 __all__ = [
     'DescribeClusterRequest', 'DescribeClusterResponse',
     'DescribeLogDirsRequest', 'DescribeLogDirsResponse',
+    'UpdateFeaturesRequest', 'UpdateFeaturesResponse',
 ]

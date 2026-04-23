@@ -2,6 +2,7 @@ from kafka.admin.client import KafkaAdminClient
 from kafka.admin._acls import (
     ACL, ACLFilter, ResourcePattern, ResourcePatternFilter, ACLOperation,
     ResourceType, ACLPermissionType, ACLResourcePatternType)
+from kafka.admin._cluster import UpdateFeatureType
 from kafka.admin._configs import (
     AlterConfigOp, ConfigFilterType, ConfigResource, ConfigResourceType,
     ConfigType, ConfigSourceType)
@@ -16,6 +17,7 @@ __all__ = [
     'ACL', 'ACLFilter', 'ACLOperation', 'ACLPermissionType', 'ACLResourcePatternType',
     'ResourceType', 'ResourcePattern', 'ResourcePatternFilter',
     'AlterConfigOp', 'ConfigResource', 'ConfigResourceType', 'ConfigType', 'ConfigSourceType',
+    'UpdateFeatureType',
     'MemberToRemove', 'OffsetSpec', # NewTopic + NewPartitions are deprecated and not included in __all__
     'ScramMechanism', 'UserScramCredentialDeletion', 'UserScramCredentialUpsertion',
 ]
