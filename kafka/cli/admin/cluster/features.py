@@ -2,13 +2,13 @@ from kafka.admin import UpdateFeatureType
 
 
 class DescribeFeatures:
+    COMMAND = 'describe-features'
+    HELP = 'Describe Features of Kafka Cluster'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe-features', help='Describe Features of Kafka Cluster')
+    def add_arguments(cls, parser):
         parser.add_argument('-f', '--feature', type=str, action='append', dest='features', default=[],
                             help='Show one or more specific features. If not provided, returns all features.')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):
@@ -20,16 +20,16 @@ class DescribeFeatures:
 
 
 class UpdateFeatures:
+    COMMAND = 'update-features'
+    HELP = 'Update Features of Kafka Cluster'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('update-features', help='Update Features of Kafka Cluster')
+    def add_arguments(cls, parser):
         parser.add_argument('-f', '--feature', type=str, action='append', dest='features', default=[], help='set feature=value')
         parser.add_argument('--downgrade', action='store_true')
         parser.add_argument('--unsafe', action='store_true')
         parser.add_argument('--timeout', type=int, default=60)
         parser.add_argument('--validate-only', action='store_true')
-        parser.set_defaults(command=cls.command)
 
     @staticmethod
     def _feature_type(args):

@@ -2,12 +2,11 @@ from kafka.structs import TopicPartition
 
 
 class AlterPartitionReassignments:
+    COMMAND = 'alter-reassignments'
+    HELP = 'Alter replica assignments for partitions'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'alter-reassignments',
-            help='Alter replica assignments for partitions')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '-r', '--reassign', type=str, action='append',
             dest='reassignments', default=[], required=True,
@@ -20,7 +19,6 @@ class AlterPartitionReassignments:
         parser.add_argument(
             '--no-raise-errors', dest='raise_errors', action='store_false',
             help='Do not raise on partition-level errors; return the response instead')
-        parser.set_defaults(command=cls.command, raise_errors=True)
 
     @classmethod
     def command(cls, client, args):

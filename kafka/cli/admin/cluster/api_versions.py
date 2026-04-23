@@ -2,13 +2,13 @@ from kafka.protocol.api_key import ApiKey
 
 
 class GetApiVersions:
+    COMMAND = 'api-versions'
+    HELP = 'Get Supported Api Versions'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('api-versions', help='Get Supported Api Versions')
+    def add_arguments(cls, parser):
         parser.add_argument('-k', '--api-key', type=str, action='append', dest='api_keys', default=None)
         parser.add_argument('--raw', action='store_true')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

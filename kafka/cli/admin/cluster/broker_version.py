@@ -1,10 +1,10 @@
 class GetBrokerVersion:
+    COMMAND = 'broker-version'
+    HELP = 'Get Version for Broker'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('broker-version', help='Get Version for Broker')
-        parser.add_argument('-b', '--broker', required=True)
-        parser.set_defaults(command=cls.command)
+    def add_arguments(cls, parser):
+        parser.add_argument('--broker', required=True)
 
     @classmethod
     def command(cls, client, args):

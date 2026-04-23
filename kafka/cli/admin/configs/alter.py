@@ -5,10 +5,11 @@ from .common import add_resource_arguments, parse_resources
 
 
 class AlterConfigs:
+    COMMAND = 'alter'
+    HELP = 'Alter Kafka Configs'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('alter', help='Alter Kafka Configs')
+    def add_arguments(cls, parser):
         add_resource_arguments(parser)
         parser.add_argument('-c', '--config', type=str, action='append', dest='configs', required=True, help='key=value to alter')
         parser.add_argument('-v', '--validate-only', action='store_true', default=False)
@@ -16,7 +17,6 @@ class AlterConfigs:
         incremental = parser.add_mutually_exclusive_group()
         incremental.add_argument('--force-incremental', action='store_true', dest='incremental', default=None)
         incremental.add_argument('--force-alter', action='store_false', dest='incremental', default=None)
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

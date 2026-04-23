@@ -5,12 +5,11 @@ from kafka.structs import TopicPartition
 
 
 class ListPartitionOffsets:
+    COMMAND = 'list-offsets'
+    HELP = 'List offsets for partitions by spec (earliest/latest/timestamp)'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'list-offsets',
-            help='List offsets for partitions by spec (earliest/latest/timestamp)')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '-t', '--topic', type=str)
         parser.add_argument(
@@ -25,7 +24,6 @@ class ListPartitionOffsets:
                  'a single wildcard "*" for all partitions. SPEC may be one of '
                  'earliest, latest, max-timestamp, earliest-local, latest-tiered, '
                  'or a millisecond timestamp.')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

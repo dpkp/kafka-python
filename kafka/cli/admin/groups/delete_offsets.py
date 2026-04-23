@@ -2,12 +2,11 @@ from kafka.structs import TopicPartition
 
 
 class DeleteGroupOffsets:
+    COMMAND = 'delete-offsets'
+    HELP = 'Delete committed offsets for a consumer group'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'delete-offsets',
-            help='Delete committed offsets for a consumer group')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, required=True)
         parser.add_argument(
             '-p', '--partition', type=str, action='append',
@@ -16,7 +15,6 @@ class DeleteGroupOffsets:
         parser.add_argument(
             '--group-coordinator-id', type=int, default=None,
             help='Send directly to this broker id, skipping coordinator lookup')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

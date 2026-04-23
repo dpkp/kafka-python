@@ -1,7 +1,11 @@
 class DescribeTopics:
+    COMMAND = 'describe'
+    HELP = 'Describe Kafka Topics'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe', help='Describe Kafka Topics')
+    def add_arguments(cls, parser):
         parser.add_argument('-t', '--topic', type=str, action='append', dest='topics')
-        parser.set_defaults(command=lambda cli, args: cli.describe_topics(args.topics or None))
+
+    @classmethod
+    def command(cls, client, args):
+        return client.describe_topics(args.topics or None)

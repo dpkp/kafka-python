@@ -2,12 +2,11 @@ from kafka.admin import MemberToRemove
 
 
 class RemoveGroupMembers:
+    COMMAND = 'remove-members'
+    HELP = 'Remove members from a consumer group'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'remove-members',
-            help='Remove members from a consumer group')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, required=True)
         parser.add_argument(
             '-m', '--member-id', type=str, action='append',
@@ -25,7 +24,6 @@ class RemoveGroupMembers:
         parser.add_argument(
             '--group-coordinator-id', type=int, default=None,
             help='Send directly to this broker id, skipping coordinator lookup')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

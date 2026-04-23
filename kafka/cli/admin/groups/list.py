@@ -1,6 +1,11 @@
 class ListGroups:
+    COMMAND = 'list'
+    HELP = 'List Groups'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('list', help='List Groups')
-        parser.set_defaults(command=lambda cli, _args: cli.list_groups())
+    def add_arguments(cls, parser):
+        pass
+
+    @classmethod
+    def command(cls, client, args):
+        return client.list_groups()

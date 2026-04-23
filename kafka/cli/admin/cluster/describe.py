@@ -1,6 +1,11 @@
 class DescribeCluster:
+    COMMAND = 'describe'
+    HELP = 'Describe Kafka Cluster'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe', help='Describe Kafka Cluster')
-        parser.set_defaults(command=lambda cli, _args: cli.describe_cluster())
+    def add_arguments(cls, parser):
+        pass
+
+    @classmethod
+    def command(cls, client, args):
+        return client.describe_cluster()

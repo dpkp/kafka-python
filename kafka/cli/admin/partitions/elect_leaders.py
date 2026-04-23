@@ -5,12 +5,11 @@ _ELECTION_TYPES = {'preferred': 0, 'unclean': 1}
 
 
 class ElectLeaders:
+    COMMAND = 'elect-leaders'
+    HELP = 'Trigger leader election for partitions'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'elect-leaders',
-            help='Trigger leader election for partitions')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '--election-type', type=str, default='preferred',
             choices=sorted(_ELECTION_TYPES),
@@ -31,7 +30,6 @@ class ElectLeaders:
         parser.add_argument(
             '--no-raise-errors', dest='raise_errors', action='store_false',
             help='Do not raise on partition-level errors; return the response instead')
-        parser.set_defaults(command=cls.command, raise_errors=True)
 
     @classmethod
     def command(cls, client, args):

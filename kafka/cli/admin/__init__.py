@@ -4,36 +4,45 @@ import logging
 from pprint import pprint
 
 from kafka.admin.client import KafkaAdminClient
-from .acls import ACLsSubCommand
-from .cluster import ClusterSubCommand
-from .configs import ConfigsSubCommand
-from .groups import GroupsSubCommand
-from .partitions import PartitionsSubCommand
-from .topics import TopicsSubCommand
-from .users import UsersSubCommand
+from .acls import ACLsCommandGroup
+from .cluster import ClusterCommandGroup
+from .configs import ConfigsCommandGroup
+from .groups import GroupsCommandGroup
+from .partitions import PartitionsCommandGroup
+from .topics import TopicsCommandGroup
+from .users import UsersCommandGroup
 from ..common import add_common_cli_args, configure_logging, build_connect_kwargs
 from kafka.errors import BrokerResponseError
 
 
-def main_parser():
+def build_parser(groups=()):
     parser = argparse.ArgumentParser(
         prog='python -m kafka.admin',
-        description='Kafka admin client',
+        description='Kafka Admin Client',
     )
     add_common_cli_args(parser)
     parser.add_argument(
         '-f', '--format', type=str, default='raw',
         help='output format: raw|json')
+    groups_sub = parser.add_subparsers(dest='group', metavar='GROUP', title='Available command groups')
+    for group in groups:
+        group_parser = groups_sub.add_parser(group.GROUP, help=group.HELP)
+        group_parser.set_defaults(group=group_parser) # refcycle..
+        commands_sub = group_parser.add_subparsers(dest='command', metavar='COMMAND', title='Available commands')
+        for cmd in group.COMMANDS:
+            command_parser = commands_sub.add_parser(cmd.COMMAND, help=cmd.HELP)
+            options = command_parser.add_argument_group('command options')
+            cmd.add_arguments(options)
+            command_parser.set_defaults(command=cmd.command)
     return parser
 
 
 def run_cli(args=None):
-    parser = main_parser()
-    subparsers = parser.add_subparsers(help='subcommands')
-    for cmd in [ACLsSubCommand, ClusterSubCommand, ConfigsSubCommand,
-                TopicsSubCommand, PartitionsSubCommand,
-                GroupsSubCommand, UsersSubCommand]:
-        cmd.add_subparser(subparsers)
+    parser = build_parser([
+        ACLsCommandGroup, ClusterCommandGroup, ConfigsCommandGroup,
+        TopicsCommandGroup, PartitionsCommandGroup, GroupsCommandGroup,
+        UsersCommandGroup,
+    ])
     config = parser.parse_args(args)
     if config.format not in ('raw', 'json'):
         raise ValueError('Unrecognized format: %s' % config.format)

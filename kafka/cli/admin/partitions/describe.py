@@ -1,10 +1,9 @@
 class DescribeTopicPartitions:
+    COMMAND = 'describe'
+    HELP = 'Describe topic partitions with pagination (KIP-966, broker >=3.9)'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'describe',
-            help='Describe topic partitions with pagination (KIP-966, broker >=3.9)')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '-t', '--topic', type=str, action='append',
             dest='topics', default=[], required=True,
@@ -19,7 +18,6 @@ class DescribeTopicPartitions:
         parser.add_argument(
             '--cursor-partition', type=int, default=None,
             help='Partition index to start pagination from')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):
