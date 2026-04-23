@@ -6,11 +6,17 @@ class DescribeFeatures:
     @classmethod
     def add_subparser(cls, subparsers):
         parser = subparsers.add_parser('describe-features', help='Describe Features of Kafka Cluster')
+        parser.add_argument('-f', '--feature', type=str, action='append', dest='features', default=[],
+                            help='Show one or more specific features. If not provided, returns all features.')
         parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):
-        return client.describe_features()
+        result = client.describe_features()
+        if args.features:
+            return {k: v for k, v in result.items() if k in args.features}
+        else:
+            return result
 
 
 class UpdateFeatures:

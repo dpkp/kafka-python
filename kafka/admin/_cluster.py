@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from enum import IntEnum
 import logging
 from typing import TYPE_CHECKING
@@ -104,18 +105,16 @@ class ClusterAdminMixin:
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             raise error_type(f"ApiVersionsRequest failed: {response}")
-        supported = {feature.name: (feature.min_version, feature.max_version)
-                     for feature in (response.supported_features or [])}
-        finalized = {feature.name: (feature.min_version_level, feature.max_version_level)
-                     for feature in (response.finalized_features or [])}
+        result = defaultdict(dict)
         epoch = response.finalized_features_epoch
         if epoch is None or epoch < 0:
             epoch = None
-        return {
-            'supported_features': supported,
-            'finalized_features': finalized,
-            'finalized_features_epoch': epoch,
-        }
+        for feature in (response.supported_features or []):
+            result[feature.name]['supported'] = (feature.min_version, feature.max_version)
+        for feature in (response.finalized_features or []):
+            result[feature.name]['finalized'] = (feature.min_version_level, feature.max_version_level)
+            result[feature.name]['finalized_epoch'] = epoch
+        return dict(result)
 
     def describe_features(self, send_request_to_controller=False):
         """Fetch the cluster's supported and finalized feature flags.

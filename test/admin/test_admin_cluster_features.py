@@ -82,28 +82,23 @@ class TestDescribeFeaturesMockBroker:
 
         result = admin.describe_features()
 
-        assert result['supported_features'] == {
-            'metadata.version': (1, 19),
-            'kraft.version': (0, 1),
+        assert result == {
+            'metadata.version': {'supported': (1, 19), 'finalized': (8, 8), 'finalized_epoch': 42},
+            'kraft.version': {'supported': (0, 1)},
         }
-        assert result['finalized_features'] == {'metadata.version': (8, 8)}
-        assert result['finalized_features_epoch'] == 42
 
     def test_empty_features(self, broker, admin):
         broker.respond(ApiVersionsRequest, _api_versions_response())
         result = admin.describe_features()
-        assert result == {
-            'supported_features': {},
-            'finalized_features': {},
-            'finalized_features_epoch': None,
-        }
+        assert result == {}
 
     def test_negative_epoch_normalized_to_none(self, broker, admin):
-        broker.respond(ApiVersionsRequest, _api_versions_response(
+        broker._api_versions_response = _api_versions_response(
             supported=[('metadata.version', 1, 19)],
+            finalized=[('metadata.version', 8, 8)],
             finalized_epoch=-1,
-        ))
-        assert admin.describe_features()['finalized_features_epoch'] is None
+        )
+        assert admin.describe_features()['metadata.version']['finalized_epoch'] is None
 
     def test_sends_request_version_3_plus(self, broker, admin):
         captured = {}
