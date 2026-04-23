@@ -3,7 +3,7 @@ import logging
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
-from ..common import add_common_cli_args
+from ..common import add_common_cli_args, configure_logging, build_connect_kwargs
 
 
 def main_parser():
@@ -29,53 +29,17 @@ def main_parser():
     return parser
 
 
-_LOGGING_LEVELS = {'NOTSET': 0, 'DEBUG': 10, 'INFO': 20, 'WARNING': 30, 'ERROR': 40, 'CRITICAL': 50}
-
-
-def build_kwargs(props):
-    kwargs = {}
-    for prop in props or []:
-        k, v = prop.split('=')
-        try:
-            v = int(v)
-        except ValueError:
-            pass
-        if v == 'None':
-            v = None
-        elif v == 'False':
-            v = False
-        elif v == 'True':
-            v = True
-        kwargs[k] = v
-    return kwargs
-
-
 def run_cli(args=None):
     parser = main_parser()
     config = parser.parse_args(args)
 
-    if config.enable_logger is not None:
-        log_level = _LOGGING_LEVELS[config.log_level.upper()]
-        handler = logging.StreamHandler()
-        handler.setLevel(log_level)
-        handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-        for name in config.enable_logger:
-            logger = logging.getLogger(name)
-            logger.setLevel(log_level)
-            logger.addHandler(handler)
-    else:
-        logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
-    if config.disable_logger is not None:
-        for name in config.disable_logger:
-            logging.getLogger(name).setLevel(logging.CRITICAL + 1)
-
     if config.format not in ('str', 'raw', 'full'):
         raise ValueError('Unrecognized format: %s' % config.format)
+    configure_logging(config)
     logger = logging.getLogger(__name__)
 
-    kwargs = build_kwargs(config.extra_config)
+    kwargs = build_connect_kwargs(config)
     consumer = KafkaConsumer(
-        bootstrap_servers=config.bootstrap_servers,
         group_id=config.group,
         group_instance_id=config.group_instance_id,
         **kwargs)
