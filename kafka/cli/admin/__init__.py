@@ -102,7 +102,6 @@ def run_cli(args=None):
     # abort (EndTxn)
 
     # [cluster]
-    # describe-quorum (DescribeQuorum)
     # unregister-broker (UnregisterBroker)
     # add-raft-voter (AddRaftVoter)
     # remove-raft-voter (RemoveRaftVoter)

@@ -13,6 +13,7 @@ from kafka.protocol.metadata import ApiVersionsRequest, MetadataRequest
 from kafka.protocol.admin import (
     AlterReplicaLogDirsRequest,
     DescribeLogDirsRequest,
+    DescribeQuorumRequest,
     UpdateFeaturesRequest,
 )
 from kafka.structs import TopicPartitionReplica
@@ -141,6 +142,43 @@ class ClusterAdminMixin:
             corresponding error class (``kafka.errors.NoError`` on success).
         """
         return self._manager.run(self._async_alter_replica_log_dirs, replica_assignments)
+
+    async def _async_describe_quorum(self, topic, partition):
+        _Topic = DescribeQuorumRequest.TopicData
+        _Partition = _Topic.PartitionData
+        request = DescribeQuorumRequest(topics=[
+            _Topic(topic_name=topic, partitions=[_Partition(partition_index=partition)])
+        ])
+        response = await self._manager.send(request)
+        top_error = Errors.for_code(response.error_code)
+        if top_error is not Errors.NoError:
+            raise top_error(response.error_message or '')
+        result = response.to_dict()
+        result.pop('throttle_time_ms', None)
+        result.pop('error_code', None)
+        result.pop('error_message', None)
+        for topic in result['topics']:
+            for partition in topic['partitions']:
+                error = Errors.for_code(partition.pop('error_code'))(partition.pop('error_message'))
+                if not isinstance(error, Errors.NoError):
+                    partition['error'] = str(error)
+                else:
+                    partition['error'] = None
+        return result
+
+    def describe_metadata_quorum(self):
+        """Describe the KRaft quorum state for the cluster metadata log.
+
+        Returns quorum info for the ``__cluster_metadata`` topic
+        (partition 0), including the current leader, leader epoch, high
+        watermark, voters, and observers. On broker version >= 3.8 (KIP-853),
+        the response also reports controller node endpoints in ``nodes``.
+        Requires a KRaft cluster.
+
+        Returns:
+            dict matching the DescribeQuorumResponse shape.
+        """
+        return self._manager.run(self._async_describe_quorum, '__cluster_metadata', 0)
 
     async def _async_get_broker_version_data(self, broker_id):
         conn = await self._manager.get_connection(broker_id)
