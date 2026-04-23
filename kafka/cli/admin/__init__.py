@@ -122,8 +122,6 @@ def run_cli(args=None):
 
     # [cluster]
     # alter-log-dirs (AlterReplicaLogDirs)
-    # describe-features (ApiVersions)
-    # update-features (UpdateFeatures)
     # describe-quorum (DescribeQuorum)
     # unregister-broker (UnregisterBroker)
     # add-raft-voter (AddRaftVoter)
