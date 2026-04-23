@@ -55,7 +55,7 @@ class ACLAdminMixin:
             operation=acl_filter.operation,
             permission_type=acl_filter.permission_type
         )
-        response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
+        response = self._manager.run(self._manager.send, request)
         return self._convert_describe_acls_response_to_acls(response)
 
     @staticmethod
@@ -132,7 +132,7 @@ class ACLAdminMixin:
         creations = [self._convert_create_acls_resource_request(acl) for acl in acls]
         min_version = 3 if any(creation.resource_type == ResourceType.USER for creation in creations) else 0
         request = CreateAclsRequest(creations=creations, min_version=min_version)
-        response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
+        response = self._manager.run(self._manager.send, request)
         return self._convert_create_acls_response_to_acls(acls, response)
 
     @staticmethod
@@ -191,7 +191,7 @@ class ACLAdminMixin:
         filters = [self._convert_delete_acls_resource_request(acl) for acl in acl_filters]
         min_version = 3 if any(_filter.resource_type_filter == ResourceType.USER for _filter in filters) else 0
         request = DeleteAclsRequest(filters=filters, min_version=min_version)
-        response = self._manager.run(self._manager.send(request))  # pylint: disable=E0606
+        response = self._manager.run(self._manager.send, request)
         return self._convert_delete_acls_response_to_matching_acls(acl_filters, response)
 
 
