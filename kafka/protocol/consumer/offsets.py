@@ -26,6 +26,20 @@ class OffsetSpec(EnumHelper, IntEnum):
     LATEST_TIERED = -5  # the latest offset of the partition in remote storage (KIP-1005)
 
 
+class OffsetTimestamp(int):
+    """Millisecond-timestamp spec for partition offset lookup.
+
+    Wraps an int so it can be distinguished from a bare offset. Use with
+    :meth:`KafkaAdminClient.reset_group_offsets` (and anywhere else a spec
+    may be mixed with explicit offsets) to request "earliest offset whose
+    timestamp is >= N ms".
+    """
+    __slots__ = ()
+
+    def __repr__(self):
+        return f'OffsetTimestamp({int(self)})'
+
+
 class ListOffsetsRequest(ApiMessage):
     @classmethod
     def min_version_for_timestamp(cls, ts):
@@ -54,7 +68,8 @@ class OffsetForLeaderEpochResponse(ApiMessage): pass
 
 
 __all__ = [
-    'UNKNOWN_OFFSET', 'OffsetResetStrategy', 'IsolationLevel', 'OffsetSpec',
+    'UNKNOWN_OFFSET', 'OffsetResetStrategy', 'IsolationLevel',
+    'OffsetSpec', 'OffsetTimestamp',
     'ListOffsetsRequest', 'ListOffsetsResponse',
     'OffsetForLeaderEpochRequest', 'OffsetForLeaderEpochResponse',
 ]

@@ -20,7 +20,9 @@ from kafka.protocol.admin import (
     ElectionType,
     ListPartitionReassignmentsRequest,
 )
-from kafka.protocol.consumer import ListOffsetsRequest, IsolationLevel, OffsetSpec
+from kafka.protocol.consumer import (
+    ListOffsetsRequest, IsolationLevel, OffsetSpec, OffsetTimestamp,
+)
 from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 

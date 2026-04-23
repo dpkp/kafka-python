@@ -6,7 +6,7 @@ from enum import IntEnum
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['UNKNOWN_OFFSET', 'OffsetResetStrategy', 'IsolationLevel', 'OffsetSpec', 'ListOffsetsRequest', 'ListOffsetsResponse', 'OffsetForLeaderEpochRequest', 'OffsetForLeaderEpochResponse']
+__all__ = ['UNKNOWN_OFFSET', 'OffsetResetStrategy', 'IsolationLevel', 'OffsetSpec', 'OffsetTimestamp', 'ListOffsetsRequest', 'ListOffsetsResponse', 'OffsetForLeaderEpochRequest', 'OffsetForLeaderEpochResponse']
 
 UNKNOWN_OFFSET: int
 
@@ -25,6 +25,9 @@ class OffsetSpec(EnumHelper, IntEnum):
     MAX_TIMESTAMP: int
     EARLIEST_LOCAL: int
     LATEST_TIERED: int
+
+class OffsetTimestamp(int):
+    def __repr__(self) -> str: ...
 
 class ListOffsetsRequest(ApiMessage):
     class ListOffsetsTopic(DataContainer):
