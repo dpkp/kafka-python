@@ -462,14 +462,7 @@ class PartitionAdminMixin:
         return results
 
     async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted'):
-        if isinstance(isolation_level, str):
-            try:
-                isolation_level = IsolationLevel[isolation_level.upper()]
-            except KeyError:
-                raise ValueError(f'Unrecognized isolation_level: {isolation_level}')
-        elif isinstance(isolation_level, int):
-            isolation_level = IsolationLevel(isolation_level)
-
+        isolation_level = IsolationLevel.build_from(isolation_level)
         results = {}
         topic_partitions = set(topic_partition_specs.keys())
         while topic_partitions:

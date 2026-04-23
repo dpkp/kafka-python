@@ -17,6 +17,7 @@ from kafka.protocol.admin import (
     IncrementalAlterConfigsRequest,
     ListConfigResourcesRequest,
 )
+from kafka.util import EnumHelper
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -104,11 +105,7 @@ class ConfigAdminMixin:
 
     @staticmethod
     def _describe_configs_process_responses(responses, config_filter='modified'):
-        if isinstance(config_filter, str):
-            try:
-                config_filter = ConfigFilterType[config_filter.upper()]
-            except KeyError:
-                raise ValueError(f'{config_filter} is not a valid ConfigFilterType')
+        config_filter = ConfigFilterType.build_from(config_filter)
         ret = defaultdict(dict)
         for response in responses:
             for result in response.results:
@@ -192,11 +189,7 @@ class ConfigAdminMixin:
     async def _async_list_config_resources(self, resource_types=None):
         wire_types = []
         for rt in resource_types or []:
-            if not isinstance(rt, ConfigResourceType):
-                try:
-                    rt = ConfigResourceType[str(rt).upper().replace('-', '_')]
-                except KeyError:
-                    raise ValueError(f'Unrecognized ConfigResourceType: {rt}')
+            rt = ConfigResourceType.build_from(rt)
             wire_types.append(rt.value)
         request = ListConfigResourcesRequest(resource_types=wire_types)
         response = await self._manager.send(request)
@@ -371,25 +364,14 @@ class ConfigAdminMixin:
         return self._manager.run(self._async_reset_configs, config_resources, validate_only, raise_on_unknown, incremental)
 
 
-class AlterConfigOp(IntEnum):
+class AlterConfigOp(EnumHelper, IntEnum):
     SET = 0
     DELETE = 1
     APPEND = 2
     SUBTRACT = 3
 
-    @staticmethod
-    def value_for(op):
-        if isinstance(op, AlterConfigOp):
-            return op.value
-        if isinstance(op, int):
-            return AlterConfigOp(op).value
-        try:
-            return AlterConfigOp[str(op).upper()].value
-        except KeyError:
-            raise ValueError(f'Unrecognized AlterConfigOp: {op}')
 
-
-class ConfigFilterType(IntEnum):
+class ConfigFilterType(EnumHelper, IntEnum):
     ALL = 0
     DYNAMIC = 1
     MODIFIED = 2
@@ -406,7 +388,7 @@ class ConfigFilterType(IntEnum):
         return False
 
 
-class ConfigResourceType(IntEnum):
+class ConfigResourceType(EnumHelper, IntEnum):
     UNKNOWN = 0
     TOPIC = 2
     BROKER = 4

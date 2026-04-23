@@ -15,11 +15,11 @@ class OffsetResetStrategy:
     EARLIEST: int
     NONE: int
 
-class IsolationLevel(IntEnum):
+class IsolationLevel(EnumHelper, IntEnum):
     READ_UNCOMMITTED: int
     READ_COMMITTED: int
 
-class OffsetSpec(IntEnum):
+class OffsetSpec(EnumHelper, IntEnum):
     LATEST: int
     EARLIEST: int
     MAX_TIMESTAMP: int
