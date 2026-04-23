@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 import itertools
 import logging
 from collections import defaultdict
@@ -19,6 +20,7 @@ from kafka.protocol.consumer.metadata import (
     ConsumerProtocolAssignment, ConsumerProtocolSubscription, ConsumerProtocolType,
 )
 from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.util import EnumHelper
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -106,10 +108,16 @@ class GroupAdminMixin:
 
     # -- List groups --------------------------------------------------
 
-    def _list_groups_request(self):
-        # TODO: KIP-518: StatesFilter
-        # TODO: KIP-848: TypesFilter
-        return ListGroupsRequest()
+    @staticmethod
+    def _list_groups_request(states_filter=None, types_filter=None):
+        kwargs = {'min_version': 0}
+        if states_filter:
+            kwargs['states_filter'] = [GroupState.value_for(s) for s in states_filter]
+            kwargs['min_version'] = 4
+        if types_filter:
+            kwargs['types_filter'] = [GroupType.value_for(t) for t in types_filter]
+            kwargs['min_version'] = 5
+        return ListGroupsRequest(**kwargs)
 
     def _list_groups_process_response(self, response):
         """Process a ListGroupsResponse into a list of groups."""
@@ -120,17 +128,18 @@ class GroupAdminMixin:
                 .format(response))
         return [group.to_dict() for group in response.groups]
 
-    async def _async_list_groups(self, broker_ids=None):
+    async def _async_list_groups(self, broker_ids=None, states_filter=None, types_filter=None):
         if broker_ids is None:
             broker_ids = [broker.node_id for broker in self._manager.cluster.brokers()]
         groups = []
         for broker_id in broker_ids:
-            request = self._list_groups_request()
+            request = self._list_groups_request(states_filter=states_filter,
+                                                types_filter=types_filter)
             response = await self._manager.send(request, node_id=broker_id)
             groups.extend(self._list_groups_process_response(response))
         return groups
 
-    def list_groups(self, broker_ids=None):
+    def list_groups(self, broker_ids=None, states_filter=None, types_filter=None):
         """List all consumer groups known to the cluster.
 
         This returns a list of Group dicts. The tuples are
@@ -150,11 +159,22 @@ class GroupAdminMixin:
                 groups. If set to None, will query all brokers in the cluster.
                 Explicitly specifying broker(s) can be useful for determining which
                 consumer groups are coordinated by those broker(s). Default: None
+            states_filter (list, optional): Filter groups by state. Values
+                may be :class:`GroupState` members, their string names
+                (case-insensitive, hyphen or underscore), or raw protocol
+                strings (e.g. ``['Stable', 'Empty']``). Requires broker
+                >= 3.0 (KIP-518). Default: None (no filter).
+            types_filter (list, optional): Filter groups by type. Values
+                may be :class:`GroupType` members, their string names
+                (case-insensitive), or raw protocol strings (e.g.
+                ``['consumer', 'classic', 'share']``). Requires broker
+                >= 4.0 (KIP-848). Default: None (no filter).
 
         Returns:
             List of group data dicts, with key/vals from ListGroupsRequest
         """
-        return self._manager.run(self._async_list_groups, broker_ids)
+        return self._manager.run(self._async_list_groups, broker_ids,
+                                 states_filter, types_filter)
 
     # -- List group offsets -------------------------------------------
 
@@ -604,3 +624,23 @@ class MemberToRemove:
 
     def __hash__(self):
         return hash((self.member_id, self.group_instance_id, self.reason))
+
+
+class GroupState(EnumHelper, str, Enum):
+    """Consumer group states as reported by the broker (KIP-518, KIP-848)."""
+    UNKNOWN = 'Unknown'
+    PREPARING_REBALANCE = 'PreparingRebalance'
+    COMPLETING_REBALANCE = 'CompletingRebalance'
+    STABLE = 'Stable'
+    DEAD = 'Dead'
+    EMPTY = 'Empty'
+    ASSIGNING = 'Assigning'
+    RECONCILING = 'Reconciling'
+
+
+class GroupType(EnumHelper, str, Enum):
+    """Consumer group protocol types (KIP-848)."""
+    UNKNOWN = 'Unknown'
+    CLASSIC = 'classic'
+    CONSUMER = 'consumer'
+    SHARE = 'share'

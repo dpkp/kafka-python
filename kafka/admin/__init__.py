@@ -6,7 +6,7 @@ from kafka.admin._cluster import UpdateFeatureType
 from kafka.admin._configs import (
     AlterConfigOp, ConfigFilterType, ConfigResource, ConfigResourceType,
     ConfigType, ConfigSourceType)
-from kafka.admin._groups import MemberToRemove
+from kafka.admin._groups import GroupState, GroupType, MemberToRemove
 from kafka.admin._partitions import NewPartitions, OffsetSpec
 from kafka.admin._topics import NewTopic
 from kafka.admin._users import (
@@ -18,6 +18,7 @@ __all__ = [
     'ResourceType', 'ResourcePattern', 'ResourcePatternFilter',
     'AlterConfigOp', 'ConfigResource', 'ConfigResourceType', 'ConfigType', 'ConfigSourceType',
     'UpdateFeatureType',
-    'MemberToRemove', 'OffsetSpec', # NewTopic + NewPartitions are deprecated and not included in __all__
+    'GroupState', 'GroupType', 'MemberToRemove',
+    'OffsetSpec', # NewTopic + NewPartitions are deprecated and not included in __all__
     'ScramMechanism', 'UserScramCredentialDeletion', 'UserScramCredentialUpsertion',
 ]
