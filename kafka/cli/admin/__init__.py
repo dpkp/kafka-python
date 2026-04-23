@@ -44,6 +44,12 @@ def run_cli(args=None):
         UsersCommandGroup,
     ])
     config = parser.parse_args(args)
+    if not config.group:
+        parser.print_help()
+        return 1
+    elif not config.command:
+        config.group.print_help()
+        return 1
     if config.format not in ('raw', 'json'):
         raise ValueError('Unrecognized format: %s' % config.format)
 
