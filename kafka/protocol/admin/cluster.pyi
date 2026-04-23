@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['DescribeClusterRequest', 'DescribeClusterResponse', 'DescribeLogDirsRequest', 'DescribeLogDirsResponse', 'UpdateFeaturesRequest', 'UpdateFeaturesResponse']
+__all__ = ['DescribeClusterRequest', 'DescribeClusterResponse', 'DescribeLogDirsRequest', 'DescribeLogDirsResponse', 'AlterReplicaLogDirsRequest', 'AlterReplicaLogDirsResponse', 'UpdateFeaturesRequest', 'UpdateFeaturesResponse']
 
 class DescribeClusterRequest(ApiMessage):
     include_cluster_authorized_operations: bool
@@ -204,6 +204,120 @@ class DescribeLogDirsResponse(ApiMessage):
         throttle_time_ms: int = ...,
         error_code: int = ...,
         results: list[DescribeLogDirsResult] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class AlterReplicaLogDirsRequest(ApiMessage):
+    class AlterReplicaLogDir(DataContainer):
+        class AlterReplicaLogDirTopic(DataContainer):
+            name: str
+            partitions: list[int]
+            def __init__(
+                self,
+                *args: Any,
+                name: str = ...,
+                partitions: list[int] = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        path: str
+        topics: list[AlterReplicaLogDirTopic]
+        def __init__(
+            self,
+            *args: Any,
+            path: str = ...,
+            topics: list[AlterReplicaLogDirTopic] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    dirs: list[AlterReplicaLogDir]
+    def __init__(
+        self,
+        *args: Any,
+        dirs: list[AlterReplicaLogDir] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class AlterReplicaLogDirsResponse(ApiMessage):
+    class AlterReplicaLogDirTopicResult(DataContainer):
+        class AlterReplicaLogDirPartitionResult(DataContainer):
+            partition_index: int
+            error_code: int
+            def __init__(
+                self,
+                *args: Any,
+                partition_index: int = ...,
+                error_code: int = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        topic_name: str
+        partitions: list[AlterReplicaLogDirPartitionResult]
+        def __init__(
+            self,
+            *args: Any,
+            topic_name: str = ...,
+            partitions: list[AlterReplicaLogDirPartitionResult] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    throttle_time_ms: int
+    results: list[AlterReplicaLogDirTopicResult]
+    def __init__(
+        self,
+        *args: Any,
+        throttle_time_ms: int = ...,
+        results: list[AlterReplicaLogDirTopicResult] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
