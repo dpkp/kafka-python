@@ -2,12 +2,12 @@ from .common import add_acl_args, acl_from_args
 
 
 class CreateACLs:
+    COMMAND = 'create'
+    HELP = 'Create Kafka ACLs'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('create', help='Create Kafka ACLs')
+    def add_arguments(cls, parser):
         add_acl_args(parser, required=True)
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

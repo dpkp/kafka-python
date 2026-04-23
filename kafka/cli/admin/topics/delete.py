@@ -2,13 +2,13 @@ import uuid
 
 
 class DeleteTopic:
+    COMMAND = 'delete'
+    HELP = 'Delete Kafka Topic'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('delete', help='Delete Kafka Topic')
+    def add_arguments(cls, parser):
         parser.add_argument('-t', '--topic', type=str, action='append', dest='topics', default=[], help='topic name')
         parser.add_argument('--id', type=str, action='append', dest='topic_ids', default=[], help='topic UUID')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

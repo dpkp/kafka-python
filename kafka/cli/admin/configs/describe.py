@@ -2,17 +2,17 @@ from .common import add_resource_arguments, parse_resources
 
 
 class DescribeConfigs:
+    COMMAND = 'describe'
+    HELP = 'Describe Kafka Configs'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe', help='Describe Kafka Configs')
+    def add_arguments(cls, parser):
         add_resource_arguments(parser)
         parser.add_argument('-c', '--config', type=str, action='append', dest='configs', default=None)
         parser.add_argument('--dynamic', action='store_true', default=False)
         parser.add_argument('--modified', action='store_true', default=False)
         parser.add_argument('--static', action='store_true', default=False)
         parser.add_argument('--default', action='store_true', default=False)
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

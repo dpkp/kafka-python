@@ -12,10 +12,11 @@ def main_parser():
         description='Kafka console producer',
     )
     add_common_cli_args(parser)
-    parser.add_argument(
+    options = parser.add_argument_group('producer options')
+    options.add_argument(
         '-t', '--topic', type=str, required=True,
         help='publish to topic')
-    parser.add_argument(
+    options.add_argument(
         '--encoding', type=str, default='utf-8',
         help='byte encoding for produced messages')
     return parser

@@ -4,12 +4,11 @@ from kafka.structs import TopicPartition
 
 
 class ListPartitionReassignments:
+    COMMAND = 'list-reassignments'
+    HELP = 'List the current ongoing partition reassignments'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'list-reassignments',
-            help='List the current ongoing partition reassignments')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '-p', '--topic-partition', type=str, action='append',
             dest='topic_partitions', default=[],
@@ -18,7 +17,6 @@ class ListPartitionReassignments:
         parser.add_argument(
             '--timeout-ms', type=int, default=None,
             help='Request timeout in milliseconds')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

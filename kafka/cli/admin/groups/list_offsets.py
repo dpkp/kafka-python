@@ -5,12 +5,12 @@ from kafka.admin import OffsetSpec
 
 
 class ListGroupOffsets:
+    COMMAND = 'list-offsets'
+    HELP = 'List Offsets for Group'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('list-offsets', help='List Offsets for Group')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, required=True)
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

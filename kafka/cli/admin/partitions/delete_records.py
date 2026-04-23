@@ -2,12 +2,11 @@ from kafka.structs import TopicPartition
 
 
 class DeleteRecords:
+    COMMAND = 'delete-records'
+    HELP = 'Delete records from partitions up to a given offset'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'delete-records',
-            help='Delete records from partitions up to a given offset')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '-r', '--record', type=str, action='append',
             dest='records', default=[], required=True,
@@ -19,7 +18,6 @@ class DeleteRecords:
         parser.add_argument(
             '--partition-leader-id', type=int, default=None,
             help='Send all delete requests to this broker id, skipping metadata lookup')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

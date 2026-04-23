@@ -2,12 +2,11 @@ from kafka.structs import OffsetAndMetadata, TopicPartition
 
 
 class AlterGroupOffsets:
+    COMMAND = 'alter-offsets'
+    HELP = 'Alter committed offsets for a consumer group'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'alter-offsets',
-            help='Alter committed offsets for a consumer group')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, required=True)
         parser.add_argument(
             '-o', '--offset', type=str, action='append',
@@ -16,7 +15,6 @@ class AlterGroupOffsets:
         parser.add_argument(
             '--group-coordinator-id', type=int, default=None,
             help='Send directly to this broker id, skipping coordinator lookup')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

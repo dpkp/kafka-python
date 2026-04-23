@@ -5,12 +5,11 @@ from kafka.structs import OffsetAndMetadata, TopicPartition
 
 
 class ResetGroupOffsets:
+    COMMAND = 'reset-offsets'
+    HELP = 'Reset committed offsets for a consumer group'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'reset-offsets',
-            help='Reset committed offsets for a consumer group')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, required=True)
         parser.add_argument(
             '-s', '--spec', type=str,
@@ -26,7 +25,6 @@ class ResetGroupOffsets:
                  'a single wildcard "*" for all partitions. SPEC may be one of '
                  'earliest, latest, max-timestamp, earliest-local, latest-tiered, '
                  'or a millisecond timestamp.')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

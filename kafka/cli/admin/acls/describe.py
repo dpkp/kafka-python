@@ -2,12 +2,12 @@ from .common import add_acl_filter_args, acl_filter_from_args
 
 
 class DescribeACLs:
+    COMMAND = 'describe'
+    HELP = 'Describe Kafka ACLs'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe', help='Describe Kafka ACLs')
+    def add_arguments(cls, parser):
         add_acl_filter_args(parser)
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

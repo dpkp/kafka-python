@@ -6,12 +6,11 @@ from kafka.admin import (
 
 
 class AlterUserScramCredentials:
+    COMMAND = 'alter-scram-credentials'
+    HELP = 'Alter SCRAM credentials for Kafka users'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser(
-            'alter-scram-credentials',
-            help='Alter SCRAM credentials for Kafka users')
+    def add_arguments(cls, parser):
         parser.add_argument(
             '--delete', type=str, action='append', dest='deletions', default=[],
             help='USER:MECHANISM pair to delete (e.g. alice:SCRAM-SHA-256)')
@@ -21,7 +20,6 @@ class AlterUserScramCredentials:
         parser.add_argument(
             '--iterations', type=int, default=None,
             help='PBKDF2 iteration count for upsertions (default: 4096)')
-        parser.set_defaults(command=cls.command)
 
     @classmethod
     def command(cls, client, args):

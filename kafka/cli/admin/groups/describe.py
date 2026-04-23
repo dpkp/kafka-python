@@ -1,7 +1,11 @@
 class DescribeGroups:
+    COMMAND = 'describe'
+    HELP = 'Describe Groups'
 
     @classmethod
-    def add_subparser(cls, subparsers):
-        parser = subparsers.add_parser('describe', help='Describe Groups')
+    def add_arguments(cls, parser):
         parser.add_argument('-g', '--group-id', type=str, action='append', dest='groups', required=True)
-        parser.set_defaults(command=lambda cli, args: cli.describe_groups(args.groups))
+
+    @classmethod
+    def command(cls, client, args):
+        return client.describe_groups(args.groups)
