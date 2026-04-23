@@ -12,19 +12,20 @@ def main_parser():
         description='Kafka console consumer',
     )
     add_common_cli_args(parser)
-    parser.add_argument(
+    options = parser.add_argument_group('consumer options')
+    options.add_argument(
         '-t', '--topic', type=str, action='append', dest='topics', required=True,
         help='subscribe to topic')
-    parser.add_argument(
+    options.add_argument(
         '-g', '--group', type=str, required=True,
         help='consumer group')
-    parser.add_argument(
+    options.add_argument(
         '-i', '--group-instance-id', type=str,
         help='static group membership identifier')
-    parser.add_argument(
+    options.add_argument(
         '-f', '--format', type=str, default='str',
         help='output format: str|raw|full')
-    parser.add_argument(
+    options.add_argument(
         '--encoding', type=str, default='utf-8', help='encoding to use for str output decode()')
     return parser
 
