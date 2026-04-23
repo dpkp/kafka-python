@@ -221,13 +221,13 @@ class Fetcher:
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        offsets = self._fetch_offsets_by_times(timestamps, timeout_ms)
+        offsets = self._client._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
         return offsets
 
-    def _fetch_offsets_by_times(self, timestamps, timeout_ms=None):
+    async def _fetch_offsets_by_times_async(self, timestamps, timeout_ms=None):
         if not timestamps:
             return {}
 
@@ -239,34 +239,29 @@ class Fetcher:
                 return {}
 
             future = self._send_list_offsets_requests(timestamps)
-            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
-
-            # Timeout w/o future completion
-            if not future.is_done:
+            try:
+                offsets, retry = await self._client._manager.wait_for(future, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
                 break
-
-            if future.succeeded():
-                offsets, retry = future.value
+            except Exception as exc:
+                if not getattr(exc, 'retriable', False):
+                    raise
+                if getattr(exc, 'invalid_metadata', False) or self._client._manager.cluster.need_update:
+                    refresh_future = self._client._manager.update_metadata()
+                    try:
+                        await self._client._manager.wait_for(refresh_future, timer.timeout_ms)
+                    except Errors.KafkaTimeoutError:
+                        break
+                else:
+                    delay = self.config['retry_backoff_ms'] / 1000
+                    if timer.timeout_ms is not None:
+                        delay = min(delay, timer.timeout_ms / 1000)
+                    await self._client._manager._net.sleep(delay)
+            else:
                 fetched_offsets.update(offsets)
                 if not retry:
                     return fetched_offsets
-
                 timestamps = {tp: timestamps[tp] for tp in retry}
-
-            elif not future.retriable():
-                raise future.exception  # pylint: disable-msg=raising-bad-type
-
-            elif future.exception.invalid_metadata or self._client.cluster.need_update:
-                refresh_future = self._client.cluster.request_update()
-                self._client.poll(future=refresh_future, timeout_ms=timer.timeout_ms)
-
-                if not future.is_done:
-                    break
-            else:
-                if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
-                    time.sleep(self.config['retry_backoff_ms'] / 1000)
-                else:
-                    time.sleep(timer.timeout_ms / 1000)
 
             timer.maybe_raise()
 
@@ -283,7 +278,7 @@ class Fetcher:
 
     def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        offsets = self._fetch_offsets_by_times(timestamps, timeout_ms)
+        offsets = self._client._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets

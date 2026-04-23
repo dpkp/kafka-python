@@ -387,6 +387,38 @@ class KafkaConnectionManager:
     def poll(self, timeout_ms=None, future=None):
         return self._net.poll(timeout_ms=timeout_ms, future=future)
 
+    async def wait_for(self, future, timeout_ms):
+        """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
+
+        Must be awaited from a coroutine running on this loop. The underlying
+        future is not cancelled on timeout — it continues to run; the timeout
+        only unblocks the awaiter.
+        """
+        if timeout_ms is None:
+            return await future
+        wrapper = Future()
+        def _on_success(value):
+            if not wrapper.is_done:
+                wrapper.success(value)
+        def _on_failure(exc):
+            if not wrapper.is_done:
+                wrapper.failure(exc)
+        future.add_callback(_on_success)
+        future.add_errback(_on_failure)
+        def _on_timeout():
+            if not wrapper.is_done:
+                wrapper.failure(Errors.KafkaTimeoutError(
+                    'Timed out after %s ms' % timeout_ms))
+        timer = self._net.call_later(timeout_ms / 1000, _on_timeout)
+        try:
+            return await wrapper
+        finally:
+            if not timer.is_done:
+                try:
+                    self._net.unschedule(timer)
+                except ValueError:
+                    pass
+
     async def _invoke(self, coro, args):
         """Invoke coro/awaitable/function and fully resolve the result.
 
