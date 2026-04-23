@@ -21,8 +21,8 @@ def build_parser(groups=()):
         description='Kafka Admin Client',
     )
     add_common_cli_args(parser, bootstrap_required=False)
-    parser.add_argument(
-        '-f', '--format', type=str, default='raw',
+    parser.add_argument_group('output').add_argument(
+        '--format', type=str, default='raw',
         help='output format: raw|json')
     groups_sub = parser.add_subparsers(dest='group', metavar='GROUP', title='Available command groups')
     for group in groups:
@@ -51,7 +51,8 @@ def run_cli(args=None):
         config.group.print_help()
         return 1
     if config.format not in ('raw', 'json'):
-        raise ValueError('Unrecognized format: %s' % config.format)
+        print(f'Unrecognized format: {config.format}')
+        return 1
 
     configure_logging(config)
     logger = logging.getLogger(__name__)
