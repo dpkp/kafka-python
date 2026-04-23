@@ -1,10 +1,10 @@
 import logging
 
 
-def add_connect_cli_args(parser):
+def add_connect_cli_args(parser, bootstrap_required=True):
     connect_group = parser.add_argument_group('connection')
     connect_group.add_argument(
-        '-b', '--bootstrap-servers', type=str, action='append', required=True,
+        '-b', '--bootstrap-servers', type=str, action='append', required=bootstrap_required,
         help='host:port for cluster bootstrap server. Can be provided multiple times.')
     connect_group.add_argument(
         '-s', '--security-protocol', type=str, default='PLAINTEXT', help='PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL')
@@ -35,6 +35,8 @@ def build_kwargs(props):
 
 
 def build_connect_kwargs(config):
+    if not config.bootstrap_servers:
+        raise ValueError('python -m kafka: error: the following arguments are required: -b/--bootstrap-servers')
     kwargs = build_kwargs(config.extra_config)
     kwargs.update({
         'bootstrap_servers': config.bootstrap_servers,
@@ -88,6 +90,6 @@ def configure_logging(config):
             logging.getLogger(name).setLevel(logging.CRITICAL + 1)
 
 
-def add_common_cli_args(parser):
-    add_connect_cli_args(parser)
+def add_common_cli_args(parser, bootstrap_required=True):
+    add_connect_cli_args(parser, bootstrap_required)
     add_logging_cli_args(parser)

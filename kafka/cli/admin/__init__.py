@@ -20,7 +20,7 @@ def build_parser(groups=()):
         prog='python -m kafka.admin',
         description='Kafka Admin Client',
     )
-    add_common_cli_args(parser)
+    add_common_cli_args(parser, bootstrap_required=False)
     parser.add_argument(
         '-f', '--format', type=str, default='raw',
         help='output format: raw|json')
@@ -56,7 +56,12 @@ def run_cli(args=None):
     configure_logging(config)
     logger = logging.getLogger(__name__)
 
-    kwargs = build_connect_kwargs(config)
+    try:
+        kwargs = build_connect_kwargs(config)
+    except ValueError as exc:
+        parser.print_usage()
+        print(f'{parser.prog}: {exc}')
+        return 1
     client = KafkaAdminClient(**kwargs)
 
     try:
