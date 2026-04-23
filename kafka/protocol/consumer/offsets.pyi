@@ -27,7 +27,7 @@ class OffsetSpec(EnumHelper, IntEnum):
     LATEST_TIERED: int
 
 class OffsetTimestamp(int):
-    def __repr__(self) -> str: ...
+    ...
 
 class ListOffsetsRequest(ApiMessage):
     class ListOffsetsTopic(DataContainer):
