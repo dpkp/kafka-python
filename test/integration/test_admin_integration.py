@@ -16,7 +16,7 @@ from kafka.errors import (
     UnknownTopicOrPartitionError, ElectionNotNeededError,
     KafkaTimeoutError, IncompatibleBrokerVersion
 )
-from kafka.structs import TopicPartition, OffsetAndTimestamp
+from kafka.structs import TopicPartition, OffsetAndTimestamp, TopicPartitionReplica
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import create_topics
 
@@ -492,6 +492,19 @@ def test_describe_log_dirs(kafka_admin_client):
         for log_dir in broker_map[broker.node_id]['log_dirs']:
             assert 'log_dir' in log_dir
             assert log_dir['error_code'] == 0
+
+
+@pytest.mark.skipif(env_kafka_version() < (1, 1), reason="AlterReplicaLogDirs requires broker >=1.1")
+def test_alter_replica_log_dirs(kafka_admin_client, topic):
+    log_dirs = kafka_admin_client.describe_log_dirs()
+    target_dir = log_dirs[0]['log_dirs'][0]['log_dir']
+    broker_id = log_dirs[0]['broker']
+    tpr = TopicPartitionReplica(topic, 0, broker_id)
+
+    result = kafka_admin_client.alter_replica_log_dirs({tpr: target_dir})
+    assert tpr in result
+    # Moving a replica to its current log dir is a no-op that returns NoError.
+    assert result[tpr] is NoError
 
 
 @pytest.mark.skipif(env_kafka_version() < (2, 4), reason="AlterPartitionReassignments requires broker >=2.4")

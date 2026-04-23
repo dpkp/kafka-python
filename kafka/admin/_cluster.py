@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING
 import kafka.errors as Errors
 from kafka.protocol.api_key import ApiKey
 from kafka.protocol.metadata import ApiVersionsRequest, MetadataRequest
-from kafka.protocol.admin import DescribeLogDirsRequest, UpdateFeaturesRequest
+from kafka.protocol.admin import (
+    AlterReplicaLogDirsRequest,
+    DescribeLogDirsRequest,
+    UpdateFeaturesRequest,
+)
+from kafka.structs import TopicPartitionReplica
 from kafka.util import EnumHelper
 
 if TYPE_CHECKING:
@@ -79,6 +84,63 @@ class ClusterAdminMixin:
         """
         topic_partitions = self._get_topic_partitions(topic_partitions)
         return self._manager.run(self._async_describe_log_dirs, topic_partitions, brokers)
+
+    @staticmethod
+    def _alter_replica_log_dirs_requests(replica_assignments):
+        _Dir = AlterReplicaLogDirsRequest.AlterReplicaLogDir
+        _Topic = _Dir.AlterReplicaLogDirTopic
+        broker_to_dirs = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for tpr, log_dir in replica_assignments.items():
+            if not isinstance(tpr, TopicPartitionReplica):
+                tpr = TopicPartitionReplica(*tpr)
+            broker_to_dirs[tpr.broker_id][log_dir][tpr.topic].append(tpr.partition)
+        return {
+            broker_id: AlterReplicaLogDirsRequest(dirs=[
+                _Dir(path=path, topics=[
+                    _Topic(name=topic, partitions=parts)
+                    for topic, parts in topics.items()
+                ])
+                for path, topics in dirs.items()
+            ])
+            for broker_id, dirs in broker_to_dirs.items()
+        }
+
+    async def _async_alter_replica_log_dirs(self, replica_assignments):
+        if not replica_assignments:
+            return {}
+        broker_requests = self._alter_replica_log_dirs_requests(replica_assignments)
+        result = {}
+        for broker_id, request in broker_requests.items():
+            response = await self._manager.send(request, node_id=broker_id)
+            for topic in response.results:
+                for partition in topic.partitions:
+                    tpr = TopicPartitionReplica(
+                        topic=topic.topic_name,
+                        partition=partition.partition_index,
+                        broker_id=broker_id)
+                    result[tpr] = Errors.for_code(partition.error_code)
+        return result
+
+    def alter_replica_log_dirs(self, replica_assignments):
+        """Move replicas between log directories on their hosting brokers.
+
+        Each entry instructs the targeted broker to move (or place) the
+        replica for a given partition into the specified absolute log
+        directory path. Requests are sent to each broker in parallel; a
+        broker will only act on replicas it currently hosts.
+
+        Arguments:
+            replica_assignments: A dict mapping
+                :class:`~kafka.TopicPartitionReplica` (``topic``,
+                ``partition``, ``broker_id``) to the destination log
+                directory path (absolute string). Tuples of
+                ``(topic, partition, broker_id)`` are also accepted.
+
+        Returns:
+            dict mapping :class:`~kafka.TopicPartitionReplica` to the
+            corresponding error class (``kafka.errors.NoError`` on success).
+        """
+        return self._manager.run(self._async_alter_replica_log_dirs, replica_assignments)
 
     async def _async_get_broker_version_data(self, broker_id):
         conn = await self._manager.get_connection(broker_id)

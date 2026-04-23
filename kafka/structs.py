@@ -13,6 +13,17 @@ Keyword Arguments:
 """
 
 
+TopicPartitionReplica = namedtuple("TopicPartitionReplica",
+    ["topic", "partition", "broker_id"])
+TopicPartitionReplica.__doc__ = """A topic / partition / broker replica tuple
+
+Keyword Arguments:
+    topic (str): A topic name
+    partition (int): A partition id
+    broker_id (int): The node_id of the broker hosting the replica
+"""
+
+
 OffsetAndMetadata = namedtuple("OffsetAndMetadata",
     ["offset", "metadata", "leader_epoch"], defaults=[None, '', -1])
 OffsetAndMetadata.__doc__ = """Container for committed group offset data.
