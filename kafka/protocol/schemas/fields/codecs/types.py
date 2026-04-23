@@ -60,6 +60,11 @@ class Int16(FixedCodec):
     size = 2
 
 
+class UnsignedInt16(FixedCodec):
+    fmt = 'H'
+    size = 2
+
+
 class Int32(FixedCodec):
     fmt = 'i'
     size = 4

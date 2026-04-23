@@ -24,6 +24,7 @@ from kafka.util import classproperty
 SIMPLE_TYPE_MAP = {
     'int8': 'int',
     'int16': 'int',
+    'uint16': 'int',
     'int32': 'int',
     'int64': 'int',
     'float64': 'float',

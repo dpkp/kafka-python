@@ -6,7 +6,7 @@ import pytest
 
 from kafka.protocol.schemas.fields.codecs.types import (
     Int8, Int16, Int32, Int64, Float64, Boolean, UUID,
-    UnsignedVarInt32, VarInt32, VarInt64,
+    UnsignedInt16, UnsignedVarInt32, VarInt32, VarInt64,
     String, Bytes, BitField,
 )
 
@@ -18,6 +18,9 @@ from kafka.protocol.schemas.fields.codecs.types import (
     (Int16, 0, b'\x00\x00'),
     (Int16, 32767, b'\x7f\xff'),
     (Int16, -32768, b'\x80\x00'),
+    (UnsignedInt16, 0, b'\x00\x00'),
+    (UnsignedInt16, 32768, b'\x80\x00'),
+    (UnsignedInt16, 65535, b'\xff\xff'),
     (Int32, 0, b'\x00\x00\x00\x00'),
     (Int32, 2147483647, b'\x7f\xff\xff\xff'),
     (Int32, -2147483648, b'\x80\x00\x00\x00'),
@@ -88,6 +91,12 @@ def test_error_handling():
 
     with pytest.raises(struct.error):
         Int8.decode(io.BytesIO(b'')) # Too short
+
+    with pytest.raises(struct.error):
+        UnsignedInt16.encode(-1) # Negative not allowed
+
+    with pytest.raises(struct.error):
+        UnsignedInt16.encode(65536) # Too large
 
     s = String()
     with pytest.raises(ValueError):

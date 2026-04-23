@@ -3,7 +3,7 @@ import uuid
 from .base import BaseField
 from .codecs import (
     BitField, Boolean, Bytes,
-    Float64, Int8, Int16, Int32, Int64, String, UUID
+    Float64, Int8, Int16, Int32, Int64, String, UnsignedInt16, UUID
 )
 
 
@@ -11,7 +11,7 @@ class SimpleField(BaseField):
     TYPES = {
         'int8': Int8,
         'int16': Int16,
-        #'uint16': UnsignedInt16,
+        'uint16': UnsignedInt16,
         'int32': Int32,
         #'uint32': UnsignedInt32,
         'int64': Int64,
@@ -52,7 +52,7 @@ class SimpleField(BaseField):
                 else:
                     raise ValueError('Invalid default for boolean field %s: %s' % (self._name, default))
             return bool(default)
-        elif self._type in (Int8, Int16, Int32, Int64):
+        elif self._type in (Int8, Int16, Int32, Int64, UnsignedInt16):
             if not default:
                 return 0
             if isinstance(default, str):
