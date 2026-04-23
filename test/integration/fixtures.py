@@ -186,7 +186,11 @@ class ZookeeperFixture(Fixture):
         if host is None:
             host = "127.0.0.1"
         fixture = cls(host, port, external=external)
-        fixture.open()
+        try:
+            fixture.open()
+        except:
+            fixture.close()
+            raise
         return fixture
 
     def __init__(self, host, port, external=False, tmp_dir=None):
@@ -297,7 +301,11 @@ class KafkaFixture(Fixture):
                                auto_create_topic=auto_create_topic,
                                tmp_dir=tmp_dir)
 
-        fixture.open()
+        try:
+            fixture.open()
+        except:
+            fixture.close()
+            raise
         return fixture
 
     def __init__(self, host, port, broker_id, zookeeper=None, zk_chroot=None,
