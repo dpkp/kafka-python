@@ -123,6 +123,7 @@ class NetworkSelector:
                 self.config[key] = configs[key]
 
         self._closed = False
+        self._stop = False
         self._selector = self.config['selector']()
         self._scheduled = [] # managed by heapq
         self._ready = collections.deque()
@@ -138,6 +139,19 @@ class NetworkSelector:
     def run(self):
         while self._scheduled or self._ready:
             self._poll_once()
+
+    def run_forever(self):
+        """Run the event loop until stop() is called. Intended to be driven by
+        a dedicated IO thread. Wake-ups from other threads must go through
+        call_soon_threadsafe() so the select() loop returns promptly."""
+        self._stop = False
+        while not self._stop:
+            self._poll_once()
+
+    def stop(self):
+        """Signal run_forever() to exit. Safe to call from any thread."""
+        self._stop = True
+        self.wakeup()
 
     def run_until_done(self, task_or_future):
         if not isinstance(task_or_future, (Future, Task)):

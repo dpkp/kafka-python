@@ -219,6 +219,10 @@ class KafkaAdminClient(
         # Goal: migrate all self._client calls -> self._manager (skipping compat layer)
         self._manager = self._client._manager
 
+        # Run all IO on a dedicated background thread; public admin methods
+        # block on cross-thread Events via self._manager.run(...).
+        self._manager.start()
+
         # Bootstrap on __init__
         self._manager.run(self._manager.bootstrap(timeout_ms=self.config['bootstrap_timeout_ms']))
         self._closed = False
