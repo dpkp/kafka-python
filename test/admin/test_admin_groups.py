@@ -1,6 +1,7 @@
 import pytest
 
-from kafka.admin import KafkaAdminClient, MemberToRemove
+from kafka.admin import GroupState, GroupType, KafkaAdminClient, MemberToRemove
+import kafka.errors as Errors
 from kafka.errors import (
     GroupIdNotFoundError,
     GroupSubscribedToTopicError,
@@ -8,6 +9,7 @@ from kafka.errors import (
     UnknownMemberIdError,
     UnsupportedVersionError,
 )
+from kafka.protocol.admin import ListGroupsRequest, ListGroupsResponse
 from kafka.protocol.consumer import (
     LeaveGroupRequest, LeaveGroupResponse,
     OffsetCommitRequest, OffsetCommitResponse,
@@ -426,3 +428,90 @@ class TestRemoveGroupMembersMockBroker:
                 [MemberToRemove()],
                 group_coordinator_id=0,
             )
+
+
+# ---------------------------------------------------------------------------
+# list_groups
+# ---------------------------------------------------------------------------
+
+
+def _capture_list_groups(captured, response=None):
+    def handler(api_key, api_version, correlation_id, request_bytes):
+        captured['request'] = ListGroupsRequest.decode(
+            request_bytes, version=api_version, header=True)
+        captured['version'] = api_version
+        if response is not None:
+            return response
+        return ListGroupsResponse(throttle_time_ms=0, error_code=0, groups=[])
+    return handler
+
+
+class TestListGroupsMockBroker:
+
+    def test_no_filters_uses_default_version(self, broker, admin):
+        captured = {}
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups(captured))
+        admin.list_groups()
+        req = captured['request']
+        assert req.states_filter in (None, [])
+        assert req.types_filter in (None, [])
+
+    def test_states_filter_propagates(self, broker, admin):
+        captured = {}
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups(captured))
+        admin.list_groups(states_filter=['Stable', 'Empty'])
+        assert captured['version'] >= 4
+        assert list(captured['request'].states_filter) == ['Stable', 'Empty']
+
+    def test_types_filter_propagates(self, broker, admin):
+        captured = {}
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups(captured))
+        admin.list_groups(types_filter=['consumer', 'share'])
+        assert captured['version'] >= 5
+        assert list(captured['request'].types_filter) == ['consumer', 'share']
+
+    def test_both_filters_propagate(self, broker, admin):
+        captured = {}
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups(captured))
+        admin.list_groups(states_filter=['Stable'], types_filter=['consumer'])
+        assert captured['version'] >= 5
+        assert list(captured['request'].states_filter) == ['Stable']
+        assert list(captured['request'].types_filter) == ['consumer']
+
+    def test_enum_filters_normalize_to_protocol_strings(self, broker, admin):
+        """Enum members, lowercase names, and raw protocol strings all produce
+        the canonical wire value."""
+        captured = {}
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups(captured))
+        admin.list_groups(
+            states_filter=[GroupState.STABLE, 'empty', 'preparing-rebalance'],
+            types_filter=[GroupType.CONSUMER, 'CLASSIC'])
+        assert list(captured['request'].states_filter) == [
+            'Stable', 'Empty', 'PreparingRebalance']
+        assert list(captured['request'].types_filter) == ['consumer', 'classic']
+
+    def test_response_groups_returned(self, broker, admin):
+        ListedGroup = ListGroupsResponse.ListedGroup
+        response = ListGroupsResponse(
+            throttle_time_ms=0, error_code=0,
+            groups=[
+                ListedGroup(group_id='g1', protocol_type='consumer',
+                            group_state='Stable', group_type='consumer'),
+                ListedGroup(group_id='g2', protocol_type='consumer',
+                            group_state='Empty', group_type='classic'),
+            ])
+        broker.respond_fn(ListGroupsRequest, _capture_list_groups({}, response))
+        result = admin.list_groups(states_filter=['Stable', 'Empty'],
+                                   types_filter=['consumer', 'classic'])
+        ids = sorted(g['group_id'] for g in result)
+        assert ids == ['g1', 'g2']
+
+    @pytest.mark.parametrize("broker", [(2, 3, 0)], indirect=True)
+    def test_states_filter_rejected_on_pre_518_broker(self, broker, admin):
+        with pytest.raises(Errors.IncompatibleBrokerVersion):
+            admin.list_groups(states_filter=['Stable'])
+
+    @pytest.mark.parametrize("broker", [(3, 7, 0)], indirect=True)
+    def test_types_filter_rejected_on_pre_848_broker(self, broker, admin):
+        with pytest.raises(Errors.IncompatibleBrokerVersion):
+            admin.list_groups(types_filter=['consumer'])
