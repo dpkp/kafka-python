@@ -381,9 +381,14 @@ class KafkaConsumer:
             self._metrics = None
 
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
+        self._manager = self._client._manager
 
-        # Get auto-discovered / normalized version from client
-        self.config['api_version'] = self._client.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
+        # If api_version was not passed explicitly, bootstrap to auto-discover
+        # it. bootstrap is passed as a deferred coroutine so that once the IO
+        # thread is introduced in a later phase it runs on the IO thread.
+        if self._manager.broker_version_data is None:
+            self._manager.run(self._manager.bootstrap, self.config['api_version_auto_timeout_ms'])
+        self.config['api_version'] = self._manager.broker_version
 
         # Coordinator configurations are different for older brokers
         # max_poll_interval_ms is not supported directly -- it must the be

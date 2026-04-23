@@ -224,7 +224,7 @@ class KafkaAdminClient(
         self._manager.start()
 
         # Bootstrap on __init__
-        self._manager.run(self._manager.bootstrap(timeout_ms=self.config['bootstrap_timeout_ms']))
+        self._manager.run(self._manager.bootstrap, self.config['bootstrap_timeout_ms'])
         self._closed = False
         self._controller_id = None
         self._coordinator_cache = {}  # {group_id: node_id}
