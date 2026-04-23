@@ -507,6 +507,26 @@ def test_alter_replica_log_dirs(kafka_admin_client, topic):
     assert result[tpr] is NoError
 
 
+@pytest.mark.skipif(env_kafka_version() < (4, 0), reason="DescribeQuorum requires KRaft (broker >=4.0)")
+def test_describe_metadata_quorum(kafka_admin_client):
+    result = kafka_admin_client.describe_metadata_quorum()
+    assert 'error_code' not in result
+    assert 'error_message' not in result
+    assert len(result['topics']) == 1
+    t = result['topics'][0]
+    assert t['topic_name'] == '__cluster_metadata'
+    assert len(t['partitions']) == 1
+    p = t['partitions'][0]
+    assert p['partition_index'] == 0
+    assert 'error_code' not in p
+    assert 'error_message' not in p
+    assert p['error'] is None
+    assert p['leader_id'] >= 0
+    assert p['leader_epoch'] >= 0
+    assert p['high_watermark'] >= 0
+    assert len(p['current_voters']) >= 1
+
+
 @pytest.mark.skipif(env_kafka_version() < (2, 4), reason="AlterPartitionReassignments requires broker >=2.4")
 def test_alter_partition_reassignments(kafka_admin_client, topic):
     topic_metadata = kafka_admin_client.describe_topics([topic])[0]
