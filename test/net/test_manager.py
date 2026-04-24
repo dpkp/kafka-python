@@ -1,4 +1,5 @@
 import socket
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -319,6 +320,45 @@ class TestKafkaConnectionManagerMetadataRefresh:
             assert not f.is_done
             # Should have a scheduled retry
             assert len(net._scheduled) > 0
+
+    def test_bootstrap_triggers_refresh_loop(self, net, cluster):
+        """bootstrap() schedules the periodic metadata refresh loop, so
+        update_metadata fires without anyone calling it from compat.poll()."""
+        manager = KafkaConnectionManager(net, cluster,
+                                         socket_connection_timeout_ms=1000,
+                                         reconnect_backoff_ms=10)
+        assert manager._refresh_loop_task is None
+        call_count = [0]
+        done = threading.Event()
+        orig = manager.update_metadata
+
+        def counting_update():
+            call_count[0] += 1
+            if call_count[0] >= 1:
+                done.set()
+            return orig()
+
+        with patch.object(manager, 'update_metadata', side_effect=counting_update):
+            manager.bootstrap(timeout_ms=100)
+            assert manager._refresh_loop_task is not None
+            manager.start()
+            try:
+                assert done.wait(timeout=2), "refresh loop never called update_metadata"
+            finally:
+                manager.stop(timeout=2)
+        assert call_count[0] >= 1
+
+    def test_refresh_loop_spawned_once(self, net, cluster):
+        """Calling bootstrap() multiple times must not spawn multiple refresh
+        loop tasks."""
+        manager = KafkaConnectionManager(net, cluster,
+                                         socket_connection_timeout_ms=1000,
+                                         reconnect_backoff_ms=10)
+        manager.bootstrap(timeout_ms=100)
+        task = manager._refresh_loop_task
+        assert task is not None
+        manager.bootstrap(timeout_ms=100)
+        assert manager._refresh_loop_task is task
 
 
 class TestKafkaConnectionManagerClose:
