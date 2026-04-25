@@ -113,10 +113,9 @@ class ClusterMetadata:
         else:
             self._manager.reset_backoff('metadata')
         try:
-            conn = await self._manager.get_connection(node_id)
             request = self.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
-            response = await conn.send_request(request)
+            response = await self._manager.send(request, node_id)
         except Exception as exc:
             log.error('Metadata refresh: failed %s', exc)
             self.failed_update(exc)
