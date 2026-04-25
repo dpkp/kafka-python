@@ -472,7 +472,7 @@ class KafkaConnectionManager:
     def wakeup_pair(self, timeout_secs):
         fut = Future()
         wakeup = lambda f=fut: f.success(None) if not f.is_done else None
-        timer = self._net.call_later(ttl_ms / 1000, wakeup)
+        timer = self._net.call_later(timeout_secs, wakeup)
         async def _wakeup():
             try:
                 await fut

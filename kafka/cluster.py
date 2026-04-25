@@ -98,8 +98,11 @@ class ClusterMetadata:
                 except Exception as exc:
                     log.debug('Metadata refresh failed: %s', exc)
                 continue
-            wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
-            await wakeup
+            try:
+                wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
+                await wakeup()
+            except Exception as exc:
+                log.error('_refresh_loop: %s', exc)
 
     async def refresh_metadata(self, node_id=None):
         log.debug(f'Metadata refresh (node_id={node_id})')
