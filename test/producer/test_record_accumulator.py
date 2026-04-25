@@ -1,4 +1,5 @@
 # pylint: skip-file
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,7 +15,7 @@ def tp():
 
 @pytest.fixture
 def cluster(tp, mocker):
-    metadata = ClusterMetadata()
+    metadata = ClusterMetadata(MagicMock())
     mocker.patch.object(metadata, 'leader_for_partition', return_value=0)
     mocker.patch.object(metadata, 'partitions_for_broker', return_value=[tp])
     return metadata

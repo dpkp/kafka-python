@@ -20,8 +20,7 @@ def cluster():
 
 
 class TestClusterMetadataUpdateMetadata:
-    def test_empty_broker_list(self):
-        cluster = ClusterMetadata()
+    def test_empty_broker_list(self, cluster):
         assert len(cluster.brokers()) == 0
 
         cluster.update_metadata(MetadataResponse[0](
@@ -35,8 +34,7 @@ class TestClusterMetadataUpdateMetadata:
         assert len(cluster.brokers()) == 2
 
     @pytest.mark.parametrize('version', range(0, MetadataResponse.max_version + 1))
-    def test_metadata(self, version):
-        cluster = ClusterMetadata()
+    def test_metadata(self, cluster, version):
         topic = Topic(
             version=version,
             error_code=0,
@@ -85,8 +83,7 @@ class TestClusterMetadataUpdateMetadata:
         else:
             assert cluster._partitions['topic-1'][0].leader_epoch == -1
 
-    def test_unauthorized_topic(self):
-        cluster = ClusterMetadata()
+    def test_unauthorized_topic(self, cluster):
         cluster.set_topics(['unauthorized-topic'])
         assert len(cluster.brokers()) == 0
 
@@ -102,8 +99,7 @@ class TestClusterMetadataUpdateMetadata:
 
 
 class TestClusterMetadataTopics:
-    def test_set_topics(self):
-        cluster = ClusterMetadata()
+    def test_set_topics(self, cluster):
         cluster._need_update = False
 
         fut = cluster.set_topics(['t1', 't2'])

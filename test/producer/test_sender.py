@@ -4,7 +4,7 @@ import collections
 import io
 import math
 import time
-from unittest.mock import call
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -86,13 +86,18 @@ def producer_batch(topic='foo', partition=0, magic=2):
 
 
 @pytest.fixture
-def transaction_manager():
+def cluster():
+    return ClusterMetadata(MagicMock())
+
+
+@pytest.fixture
+def transaction_manager(cluster):
     return TransactionManager(
         transactional_id=None,
         transaction_timeout_ms=60000,
         retry_backoff_ms=100,
         api_version=(2, 1),
-        metadata=ClusterMetadata())
+        metadata=cluster)
 
 
 @pytest.mark.parametrize(("api_version", "produce_version"), [
@@ -1017,6 +1022,7 @@ class TestTransactionManagerLastAckedOffset:
 
 
 class TestKip360SenderIntegration:
+
     def _make_txn_manager(self, transactional_id=None):
         """Transaction manager on a KIP-360-capable broker version with a
         valid producer_id already set (simulating post-InitProducerId state)."""
@@ -1026,7 +1032,7 @@ class TestKip360SenderIntegration:
             transaction_timeout_ms=60000,
             retry_backoff_ms=100,
             api_version=(2, 5),
-            metadata=ClusterMetadata(),
+            metadata=ClusterMetadata(MagicMock()),
         )
         tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
         tm._current_state = _TS.READY
@@ -1100,7 +1106,7 @@ class TestKip360SenderIntegration:
             transaction_timeout_ms=60000,
             retry_backoff_ms=100,
             api_version=(2, 0),  # pre-KIP-360
-            metadata=ClusterMetadata(),
+            metadata=ClusterMetadata(MagicMock()),
         )
         tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
         tm._current_state = _TS.READY

@@ -1,4 +1,5 @@
 # pylint: skip-file
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,7 +27,7 @@ def _make_manager(transactional_id=None, api_version=(2, 5)):
         transaction_timeout_ms=60000,
         retry_backoff_ms=100,
         api_version=api_version,
-        metadata=ClusterMetadata(),
+        metadata=ClusterMetadata(MagicMock()),
     )
 
 
