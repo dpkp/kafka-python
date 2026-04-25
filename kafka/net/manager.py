@@ -99,6 +99,7 @@ class KafkaConnectionManager:
     async def _do_bootstrap(self, deadline):
         while deadline is None or time.monotonic() < deadline:
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
+            log.debug('Attempting bootstrap with %s', bootstrap_broker)
             try:
                 conn = self.get_connection(bootstrap_broker.node_id,
                                            pop_on_close=False,
@@ -112,7 +113,6 @@ class KafkaConnectionManager:
                 await self._net.sleep(delay)
                 continue
 
-            log.debug('Attempting bootstrap with %s', bootstrap_broker)
             try:
                 await conn
             except Errors.IncompatibleBrokerVersion:
@@ -147,6 +147,7 @@ class KafkaConnectionManager:
         if self._bootstrap_future is not None and not self._bootstrap_future.is_done:
             return self._bootstrap_future
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
+        log.debug('Starting new bootstrap')
         self._bootstrap_future = self.call_soon(self._do_bootstrap, deadline)
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
