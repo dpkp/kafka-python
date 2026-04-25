@@ -20,6 +20,8 @@ class KafkaNetClient:
     KafkaConnectionManager directly (fire-and-forget via _request_buffer).
     """
     def __init__(self, **configs):
+        # _lock is still used by the legacy Coordinator (kafka/coordinator/base.py).
+        # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
         self._net = NetworkSelector(**configs)
         cluster = ClusterMetadata(
@@ -129,6 +131,10 @@ class KafkaNetClient:
     # Delegation
 
     def poll(self, timeout_ms=None, future=None):
+        # _lock serializes with HeartbeatThread, which also drives poll()
+        # while holding this lock. Without it, both threads would call
+        # _net.poll() concurrently and race on selector / task state.
+        # The lock goes away once HeartbeatThread does (Phase D).
         with self._lock:
             return self._manager.poll(timeout_ms=timeout_ms, future=future)
 

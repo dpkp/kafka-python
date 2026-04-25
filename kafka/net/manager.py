@@ -63,14 +63,13 @@ class KafkaConnectionManager:
 
         self._net = net
         self.cluster = cluster
+        self.cluster.attach(net, self._do_update_metadata)
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
         self.close_idle_connections()
         self.broker_version_data = None
         self._bootstrap_future = None
-        self._metadata_future = None
-        self._refresh_loop_task = None
         self._io_thread = None
         self._pending_waiters = {}  # event -> state dict, for pending run() waiters
         self._pending_waiters_lock = threading.Lock()
@@ -145,8 +144,7 @@ class KafkaConnectionManager:
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
         self._bootstrap_future = self.call_soon(self._do_bootstrap, deadline)
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
-        if self._refresh_loop_task is None:
-            self._refresh_loop_task = self._net.call_soon(self._metadata_refresh_loop)
+        self.cluster.start_refresh_loop()
         return self._bootstrap_future
 
     def bootstrap(self, timeout_ms=None):
@@ -322,11 +320,12 @@ class KafkaConnectionManager:
         return max(0, self._backoff[node_id][1] - time.monotonic())
 
     def update_metadata(self):
-        if self._metadata_future is not None and not self._metadata_future.is_done:
-            return self._metadata_future
-        self.cluster.request_update()
-        self._metadata_future = self.call_soon(self._do_update_metadata)
-        return self._metadata_future
+        """Trigger a metadata refresh. Returns a Future resolved on completion.
+
+        Thin wrapper over cluster.request_update(); the cluster owns the
+        refresh loop and will pick this up on the next tick.
+        """
+        return self.cluster.request_update()
 
     async def _do_update_metadata(self):
         while True:
@@ -350,25 +349,6 @@ class KafkaConnectionManager:
             except Exception as exc:
                 self.cluster.failed_update(exc)
                 raise
-
-    async def _metadata_refresh_loop(self):
-        """Long-running coroutine that owns periodic metadata refresh.
-
-        Sleeps for cluster.ttl() then triggers update_metadata(). Exits with
-        the event loop — stop() tears down the loop and this task with it.
-        """
-        while True:
-            ttl_ms = self.cluster.ttl()
-            if ttl_ms > 0:
-                log.debug(f'Metadata loop: sleeping for {ttl_ms / 1000} secs')
-                await self._net.sleep(ttl_ms / 1000)
-                continue
-            try:
-                log.debug(f'Metadata loop: updating metadata')
-                await self.update_metadata()
-            except Exception as exc:
-                log.debug('Metadata refresh failed: %s', exc)
-                # failed_update() already set backoff; loop re-reads ttl
 
     def close(self, node_id=None):
         if node_id is not None:

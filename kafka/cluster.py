@@ -66,6 +66,11 @@ class ClusterMetadata:
         self.cluster_id = None
         self.metadata_refresh_in_progress = False
 
+        self._net = None
+        self._fetch_callback = None
+        self._refresh_loop_task = None
+        self._wakeup_future = None
+
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -73,6 +78,56 @@ class ClusterMetadata:
 
         self._bootstrap_brokers = self._generate_bootstrap_brokers()
         self._coordinator_brokers = {}
+
+    def attach(self, net, fetch_callback):
+        """Wire up the event loop and async metadata-fetch callback.
+
+        `fetch_callback` is awaited each refresh cycle; it should drive a
+        single MetadataRequest end-to-end and call self.update_metadata() /
+        self.failed_update() before returning.
+        """
+        self._net = net
+        self._fetch_callback = fetch_callback
+
+    def start_refresh_loop(self):
+        """Spawn the periodic refresh coroutine. Idempotent. Requires attach()."""
+        if self._refresh_loop_task is not None:
+            return
+        if self._net is None or self._fetch_callback is None:
+            raise RuntimeError('start_refresh_loop requires prior attach()')
+        self._refresh_loop_task = self._net.call_soon(self._refresh_loop)
+
+    async def _refresh_loop(self):
+        """Awaits ttl() then triggers refresh; request_update() wakes us early."""
+        while True:
+            ttl_ms = self.ttl()
+            if ttl_ms == 0:
+                try:
+                    await self._fetch_callback()
+                except Exception as exc:
+                    log.debug('Metadata refresh failed: %s', exc)
+                continue
+            fut = Future()
+            self._wakeup_future = fut
+            timer = self._net.call_later(
+                ttl_ms / 1000,
+                lambda f=fut: f.success(None) if not f.is_done else None,
+            )
+            try:
+                await fut
+            finally:
+                self._wakeup_future = None
+                if not timer.is_done:
+                    try:
+                        self._net.unschedule(timer)
+                    except (ValueError, RuntimeError):
+                        pass
+
+    def _notify_wakeup(self):
+        # Runs on the event loop thread.
+        fut = self._wakeup_future
+        if fut is not None and not fut.is_done:
+            fut.success(None)
 
     def _generate_bootstrap_brokers(self):
         # collect_hosts does not perform DNS, so we should be fine to re-use
@@ -258,7 +313,10 @@ class ClusterMetadata:
             self._need_update = True
             if not self._future or self._future.is_done:
                 self._future = Future()
-            return self._future
+            ret = self._future
+        if self._net is not None:
+            self._net.call_soon_threadsafe(self._notify_wakeup)
+        return ret
 
     @property
     def need_update(self):

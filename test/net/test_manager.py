@@ -298,10 +298,10 @@ class TestKafkaConnectionManagerMetadataRefresh:
         conn.send_request.return_value = Future()
         manager._conns['node-1'] = conn
         with patch.object(cluster, 'brokers', return_value=[MagicMock(node_id='node-1')]):
+            cluster.start_refresh_loop()
             f = manager.update_metadata()
-            # Run the scheduled _refresh_metadata task
+            # Drive the cluster refresh loop
             net.poll(timeout_ms=100)
-            # Should have called send_request on the connection
             assert conn.send_request.called
 
     def test_refresh_metadata_retries_no_node(self, net, cluster):
@@ -310,6 +310,7 @@ class TestKafkaConnectionManagerMetadataRefresh:
                                          reconnect_backoff_ms=50)
         # No connected nodes, empty cluster
         with patch.object(cluster, 'brokers', return_value=[]):
+            cluster.start_refresh_loop()
             f = manager.update_metadata()
             net.poll(timeout_ms=0)
             # Should not have resolved yet (retry scheduled)
@@ -318,28 +319,28 @@ class TestKafkaConnectionManagerMetadataRefresh:
             assert len(net._scheduled) > 0
 
     def test_bootstrap_triggers_refresh_loop(self, net, cluster):
-        """bootstrap() schedules the periodic metadata refresh loop, so
-        update_metadata fires without anyone calling it from compat.poll()."""
+        """bootstrap() schedules the periodic metadata refresh loop on the
+        cluster, so refresh fires without anyone calling it from compat.poll()."""
         manager = KafkaConnectionManager(net, cluster,
                                          socket_connection_timeout_ms=1000,
                                          reconnect_backoff_ms=10)
-        assert manager._refresh_loop_task is None
+        assert cluster._refresh_loop_task is None
         call_count = [0]
         done = threading.Event()
-        orig = manager.update_metadata
+        orig = manager._do_update_metadata
 
-        def counting_update():
+        async def counting_update():
             call_count[0] += 1
-            if call_count[0] >= 1:
-                done.set()
-            return orig()
+            done.set()
+            return await orig()
 
-        with patch.object(manager, 'update_metadata', side_effect=counting_update):
+        with patch.object(manager, '_do_update_metadata', side_effect=counting_update):
+            cluster.attach(net, manager._do_update_metadata)
             manager.bootstrap(timeout_ms=100)
-            assert manager._refresh_loop_task is not None
+            assert cluster._refresh_loop_task is not None
             manager.start()
             try:
-                assert done.wait(timeout=2), "refresh loop never called update_metadata"
+                assert done.wait(timeout=2), "refresh loop never called _do_update_metadata"
             finally:
                 manager.stop(timeout=2)
         assert call_count[0] >= 1
@@ -351,10 +352,10 @@ class TestKafkaConnectionManagerMetadataRefresh:
                                          socket_connection_timeout_ms=1000,
                                          reconnect_backoff_ms=10)
         manager.bootstrap(timeout_ms=100)
-        task = manager._refresh_loop_task
+        task = cluster._refresh_loop_task
         assert task is not None
         manager.bootstrap(timeout_ms=100)
-        assert manager._refresh_loop_task is task
+        assert cluster._refresh_loop_task is task
 
 
 class TestKafkaConnectionManagerClose:
