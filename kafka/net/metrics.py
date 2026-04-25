@@ -1,7 +1,4 @@
 """Metrics for kafka.net connection manager and connections.
-
-Mirrors the metrics from kafka/client_async.py (KafkaClientMetrics)
-and kafka/conn.py (BrokerConnectionMetrics).
 """
 import logging
 

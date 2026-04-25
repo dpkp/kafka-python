@@ -35,22 +35,8 @@ class TestSSLConnection:
         assert ssock.version() is not None
         ssock.close()
 
-    def test_kafka_client_ssl(self, ssl_kafka):
-        """Test KafkaClient can connect and fetch metadata over SSL."""
-        from kafka.client_async import KafkaClient
-
-        client = KafkaClient(
-            bootstrap_servers='localhost:%d' % ssl_kafka.port,
-            security_protocol='SSL',
-            ssl_cafile=os.path.join(ssl_kafka.ssl_dir, 'ca-cert'),
-            ssl_check_hostname=False,
-            api_version=env_kafka_version(),
-        )
-        assert client.broker_version_data
-        client.close()
-
     def test_legacy_kafka_client_ssl(self, ssl_kafka):
-        """Test LegacyKafkaClient (kafka.net) can connect over SSL."""
+        """Test KafkaNetClient (kafka.net) can connect over SSL."""
         from kafka.net.compat import KafkaNetClient
 
         client = KafkaNetClient(

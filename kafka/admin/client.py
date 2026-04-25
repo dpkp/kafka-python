@@ -121,8 +121,9 @@ class KafkaAdminClient(
             providing a file, only the leaf certificate will be checked against
             this CRL. Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set
-            to None, KafkaClient will attempt to infer the broker version by
-            probing various APIs. Example: (0, 10, 2). Default: None
+            to None, KafkaConnectionManager will attempt to infer the
+            broker version by probing various APIs. Example: (0, 10, 2).
+            Default: None
         bootstrap_timeout_ms (int): number of milliseconds to throw a
             timeout exception from the constructor when bootstrapping.
             Default: 2000.
@@ -149,7 +150,7 @@ class KafkaAdminClient(
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
         socks5_proxy (str): Socks5 proxy url. Default: None
-        kafka_client (callable): Custom class / callable for creating KafkaClient instances
+        kafka_client (callable): Custom class / callable for creating KafkaNetClient instances
     """
     DEFAULT_CONFIG = {
         # client configs

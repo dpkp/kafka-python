@@ -1,2 +1,0 @@
-.. autoclass:: kafka.KafkaClient
-    :members:

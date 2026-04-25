@@ -3,7 +3,6 @@ import time
 
 import pytest
 
-from kafka.client_async import KafkaClient
 from kafka.consumer.subscription_state import SubscriptionState, ConsumerRebalanceListener
 from kafka.coordinator.assignors.abstract import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment,
@@ -43,8 +42,8 @@ def test_init(client, coordinator):
 
 
 @pytest.mark.parametrize("api_version", [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_autocommit_enable_api_version(conn, metrics, api_version):
-    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+def test_autocommit_enable_api_version(client, metrics, api_version):
+    coordinator = ConsumerCoordinator(client,
                                       SubscriptionState(),
                                       metrics=metrics,
                                       enable_auto_commit=True,
@@ -90,8 +89,8 @@ def test_group_protocols(coordinator):
 
 
 @pytest.mark.parametrize('api_version', [(0, 8, 0), (0, 8, 1), (0, 8, 2), (0, 9)])
-def test_pattern_subscription(conn, metrics, api_version):
-    coordinator = ConsumerCoordinator(KafkaClient(api_version=api_version),
+def test_pattern_subscription(client, metrics, api_version):
+    coordinator = ConsumerCoordinator(client,
                                       SubscriptionState(),
                                       metrics=metrics,
                                       api_version=api_version,
@@ -384,12 +383,11 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
         ((0, 9), 'foobar', True, None, True, True, False, False),
         ((0, 9), None, True, None, False, False, True, False),
     ])
-def test_maybe_auto_commit_offsets_sync(mocker, api_version, group_id, enable,
+def test_maybe_auto_commit_offsets_sync(mocker, client, api_version, group_id, enable,
                                         error, has_auto_commit, commit_offsets,
                                         warn, exc):
     mock_warn = mocker.patch('kafka.coordinator.consumer.log.warning')
     mock_exc = mocker.patch('kafka.coordinator.consumer.log.exception')
-    client = KafkaClient(api_version=api_version)
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
                                       api_version=api_version,
                                       session_timeout_ms=30000,
@@ -462,7 +460,7 @@ def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
 def test_send_offset_commit_request_versions(patched_coord, offsets,
                                              api_version, version):
     expect_node = 0
-    patched_coord._client.broker_version_data = BrokerVersionData(api_version)
+    patched_coord._client._manager.broker_version_data = BrokerVersionData(api_version)
 
     patched_coord._send_offset_commit_request(offsets)
     (node, request), _ = patched_coord._client.send.call_args
@@ -577,7 +575,7 @@ def test_send_offset_fetch_request_versions(patched_coord, partitions,
                                             api_version, version):
     # assuming fixture sets coordinator=0, least_loaded_node=1
     expect_node = 0
-    patched_coord._client.broker_version_data = BrokerVersionData(api_version)
+    patched_coord._client._manager.broker_version_data = BrokerVersionData(api_version)
 
     patched_coord._send_offset_fetch_request(partitions)
     (node, request), _ = patched_coord._client.send.call_args

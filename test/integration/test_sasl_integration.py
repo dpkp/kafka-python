@@ -7,7 +7,7 @@ import pytest
 
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
-from kafka.client_async import KafkaClient
+from kafka.net.compat import KafkaNetClient
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 from test.integration.fixtures import client_params, create_topics
@@ -73,7 +73,7 @@ def test_client(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
     create_topics(sasl_kafka, [topic_name], num_partitions=1)
 
-    client = KafkaClient(**client_params(sasl_kafka, 'client'))
+    client = KafkaNetClient(**client_params(sasl_kafka, 'client'))
     request = MetadataRequest(topics=None, version=1)
     timeout_at = time.time() + 1
     while not client.is_ready(0):

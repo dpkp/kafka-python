@@ -726,18 +726,16 @@ def get_api_versions():
     k = KafkaFixture.instance(0)
     zk = k.zookeeper
 
-    from kafka.client_async import KafkaClient
-    client = KafkaClient(bootstrap_servers='localhost:{}'.format(k.port))
-    client.check_version()
+    try:
+        from kafka.admin import KafkaAdminClient
+        client = KafkaAdminClient(bootstrap_servers='localhost:{}'.format(k.port))
+        print(client.api_versions())
+        client.close()
 
-    from pprint import pprint
-
-    print(client.get_api_versions())
-
-    client.close()
-    k.close()
-    if zk:
-        zk.close()
+    finally:
+        k.close()
+        if zk:
+            zk.close()
 
 
 def run_brokers(args=()):

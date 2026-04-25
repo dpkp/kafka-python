@@ -8,7 +8,6 @@ from unittest.mock import call
 
 import pytest
 
-from kafka.client_async import KafkaClient
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
@@ -103,7 +102,7 @@ def transaction_manager():
     ((0, 8, 0), 0)
 ])
 def test_produce_request(sender, api_version, produce_version):
-    sender._client.broker_version_data = BrokerVersionData(api_version)
+    sender._client._manager.broker_version_data = BrokerVersionData(api_version)
     magic = KafkaProducer.max_usable_produce_magic(api_version)
     batch = producer_batch(magic=magic)
     produce_request = sender._produce_request(0, 0, 0, [batch])
@@ -115,7 +114,7 @@ def test_produce_request(sender, api_version, produce_version):
     ((2, 1), 7),
 ])
 def test_create_produce_requests(sender, api_version, produce_version):
-    sender._client.broker_version_data = BrokerVersionData(api_version)
+    sender._client._manager.broker_version_data = BrokerVersionData(api_version)
     tp = TopicPartition('foo', 0)
     magic = KafkaProducer.max_usable_produce_magic(api_version)
     batches_by_node = collections.defaultdict(list)
