@@ -131,7 +131,6 @@ class ClusterMetadata:
         # Success!
         log.debug('Metadata refresh: success')
         self.update_metadata(response)
-        return True
 
     def _generate_bootstrap_brokers(self):
         # collect_hosts does not perform DNS, so we should be fine to re-use
