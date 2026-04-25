@@ -4,7 +4,7 @@ import collections
 import io
 import math
 import time
-from unittest.mock import MagicMock, call
+from unittest.mock import call
 
 import pytest
 
@@ -83,11 +83,6 @@ def producer_batch(topic='foo', partition=0, magic=2):
     batch.try_append(0, None, b'msg', [])
     batch.records.close()
     return batch
-
-
-@pytest.fixture
-def cluster():
-    return ClusterMetadata(MagicMock())
 
 
 @pytest.fixture
@@ -1032,7 +1027,7 @@ class TestKip360SenderIntegration:
             transaction_timeout_ms=60000,
             retry_backoff_ms=100,
             api_version=(2, 5),
-            metadata=ClusterMetadata(MagicMock()),
+            metadata=ClusterMetadata(),
         )
         tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
         tm._current_state = _TS.READY
@@ -1106,7 +1101,7 @@ class TestKip360SenderIntegration:
             transaction_timeout_ms=60000,
             retry_backoff_ms=100,
             api_version=(2, 0),  # pre-KIP-360
-            metadata=ClusterMetadata(MagicMock()),
+            metadata=ClusterMetadata(),
         )
         tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1234, 5))
         tm._current_state = _TS.READY

@@ -5,18 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kafka.cluster import ClusterMetadata, collect_hosts
+from kafka.cluster import collect_hosts
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse
 
 Broker = MetadataResponse.MetadataResponseBroker
 Topic = MetadataResponse.MetadataResponseTopic
 Partition = Topic.MetadataResponsePartition
-
-
-@pytest.fixture
-def cluster():
-    return ClusterMetadata(MagicMock())
 
 
 class TestClusterMetadataUpdateMetadata:

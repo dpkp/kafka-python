@@ -20,8 +20,8 @@ def net():
 
 
 @pytest.fixture
-def cluster(manager):
-    return ClusterMetadata(manager, bootstrap_servers=['localhost:9092'])
+def cluster():
+    return ClusterMetadata(bootstrap_servers=['localhost:9092'])
 
 
 @pytest.fixture

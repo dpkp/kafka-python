@@ -1,6 +1,7 @@
 import pytest
 
 from .mock_broker import MockBroker
+from kafka.cluster import ClusterMetadata
 from kafka.net.compat import KafkaNetClient
 from kafka.net.manager import KafkaConnectionManager
 from kafka.net.selector import NetworkSelector
@@ -66,3 +67,8 @@ def manager(broker):
         yield manager
     finally:
         manager.close()
+
+
+@pytest.fixture
+def cluster():
+    return ClusterMetadata()

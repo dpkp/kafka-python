@@ -1,18 +1,11 @@
 import gc
 import platform
 import threading
-from unittest.mock import MagicMock
 
 import pytest
 
 from kafka import KafkaProducer
-from kafka.cluster import ClusterMetadata
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
-
-
-@pytest.fixture
-def cluster():
-    return ClusterMetadata(MagicMock())
 
 
 def test_kafka_producer_thread_close():

@@ -66,10 +66,10 @@ class KafkaConnectionManager:
 
         self._net = net
         self.cluster = ClusterMetadata(
-            self,
             bootstrap_servers=self.config['bootstrap_servers'],
             metadata_max_age_ms=self.config['metadata_max_age_ms'],
         )
+        self.cluster.attach(self)
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
@@ -123,7 +123,7 @@ class KafkaConnectionManager:
                 continue
 
             try:
-                await self.cluster.refresh_metadata(bootstrap_broker.node_id)
+                await self.cluster.refresh_metadata(self, bootstrap_broker.node_id)
                 if not self.cluster.brokers():
                     log.warning('Bootstrap metadata response has no brokers. Retrying.')
                     self.update_backoff(bootstrap_broker.node_id)
