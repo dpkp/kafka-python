@@ -167,54 +167,23 @@ class TestKafkaConnectionManagerBootstrap:
         manager._bootstrap_future.success(True)
         assert manager.bootstrapped
 
-    def test_bootstrap_retries_empty_brokers(self, net):
-        manager = KafkaConnectionManager(net,
-                                         bootstrap_servers=['localhost:9092'],
-                                         socket_connection_timeout_ms=1000,
-                                         reconnect_backoff_ms=10)
+    def test_bootstrap_retries_empty_brokers(self, manager):
         cluster = manager.cluster
-        class MockConn(MagicMock):
-            def __await__(self):
-                yield self.init_future
-                return self
 
-        conn = MockConn()
-        conn.connected = True
-        conn.init_future = Future()
-        conn.init_future.success(True)
-        conn.close_future = Future()
-        conn.paused = set()
-        conn.in_flight_requests = []
-
-        call_count = [0]
-        def mock_send_request(request):
-            call_count[0] += 1
-            f = Future()
-            f.success(MagicMock())
-            return f
-        conn.send_request.side_effect = mock_send_request
-
-        # The bootstrap loop closes/pops the conn in a `finally` on every
-        # iteration, so patch get_connection to hand back the same mock on
-        # each retry instead of letting the manager open a fresh real socket.
-        def mock_get_connection(node_id, **kwargs):
-            if manager.connection_delay(node_id) > 0:
-                raise Errors.NodeNotReadyError(node_id)
-            manager._conns[node_id] = conn
-            return conn
-
-        # First update_metadata leaves brokers empty; second populates them.
+        # First metadata update leaves brokers empty; second populates them.
         # The real update_metadata also clears metadata_refresh_in_progress
         # so subsequent metadata_request() calls don't raise.
+        call_count = [0]
         def mock_update_metadata(response):
+            call_count[0] += 1
             cluster.metadata_refresh_in_progress = False
             if call_count[0] >= 2:
                 cluster._brokers = {1: MagicMock(node_id=1)}
 
-        with patch.object(manager, 'get_connection', side_effect=mock_get_connection), \
-             patch.object(cluster, 'update_metadata', side_effect=mock_update_metadata):
+        with patch.object(cluster, 'update_metadata', side_effect=mock_update_metadata):
             manager.bootstrap(timeout_ms=2000)
 
+        assert manager.bootstrapped
         assert call_count[0] >= 2
 
 
