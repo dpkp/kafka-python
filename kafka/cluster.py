@@ -120,11 +120,14 @@ class ClusterMetadata:
         try:
             request = self.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
+            self.metadata_refresh_in_progress = True
             response = await manager.send(request, node_id)
         except Exception as exc:
             log.error('Metadata refresh: failed %s', exc)
             self.failed_update(exc)
             raise
+        finally:
+            self.metadata_refresh_in_progress = False
         # Success!
         log.debug('Metadata refresh: success')
         self.update_metadata(response)
@@ -348,10 +351,6 @@ class ClusterMetadata:
             return topics
 
     def metadata_request(self):
-        if self.metadata_refresh_in_progress:
-            raise RuntimeError('MetadataRequest currently in-flight!')
-        else:
-            self.metadata_refresh_in_progress = True
         if self.need_all_topic_metadata:
             topics = MetadataRequest.ALL_TOPICS
         elif not self._topics:
@@ -374,7 +373,6 @@ class ClusterMetadata:
                 f = self._future
                 self._future = None
         self._last_refresh_ms = time.monotonic() * 1000
-        self.metadata_refresh_in_progress = False
         if f:
             f.failure(exception)
 
@@ -468,7 +466,6 @@ class ClusterMetadata:
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
         self._last_successful_refresh_ms = now
-        self.metadata_refresh_in_progress = False
 
         if f:
             # In the common case where we ask for a single topic and get back an
