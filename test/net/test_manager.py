@@ -153,7 +153,7 @@ class TestKafkaConnectionManagerBootstrap:
                                          socket_connection_timeout_ms=500,
                                          reconnect_backoff_ms=10,
                                          reconnect_backoff_max_ms=100)
-        with pytest.raises(Errors.KafkaConnectionError):
+        with pytest.raises(Errors.KafkaTimeoutError):
             manager.bootstrap(timeout_ms=2000)
         assert not manager._conns
         failures, _ = manager._backoff['bootstrap-0']
