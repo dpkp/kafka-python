@@ -2,6 +2,8 @@ import pytest
 
 from .mock_broker import MockBroker
 from kafka.net.compat import KafkaNetClient
+from kafka.net.manager import KafkaConnectionManager
+from kafka.net.selector import NetworkSelector
 from kafka.protocol.metadata import MetadataResponse
 
 
@@ -49,3 +51,18 @@ def client(broker):
         yield cli
     finally:
         cli.close()
+
+
+@pytest.fixture
+def manager(broker):
+    manager = KafkaConnectionManager(
+        NetworkSelector(),
+        bootstrap_servers='%s:%d' % (broker.host, broker.port),
+        api_version=broker.broker_version,
+        request_timeout_ms=5000,
+    )
+    broker.attach(manager)
+    try:
+        yield manager
+    finally:
+        manager.close()
