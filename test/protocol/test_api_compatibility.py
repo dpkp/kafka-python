@@ -293,8 +293,3 @@ def test_tagged_fields_retention():
     assert decoded_unknown.unknown_tags is not None
     assert '_99' in decoded_unknown.unknown_tags
     assert decoded_unknown.unknown_tags['_99'] == b'\x01\x02\x03'
-
-
-def test_new_class_len():
-    # Used by kafka/client_async.py api_version()
-    assert len(NewApiVersionsRequest) == NewApiVersionsRequest.max_version + 1

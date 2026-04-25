@@ -101,7 +101,7 @@ def test_send_fetches(fetcher, topic, mocker):
     ((0, 8, 2), 0)
 ])
 def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
-    fetcher._client.broker_version_data = BrokerVersionData(api_version)
+    fetcher._client._manager.broker_version_data = BrokerVersionData(api_version)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
     mocker.patch.object(fetcher._client, "ready", return_value=True)

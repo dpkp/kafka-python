@@ -1,5 +1,9 @@
 import pytest
 
+from .mock_broker import MockBroker
+from kafka.net.compat import KafkaNetClient
+from kafka.protocol.metadata import MetadataResponse
+
 
 @pytest.fixture
 def metrics():
@@ -13,40 +17,35 @@ def metrics():
 
 
 @pytest.fixture
-def conn(mocker):
-    """Return a connection mocker fixture"""
-    from kafka.conn import ConnectionStates
-    from kafka.future import Future
-    from kafka.protocol.metadata import MetadataResponse
-    conn = mocker.patch('kafka.client_async.BrokerConnection')
-    conn.return_value = conn
-    conn.state = ConnectionStates.CONNECTED
-    conn.send.return_value = Future().success(
-        MetadataResponse[0](
-            [(0, 'foo', 12), (1, 'bar', 34)],  # brokers
-            []))  # topics
-    conn.connection_delay.return_value = 0
-    conn.blacked_out.return_value = False
-    conn.next_ifr_request_timeout_ms.return_value = float('inf')
-    def _set_conn_state(state):
-        conn.state = state
-        return state
-    conn._set_conn_state = _set_conn_state
-    conn.connect.side_effect = lambda: conn.state
-    conn.connecting = lambda: conn.state in (ConnectionStates.CONNECTING,
-                                             ConnectionStates.HANDSHAKE)
-    conn.connected = lambda: conn.state is ConnectionStates.CONNECTED
-    conn.disconnected = lambda: conn.state is ConnectionStates.DISCONNECTED
-    return conn
+def broker(request):
+    """
+    To set broker version, use indirect parametrize:
+
+    @pytest.mark.parametrize("broker", [(2, 3)], indirect=True)
+    """
+    broker_version = getattr(request, 'param', (4, 2))
+    return MockBroker(broker_version=broker_version)
 
 
 @pytest.fixture
-def client(conn, mocker):
-    from kafka.client_async import KafkaClient
+def multi_broker(broker):
+    Broker = MetadataResponse.MetadataResponseBroker
+    broker.set_metadata(brokers=[
+        Broker(node_id=0, host=broker.host, port=broker.port, rack=None),
+        Broker(node_id=1, host=broker.host, port=broker.port, rack=None),
+    ])
+    return broker
 
-    cli = KafkaClient(api_version=(0, 9))
-    mocker.patch.object(cli, '_init_connect', return_value=True)
+
+@pytest.fixture
+def client(broker):
+    cli = KafkaNetClient(
+        bootstrap_servers='%s:%d' % (broker.host, broker.port),
+        api_version=broker.broker_version,
+        request_timeout_ms=5000,
+    )
+    broker.attach(cli._manager)
     try:
         yield cli
     finally:
-        cli._close()
+        cli.close()

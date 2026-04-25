@@ -271,7 +271,7 @@ class KafkaConsumer:
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
         socks5_proxy (str): Socks5 proxy URL. Default: None
-        kafka_client (callable): Custom class / callable for creating KafkaClient instances
+        kafka_client (callable): Custom class / callable for creating KafkaNetClient instances
 
     Note:
         Configuration parameters are described in more detail at
