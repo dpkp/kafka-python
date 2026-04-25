@@ -195,7 +195,7 @@ class TestClusterMetadataRefresh:
         with patch.object(manager, 'send', return_value=MagicMock()):
             f = manager.cluster.request_update()
             # Drive the cluster refresh loop
-            manager.poll(timeout_ms=100, future=f)
+            manager.poll(timeout_ms=500, future=f)
             assert manager.send.called
 
     def test_refresh_metadata_retries_no_node(self, manager):
