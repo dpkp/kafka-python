@@ -20,28 +20,28 @@ def net():
 
 
 @pytest.fixture
-def cluster():
-    return ClusterMetadata(bootstrap_servers=['localhost:9092'])
+def cluster(manager):
+    return ClusterMetadata(manager, bootstrap_servers=['localhost:9092'])
 
 
 @pytest.fixture
-def manager(net, cluster):
-    return KafkaConnectionManager(net, cluster,
+def manager(net):
+    return KafkaConnectionManager(net,
                                   socket_connection_timeout_ms=1000,
                                   reconnect_backoff_ms=10,
                                   reconnect_backoff_max_ms=100)
 
 
 class TestKafkaConnectionManagerConfig:
-    def test_default_config(self, net, cluster):
-        m = KafkaConnectionManager(net, cluster)
+    def test_default_config(self, net):
+        m = KafkaConnectionManager(net)
         assert m.config['reconnect_backoff_ms'] == 50
         assert m.config['reconnect_backoff_max_ms'] == 30000
         assert m.config['socket_connection_timeout_ms'] == 5000
         assert m.config['max_in_flight_requests_per_connection'] == 5
 
-    def test_config_override(self, net, cluster):
-        m = KafkaConnectionManager(net, cluster, reconnect_backoff_ms=100)
+    def test_config_override(self, net):
+        m = KafkaConnectionManager(net, reconnect_backoff_ms=100)
         assert m.config['reconnect_backoff_ms'] == 100
 
     def test_initial_state(self, manager):
@@ -50,8 +50,8 @@ class TestKafkaConnectionManagerConfig:
         assert manager.broker_version_data is None
         assert not manager.bootstrapped
 
-    def test_api_versions(self, net, cluster):
-        m = KafkaConnectionManager(net, cluster, api_version=(1, 0))
+    def test_api_versions(self, net):
+        m = KafkaConnectionManager(net, api_version=(1, 0))
         assert m.broker_version_data == BrokerVersionData((1, 0))
 
 
@@ -149,8 +149,8 @@ class TestKafkaConnectionManagerBootstrap:
         assert f1 is f2
 
     def test_bootstrap_connection_failure(self, net):
-        cluster = ClusterMetadata(bootstrap_servers=['localhost:1'])
-        manager = KafkaConnectionManager(net, cluster,
+        manager = KafkaConnectionManager(net,
+                                         bootstrap_servers=['localhost:1'],
                                          socket_connection_timeout_ms=500,
                                          reconnect_backoff_ms=10,
                                          reconnect_backoff_max_ms=100)
@@ -168,11 +168,17 @@ class TestKafkaConnectionManagerBootstrap:
         assert manager.bootstrapped
 
     def test_bootstrap_retries_empty_brokers(self, net):
-        cluster = ClusterMetadata(bootstrap_servers=['localhost:9092'])
-        manager = KafkaConnectionManager(net, cluster,
+        manager = KafkaConnectionManager(net,
+                                         bootstrap_servers=['localhost:9092'],
                                          socket_connection_timeout_ms=1000,
                                          reconnect_backoff_ms=10)
-        conn = MagicMock()
+        cluster = manager.cluster
+        class MockConn(MagicMock):
+            def __await__(self):
+                yield self.init_future
+                return self
+
+        conn = MockConn()
         conn.connected = True
         conn.init_future = Future()
         conn.init_future.success(True)
@@ -192,6 +198,8 @@ class TestKafkaConnectionManagerBootstrap:
         # iteration, so patch get_connection to hand back the same mock on
         # each retry instead of letting the manager open a fresh real socket.
         def mock_get_connection(node_id, **kwargs):
+            if manager.connection_delay(node_id) > 0:
+                raise Errors.NodeNotReadyError(node_id)
             manager._conns[node_id] = conn
             return conn
 
@@ -254,8 +262,7 @@ class TestKafkaConnectionManagerConnectionTimeout:
         blocker.connect(('127.0.0.1', port))
 
         try:
-            cluster = ClusterMetadata(bootstrap_servers=['127.0.0.1:%d' % port])
-            manager = KafkaConnectionManager(net, cluster, socket_connection_timeout_ms=100)
+            manager = KafkaConnectionManager(net, bootstrap_servers=['127.0.0.1:%d' % port], socket_connection_timeout_ms=100)
             conn = manager.get_connection('bootstrap-0')
             manager.poll(timeout_ms=1000, future=conn.init_future)
             assert conn.init_future.is_done
@@ -285,8 +292,8 @@ class TestKafkaConnectionManagerMetadataRefresh:
         manager.update_metadata()
         assert manager.cluster._need_update
 
-    def test_refresh_metadata_schedules_next(self, net, cluster):
-        manager = KafkaConnectionManager(net, cluster,
+    def test_refresh_metadata_schedules_next(self, net):
+        manager = KafkaConnectionManager(net,
                                          socket_connection_timeout_ms=1000,
                                          reconnect_backoff_ms=10)
         # Simulate a connected node
@@ -304,10 +311,7 @@ class TestKafkaConnectionManagerMetadataRefresh:
             net.poll(timeout_ms=100)
             assert conn.send_request.called
 
-    def test_refresh_metadata_retries_no_node(self, net, cluster):
-        manager = KafkaConnectionManager(net, cluster,
-                                         socket_connection_timeout_ms=1000,
-                                         reconnect_backoff_ms=50)
+    def test_refresh_metadata_retries_no_node(self, manager, cluster):
         # No connected nodes, empty cluster
         with patch.object(cluster, 'brokers', return_value=[]):
             cluster.start_refresh_loop()
@@ -318,13 +322,10 @@ class TestKafkaConnectionManagerMetadataRefresh:
             # Should have a scheduled retry
             assert len(net._scheduled) > 0
 
-    def test_bootstrap_triggers_refresh_loop(self, net, cluster):
+    def test_bootstrap_triggers_refresh_loop(self, manager, cluster):
         """bootstrap() schedules the periodic metadata refresh loop on the
         cluster, so refresh fires without anyone calling it from compat.poll()."""
-        manager = KafkaConnectionManager(net, cluster,
-                                         socket_connection_timeout_ms=1000,
-                                         reconnect_backoff_ms=10)
-        assert cluster._refresh_loop_task is None
+        assert cluster._refresh_loop_future is None
         call_count = [0]
         done = threading.Event()
         orig = manager._do_update_metadata
@@ -337,7 +338,7 @@ class TestKafkaConnectionManagerMetadataRefresh:
         with patch.object(manager, '_do_update_metadata', side_effect=counting_update):
             cluster.attach(net, manager._do_update_metadata)
             manager.bootstrap(timeout_ms=100)
-            assert cluster._refresh_loop_task is not None
+            assert cluster._refresh_loop_future is not None
             manager.start()
             try:
                 assert done.wait(timeout=2), "refresh loop never called _do_update_metadata"
@@ -345,17 +346,14 @@ class TestKafkaConnectionManagerMetadataRefresh:
                 manager.stop(timeout=2)
         assert call_count[0] >= 1
 
-    def test_refresh_loop_spawned_once(self, net, cluster):
+    def test_refresh_loop_spawned_once(self, manager, cluster):
         """Calling bootstrap() multiple times must not spawn multiple refresh
         loop tasks."""
-        manager = KafkaConnectionManager(net, cluster,
-                                         socket_connection_timeout_ms=1000,
-                                         reconnect_backoff_ms=10)
         manager.bootstrap(timeout_ms=100)
-        task = cluster._refresh_loop_task
-        assert task is not None
+        future = cluster._refresh_loop_future
+        assert future is not None
         manager.bootstrap(timeout_ms=100)
-        assert cluster._refresh_loop_task is task
+        assert cluster._refresh_loop_future is future
 
 
 class TestKafkaConnectionManagerClose:

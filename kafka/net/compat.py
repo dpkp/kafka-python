@@ -4,7 +4,6 @@ import threading
 import time
 
 import kafka.errors as Errors
-from kafka.cluster import ClusterMetadata
 from kafka.net.manager import KafkaConnectionManager
 from kafka.net.selector import NetworkSelector
 
@@ -24,11 +23,7 @@ class KafkaNetClient:
         # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
         self._net = NetworkSelector(**configs)
-        cluster = ClusterMetadata(
-            bootstrap_servers=configs.get('bootstrap_servers', ['localhost:9092']),
-            metadata_max_age_ms=configs.get('metadata_max_age_ms', 300000),
-        )
-        self._manager = KafkaConnectionManager(self._net, cluster, **configs)
+        self._manager = KafkaConnectionManager(self._net, **configs)
 
     @property
     def cluster(self):

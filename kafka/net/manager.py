@@ -11,6 +11,7 @@ from .inet import create_connection
 from .connection import KafkaConnection
 from .metrics import KafkaManagerMetrics
 from .transport import KafkaSSLTransport, KafkaTCPTransport
+from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.future import Future
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 
 class KafkaConnectionManager:
     DEFAULT_CONFIG = {
+        'bootstrap_servers': 'localhost:9092',
         'client_id': 'kafka-python-' + __version__,
         'client_software_name': 'kafka-python',
         'client_software_version': __version__,
@@ -54,16 +56,20 @@ class KafkaConnectionManager:
         'api_version_auto_timeout_ms': 2000,
         'metrics': None,
         'metric_group_prefix': '',
+        'metadata_max_age_ms': 300000,
     }
-    def __init__(self, net, cluster, **configs):
+    def __init__(self, net, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
 
         self._net = net
-        self.cluster = cluster
-        self.cluster.attach(net, self._do_update_metadata)
+        self.cluster = ClusterMetadata(
+            self,
+            bootstrap_servers=self.config['bootstrap_servers'],
+            metadata_max_age_ms=self.config['metadata_max_age_ms'],
+        )
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
@@ -106,32 +112,31 @@ class KafkaConnectionManager:
                 await self._net.sleep(delay)
                 continue
 
-            if not conn.connected:
-                log.debug('Attempting bootstrap with %s', bootstrap_broker)
-                self.cluster.request_update()
-                try:
-                    await conn.init_future
-                except Errors.IncompatibleBrokerVersion:
-                    log.error('Did you attempt to connect to a kafka controller (no metadata support)?')
-                    raise
-                except Exception as exc:
-                    self._conns.pop(bootstrap_broker.node_id, conn).close(exc)
-                    continue
+            log.debug('Attempting bootstrap with %s', bootstrap_broker)
+            try:
+                await conn
+            except Errors.IncompatibleBrokerVersion:
+                log.error('Did you attempt to connect to a kafka controller (no metadata support)?')
+                raise
+            except Exception as exc:
+                self._conns.pop(bootstrap_broker.node_id, conn).close(exc)
+                continue
 
             try:
-                response = await conn.send_request(self.cluster.metadata_request())
-                self.cluster.update_metadata(response)
+                await self.cluster.refresh_metadata(bootstrap_broker.node_id)
                 if not self.cluster.brokers():
                     log.warning('Bootstrap metadata response has no brokers. Retrying.')
+                    self.update_backoff(bootstrap_broker.node_id)
                     continue
-                self.reset_backoff(bootstrap_broker.node_id)
-                log.info('Bootstrap complete: %s', self.cluster)
-                return True
             except Exception as exc:
                 log.error(f'Bootstrap attempt to {bootstrap_broker.node_id} failed: {exc}')
                 self.update_backoff(bootstrap_broker.node_id)
-                self.cluster.failed_update(exc)
                 continue
+            else:
+                self.reset_backoff(bootstrap_broker.node_id)
+                self.cluster.start_refresh_loop()
+                log.info('Bootstrap complete: %s', self.cluster)
+                return True
             finally:
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
         else:
@@ -144,7 +149,6 @@ class KafkaConnectionManager:
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
         self._bootstrap_future = self.call_soon(self._do_bootstrap, deadline)
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
-        self.cluster.start_refresh_loop()
         return self._bootstrap_future
 
     def bootstrap(self, timeout_ms=None):
@@ -217,8 +221,9 @@ class KafkaConnectionManager:
             transport = await self._build_transport(node)
             conn.connection_made(transport)
             await conn.init_future
-        except Exception as e:
-            conn.connection_lost(e)
+        except Exception as exc:
+            log.error('Connection failed: %s', exc)
+            conn.connection_lost(exc)
             self.update_backoff(node.node_id)
             return
 
@@ -315,40 +320,13 @@ class KafkaConnectionManager:
         self._backoff[node_id] = (failures, backoff_until_time)
 
     def connection_delay(self, node_id):
+        """Connection delay in seconds.
+
+        Uses exponential backoff/retry with jitter. See KIP-144.
+        """
         if node_id not in self._backoff:
             return 0
         return max(0, self._backoff[node_id][1] - time.monotonic())
-
-    def update_metadata(self):
-        """Trigger a metadata refresh. Returns a Future resolved on completion.
-
-        Thin wrapper over cluster.request_update(); the cluster owns the
-        refresh loop and will pick this up on the next tick.
-        """
-        return self.cluster.request_update()
-
-    async def _do_update_metadata(self):
-        while True:
-            node_id = self.least_loaded_node()
-            if node_id is None:
-                if not self.bootstrapped:
-                    await self.bootstrap_async()
-                    continue
-                delay = self.config['reconnect_backoff_ms'] / 1000
-                log.debug("No node available for metadata request, retrying in %ss", delay)
-                await self._net.sleep(delay)
-                continue
-            conn = self.get_connection(node_id)
-            try:
-                await conn.init_future
-                request = self.cluster.metadata_request()
-                log.debug("Sending metadata request %s to node %s", request, node_id)
-                response = await conn.send_request(request)
-                self.cluster.update_metadata(response)
-                return True
-            except Exception as exc:
-                self.cluster.failed_update(exc)
-                raise
 
     def close(self, node_id=None):
         if node_id is not None:
@@ -358,6 +336,7 @@ class KafkaConnectionManager:
         else:
             for conn in list(self._conns.values()):
                 conn.close()
+            self.cluster.close()
 
     def start(self):
         """Spawn a daemon IO thread that owns the event loop. Idempotent."""
@@ -489,3 +468,21 @@ class KafkaConnectionManager:
         if state['exception'] is not None:
             raise state['exception']
         return state['value']
+
+    def wakeup_pair(self, timeout_secs):
+        fut = Future()
+        wakeup = lambda f=fut: f.success(None) if not f.is_done else None
+        timer = self._net.call_later(ttl_ms / 1000, wakeup)
+        async def _wakeup():
+            try:
+                await fut
+            finally:
+                # early wakeup via _notify_wakeup
+                if not timer.is_done:
+                    try:
+                        self._net.unschedule(timer)
+                    except (ValueError, RuntimeError):
+                        pass
+        def _notify_wakeup():
+            self._net.call_soon_threadsafe(wakeup)
+        return _wakeup, _notify_wakeup

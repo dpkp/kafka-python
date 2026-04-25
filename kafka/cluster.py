@@ -20,9 +20,6 @@ class ClusterMetadata:
     """
     A class to manage kafka cluster metadata.
 
-    This class does not perform any IO. It simply updates internal state
-    given API responses (MetadataResponse, FindCoordinatorResponse).
-
     Keyword Arguments:
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
@@ -47,7 +44,8 @@ class ClusterMetadata:
         'allow_auto_create_topics': True,
     }
 
-    def __init__(self, **configs):
+    def __init__(self, manager, **configs):
+        self._manager = manager
         self._topics = set()
         self._brokers = {}  # node_id -> MetadataResponseBroker
         self._partitions = {}  # topic -> partition -> PartitionMetadata
@@ -66,10 +64,8 @@ class ClusterMetadata:
         self.cluster_id = None
         self.metadata_refresh_in_progress = False
 
-        self._net = None
-        self._fetch_callback = None
-        self._refresh_loop_task = None
-        self._wakeup_future = None
+        self._refresh_loop_future = None
+        self._notify_wakeup = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -79,55 +75,53 @@ class ClusterMetadata:
         self._bootstrap_brokers = self._generate_bootstrap_brokers()
         self._coordinator_brokers = {}
 
-    def attach(self, net, fetch_callback):
-        """Wire up the event loop and async metadata-fetch callback.
-
-        `fetch_callback` is awaited each refresh cycle; it should drive a
-        single MetadataRequest end-to-end and call self.update_metadata() /
-        self.failed_update() before returning.
-        """
-        self._net = net
-        self._fetch_callback = fetch_callback
+    def close(self):
+        # Drop manager reference cycle
+        self._manager = None
 
     def start_refresh_loop(self):
-        """Spawn the periodic refresh coroutine. Idempotent. Requires attach()."""
-        if self._refresh_loop_task is not None:
+        """Spawn the periodic refresh coroutine. Idempotent. Triggers bootstrap if needed."""
+        if self._refresh_loop_future is not None:
             return
-        if self._net is None or self._fetch_callback is None:
-            raise RuntimeError('start_refresh_loop requires prior attach()')
-        self._refresh_loop_task = self._net.call_soon(self._refresh_loop)
+        log.debug('Starting metadata refresh loop')
+        self._refresh_loop_future = self._manager.call_soon(self._refresh_loop)
 
     async def _refresh_loop(self):
-        """Awaits ttl() then triggers refresh; request_update() wakes us early."""
+        """Awaits ttl() then triggers refresh; request_update() wakes early."""
+        if not self._manager.bootstrapped:
+            await self._manager.bootstrap()
         while True:
             ttl_ms = self.ttl()
             if ttl_ms == 0:
                 try:
-                    await self._fetch_callback()
+                    await self.refresh_metadata()
                 except Exception as exc:
                     log.debug('Metadata refresh failed: %s', exc)
                 continue
-            fut = Future()
-            self._wakeup_future = fut
-            timer = self._net.call_later(
-                ttl_ms / 1000,
-                lambda f=fut: f.success(None) if not f.is_done else None,
-            )
-            try:
-                await fut
-            finally:
-                self._wakeup_future = None
-                if not timer.is_done:
-                    try:
-                        self._net.unschedule(timer)
-                    except (ValueError, RuntimeError):
-                        pass
+            wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
+            await wakeup
 
-    def _notify_wakeup(self):
-        # Runs on the event loop thread.
-        fut = self._wakeup_future
-        if fut is not None and not fut.is_done:
-            fut.success(None)
+    async def refresh_metadata(self, node_id=None):
+        log.debug(f'Metadata refresh (node_id={node_id})')
+        node_id = self._manager.least_loaded_node() if node_id is None else node_id
+        if node_id is None:
+            self._manager.update_backoff('metadata')
+            raise Errors.NodeNotReadyError('metadata')
+        else:
+            self._manager.reset_backoff('metadata')
+        try:
+            conn = await self._manager.get_connection(node_id)
+            request = self.metadata_request()
+            log.debug("Sending metadata request %s to node %s", request, node_id)
+            response = await conn.send_request(request)
+        except Exception as exc:
+            log.error('Metadata refresh: failed %s', exc)
+            self.failed_update(exc)
+            raise
+        # Success!
+        log.debug('Metadata refresh: success')
+        self.update_metadata(response)
+        return True
 
     def _generate_bootstrap_brokers(self):
         # collect_hosts does not perform DNS, so we should be fine to re-use
@@ -285,6 +279,9 @@ class ClusterMetadata:
         now = time.monotonic() * 1000
         if self.metadata_refresh_in_progress:
             ttl = self.config['retry_backoff_ms']
+        elif self._manager.connection_delay('metadata'):
+            # Exponential backoff - KIP-580
+            return self._manager.connection_delay('metadata') * 1000
         elif self._need_update:
             ttl = 0
         else:
@@ -314,8 +311,10 @@ class ClusterMetadata:
             if not self._future or self._future.is_done:
                 self._future = Future()
             ret = self._future
-        if self._net is not None:
-            self._net.call_soon_threadsafe(self._notify_wakeup)
+            self.start_refresh_loop()
+        if self._notify_wakeup:
+            self._notify_wakeup()
+            self._notify_wakeup = None
         return ret
 
     @property
