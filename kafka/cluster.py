@@ -89,7 +89,7 @@ class ClusterMetadata:
     async def _refresh_loop(self):
         """Awaits ttl() then triggers refresh; request_update() wakes early."""
         if not self._manager.bootstrapped:
-            await self._manager.bootstrap()
+            await self._manager.bootstrap_async()
         while True:
             ttl_ms = self.ttl()
             if ttl_ms == 0:
