@@ -135,16 +135,19 @@ class KafkaConnectionManager:
             finally:
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
         else:
-            raise Errors.KafkaConnectionError(
+            raise Errors.KafkaTimeoutError(
                 'Unable to bootstrap from %s' % (self.cluster.config['bootstrap_servers'],))
 
-    def bootstrap(self, timeout_ms=None):
+    def bootstrap_async(self, timeout_ms=None):
         if self._bootstrap_future is not None and not self._bootstrap_future.is_done:
             return self._bootstrap_future
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
         self._bootstrap_future = self.call_soon(self._do_bootstrap, deadline)
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
+
+    def bootstrap(self, timeout_ms=None):
+        self.run(self.bootstrap_async, timeout_ms)
 
     @property
     def bootstrapped(self):
@@ -327,7 +330,7 @@ class KafkaConnectionManager:
             node_id = self.least_loaded_node()
             if node_id is None:
                 if not self.bootstrapped:
-                    await self.bootstrap()
+                    await self.bootstrap_async()
                     continue
                 delay = self.config['reconnect_backoff_ms'] / 1000
                 log.debug("No node available for metadata request, retrying in %ss", delay)

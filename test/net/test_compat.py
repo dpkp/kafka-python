@@ -102,8 +102,9 @@ class TestKafkaNetClientBootstrap:
     def test_bootstrap_connected(self, client, manager):
         assert not client.bootstrap_connected()
         manager._bootstrap_future = Future()
-        manager._bootstrap_future.success(True)
         assert client.bootstrap_connected()
+        manager._bootstrap_future.success(None)
+        assert not client.bootstrap_connected()
 
     def test_get_broker_version(self, client, manager):
         with pytest.raises(Errors.KafkaTimeoutError):

@@ -137,14 +137,14 @@ class TestKafkaConnectionManagerSend:
 
 
 class TestKafkaConnectionManagerBootstrap:
-    def test_bootstrap_returns_future(self, manager):
-        f = manager.bootstrap()
+    def test_bootstrap_async_returns_future(self, manager):
+        f = manager.bootstrap_async()
         assert isinstance(f, Future)
         assert not f.is_done
 
-    def test_bootstrap_idempotent(self, manager):
-        f1 = manager.bootstrap()
-        f2 = manager.bootstrap()
+    def test_bootstrap_async_idempotent(self, manager):
+        f1 = manager.bootstrap_async()
+        f2 = manager.bootstrap_async()
         assert f1 is f2
 
     def test_bootstrap_connection_failure(self, net):
@@ -153,10 +153,8 @@ class TestKafkaConnectionManagerBootstrap:
                                          socket_connection_timeout_ms=500,
                                          reconnect_backoff_ms=10,
                                          reconnect_backoff_max_ms=100)
-        f = manager.bootstrap(timeout_ms=2000)
-        manager.poll(timeout_ms=3000, future=f)
-        assert f.failed()
-        assert isinstance(f.exception, Errors.KafkaConnectionError)
+        with pytest.raises(Errors.KafkaTimeoutError):
+            manager.bootstrap(timeout_ms=2000)
         assert not manager._conns
         failures, _ = manager._backoff['bootstrap-0']
         assert failures > 1
@@ -206,10 +204,8 @@ class TestKafkaConnectionManagerBootstrap:
 
         with patch.object(manager, 'get_connection', side_effect=mock_get_connection), \
              patch.object(cluster, 'update_metadata', side_effect=mock_update_metadata):
-            f = manager.bootstrap(timeout_ms=2000)
-            manager.poll(timeout_ms=2000, future=f)
+            manager.bootstrap(timeout_ms=2000)
 
-        assert f.succeeded()
         assert call_count[0] >= 2
 
 

@@ -387,7 +387,7 @@ class KafkaConsumer:
         # it. bootstrap is passed as a deferred coroutine so that once the IO
         # thread is introduced in a later phase it runs on the IO thread.
         if self._manager.broker_version_data is None:
-            self._manager.run(self._manager.bootstrap, self.config['api_version_auto_timeout_ms'])
+            self._manager.bootstrap(self.config['api_version_auto_timeout_ms'])
         self.config['api_version'] = self._manager.broker_version
 
         # Coordinator configurations are different for older brokers
