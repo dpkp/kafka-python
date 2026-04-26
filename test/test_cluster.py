@@ -14,6 +14,37 @@ Topic = MetadataResponse.MetadataResponseTopic
 Partition = Topic.MetadataResponsePartition
 
 
+def _make_metadata_response(version):
+    topic = Topic(
+        version=version,
+        error_code=0,
+        name='topic-1',
+        is_internal=False,
+        partitions=[
+            Partition(
+                version=version,
+                error_code=0,
+                partition_index=0,
+                leader_id=0,
+                leader_epoch=0,
+                replica_nodes=[0],
+                isr_nodes=[0],
+                offline_replicas=[12],
+            ),
+        ],
+    )
+    return MetadataResponse(
+        version=version,
+        throttle_time_ms=0,
+        brokers=[
+            Broker(node_id=0, host='foo', port=12, rack='rack-1', version=version),
+            Broker(node_id=1, host='bar', port=34, rack='rack-2', version=version),
+        ],
+        cluster_id='cluster-foo',
+        controller_id=0,
+        topics=[topic])
+
+
 class TestClusterMetadataUpdateMetadata:
     def test_empty_broker_list(self, cluster):
         assert len(cluster.brokers()) == 0
@@ -30,34 +61,7 @@ class TestClusterMetadataUpdateMetadata:
 
     @pytest.mark.parametrize('version', range(0, MetadataResponse.max_version + 1))
     def test_metadata(self, cluster, version):
-        topic = Topic(
-            version=version,
-            error_code=0,
-            name='topic-1',
-            is_internal=False,
-            partitions=[
-                Partition(
-                    version=version,
-                    error_code=0,
-                    partition_index=0,
-                    leader_id=0,
-                    leader_epoch=0,
-                    replica_nodes=[0],
-                    isr_nodes=[0],
-                    offline_replicas=[12],
-                ),
-            ],
-        )
-        response = MetadataResponse(
-            version=version,
-            throttle_time_ms=0,
-            brokers=[
-                Broker(node_id=0, host='foo', port=12, rack='rack-1', version=version),
-                Broker(node_id=1, host='bar', port=34, rack='rack-2', version=version),
-            ],
-            cluster_id='cluster-foo',
-            controller_id=0,
-            topics=[topic])
+        response = _make_metadata_response(version)
         response = MetadataResponse.decode(response.encode(), version=version)
         cluster.update_metadata(response)
         assert len(cluster.topics()) == 1
@@ -192,10 +196,13 @@ class TestClusterMetadataRefresh:
 
     def test_request_update_sends_metadata_request(self, manager):
         manager.bootstrap()
-        with patch.object(manager, 'send', return_value=MagicMock()):
+        manager.cluster.config['retry_backoff_ms'] = 10 # reduce loop delay when metadata in progress
+
+        response = _make_metadata_response(8)
+        with patch.object(manager, 'send', return_value=Future().success(response)):
             f = manager.cluster.request_update()
             # Drive the cluster refresh loop
-            manager.poll(timeout_ms=500, future=f)
+            manager.poll(timeout_ms=100, future=f)
             assert manager.send.called
 
     def test_refresh_metadata_retries_no_node(self, manager):

@@ -123,7 +123,7 @@ class KafkaConnectionManager:
                 continue
 
             try:
-                await self.cluster.refresh_metadata(self, bootstrap_broker.node_id)
+                await self.cluster.refresh_metadata(bootstrap_broker.node_id)
                 if not self.cluster.brokers():
                     log.warning('Bootstrap metadata response has no brokers. Retrying.')
                     self.update_backoff(bootstrap_broker.node_id)
