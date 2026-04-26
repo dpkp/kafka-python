@@ -10,7 +10,7 @@ from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.consumer import FetchRequest
 from kafka.protocol.consumer import (
-    ListOffsetsRequest, OffsetResetStrategy, UNKNOWN_OFFSET
+    ListOffsetsRequest, OffsetSpec, UNKNOWN_OFFSET, IsolationLevel
 )
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
@@ -19,15 +19,6 @@ from kafka.util import Timer
 
 log = logging.getLogger(__name__)
 
-
-# Isolation levels
-READ_UNCOMMITTED = 0
-READ_COMMITTED = 1
-
-ISOLATION_LEVEL_CONFIG = {
-    'read_uncommitted': READ_UNCOMMITTED,
-    'read_committed': READ_COMMITTED,
-}
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
@@ -41,6 +32,13 @@ CompletedFetch = collections.namedtuple("CompletedFetch",
 
 ExceptionMetadata = collections.namedtuple("ExceptionMetadata",
     ["partition", "fetched_offset", "exception"])
+
+
+_FetchTopic = FetchRequest.FetchTopic
+_FetchPartition = _FetchTopic.FetchPartition
+_ForgottenTopic = FetchRequest.ForgottenTopic
+_ListOffsetsTopic = ListOffsetsRequest.ListOffsetsTopic
+_ListOffsetsPartition = _ListOffsetsTopic.ListOffsetsPartition
 
 
 class NoOffsetForPartitionError(Errors.KafkaError):
@@ -116,8 +114,10 @@ class Fetcher:
             if key in configs:
                 self.config[key] = configs[key]
 
-        if self.config['isolation_level'] not in ISOLATION_LEVEL_CONFIG:
-            raise Errors.KafkaConfigurationError('Unrecognized isolation_level')
+        try:
+            self._isolation_level = IsolationLevel.build_from(self.config['isolation_level'])
+        except ValueError:
+            raise Errors.KafkaConfigurationError('Unrecognized isolation_level') from None
 
         self._client = client
         self._manager = client._manager
@@ -130,11 +130,16 @@ class Fetcher:
             self._sensors = FetchManagerMetrics(self.config['metrics'], self.config['metric_group_prefix'])
         else:
             self._sensors = None
-        self._isolation_level = ISOLATION_LEVEL_CONFIG[self.config['isolation_level']]
         self._session_handlers = {}
         self._nodes_with_pending_fetch_requests = set()
         self._cached_list_offsets_exception = None
         self._next_in_line_exception_metadata = None
+
+    @property
+    def _enable_incremental_fetch_sessions(self):
+        if self._manager.broker_version is None or self._manager.broker_version < (1, 1):
+            return False
+        return self.config['enable_incremental_fetch_sessions']
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
@@ -271,11 +276,11 @@ class Fetcher:
 
     def beginning_offsets(self, partitions, timeout_ms):
         return self.beginning_or_end_offset(
-            partitions, OffsetResetStrategy.EARLIEST, timeout_ms)
+            partitions, OffsetSpec.EARLIEST, timeout_ms)
 
     def end_offsets(self, partitions, timeout_ms):
         return self.beginning_or_end_offset(
-            partitions, OffsetResetStrategy.LATEST, timeout_ms)
+            partitions, OffsetSpec.LATEST, timeout_ms)
 
     def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
         timestamps = dict([(tp, timestamp) for tp in partitions])
@@ -476,43 +481,37 @@ class Fetcher:
     def _group_list_offset_requests(self, timestamps):
         timestamps_by_node = collections.defaultdict(dict)
         for partition, timestamp in timestamps.items():
-            node_id = self._client.cluster.leader_for_partition(partition)
+            node_id = self._manager.cluster.leader_for_partition(partition)
             if node_id is None:
-                self._client.cluster.add_topic(partition.topic)
+                self._manager.cluster.add_topic(partition.topic)
                 log.debug("Partition %s is unknown for fetching offset", partition)
-                self._client.cluster.request_update()
+                self._manager.cluster.request_update()
             elif node_id == -1:
                 log.debug("Leader for partition %s unavailable for fetching "
                           "offset, wait for metadata refresh", partition)
-                self._client.cluster.request_update()
+                self._manager.cluster.request_update()
             else:
                 leader_epoch = -1
                 timestamps_by_node[node_id][partition] = (timestamp, leader_epoch)
         return dict(timestamps_by_node)
 
     async def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
-        version = self._client.api_version(ListOffsetsRequest, max_version=5)
-        if self.config['isolation_level'] == 'read_committed' and version < 2:
-            raise Errors.UnsupportedVersionError('read_committed isolation level requires ListOffsetsRequest >= v2')
+        max_version = 6 # TODO: support 7-10 via OffsetSpec
+        min_version = ListOffsetsRequest.min_version_for_isolation_level(self._isolation_level)
         by_topic = collections.defaultdict(list)
         for tp, (timestamp, leader_epoch) in timestamps_and_epochs.items():
-            if version >= 4:
-                data = (tp.partition, leader_epoch, timestamp)
-            elif version >= 1:
-                data = (tp.partition, timestamp)
-            else:
-                data = (tp.partition, timestamp, 1)
+            data = _ListOffsetsPartition(
+                partition_index=tp.partition,
+                current_leader_epoch=leader_epoch,
+                timestamp=timestamp)
             by_topic[tp.topic].append(data)
 
-        if version >= 2:
-            request = ListOffsetsRequest[version](
-                    -1,
-                    self._isolation_level,
-                    list(by_topic.items()))
-        else:
-            request = ListOffsetsRequest[version](
-                    -1,
-                    list(by_topic.items()))
+        request = ListOffsetsRequest(
+            isolation_level=self._isolation_level,
+            topics=list(by_topic.items()),
+            min_version=min_version,
+            max_version=max_version,
+        )
 
         log.debug("Sending ListOffsetRequest %s to broker %s", request, node_id)
         response = await self._manager.send(request, node_id=node_id)
@@ -530,57 +529,53 @@ class Fetcher:
         fetched_offsets = dict()
         partitions_to_retry = set()
         unauthorized_topics = set()
-        for topic, part_data in response.topics:
-            for partition_info in part_data:
-                partition, error_code = partition_info[:2]
-                partition = TopicPartition(topic, partition)
+        for topic_data in response.topics:
+            for partition_info in topic_data.partitions:
+                tp = TopicPartition(topic_data.name, partition_info.partition_index)
+                error_code = partition_info.error_code
                 error_type = Errors.for_code(error_code)
                 if error_type is Errors.NoError:
                     if response.API_VERSION == 0:
-                        offsets = partition_info[2]
+                        offsets = partition_info.old_style_offsets
                         assert len(offsets) <= 1, 'Expected ListOffsetsResponse with one offset'
-                        if not offsets:
-                            offset = UNKNOWN_OFFSET
-                        else:
-                            offset = offsets[0]
-                        timestamp = None
-                        leader_epoch = -1
-                    elif response.API_VERSION <= 3:
-                        timestamp, offset = partition_info[2:]
-                        leader_epoch = -1
+                        offset = offsets[0] if offsets else UNKNOWN_OFFSET
                     else:
-                        timestamp, offset, leader_epoch = partition_info[2:]
+                        offset = partition_info.offset
+                    timestamp = partition_info.timestamp
+                    if timestamp == -1:
+                        timestamp = None
+                    leader_epoch = partition_info.leader_epoch
                     log.debug("Handling ListOffsetsResponse response for %s. "
                               "Fetched offset %s, timestamp %s, leader_epoch %s",
-                              partition, offset, timestamp, leader_epoch)
+                              tp, offset, timestamp, leader_epoch)
                     if offset != UNKNOWN_OFFSET:
-                        fetched_offsets[partition] = OffsetAndTimestamp(offset, timestamp, leader_epoch)
+                        fetched_offsets[tp] = OffsetAndTimestamp(offset, timestamp, leader_epoch)
                 elif error_type is Errors.UnsupportedForMessageFormatError:
                     # The message format on the broker side is before 0.10.0, which means it does not
                     # support timestamps. We treat this case the same as if we weren't able to find an
                     # offset corresponding to the requested timestamp and leave it out of the result.
                     log.debug("Cannot search by timestamp for partition %s because the"
-                              " message format version is before 0.10.0", partition)
+                              " message format version is before 0.10.0", tp)
                 elif error_type in (Errors.NotLeaderForPartitionError,
                                     Errors.ReplicaNotAvailableError,
                                     Errors.KafkaStorageError,
                                     Errors.OffsetNotAvailableError,
                                     Errors.LeaderNotAvailableError):
                     log.debug("Attempt to fetch offsets for partition %s failed due"
-                              " to %s, retrying.", error_type.__name__, partition)
-                    partitions_to_retry.add(partition)
+                              " to %s, retrying.", error_type.__name__, tp)
+                    partitions_to_retry.add(tp)
                 elif error_type is Errors.UnknownTopicOrPartitionError:
                     log.warning("Received unknown topic or partition error in ListOffsets "
                                 "request for partition %s. The topic/partition " +
                                 "may not exist or the user may not have Describe access "
-                                "to it.", partition)
-                    partitions_to_retry.add(partition)
+                                "to it.", tp)
+                    partitions_to_retry.add(tp)
                 elif error_type is Errors.TopicAuthorizationFailedError:
-                    unauthorized_topics.add(topic)
+                    unauthorized_topics.add(tp.topic)
                 else:
                     log.warning("Attempt to fetch offsets for partition %s failed due to:"
-                                " %s", partition, error_type.__name__)
-                    partitions_to_retry.add(partition)
+                                " %s", tp, error_type.__name__)
+                    partitions_to_retry.add(tp)
         if unauthorized_topics:
             raise Errors.TopicAuthorizationFailedError(unauthorized_topics)
         return fetched_offsets, partitions_to_retry
@@ -603,11 +598,18 @@ class Fetcher:
         Returns:
             dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...} (version depends on client api_versions)
         """
+        # TODO:
+        # v12 epoch detection / validation
+        # v13 topic ids (KIP-516)
+        # v14 tiered storage (KIP-405)
+        # v15 replica state (KIP-903)
+        # v16 node endpoints (KIP-951)
+        # v17 directory id (KIP-853)
+        max_version = 10
+
         # create the fetch info as a dict of lists of partition info tuples
         # which can be passed to FetchRequest() via .items()
-        version = self._client.api_version(FetchRequest, max_version=10)
         fetchable = collections.defaultdict(collections.OrderedDict)
-
         for partition in self._fetchable_partitions():
             node_id = self._client.cluster.leader_for_partition(partition)
 
@@ -643,35 +645,19 @@ class Fetcher:
 
             else:
                 # Leader is connected and does not have a pending fetch request
-                if version < 5:
-                    partition_info = (
-                        partition.partition,
-                        position.offset,
-                        self.config['max_partition_fetch_bytes']
-                    )
-                elif version <= 8:
-                    partition_info = (
-                        partition.partition,
-                        position.offset,
-                        -1, # log_start_offset is used internally by brokers / replicas only
-                        self.config['max_partition_fetch_bytes'],
-                    )
-                else:
-                    partition_info = (
-                        partition.partition,
-                        position.leader_epoch,
-                        position.offset,
-                        -1, # log_start_offset is used internally by brokers / replicas only
-                        self.config['max_partition_fetch_bytes'],
-                    )
-
+                partition_info = _FetchPartition(
+                    partition=partition.partition,
+                    current_leader_epoch=position.leader_epoch,
+                    fetch_offset=position.offset,
+                    partition_max_bytes=self.config['max_partition_fetch_bytes']
+                )
                 fetchable[node_id][partition] = partition_info
                 log.debug("Adding fetch request for partition %s at offset %d",
                           partition, position.offset)
 
         requests = {}
         for node_id, next_partitions in fetchable.items():
-            if version >= 7 and self.config['enable_incremental_fetch_sessions']:
+            if self._enable_incremental_fetch_sessions:
                 if node_id not in self._session_handlers:
                     self._session_handlers[node_id] = FetchSessionHandler(node_id)
                 session = self._session_handlers[node_id].build_next(next_partitions)
@@ -679,77 +665,57 @@ class Fetcher:
                 # No incremental fetch support
                 session = FetchRequestData(next_partitions, None, FetchMetadata.LEGACY)
 
-            if version <= 2:
-                request = FetchRequest[version](
-                    -1,  # replica_id
-                    self.config['fetch_max_wait_ms'],
-                    self.config['fetch_min_bytes'],
-                    session.to_send)
-            elif version == 3:
-                request = FetchRequest[version](
-                    -1,  # replica_id
-                    self.config['fetch_max_wait_ms'],
-                    self.config['fetch_min_bytes'],
-                    self.config['fetch_max_bytes'],
-                    session.to_send)
-            elif version <= 6:
-                request = FetchRequest[version](
-                    -1,  # replica_id
-                    self.config['fetch_max_wait_ms'],
-                    self.config['fetch_min_bytes'],
-                    self.config['fetch_max_bytes'],
-                    self._isolation_level,
-                    session.to_send)
-            else:
-                # Through v8
-                request = FetchRequest[version](
-                    -1,  # replica_id
-                    self.config['fetch_max_wait_ms'],
-                    self.config['fetch_min_bytes'],
-                    self.config['fetch_max_bytes'],
-                    self._isolation_level,
-                    session.id,
-                    session.epoch,
-                    session.to_send,
-                    session.to_forget)
+            min_version = FetchRequest.min_version_for_isolation_level(self._isolation_level)
+            request = FetchRequest(
+                max_wait_ms=self.config['fetch_max_wait_ms'],
+                min_bytes=self.config['fetch_min_bytes'],
+                max_bytes=self.config['fetch_max_bytes'],
+                isolation_level=self._isolation_level,
+                session_id=session.id,
+                session_epoch=session.epoch,
+                topics=session.to_send,
+                forgotten_topics_data=session.to_forget,
+                min_version=min_version,
+                max_version=max_version,
+            )
 
-            fetch_offsets = {}
-            for tp, partition_data in next_partitions.items():
-                if version <= 8:
-                    offset = partition_data[1]
-                else:
-                    offset = partition_data[2]
-                fetch_offsets[tp] = offset
-
+            fetch_offsets = {tp: next_partitions[tp].fetch_offset for tp in next_partitions}
             requests[node_id] = (request, fetch_offsets)
 
         return requests
 
     def _handle_fetch_response(self, node_id, fetch_offsets, send_time, response):
         """The callback for fetch completion"""
-        if response.API_VERSION >= 7 and self.config['enable_incremental_fetch_sessions']:
+        if response.API_VERSION >= 7 and self_enable_incremental_fetch_sessions:
             if node_id not in self._session_handlers:
                 log.error("Unable to find fetch session handler for node %s. Ignoring fetch response", node_id)
                 return
             if not self._session_handlers[node_id].handle_response(response):
                 return
 
-        partitions = set([TopicPartition(topic, partition_data[0])
-                          for topic, partitions in response.responses
-                          for partition_data in partitions])
+        partitions = set([
+            TopicPartition(
+                topic_data.topic,
+                partition_data.partition_index)
+            for topic_data in response.responses
+            for partition_data in topic_data.partitions
+        ])
         if self._sensors:
             metric_aggregator = FetchResponseMetricAggregator(self._sensors, partitions)
         else:
             metric_aggregator = None
 
-        for topic, partitions in response.responses:
-            for partition_data in partitions:
-                tp = TopicPartition(topic, partition_data[0])
+        for topic_data in response.responses:
+            for partition_data in topic_data.partitions:
+                tp = TopicPartition(
+                    topic_data.topic,
+                    partition_data.partition_index
+                )
                 fetch_offset = fetch_offsets[tp]
                 completed_fetch = CompletedFetch(
                     tp, fetch_offset,
                     response.API_VERSION,
-                    partition_data[1:],
+                    partition_data,
                     metric_aggregator
                 )
                 self._completed_fetches.append(completed_fetch)
@@ -772,7 +738,8 @@ class Fetcher:
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
         fetch_offset = completed_fetch.fetched_offset
-        error_code, highwater = completed_fetch.partition_data[:2]
+        error_code = completed_fetch.partition_data.error_code
+        highwater = completed_fetch.partition_data.high_watermark
         error_type = Errors.for_code(error_code)
         parsed_records = None
 
@@ -796,12 +763,8 @@ class Fetcher:
                               position.offset)
                     return None
 
-                records = MemoryRecords(completed_fetch.partition_data[-1])
-                aborted_transactions = None
-                if completed_fetch.response_version >= 11:
-                    aborted_transactions = completed_fetch.partition_data[-3]
-                elif completed_fetch.response_version >= 4:
-                    aborted_transactions = completed_fetch.partition_data[-2]
+                records = MemoryRecords(completed_fetch.partition_data.records)
+                aborted_transactions = completed_fetch.partition_data.aborted_transactions
                 log.debug("Preparing to read %s bytes of data for partition %s with offset %d",
                           records.size_in_bytes(), tp, fetch_offset)
                 parsed_records = self.PartitionRecords(fetch_offset, tp, records,
@@ -887,7 +850,8 @@ class Fetcher:
     class PartitionRecords:
         def __init__(self, fetch_offset, tp, records,
                      key_deserializer=None, value_deserializer=None,
-                     check_crcs=True, isolation_level=READ_UNCOMMITTED,
+                     check_crcs=True,
+                     isolation_level=IsolationLevel.READ_UNCOMMITTED,
                      aborted_transactions=None, # AbortedTransaction data from FetchResponse
                      metric_aggregator=None, on_drain=lambda x: None):
             self.fetch_offset = fetch_offset
@@ -968,7 +932,7 @@ class Fetcher:
                     # base_offset, last_offset_delta, aborted transactions, and control batches
                     if batch.magic == 2:
                         self.leader_epoch = batch.leader_epoch
-                        if self.isolation_level == READ_COMMITTED and batch.has_producer_id():
+                        if self.isolation_level == IsolationLevel.READ_COMMITTED and batch.has_producer_id():
                             # remove from the aborted transaction queue all aborted transactions which have begun
                             # before the current batch's last offset and add the associated producerIds to the
                             # aborted producer set
@@ -1182,9 +1146,9 @@ class FetchSessionHandler:
         self.next_metadata = self.next_metadata.next_close_existing()
 
     def _response_partitions(self, response):
-        return {TopicPartition(topic, partition_data[0])
-                for topic, partitions in response.responses
-                for partition_data in partitions}
+        return {TopicPartition(topic_data.topic, partition_data.partition_index)
+                for topic_data in response.responses
+                for partition_data in topic_data.partitions}
 
 
 class FetchMetadata:
@@ -1249,21 +1213,27 @@ class FetchRequestData:
 
     @property
     def to_send(self):
-        # Return as list of [(topic, [(partition, ...), ...]), ...]
+        # Return as list of _FetchTopic data objects
         # so it can be passed directly to encoder
         partition_data = collections.defaultdict(list)
         for tp, partition_info in self._to_send.items():
             partition_data[tp.topic].append(partition_info)
-        return list(partition_data.items())
+        return [
+            _FetchTopic(topic=tp.topic, partitions=partitions)
+            for topic, partitions in partition_data.items()
+        ]
 
     @property
     def to_forget(self):
-        # Return as list of [(topic, (partiiton, ...)), ...]
+        # Return as list of _ForgottenTopic data objects
         # so it an be passed directly to encoder
         partition_data = collections.defaultdict(list)
         for tp in self._to_forget:
             partition_data[tp.topic].append(tp.partition)
-        return list(partition_data.items())
+        return [
+            _ForgottenTopic(topic=tp.topic, partitions=partitions)
+            for topic, partitions in partition_data.items()
+        ]
 
 
 class FetchMetrics:
