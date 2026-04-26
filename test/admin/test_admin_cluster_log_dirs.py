@@ -1,43 +1,10 @@
 import pytest
 
 import kafka.errors as Errors
-from kafka.admin import KafkaAdminClient
 from kafka.protocol.admin import (
     AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse,
 )
-from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import TopicPartitionReplica
-
-from test.mock_broker import MockBroker
-
-
-@pytest.fixture
-def broker(request):
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def multi_broker(broker):
-    Broker = MetadataResponse.MetadataResponseBroker
-    broker.set_metadata(brokers=[
-        Broker(node_id=0, host=broker.host, port=broker.port, rack=None),
-        Broker(node_id=1, host=broker.host, port=broker.port, rack=None),
-    ])
-    return broker
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 def _alter_response(results):

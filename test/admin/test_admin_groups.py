@@ -1,7 +1,6 @@
 import pytest
 
 from kafka.admin import (
-    KafkaAdminClient,
     GroupState, GroupType, MemberToRemove,
     OffsetTimestamp,
 )
@@ -24,28 +23,6 @@ from kafka.protocol.consumer import (
 from kafka.protocol.metadata import MetadataResponse
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.structs import OffsetAndMetadata, TopicPartition
-
-from test.mock_broker import MockBroker
-
-
-@pytest.fixture
-def broker(request):
-    # parametrize tests with indirect=True
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 # ---------------------------------------------------------------------------

@@ -775,20 +775,7 @@ def test_seek_before_exception(client, mocker):
 
 class TestFetchOffsetsByTimes:
     @pytest.fixture
-    def net_client(self):
-        from kafka.net.compat import KafkaNetClient
-        cli = KafkaNetClient(
-            bootstrap_servers=['localhost:1'],
-            socket_connection_timeout_ms=1000,
-            reconnect_backoff_ms=10,
-            reconnect_backoff_max_ms=100,
-        )
-        try:
-            yield cli
-        finally:
-            cli.close()
-
-    def _make_fetcher(self, client):
+    def fetcher(self, client):
         subscription_state = SubscriptionState()
         subscription_state.subscribe(topics=['test'])
         tp = TopicPartition('test', 0)
@@ -796,12 +783,10 @@ class TestFetchOffsetsByTimes:
         subscription_state.seek(tp, 0)
         return Fetcher(client, subscription_state)
 
-    def test_empty_timestamps(self, net_client):
-        fetcher = self._make_fetcher(net_client)
+    def test_empty_timestamps(self, fetcher):
         assert fetcher.offsets_by_times({}) == {}
 
-    def test_success_no_retry(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_success_no_retry(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
@@ -813,8 +798,7 @@ class TestFetchOffsetsByTimes:
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp: expected_offset}
 
-    def test_success_with_retry(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_success_with_retry(self, fetcher, mocker):
         tp0 = TopicPartition('test', 0)
         tp1 = TopicPartition('test', 1)
         timestamps = {tp0: 1000, tp1: 2000}
@@ -829,8 +813,7 @@ class TestFetchOffsetsByTimes:
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp0: offset0, tp1: offset1}
 
-    def test_timeout_raises(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_timeout_raises(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
 
@@ -841,8 +824,7 @@ class TestFetchOffsetsByTimes:
         with pytest.raises(Errors.KafkaTimeoutError):
             fetcher.offsets_by_times(timestamps, timeout_ms=50)
 
-    def test_non_retriable_error_raises(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_non_retriable_error_raises(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
 
@@ -854,8 +836,7 @@ class TestFetchOffsetsByTimes:
         with pytest.raises(Errors.TopicAuthorizationFailedError):
             fetcher.offsets_by_times(timestamps, timeout_ms=10000)
 
-    def test_retriable_invalid_metadata_triggers_refresh(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_retriable_invalid_metadata_triggers_refresh(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
@@ -874,8 +855,7 @@ class TestFetchOffsetsByTimes:
         assert result == {tp: expected_offset}
         update_metadata_mock.assert_called_once()
 
-    def test_retriable_non_metadata_error_sleeps(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_retriable_non_metadata_error_sleeps(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
@@ -898,9 +878,8 @@ class TestFetchOffsetsByTimes:
         # At least one call_later was for the retry_backoff sleep
         assert call_later_spy.call_count >= 1
 
-    def test_success_does_not_check_exception(self, net_client, mocker):
+    def test_success_does_not_check_exception(self, fetcher, mocker):
         """Regression: successful future should not fall through to check future.exception."""
-        fetcher = self._make_fetcher(net_client)
         tp0 = TopicPartition('test', 0)
         tp1 = TopicPartition('test', 1)
         timestamps = {tp0: 1000, tp1: 2000}
@@ -919,8 +898,7 @@ class TestFetchOffsetsByTimes:
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp0: offset0, tp1: offset1}
 
-    def test_no_timeout_passes_none(self, net_client, mocker):
-        fetcher = self._make_fetcher(net_client)
+    def test_no_timeout_passes_none(self, fetcher, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)

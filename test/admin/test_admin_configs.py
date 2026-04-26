@@ -1,7 +1,7 @@
 import pytest
 
 from kafka.admin import (
-    AlterConfigOp, ConfigResource, ConfigResourceType, KafkaAdminClient)
+    AlterConfigOp, ConfigResource, ConfigResourceType)
 from kafka.errors import ClusterAuthorizationFailedError, InvalidConfigurationError
 from kafka.protocol.admin import (
     AlterConfigsRequest, AlterConfigsResponse,
@@ -9,9 +9,6 @@ from kafka.protocol.admin import (
     IncrementalAlterConfigsRequest, IncrementalAlterConfigsResponse,
     ListConfigResourcesRequest, ListConfigResourcesResponse,
 )
-
-from test.mock_broker import MockBroker
-
 
 # ConfigResourceType values (wire)
 _TOPIC = ConfigResourceType.TOPIC.value
@@ -37,26 +34,6 @@ def test_config_resource():
 # ---------------------------------------------------------------------------
 # MockBroker helpers
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def broker(request):
-    # parametrize tests with indirect=True
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 def _describe_configs_response(resource_type, resource_name, configs):

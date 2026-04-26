@@ -11,13 +11,6 @@ import pytest
 
 from kafka.admin import KafkaAdminClient
 
-from test.mock_broker import MockBroker
-
-
-@pytest.fixture
-def broker():
-    return MockBroker(broker_version=(4, 2))
-
 
 @pytest.fixture
 def admin(broker):

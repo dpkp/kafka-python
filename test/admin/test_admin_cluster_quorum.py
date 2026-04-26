@@ -1,29 +1,7 @@
 import pytest
 
 import kafka.errors as Errors
-from kafka.admin import KafkaAdminClient
 from kafka.protocol.admin import DescribeQuorumRequest, DescribeQuorumResponse
-
-from test.mock_broker import MockBroker
-
-
-@pytest.fixture
-def broker(request):
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 def _quorum_response(
