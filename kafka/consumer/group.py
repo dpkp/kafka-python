@@ -1027,7 +1027,7 @@ class KafkaConsumer:
             metrics[k.group][k.name] = v.value()
         return metrics
 
-    def offsets_for_times(self, timestamps):
+    def offsets_for_times(self, timestamps, timeout_ms=None):
         """Look up the offsets for the given partitions by timestamp. The
         returned offset for each partition is the earliest offset whose
         timestamp is greater than or equal to the given timestamp in the
@@ -1041,17 +1041,18 @@ class KafkaConsumer:
         partition. ``None`` will also be returned for the partition if there
         are no messages in it.
 
-        Note:
-            This method may block indefinitely if the partition does not exist.
+        Note: This method may block indefinitely if the partition does not exist
+            and no timeout_ms provided.
 
         Arguments:
             timestamps (dict): ``{TopicPartition: int}`` mapping from partition
                 to the timestamp to look up. Unit should be milliseconds since
                 beginning of the epoch (midnight Jan 1, 1970 (UTC))
+            timeout_ms (int, optional): Milliseconds to block fetching offsets.
 
         Returns:
             ``{TopicPartition: OffsetAndTimestamp}``: mapping from partition
-            to the timestamp and offset of the first message with timestamp
+            to the offset and timestamp of the first message with timestamp
             greater than or equal to the target timestamp.
 
         Raises:
@@ -1060,31 +1061,28 @@ class KafkaConsumer:
                 up the offsets by timestamp.
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
-        if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
-                "offsets_for_times API not supported for cluster version {}"
-                .format(self.config['api_version']))
+        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
         for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
                 raise ValueError(
                     "The target time for partition {} is {}. The target time "
                     "cannot be negative.".format(tp, ts))
-        return self._fetcher.offsets_by_times(
-            timestamps, self.config['request_timeout_ms'])
+        return self._fetcher.offsets_by_times(timestamps, timeout_ms)
 
-    def beginning_offsets(self, partitions):
+    def beginning_offsets(self, partitions, timeout_ms=None):
         """Get the first offset for the given partitions.
 
         This method does not change the current consumer position of the
         partitions.
 
-        Note:
-            This method may block indefinitely if the partition does not exist.
+        Note: This method may block indefinitely if the partition does not exist
+            and no timeout_ms provided.
 
         Arguments:
             partitions (list): List of TopicPartition instances to fetch
                 offsets for.
+            timeout_ms (int, optional): Milliseconds to block fetching offsets.
 
         Returns:
             ``{TopicPartition: int}``: The earliest available offsets for the
@@ -1093,13 +1091,13 @@ class KafkaConsumer:
         Raises:
             UnsupportedVersionError: If the broker does not support looking
                 up the offsets by timestamp.
-            KafkaTimeoutError: If fetch failed in request_timeout_ms.
+            KafkaTimeoutError: If fetch failed in timeout_ms.
         """
-        offsets = self._fetcher.beginning_offsets(
-            partitions, self.config['request_timeout_ms'])
+        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
+        offsets = self._fetcher.beginning_offsets(partitions, timeout_ms)
         return offsets
 
-    def end_offsets(self, partitions):
+    def end_offsets(self, partitions, timeout_ms=None):
         """Get the last offset for the given partitions. The last offset of a
         partition is the offset of the upcoming message, i.e. the offset of the
         last available message + 1.
@@ -1107,12 +1105,13 @@ class KafkaConsumer:
         This method does not change the current consumer position of the
         partitions.
 
-        Note:
-            This method may block indefinitely if the partition does not exist.
+        Note: This method may block indefinitely if the partition does not exist
+            and no timeout_ms provided.
 
         Arguments:
             partitions (list): List of TopicPartition instances to fetch
                 offsets for.
+            timeout_ms (int, optional): Milliseconds to block fetching offsets.
 
         Returns:
             ``{TopicPartition: int}``: The end offsets for the given partitions.
@@ -1120,10 +1119,10 @@ class KafkaConsumer:
         Raises:
             UnsupportedVersionError: If the broker does not support looking
                 up the offsets by timestamp.
-            KafkaTimeoutError: If fetch failed in request_timeout_ms
+            KafkaTimeoutError: If fetch failed in timeout_ms
         """
-        offsets = self._fetcher.end_offsets(
-            partitions, self.config['request_timeout_ms'])
+        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
+        offsets = self._fetcher.end_offsets(partitions, timeout_ms)
         return offsets
 
     def _update_fetch_positions(self, timeout_ms=None):
@@ -1131,8 +1130,8 @@ class KafkaConsumer:
         or reset it using the offset reset policy the user has configured.
 
         Arguments:
-            partitions (List[TopicPartition]): The partitions that need
-                updating fetch positions.
+            timeout_ms (int, optional): Milliseconds to block refreshing committed
+                offsets.
 
         Returns True if fetch positions updated, False if timeout or async reset is pending
 

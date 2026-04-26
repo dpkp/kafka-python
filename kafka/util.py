@@ -145,7 +145,7 @@ class EnumHelper:
         try:
             return cls[str(val).strip().upper().replace('-', '_')] # pylint: disable=E1136
         except KeyError:
-            raise ValueError(f'Unrecognized {cls.__name__}: {val}')
+            raise ValueError(f'Unrecognized {cls.__name__}: {val}') from None
 
     @classmethod
     def value_for(cls, val):
@@ -156,4 +156,4 @@ class EnumHelper:
         try:
             return cls[str(val).upper().replace('-', '_')].value # pylint: disable=E1136
         except KeyError:
-            raise ValueError(f'Unrecognized {cls.__name__}: {val}')
+            raise ValueError(f'Unrecognized {cls.__name__}: {val}') from None
