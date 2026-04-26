@@ -41,10 +41,6 @@ _ListOffsetsTopic = ListOffsetsRequest.ListOffsetsTopic
 _ListOffsetsPartition = _ListOffsetsTopic.ListOffsetsPartition
 
 
-class NoOffsetForPartitionError(Errors.KafkaError):
-    pass
-
-
 class RecordTooLargeError(Errors.KafkaError):
     pass
 
