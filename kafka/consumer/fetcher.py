@@ -492,7 +492,13 @@ class Fetcher:
         return dict(timestamps_by_node)
 
     async def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
-        max_version = 6 # TODO: support 7-10 via OffsetSpec
+        # TODO:
+        # v6 flexible
+        # v7 MAX_TIMESTAMP (KIP-734)
+        # v8 EARLIEST_LOCAL (KIP-405)
+        # v9 LATEST_TIERED (KIP-1005)
+        # v10 async remote (KIP-1075)
+        max_version = 5
         min_version = ListOffsetsRequest.min_version_for_isolation_level(self._isolation_level)
         by_topic = collections.defaultdict(list)
         for tp, (timestamp, leader_epoch) in timestamps_and_epochs.items():
