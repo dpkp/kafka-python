@@ -173,15 +173,11 @@ class Fetcher:
     def reset_offsets_if_needed(self):
         """Reset offsets for the given partitions using the offset reset strategy.
 
-        Arguments:
-            partitions ([TopicPartition]): the partitions that need offsets reset
-
         Returns:
             bool: True if any partitions need reset; otherwise False (no reset pending)
 
         Raises:
             NoOffsetForPartitionError: if no offset reset strategy is defined
-            KafkaTimeoutError if timeout_ms provided
         """
         # Raise exception from previous offset fetch if there is one
         exc, self._cached_list_offsets_exception = self._cached_list_offsets_exception, None
@@ -215,10 +211,10 @@ class Fetcher:
             timeout_ms (int, optional): The maximum time in milliseconds to block.
 
         Returns:
-            {TopicPartition: OffsetAndTimestamp}: Mapping of partition to
-                retrieved offset, timestamp, and leader_epoch. If offset does not exist for
-                the provided timestamp, that partition will be missing from
-                this mapping.
+            {TopicPartition: OffsetAndTimestamp or None}: Mapping of partition to
+                retrieved offset, timestamp, and leader_epoch. If offset does not
+                exist for the provided timestamp, the value for the TopicPartition
+                will be None.
 
         Raises:
             KafkaTimeoutError if timeout_ms provided
@@ -230,6 +226,24 @@ class Fetcher:
         return offsets
 
     async def _fetch_offsets_by_times_async(self, timestamps, timeout_ms=None):
+        """Fetch offsets for each partition in timestamps dict. This may send
+        request to multiple nodes, based on who is Leader for partition.
+
+        Per-node requests are dispatched concurrently; if any fails, the first
+        exception encountered propagates and the remaining results are dropped.
+
+        Arguments:
+            timestamps (dict): {TopicPartition: int} mapping of partitions to
+                timestamps or OffsetSpec sentinels.
+
+        Returns:
+            (fetched_offsets, partitions_to_retry):
+                dict[TopicPartition, OffsetAndTimestamp],
+                set[TopicPartition]
+
+        Raises:
+            KafkaTimeoutError: if offsets cannot be fully fetched before timeout_ms
+        """
         if not timestamps:
             return {}
 
@@ -271,14 +285,62 @@ class Fetcher:
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
 
     def beginning_offsets(self, partitions, timeout_ms=None):
+        """Fetch earliest (oldest) offset for each partition.
+
+        Blocks until offsets are obtained, a non-retriable exception is raised
+        or ``timeout_ms`` passed.
+
+        Arguments:
+            partitions ([TopicPartition]): List of partitions for list offsets.
+            timeout_ms (int, optional): The maximum time in milliseconds to block.
+
+        Returns:
+            {TopicPartition: int}: Mapping of partition to retrieved offset.
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided.
+        """
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.EARLIEST, timeout_ms)
 
     def end_offsets(self, partitions, timeout_ms=None):
+        """Fetch latest (most recent) offset for each partition.
+
+        Blocks until offsets are obtained, a non-retriable exception is raised
+        or ``timeout_ms`` passed.
+
+        Arguments:
+            partitions ([TopicPartition]): List of partitions for list offsets.
+            timeout_ms (int, optional): The maximum time in milliseconds to block.
+
+        Returns:
+            {TopicPartition: int}: Mapping of partition to retrieved offset.
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided.
+        """
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.LATEST, timeout_ms)
 
     def beginning_or_end_offset(self, partitions, timestamp, timeout_ms=None):
+        """Fetch offset for each partition using ``timestamp``.
+
+        Blocks until offsets are obtained, a non-retriable exception is raised
+        or ``timeout_ms`` passed.
+
+        Arguments:
+            partitions ([TopicPartition]): List of partitions for list offsets.
+            timestamp (int or OffsetSpec): OffsetSpec.LATEST (-1) for the latest
+                available, OffsetSpec.EARLIEST (-2) for the earliest available.
+                Otherwise timestamp is treated as epoch milliseconds.
+            timeout_ms (int, optional): The maximum time in milliseconds to block.
+
+        Returns:
+            {TopicPartition: int}: Mapping of partition to retrieved offset.
+
+        Raises:
+            KafkaTimeoutError if timeout_ms provided.
+        """
         timestamps = dict([(tp, timestamp) for tp in partitions])
         offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
@@ -452,7 +514,9 @@ class Fetcher:
                 timestamps.
 
         Returns:
-            (fetched_offsets, partitions_to_retry)
+            (fetched_offsets, partitions_to_retry):
+                dict[TopicPartition, OffsetAndTimestamp],
+                set[TopicPartition]
 
         Raises:
             StaleMetadata: if no node has known leader for any partition.
@@ -492,6 +556,16 @@ class Fetcher:
         return dict(timestamps_by_node)
 
     async def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
+        """Send single ListOffsetsResponse to node_id
+
+        Returns:
+            (fetched_offsets, partitions_to_retry):
+                dict[TopicPartition, OffsetAndTimestamp],
+                set[TopicPartition]
+
+        Raises:
+            TopicAuthorizationFailedError: if any topic returned an auth error
+        """
         # TODO:
         # v6 flexible
         # v7 MAX_TIMESTAMP (KIP-734)
@@ -523,7 +597,9 @@ class Fetcher:
         """Parse a ListOffsets response.
 
         Returns:
-            (fetched_offsets, partitions_to_retry): dict[TopicPartition, OffsetAndTimestamp], set[TopicPartition]
+            (fetched_offsets, partitions_to_retry):
+                dict[TopicPartition, OffsetAndTimestamp],
+                set[TopicPartition]
 
         Raises:
             TopicAuthorizationFailedError: if any topic returned an auth error
@@ -602,7 +678,7 @@ class Fetcher:
         FetchRequests skipped if no leader, or node has requests in flight
 
         Returns:
-            dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...} (version depends on client api_versions)
+            dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...}
         """
         # TODO:
         # v12 epoch detection / validation
