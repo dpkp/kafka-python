@@ -412,6 +412,8 @@ class KafkaConnectionManager:
             result = await coro
         else:
             result = coro(*args)
+        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
+            result = await result
         while isinstance(result, Future):
             result = await result
         return result
