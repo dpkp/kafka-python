@@ -112,6 +112,8 @@ class ClusterMetadata:
             log.debug('_refresh_loop: wait bootstrap')
             await self._manager.bootstrap_async()
         while True:
+            if self.metadata_refresh_in_progress:
+                await self._refresh_future
             ttl_ms = self.ttl()
             if ttl_ms == 0:
                 try:
@@ -138,7 +140,7 @@ class ClusterMetadata:
         """
         if self._manager is None:
             raise RuntimeError('refresh_metadata requires prior attach()')
-        if self._refresh_future is not None and not self._refresh_future.is_done:
+        if self.metadata_refresh_in_progress:
             log.debug('Metadata refresh already in flight; awaiting existing')
             await self._refresh_future
             return
@@ -324,9 +326,7 @@ class ClusterMetadata:
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
         now = time.monotonic() * 1000
-        if self.metadata_refresh_in_progress:
-            ttl = self.config['retry_backoff_ms']
-        elif self._manager is not None and self._manager.connection_delay('metadata'):
+        if self._manager is not None and self._manager.connection_delay('metadata'):
             # Exponential backoff - KIP-580
             return self._manager.connection_delay('metadata') * 1000
         elif self._need_update:
