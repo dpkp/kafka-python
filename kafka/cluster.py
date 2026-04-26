@@ -109,7 +109,6 @@ class ClusterMetadata:
         if self._manager is None:
             raise RuntimeError('start_refresh_loop requires prior attach()')
         if not self._manager.bootstrapped:
-            log.debug('_refresh_loop: wait bootstrap')
             await self._manager.bootstrap_async()
         while True:
             if self.metadata_refresh_in_progress:
@@ -123,11 +122,11 @@ class ClusterMetadata:
                     log.exception(exc)
                 continue
             try:
-                log.debug('_refresh_loop: sleep %s', ttl_ms / 1000)
+                log.debug('Sleeping %s for next Metadata refresh', ttl_ms / 1000)
                 wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
                 await wakeup()
             except Exception as exc:
-                log.error('_refresh_loop: %s', exc)
+                log.error('Metadata refresh loop error: %s', exc)
 
     async def refresh_metadata(self, node_id=None):
         """Send one MetadataRequest and apply the response.
