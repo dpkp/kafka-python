@@ -686,7 +686,7 @@ class Fetcher:
 
     def _handle_fetch_response(self, node_id, fetch_offsets, send_time, response):
         """The callback for fetch completion"""
-        if response.API_VERSION >= 7 and self_enable_incremental_fetch_sessions:
+        if response.API_VERSION >= 7 and self._enable_incremental_fetch_sessions:
             if node_id not in self._session_handlers:
                 log.error("Unable to find fetch session handler for node %s. Ignoring fetch response", node_id)
                 return
