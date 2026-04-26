@@ -806,9 +806,9 @@ class TestFetchOffsetsByTimes:
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
 
-        future = Future()
-        future.success(({tp: expected_offset}, set()))
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        async def fake_send(ts):
+            return ({tp: expected_offset}, set())
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp: expected_offset}
@@ -820,10 +820,10 @@ class TestFetchOffsetsByTimes:
         offset0 = OffsetAndTimestamp(10, 1000, -1)
         offset1 = OffsetAndTimestamp(20, 2000, -1)
 
-        future1 = Future().success(({tp0: offset0}, {tp1}))
-        future2 = Future().success(({tp1: offset1}, set()))
-        futures = iter([future1, future2])
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+        results = iter([({tp0: offset0}, {tp1}), ({tp1: offset1}, set())])
+        async def fake_send(ts):
+            return next(results)
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp0: offset0, tp1: offset1}
@@ -832,9 +832,10 @@ class TestFetchOffsetsByTimes:
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
 
-        # Return a future that never completes
-        future = Future()
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        # Awaits a future that never completes
+        async def fake_send(ts):
+            await Future()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         with pytest.raises(Errors.KafkaTimeoutError):
             fetcher.offsets_by_times(timestamps, timeout_ms=50)
@@ -844,9 +845,9 @@ class TestFetchOffsetsByTimes:
         timestamps = {tp: 1000}
 
         # AuthorizationError is not retriable
-        error = Errors.TopicAuthorizationFailedError()
-        future = Future().failure(error)
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        async def fake_send(ts):
+            raise Errors.TopicAuthorizationFailedError()
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         with pytest.raises(Errors.TopicAuthorizationFailedError):
             fetcher.offsets_by_times(timestamps, timeout_ms=10000)
@@ -857,10 +858,13 @@ class TestFetchOffsetsByTimes:
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
 
         # First call fails with invalid_metadata error, second succeeds
-        future1 = Future().failure(NotLeaderForPartitionError())
-        future2 = Future().success(({tp: expected_offset}, set()))
-        futures = iter([future1, future2])
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+        results = iter([NotLeaderForPartitionError(), ({tp: expected_offset}, set())])
+        async def fake_send(ts):
+            r = next(results)
+            if isinstance(r, BaseException):
+                raise r
+            return r
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         refresh_future = Future().success(None)
         update_metadata_mock = mocker.patch.object(
@@ -876,10 +880,13 @@ class TestFetchOffsetsByTimes:
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
 
         # RequestTimedOutError is retriable but not invalid_metadata
-        future1 = Future().failure(Errors.RequestTimedOutError())
-        future2 = Future().success(({tp: expected_offset}, set()))
-        futures = iter([future1, future2])
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+        results = iter([Errors.RequestTimedOutError(), ({tp: expected_offset}, set())])
+        async def fake_send(ts):
+            r = next(results)
+            if isinstance(r, BaseException):
+                raise r
+            return r
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         # Ensure cluster does not need update
         mocker.patch.object(type(fetcher._client._manager.cluster), 'need_update',
@@ -904,10 +911,10 @@ class TestFetchOffsetsByTimes:
         # Succeeds but has retry partitions -- the bug was that code
         # would fall through to check future.exception (which is None),
         # causing an AttributeError
-        future1 = Future().success(({tp0: offset0}, {tp1}))
-        future2 = Future().success(({tp1: offset1}, set()))
-        futures = iter([future1, future2])
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=lambda ts: next(futures))
+        results = iter([({tp0: offset0}, {tp1}), ({tp1: offset1}, set())])
+        async def fake_send(ts):
+            return next(results)
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         # Should not raise AttributeError
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
@@ -918,8 +925,9 @@ class TestFetchOffsetsByTimes:
         timestamps = {tp: 1000}
         expected_offset = OffsetAndTimestamp(10, 1000, -1)
 
-        future = Future().success(({tp: expected_offset}, set()))
-        mocker.patch.object(fetcher, '_send_list_offsets_requests', return_value=future)
+        async def fake_send(ts):
+            return ({tp: expected_offset}, set())
+        mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         result = fetcher.offsets_by_times(timestamps, timeout_ms=None)
         assert result == {tp: expected_offset}
