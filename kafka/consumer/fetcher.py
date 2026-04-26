@@ -270,15 +270,15 @@ class Fetcher:
         raise Errors.KafkaTimeoutError(
             "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
 
-    def beginning_offsets(self, partitions, timeout_ms):
+    def beginning_offsets(self, partitions, timeout_ms=None):
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.EARLIEST, timeout_ms)
 
-    def end_offsets(self, partitions, timeout_ms):
+    def end_offsets(self, partitions, timeout_ms=None):
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.LATEST, timeout_ms)
 
-    def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
+    def beginning_or_end_offset(self, partitions, timestamp, timeout_ms=None):
         timestamps = dict([(tp, timestamp) for tp in partitions])
         offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
