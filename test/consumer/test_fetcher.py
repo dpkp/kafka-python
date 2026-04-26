@@ -111,27 +111,27 @@ def test_create_fetch_requests(fetcher, mocker, api_version, fetch_version):
 
 
 def test_reset_offsets_if_needed(fetcher, topic, mocker):
-    mocker.patch.object(fetcher, '_reset_offsets_async')
+    call_soon = mocker.patch.object(fetcher._client._manager, 'call_soon')
     partition = TopicPartition(topic, 0)
 
     # fetchable partition (has offset, not paused)
     fetcher.reset_offsets_if_needed()
-    assert fetcher._reset_offsets_async.call_count == 0
+    assert call_soon.call_count == 0
 
     # partition needs reset, no valid position
     fetcher._subscriptions.request_offset_reset(partition)
     fetcher.reset_offsets_if_needed()
-    fetcher._reset_offsets_async.assert_called_with({partition: OffsetResetStrategy.EARLIEST})
+    call_soon.assert_called_with(fetcher._reset_offsets_async, {partition: OffsetResetStrategy.EARLIEST})
     assert fetcher._subscriptions.assignment[partition].awaiting_reset is True
     fetcher.reset_offsets_if_needed()
-    fetcher._reset_offsets_async.assert_called_with({partition: OffsetResetStrategy.EARLIEST})
+    call_soon.assert_called_with(fetcher._reset_offsets_async, {partition: OffsetResetStrategy.EARLIEST})
 
     # partition needs reset, has valid position
-    fetcher._reset_offsets_async.reset_mock()
+    call_soon.reset_mock()
     fetcher._subscriptions.request_offset_reset(partition)
     fetcher._subscriptions.seek(partition, 123)
     fetcher.reset_offsets_if_needed()
-    assert fetcher._reset_offsets_async.call_count == 0
+    assert call_soon.call_count == 0
 
 
 def test__reset_offsets_async(fetcher, mocker):
@@ -144,15 +144,26 @@ def test__reset_offsets_async(fetcher, mocker):
     leaders = {tp0: 0, tp1: 1}
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", side_effect=lambda tp: leaders[tp])
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
-    future1 = Future()
-    future2 = Future()
-    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=[future1, future2])
-    fetcher._reset_offsets_async({
+
+    results = {
+        0: ({tp0: OffsetAndTimestamp(1001, None, -1)}, set()),
+        1: ({tp1: OffsetAndTimestamp(1002, None, -1)}, set()),
+    }
+    pending = []
+    async def fake_send(node_id, timestamps_and_epochs):
+        pending.append(node_id)
+        return results[node_id]
+    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
+
+    manager = fetcher._client._manager
+    manager.run(fetcher._reset_offsets_async, {
         tp0: OffsetResetStrategy.EARLIEST,
         tp1: OffsetResetStrategy.EARLIEST,
     })
-    future1.success(({tp0: OffsetAndTimestamp(1001, None, -1)}, set())),
-    future2.success(({tp1: OffsetAndTimestamp(1002, None, -1)}, set())),
+    # _reset_offsets_async is fire-and-forget; drain the spawned per-node tasks
+    while len(pending) < 2 or fetcher._subscriptions.assignment[tp0].awaiting_reset or fetcher._subscriptions.assignment[tp1].awaiting_reset:
+        manager.poll(timeout_ms=10)
+
     assert not fetcher._subscriptions.assignment[tp0].awaiting_reset
     assert not fetcher._subscriptions.assignment[tp1].awaiting_reset
     assert fetcher._subscriptions.assignment[tp0].position.offset == 1001
@@ -161,14 +172,13 @@ def test__reset_offsets_async(fetcher, mocker):
 
 def test__send_list_offsets_requests(fetcher, mocker):
     tp = TopicPartition("topic_send_list_offsets", 1)
-    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request")
-    send_futures = []
 
-    def send_side_effect(*args, **kw):
+    pending = []
+    async def fake_send(node_id, timestamps):
         f = Future()
-        send_futures.append(f)
-        return f
-    mocked_send.side_effect = send_side_effect
+        pending.append(f)
+        return await f
+    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request", side_effect=fake_send)
 
     mocked_leader = mocker.patch.object(
         fetcher._client.cluster, "leader_for_partition")
@@ -178,33 +188,36 @@ def test__send_list_offsets_requests(fetcher, mocker):
         [None, -1], itertools.cycle([0]))
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
 
+    manager = fetcher._client._manager
+
     # Leader == None
-    fut = fetcher._send_list_offsets_requests({tp: 0})
-    assert fut.failed()
-    assert isinstance(fut.exception, StaleMetadata)
+    with pytest.raises(StaleMetadata):
+        manager.run(fetcher._send_list_offsets_requests, {tp: 0})
     assert not mocked_send.called
 
     # Leader == -1
-    fut = fetcher._send_list_offsets_requests({tp: 0})
-    assert fut.failed()
-    assert isinstance(fut.exception, StaleMetadata)
+    with pytest.raises(StaleMetadata):
+        manager.run(fetcher._send_list_offsets_requests, {tp: 0})
     assert not mocked_send.called
 
     # Leader == 0, send failed
-    fut = fetcher._send_list_offsets_requests({tp: 0})
+    fut = manager.call_soon(fetcher._send_list_offsets_requests, {tp: 0})
+    while not pending:
+        manager.poll(timeout_ms=10)
     assert not fut.is_done
     assert mocked_send.called
-    # Check that we bound the futures correctly to chain failure
-    send_futures.pop().failure(NotLeaderForPartitionError(tp))
+    pending.pop().failure(NotLeaderForPartitionError(tp))
+    manager.poll(future=fut)
     assert fut.failed()
     assert isinstance(fut.exception, NotLeaderForPartitionError)
 
     # Leader == 0, send success
-    fut = fetcher._send_list_offsets_requests({tp: 0})
+    fut = manager.call_soon(fetcher._send_list_offsets_requests, {tp: 0})
+    while not pending:
+        manager.poll(timeout_ms=10)
     assert not fut.is_done
-    assert mocked_send.called
-    # Check that we bound the futures correctly to chain success
-    send_futures.pop().success(({tp: (10, 10000)}, set()))
+    pending.pop().success(({tp: (10, 10000)}, set()))
+    manager.poll(future=fut)
     assert fut.succeeded()
     assert fut.value == ({tp: (10, 10000)}, set())
 
@@ -214,23 +227,29 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
     tp2 = TopicPartition("topic_send_list_offsets", 2)
     tp3 = TopicPartition("topic_send_list_offsets", 3)
     tp4 = TopicPartition("topic_send_list_offsets", 4)
-    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request")
-    send_futures = []
 
-    def send_side_effect(node_id, timestamps):
+    send_futures = []
+    async def fake_send(node_id, timestamps):
         f = Future()
         send_futures.append((node_id, timestamps, f))
-        return f
-    mocked_send.side_effect = send_side_effect
+        return await f
+    mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request", side_effect=fake_send)
 
     mocked_leader = mocker.patch.object(
         fetcher._client.cluster, "leader_for_partition")
     mocked_leader.side_effect = itertools.cycle([0, 1])
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
 
+    manager = fetcher._client._manager
+
+    def wait_for_send_futures(n):
+        while len(send_futures) < n:
+            manager.poll(timeout_ms=10)
+
     # -- All node succeeded case
     tss = OrderedDict([(tp1, 0), (tp2, 0), (tp3, 0), (tp4, 0)])
-    fut = fetcher._send_list_offsets_requests(tss)
+    fut = manager.call_soon(fetcher._send_list_offsets_requests, tss)
+    wait_for_send_futures(2)
     assert not fut.is_done
     assert mocked_send.call_count == 2
 
@@ -249,115 +268,103 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
     }
 
     # We only resolved 1 future so far, so result future is not yet ready
+    manager.poll(timeout_ms=10)
     assert not fut.is_done
     second_future.success(({tp2: (12, 1002), tp4: (14, 1004)}, set()))
+    manager.poll(future=fut)
     assert fut.succeeded()
     assert fut.value == ({tp1: (11, 1001), tp2: (12, 1002), tp4: (14, 1004)}, set())
 
     # -- First succeeded second not
     del send_futures[:]
-    fut = fetcher._send_list_offsets_requests(tss)
-    assert len(send_futures) == 2
+    fut = manager.call_soon(fetcher._send_list_offsets_requests, tss)
+    wait_for_send_futures(2)
     send_futures[0][2].success(({tp1: (11, 1001)}, set()))
     send_futures[1][2].failure(UnknownTopicOrPartitionError(tp1))
+    manager.poll(future=fut)
     assert fut.failed()
     assert isinstance(fut.exception, UnknownTopicOrPartitionError)
 
     # -- First fails second succeeded
     del send_futures[:]
-    fut = fetcher._send_list_offsets_requests(tss)
-    assert len(send_futures) == 2
+    fut = manager.call_soon(fetcher._send_list_offsets_requests, tss)
+    wait_for_send_futures(2)
     send_futures[0][2].failure(UnknownTopicOrPartitionError(tp1))
     send_futures[1][2].success(({tp1: (11, 1001)}, set()))
+    manager.poll(future=fut)
     assert fut.failed()
     assert isinstance(fut.exception, UnknownTopicOrPartitionError)
 
 
 def test__handle_list_offsets_response_v1(fetcher, mocker):
     # Broker returns UnsupportedForMessageFormatError, will omit partition
-    fut = Future()
     res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]),
         ("topic", [(1, 0, 1000, 9999)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 1): OffsetAndTimestamp(9999, 1000, -1)}, set())
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 1): OffsetAndTimestamp(9999, 1000, -1)}, set())
 
     # Broker returns NotLeaderForPartitionError
-    fut = Future()
     res = ListOffsetsResponse[1]([
         ("topic", [(0, 6, -1, -1)]),
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({}, set([TopicPartition("topic", 0)]))
+    assert fetcher._handle_list_offsets_response(res) == (
+        {}, set([TopicPartition("topic", 0)]))
 
     # Broker returns UnknownTopicOrPartitionError
-    fut = Future()
     res = ListOffsetsResponse[1]([
         ("topic", [(0, 3, -1, -1)]),
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({}, set([TopicPartition("topic", 0)]))
+    assert fetcher._handle_list_offsets_response(res) == (
+        {}, set([TopicPartition("topic", 0)]))
 
     # Broker returns many errors and 1 result
-    fut = Future()
     res = ListOffsetsResponse[1]([
         ("topic", [(0, 43, -1, -1)]), # not retriable
         ("topic", [(1, 6, -1, -1)]),  # retriable
         ("topic", [(2, 3, -1, -1)]),  # retriable
         ("topic", [(3, 0, 1000, 9999)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 3): OffsetAndTimestamp(9999, 1000, -1)},
-                         set([TopicPartition("topic", 1), TopicPartition("topic", 2)]))
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 3): OffsetAndTimestamp(9999, 1000, -1)},
+        set([TopicPartition("topic", 1), TopicPartition("topic", 2)]))
 
 
 def test__handle_list_offsets_response_v2_v3(fetcher, mocker):
     # including a throttle_time shouldnt cause issues
-    fut = Future()
     res = ListOffsetsResponse[2](
         123, # throttle_time_ms
         [("topic", [(0, 0, 1000, 9999)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}, set())
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}, set())
 
     # v3 response is the same format
-    fut = Future()
     res = ListOffsetsResponse[3](
         123, # throttle_time_ms
         [("topic", [(0, 0, 1000, 9999)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}, set())
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, -1)}, set())
 
 
 def test__handle_list_offsets_response_v4_v5(fetcher, mocker):
     # includes leader_epoch
-    fut = Future()
     res = ListOffsetsResponse[4](
         123, # throttle_time_ms
         [("topic", [(0, 0, 1000, 9999, 1234)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}, set())
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}, set())
 
     # v5 response is the same format
-    fut = Future()
     res = ListOffsetsResponse[5](
         123, # throttle_time_ms
         [("topic", [(0, 0, 1000, 9999, 1234)])
     ])
-    fetcher._handle_list_offsets_response(fut, res)
-    assert fut.succeeded()
-    assert fut.value == ({TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}, set())
+    assert fetcher._handle_list_offsets_response(res) == (
+        {TopicPartition("topic", 0): OffsetAndTimestamp(9999, 1000, 1234)}, set())
 
 
 def test_fetched_records(fetcher, topic, mocker):
@@ -643,11 +650,15 @@ def test_reset_offsets_paused(subscription_state, client, mocker):
     subscription_state.request_offset_reset(tp, OffsetResetStrategy.LATEST)
 
     fetched_offsets = {tp: OffsetAndTimestamp(10, 1, -1)}
+    async def fake_send(node_id, timestamps_and_epochs):
+        return (fetched_offsets, set())
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
-    mocker.patch.object(fetcher, '_send_list_offsets_request',
-                        return_value=Future().success((fetched_offsets, set())))
+    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    fetcher.reset_offsets_if_needed()
+    manager = fetcher._client._manager
+    manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.LATEST})
+    while subscription_state.is_offset_reset_needed(tp):
+        manager.poll(timeout_ms=10)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
@@ -663,11 +674,15 @@ def test_reset_offsets_paused_without_valid(subscription_state, client, mocker):
     subscription_state.reset_missing_positions()
 
     fetched_offsets = {tp: OffsetAndTimestamp(0, 1, -1)}
+    async def fake_send(node_id, timestamps_and_epochs):
+        return (fetched_offsets, set())
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
-    mocker.patch.object(fetcher, '_send_list_offsets_request',
-                        return_value=Future().success((fetched_offsets, set())))
+    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    fetcher.reset_offsets_if_needed()
+    manager = fetcher._client._manager
+    manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.EARLIEST})
+    while subscription_state.is_offset_reset_needed(tp):
+        manager.poll(timeout_ms=10)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
