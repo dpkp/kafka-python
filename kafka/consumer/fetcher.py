@@ -1218,19 +1218,19 @@ class FetchRequestData:
         for tp, partition_info in self._to_send.items():
             partition_data[tp.topic].append(partition_info)
         return [
-            _FetchTopic(topic=tp.topic, partitions=partitions)
+            _FetchTopic(topic=topic, partitions=partitions)
             for topic, partitions in partition_data.items()
         ]
 
     @property
     def to_forget(self):
         # Return as list of _ForgottenTopic data objects
-        # so it an be passed directly to encoder
+        # so it can be passed directly to encoder
         partition_data = collections.defaultdict(list)
         for tp in self._to_forget:
             partition_data[tp.topic].append(tp.partition)
         return [
-            _ForgottenTopic(topic=tp.topic, partitions=partitions)
+            _ForgottenTopic(topic=topic, partitions=partitions)
             for topic, partitions in partition_data.items()
         ]
 
