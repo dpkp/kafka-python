@@ -339,6 +339,8 @@ class Fetcher:
             {TopicPartition: int}: Mapping of partition to retrieved offset.
 
         Raises:
+            UnsupportedVersionError if broker does not support any compatible
+                ListOffsetsRequest api version.
             KafkaTimeoutError if timeout_ms provided.
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
@@ -573,7 +575,8 @@ class Fetcher:
         # v9 LATEST_TIERED (KIP-1005)
         # v10 async remote (KIP-1075)
         max_version = 5
-        min_version = ListOffsetsRequest.min_version_for_isolation_level(self._isolation_level)
+        min_version = 1 if any(res[0] >= 0 for res in timestamps_and_epochs.values()) else 0
+        min_version = max(min_version, ListOffsetsRequest.min_version_for_isolation_level(self._isolation_level))
         by_topic = collections.defaultdict(list)
         for tp, (timestamp, leader_epoch) in timestamps_and_epochs.items():
             data = _ListOffsetsPartition(
@@ -590,7 +593,11 @@ class Fetcher:
         )
 
         log.debug("Sending ListOffsetRequest %s to broker %s", request, node_id)
-        response = await self._manager.send(request, node_id=node_id)
+        try:
+            response = await self._manager.send(request, node_id=node_id)
+        except Errors.IncompatibleBrokerVersion as exc:
+            # TODO: push this down to connection or bvd
+            raise Errors.UnsupportedVersionError(exc.args[0]) from None
         return self._handle_list_offsets_response(response)
 
     def _handle_list_offsets_response(self, response):
