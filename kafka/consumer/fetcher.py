@@ -120,6 +120,7 @@ class Fetcher:
             raise Errors.KafkaConfigurationError('Unrecognized isolation_level')
 
         self._client = client
+        self._manager = client._manager
         self._subscriptions = subscriptions
         self._completed_fetches = collections.deque()  # Unparsed responses
         self._next_partition_records = None  # Holds a single PartitionRecords until fully consumed
@@ -197,7 +198,7 @@ class Fetcher:
             if ts:
                 offset_resets[tp] = ts
 
-        self._client._manager.call_soon(self._reset_offsets_async, offset_resets)
+        self._manager.call_soon(self._reset_offsets_async, offset_resets)
         return True
 
     def offsets_by_times(self, timestamps, timeout_ms=None):
@@ -221,7 +222,7 @@ class Fetcher:
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        offsets = self._client._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -238,25 +239,25 @@ class Fetcher:
             if not timestamps:
                 return {}
 
-            future = self._client._manager.call_soon(self._send_list_offsets_requests, timestamps)
+            future = self._manager.call_soon(self._send_list_offsets_requests, timestamps)
             try:
-                offsets, retry = await self._client._manager.wait_for(future, timer.timeout_ms)
+                offsets, retry = await self._manager.wait_for(future, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 break
             except Exception as exc:
                 if not getattr(exc, 'retriable', False):
                     raise
-                if getattr(exc, 'invalid_metadata', False) or self._client._manager.cluster.need_update:
-                    refresh_future = self._client.cluster.request_update()
+                if getattr(exc, 'invalid_metadata', False) or self._manager.cluster.need_update:
+                    refresh_future = self._manager.cluster.request_update()
                     try:
-                        await self._client._manager.wait_for(refresh_future, timer.timeout_ms)
+                        await self._manager.wait_for(refresh_future, timer.timeout_ms)
                     except Errors.KafkaTimeoutError:
                         break
                 else:
                     delay = self.config['retry_backoff_ms'] / 1000
                     if timer.timeout_ms is not None:
                         delay = min(delay, timer.timeout_ms / 1000)
-                    await self._client._manager._net.sleep(delay)
+                    await self._manager._net.sleep(delay)
             else:
                 fetched_offsets.update(offsets)
                 if not retry:
@@ -278,7 +279,7 @@ class Fetcher:
 
     def beginning_or_end_offset(self, partitions, timestamp, timeout_ms):
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        offsets = self._client._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets
@@ -412,21 +413,18 @@ class Fetcher:
 
     async def _reset_offsets_async(self, timestamps):
         timestamps_by_node = self._group_list_offset_requests(timestamps)
-        manager = self._client._manager
         for node_id, timestamps_and_epochs in timestamps_by_node.items():
-            if not self._client.ready(node_id):
-                continue
             partitions = set(timestamps_and_epochs.keys())
             expire_at = time.monotonic() + self.config['request_timeout_ms'] / 1000
             self._subscriptions.set_reset_pending(partitions, expire_at)
-            manager.call_soon(self._reset_offsets_for_node, node_id, timestamps_and_epochs, partitions)
+            self._manager.call_soon(self._reset_offsets_for_node, node_id, timestamps_and_epochs, partitions)
 
     async def _reset_offsets_for_node(self, node_id, timestamps_and_epochs, partitions):
         try:
             fetched_offsets, partitions_to_retry = await self._send_list_offsets_request(node_id, timestamps_and_epochs)
         except Exception as error:
             self._subscriptions.reset_failed(partitions, time.monotonic() + self.config['retry_backoff_ms'] / 1000)
-            self._client.cluster.request_update()
+            self._manager.cluster.request_update()
             if not getattr(error, 'retriable', False):
                 if not self._cached_list_offsets_exception:
                     self._cached_list_offsets_exception = error
@@ -436,7 +434,7 @@ class Fetcher:
 
         if partitions_to_retry:
             self._subscriptions.reset_failed(partitions_to_retry, time.monotonic() + self.config['retry_backoff_ms'] / 1000)
-            self._client.cluster.request_update()
+            self._manager.cluster.request_update()
         for partition, offset in fetched_offsets.items():
             ts, _epoch = timestamps_and_epochs[partition]
             self._reset_offset_if_needed(partition, ts, offset.offset)
@@ -462,9 +460,8 @@ class Fetcher:
         if not timestamps_by_node:
             raise Errors.StaleMetadata()
 
-        manager = self._client._manager
         futures = [
-            manager.call_soon(self._send_list_offsets_request, node_id, ts)
+            self._manager.call_soon(self._send_list_offsets_request, node_id, ts)
             for node_id, ts in timestamps_by_node.items()
         ]
 
@@ -518,7 +515,7 @@ class Fetcher:
                     list(by_topic.items()))
 
         log.debug("Sending ListOffsetRequest %s to broker %s", request, node_id)
-        response = await self._client.send(node_id, request)
+        response = await self._manager.send(request, node_id=node_id)
         return self._handle_list_offsets_response(response)
 
     def _handle_list_offsets_response(self, response):
