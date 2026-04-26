@@ -1062,10 +1062,6 @@ class KafkaConsumer:
             KafkaTimeoutError: If fetch failed in request_timeout_ms
         """
         timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
-        if self.config['api_version'] <= (0, 10, 0):
-            raise UnsupportedVersionError(
-                "offsets_for_times API not supported for cluster version {}"
-                .format(self.config['api_version']))
         for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
