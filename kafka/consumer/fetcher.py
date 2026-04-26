@@ -688,49 +688,46 @@ class Fetcher:
         # v16 node endpoints (KIP-951)
         # v17 directory id (KIP-853)
         max_version = 10
-
-        # create the fetch info as a dict of lists of partition info tuples
-        # which can be passed to FetchRequest() via .items()
         fetchable = collections.defaultdict(collections.OrderedDict)
-        for partition in self._fetchable_partitions():
-            node_id = self._manager.cluster.leader_for_partition(partition)
+        for tp in self._fetchable_partitions():
+            node_id = self._manager.cluster.leader_for_partition(tp)
 
-            position = self._subscriptions.assignment[partition].position
+            position = self._subscriptions.assignment[tp].position
 
             # fetch if there is a leader and no in-flight requests
             if node_id is None or node_id == -1:
                 log.debug("No leader found for partition %s."
-                          " Requesting metadata update", partition)
+                          " Requesting metadata update", tp)
                 self._manager.cluster.request_update()
 
             elif self._manager.connection_delay(node_id) > 0:
                 # If we try to send during the reconnect backoff window, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
                 log.debug("Skipping fetch for partition %s because node %s is awaiting reconnect backoff",
-                        partition, node_id)
+                          tp, node_id)
 
             # TODO: handle throttle_delay in kafka.net
             elif self._client.throttle_delay(node_id) > 0:
                 # If we try to send while throttled, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
                 log.debug("Skipping fetch for partition %s because node %s is throttled",
-                        partition, node_id)
+                          tp, node_id)
 
             elif node_id in self._nodes_with_pending_fetch_requests:
                 log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",
-                        partition, node_id)
+                          tp, node_id)
 
             else:
                 # Leader is connected and does not have a pending fetch request
                 partition_info = _FetchPartition(
-                    partition=partition.partition,
+                    partition=tp.partition,
                     current_leader_epoch=position.leader_epoch,
                     fetch_offset=position.offset,
                     partition_max_bytes=self.config['max_partition_fetch_bytes']
                 )
-                fetchable[node_id][partition] = partition_info
+                fetchable[node_id][tp] = partition_info
                 log.debug("Adding fetch request for partition %s at offset %d",
-                          partition, position.offset)
+                          tp, position.offset)
 
         requests = {}
         for node_id, next_partitions in fetchable.items():
