@@ -625,23 +625,18 @@ class Fetcher:
                           " Requesting metadata update", partition)
                 self._manager.cluster.request_update()
 
-            elif not self._client.connected(node_id) and self._client.connection_delay(node_id) > 0:
+            elif self._manager.connection_delay(node_id) > 0:
                 # If we try to send during the reconnect backoff window, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
                 log.debug("Skipping fetch for partition %s because node %s is awaiting reconnect backoff",
                         partition, node_id)
 
+            # TODO: handle throttle_delay in kafka.net
             elif self._client.throttle_delay(node_id) > 0:
                 # If we try to send while throttled, then the request is just
                 # going to be failed anyway before being sent, so skip the send for now
                 log.debug("Skipping fetch for partition %s because node %s is throttled",
                         partition, node_id)
-
-            elif not self._client.ready(node_id):
-                # Until we support send request queues, any attempt to send to a not-ready node will be
-                # immediately failed with NodeNotReadyError.
-                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet",
-                        partition)
 
             elif node_id in self._nodes_with_pending_fetch_requests:
                 log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",
