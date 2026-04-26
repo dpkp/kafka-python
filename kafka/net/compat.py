@@ -4,7 +4,6 @@ import threading
 import time
 
 import kafka.errors as Errors
-from kafka.cluster import ClusterMetadata
 from kafka.net.manager import KafkaConnectionManager
 from kafka.net.selector import NetworkSelector
 
@@ -20,13 +19,11 @@ class KafkaNetClient:
     KafkaConnectionManager directly (fire-and-forget via _request_buffer).
     """
     def __init__(self, **configs):
+        # _lock is still used by the legacy Coordinator (kafka/coordinator/base.py).
+        # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
         self._net = NetworkSelector(**configs)
-        cluster = ClusterMetadata(
-            bootstrap_servers=configs.get('bootstrap_servers', ['localhost:9092']),
-            metadata_max_age_ms=configs.get('metadata_max_age_ms', 300000),
-        )
-        self._manager = KafkaConnectionManager(self._net, cluster, **configs)
+        self._manager = KafkaConnectionManager(self._net, **configs)
 
     @property
     def cluster(self):
@@ -129,16 +126,11 @@ class KafkaNetClient:
     # Delegation
 
     def poll(self, timeout_ms=None, future=None):
+        # _lock serializes with HeartbeatThread, which also drives poll()
+        # while holding this lock. Without it, both threads would call
+        # _net.poll() concurrently and race on selector / task state.
+        # The lock goes away once HeartbeatThread does (Phase D).
         with self._lock:
-            metadata_ttl = self._manager.cluster.ttl()
-            if metadata_ttl == 0:
-                self._manager.update_metadata()
-            elif self._manager.cluster.need_update:
-                # A refresh is pending but retry_backoff hasn't elapsed yet.
-                # Cap timeout_ms so select() returns in time for us to come
-                # back and re-check ttl.
-                if timeout_ms is None or metadata_ttl < timeout_ms:
-                    timeout_ms = metadata_ttl
             return self._manager.poll(timeout_ms=timeout_ms, future=future)
 
     def close(self, node_id=None):

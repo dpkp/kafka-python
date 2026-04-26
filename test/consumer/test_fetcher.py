@@ -868,7 +868,7 @@ class TestFetchOffsetsByTimes:
 
         refresh_future = Future().success(None)
         update_metadata_mock = mocker.patch.object(
-            fetcher._client._manager, 'update_metadata', return_value=refresh_future)
+            fetcher._client.cluster, 'request_update', return_value=refresh_future)
 
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp: expected_offset}

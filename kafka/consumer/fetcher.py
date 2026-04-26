@@ -247,7 +247,7 @@ class Fetcher:
                 if not getattr(exc, 'retriable', False):
                     raise
                 if getattr(exc, 'invalid_metadata', False) or self._client._manager.cluster.need_update:
-                    refresh_future = self._client._manager.update_metadata()
+                    refresh_future = self._client.cluster.request_update()
                     try:
                         await self._client._manager.wait_for(refresh_future, timer.timeout_ms)
                     except Errors.KafkaTimeoutError:

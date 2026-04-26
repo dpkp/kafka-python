@@ -6,6 +6,7 @@ import re
 import socket
 import threading
 import time
+import weakref
 
 from kafka import errors as Errors
 from kafka.future import Future
@@ -19,9 +20,6 @@ log = logging.getLogger(__name__)
 class ClusterMetadata:
     """
     A class to manage kafka cluster metadata.
-
-    This class does not perform any IO. It simply updates internal state
-    given API responses (MetadataResponse, FindCoordinatorResponse).
 
     Keyword Arguments:
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
@@ -48,6 +46,7 @@ class ClusterMetadata:
     }
 
     def __init__(self, **configs):
+        self._manager = None
         self._topics = set()
         self._brokers = {}  # node_id -> MetadataResponseBroker
         self._partitions = {}  # topic -> partition -> PartitionMetadata
@@ -64,7 +63,10 @@ class ClusterMetadata:
         self.internal_topics = set()
         self.controller = None
         self.cluster_id = None
-        self.metadata_refresh_in_progress = False
+
+        self._refresh_loop_future = None
+        self._refresh_future = None
+        self._notify_wakeup = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -73,6 +75,101 @@ class ClusterMetadata:
 
         self._bootstrap_brokers = self._generate_bootstrap_brokers()
         self._coordinator_brokers = {}
+
+    @property
+    def metadata_refresh_in_progress(self):
+        """True if a refresh is mid-flight."""
+        return self._refresh_future is not None and not self._refresh_future.is_done
+
+    def attach(self, manager):
+        """Wire this cluster to its connection manager.
+
+        Construction is split from attach so ClusterMetadata can be built
+        standalone (tests, snapshots) without a live manager. The reference is
+        held via weakref.proxy so that manager <-> cluster does not form a GC
+        cycle; manager.close() still calls cluster.close() to clear eagerly.
+        """
+        self._manager = weakref.proxy(manager)
+
+    def close(self):
+        # Drop manager reference cycle
+        self._manager = None
+
+    def start_refresh_loop(self):
+        """Spawn the periodic refresh coroutine. Idempotent. Triggers bootstrap if needed."""
+        if self._manager is None:
+            raise RuntimeError('start_refresh_loop requires prior attach()')
+        if self._refresh_loop_future is not None:
+            return
+        log.debug('Starting metadata refresh loop')
+        self._refresh_loop_future = self._manager.call_soon(self._refresh_loop)
+
+    async def _refresh_loop(self):
+        """Awaits ttl() then triggers refresh_metadata(); request_update() wakes early."""
+        if self._manager is None:
+            raise RuntimeError('start_refresh_loop requires prior attach()')
+        if not self._manager.bootstrapped:
+            await self._manager.bootstrap_async()
+        while True:
+            if self.metadata_refresh_in_progress:
+                await self._refresh_future
+            ttl_ms = self.ttl()
+            if ttl_ms == 0:
+                try:
+                    await self.refresh_metadata()
+                except Exception as exc:
+                    log.debug('Metadata refresh failed: %s', exc)
+                    log.exception(exc)
+                continue
+            try:
+                log.debug('Sleeping %s for next Metadata refresh', ttl_ms / 1000)
+                wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
+                await wakeup()
+            except Exception as exc:
+                log.error('Metadata refresh loop error: %s', exc)
+
+    async def refresh_metadata(self, node_id=None):
+        """Send one MetadataRequest and apply the response.
+
+        Concurrent callers share a single in-flight request: if a refresh is
+        already underway, additional callers await the same Future and see the
+        same outcome (success or exception). This avoids duplicate broker
+        requests when bootstrap and the refresh loop race, or when external
+        callers invoke refresh while the loop is mid-flight.
+        """
+        if self._manager is None:
+            raise RuntimeError('refresh_metadata requires prior attach()')
+        if self.metadata_refresh_in_progress:
+            log.debug('Metadata refresh already in flight; awaiting existing')
+            await self._refresh_future
+            return
+        self._refresh_future = Future()
+        try:
+            await self._do_refresh_metadata(node_id)
+        except Exception as exc:
+            self._refresh_future.failure(exc)
+            raise
+        else:
+            self._refresh_future.success(None)
+
+    async def _do_refresh_metadata(self, node_id):
+        log.debug(f'Metadata refresh (node_id={node_id})')
+        node_id = self._manager.least_loaded_node() if node_id is None else node_id
+        if node_id is None:
+            self._manager.update_backoff('metadata')
+            raise Errors.NodeNotReadyError('metadata')
+        else:
+            self._manager.reset_backoff('metadata')
+        try:
+            request = self.metadata_request()
+            log.debug("Sending metadata request %s to node %s", request, node_id)
+            response = await self._manager.send(request, node_id)
+        except Exception as exc:
+            log.error('Metadata refresh: failed %s', exc)
+            self.failed_update(exc)
+            raise
+        log.debug('Metadata refresh: success')
+        self.update_metadata(response)
 
     def _generate_bootstrap_brokers(self):
         # collect_hosts does not perform DNS, so we should be fine to re-use
@@ -228,8 +325,9 @@ class ClusterMetadata:
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
         now = time.monotonic() * 1000
-        if self.metadata_refresh_in_progress:
-            ttl = self.config['retry_backoff_ms']
+        if self._manager is not None and self._manager.connection_delay('metadata'):
+            # Exponential backoff - KIP-580
+            return self._manager.connection_delay('metadata') * 1000
         elif self._need_update:
             ttl = 0
         else:
@@ -258,7 +356,13 @@ class ClusterMetadata:
             self._need_update = True
             if not self._future or self._future.is_done:
                 self._future = Future()
-            return self._future
+            ret = self._future
+            if self._manager:
+                self.start_refresh_loop()
+            if self._notify_wakeup:
+                self._notify_wakeup()
+                self._notify_wakeup = None
+        return ret
 
     @property
     def need_update(self):
@@ -283,10 +387,6 @@ class ClusterMetadata:
             return topics
 
     def metadata_request(self):
-        if self.metadata_refresh_in_progress:
-            raise RuntimeError('MetadataRequest currently in-flight!')
-        else:
-            self.metadata_refresh_in_progress = True
         if self.need_all_topic_metadata:
             topics = MetadataRequest.ALL_TOPICS
         elif not self._topics:
@@ -309,7 +409,6 @@ class ClusterMetadata:
                 f = self._future
                 self._future = None
         self._last_refresh_ms = time.monotonic() * 1000
-        self.metadata_refresh_in_progress = False
         if f:
             f.failure(exception)
 
@@ -403,7 +502,6 @@ class ClusterMetadata:
         now = time.monotonic() * 1000
         self._last_refresh_ms = now
         self._last_successful_refresh_ms = now
-        self.metadata_refresh_in_progress = False
 
         if f:
             # In the common case where we ask for a single topic and get back an

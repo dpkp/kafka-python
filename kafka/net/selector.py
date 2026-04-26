@@ -231,9 +231,9 @@ class NetworkSelector:
             key = self._selector.get_key(fileobj)
             reader, writer = key.data
             if event == selectors.EVENT_READ and reader:
-                raise RuntimeError("EVENT_READ already registered for fileobj")
+                raise RuntimeError("EVENT_READ already registered for fileobj %s by %s (new: %s)" % (fileobj, reader, task))
             if event == selectors.EVENT_WRITE and writer:
-                raise RuntimeError("EVENT_WRITE already registered for fileobj")
+                raise RuntimeError("EVENT_WRITE already registered for fileobj %s by %s (new: %s)" % (fileobj, writer, task))
             self._selector.modify(fileobj, key.events | event, (task, writer) if event == selectors.EVENT_READ else (reader, task))
         except KeyError:
             self._selector.register(fileobj, event, (task, None) if event == selectors.EVENT_READ else (None, task))
