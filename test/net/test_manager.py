@@ -19,19 +19,6 @@ def net():
     return NetworkSelector()
 
 
-@pytest.fixture
-def cluster():
-    return ClusterMetadata(bootstrap_servers=['localhost:9092'])
-
-
-@pytest.fixture
-def manager(net):
-    return KafkaConnectionManager(net,
-                                  socket_connection_timeout_ms=1000,
-                                  reconnect_backoff_ms=10,
-                                  reconnect_backoff_max_ms=100)
-
-
 class TestKafkaConnectionManagerConfig:
     def test_default_config(self, net):
         m = KafkaConnectionManager(net)
@@ -44,7 +31,8 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net, reconnect_backoff_ms=100)
         assert m.config['reconnect_backoff_ms'] == 100
 
-    def test_initial_state(self, manager):
+    def test_initial_state(self, net):
+        manager = KafkaConnectionManager(net)
         assert manager._conns == {}
         assert manager._backoff == {}
         assert manager.broker_version_data is None
@@ -96,7 +84,8 @@ class TestKafkaConnectionManagerGetConnection:
         with pytest.raises(Errors.NodeNotReadyError):
             manager.get_connection('bootstrap-0')
 
-    def test_get_connection_creates_connection(self, manager):
+    def test_get_connection_creates_connection(self, net):
+        manager = KafkaConnectionManager(net)
         conn = manager.get_connection('bootstrap-0')
         assert isinstance(conn, KafkaConnection)
         assert conn.node_id == 'bootstrap-0'
@@ -171,12 +160,9 @@ class TestKafkaConnectionManagerBootstrap:
         cluster = manager.cluster
 
         # First metadata update leaves brokers empty; second populates them.
-        # The real update_metadata also clears metadata_refresh_in_progress
-        # so subsequent metadata_request() calls don't raise.
         call_count = [0]
         def mock_update_metadata(response):
             call_count[0] += 1
-            cluster.metadata_refresh_in_progress = False
             if call_count[0] >= 2:
                 cluster._brokers = {1: MagicMock(node_id=1)}
 

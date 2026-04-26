@@ -63,9 +63,9 @@ class ClusterMetadata:
         self.internal_topics = set()
         self.controller = None
         self.cluster_id = None
-        self.metadata_refresh_in_progress = False
 
         self._refresh_loop_future = None
+        self._refresh_future = None
         self._notify_wakeup = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
@@ -75,6 +75,10 @@ class ClusterMetadata:
 
         self._bootstrap_brokers = self._generate_bootstrap_brokers()
         self._coordinator_brokers = {}
+
+    @property
+    def metadata_refresh_in_progress(self):
+        return self._refresh_future is not None and not self._refresh_future.is_done
 
     def attach(self, manager):
         self._manager = weakref.proxy(manager)
@@ -117,7 +121,21 @@ class ClusterMetadata:
 
     async def refresh_metadata(self, node_id=None):
         if self._manager is None:
-            raise RuntimeError('start_refresh_loop requires prior attach()')
+            raise RuntimeError('refresh_metadata requires prior attach()')
+        if self._refresh_future is not None and not self._refresh_future.is_done:
+            log.debug('Metadata refresh already in flight; awaiting existing')
+            await self._refresh_future
+            return
+        self._refresh_future = Future()
+        try:
+            await self._do_refresh_metadata(node_id)
+        except Exception as exc:
+            self._refresh_future.failure(exc)
+            raise
+        else:
+            self._refresh_future.success(None)
+
+    async def _do_refresh_metadata(self, node_id):
         log.debug(f'Metadata refresh (node_id={node_id})')
         node_id = self._manager.least_loaded_node() if node_id is None else node_id
         if node_id is None:
@@ -128,15 +146,11 @@ class ClusterMetadata:
         try:
             request = self.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
-            self.metadata_refresh_in_progress = True
             response = await self._manager.send(request, node_id)
         except Exception as exc:
             log.error('Metadata refresh: failed %s', exc)
             self.failed_update(exc)
             raise
-        finally:
-            self.metadata_refresh_in_progress = False
-        # Success!
         log.debug('Metadata refresh: success')
         self.update_metadata(response)
 
