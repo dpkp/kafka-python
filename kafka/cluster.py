@@ -78,9 +78,17 @@ class ClusterMetadata:
 
     @property
     def metadata_refresh_in_progress(self):
+        """True if a refresh is mid-flight."""
         return self._refresh_future is not None and not self._refresh_future.is_done
 
     def attach(self, manager):
+        """Wire this cluster to its connection manager.
+
+        Construction is split from attach so ClusterMetadata can be built
+        standalone (tests, snapshots) without a live manager. The reference is
+        held via weakref.proxy so that manager <-> cluster does not form a GC
+        cycle; manager.close() still calls cluster.close() to clear eagerly.
+        """
         self._manager = weakref.proxy(manager)
 
     def close(self):
@@ -120,6 +128,14 @@ class ClusterMetadata:
                 log.error('_refresh_loop: %s', exc)
 
     async def refresh_metadata(self, node_id=None):
+        """Send one MetadataRequest and apply the response.
+
+        Concurrent callers share a single in-flight request: if a refresh is
+        already underway, additional callers await the same Future and see the
+        same outcome (success or exception). This avoids duplicate broker
+        requests when bootstrap and the refresh loop race, or when external
+        callers invoke refresh while the loop is mid-flight.
+        """
         if self._manager is None:
             raise RuntimeError('refresh_metadata requires prior attach()')
         if self._refresh_future is not None and not self._refresh_future.is_done:

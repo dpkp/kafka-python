@@ -471,6 +471,16 @@ class KafkaConnectionManager:
         return state['value']
 
     def wakeup_pair(self, timeout_secs):
+        """Returns (awaitable, threadsafe_notifier) for an interruptible sleep.
+
+        The awaitable resolves when either ``timeout_secs`` elapses or the
+        notifier is called -- whichever first. The notifier is safe to call
+        from any thread (it routes through call_soon_threadsafe).
+
+        Used by the metadata refresh loop to sleep on its TTL while remaining
+        interruptible by external callers (e.g. KafkaProducer / KafkaConsumer
+        invoking cluster.request_update() from another thread).
+        """
         fut = Future()
         wakeup = lambda f=fut: f.success(None) if not f.is_done else None
         timer = self._net.call_later(timeout_secs, wakeup)
