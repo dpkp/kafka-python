@@ -3,16 +3,13 @@ import hashlib
 import pytest
 
 from kafka.admin import (
-    KafkaAdminClient, ScramMechanism,
-    UserScramCredentialDeletion, UserScramCredentialUpsertion,
+    ScramMechanism, UserScramCredentialDeletion, UserScramCredentialUpsertion,
 )
 from kafka.errors import IllegalArgumentError
 from kafka.protocol.admin import (
     AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse,
     DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse,
 )
-
-from test.mock_broker import MockBroker
 
 
 class TestScramMechanism:
@@ -85,26 +82,6 @@ class TestUserScramCredentialUpsertion:
 # ---------------------------------------------------------------------------
 # MockBroker tests exercising the full wire round-trip
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def broker(request):
-    # parametrize tests with indirect=True
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 class TestAlterUserScramCredentialsMockBroker:

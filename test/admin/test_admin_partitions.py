@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from kafka.admin import KafkaAdminClient, OffsetSpec
+from kafka.admin import OffsetSpec
 from kafka.errors import (
     UnknownTopicOrPartitionError,
     IncompatibleBrokerVersion,
@@ -15,28 +15,6 @@ from kafka.protocol.admin import (
 from kafka.protocol.consumer import ListOffsetsRequest, ListOffsetsResponse
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import TopicPartition, OffsetAndTimestamp
-
-from test.mock_broker import MockBroker
-
-
-@pytest.fixture
-def broker(request):
-    # parametrize tests with indirect=True
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +467,7 @@ class TestListPartitionOffsetsMockBroker:
         assert captured['request'].topics[0].partitions[0].timestamp == 1700000000
         assert result[TopicPartition('topic-a', 0)].offset == 42
 
-    def test_groups_partitions_by_leader(self, broker):
+    def test_groups_partitions_by_leader(self, broker, admin):
         # Two partitions, two different leaders => two requests.
         Broker = MetadataResponse.MetadataResponseBroker
         Topic = MetadataResponse.MetadataResponseTopic
@@ -510,6 +488,7 @@ class TestListPartitionOffsetsMockBroker:
                 Broker(node_id=1, host=broker.host, port=broker.port, rack=None),
             ],
         )
+        admin._manager.bootstrap()
 
         captured = []
 
@@ -523,13 +502,6 @@ class TestListPartitionOffsetsMockBroker:
 
         broker.respond_fn(ListOffsetsRequest, handler)
         broker.respond_fn(ListOffsetsRequest, handler)
-
-        # cant use fixture because it bootstraps eagerly
-        admin = KafkaAdminClient(
-            kafka_client=broker.client_factory(),
-            bootstrap_servers='%s:%d' % (broker.host, broker.port),
-            request_timeout_ms=5000,
-        )
         try:
             admin.list_partition_offsets({
                 TopicPartition('topic-a', 0): OffsetSpec.LATEST,

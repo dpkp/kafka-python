@@ -1,6 +1,6 @@
 import pytest
 
-from kafka.admin import KafkaAdminClient, UpdateFeatureType
+from kafka.admin import UpdateFeatureType
 from kafka.errors import (
     ClusterAuthorizationFailedError,
     FeatureUpdateFailedError,
@@ -8,32 +8,6 @@ from kafka.errors import (
 )  # noqa: F401
 from kafka.protocol.admin import UpdateFeaturesRequest, UpdateFeaturesResponse
 from kafka.protocol.metadata import ApiVersionsRequest, ApiVersionsResponse
-
-from test.mock_broker import MockBroker
-
-
-# ---------------------------------------------------------------------------
-# fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def broker(request):
-    broker_version = getattr(request, 'param', (4, 2))
-    return MockBroker(broker_version=broker_version)
-
-
-@pytest.fixture
-def admin(broker):
-    admin = KafkaAdminClient(
-        kafka_client=broker.client_factory(),
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        request_timeout_ms=5000,
-    )
-    try:
-        yield admin
-    finally:
-        admin.close()
 
 
 # ---------------------------------------------------------------------------
