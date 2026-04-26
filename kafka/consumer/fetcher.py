@@ -542,9 +542,13 @@ class Fetcher:
                     else:
                         offset = partition_info.offset
                     timestamp = partition_info.timestamp
-                    if timestamp == -1:
-                        timestamp = None
                     leader_epoch = partition_info.leader_epoch
+                    # DataContainer currently does not set default for
+                    # out-of-version fields; so we need to handle explicitly
+                    if timestamp is None:
+                        timestamp = -1
+                    if leader_epoch is None:
+                        leader_epoch = -1
                     log.debug("Handling ListOffsetsResponse response for %s. "
                               "Fetched offset %s, timestamp %s, leader_epoch %s",
                               tp, offset, timestamp, leader_epoch)
