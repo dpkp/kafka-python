@@ -113,16 +113,16 @@ def test_send_fetches(fetcher, topic, mocker):
         return_value=(dict(enumerate(map(lambda r: (r, build_fetch_offsets(r)), fetch_requests)))))
 
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
-    mocker.patch.object(fetcher._client, 'send')
+    mocker.patch.object(fetcher._manager, 'send')
     ret = fetcher.send_fetches()
     for node, request in enumerate(fetch_requests):
-        fetcher._client.send.assert_any_call(node, request, wakeup=False)
+        fetcher._manager.send.assert_any_call(request, node_id=node)
     assert len(ret) == len(fetch_requests)
 
 
 def test_create_fetch_requests(fetcher, mocker, assignment):
-    mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
+    mocker.patch.object(fetcher._manager.cluster, "leader_for_partition", return_value=0)
+    mocker.patch.object(fetcher._manager.cluster, "leader_epoch_for_partition", return_value=0)
     mocker.patch.object(fetcher._client, "ready", return_value=True)
     by_node = fetcher._create_fetch_requests()
     assert len(by_node) == 1

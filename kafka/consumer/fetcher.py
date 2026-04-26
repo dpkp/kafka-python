@@ -152,7 +152,7 @@ class Fetcher:
         for node_id, (request, fetch_offsets) in self._create_fetch_requests().items():
             log.debug("Sending FetchRequest to node %s", node_id)
             self._nodes_with_pending_fetch_requests.add(node_id)
-            future = self._client.send(node_id, request, wakeup=False)
+            future = self._manager.send(request, node_id=node_id)
             future.add_callback(self._handle_fetch_response, node_id, fetch_offsets, time.monotonic())
             future.add_errback(self._handle_fetch_error, node_id)
             future.add_both(self._clear_pending_fetch_request, node_id)
@@ -611,7 +611,7 @@ class Fetcher:
         # which can be passed to FetchRequest() via .items()
         fetchable = collections.defaultdict(collections.OrderedDict)
         for partition in self._fetchable_partitions():
-            node_id = self._client.cluster.leader_for_partition(partition)
+            node_id = self._manager.cluster.leader_for_partition(partition)
 
             position = self._subscriptions.assignment[partition].position
 
@@ -619,7 +619,7 @@ class Fetcher:
             if node_id is None or node_id == -1:
                 log.debug("No leader found for partition %s."
                           " Requesting metadata update", partition)
-                self._client.cluster.request_update()
+                self._manager.cluster.request_update()
 
             elif not self._client.connected(node_id) and self._client.connection_delay(node_id) > 0:
                 # If we try to send during the reconnect backoff window, then the request is just
@@ -802,7 +802,7 @@ class Fetcher:
                                 Errors.UnknownTopicOrPartitionError,
                                 Errors.KafkaStorageError):
                 log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
-                self._client.cluster.request_update()
+                self._manager.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:
                 position = self._subscriptions.assignment[tp].position
                 if position is None or position.offset != fetch_offset:
@@ -821,7 +821,7 @@ class Fetcher:
             elif getattr(error_type, 'retriable', False):
                 log.debug("Retriable error fetching partition %s: %s", tp, error_type())
                 if getattr(error_type, 'invalid_metadata', False):
-                    self._client.cluster.request_update()
+                    self._manager.cluster.request_update()
             else:
                 raise error_type('Unexpected error while fetching data')
 
