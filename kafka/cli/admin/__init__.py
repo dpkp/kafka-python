@@ -87,6 +87,8 @@ def run_cli(args=None):
     except Exception:
         logger.critical('Error!', exc_info=True)
         return 1
+    finally:
+        client.close()
 
 
 # Commands TODO:
