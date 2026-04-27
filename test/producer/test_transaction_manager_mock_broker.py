@@ -292,6 +292,36 @@ class TestInitProducerIdHandlerMockBroker:
         assert len(fallbacks) == 1
         assert fallbacks[0]._is_epoch_bump is False
 
+    def test_idempotent_producer_can_bump_epoch_from_uninitialized(self, broker, client):
+        """Idempotent (non-transactional) producer must be able to bump its
+        producer epoch (KIP-360) when the broker returns
+        OUT_OF_ORDER_SEQUENCE_NUMBER, even though its state machine remains
+        at UNINITIALIZED.
+
+        Sender._maybe_wait_for_producer_id() acquires a producer_id for the
+        idempotent producer by calling set_producer_id_and_epoch() directly
+        without driving the state machine through INITIALIZING -> READY.
+        That leaves the manager at UNINITIALIZED with a valid producer_id,
+        and a subsequent bump_producer_id_and_epoch() raises an
+        invalid-state-transition KafkaError on master. Reproduces the
+        failure observed in test_idempotent_producer_high_throughput.
+        """
+        tm = TransactionManager(
+            transactional_id=None,
+            api_version=_API_VERSION,
+            metadata=client.cluster,
+        )
+        tm.set_producer_id_and_epoch(
+            ProducerIdAndEpoch(_PRODUCER_ID, _PRODUCER_EPOCH))
+        assert tm._current_state == TransactionState.UNINITIALIZED
+        assert tm.has_producer_id()
+
+        # On master this raises:
+        #   KafkaError: TransactionalId None: Invalid transition attempted
+        #   from state UNINITIALIZED to state BUMPING_PRODUCER_EPOCH
+        tm.bump_producer_id_and_epoch()
+        assert tm.is_bumping_epoch()
+
 
 # ---------------------------------------------------------------------------
 # AddPartitionsToTxnHandler
