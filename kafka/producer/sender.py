@@ -8,8 +8,8 @@ import time
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
-from kafka.producer.transaction_manager import ProducerIdAndEpoch, TransactionManager
-from kafka.protocol.producer import InitProducerIdRequest, ProduceRequest, ProduceResponse
+from kafka.producer.transaction_manager import TransactionManager
+from kafka.protocol.producer import ProduceRequest, ProduceResponse
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
 from kafka.version import __version__
@@ -147,10 +147,15 @@ class Sender(threading.Thread):
 
         if self._transaction_manager:
             try:
-                if not self._transaction_manager.is_transactional():
-                    # this is an idempotent producer, so make sure we have a producer id
-                    self._maybe_wait_for_producer_id()
-                elif self._transaction_manager.has_in_flight_transactional_request() or self._maybe_send_transactional_request():
+                if (not self._transaction_manager.is_transactional()
+                        and not self._transaction_manager.has_producer_id()):
+                    # Idempotent producer: ensure an InitProducerIdHandler is
+                    # enqueued. Dispatch happens below via the same handler-queue
+                    # path used for transactional requests; the produce gate
+                    # below blocks new sends until the response arrives.
+                    self._transaction_manager.init_producer_id()
+
+                if self._transaction_manager.has_in_flight_transactional_request() or self._maybe_send_pending_request():
                     # as long as there are outstanding transactional requests, we simply wait for them to return
                     self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
                     return
@@ -284,7 +289,7 @@ class Sender(threading.Thread):
                      self._failed_produce, batches, node_id))
         return poll_timeout_ms
 
-    def _maybe_send_transactional_request(self):
+    def _maybe_send_pending_request(self):
         if self._transaction_manager.is_completing() and self._accumulator.has_incomplete:
             if self._transaction_manager.is_aborting():
                 self._accumulator.abort_undrained_batches(Errors.KafkaError("Failing batch since transaction was aborted"))
@@ -364,39 +369,6 @@ class Sender(threading.Thread):
             ensure_valid_topic_name(topic)
             self._topics_to_add.add(topic)
             self.wakeup()
-
-    def _maybe_wait_for_producer_id(self):
-        while not self._transaction_manager.has_producer_id():
-            try:
-                node_id = self._client.least_loaded_node()
-                if node_id is None or not self._client.await_ready(node_id):
-                    log.debug("%s, Could not find an available broker to send InitProducerIdRequest to." +
-                              " Will back off and try again.", str(self))
-                    time.sleep(self._client.least_loaded_node_refresh_ms() / 1000)
-                    return
-                version = self._client.api_version(InitProducerIdRequest, max_version=1)
-                request = InitProducerIdRequest[version](
-                    transactional_id=self.config['transactional_id'],
-                    transaction_timeout_ms=self.config['transaction_timeout_ms'],
-                )
-                response = self._client.send_and_receive(node_id, request)
-                error_type = Errors.for_code(response.error_code)
-                if error_type is Errors.NoError:
-                    self._transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(response.producer_id, response.producer_epoch))
-                    break
-                elif getattr(error_type, 'retriable', False):
-                    log.debug("%s: Retriable error from InitProducerId response: %s", str(self), error_type.__name__)
-                    if getattr(error_type, 'invalid_metadata', False):
-                        self._metadata.request_update()
-                else:
-                    self._transaction_manager.transition_to_fatal_error(error_type())
-                    break
-            except Errors.KafkaConnectionError:
-                log.debug("%s: Broker %s disconnected while awaiting InitProducerId response", str(self), node_id)
-            except Errors.RequestTimedOutError:
-                log.debug("%s: InitProducerId request to node %s timed out", str(self), node_id)
-            log.debug("%s: Retry InitProducerIdRequest in %sms.", str(self), self.config['retry_backoff_ms'])
-            time.sleep(self.config['retry_backoff_ms'] / 1000)
 
     def _failed_produce(self, batches, node_id, error):
         log.error("%s: Error sending produce request to node %d: %s", str(self), node_id, error) # trace

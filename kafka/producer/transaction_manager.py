@@ -159,6 +159,26 @@ class TransactionManager:
             self._enqueue_request(handler)
             return handler.result
 
+    def init_producer_id(self):
+        """Idempotent (non-transactional) producer: enqueue an InitProducerIdHandler.
+
+        Drives UNINITIALIZED -> INITIALIZING; the handler completes the
+        transition to READY on success. No-op outside UNINITIALIZED so
+        repeated calls from the sender's run loop are safe.
+        """
+        with self._lock:
+            if self.is_transactional():
+                raise Errors.IllegalStateError(
+                    "init_producer_id is for idempotent (non-transactional) producers;"
+                    " use initialize_transactions for transactional producers")
+            if self._current_state != TransactionState.UNINITIALIZED:
+                return
+            self._transition_to(TransactionState.INITIALIZING)
+            self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
+            self._sequence_numbers.clear()
+            handler = InitProducerIdHandler(self, 0)
+            self._enqueue_request(handler)
+
     def begin_transaction(self):
         with self._lock:
             self._ensure_transactional()
@@ -894,6 +914,14 @@ class InitProducerIdHandler(TxnRequestHandler):
     @property
     def priority(self):
         return Priority.INIT_PRODUCER_ID
+
+    @property
+    def coordinator_type(self):
+        # Idempotent (non-transactional) producers don't have a transaction
+        # coordinator -- InitProducerIdRequest can be sent to any broker.
+        if self.transaction_manager.transactional_id is None:
+            return None
+        return 'transaction'
 
     def handle_response(self, response):
         error_type = Errors.for_code(response.error_code)
