@@ -327,13 +327,19 @@ class KafkaTCPTransport:
         pass
 
     def host_port(self):
-        host, port = self.getPeer()[0:2]
-        local_port = self._sock.getsockname()[1]
-        return '%s:%d<-%d' % (host, port, local_port)
+        try:
+            host, port = self._sock.getpeername()[0:2]
+        except OSError:
+            return 'none'
+        try:
+            local_port = self._sock.getsockname()[1]
+        except OSError:
+            return f'{host}:{port}'
+        return f'{host}:{port}<-{local_port}'
 
     def __str__(self):
         state = ' (closed)' if self._closed else ''
-        return f"<KafkaTCPTransport [{self.host_port()}]{state}>"
+        return f"<{self.__class__.__name__} [{self.host_port()}]{state}>"
 
 
 class KafkaSSLTransport(KafkaTCPTransport):
@@ -395,6 +401,3 @@ class KafkaSSLTransport(KafkaTCPTransport):
                     err = Errors.KafkaConnectionError(e)
                     return total_bytes, err
         return total_bytes, err
-
-    def __str__(self):
-        return ("<KafkaSSLTransport [%s:%d]" % self.getPeer()[0:2]) + (" (closed)>" if self._closed else ">")
