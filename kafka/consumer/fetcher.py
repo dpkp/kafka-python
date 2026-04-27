@@ -593,11 +593,7 @@ class Fetcher:
         )
 
         log.debug("Sending ListOffsetRequest %s to broker %s", request, node_id)
-        try:
-            response = await self._manager.send(request, node_id=node_id)
-        except Errors.IncompatibleBrokerVersion as exc:
-            # TODO: push this down to connection or bvd
-            raise Errors.UnsupportedVersionError(exc.args[0]) from None
+        response = await self._manager.send(request, node_id=node_id)
         return self._handle_list_offsets_response(response)
 
     def _handle_list_offsets_response(self, response):

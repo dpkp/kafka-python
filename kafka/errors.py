@@ -37,10 +37,6 @@ class IllegalStateError(KafkaError):
     pass
 
 
-class IncompatibleBrokerVersion(KafkaError):
-    pass
-
-
 class KafkaConfigurationError(KafkaError):
     pass
 
@@ -402,6 +398,10 @@ class UnsupportedVersionError(BrokerResponseError):
     errno = 35
     message = 'UNSUPPORTED_VERSION'
     description = 'The version of API is not supported.'
+
+
+class IncompatibleBrokerVersion(UnsupportedVersionError):
+    """Synthetic error raised by client"""
 
 
 class TopicAlreadyExistsError(BrokerResponseError):
