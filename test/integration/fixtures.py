@@ -104,8 +104,7 @@ def gen_ssl_resources(directory):
 
 
 class Fixture:
-    kafka_version = os.environ.get('KAFKA_VERSION', '0.11.0.2')
-    scala_version = os.environ.get("SCALA_VERSION", '2.8.0')
+    kafka_version = os.environ.get('KAFKA_VERSION', '4.2.0')
     project_root = os.environ.get('PROJECT_ROOT',
                                   os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     kafka_root = os.environ.get("KAFKA_ROOT",
