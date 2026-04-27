@@ -7,6 +7,8 @@ kafka-python API
    KafkaConsumer
    KafkaProducer
    KafkaAdminClient
+   KafkaConnectionManager
+   KafkaConnection
    ClusterMetadata
    OffsetAndMetadata
    TopicPartition
