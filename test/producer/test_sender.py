@@ -288,10 +288,6 @@ def test_failed_produce(sender, mocker):
     ])
 
 
-def test_maybe_wait_for_producer_id():
-    pass
-
-
 def test_run_once():
     pass
 
@@ -1159,9 +1155,6 @@ class TestKip360SenderIntegration:
         tm._current_state = _TS.BUMPING_PRODUCER_EPOCH
         mocker.patch.object(sender, '_send_producer_data')
         mocker.patch.object(sender._client, 'poll')
-        # is_transactional() is False (no transactional_id), so the sender
-        # runs _maybe_wait_for_producer_id() -- mock that to a no-op
-        mocker.patch.object(sender, '_maybe_wait_for_producer_id')
 
         sender.run_once()
 
