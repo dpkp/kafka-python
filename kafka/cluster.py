@@ -10,6 +10,7 @@ import weakref
 
 from kafka import errors as Errors
 from kafka.future import Future
+from kafka.net.selector import WakeupNotifier
 from kafka.protocol.metadata import MetadataRequest, MetadataResponse
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
@@ -66,7 +67,7 @@ class ClusterMetadata:
 
         self._refresh_loop_future = None
         self._refresh_future = None
-        self._notify_wakeup = None
+        self._wakeup = None
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -90,6 +91,7 @@ class ClusterMetadata:
         cycle; manager.close() still calls cluster.close() to clear eagerly.
         """
         self._manager = weakref.proxy(manager)
+        self._wakeup = WakeupNotifier(self._manager._net)
 
     def close(self):
         # Drop manager reference cycle
@@ -123,8 +125,7 @@ class ClusterMetadata:
                 continue
             try:
                 log.debug('Sleeping %s for next Metadata refresh', ttl_ms / 1000)
-                wakeup, self._notify_wakeup = self._manager.wakeup_pair(ttl_ms / 1000)
-                await wakeup()
+                await self._wakeup(ttl_ms / 1000)
             except Exception as exc:
                 log.error('Metadata refresh loop error: %s', exc)
 
@@ -359,9 +360,7 @@ class ClusterMetadata:
             ret = self._future
             if self._manager:
                 self.start_refresh_loop()
-            if self._notify_wakeup:
-                self._notify_wakeup()
-                self._notify_wakeup = None
+                self._wakeup.notify()
         return ret
 
     @property
