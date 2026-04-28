@@ -138,6 +138,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                                                      "and session_timeout_ms")
 
         self._client = client
+        self._manager = client._manager
         self.heartbeat = Heartbeat(**self.config)
         self._heartbeat_thread = None
         self._lock = threading.Condition()
@@ -917,32 +918,41 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def is_dynamic_member(self):
         return self.group_instance_id is None or self.config['api_version'] < (2, 3)
 
-    def maybe_leave_group(self, timeout_ms=None):
-        """Leave the current group and reset local generation/memberId."""
+    def maybe_leave_group(self, reason=None, timeout_ms=None):
+        """Leave the current group and reset local generation/member_id."""
+        return self._manager.run(self.maybe_leave_group_async, reason, timeout_ms)
+
+    async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
         if self.config['api_version'] < (0, 9):
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
-        with self._client._lock, self._lock:
-            # Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
-            # consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
-            # and the membership expiration is only controlled by session timeout.
-            if (self.is_dynamic_member() and not self.coordinator_unknown()
-                and self.state is not MemberState.UNJOINED and self._generation.has_member_id()):
+        # Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
+        # consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
+        # and the membership expiration is only controlled by session timeout.
+        if (self.is_dynamic_member() and not self.coordinator_unknown()
+            and self.state is not MemberState.UNJOINED and self._generation.has_member_id()):
 
-                # this is a minimal effort attempt to leave the group. we do not
-                # attempt any resending if the request fails or times out.
-                log.info('Leaving consumer group %s (member %s).', self.group_id, self._generation.member_id)
-                version = self._client.api_version(LeaveGroupRequest, max_version=3)
-                if version <= 2:
-                    request = LeaveGroupRequest[version](self.group_id, self._generation.member_id)
-                else:
-                    request = LeaveGroupRequest[version](self.group_id, [(self._generation.member_id, self.group_instance_id)])
-                log.debug('Sending LeaveGroupRequest to %s: %s', self.coordinator_id, request)
-                future = self._client.send(self.coordinator_id, request)
-                future.add_callback(self._handle_leave_group_response)
-                future.add_errback(log.error, "LeaveGroup request failed: %s")
-                self._client.poll(future=future, timeout_ms=timeout_ms)
-
-            self.reset_generation()
+            # this is a minimal effort attempt to leave the group. we do not
+            # attempt any resending if the request fails or times out.
+            log.info('Leaving consumer group %s (member %s).', self.group_id, self._generation.member_id)
+            request = LeaveGroupRequest(
+                group_id=self.group_id,
+                member_id=self._generation.member_id,
+                members=[
+                    LeaveGroupRequest.MemberIdentity(
+                        member_id=self._generation.member_id,
+                        group_instance_id=self.group_instance_id,
+                        reason=reason,
+                    )
+                ]
+            )
+            log.debug('Sending LeaveGroupRequest to %s: %s', self.coordinator_id, request)
+            future = self._manager.send(request, node_id=self.coordinator_id)
+            try:
+                response = await self._manager.wait_for(future, timeout_ms)
+                self._handle_leave_group_response(response)
+            except Exception as exc:
+                log.error("LeaveGroup request failed: %s", exc)
+        self.reset_generation()
 
     def _handle_leave_group_response(self, response):
         log.debug("Received LeaveGroupResponse: %s", response)

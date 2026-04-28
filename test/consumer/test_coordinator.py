@@ -301,7 +301,7 @@ def test_close(mocker, coordinator):
     coordinator._generation = Generation(1, 'foobar', b'')
     coordinator.state = MemberState.STABLE
     cli = coordinator._client
-    mocker.patch.object(cli, 'send', return_value=Future().success('foobar'))
+    mocker.patch.object(cli._manager, 'send', return_value=Future().success('foobar'))
     mocker.patch.object(cli, 'poll')
 
     coordinator.close()
