@@ -12,6 +12,12 @@ def test_type_error():
     s.subscribe(topics=['foo'])
 
 
+def test_subscribe_requires_topics_or_pattern():
+    s = SubscriptionState()
+    with pytest.raises(ValueError, match='Must provide topics or pattern'):
+        s.subscribe()
+
+
 def test_change_subscription():
     s = SubscriptionState()
     s.subscribe(topics=['foo'])
