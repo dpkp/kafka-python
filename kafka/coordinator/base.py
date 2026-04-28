@@ -434,6 +434,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             log.info("Failed to join group %s: %s", self.group_id, exception)
             self.state = MemberState.UNJOINED
 
+    @property
+    def _use_group_apis(self):
+        return self.config['api_version'] >= (0, 9)
+
     def ensure_active_group(self, timeout_ms=None):
         """Ensure that the group is active (i.e. joined and synced)
 
@@ -443,7 +447,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         Returns: True if group initialized before timeout_ms, else False
         """
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         timer = Timer(timeout_ms)
         if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
@@ -452,7 +456,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         return self.join_group(timeout_ms=timer.timeout_ms)
 
     def join_group(self, timeout_ms=None):
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         timer = Timer(timeout_ms)
         while self.need_rejoin():
@@ -885,7 +889,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self.rejoin_needed = True
 
     def _start_heartbeat_thread(self):
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Heartbeat APIs require 0.9+ broker')
         with self._lock:
             if self._heartbeat_thread is None:
@@ -911,7 +915,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def close(self, timeout_ms=None):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        if self.config['api_version'] >= (0, 9):
+        if self._use_group_apis:
             self._close_heartbeat_thread(timeout_ms=timeout_ms)
             self.maybe_leave_group(timeout_ms=timeout_ms)
 
@@ -924,7 +928,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             return self._manager.run(self.maybe_leave_group_async, reason, timeout_ms)
 
     async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
         # Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         # consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
