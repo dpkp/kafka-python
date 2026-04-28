@@ -920,7 +920,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
     def maybe_leave_group(self, reason=None, timeout_ms=None):
         """Leave the current group and reset local generation/member_id."""
-        with self._client._lock, self._lock:
+        with self._client._lock:
             return self._manager.run(self.maybe_leave_group_async, reason, timeout_ms)
 
     async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
