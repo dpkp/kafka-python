@@ -112,7 +112,7 @@ class ClusterMetadata:
             raise RuntimeError('start_refresh_loop requires prior attach()')
         if not self._manager.bootstrapped:
             await self._manager.bootstrap_async()
-        while True:
+        while self._manager is not None:
             if self.metadata_refresh_in_progress:
                 await self._refresh_future
             ttl_ms = self.ttl()
