@@ -47,7 +47,7 @@ class KafkaConnectionError(KafkaError):
 
 
 class KafkaProtocolError(KafkaError):
-    retriable = True
+    pass
 
 
 class CorrelationIdError(KafkaProtocolError):
