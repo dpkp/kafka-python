@@ -332,6 +332,15 @@ class TestNetworkSelector:
         assert len(net._scheduled) == 1
         net.unschedule(t)
         assert len(net._scheduled) == 0
+        assert t.scheduled_at is None
+
+    def test_unschedule_unscheduled(self):
+        net = NetworkSelector()
+        def task():
+            yield
+        assert len(net._scheduled) == 0
+        net.unschedule(Task(task))
+        assert len(net._scheduled) == 0
 
     def test_reschedule(self):
         net = NetworkSelector()
@@ -339,7 +348,16 @@ class TestNetworkSelector:
             yield
         t = net.call_later(10, task)
         new_when = time.monotonic() + 0.01
-        net.reschedule(t, new_when)
+        net.reschedule(new_when, t)
+        assert len(net._scheduled) == 1
+        assert net._scheduled[0][0] == new_when
+
+    def test_reschedule_unscheduled(self):
+        net = NetworkSelector()
+        def task():
+            yield
+        new_when = time.monotonic() + 0.01
+        net.reschedule(new_when, Task(task))
         assert len(net._scheduled) == 1
         assert net._scheduled[0][0] == new_when
 

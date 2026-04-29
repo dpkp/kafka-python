@@ -183,9 +183,11 @@ class NetworkSelector:
         return task
 
     def unschedule(self, task):
-        self._scheduled.remove((task.scheduled_at, task))
+        if task.scheduled_at is not None:
+            self._scheduled.remove((task.scheduled_at, task))
+            task.scheduled_at = None
 
-    def reschedule(self, task, when):
+    def reschedule(self, when, task):
         self.unschedule(task)
         self.call_at(when, task)
         return task
@@ -215,7 +217,9 @@ class NetworkSelector:
 
     def _schedule_tasks(self):
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():
-            self._ready.append(heapq.heappop(self._scheduled)[1])
+            _, task = heapq.heappop(self._scheduled)
+            task.scheduled_at = None
+            self._ready.append(task)
 
     def _next_scheduled_timeout(self, now):
         try:
