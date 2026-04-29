@@ -554,7 +554,9 @@ class KafkaProducer:
                 transaction_manager=self._transaction_manager,
                 message_version=message_version,
                 **self.config)
-        guarantee_message_order = bool(self.config['max_in_flight_requests_per_connection'] == 1)
+        guarantee_message_order = False
+        if self.config['enable_idempotence'] or self.config['max_in_flight_requests_per_connection'] == 1:
+            guarantee_message_order = True
         self._sender = Sender(client, self._metadata,
                               self._accumulator,
                               metrics=self._metrics,
