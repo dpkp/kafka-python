@@ -436,7 +436,7 @@ class KafkaConnectionManager:
         async def wrapper():
             try:
                 future.success(await self._invoke(coro, args))
-            except Exception as exc:
+            except BaseException as exc:
                 future.failure(exc)
         self._net.call_soon_threadsafe(wrapper)
         return future
