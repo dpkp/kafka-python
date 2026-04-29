@@ -943,7 +943,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                     heartbeat_log.debug('Looking up coordinator')
                     try:
                         await self.lookup_coordinator()
-                    except Exception:
+                    except Errors.KafkaError:
                         await self._heartbeat_wakeup(self.config['retry_backoff_ms'] / 1000)
 
                 elif self.heartbeat.session_timeout_expired():
@@ -975,7 +975,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                     await self._heartbeat_wakeup(next_hb)
                 else:
                     await self._do_heartbeat()
-            except Exception as exc:
+            except BaseException as exc:
                 heartbeat_log.error('Unhandled Heartbeat loop error: %s', exc)
                 raise
         heartbeat_log.debug('_heartbeat_loop: closed')
@@ -987,7 +987,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             response = await self._send_heartbeat_request()
             heartbeat_log.debug('Heartbeat success')
             self.heartbeat.received_heartbeat()
-        except Exception as exc:
+        except Errors.KafkaError as exc:
             if isinstance(exc, Errors.RebalanceInProgressError):
                 # it is valid to continue heartbeating while the group is
                 # rebalancing. This ensures that the coordinator keeps the
@@ -1241,7 +1241,7 @@ class HeartbeatThread(threading.Thread):
         except ReferenceError:
             heartbeat_log.debug('Heartbeat thread closed due to coordinator gc')
 
-        except Exception as exc:
+        except BaseException as exc:
             heartbeat_log.exception("Heartbeat thread failed due to unexpected error: %s", exc)
             self.failed = exc
 
