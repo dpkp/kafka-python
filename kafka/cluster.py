@@ -68,6 +68,7 @@ class ClusterMetadata:
         self._refresh_loop_future = None
         self._refresh_future = None
         self._wakeup = None
+        self.closed = False
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
@@ -94,8 +95,8 @@ class ClusterMetadata:
         self._wakeup = WakeupNotifier(self._manager._net)
 
     def close(self):
-        # Drop manager reference cycle
-        self._manager = None
+        self.closed = True
+        self._wakeup.notify()
 
     def start_refresh_loop(self):
         """Spawn the periodic refresh coroutine. Idempotent. Triggers bootstrap if needed."""
@@ -112,7 +113,7 @@ class ClusterMetadata:
             raise RuntimeError('start_refresh_loop requires prior attach()')
         if not self._manager.bootstrapped:
             await self._manager.bootstrap_async()
-        while self._manager is not None:
+        while not self.closed:
             if self.metadata_refresh_in_progress:
                 await self._refresh_future
             ttl_ms = self.ttl()
