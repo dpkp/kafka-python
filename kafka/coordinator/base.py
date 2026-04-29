@@ -951,7 +951,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             try:
                 response = await self._manager.wait_for(future, timeout_ms)
                 self._handle_leave_group_response(response)
-            except Exception as exc:
+            except Errors.KafkaError as exc:
                 log.error("LeaveGroup request failed: %s", exc)
         self.reset_generation()
 
