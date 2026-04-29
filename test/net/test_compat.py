@@ -182,8 +182,7 @@ class TestKafkaNetClientVersion:
         # Pre-set bootstrap future so check_version doesn't try to connect
         manager._bootstrap_future = Future()
         manager._bootstrap_future.success(True)
-        with patch.object(manager, 'bootstrap', return_value=manager._bootstrap_future):
-            result = client.check_version()
+        result = client.check_version()
         assert isinstance(result, tuple)
 
 
