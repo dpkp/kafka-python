@@ -104,7 +104,6 @@ class ClusterMetadata:
             raise RuntimeError('start_refresh_loop requires prior attach()')
         if self._refresh_loop_future is not None:
             return
-        log.debug('Starting metadata refresh loop')
         self._refresh_loop_future = self._manager.call_soon(self._refresh_loop)
 
     async def _refresh_loop(self):
@@ -112,7 +111,9 @@ class ClusterMetadata:
         if self._manager is None:
             raise RuntimeError('start_refresh_loop requires prior attach()')
         if not self._manager.bootstrapped:
+            log.debug('Metadata refresh loop needs bootstrap...')
             await self._manager.bootstrap_async()
+        log.info('Starting metadata refresh loop')
         while not self.closed:
             if self.metadata_refresh_in_progress:
                 await self._refresh_future
@@ -129,6 +130,7 @@ class ClusterMetadata:
                 await self._wakeup(ttl_ms / 1000)
             except Exception as exc:
                 log.error('Metadata refresh loop error: %s', exc)
+        log.info('Stopping metadata refresh loop')
 
     async def refresh_metadata(self, node_id=None):
         """Send one MetadataRequest and apply the response.
@@ -155,13 +157,14 @@ class ClusterMetadata:
             self._refresh_future.success(None)
 
     async def _do_refresh_metadata(self, node_id):
-        log.debug(f'Metadata refresh (node_id={node_id})')
         node_id = self._manager.least_loaded_node() if node_id is None else node_id
         if node_id is None:
+            log.warn('No node available for metadata refresh - backoff/retry')
             self._manager.update_backoff('metadata')
             raise Errors.NodeNotReadyError('metadata')
         else:
             self._manager.reset_backoff('metadata')
+        log.info(f'Metadata refresh (node_id={node_id})')
         try:
             request = self.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
@@ -513,7 +516,7 @@ class ClusterMetadata:
             else:
                 f.success(self)
 
-        log.debug("Updated cluster metadata to %s", self)
+        log.info("Updated metadata: %s", self)
 
         for listener in self._listeners:
             listener(self)
