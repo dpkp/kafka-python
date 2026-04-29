@@ -198,7 +198,7 @@ class KafkaConnection:
             self.unpause('max_in_flight')
         if self.in_flight_requests:
             next_timeout_at = self.in_flight_requests[0][3]
-            self.net.reschedule(self._timeout_task, next_timeout_at)
+            self.net.reschedule(next_timeout_at, self._timeout_task)
         else:
             self.net.unschedule(self._timeout_task)
             self._timeout_task = None
