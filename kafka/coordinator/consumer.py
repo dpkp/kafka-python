@@ -143,14 +143,6 @@ class ConsumerCoordinator(BaseCoordinator):
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
 
-    def __del__(self):
-        if hasattr(self, '_cluster') and self._cluster:
-            try:
-                self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
-            except TypeError:
-                pass
-        super().__del__()
-
     def protocol_type(self):
         return ConsumerProtocolType
 
@@ -485,6 +477,7 @@ class ConsumerCoordinator(BaseCoordinator):
         try:
             if autocommit:
                 self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
+            self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
         finally:
             super().close(timeout_ms=timeout_ms)
 

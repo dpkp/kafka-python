@@ -522,8 +522,11 @@ class ClusterMetadata:
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
-        """Remove a previously added listener callback"""
-        self._listeners.remove(listener)
+        """Remove a previously added listener callback."""
+        try:
+            self._listeners.remove(listener)
+        except KeyError:
+            pass
 
     def add_coordinator(self, response, key_type, key):
         """Update with metadata for a group or txn coordinator

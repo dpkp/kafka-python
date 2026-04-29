@@ -907,17 +907,11 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 pass
             self._heartbeat_thread = None
 
-    def __del__(self):
-        try:
-            self._close_heartbeat_thread()
-        except (TypeError, AttributeError):
-            pass
-
     def close(self, timeout_ms=None):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id"""
-        self._close_heartbeat_thread(timeout_ms=timeout_ms)
         if self.config['api_version'] >= (0, 9):
+            self._close_heartbeat_thread(timeout_ms=timeout_ms)
             self.maybe_leave_group(timeout_ms=timeout_ms)
 
     def is_dynamic_member(self):
