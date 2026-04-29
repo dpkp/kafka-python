@@ -265,7 +265,9 @@ class NetworkSelector:
         self.unregister_event(fileobj, selectors.EVENT_WRITE)
 
     def poll(self, timeout_ms=None, future=None):
-        if self._running:
+        if self._current:
+            raise RuntimError('Recursive access to net.poll!')
+        elif self._running:
             raise RuntimeError('Concurrent access to net.poll!')
         self._running = True
         start_at = time.monotonic()
