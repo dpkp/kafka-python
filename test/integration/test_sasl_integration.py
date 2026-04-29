@@ -74,7 +74,7 @@ def test_client(request, sasl_kafka):
     create_topics(sasl_kafka, [topic_name], num_partitions=1)
 
     client = KafkaNetClient(**client_params(sasl_kafka, 'client'))
-    client._manager.run(client._manager.bootstrap)
+    client._manager.run(client._manager.bootstrap_async)
     request = MetadataRequest(topics=None, version=1)
     timeout_at = time.time() + 1
     future = client.send(None, request)
