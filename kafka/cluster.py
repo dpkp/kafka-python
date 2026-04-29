@@ -10,7 +10,7 @@ import weakref
 
 from kafka import errors as Errors
 from kafka.future import Future
-from kafka.net.selector import WakeupNotifier
+from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.metadata import MetadataRequest, MetadataResponse
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
