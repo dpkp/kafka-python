@@ -935,6 +935,9 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             # this is a minimal effort attempt to leave the group. we do not
             # attempt any resending if the request fails or times out.
             log.info('Leaving consumer group %s (member %s).', self.group_id, self._generation.member_id)
+            # client side length restriction mirrors java client
+            if reason is not None:
+                reason = reason[:255]
             request = LeaveGroupRequest(
                 group_id=self.group_id,
                 member_id=self._generation.member_id,
