@@ -12,7 +12,7 @@ from kafka.future import Future
 
 log = logging.getLogger(__name__)
 
-def log_trace(msg *args, **kwargs):
+def log_trace(msg, *args, **kwargs):
     log.log(5, msg, *args, **kwargs)
 
 
