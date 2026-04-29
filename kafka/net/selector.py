@@ -276,6 +276,7 @@ class NetworkSelector:
             raise RuntimError('Recursive access to net.poll!')
         elif self._running:
             raise RuntimeError('Concurrent access to net.poll!')
+        log_trace('poll: enter')
         self._running = True
         start_at = time.monotonic()
         inner_timeout = timeout_ms / 1000 if timeout_ms is not None else None
@@ -290,8 +291,10 @@ class NetworkSelector:
                 if inner_timeout <= 0:
                     break
         self._running = False
+        log_trace('poll: exit')
 
     def _poll_once(self, timeout=None):
+        log_trace('_poll_once: enter')
         if self._ready:
             timeout = 0
         else:
@@ -307,6 +310,7 @@ class NetworkSelector:
             timeout = 0
 
         ready_events = self._selector.select(timeout)
+        log_trace('_poll_once: %d ready_events', len(ready_events))
         self._process_events(ready_events)
         self._schedule_tasks()
 
@@ -314,6 +318,7 @@ class NetworkSelector:
         for i in range(n):
             self._current = self._ready.popleft()
             try:
+                log_trace('Calling task %s', self._current)
                 event = self._current()
 
             except StopIteration:
@@ -332,6 +337,7 @@ class NetworkSelector:
                     raise RuntimeError('Unhandled event type: %s' % event)
 
         self._current = None
+        log_trace('_poll_once: exit')
 
     def wakeup(self):
         try:
