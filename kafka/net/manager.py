@@ -13,6 +13,7 @@ from .metrics import KafkaManagerMetrics
 from .transport import KafkaSSLTransport, KafkaTCPTransport
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
+from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.future import Future
 from kafka.version import __version__
@@ -76,6 +77,7 @@ class KafkaConnectionManager:
         self.close_idle_connections()
         self.broker_version_data = None
         self._bootstrap_future = None
+        self._bootstrap_wakeup = WakeupNotifier(self._net)
         self._io_thread = None
         self._pending_waiters = {}  # event -> state dict, for pending run() waiters
         self._pending_waiters_lock = threading.Lock()
@@ -86,6 +88,7 @@ class KafkaConnectionManager:
             self._sensors = None
         if self.config['api_version'] is not None:
             self.broker_version_data = BrokerVersionData(self.config['api_version'])
+        self.closed = False
 
     @property
     def broker_version(self):
@@ -97,7 +100,7 @@ class KafkaConnectionManager:
         return sorted(filter(lambda conn: conn.connected, self._conns.values()), key=lambda conn: conn.transport.last_activity)
 
     async def _do_bootstrap(self, deadline):
-        while deadline is None or time.monotonic() < deadline:
+        while not self.closed and (deadline is None or time.monotonic() < deadline):
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
             log.debug('Attempting bootstrap with %s', bootstrap_broker)
             try:
@@ -110,7 +113,7 @@ class KafkaConnectionManager:
                 if deadline is not None:
                     delay = min(delay, max(0, deadline - time.monotonic()))
                 log.debug('Bootstrap %s NodeNotReadyError: backoff %s', bootstrap_broker, delay)
-                await self._net.sleep(delay)
+                await self._bootstrap_wakeup(delay)
                 continue
 
             try:
@@ -334,7 +337,9 @@ class KafkaConnectionManager:
             conn = self._conns.get(node_id)
             if conn is not None:
                 conn.close()
-        else:
+        elif not self.closed:
+            self.closed = True
+            self._bootstrap_wakeup.notify()
             for conn in list(self._conns.values()):
                 conn.close()
             self.cluster.close()
@@ -431,7 +436,7 @@ class KafkaConnectionManager:
         async def wrapper():
             try:
                 future.success(await self._invoke(coro, args))
-            except Exception as exc:
+            except BaseException as exc:
                 future.failure(exc)
         self._net.call_soon_threadsafe(wrapper)
         return future
