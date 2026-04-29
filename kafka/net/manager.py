@@ -239,7 +239,10 @@ class KafkaConnectionManager:
             if self.cluster.is_bootstrap(node.node_id):
                 self.broker_version_data = conn.broker_version_data
 
-    def get_connection(self, node_id, pop_on_close=True, refresh_metadata_on_err=True, reset_backoff_on_connect=True):
+    def get_connection(self, node_id, timeout_ms=None,
+                       pop_on_close=True,
+                       refresh_metadata_on_err=True,
+                       reset_backoff_on_connect=True):
         if node_id is None:
             raise Errors.NodeNotReadyError('No node_id provided')
         elif self.connection_delay(node_id) > 0:
@@ -258,7 +261,9 @@ class KafkaConnectionManager:
             conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn
         self._net.call_soon(lambda: self._connect(node, conn, reset_backoff_on_connect=reset_backoff_on_connect))
-        self._net.call_later(self.config['socket_connection_timeout_ms'] / 1000,
+        if timeout_ms is None:
+            timeout_ms = self.config['socket_connection_timeout_ms']
+        self._net.call_later(timeout_ms / 1000,
                              lambda: conn.close(Errors.KafkaConnectionError('Connection timed out'))
                                      if not conn.init_future.is_done else None)
         return conn
