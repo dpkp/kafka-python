@@ -212,7 +212,7 @@ class KafkaConsumer:
             None, the client will attempt to determine the broker version via
             ApiVersionsRequest API or, for brokers earlier than 0.10, probing
             various known APIs. Dynamic version checking is performed eagerly
-            during __init__ and can raise NoBrokersAvailableError if no connection
+            during __init__ and can raise KafkaTimeoutError if no connection
             was made before timeout (see api_version_auto_timeout_ms below).
             Different versions enable different functionality.
 

@@ -289,7 +289,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 if self.config['api_version'] < (0, 8, 2):
                     maybe_coordinator_id = self._client.least_loaded_node()
                     if maybe_coordinator_id is None:
-                        future = Future().failure(Errors.NoBrokersAvailable())
+                        future = Future().failure(Errors.NodeNotReadyError('coordinator'))
                     else:
                         self.coordinator_id = maybe_coordinator_id
                         self._client.maybe_connect(self.coordinator_id)
@@ -796,7 +796,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         node_id = self._client.least_loaded_node()
         if node_id is None:
-            return Future().failure(Errors.NoBrokersAvailable())
+            return Future().failure(Errors.NodeNotReadyError('coordinator'))
 
         elif not self._client.ready(node_id, metadata_priority=False):
             e = Errors.NodeNotReadyError(node_id)

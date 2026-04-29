@@ -62,11 +62,6 @@ class MetadataEmptyBrokerList(KafkaError):
     retriable = True
 
 
-class NoBrokersAvailable(KafkaError):
-    retriable = True
-    invalid_metadata = True
-
-
 class NoOffsetForPartitionError(KafkaError):
     pass
 
