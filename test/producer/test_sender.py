@@ -744,10 +744,30 @@ class TestIdempotentProducerMaxInFlight:
         assert p.config['max_in_flight_requests_per_connection'] == 5
         p.close(timeout=0)
 
-    def test_guarantee_message_order_only_when_max_in_flight_1(self):
-        """guarantee_message_order is True only when max_in_flight == 1."""
+    def test_idempotent_producer_forces_guarantee_message_order(self):
+        """guarantee_message_order is forced True when idempotence is enabled,
+        regardless of max_in_flight. Without partition muting, a transient
+        retryable error (e.g. NotLeader) triggers reenqueue via appendleft
+        which reverses concurrently-failed batches; the retried sends arrive
+        out of sequence and the broker rejects with OutOfOrderSequenceNumber.
+        Java's producer enforces this for the same reason.
+        """
+        for max_in_flight in (1, 2, 3, 4, 5):
+            p = KafkaProducer(
+                enable_idempotence=True,
+                max_in_flight_requests_per_connection=max_in_flight,
+                api_version=(0, 11),
+            )
+            assert p._sender.config['guarantee_message_order'] is True, (
+                'idempotence should force guarantee_message_order=True (max_in_flight=%d)'
+                % max_in_flight)
+            p.close(timeout=0)
+
+    def test_non_idempotent_guarantee_message_order_only_when_max_in_flight_1(self):
+        """For non-idempotent producers, guarantee_message_order is only True
+        when max_in_flight == 1 (the original Java behavior)."""
         p1 = KafkaProducer(
-            enable_idempotence=True,
+            enable_idempotence=False,
             max_in_flight_requests_per_connection=1,
             api_version=(0, 11),
         )
@@ -755,7 +775,7 @@ class TestIdempotentProducerMaxInFlight:
         p1.close(timeout=0)
 
         p5 = KafkaProducer(
-            enable_idempotence=True,
+            enable_idempotence=False,
             max_in_flight_requests_per_connection=5,
             api_version=(0, 11),
         )
