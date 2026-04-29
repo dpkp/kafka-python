@@ -12,6 +12,9 @@ from kafka.future import Future
 
 log = logging.getLogger(__name__)
 
+def log_trace(msg *args, **kwargs):
+    log.log(5, msg, *args, **kwargs)
+
 
 MAX_TIMEOUT = 2147483
 
@@ -229,7 +232,7 @@ class NetworkSelector:
 
     # Note: Windows select works w/ sockets only
     def register_event(self, fileobj, event, task):
-        log.log(0, 'net.register_event: %s, %s, %s', fileobj, event, task)
+        log_trace('net.register_event: %s, %s, %s', fileobj, event, task)
         if not isinstance(task, Task):
             task = Task(task)
         try:
@@ -244,7 +247,7 @@ class NetworkSelector:
             self._selector.register(fileobj, event, (task, None) if event == selectors.EVENT_READ else (None, task))
 
     def unregister_event(self, fileobj, event):
-        log.log(0, 'net.unregister_event: %s, %s', fileobj, event)
+        log_trace('net.unregister_event: %s, %s', fileobj, event)
         try:
             key = self._selector.get_key(fileobj)
             reader, writer = key.data
@@ -321,7 +324,7 @@ class NetworkSelector:
 
             else:
                 if isinstance(event, KernelEvent):
-                    log.log(0, 'kernel event %s', event.method)
+                    log_trace('kernel event %s', event.method)
                     getattr(self, event.method)(*event.args)
                 elif isinstance(event, Future):
                     event.add_both(lambda _, task=self._current: self.call_soon(task))
