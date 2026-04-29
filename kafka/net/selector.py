@@ -273,7 +273,7 @@ class NetworkSelector:
 
     def poll(self, timeout_ms=None, future=None):
         if self._current:
-            raise RuntimError('Recursive access to net.poll!')
+            raise RuntimeError('Recursive access to net.poll!')
         elif self._running:
             raise RuntimeError('Concurrent access to net.poll!')
         log_trace('poll: enter')
