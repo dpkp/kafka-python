@@ -122,6 +122,7 @@ class NetworkSelector:
             if key in configs:
                 self.config[key] = configs[key]
 
+        self._running = False
         self._closed = False
         self._stop = False
         self._selector = self.config['selector']()
@@ -264,6 +265,9 @@ class NetworkSelector:
         self.unregister_event(fileobj, selectors.EVENT_WRITE)
 
     def poll(self, timeout_ms=None, future=None):
+        if self._running:
+            raise RuntimeError('Concurrent access to net.poll!')
+        self._running = True
         start_at = time.monotonic()
         inner_timeout = timeout_ms / 1000 if timeout_ms is not None else None
         if future is not None and future.is_done:
@@ -276,6 +280,7 @@ class NetworkSelector:
                 inner_timeout = (timeout_ms / 1000) - (time.monotonic() - start_at)
                 if inner_timeout <= 0:
                     break
+        self._running = False
 
     def _poll_once(self, timeout=None):
         if self._ready:

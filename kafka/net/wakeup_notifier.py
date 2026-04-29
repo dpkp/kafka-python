@@ -23,6 +23,8 @@ class WakeupNotifier:
             self._fut.success(None)
 
     async def __call__(self, timeout_secs=None):
+        if self._fut is not None:
+            raise RuntimeError('Concurrent access to WakeupNotifier!')
         self._fut = Future()
         if timeout_secs is not None:
             try:
