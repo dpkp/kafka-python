@@ -2,7 +2,7 @@ import inspect
 import sys
 
 
-class KafkaError(RuntimeError):
+class KafkaError(Exception):
     retriable = False
     # whether metadata should be refreshed on error
     invalid_metadata = False
