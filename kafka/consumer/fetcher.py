@@ -219,7 +219,8 @@ class Fetcher:
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        with self._client._lock:
+            offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -344,7 +345,8 @@ class Fetcher:
             KafkaTimeoutError if timeout_ms provided.
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        with self._client._lock:
+            offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets
