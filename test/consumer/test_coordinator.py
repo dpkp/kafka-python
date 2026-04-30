@@ -425,12 +425,18 @@ def patched_coord(mocker, coordinator):
     mocker.patch.object(coordinator._client, 'least_loaded_node',
                         return_value=1)
     mocker.patch.object(coordinator._client, 'ready', return_value=True)
-    mocker.patch.object(coordinator._client, 'send')
+    send_future = Future()
+    mocker.patch.object(coordinator._client, 'send', return_value=send_future)
+    mocker.patch.object(coordinator._client._manager, 'send', return_value=send_future)
     mocker.patch.object(coordinator, '_heartbeat_thread')
     mocker.spy(coordinator, '_failed_request')
     mocker.spy(coordinator, '_handle_offset_commit_response')
     mocker.spy(coordinator, '_handle_offset_fetch_response')
-    return coordinator
+    try:
+        yield coordinator
+    finally:
+        send_future.failure(Errors.KafkaConnectionError())
+        coordinator.close()
 
 
 def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
@@ -643,32 +649,42 @@ def test_handle_offset_fetch_response(patched_coord, offsets,
 
 
 def test_heartbeat(mocker, patched_coord):
-    heartbeat = HeartbeatThread(patched_coord)
+    heartbeat = patched_coord.heartbeat
+    net = patched_coord._manager._net
 
-    assert not heartbeat.enabled and not heartbeat.closed
+    assert not patched_coord._heartbeat_enabled and not patched_coord._heartbeat_closed
 
-    heartbeat.enable()
-    assert heartbeat.enabled
+    assert patched_coord._heartbeat_loop_future is None
+    patched_coord._maybe_start_heartbeat_loop()
+    assert patched_coord._heartbeat_loop_future is not None
 
-    heartbeat.disable()
-    assert not heartbeat.enabled
+    patched_coord._enable_heartbeat()
+    assert patched_coord._heartbeat_enabled
+
+    patched_coord._disable_heartbeat()
+    assert not patched_coord._heartbeat_enabled
 
     # heartbeat disables when un-joined
-    heartbeat.enable()
+    patched_coord._enable_heartbeat()
     patched_coord.state = MemberState.UNJOINED
-    heartbeat._run_once()
-    assert not heartbeat.enabled
+    net.poll(timeout_ms=50)
+    assert not patched_coord._heartbeat_enabled
 
-    heartbeat.enable()
+    patched_coord._enable_heartbeat()
     patched_coord.state = MemberState.STABLE
     mocker.spy(patched_coord, '_send_heartbeat_request')
-    mocker.patch.object(patched_coord, 'connected', return_value=True)
     mocker.patch.object(patched_coord.heartbeat, 'should_heartbeat', return_value=True)
-    heartbeat._run_once()
+    # Wakeup callback resolves the future on one poll cycle; the heartbeat
+    # coroutine resumes and reaches _send_heartbeat_request on the next.
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        net.poll(timeout_ms=10)
+        if patched_coord._send_heartbeat_request.call_count > 0:
+            break
     assert patched_coord._send_heartbeat_request.call_count == 1
 
-    heartbeat.close()
-    assert heartbeat.closed
+    patched_coord._close_heartbeat()
+    assert patched_coord._heartbeat_closed
 
 
 def test_lookup_coordinator_failure(mocker, coordinator):
