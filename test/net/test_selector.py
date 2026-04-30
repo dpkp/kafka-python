@@ -516,3 +516,141 @@ class TestNetworkSelector:
         net.call_soon(resolver)
         net.poll(timeout_ms=1000, future=done)
         assert results == [('a', 'b')]
+
+
+class TestSlowTaskMonitor:
+    """Detection for tasks that hog the event loop (livelock guard).
+
+    See task #44: a coroutine in a tight sync loop never yields back to the
+    selector. From the outside this looks like a hang; with monitoring it
+    becomes a clean warning (or, in raise-mode, a RuntimeError).
+    """
+
+    def test_slow_task_warns_with_default_threshold(self, caplog):
+        net = NetworkSelector(slow_task_threshold_secs=0.01)
+        done = Future()
+
+        async def hog():
+            time.sleep(0.05)  # synchronous sleep — does not yield to loop
+            done.success(True)
+
+        net.call_soon(hog)
+        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+            net.poll(timeout_ms=1000, future=done)
+        assert any('blocking the event loop' in rec.message for rec in caplog.records), (
+            'expected slow-task warning, got: %r'
+            % [(r.levelname, r.message) for r in caplog.records])
+        assert done.succeeded()
+
+    def test_slow_task_below_threshold_no_warning(self, caplog):
+        net = NetworkSelector(slow_task_threshold_secs=0.5)
+        done = Future()
+
+        async def quick():
+            done.success(True)
+
+        net.call_soon(quick)
+        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+            net.poll(timeout_ms=1000, future=done)
+        assert not any('blocking the event loop' in rec.message for rec in caplog.records)
+
+    def test_slow_task_disabled_when_threshold_zero(self, caplog):
+        net = NetworkSelector(slow_task_threshold_secs=0)
+        done = Future()
+
+        async def hog():
+            time.sleep(0.02)
+            done.success(True)
+
+        net.call_soon(hog)
+        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+            net.poll(timeout_ms=1000, future=done)
+        assert not any('blocking the event loop' in rec.message for rec in caplog.records)
+
+    def test_slow_task_raise_mode(self):
+        net = NetworkSelector(slow_task_threshold_secs=0.01,
+                              raise_on_slow_task=True)
+        done = Future()
+
+        async def hog():
+            time.sleep(0.05)
+            done.success(True)
+
+        net.call_soon(hog)
+        with pytest.raises(RuntimeError, match='blocking the event loop'):
+            net.poll(timeout_ms=1000, future=done)
+
+    def test_concurrent_poll_raises(self):
+        """Two threads calling poll() simultaneously should raise instead of
+        racing on selector / task state."""
+        net = NetworkSelector()
+        gate = threading.Event()
+        done = Future()
+        errors = []
+
+        async def slow():
+            gate.set()
+            time.sleep(0.1)
+            done.success(True)
+
+        def driver_a():
+            net.call_soon(slow)
+            net.poll(timeout_ms=1000, future=done)
+
+        def driver_b():
+            gate.wait(timeout=1)
+            try:
+                net.poll(timeout_ms=10)
+            except RuntimeError as exc:
+                errors.append(str(exc))
+
+        ta = threading.Thread(target=driver_a)
+        tb = threading.Thread(target=driver_b)
+        ta.start()
+        tb.start()
+        ta.join(2)
+        tb.join(2)
+        assert errors and 'Concurrent access' in errors[0], (
+            'expected Concurrent access error, got: %r' % errors)
+
+    def test_recursive_poll_raises_recursive_error(self):
+        """A task callback calling poll() reentrantly should be diagnosed as
+        recursive (same-thread), not as concurrent."""
+        net = NetworkSelector()
+        errors = []
+
+        async def reenter():
+            try:
+                net.poll(timeout_ms=10)
+            except RuntimeError as exc:
+                errors.append(str(exc))
+
+        net.call_soon(reenter)
+        net.poll(timeout_ms=100)
+        assert errors and 'Recursive access' in errors[0], (
+            'expected Recursive access error, got: %r' % errors)
+
+    def test_poll_lock_released_on_exception(self):
+        """An exception in _poll_once must release the poll lock so the next
+        caller doesn't see a stale 'Concurrent access' error."""
+        net = NetworkSelector()
+
+        # Inject a coroutine that raises a base-level error to escape the
+        # per-task BaseException catch (StopIteration / Exception are caught).
+        # We use a custom signal: monkey-patch _poll_once to raise.
+        orig = net._poll_once
+        first_call = [True]
+
+        def _poll_once_raising(*args, **kwargs):
+            if first_call[0]:
+                first_call[0] = False
+                raise KeyboardInterrupt('simulated Ctrl-C')
+            return orig(*args, **kwargs)
+
+        net._poll_once = _poll_once_raising
+        with pytest.raises(KeyboardInterrupt):
+            net.poll(timeout_ms=10)
+
+        # Restore and verify the lock was released so the next poll succeeds.
+        net._poll_once = orig
+        net.poll(timeout_ms=10)  # would raise 'Concurrent access' if leaked
