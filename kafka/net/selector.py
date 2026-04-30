@@ -118,6 +118,16 @@ class Task:
 class NetworkSelector:
     DEFAULT_CONFIG = {
         'selector': selectors.DefaultSelector,
+        # Warn (or, in debug mode, raise) when a single ready-task step takes
+        # longer than this many seconds. A coroutine that hits this threshold
+        # is blocking the event loop -- common cause is a tight sync loop
+        # over a synchronously-raising await (see cluster._refresh_loop hang
+        # where RuntimeError from a closed manager was caught and retried).
+        # Mirrors asyncio's loop.slow_callback_duration. Set to 0 to disable.
+        'slow_task_threshold_secs': 0.1,
+        # When True, raise RuntimeError on slow tasks instead of just warning.
+        # Useful in tests so livelocks fail loudly.
+        'raise_on_slow_task': False,
     }
 
     def __init__(self, **configs):
@@ -126,7 +136,14 @@ class NetworkSelector:
             if key in configs:
                 self.config[key] = configs[key]
 
-        self._lock = threading.Lock()
+        # Used by poll() as both a mutex (cross-thread concurrent-entry guard)
+        # and the in-loop flag. acquire(blocking=False) doubles as the
+        # "is anyone in poll() right now?" check. Held only across poll()'s
+        # body; never held by anything else.
+        # _poll_owner tracks which thread holds the lock so we can produce
+        # an accurate diagnostic (recursive vs concurrent) on contention.
+        self._poll_lock = threading.Lock()
+        self._poll_owner = None
         self._closed = False
         self._stop = False
         self._selector = self.config['selector']()
@@ -273,10 +290,15 @@ class NetworkSelector:
         self.unregister_event(fileobj, selectors.EVENT_WRITE)
 
     def poll(self, timeout_ms=None, future=None):
-        if self._current:
-            raise RuntimeError('Recursive access to net.poll!')
-        elif not self._lock.acquire(blocking=False):
+        if not self._poll_lock.acquire(blocking=False):
+            # Lock contended. Distinguish recursive (this thread is already
+            # in poll, e.g. via a task callback) from concurrent (a different
+            # thread is in poll). Same-thread reentry of a non-RLock fails
+            # the same way as cross-thread contention.
+            if self._poll_owner is threading.current_thread():
+                raise RuntimeError('Recursive access to net.poll!')
             raise RuntimeError('Concurrent access to net.poll!')
+        self._poll_owner = threading.current_thread()
         try:
             log_trace('poll: enter')
             start_at = time.monotonic()
@@ -292,7 +314,8 @@ class NetworkSelector:
                     if inner_timeout <= 0:
                         break
         finally:
-            self._lock.release()
+            self._poll_owner = None
+            self._poll_lock.release()
             log_trace('poll: exit')
 
     def _poll_once(self, timeout=None):
@@ -316,9 +339,11 @@ class NetworkSelector:
         self._process_events(ready_events)
         self._schedule_tasks()
 
+        threshold = self.config['slow_task_threshold_secs']
         n = len(self._ready)
         for i in range(n):
             self._current = self._ready.popleft()
+            step_start = time.monotonic() if threshold else None
             try:
                 log_trace('Calling task %s', self._current)
                 event = self._current()
@@ -337,6 +362,19 @@ class NetworkSelector:
                     event.add_both(lambda _, task=self._current: self.call_soon(task))
                 else:
                     raise RuntimeError('Unhandled event type: %s' % event)
+
+            if threshold:
+                elapsed = time.monotonic() - step_start
+                if elapsed > threshold:
+                    msg = (
+                        'Task %r ran for %.3fs (>%.3fs threshold). It is '
+                        'blocking the event loop -- likely a tight sync loop '
+                        'inside a coroutine. Other pollers will time out.'
+                        % (self._current, elapsed, threshold))
+                    if self.config['raise_on_slow_task']:
+                        self._current = None
+                        raise RuntimeError(msg)
+                    log.warning(msg)
 
         self._current = None
         log_trace('_poll_once: exit')
