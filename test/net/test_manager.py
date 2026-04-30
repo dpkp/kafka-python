@@ -219,7 +219,7 @@ class TestKafkaConnectionManagerConnectionTimeout:
         try:
             manager = KafkaConnectionManager(net, bootstrap_servers=['127.0.0.1:%d' % port], socket_connection_timeout_ms=100)
             conn = manager.get_connection('bootstrap-0')
-            manager.poll(timeout_ms=1000, future=conn.init_future)
+            net.poll(timeout_ms=1000, future=conn.init_future)
             assert conn.init_future.is_done
         finally:
             blocker.close()
@@ -227,18 +227,18 @@ class TestKafkaConnectionManagerConnectionTimeout:
 
 
 class TestKafkaConnectionManagerClose:
-    def test_close_single_connection(self, manager):
+    def test_close_single_connection(self, manager, net):
         conn = manager.get_connection('bootstrap-0')
         assert 'bootstrap-0' in manager._conns
         manager.close('bootstrap-0')
         assert conn.init_future.is_done
 
-    def test_close_all_connections(self, manager):
+    def test_close_all_connections(self, manager, net):
         manager.get_connection('bootstrap-0')
         assert len(manager._conns) > 0
         manager.close()
         # close_future callbacks should remove from _conns
-        manager.poll(timeout_ms=100)
+        net.poll(timeout_ms=100)
         assert len(manager._conns) == 0
 
     def test_close_nonexistent_node(self, manager):
@@ -284,12 +284,12 @@ class TestKafkaConnectionManagerRun:
         with pytest.raises(ValueError, match='bad_coro'):
             manager.run(bad_coro)
 
-    def test_call_soon_does_not_raise(self, manager):
+    def test_call_soon_does_not_raise(self, manager, net):
         async def bad_coro():
             raise ValueError('bad_coro')
         future = manager.call_soon(bad_coro)
         assert not future.is_done
-        manager.poll(future=future)
+        net.poll(future=future)
         assert future.failed()
         assert isinstance(future.exception, ValueError)
         assert future.exception.args[0] == 'bad_coro'
