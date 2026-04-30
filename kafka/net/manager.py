@@ -377,9 +377,6 @@ class KafkaConnectionManager:
             state['exception'] = Errors.KafkaConnectionError('Manager stopped')
             event.set()
 
-    def poll(self, timeout_ms=None, future=None):
-        return self._net.poll(timeout_ms=timeout_ms, future=future)
-
     async def wait_for(self, future, timeout_ms):
         """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
 
@@ -460,7 +457,7 @@ class KafkaConnectionManager:
         """
         if self._io_thread is None:
             future = self.call_soon(coro, *args)
-            self.poll(future=future)
+            self._net.poll(future=future)
             if future.exception is not None:
                 raise future.exception
             return future.value

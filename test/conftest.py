@@ -41,13 +41,8 @@ def multi_broker(broker):
 
 
 @pytest.fixture
-def client(broker):
-    cli = KafkaNetClient(
-        bootstrap_servers='%s:%d' % (broker.host, broker.port),
-        api_version=broker.broker_version,
-        request_timeout_ms=5000,
-    )
-    broker.attach(cli._manager)
+def client(net, manager, broker):
+    cli = KafkaNetClient(net=net, manager=manager)
     try:
         yield cli
     finally:
@@ -55,9 +50,14 @@ def client(broker):
 
 
 @pytest.fixture
-def manager(broker):
+def net():
+    return NetworkSelector()
+
+
+@pytest.fixture
+def manager(net, broker):
     manager = KafkaConnectionManager(
-        NetworkSelector(),
+        net,
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
         api_version=broker.broker_version,
         request_timeout_ms=5000,
