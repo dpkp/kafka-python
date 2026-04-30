@@ -184,6 +184,10 @@ class NetworkSelector:
             self._poll_once()
         return task_or_future
 
+    def drain(self):
+        while self._ready:
+            self._poll_once()
+
     def call_at(self, when, task):
         if not isinstance(task, Task):
             task = Task(task)
