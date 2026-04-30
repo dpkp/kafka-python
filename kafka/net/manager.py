@@ -337,7 +337,7 @@ class KafkaConnectionManager:
             return 0
         return max(0, self._backoff[node_id][1] - time.monotonic())
 
-    def close(self, node_id=None, timeout=None):
+    def close(self, node_id=None, timeout_ms=None):
         if node_id is not None:
             conn = self._conns.get(node_id)
             if conn is not None:
@@ -348,7 +348,7 @@ class KafkaConnectionManager:
             for conn in list(self._conns.values()):
                 conn.close()
             self.cluster.close()
-            self.stop(timeout)
+            self.stop(timeout_ms)
 
     def start(self):
         """Spawn a daemon IO thread that owns the event loop. Idempotent."""
@@ -360,7 +360,7 @@ class KafkaConnectionManager:
         self._io_thread = t
         t.start()
 
-    def stop(self, timeout=None):
+    def stop(self, timeout_ms=None):
         """Signal the IO thread to exit and join it. Fails any pending run()
         waiters with KafkaConnectionError. Idempotent."""
         t = self._io_thread
@@ -369,7 +369,7 @@ class KafkaConnectionManager:
             return
         self._io_thread = None
         self._net.stop()
-        t.join(timeout)
+        t.join(timeout_ms / 1000 if timeout_ms is not None else None)
         with self._pending_waiters_lock:
             waiters = list(self._pending_waiters.items())
             self._pending_waiters.clear()
