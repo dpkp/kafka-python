@@ -18,12 +18,12 @@ class KafkaNetClient:
     code depends on. Goal: shrink over time as components transition to using
     KafkaConnectionManager directly (fire-and-forget via _request_buffer).
     """
-    def __init__(self, **configs):
+    def __init__(self, net=None, manager=None, **configs):
         # _lock is still used by the legacy Coordinator (kafka/coordinator/base.py).
         # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
-        self._net = NetworkSelector(**configs)
-        self._manager = KafkaConnectionManager(self._net, **configs)
+        self._net = NetworkSelector(**configs) if net is None else net
+        self._manager = KafkaConnectionManager(self._net, **configs) if manager is None else manager
 
     @property
     def cluster(self):

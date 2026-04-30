@@ -161,7 +161,7 @@ def test_reset_offsets_if_needed(fetcher, topic, mocker):
     assert call_soon.call_count == 0
 
 
-def test__reset_offsets_async(fetcher, mocker):
+def test__reset_offsets_async(fetcher, manager, mocker):
     tp0 = TopicPartition("topic", 0)
     tp1 = TopicPartition("topic", 1)
     fetcher._subscriptions.subscribe(topics=["topic"])
@@ -182,7 +182,6 @@ def test__reset_offsets_async(fetcher, mocker):
         return results[node_id]
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
 
-    manager = fetcher._client._manager
     manager.run(fetcher._reset_offsets_async, {
         tp0: OffsetResetStrategy.EARLIEST,
         tp1: OffsetResetStrategy.EARLIEST,
@@ -197,7 +196,7 @@ def test__reset_offsets_async(fetcher, mocker):
     assert fetcher._subscriptions.assignment[tp1].position.offset == 1002
 
 
-def test__send_list_offsets_requests(fetcher, mocker):
+def test__send_list_offsets_requests(fetcher, manager, mocker):
     tp = TopicPartition("topic_send_list_offsets", 1)
 
     pending = []
@@ -215,7 +214,6 @@ def test__send_list_offsets_requests(fetcher, mocker):
         [None, -1], itertools.cycle([0]))
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
 
-    manager = fetcher._client._manager
 
     # Leader == None
     with pytest.raises(StaleMetadata):
@@ -249,7 +247,7 @@ def test__send_list_offsets_requests(fetcher, mocker):
     assert fut.value == ({tp: (10, 10000)}, set())
 
 
-def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
+def test__send_list_offsets_requests_multiple_nodes(fetcher, manager, mocker):
     tp1 = TopicPartition("topic_send_list_offsets", 1)
     tp2 = TopicPartition("topic_send_list_offsets", 2)
     tp3 = TopicPartition("topic_send_list_offsets", 3)
@@ -266,8 +264,6 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, mocker):
         fetcher._client.cluster, "leader_for_partition")
     mocked_leader.side_effect = itertools.cycle([0, 1])
     mocker.patch.object(fetcher._client.cluster, "leader_epoch_for_partition", return_value=0)
-
-    manager = fetcher._client._manager
 
     def wait_for_send_futures(n):
         while len(send_futures) < n:
@@ -657,7 +653,7 @@ def test_partition_records_compacted_offset(mocker):
     assert msgs[0].offset == fetch_offset + 1
 
 
-def test_reset_offsets_paused(subscription_state, client, mocker):
+def test_reset_offsets_paused(subscription_state, client, manager, mocker):
     fetcher = Fetcher(client, subscription_state)
     tp = TopicPartition('foo', 0)
     subscription_state.assign_from_user([tp])
@@ -670,7 +666,6 @@ def test_reset_offsets_paused(subscription_state, client, mocker):
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager = fetcher._client._manager
     manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.LATEST})
     while subscription_state.is_offset_reset_needed(tp):
         manager.poll(timeout_ms=10)
@@ -681,7 +676,7 @@ def test_reset_offsets_paused(subscription_state, client, mocker):
     assert subscription_state.position(tp) == OffsetAndMetadata(10, '', -1)
 
 
-def test_reset_offsets_paused_without_valid(subscription_state, client, mocker):
+def test_reset_offsets_paused_without_valid(subscription_state, client, manager, mocker):
     fetcher = Fetcher(client, subscription_state)
     tp = TopicPartition('foo', 0)
     subscription_state.assign_from_user([tp])
@@ -694,7 +689,6 @@ def test_reset_offsets_paused_without_valid(subscription_state, client, mocker):
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager = fetcher._client._manager
     manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.EARLIEST})
     while subscription_state.is_offset_reset_needed(tp):
         manager.poll(timeout_ms=10)
