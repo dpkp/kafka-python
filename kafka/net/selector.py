@@ -218,7 +218,6 @@ class NetworkSelector:
 
     def _sleep(self, delay):
         self.call_later(delay, self._current)
-        self._current = None
 
     def wait_write(self, fileobj):
         return KernelEvent('_wait_write', fileobj)
@@ -226,7 +225,6 @@ class NetworkSelector:
     def _wait_write(self, fileobj):
         self.register_event(fileobj, selectors.EVENT_WRITE, self._current)
         self._current.push_stack(lambda: self.unregister_event(fileobj, selectors.EVENT_WRITE))
-        self._current = None
 
     def wait_read(self, fileobj):
         return KernelEvent('_wait_read', fileobj)
@@ -234,7 +232,6 @@ class NetworkSelector:
     def _wait_read(self, fileobj):
         self.register_event(fileobj, selectors.EVENT_READ, self._current)
         self._current.push_stack(lambda: self.unregister_event(fileobj, selectors.EVENT_READ))
-        self._current = None
 
     def _schedule_tasks(self):
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():
