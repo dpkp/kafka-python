@@ -194,7 +194,7 @@ class TestClusterMetadataRefresh:
         f = cluster.request_update()
         assert cluster._need_update
 
-    def test_request_update_sends_metadata_request(self, manager):
+    def test_request_update_sends_metadata_request(self, manager, net):
         manager.bootstrap()
         manager.cluster.config['retry_backoff_ms'] = 10 # reduce loop delay when metadata in progress
 
@@ -202,16 +202,16 @@ class TestClusterMetadataRefresh:
         with patch.object(manager, 'send', return_value=Future().success(response)):
             f = manager.cluster.request_update()
             # Drive the cluster refresh loop
-            manager.poll(timeout_ms=100, future=f)
+            net.poll(timeout_ms=100, future=f)
             assert manager.send.called
 
-    def test_refresh_metadata_retries_no_node(self, manager):
+    def test_refresh_metadata_retries_no_node(self, manager, net):
         # No connected nodes, empty cluster
         cluster = manager.cluster
         with patch.object(cluster, 'brokers', return_value=[]):
             cluster.start_refresh_loop()
             f = cluster.request_update()
-            manager.poll(timeout_ms=0)
+            net.poll(timeout_ms=0)
             # Should not have resolved yet (retry scheduled)
             assert not f.is_done
             # Should have a scheduled retry
