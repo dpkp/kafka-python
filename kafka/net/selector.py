@@ -289,7 +289,9 @@ class NetworkSelector:
     def remove_writer(self, fileobj):
         self.unregister_event(fileobj, selectors.EVENT_WRITE)
 
-    def poll(self, timeout_ms=None, future=None):
+    def poll(self, timeout_ms=None, future=None, drain=False):
+        if drain and future:
+            raise ValueError('Cannot set both drain and future')
         if not self._poll_lock.acquire(blocking=False):
             # Lock contended. Distinguish recursive (this thread is already
             # in poll, e.g. via a task callback) from concurrent (a different
@@ -305,7 +307,7 @@ class NetworkSelector:
             inner_timeout = timeout_ms / 1000 if timeout_ms is not None else None
             if future is not None and future.is_done:
                 inner_timeout = 0
-            while True:
+            while (not drain) or (drain and self._ready):
                 self._poll_once(inner_timeout)
                 if future is None or future.is_done:
                     break
