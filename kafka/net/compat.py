@@ -63,11 +63,11 @@ class KafkaNetClient:
         self.maybe_connect(node_id)
         conn = self._manager._conns.get(node_id)
         if conn is not None and not conn.init_future.is_done:
-            self._manager.poll(timeout_ms=timeout_ms, future=conn.init_future)
+            self._net.poll(timeout_ms=timeout_ms, future=conn.init_future)
         # Connection may be initialized but paused (e.g. max_in_flight reached).
         # Poll briefly to drain in-flight responses and unpause.
         if conn is not None and conn.connected and conn.paused:
-            self._manager.poll(timeout_ms=min(timeout_ms, self._manager.config['request_timeout_ms']))
+            self._net.poll(timeout_ms=min(timeout_ms, self._manager.config['request_timeout_ms']))
         if not self.is_ready(node_id):
             raise Errors.KafkaConnectionError('Node %s not ready after %s ms' % (node_id, timeout_ms))
         return True
@@ -116,7 +116,7 @@ class KafkaNetClient:
     def send_and_receive(self, node_id, request, timeout_ms=30000):
         self.await_ready(node_id, timeout_ms=timeout_ms)
         f = self.send(node_id, request)
-        self._manager.poll(timeout_ms=timeout_ms, future=f)
+        self._net.poll(timeout_ms=timeout_ms, future=f)
         if f.succeeded():
             return f.value
         elif f.failed():
@@ -131,7 +131,7 @@ class KafkaNetClient:
         # _net.poll() concurrently and race on selector / task state.
         # The lock goes away once HeartbeatThread does (Phase D).
         with self._lock:
-            return self._manager.poll(timeout_ms=timeout_ms, future=future)
+            return self._net.poll(timeout_ms=timeout_ms, future=future)
 
     def close(self, node_id=None):
         self._manager.close(node_id=node_id)
