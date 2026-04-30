@@ -136,7 +136,6 @@ class KafkaNetClient:
     def close(self, node_id=None):
         self._manager.close(node_id=node_id)
         if node_id is None:
-            self._manager.stop()
             self._net.close()
 
     def least_loaded_node(self, bootstrap_fallback=False):
