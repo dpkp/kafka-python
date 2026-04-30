@@ -408,9 +408,13 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
+        with self._client._lock:
+            return self._manager.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
+
+    async def refresh_committed_offsets_if_needed_async(self, timeout_ms=None):
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
         try:
-            offsets = self.fetch_committed_offsets(missing_fetch_positions, timeout_ms=timeout_ms)
+            offsets = await self.fetch_committed_offsets_async(missing_fetch_positions, timeout_ms=timeout_ms)
         except Errors.KafkaTimeoutError:
             return False
         for partition, offset in offsets.items():
@@ -432,11 +436,18 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         if not partitions:
             return {}
+        with self._client._lock:
+            return self._manager.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
+
+    async def fetch_committed_offsets_async(self, partitions, timeout_ms=None):
+        """Async variant of :meth:`fetch_committed_offsets`."""
+        if not partitions:
+            return {}
 
         future_key = frozenset(partitions)
         timer = Timer(timeout_ms)
         while True:
-            if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
+            if not await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms):
                 timer.maybe_raise()
 
             # contact coordinator to fetch committed offsets
@@ -446,7 +457,13 @@ class ConsumerCoordinator(BaseCoordinator):
                 future = self._send_offset_fetch_request(partitions)
                 self._offset_fetch_futures[future_key] = future
 
-            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
+            try:
+                await self._manager.wait_for(future, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                pass
+            except BaseException:
+                # handled below via future.is_done / retriable; cleanup happens too
+                pass
 
             if future.is_done:
                 if future_key in self._offset_fetch_futures:
@@ -456,13 +473,14 @@ class ConsumerCoordinator(BaseCoordinator):
                     return future.value
 
                 elif not future.retriable():
-                    raise future.exception # pylint: disable-msg=raising-bad-type
+                    raise future.exception  # pylint: disable-msg=raising-bad-type
 
             # future failed but is retriable, or is not done yet
-            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
-                time.sleep(self.config['retry_backoff_ms'] / 1000)
-            else:
-                time.sleep(timer.timeout_ms / 1000)
+            delay = self.config['retry_backoff_ms'] / 1000
+            if timer.timeout_ms is not None:
+                delay = min(delay, timer.timeout_ms / 1000)
+            if delay > 0:
+                await self._manager._net.sleep(delay)
             timer.maybe_raise()
 
     def close(self, autocommit=True, timeout_ms=None):
@@ -560,26 +578,36 @@ class ConsumerCoordinator(BaseCoordinator):
         self._invoke_completed_offset_commit_callbacks()
         if not offsets:
             return
+        with self._client._lock:
+            return self._manager.run(self._commit_offsets_sync_async, offsets, timeout_ms)
 
+    async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
         timer = Timer(timeout_ms)
         while True:
-            self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms)
+            await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)
 
             future = self._send_offset_commit_request(offsets)
-            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
+            try:
+                await self._manager.wait_for(future, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                pass
+            except BaseException:
+                # handled below via future.is_done / retriable
+                pass
 
             if future.is_done:
                 if future.succeeded():
                     return future.value
 
                 elif not future.retriable():
-                    raise future.exception # pylint: disable-msg=raising-bad-type
+                    raise future.exception  # pylint: disable-msg=raising-bad-type
 
             # future failed but is retriable, or it is still pending
-            if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
-                time.sleep(self.config['retry_backoff_ms'] / 1000)
-            else:
-                time.sleep(timer.timeout_ms / 1000)
+            delay = self.config['retry_backoff_ms'] / 1000
+            if timer.timeout_ms is not None:
+                delay = min(delay, timer.timeout_ms / 1000)
+            if delay > 0:
+                await self._manager._net.sleep(delay)
             timer.maybe_raise()
 
     def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):
