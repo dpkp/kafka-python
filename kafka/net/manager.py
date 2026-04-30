@@ -365,7 +365,7 @@ class KafkaConnectionManager:
         waiters with KafkaConnectionError. Idempotent."""
         t = self._io_thread
         if t is None:
-            self._net.poll(drain=True)
+            self._net.drain()
             return
         self._io_thread = None
         self._net.stop()
