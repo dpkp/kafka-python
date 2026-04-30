@@ -425,13 +425,18 @@ def patched_coord(mocker, coordinator):
     mocker.patch.object(coordinator._client, 'least_loaded_node',
                         return_value=1)
     mocker.patch.object(coordinator._client, 'ready', return_value=True)
-    mocker.patch.object(coordinator._client, 'send')
-    mocker.patch.object(coordinator._client._manager, 'send')
+    send_future = Future()
+    mocker.patch.object(coordinator._client, 'send', return_value=send_future)
+    mocker.patch.object(coordinator._client._manager, 'send', return_value=send_future)
     mocker.patch.object(coordinator, '_heartbeat_thread')
     mocker.spy(coordinator, '_failed_request')
     mocker.spy(coordinator, '_handle_offset_commit_response')
     mocker.spy(coordinator, '_handle_offset_fetch_response')
-    return coordinator
+    try:
+        yield coordinator
+    finally:
+        send_future.failure(Errors.KafkaConnectionError())
+        coordinator.close()
 
 
 def test_send_offset_commit_request_fail(mocker, patched_coord, offsets):
