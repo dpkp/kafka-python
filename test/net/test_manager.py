@@ -293,3 +293,38 @@ class TestKafkaConnectionManagerRun:
         assert future.failed()
         assert isinstance(future.exception, ValueError)
         assert future.exception.args[0] == 'bad_coro'
+
+    def test_run_survives_gc_during_poll(self, manager, monkeypatch):
+        """Regression: an aggressive gc.collect() between _poll_once
+        iterations must not close orphan-cycle suspended coroutines and mask
+        the real result with GeneratorExit.
+
+        The wrapper Future returned by manager.call_soon pins its Task via
+        a no-op callback so the cycle (Future_yielded <-> _poll_once cb <->
+        Task <-> coroutine <-> Future_yielded) has an external reference
+        for as long as the wrapper Future is pending.
+        """
+        import gc
+        from kafka.net.selector import NetworkSelector
+
+        # Force a GC cycle on every _poll_once entry to deterministically
+        # trigger the orphan-collection race that was masking timeouts in CI.
+        orig_poll_once = NetworkSelector._poll_once
+
+        def aggressive_poll_once(self, timeout=None):
+            gc.collect()
+            return orig_poll_once(self, timeout)
+        monkeypatch.setattr(NetworkSelector, '_poll_once', aggressive_poll_once)
+
+        async def hangs_then_times_out():
+            # Awaits a bare Future that nothing references externally --
+            # exactly the orphan-cycle shape that CPython's gc collects.
+            await Future()
+
+        # wait_for should fail with KafkaTimeoutError, not GeneratorExit.
+        async def waiter():
+            inner = manager.call_soon(hangs_then_times_out)
+            return await manager.wait_for(inner, timeout_ms=50)
+
+        with pytest.raises(Errors.KafkaTimeoutError):
+            manager.run(waiter)
