@@ -149,6 +149,15 @@ class NetworkSelector:
         self._selector = self.config['selector']()
         self._scheduled = [] # managed by heapq
         self._ready = collections.deque()
+        # Strong refs to every Task that hasn't completed yet. Without this,
+        # a Task suspended on an externally-unreachable awaitable (e.g. a
+        # Future created and awaited inside the Task's own coroutine) forms
+        # an orphan cycle and is subject to gc collection. Keeping every
+        # pending Task rooted on the selector itself prevents the cycle from
+        # ever being garbage-eligible. Tasks are removed when they raise
+        # StopIteration (normal completion) or BaseException (raised) inside
+        # _poll_once. This mirrors asyncio's loop._tasks weakset.
+        self._pending_tasks = set()
         self._current = None
         self._wakeup_r, self._wakeup_w = socket.socketpair()
         self._wakeup_r.setblocking(False)
@@ -193,6 +202,7 @@ class NetworkSelector:
             task = Task(task)
         task.scheduled_at = when
         heapq.heappush(self._scheduled, (when, task))
+        self._pending_tasks.add(task)
         return task
 
     def call_later(self, delay, task):
@@ -205,6 +215,7 @@ class NetworkSelector:
         if not isinstance(task, Task):
             task = Task(task)
         self._ready.append(task)
+        self._pending_tasks.add(task)
         return task
 
     def unschedule(self, task):
@@ -347,10 +358,14 @@ class NetworkSelector:
                     event = self._current()
 
                 except StopIteration:
-                    pass
+                    # Task ran to completion. Drop the strong ref so the Task
+                    # (and its coroutine, frames, locals) is now collectable.
+                    self._pending_tasks.discard(self._current)
 
                 except BaseException as e:
                     log.exception(e)
+                    # Same as StopIteration -- task is done either way.
+                    self._pending_tasks.discard(self._current)
 
                 else:
                     if isinstance(event, KernelEvent):
@@ -388,8 +403,9 @@ class NetworkSelector:
             pass
 
     def call_soon_threadsafe(self, callback):
-        self.call_soon(callback)
+        task = self.call_soon(callback)
         self.wakeup()
+        return task
 
     def _rebuild_wakeup_socketpair(self):
         for s in (self._wakeup_r, self._wakeup_w):
