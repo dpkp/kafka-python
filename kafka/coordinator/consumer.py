@@ -109,7 +109,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
 
         if self.config['group_id'] is not None:
-            if self.config['api_version'] >= (0, 9):
+            if self._use_group_apis:
                 if not self.config['assignors']:
                     raise Errors.KafkaConfigurationError('Coordinator requires assignors')
             if self.config['api_version'] < (0, 10, 1):
@@ -202,7 +202,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def _auto_assign_all_partitions(self):
         # For users that use "subscribe" without group support,
         # we will simply assign all partitions to this consumer
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             return True
         elif self.config['group_id'] is None:
             return True
@@ -276,7 +276,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.debug('coordinator.poll: timeout in ensure_coordinator_ready; returning early')
                 return False
 
-            if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
+            if self._use_group_apis and self._subscription.partitions_auto_assigned():
                 if self.need_rejoin():
                     # due to a race condition between the initial metadata fetch and the
                     # initial rebalance, we need to ensure that the metadata is fresh
@@ -653,7 +653,7 @@ class ConsumerCoordinator(BaseCoordinator):
             offset_data[tp.topic][tp.partition] = offset
 
         version = self._client.api_version(OffsetCommitRequest, max_version=7)
-        if version > 1 and self._subscription.partitions_auto_assigned():
+        if self._use_group_apis and self._subscription.partitions_auto_assigned():
             generation = self.generation_if_stable()
         else:
             generation = Generation.NO_GENERATION
