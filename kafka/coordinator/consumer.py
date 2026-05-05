@@ -119,7 +119,7 @@ class ConsumerCoordinator(BaseCoordinator):
                                                          "and session_timeout_ms")
 
         if self.config['enable_auto_commit']:
-            if self.config['api_version'] < (0, 8, 1):
+            if not self._use_offset_apis:
                 log.warning('Broker version (%s) does not support offset'
                             ' commits; disabling auto-commit.',
                             self.config['api_version'])
@@ -142,6 +142,10 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignors[assignor.name] = assignor
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
+
+    @property
+    def _use_offset_apis(self):
+        return self.config['api_version'] >= (0, 8, 1)
 
     def protocol_type(self):
         return ConsumerProtocolType
@@ -537,7 +541,7 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -563,7 +567,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Raises error on failure
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -634,7 +638,7 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: indicating whether the commit was successful or not
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -863,7 +867,7 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
         if not partitions:
