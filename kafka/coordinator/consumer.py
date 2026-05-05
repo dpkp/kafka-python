@@ -476,11 +476,11 @@ class ConsumerCoordinator(BaseCoordinator):
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
             # future failed but is retriable, or is not done yet
-            delay = self.config['retry_backoff_ms'] / 1000
+            delay_ms = self.config['retry_backoff_ms']
             if timer.timeout_ms is not None:
-                delay = min(delay, timer.timeout_ms / 1000)
-            if delay > 0:
-                await self._manager._net.sleep(delay)
+                delay_ms = min(delay_ms, timer.timeout_ms)
+            if delay_ms > 0:
+                await self._manager._net.sleep(delay_ms / 1000)
             timer.maybe_raise()
 
     def close(self, autocommit=True, timeout_ms=None):
@@ -603,11 +603,11 @@ class ConsumerCoordinator(BaseCoordinator):
                     raise future.exception  # pylint: disable-msg=raising-bad-type
 
             # future failed but is retriable, or it is still pending
-            delay = self.config['retry_backoff_ms'] / 1000
+            delay_ms = self.config['retry_backoff_ms']
             if timer.timeout_ms is not None:
-                delay = min(delay, timer.timeout_ms / 1000)
-            if delay > 0:
-                await self._manager._net.sleep(delay)
+                delay_ms = min(delay_ms, timer.timeout_ms)
+            if delay_ms > 0:
+                await self._manager._net.sleep(delay_ms / 1000)
             timer.maybe_raise()
 
     def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):

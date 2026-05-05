@@ -302,11 +302,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                     future = Future().failure(Errors.NodeNotReadyError('coordinator'))
                 else:
                     self.coordinator_id = maybe_coordinator_id
-                    self._client.maybe_connect(self.coordinator_id)
-                    if timer.expired:
-                        return False
-                    else:
-                        continue
+                    return not timer.expired
             else:
                 future = self.lookup_coordinator()
 
@@ -317,7 +313,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             except Errors.KafkaError as exc:
                 if not future.retriable():
                     raise
-                if getattr(exc, 'invalid_metadata', False):
+                if exc.invalid_metadata:
                     log.debug('Requesting metadata for group coordinator request: %s', exc)
                     metadata_update = self._client.cluster.request_update()
                     try:
@@ -325,10 +321,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                     except Errors.KafkaTimeoutError:
                         return False
                 else:
-                    delay = self.config['retry_backoff_ms'] / 1000
+                    delay_ms = self.config['retry_backoff_ms']
                     if timer.timeout_ms is not None:
-                        delay = min(delay, timer.timeout_ms / 1000)
-                    await self._manager._net.sleep(delay)
+                        delay = min(delay_ms, timer.timeout_ms)
+                    await self._manager._net.sleep(delay_ms / 1000)
             if timer.expired:
                 return False
         return True
