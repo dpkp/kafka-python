@@ -534,13 +534,6 @@ class ConsumerCoordinator(BaseCoordinator):
             future.add_callback(lambda r: functools.partial(self._do_commit_offsets_async, offsets, callback)())
             if callback:
                 future.add_errback(lambda e: self.completed_offset_commits.appendleft((callback, offsets, e)))
-
-        # ensure the commit has a chance to be transmitted (without blocking on
-        # its completion). Note that commits are treated as heartbeats by the
-        # coordinator, so there is no need to explicitly allow heartbeats
-        # through delayed task execution.
-        self._client.poll(timeout_ms=0) # no wakeup if we add that feature
-
         return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
@@ -653,12 +646,6 @@ class ConsumerCoordinator(BaseCoordinator):
         node_id = self.coordinator()
         if node_id is None:
             return Future().failure(Errors.CoordinatorNotAvailableError)
-
-        # Verify node is ready
-        if not self._client.ready(node_id, metadata_priority=False):
-            log.debug("Node %s not ready -- failing offset commit request",
-                      node_id)
-            return Future().failure(Errors.NodeNotReadyError)
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -885,12 +872,6 @@ class ConsumerCoordinator(BaseCoordinator):
         node_id = self.coordinator()
         if node_id is None:
             return Future().failure(Errors.CoordinatorNotAvailableError)
-
-        # Verify node is ready
-        if not self._client.ready(node_id, metadata_priority=False):
-            log.debug("Node %s not ready -- failing offset fetch request",
-                      node_id)
-            return Future().failure(Errors.NodeNotReadyError)
 
         log.debug("Group %s fetching committed offsets for partitions: %s",
                   self.group_id, partitions)
