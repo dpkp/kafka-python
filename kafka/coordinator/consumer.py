@@ -656,7 +656,6 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp, offset in offsets.items():
             offset_data[tp.topic][tp.partition] = offset
 
-        version = self._client.api_version(OffsetCommitRequest, max_version=7)
         if self._use_group_apis and self._subscription.partitions_auto_assigned():
             generation = self.generation_if_stable()
         else:
@@ -680,89 +679,22 @@ class ConsumerCoordinator(BaseCoordinator):
                     " consumer is not part of an active group for auto partition assignment; it is likely that the consumer"
                     " was kicked out of the group."))
 
-        if version == 0:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version == 1:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                # This api version was only used in v0.8.2, prior to join group apis
-                # so this always ends up as NO_GENERATION
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        -1, # timestamp, unused
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 4:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                -1, # default retention time
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 5:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 6:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.leader_epoch,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        else:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                self.group_instance_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.leader_epoch,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
+        _Topic = OffsetCommitRequest.OffsetCommitRequestTopic
+        _Partition = _Topic.OffsetCommitRequestPartition
+        request = OffsetCommitRequest(
+            group_id=self.group_id,
+            generation_id_or_member_epoch=generation.generation_id,
+            member_id=generation.member_id,
+            group_instance_id=self.group_instance_id,
+            topics=[_Topic(
+                name=topic, partitions=[_Partition(
+                    partition_index=partition,
+                    committed_offset=offset.offset,
+                    committed_leader_epoch=offset.leader_epoch,
+                    committed_metadata=offset.metadata
+                ) for partition, offset in partitions.items()]
+            ) for topic, partitions in offset_data.items()]
+        )
 
         log.debug("Sending offset-commit request with %s for group %s to %s",
                   offsets, self.group_id, node_id)
