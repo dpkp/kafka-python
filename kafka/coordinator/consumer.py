@@ -700,7 +700,7 @@ class ConsumerCoordinator(BaseCoordinator):
                   offsets, self.group_id, node_id)
 
         future = Future()
-        _f = self._client.send(node_id, request)
+        _f = self._manager.send(request, node_id=node_id)
         _f.add_callback(self._handle_offset_commit_response, offsets, future, time.monotonic())
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
@@ -832,7 +832,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         # send the request with a callback
         future = Future()
-        _f = self._client.send(node_id, request)
+        _f = self._manager.send(request, node_id=node_id)
         _f.add_callback(self._handle_offset_fetch_response, future)
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
