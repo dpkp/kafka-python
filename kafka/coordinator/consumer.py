@@ -816,12 +816,13 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp in partitions:
             topic_partitions[tp.topic].add(tp.partition)
 
-        version = self._client.api_version(OffsetFetchRequest, max_version=5)
         # Starting in version 2, the request can contain a null topics array to indicate that offsets should be fetched
         # TODO: support
-        request = OffsetFetchRequest[version](
-            self.group_id,
-            list(topic_partitions.items())
+        max_version = 7
+        request = OffsetFetchRequest(
+            group_id=self.group_id,
+            topics=list(topic_partitions.items()),
+            max_version=max_version,
         )
 
         # send the request with a callback
