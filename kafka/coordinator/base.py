@@ -604,7 +604,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         else:
             log.debug('Error sending %s to node %s [%s]',
                       request.__class__.__name__, node_id, error)
-        future.failure(error)
+        if future is not None:
+            future.failure(error)
 
     def _handle_join_group_response(self, future, send_time, response):
         log.debug("Received JoinGroup response: %s", response)
@@ -985,7 +986,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         heartbeat_log.debug('Sending heartbeat for group %s %s', self.group_id, self._generation)
         self.heartbeat.sent_heartbeat()
         try:
-            response = await self._send_heartbeat_request()
+            await self._send_heartbeat_request()
             heartbeat_log.debug('Heartbeat success')
             self.heartbeat.received_heartbeat()
         except Errors.KafkaError as exc:
@@ -1074,80 +1075,64 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 log.error("LeaveGroup request for member %s / group instance %s failed with error: %s",
                           member.member_id, member.group_instance_id, error_type())
 
-    def _send_heartbeat_request(self):
+    async def _send_heartbeat_request(self):
         """Send a heartbeat request"""
         if self.coordinator_unknown():
-            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
-            return Future().failure(e)
+            raise Errors.CoordinatorNotAvailableError(self.coordinator_id)
 
-        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
-            e = Errors.NodeNotReadyError(self.coordinator_id)
-            return Future().failure(e)
-
-        version = self._client.api_version(HeartbeatRequest, max_version=3)
-        if version <=2:
-            request = HeartbeatRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-            )
-        else:
-            request = HeartbeatRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-                self.group_instance_id,
-            )
+        request = HeartbeatRequest(
+            group_id=self.group_id,
+            generation_id=self._generation.generation_id,
+            member_id=self._generation.member_id,
+            group_instance_id=self.group_instance_id,
+        )
         heartbeat_log.debug("Sending HeartbeatRequest to %s: %s", self.coordinator_id, request)
-        future = Future()
-        _f = self._client.send(self.coordinator_id, request)
-        _f.add_callback(self._handle_heartbeat_response, future, time.monotonic())
-        _f.add_errback(self._failed_request, self.coordinator_id,
-                       request, future)
-        return future
+        try:
+            send_time = time.monotonic()
+            response = await self._manager.send(request, node_id=self.coordinator_id)
+            return self._handle_heartbeat_response(response, send_time)
+        except Errors.KafkaError as exc:
+            self._failed_request(self.coordinator_id, request, None, exc)
+            raise
 
-    def _handle_heartbeat_response(self, future, send_time, response):
+    def _handle_heartbeat_response(self, response, send_time):
         if self._sensors:
             self._sensors.heartbeat_latency.record((time.monotonic() - send_time) * 1000)
         heartbeat_log.debug("Received heartbeat response for group %s: %s",
                             self.group_id, response)
         error_type = Errors.for_code(response.error_code)
+        error = error_type()
         if error_type is Errors.NoError:
-            future.success(None)
+            return
         elif error_type in (Errors.CoordinatorNotAvailableError,
                             Errors.NotCoordinatorError):
             heartbeat_log.warning("Heartbeat failed for group %s: coordinator (node %s)"
                                   " is either not started or not valid", self.group_id,
                         self.coordinator_id)
-            self.coordinator_dead(error_type())
-            future.failure(error_type())
+            self.coordinator_dead(error)
         elif error_type is Errors.RebalanceInProgressError:
             heartbeat_log.warning("Heartbeat failed for group %s because it is"
                                   " rebalancing", self.group_id)
             self.request_rejoin()
-            future.failure(error_type())
         elif error_type is Errors.IllegalGenerationError:
             heartbeat_log.warning("Heartbeat failed for group %s: generation id is not "
                                   " current.", self.group_id)
             self.reset_generation()
-            future.failure(error_type())
         elif error_type is Errors.FencedInstanceIdError:
             heartbeat_log.error("Heartbeat failed for group %s due to fenced id error: %s",
                                 self.group_id, self.group_instance_id)
-            future.failure(error_type((self.group_id, self.group_instance_id)))
+            error = error_type((self.group_id, self.group_instance_id))
         elif error_type is Errors.UnknownMemberIdError:
             heartbeat_log.warning("Heartbeat: local member_id was not recognized;"
                                   " this consumer needs to re-join")
             self.reset_generation()
-            future.failure(error_type)
         elif error_type is Errors.GroupAuthorizationFailedError:
             error = error_type(self.group_id)
             heartbeat_log.error("Heartbeat failed: authorization error: %s", error)
-            future.failure(error)
         else:
-            error = error_type()
             heartbeat_log.error("Heartbeat failed: Unhandled error: %s", error)
-            future.failure(error)
+
+        raise error
 
 
 class GroupCoordinatorMetrics:
