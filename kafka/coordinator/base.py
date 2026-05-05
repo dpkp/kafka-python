@@ -282,51 +282,52 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         Returns: True is coordinator found before timeout_ms, else False
         """
+        with self._client._lock:
+            return self._manager.run(self.ensure_coordinator_ready_async, timeout_ms)
+
+    async def ensure_coordinator_ready_async(self, timeout_ms=None):
+        """Async variant of :meth:`ensure_coordinator_ready`.
+
+        Awaits until the coordinator for this group is known, or until the
+        timeout (if any) expires.
+        """
         timer = Timer(timeout_ms)
-        with self._client._lock, self._lock:
-            while self.coordinator_unknown():
-
-                # Prior to 0.8.2 there was no group coordinator
-                # so we will just pick a node at random and treat
-                # it as the "coordinator"
-                if self.config['api_version'] < (0, 8, 2):
-                    maybe_coordinator_id = self._client.least_loaded_node()
-                    if maybe_coordinator_id is None:
-                        future = Future().failure(Errors.NodeNotReadyError('coordinator'))
-                    else:
-                        self.coordinator_id = maybe_coordinator_id
-                        self._client.maybe_connect(self.coordinator_id)
-                        if timer.expired:
-                            return False
-                        else:
-                            continue
+        while self.coordinator_unknown():
+            # Prior to 0.8.2 there was no group coordinator
+            # so we will just pick a node at random and treat
+            # it as the "coordinator"
+            if self.config['api_version'] < (0, 8, 2):
+                maybe_coordinator_id = self._client.least_loaded_node()
+                if maybe_coordinator_id is None:
+                    future = Future().failure(Errors.NodeNotReadyError('coordinator'))
                 else:
-                    future = self.lookup_coordinator()
-
-                self._client.poll(future=future, timeout_ms=timer.timeout_ms)
-
-                if not future.is_done:
-                    return False
-
-                if future.failed():
-                    if future.retriable():
-                        if getattr(future.exception, 'invalid_metadata', False):
-                            log.debug('Requesting metadata for group coordinator request: %s', future.exception)
-                            metadata_update = self._client.cluster.request_update()
-                            self._client.poll(future=metadata_update, timeout_ms=timer.timeout_ms)
-                            if not metadata_update.is_done:
-                                return False
-                        else:
-                            if timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
-                                time.sleep(self.config['retry_backoff_ms'] / 1000)
-                            else:
-                                time.sleep(timer.timeout_ms / 1000)
-                    else:
-                        raise future.exception  # pylint: disable-msg=raising-bad-type
-                if timer.expired:
-                    return False
+                    self.coordinator_id = maybe_coordinator_id
+                    return not timer.expired
             else:
-                return True
+                future = self.lookup_coordinator()
+
+            try:
+                await self._manager.wait_for(future, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                return False
+            except Errors.KafkaError as exc:
+                if not future.retriable():
+                    raise
+                if exc.invalid_metadata:
+                    log.debug('Requesting metadata for group coordinator request: %s', exc)
+                    metadata_update = self._client.cluster.request_update()
+                    try:
+                        await self._manager.wait_for(metadata_update, timer.timeout_ms)
+                    except Errors.KafkaTimeoutError:
+                        return False
+                else:
+                    delay_ms = self.config['retry_backoff_ms']
+                    if timer.timeout_ms is not None:
+                        delay = min(delay_ms, timer.timeout_ms)
+                    await self._manager._net.sleep(delay_ms / 1000)
+            if timer.expired:
+                return False
+        return True
 
     def _reset_find_coordinator_future(self, result):
         self._find_coordinator_future = None

@@ -238,10 +238,12 @@ def test_need_rejoin(coordinator):
 def test_refresh_committed_offsets_if_needed(mocker, coordinator):
     tp0 = TopicPartition('foobar', 0)
     tp1 = TopicPartition('foobar', 1)
-    mocker.patch.object(ConsumerCoordinator, 'fetch_committed_offsets',
-                        return_value = {
-                            tp0: OffsetAndMetadata(123, '', -1),
-                            tp1: OffsetAndMetadata(234, '', -1)})
+    async def _fake_fetch(self, partitions, timeout_ms=None):
+        return {
+            tp0: OffsetAndMetadata(123, '', -1),
+            tp1: OffsetAndMetadata(234, '', -1),
+        }
+    mocker.patch.object(ConsumerCoordinator, 'fetch_committed_offsets_async', _fake_fetch)
     coordinator._subscription.assign_from_user([tp0, tp1])
     coordinator._subscription.request_offset_reset(tp0)
     coordinator._subscription.request_offset_reset(tp1)
@@ -258,39 +260,35 @@ def test_refresh_committed_offsets_if_needed(mocker, coordinator):
 def test_fetch_committed_offsets(mocker, coordinator):
 
     # No partitions, no IO polling
-    mocker.patch.object(coordinator._client, 'poll')
     assert coordinator.fetch_committed_offsets([]) == {}
-    assert coordinator._client.poll.call_count == 0
 
     # general case -- send offset fetch request, get successful future
-    mocker.patch.object(coordinator, 'ensure_coordinator_ready')
+    async def _ready(*args, **kwargs):
+        return True
+    mocker.patch.object(coordinator, 'ensure_coordinator_ready_async', side_effect=_ready)
     mocker.patch.object(coordinator, '_send_offset_fetch_request',
                         return_value=Future().success('foobar'))
     partitions = [TopicPartition('foobar', 0)]
     ret = coordinator.fetch_committed_offsets(partitions)
     assert ret == 'foobar'
     coordinator._send_offset_fetch_request.assert_called_with(partitions)
-    assert coordinator._client.poll.call_count == 1
 
     # Failed future is raised if not retriable
     coordinator._send_offset_fetch_request.return_value = Future().failure(AssertionError)
-    coordinator._client.poll.reset_mock()
     try:
         coordinator.fetch_committed_offsets(partitions)
     except AssertionError:
         pass
     else:
         assert False, 'Exception not raised when expected'
-    assert coordinator._client.poll.call_count == 1
 
-    coordinator._client.poll.reset_mock()
     coordinator._send_offset_fetch_request.side_effect = [
         Future().failure(Errors.RequestTimedOutError),
         Future().success('fizzbuzz')]
 
     ret = coordinator.fetch_committed_offsets(partitions)
     assert ret == 'fizzbuzz'
-    assert coordinator._client.poll.call_count == 2 # call + retry
+    assert coordinator._send_offset_fetch_request.call_count == 4  # successful, failed, retried+success
 
 
 def test_close(mocker, coordinator):
@@ -333,41 +331,35 @@ def test_commit_offsets_async(mocker, coordinator, offsets):
 
 
 def test_commit_offsets_sync(mocker, coordinator, offsets):
-    mocker.patch.object(coordinator, 'ensure_coordinator_ready')
+    async def _ready(*args, **kwargs):
+        return True
+    mocker.patch.object(coordinator, 'ensure_coordinator_ready_async', side_effect=_ready)
     mocker.patch.object(coordinator, '_send_offset_commit_request',
                         return_value=Future().success('fizzbuzz'))
-    cli = coordinator._client
-    mocker.patch.object(cli, 'poll')
 
     # No offsets, no calls
     assert coordinator.commit_offsets_sync({}) is None
     assert coordinator._send_offset_commit_request.call_count == 0
-    assert cli.poll.call_count == 0
 
     ret = coordinator.commit_offsets_sync(offsets)
     assert coordinator._send_offset_commit_request.call_count == 1
-    assert cli.poll.call_count == 1
     assert ret == 'fizzbuzz'
 
     # Failed future is raised if not retriable
     coordinator._send_offset_commit_request.return_value = Future().failure(AssertionError)
-    coordinator._client.poll.reset_mock()
     try:
         coordinator.commit_offsets_sync(offsets)
     except AssertionError:
         pass
     else:
         assert False, 'Exception not raised when expected'
-    assert coordinator._client.poll.call_count == 1
 
-    coordinator._client.poll.reset_mock()
     coordinator._send_offset_commit_request.side_effect = [
         Future().failure(Errors.RequestTimedOutError),
         Future().success('fizzbuzz')]
 
     ret = coordinator.commit_offsets_sync(offsets)
     assert ret == 'fizzbuzz'
-    assert coordinator._client.poll.call_count == 2 # call + retry
 
 
 @pytest.mark.parametrize(
