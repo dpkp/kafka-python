@@ -802,7 +802,7 @@ class ConsumerCoordinator(BaseCoordinator):
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
-        if not partitions:
+        if not partitions and partitions is not None:
             return Future().success({})
 
         node_id = self.coordinator()
@@ -810,18 +810,23 @@ class ConsumerCoordinator(BaseCoordinator):
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
         log.debug("Group %s fetching committed offsets for partitions: %s",
-                  self.group_id, partitions)
+                  self.group_id, '(all)' if partitions is None else partitions)
         # construct the request
-        topic_partitions = collections.defaultdict(set)
-        for tp in partitions:
-            topic_partitions[tp.topic].add(tp.partition)
-
-        # Starting in version 2, the request can contain a null topics array to indicate that offsets should be fetched
-        # TODO: support
         max_version = 7
+        if partitions is not None:
+            topic_partitions = collections.defaultdict(set)
+            for tp in partitions:
+                topic_partitions[tp.topic].add(tp.partition)
+            topic_partitions = list(topic_partitions.items())
+            min_version = 0
+        else:
+            topic_partitions = None
+            min_version = 2
+
         request = OffsetFetchRequest(
             group_id=self.group_id,
-            topics=list(topic_partitions.items()),
+            topics=topic_partitions,
+            min_version=min_version,
             max_version=max_version,
         )
 
