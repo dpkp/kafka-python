@@ -25,8 +25,20 @@ import logging
 import struct
 import time
 
+import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse
+
+
+class _MockBrokerFailure:
+    """Sentinel returned by MockBroker.handle_request to signal that the
+    MockTransport should abort the connection with the given error, simulating
+    a transport-level failure (TCP disconnect, broker crash mid-request, etc.).
+    """
+    __slots__ = ('error',)
+
+    def __init__(self, error):
+        self.error = error
 
 log = logging.getLogger(__name__)
 
@@ -155,12 +167,17 @@ class MockTransport:
             log.debug('%s: Request api_key=%d version=%d correlation_id=%d',
                       self, api_key, api_version, correlation_id)
 
-            response_bytes = await self._broker.handle_request(
+            result = await self._broker.handle_request(
                 api_key, api_version, correlation_id, request_bytes)
 
-            if response_bytes is not None and self._protocol and not self._closed:
+            if isinstance(result, _MockBrokerFailure):
+                log.debug('%s: simulating transport failure: %s', self, result.error)
+                self.abort(result.error)
+                return
+
+            if result is not None and self._protocol and not self._closed:
                 self.last_read = time.monotonic()
-                self._protocol.data_received(response_bytes)
+                self._protocol.data_received(result)
 
 
 class MockBroker:
@@ -262,6 +279,24 @@ class MockBroker:
         """
         self._response_queue.append((request_class.API_KEY, fn))
 
+    def fail_next(self, request_class, error=None):
+        """Enqueue a transport failure for the next request of the given type.
+
+        When the matching request arrives, the MockTransport aborts the
+        connection with ``error`` instead of returning a response, simulating
+        a transport-level send failure (TCP disconnect, broker crash
+        mid-request, etc.). The pending request's Future then fails via the
+        connection's ``connection_lost`` -> ``fail_in_flight_requests`` path.
+
+        Arguments:
+            request_class: The request class for API key matching.
+            error: Exception delivered to ``transport.abort()``. Defaults to
+                ``Errors.KafkaConnectionError``.
+        """
+        if error is None:
+            error = Errors.KafkaConnectionError('MockBroker.fail_next')
+        self._response_queue.append((request_class.API_KEY, _MockBrokerFailure(error)))
+
     async def handle_request(self, api_key, api_version, correlation_id, request_bytes):
         """Process a request and return framed response bytes.
 
@@ -272,7 +307,8 @@ class MockBroker:
 
         Returns:
             bytes: Framed response ready for ``protocol.data_received()``,
-            or None if the request expects no response.
+            or None if the request expects no response, or
+            ``_MockBrokerFailure`` to signal that the transport should abort.
         """
         self.requests_received += 1
 
@@ -280,6 +316,8 @@ class MockBroker:
         for i, (queued_key, queued_response) in enumerate(self._response_queue):
             if queued_key == api_key:
                 del self._response_queue[i]
+                if isinstance(queued_response, _MockBrokerFailure):
+                    return queued_response
                 if callable(queued_response):
                     response = queued_response(api_key, api_version, correlation_id, request_bytes)
                     # Support both sync and async respond_fn callables
