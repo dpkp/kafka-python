@@ -473,6 +473,17 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self._maybe_start_heartbeat_thread()
         return self.join_group(timeout_ms=timer.timeout_ms)
 
+    async def ensure_active_group_async(self, timeout_ms=None):
+        """Async variant of :meth:`ensure_active_group`."""
+        if not self._use_group_apis:
+            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
+        timer = Timer(timeout_ms)
+        if not await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms):
+            return False
+        self._maybe_start_heartbeat_loop()
+        self._maybe_start_heartbeat_thread()
+        return await self.join_group_async(timeout_ms=timer.timeout_ms)
+
     def join_group(self, timeout_ms=None):
         if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
@@ -552,6 +563,71 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                         time.sleep(self.config['retry_backoff_ms'] / 1000)
                     else:
                         time.sleep(timer.timeout_ms / 1000)
+
+    async def join_group_async(self, timeout_ms=None):
+        """Async variant of :meth:`join_group`.
+
+        Drives JoinGroup -> SyncGroup attempts in a loop until the member is
+        joined (returns True), the timer expires (returns False), or a
+        non-retriable error is raised.
+        """
+        if not self._use_group_apis:
+            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
+        timer = Timer(timeout_ms)
+        while self.need_rejoin():
+            if not await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms):
+                return False
+
+            # Call _on_join_prepare once per rebalance attempt. The rejoining
+            # flag survives across loop iterations so we don't re-run user
+            # listeners or auto-commit on retry.
+            if not self.rejoining:
+                await self._on_join_prepare_async(
+                    self._generation.generation_id,
+                    self._generation.member_id,
+                    timeout_ms=timer.timeout_ms)
+                self.rejoining = True
+
+                # Disable heartbeat for the wire round-trip. Must come AFTER
+                # _on_join_prepare_async so heartbeats keep flowing while a
+                # potentially-slow rebalance listener runs.
+                log.debug("Disabling heartbeat during join-group")
+                self._disable_heartbeat()
+
+            try:
+                assignment_bytes = await self._do_join_and_sync_async()
+            except (Errors.UnknownMemberIdError,
+                    Errors.RebalanceInProgressError,
+                    Errors.IllegalGenerationError,
+                    Errors.MemberIdRequiredError):
+                # Side effects (reset_generation / coordinator_dead /
+                # request_rejoin) were applied by the response processors;
+                # loop back and retry immediately.
+                continue
+            except Errors.KafkaError as exc:
+                if not getattr(exc, 'retriable', False):
+                    raise
+                if timer.expired:
+                    return False
+                backoff_ms = self.config['retry_backoff_ms']
+                if timer.timeout_ms is not None:
+                    backoff_ms = min(backoff_ms, timer.timeout_ms)
+                if backoff_ms > 0:
+                    await self._manager._net.sleep(backoff_ms / 1000)
+                continue
+
+            with self._lock:
+                self.rejoining = False
+                self.rejoin_needed = False
+                self.state = MemberState.STABLE
+                self._enable_heartbeat()
+            await self._on_join_complete_async(
+                self._generation.generation_id,
+                self._generation.member_id,
+                self._generation.protocol,
+                assignment_bytes)
+            return True
+        return True
 
     def _send_join_group_request(self):
         """Join the group and return the assignment for the next generation.

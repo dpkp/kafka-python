@@ -1022,6 +1022,89 @@ def test_do_join_and_sync_async_sync_error(request, broker, seeded_coord,
     assert seeded_coord.rejoin_needed is True
 
 
+def test_join_group_async_no_rejoin_returns_true(request, mocker, broker, seeded_coord):
+    """need_rejoin() False -> short-circuits to True without any requests."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    mocker.patch.object(seeded_coord, 'need_rejoin', return_value=False)
+    seeded_coord.state = MemberState.STABLE
+
+    before = broker.requests_received
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert broker.requests_received == before
+
+
+def test_join_group_async_happy_path_follower(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+    assert seeded_coord.rejoin_needed is False
+    assert seeded_coord.rejoining is False
+    assert seeded_coord._heartbeat_enabled is True
+
+
+def test_join_group_async_retries_on_retriable_error(request, broker, seeded_coord):
+    """First JoinGroup fails with RebalanceInProgress; loop retries and succeeds."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        error_code=Errors.RebalanceInProgressError.errno))
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+
+
+def test_join_group_async_raises_non_retriable(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        error_code=Errors.GroupAuthorizationFailedError.errno))
+
+    with pytest.raises(Errors.GroupAuthorizationFailedError):
+        seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+
+@pytest.mark.parametrize("broker", [(0, 8, 0)], indirect=True)
+def test_join_group_async_unsupported_version(broker, coordinator):
+    with pytest.raises(Errors.UnsupportedVersionError):
+        coordinator._manager.run(coordinator.join_group_async, None)
+
+
+def test_ensure_active_group_async_happy_path(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.ensure_active_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+    # Heartbeat loop coroutine was scheduled.
+    assert seeded_coord._heartbeat_loop_future is not None
+
+
 def test_heartbeat(mocker, coordinator):
     coordinator.coordinator_id = 0
     coordinator.state = MemberState.STABLE
