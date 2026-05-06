@@ -237,6 +237,31 @@ class TestMockBrokerWithClient:
         finally:
             client.close()
 
+    def test_fail_next_aborts_request(self):
+        """fail_next aborts the connection and fails the in-flight request."""
+        import kafka.errors as Errors
+
+        broker = MockBroker()
+        client = self._make_client(broker)
+        try:
+            client.check_version(timeout_ms=5000)
+            node_id = client.least_loaded_node(bootstrap_fallback=True)
+            client.await_ready(node_id, timeout_ms=5000)
+
+            error = Errors.KafkaConnectionError('simulated')
+            broker.fail_next(MetadataRequest, error=error)
+
+            version = client.api_version(MetadataRequest, max_version=8)
+            future = client.send(node_id, MetadataRequest[version]())
+            _poll_for_future(client, future)
+
+            assert future.failed()
+            assert future.exception is error
+            # Connection was aborted, so it should no longer be ready.
+            assert not client.is_ready(node_id)
+        finally:
+            client.close()
+
     def test_api_version_negotiation(self):
         """Client negotiates ApiVersions when api_version is not pre-set."""
         broker = MockBroker()

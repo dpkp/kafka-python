@@ -405,24 +405,6 @@ def seeded_coord(broker, coordinator):
     return coordinator
 
 
-@pytest.fixture
-def patched_coord(mocker, seeded_coord):
-    """Minimal mock-send fixture for transport-failure tests (Category D).
-    The two _failure tests exercise the _failed_request errback path, which
-    requires control over the underlying send Future. Other request-shape
-    tests have moved to the broker round-trip via ``seeded_coord``.
-    """
-    send_future = Future()
-    mocker.patch.object(seeded_coord._client, 'send', return_value=send_future)
-    mocker.patch.object(seeded_coord._client._manager, 'send', return_value=send_future)
-    mocker.spy(seeded_coord, '_failed_request')
-    try:
-        yield seeded_coord
-    finally:
-        if not send_future.is_done:
-            send_future.failure(Errors.KafkaConnectionError())
-
-
 def test_send_offset_commit_request_fail(coordinator, offsets):
     # Default coordinator state has coordinator_id=None, so coordinator()
     # returns None and the early-return paths fire without any patching.
@@ -467,16 +449,22 @@ def test_send_offset_commit_request_versions(broker, seeded_coord, offsets, vers
     assert captured['api_version'] == version
 
 
-def test_send_offset_commit_request_failure(patched_coord, offsets):
-    _f = Future()
-    patched_coord._client.send.return_value = _f
-    future = patched_coord._send_offset_commit_request(offsets)
-    (node, request), _ = patched_coord._client.send.call_args
-    error = Exception()
-    _f.failure(error)
-    patched_coord._failed_request.assert_called_with(0, request, future, error)
+def test_send_offset_commit_request_failure(mocker, broker, seeded_coord, offsets):
+    spy = mocker.spy(seeded_coord, '_failed_request')
+    error = Errors.KafkaConnectionError('simulated transport failure')
+    broker.fail_next(OffsetCommitRequest, error=error)
+
+    future = seeded_coord._send_offset_commit_request(offsets)
+    seeded_coord._client.poll(future=future, timeout_ms=5000)
+
     assert future.failed()
     assert future.exception is error
+    assert spy.call_count == 1
+    node_id, request, call_future, call_error = spy.call_args[0]
+    assert node_id == 0
+    assert isinstance(request, OffsetCommitRequest)
+    assert call_future is future
+    assert call_error is error
 
 
 def test_send_offset_commit_request_success(mocker, broker, seeded_coord, offsets):
@@ -602,16 +590,22 @@ def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, ve
     assert captured['api_version'] == version
 
 
-def test_send_offset_fetch_request_failure(patched_coord, partitions):
-    _f = Future()
-    patched_coord._client.send.return_value = _f
-    future = patched_coord._send_offset_fetch_request(partitions)
-    (node, request), _ = patched_coord._client.send.call_args
-    error = Exception()
-    _f.failure(error)
-    patched_coord._failed_request.assert_called_with(0, request, future, error)
+def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partitions):
+    spy = mocker.spy(seeded_coord, '_failed_request')
+    error = Errors.KafkaConnectionError('simulated transport failure')
+    broker.fail_next(OffsetFetchRequest, error=error)
+
+    future = seeded_coord._send_offset_fetch_request(partitions)
+    seeded_coord._client.poll(future=future, timeout_ms=5000)
+
     assert future.failed()
     assert future.exception is error
+    assert spy.call_count == 1
+    node_id, request, call_future, call_error = spy.call_args[0]
+    assert node_id == 0
+    assert isinstance(request, OffsetFetchRequest)
+    assert call_future is future
+    assert call_error is error
 
 
 def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partitions, offsets):
