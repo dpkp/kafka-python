@@ -211,6 +211,17 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         pass
 
+    async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
+        """Async variant of :meth:`_on_join_prepare`.
+
+        Default no-op; subclasses (e.g. :class:`ConsumerCoordinator`) override
+        with auto-commit + rebalance-listener invocation. Called from the join
+        coroutine on the event loop, so blocking work in subclass overrides
+        will block the loop -- including heartbeats. Async rebalance listeners
+        are awaited; sync listeners run inline.
+        """
+        pass
+
     @abc.abstractmethod
     def _perform_assignment(self, leader_id, protocol, members):
         """Perform assignment for the group.
@@ -245,6 +256,11 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 propagated from the group leader. The Coordinator instance is
                 responsible for decoding based on the chosen protocol.
         """
+        pass
+
+    async def _on_join_complete_async(self, generation, member_id, protocol,
+                                      member_assignment_bytes):
+        """Async variant of :meth:`_on_join_complete`. Default no-op."""
         pass
 
     def coordinator_unknown(self):

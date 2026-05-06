@@ -215,6 +215,110 @@ def test_on_join_prepare(coordinator):
     coordinator._on_join_prepare(0, 'member-foo')
 
 
+def test_on_join_prepare_async_invokes_sync_listener(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert listener.on_partitions_revoked.call_count == 1
+    listener.on_partitions_revoked.assert_called_with(set())
+
+
+def test_on_join_prepare_async_awaits_async_listener(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_revoked = mocker.AsyncMock()
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert listener.on_partitions_revoked.call_count == 1
+    listener.on_partitions_revoked.assert_awaited_with(set())
+
+
+def test_on_join_prepare_async_listener_exception_is_caught(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_revoked.side_effect = RuntimeError('listener crash')
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+
+    # Should not raise; should still complete the post-listener cleanup.
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    assert coordinator._is_leader is False
+
+
+def test_on_join_prepare_async_skips_auto_commit_when_disabled(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    spy = mocker.spy(coordinator, '_commit_offsets_sync_async')
+    coordinator._subscription.subscribe(topics=['foobar'])
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert spy.call_count == 0
+
+
+def test_on_join_prepare_async_runs_auto_commit_when_enabled(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = True
+    async def _noop(*args, **kwargs):
+        return None
+    spy = mocker.patch.object(coordinator, '_commit_offsets_sync_async',
+                              side_effect=_noop)
+    coordinator._subscription.subscribe(topics=['foobar'])
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert spy.call_count == 1
+
+
+def test_on_join_complete_async_invokes_sync_listener(mocker, coordinator):
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
+
+    assert listener.on_partitions_assigned.call_count == 1
+    listener.on_partitions_assigned.assert_called_with(
+        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
+
+
+def test_on_join_complete_async_awaits_async_listener(mocker, coordinator):
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_assigned = mocker.AsyncMock()
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
+
+    assert listener.on_partitions_assigned.call_count == 1
+    listener.on_partitions_assigned.assert_awaited_with(
+        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
+
+
+def test_on_join_complete_async_listener_exception_is_caught(mocker, coordinator):
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_assigned.side_effect = RuntimeError('listener crash')
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    # Should not raise.
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
+
+
 def test_need_rejoin(coordinator):
     # No subscription - no rejoin
     assert coordinator.need_rejoin() is False
