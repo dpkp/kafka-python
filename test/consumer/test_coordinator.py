@@ -694,11 +694,18 @@ def test_heartbeat(mocker, coordinator):
 
     coordinator._enable_heartbeat()
     coordinator.state = MemberState.STABLE
-    # Replace _send_heartbeat_request with a stub returning a Future we control,
-    # so the heartbeat coroutine reaches the dispatch and blocks there. The
-    # Mock's call_count then verifies the loop fired exactly once.
+    # Replace _send_heartbeat_request with an async stub that suspends on a
+    # Future we control, so the heartbeat coroutine reaches the dispatch and
+    # blocks there. patch.object auto-detects the async def and would return
+    # an AsyncMock whose return_value=Future() is never awaited (the Future
+    # is just yielded as the coroutine's value, which would let the loop
+    # spin); using side_effect with an async function that awaits the Future
+    # forces the suspension we want. The Mock's call_count then verifies the
+    # loop fired exactly once.
     blocked_send = Future()
-    mocker.patch.object(coordinator, '_send_heartbeat_request', return_value=blocked_send)
+    async def _hang(*args, **kwargs):
+        await blocked_send
+    mocker.patch.object(coordinator, '_send_heartbeat_request', side_effect=_hang)
     mocker.patch.object(coordinator.heartbeat, 'should_heartbeat', return_value=True)
     # Wakeup callback resolves the future on one poll cycle; the heartbeat
     # coroutine resumes and reaches _send_heartbeat_request on the next.
