@@ -109,7 +109,7 @@ class ConsumerCoordinator(BaseCoordinator):
             self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
 
         if self.config['group_id'] is not None:
-            if self.config['api_version'] >= (0, 9):
+            if self._use_group_apis:
                 if not self.config['assignors']:
                     raise Errors.KafkaConfigurationError('Coordinator requires assignors')
             if self.config['api_version'] < (0, 10, 1):
@@ -119,7 +119,7 @@ class ConsumerCoordinator(BaseCoordinator):
                                                          "and session_timeout_ms")
 
         if self.config['enable_auto_commit']:
-            if self.config['api_version'] < (0, 8, 1):
+            if not self._use_offset_apis:
                 log.warning('Broker version (%s) does not support offset'
                             ' commits; disabling auto-commit.',
                             self.config['api_version'])
@@ -142,6 +142,10 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignors[assignor.name] = assignor
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
+
+    @property
+    def _use_offset_apis(self):
+        return self.config['api_version'] >= (0, 8, 1)
 
     def protocol_type(self):
         return ConsumerProtocolType
@@ -202,7 +206,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def _auto_assign_all_partitions(self):
         # For users that use "subscribe" without group support,
         # we will simply assign all partitions to this consumer
-        if self.config['api_version'] < (0, 9):
+        if not self._use_group_apis:
             return True
         elif self.config['group_id'] is None:
             return True
@@ -276,7 +280,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.debug('coordinator.poll: timeout in ensure_coordinator_ready; returning early')
                 return False
 
-            if self.config['api_version'] >= (0, 9) and self._subscription.partitions_auto_assigned():
+            if self._use_group_apis and self._subscription.partitions_auto_assigned():
                 if self.need_rejoin():
                     # due to a race condition between the initial metadata fetch and the
                     # initial rebalance, we need to ensure that the metadata is fresh
@@ -537,7 +541,7 @@ class ConsumerCoordinator(BaseCoordinator):
         return future
 
     def _do_commit_offsets_async(self, offsets, callback=None):
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -563,7 +567,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Raises error on failure
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -634,7 +638,7 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: indicating whether the commit was successful or not
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
@@ -652,8 +656,7 @@ class ConsumerCoordinator(BaseCoordinator):
         for tp, offset in offsets.items():
             offset_data[tp.topic][tp.partition] = offset
 
-        version = self._client.api_version(OffsetCommitRequest, max_version=7)
-        if version > 1 and self._subscription.partitions_auto_assigned():
+        if self._use_group_apis and self._subscription.partitions_auto_assigned():
             generation = self.generation_if_stable()
         else:
             generation = Generation.NO_GENERATION
@@ -676,95 +679,28 @@ class ConsumerCoordinator(BaseCoordinator):
                     " consumer is not part of an active group for auto partition assignment; it is likely that the consumer"
                     " was kicked out of the group."))
 
-        if version == 0:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version == 1:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                # This api version was only used in v0.8.2, prior to join group apis
-                # so this always ends up as NO_GENERATION
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        -1, # timestamp, unused
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 4:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                -1, # default retention time
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 5:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        elif version <= 6:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.leader_epoch,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
-        else:
-            request = OffsetCommitRequest[version](
-                self.group_id,
-                generation.generation_id,
-                generation.member_id,
-                self.group_instance_id,
-                [(
-                    topic, [(
-                        partition,
-                        offset.offset,
-                        offset.leader_epoch,
-                        offset.metadata
-                    ) for partition, offset in partitions.items()]
-                ) for topic, partitions in offset_data.items()]
-            )
+        _Topic = OffsetCommitRequest.OffsetCommitRequestTopic
+        _Partition = _Topic.OffsetCommitRequestPartition
+        request = OffsetCommitRequest(
+            group_id=self.group_id,
+            generation_id_or_member_epoch=generation.generation_id,
+            member_id=generation.member_id,
+            group_instance_id=self.group_instance_id,
+            topics=[_Topic(
+                name=topic, partitions=[_Partition(
+                    partition_index=partition,
+                    committed_offset=offset.offset,
+                    committed_leader_epoch=offset.leader_epoch,
+                    committed_metadata=offset.metadata
+                ) for partition, offset in partitions.items()]
+            ) for topic, partitions in offset_data.items()]
+        )
 
         log.debug("Sending offset-commit request with %s for group %s to %s",
                   offsets, self.group_id, node_id)
 
         future = Future()
-        _f = self._client.send(node_id, request)
+        _f = self._manager.send(request, node_id=node_id)
         _f.add_callback(self._handle_offset_commit_response, offsets, future, time.monotonic())
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
@@ -863,10 +799,10 @@ class ConsumerCoordinator(BaseCoordinator):
         Returns:
             Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
         """
-        if self.config['api_version'] < (0, 8, 1):
+        if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
-        if not partitions:
+        if not partitions and partitions is not None:
             return Future().success({})
 
         node_id = self.coordinator()
@@ -874,23 +810,29 @@ class ConsumerCoordinator(BaseCoordinator):
             return Future().failure(Errors.CoordinatorNotAvailableError)
 
         log.debug("Group %s fetching committed offsets for partitions: %s",
-                  self.group_id, partitions)
+                  self.group_id, '(all)' if partitions is None else partitions)
         # construct the request
-        topic_partitions = collections.defaultdict(set)
-        for tp in partitions:
-            topic_partitions[tp.topic].add(tp.partition)
+        max_version = 7
+        if partitions is not None:
+            topic_partitions = collections.defaultdict(set)
+            for tp in partitions:
+                topic_partitions[tp.topic].add(tp.partition)
+            topic_partitions = list(topic_partitions.items())
+            min_version = 0
+        else:
+            topic_partitions = None
+            min_version = 2
 
-        version = self._client.api_version(OffsetFetchRequest, max_version=5)
-        # Starting in version 2, the request can contain a null topics array to indicate that offsets should be fetched
-        # TODO: support
-        request = OffsetFetchRequest[version](
-            self.group_id,
-            list(topic_partitions.items())
+        request = OffsetFetchRequest(
+            group_id=self.group_id,
+            topics=topic_partitions,
+            min_version=min_version,
+            max_version=max_version,
         )
 
         # send the request with a callback
         future = Future()
-        _f = self._client.send(node_id, request)
+        _f = self._manager.send(request, node_id=node_id)
         _f.add_callback(self._handle_offset_fetch_response, future)
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
