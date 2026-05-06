@@ -592,6 +592,83 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         if future is not None:
             future.failure(error)
 
+    def _process_join_group_response(self, response, send_time):
+        """Classify a JoinGroupResponse: mutate state on success, raise on error.
+
+        Sibling of :meth:`_handle_join_group_response` for the async join path
+        (``_do_join_and_sync_async``). Same error classification, but no
+        Future plumbing and no SyncGroup chaining -- callers route to leader
+        or follower based on the returned response.
+
+        Returns:
+            JoinGroupResponse: the response (caller does leader/follower routing).
+        Raises:
+            Errors.KafkaError: subclass matching the response error code.
+            UnjoinedGroupException: state is no longer REBALANCING.
+        """
+        log.debug("Received JoinGroup response: %s", response)
+        error_type = Errors.for_code(response.error_code)
+        if error_type is Errors.NoError:
+            if self._sensors:
+                self._sensors.join_latency.record((time.monotonic() - send_time) * 1000)
+            with self._lock:
+                if self.state is not MemberState.REBALANCING:
+                    raise UnjoinedGroupException()
+                self._generation = Generation(response.generation_id,
+                                              response.member_id,
+                                              response.protocol_name)
+            log.info("Successfully joined group %s %s", self.group_id, self._generation)
+            return response
+
+        if error_type is Errors.CoordinatorLoadInProgressError:
+            log.info("Attempt to join group %s rejected since coordinator %s"
+                     " is loading the group.", self.group_id, self.coordinator_id)
+            raise error_type(response)
+
+        if error_type is Errors.UnknownMemberIdError:
+            error = error_type(self._generation.member_id)
+            self.reset_generation()
+            log.info("Attempt to join group %s failed due to unknown member id",
+                     self.group_id)
+            raise error
+
+        if error_type in (Errors.CoordinatorNotAvailableError,
+                          Errors.NotCoordinatorError):
+            self.coordinator_dead(error_type())
+            log.info("Attempt to join group %s failed due to obsolete "
+                     "coordinator information: %s", self.group_id,
+                     error_type.__name__)
+            raise error_type()
+
+        if error_type in (Errors.InconsistentGroupProtocolError,
+                          Errors.InvalidSessionTimeoutError,
+                          Errors.InvalidGroupIdError,
+                          Errors.GroupAuthorizationFailedError,
+                          Errors.GroupMaxSizeReachedError,
+                          Errors.FencedInstanceIdError):
+            log.error("Attempt to join group %s failed due to fatal error: %s",
+                      self.group_id, error_type.__name__)
+            if error_type in (Errors.GroupAuthorizationFailedError,
+                              Errors.GroupMaxSizeReachedError):
+                raise error_type(self.group_id)
+            raise error_type()
+
+        if error_type is Errors.MemberIdRequiredError:
+            log.info("Received member id %s for group %s; will retry join-group",
+                     response.member_id, self.group_id)
+            self.reset_generation(response.member_id)
+            raise error_type()
+
+        if error_type is Errors.RebalanceInProgressError:
+            log.info("Attempt to join group %s failed due to RebalanceInProgressError,"
+                     " which could indicate a replication timeout on the broker. Will retry.",
+                     self.group_id)
+            raise error_type()
+
+        error = error_type()
+        log.error("Unexpected error in join group response: %s", error)
+        raise error
+
     def _handle_join_group_response(self, future, send_time, response):
         log.debug("Received JoinGroup response: %s", response)
         error_type = Errors.for_code(response.error_code)
@@ -729,6 +806,52 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
         return future
+
+    def _process_sync_group_response(self, response, send_time):
+        """Classify a SyncGroupResponse: return assignment bytes or raise.
+
+        Sibling of :meth:`_handle_sync_group_response` for the async join path.
+        Same error classification (and ``request_rejoin()`` side effect) but
+        no Future plumbing.
+
+        Returns:
+            bytes: encoded member assignment.
+        Raises:
+            Errors.KafkaError: subclass matching the response error code.
+        """
+        log.debug("Received SyncGroup response: %s", response)
+        error_type = Errors.for_code(response.error_code)
+        if error_type is Errors.NoError:
+            if self._sensors:
+                self._sensors.sync_latency.record((time.monotonic() - send_time) * 1000)
+            return response.assignment
+
+        # Always rejoin on error
+        self.request_rejoin()
+        if error_type is Errors.GroupAuthorizationFailedError:
+            raise error_type(self.group_id)
+        if error_type is Errors.RebalanceInProgressError:
+            log.info("SyncGroup for group %s failed due to coordinator rebalance",
+                     self.group_id)
+            raise error_type(self.group_id)
+        if error_type is Errors.FencedInstanceIdError:
+            log.error("SyncGroup for group %s failed due to fenced id error: %s",
+                      self.group_id, self.group_instance_id)
+            raise error_type((self.group_id, self.group_instance_id))
+        if error_type in (Errors.UnknownMemberIdError, Errors.IllegalGenerationError):
+            error = error_type()
+            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
+            self.reset_generation()
+            raise error
+        if error_type in (Errors.CoordinatorNotAvailableError,
+                          Errors.NotCoordinatorError):
+            error = error_type()
+            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
+            self.coordinator_dead(error)
+            raise error
+        error = error_type()
+        log.error("Unexpected error from SyncGroup: %s", error)
+        raise error
 
     def _handle_sync_group_response(self, future, send_time, response):
         log.debug("Received SyncGroup response: %s", response)

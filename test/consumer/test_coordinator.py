@@ -14,10 +14,11 @@ from kafka.coordinator.base import Generation, MemberState
 from kafka.coordinator.consumer import ConsumerCoordinator
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.coordinator.base import UnjoinedGroupException
 from kafka.protocol.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
-    JoinGroupResponse,
+    JoinGroupResponse, SyncGroupResponse,
 )
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
@@ -667,6 +668,127 @@ def test_handle_offset_fetch_response(coordinator, offsets, response, error, dea
         assert future.succeeded()
         assert future.value == offsets
     assert coordinator.coordinator_id is (None if dead else 0)
+
+
+def _join_response(error_code=0, generation_id=1, member_id='member-1',
+                   leader='member-1', protocol_name='range', members=None):
+    return JoinGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        generation_id=generation_id,
+        protocol_name=protocol_name,
+        leader=leader,
+        member_id=member_id,
+        members=members or [])
+
+
+@pytest.mark.parametrize('error_code,error_type,coordinator_dead,resets_member_id,resets_generation', [
+    (0, None, False, False, False),
+    (Errors.CoordinatorLoadInProgressError.errno, Errors.CoordinatorLoadInProgressError, False, False, False),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True),
+    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, False),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, False),
+    (Errors.InconsistentGroupProtocolError.errno, Errors.InconsistentGroupProtocolError, False, False, False),
+    (Errors.InvalidSessionTimeoutError.errno, Errors.InvalidSessionTimeoutError, False, False, False),
+    (Errors.InvalidGroupIdError.errno, Errors.InvalidGroupIdError, False, False, False),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, False),
+    (Errors.GroupMaxSizeReachedError.errno, Errors.GroupMaxSizeReachedError, False, False, False),
+    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, False),
+    (Errors.MemberIdRequiredError.errno, Errors.MemberIdRequiredError, False, True, True),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, False),
+    # Unmapped error code: should raise the corresponding generic error.
+    (Errors.UnknownError.errno, Errors.UnknownError, False, False, False),
+])
+def test_process_join_group_response(request, coordinator, error_code, error_type,
+                                     coordinator_dead, resets_member_id,
+                                     resets_generation):
+    # Avoid LeaveGroup attempt during teardown (close() only sends LeaveGroup
+    # when state is not UNJOINED).
+    request.addfinalizer(lambda: setattr(coordinator, 'state', MemberState.UNJOINED))
+    coordinator.coordinator_id = 0
+    coordinator.state = MemberState.REBALANCING
+    coordinator._generation = Generation(7, 'old-member', 'range')
+
+    response = _join_response(
+        error_code=error_code,
+        generation_id=42,
+        member_id='broker-assigned' if error_code == Errors.MemberIdRequiredError.errno else 'member-1')
+
+    if error_type is None:
+        ret = coordinator._process_join_group_response(response, send_time=time.monotonic())
+        assert ret is response
+        # State mutation: generation updated from response.
+        assert coordinator._generation.generation_id == 42
+        assert coordinator._generation.member_id == 'member-1'
+        assert coordinator._generation.protocol == 'range'
+        assert coordinator.coordinator_id == 0
+    else:
+        with pytest.raises(error_type):
+            coordinator._process_join_group_response(response, send_time=time.monotonic())
+        if coordinator_dead:
+            assert coordinator.coordinator_id is None
+        else:
+            assert coordinator.coordinator_id == 0
+        if resets_member_id:
+            # MemberIdRequired captures the broker-assigned id; UnknownMemberId
+            # clears it back to UNKNOWN_MEMBER_ID.
+            if error_code == Errors.MemberIdRequiredError.errno:
+                assert coordinator._generation.member_id == 'broker-assigned'
+            else:
+                assert coordinator._generation.member_id == ''
+        if resets_generation:
+            assert coordinator._generation.generation_id == -1
+
+
+def test_process_join_group_response_state_not_rebalancing(coordinator):
+    """Defensive: if state changed underneath us, raise UnjoinedGroupException."""
+    coordinator.coordinator_id = 0
+    coordinator.state = MemberState.UNJOINED
+    response = _join_response(error_code=0)
+    with pytest.raises(UnjoinedGroupException):
+        coordinator._process_join_group_response(response, send_time=time.monotonic())
+
+
+@pytest.mark.parametrize('error_code,error_type,coordinator_dead,resets_generation,requests_rejoin', [
+    (0, None, False, False, False),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, True),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, True),
+    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, True),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True),
+    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError, False, True, True),
+    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, True),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, True),
+    (Errors.UnknownError.errno, Errors.UnknownError, False, False, True),
+])
+def test_process_sync_group_response(request, coordinator, error_code, error_type,
+                                     coordinator_dead, resets_generation,
+                                     requests_rejoin):
+    request.addfinalizer(lambda: setattr(coordinator, 'state', MemberState.UNJOINED))
+    coordinator.coordinator_id = 0
+    coordinator._generation = Generation(7, 'member-1', 'range')
+    coordinator.rejoin_needed = False
+
+    assignment_bytes = b'\x00\x01\x02'
+    response = SyncGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        assignment=assignment_bytes)
+
+    if error_type is None:
+        ret = coordinator._process_sync_group_response(response, send_time=time.monotonic())
+        assert ret == assignment_bytes
+        assert coordinator.rejoin_needed is False
+        assert coordinator.coordinator_id == 0
+    else:
+        with pytest.raises(error_type):
+            coordinator._process_sync_group_response(response, send_time=time.monotonic())
+        if requests_rejoin:
+            assert coordinator.rejoin_needed is True
+        if coordinator_dead:
+            assert coordinator.coordinator_id is None
+        if resets_generation:
+            assert coordinator._generation.generation_id == -1
+            assert coordinator._generation.member_id == ''
 
 
 def test_heartbeat(mocker, coordinator):
