@@ -557,36 +557,21 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         # send a join group request to the coordinator
         log.info("(Re-)joining group %s", self.group_id)
-        version = self._client.api_version(JoinGroupRequest, max_version=5)
-        if version == 0:
-            request = JoinGroupRequest[version](
-                self.group_id,
-                self.config['session_timeout_ms'],
-                self._generation.member_id,
-                self.protocol_type(),
-                self.group_protocols())
-        elif version <= 4:
-            request = JoinGroupRequest[version](
-                self.group_id,
-                self.config['session_timeout_ms'],
-                self.config['max_poll_interval_ms'],
-                self._generation.member_id,
-                self.protocol_type(),
-                self.group_protocols())
-        else:
-            request = JoinGroupRequest[version](
-                self.group_id,
-                self.config['session_timeout_ms'],
-                self.config['max_poll_interval_ms'],
-                self._generation.member_id,
-                self.group_instance_id,
-                self.protocol_type(),
-                self.group_protocols())
+        max_version = 6
+        request = JoinGroupRequest(
+            group_id=self.group_id,
+            session_timeout_ms=self.config['session_timeout_ms'],
+            rebalance_timeout_ms=self.config['max_poll_interval_ms'],
+            member_id=self._generation.member_id,
+            group_instance_id=self.group_instance_id,
+            protocol_type=self.protocol_type(),
+            protocols=self.group_protocols(),
+            max_version=max_version)
 
         # create the request for the coordinator
         log.debug("Sending JoinGroup (%s) to coordinator %s", request, self.coordinator_id)
         future = Future()
-        _f = self._client.send(self.coordinator_id, request)
+        _f = self._manager.send(request, node_id=self.coordinator_id)
         _f.add_callback(self._handle_join_group_response, future, time.monotonic())
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
@@ -685,20 +670,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
     def _on_join_follower(self):
         # send follower's sync group with an empty assignment
-        version = self._client.api_version(SyncGroupRequest, max_version=3)
-        if version <= 2:
-            request = SyncGroupRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-                [])
-        else:
-            request = SyncGroupRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-                self.group_instance_id,
-                [])
+        max_version = 4
+        request = SyncGroupRequest(
+            group_id=self.group_id,
+            generation_id=self._generation.generation_id,
+            member_id=self._generation.member_id,
+            group_instance_id=self.group_instance_id,
+            assignments=[],
+            max_version=max_version)
         log.debug("Sending follower SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
         return self._send_sync_group_request(request)
@@ -721,20 +700,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         except Exception as e:
             return Future().failure(e)
 
-        version = self._client.api_version(SyncGroupRequest, max_version=3)
-        if version <= 2:
-            request = SyncGroupRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-                group_assignment.items())
-        else:
-            request = SyncGroupRequest[version](
-                self.group_id,
-                self._generation.generation_id,
-                self._generation.member_id,
-                self.group_instance_id,
-                group_assignment.items())
+        max_version = 4
+        request = SyncGroupRequest(
+            group_id=self.group_id,
+            generation_id=self._generation.generation_id,
+            member_id=self._generation.member_id,
+            group_instance_id=self.group_instance_id,
+            assignments=group_assignment.items(),
+            max_version=max_version)
         log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
                   self.group_id, self.coordinator_id, request)
         return self._send_sync_group_request(request)
@@ -751,7 +724,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         # itself requests a metadata update
 
         future = Future()
-        _f = self._client.send(self.coordinator_id, request)
+        _f = self._manager.send(request, node_id=self.coordinator_id)
         _f.add_callback(self._handle_sync_group_response, future, time.monotonic())
         _f.add_errback(self._failed_request, self.coordinator_id,
                        request, future)
@@ -809,15 +782,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             e = Errors.NodeNotReadyError(node_id)
             return Future().failure(e)
 
-        version = self._client.api_version(FindCoordinatorRequest, max_version=2)
-        if version == 0:
-            request = FindCoordinatorRequest[version](self.group_id)
-        else:
-            request = FindCoordinatorRequest[version](self.group_id, 0)
+        max_version = 3
+        request = FindCoordinatorRequest(
+            key=self.group_id,
+            max_version=max_version)
         log.debug("Sending group coordinator request for group %s to broker %s: %s",
                   self.group_id, node_id, request)
         future = Future()
-        _f = self._client.send(node_id, request)
+        _f = self._manager.send(request, node_id=node_id)
         _f.add_callback(self._handle_find_coordinator_response, future)
         _f.add_errback(self._failed_request, node_id, request, future)
         return future
