@@ -869,6 +869,85 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         log.error("Unexpected error from SyncGroup: %s", error)
         raise error
 
+    async def _do_join_and_sync_async(self):
+        """Run a single JoinGroup -> SyncGroup attempt against the coordinator.
+
+        Sends a JoinGroupRequest and processes the response (mutates
+        self._generation on success). Then dispatches as group leader
+        (running the configured assignor) or follower (empty assignment),
+        sends the matching SyncGroupRequest, and returns the assignment
+        bytes from the response.
+
+        The outer retry loop in :meth:`join_group_async` handles backoff
+        and retriable errors; this method attempts exactly one round trip.
+
+        Returns:
+            bytes: the encoded member assignment from SyncGroupResponse.
+
+        Raises:
+            Errors.CoordinatorNotAvailableError: if the coordinator is unknown.
+            Errors.KafkaError: on any error response from JoinGroup or
+                SyncGroup. Side effects (coordinator_dead, reset_generation,
+                request_rejoin) are applied by the response processors.
+            Exception: anything raised by ``_perform_assignment``
+                (e.g. assignor crash); leader-only path.
+        """
+        if self.coordinator_unknown():
+            raise Errors.CoordinatorNotAvailableError(self.coordinator_id)
+
+        with self._lock:
+            self.state = MemberState.REBALANCING
+
+        log.info("(Re-)joining group %s", self.group_id)
+        join_request = JoinGroupRequest(
+            group_id=self.group_id,
+            session_timeout_ms=self.config['session_timeout_ms'],
+            rebalance_timeout_ms=self.config['max_poll_interval_ms'],
+            member_id=self._generation.member_id,
+            group_instance_id=self.group_instance_id,
+            protocol_type=self.protocol_type(),
+            protocols=self.group_protocols(),
+            max_version=6)
+        log.debug("Sending JoinGroup (%s) to coordinator %s",
+                  join_request, self.coordinator_id)
+        join_send_time = time.monotonic()
+        join_response = await self._manager.send(
+            join_request, node_id=self.coordinator_id)
+        # raises on error; mutates self._generation on success
+        self._process_join_group_response(join_response, join_send_time)
+
+        if join_response.leader == join_response.member_id:
+            log.info("Elected group leader -- performing partition assignments"
+                     " using %s", self._generation.protocol)
+            group_assignment = self._perform_assignment(
+                join_response.leader,
+                join_response.protocol_name,
+                join_response.members)
+            sync_request = SyncGroupRequest(
+                group_id=self.group_id,
+                generation_id=self._generation.generation_id,
+                member_id=self._generation.member_id,
+                group_instance_id=self.group_instance_id,
+                assignments=group_assignment.items(),
+                max_version=4)
+            log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
+                      self.group_id, self.coordinator_id, sync_request)
+        else:
+            sync_request = SyncGroupRequest(
+                group_id=self.group_id,
+                generation_id=self._generation.generation_id,
+                member_id=self._generation.member_id,
+                group_instance_id=self.group_instance_id,
+                assignments=[],
+                max_version=4)
+            log.debug("Sending follower SyncGroup for group %s to coordinator %s: %s",
+                      self.group_id, self.coordinator_id, sync_request)
+
+        sync_send_time = time.monotonic()
+        sync_response = await self._manager.send(
+            sync_request, node_id=self.coordinator_id)
+        return self._process_sync_group_response(sync_response, sync_send_time)
+
     def _handle_sync_group_response(self, future, send_time, response):
         log.debug("Received SyncGroup response: %s", response)
         error_type = Errors.for_code(response.error_code)

@@ -18,7 +18,8 @@ from kafka.coordinator.base import UnjoinedGroupException
 from kafka.protocol.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
-    JoinGroupResponse, SyncGroupResponse,
+    JoinGroupRequest, JoinGroupResponse,
+    SyncGroupRequest, SyncGroupResponse,
 )
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
@@ -893,6 +894,132 @@ def test_process_sync_group_response(request, coordinator, error_code, error_typ
         if resets_generation:
             assert coordinator._generation.generation_id == -1
             assert coordinator._generation.member_id == ''
+
+
+def _join_response_object(error_code=0, generation_id=42,
+                           member_id='member-1', leader='member-1',
+                           protocol_name='range', members=None):
+    return JoinGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        generation_id=generation_id,
+        protocol_type='consumer',
+        protocol_name=protocol_name,
+        leader=leader,
+        member_id=member_id,
+        members=members or [])
+
+
+def _sync_response_object(error_code=0, assignment=b''):
+    return SyncGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        protocol_type='consumer',
+        protocol_name='range',
+        assignment=assignment)
+
+
+def test_do_join_and_sync_async_follower(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # Default broker.broker_version=(4,2) → JoinGroup v9, SyncGroup v5.
+    # Follower: leader != our member_id.
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    expected_assignment = ConsumerProtocolAssignment(
+        0, [('foobar', [0, 1])], b'').encode()
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=expected_assignment))
+
+    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+    assert result == expected_assignment
+    assert seeded_coord._generation.generation_id == 42
+    assert seeded_coord._generation.member_id == 'member-1'
+    assert seeded_coord._generation.protocol == 'range'
+    assert seeded_coord.state == MemberState.REBALANCING
+
+
+def test_do_join_and_sync_async_leader(request, mocker, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # Leader: response.leader == response.member_id. Members include the leader.
+    member_metadata = ConsumerProtocolSubscription(0, ['foobar'], b'').encode()
+    member = JoinGroupResponse.JoinGroupResponseMember(
+        member_id='member-1',
+        group_instance_id=None,
+        metadata=member_metadata)
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='member-1', member_id='member-1', members=[member]))
+
+    # Capture the SyncGroup request to verify the leader sent assignments.
+    captured = {}
+
+    def sync_handler(api_key, api_version, correlation_id, request_bytes):
+        captured['request'] = SyncGroupRequest.decode(
+            request_bytes, version=api_version, header=True)
+        return _sync_response_object(
+            assignment=ConsumerProtocolAssignment(
+                0, [('foobar', [0, 1])], b'').encode())
+
+    broker.respond_fn(SyncGroupRequest, sync_handler)
+
+    # Spy on _perform_assignment to confirm the leader path ran the assignor.
+    spy = mocker.spy(seeded_coord, '_perform_assignment')
+
+    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+    assert spy.call_count == 1
+    leader_id, protocol_name, members_arg = spy.call_args[0]
+    assert leader_id == 'member-1'
+    assert protocol_name == 'range'
+    assert len(members_arg) == 1
+    assert members_arg[0].member_id == 'member-1'
+    # SyncGroup carried a non-empty assignment list.
+    assert len(captured['request'].assignments) >= 1
+    # Returned the assignment bytes the broker sent back.
+    assert result == ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()
+
+
+def test_do_join_and_sync_async_coordinator_unknown(request, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.coordinator_id = None  # force coordinator_unknown
+    with pytest.raises(Errors.CoordinatorNotAvailableError):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+@pytest.mark.parametrize('error_code,error_type', [
+    (Errors.CoordinatorLoadInProgressError.errno, Errors.CoordinatorLoadInProgressError),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError),
+    (Errors.MemberIdRequiredError.errno, Errors.MemberIdRequiredError),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError),
+])
+def test_do_join_and_sync_async_join_error(request, broker, seeded_coord,
+                                            error_code, error_type):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.respond(JoinGroupRequest, _join_response_object(error_code=error_code))
+    with pytest.raises(error_type):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+@pytest.mark.parametrize('error_code,error_type', [
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError),
+    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError),
+])
+def test_do_join_and_sync_async_sync_error(request, broker, seeded_coord,
+                                            error_code, error_type):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # JoinGroup succeeds (follower) so we get to SyncGroup.
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1'))
+    broker.respond(SyncGroupRequest, _sync_response_object(error_code=error_code))
+    with pytest.raises(error_type):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+    # All sync errors flip rejoin_needed via request_rejoin().
+    assert seeded_coord.rejoin_needed is True
 
 
 def test_heartbeat(mocker, coordinator):
