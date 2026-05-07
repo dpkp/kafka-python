@@ -721,35 +721,17 @@ class KafkaConsumer:
         self._refresh_committed_offsets(timeout_ms=timer.timeout_ms)
         # Fire-and-forget: kicks ListOffsets reset for any remaining partitions.
         # _reset_offsets_async self-drives metadata refresh + retry-backoff
-        # within request_timeout_ms; we don't need to wake the user thread
-        # early to re-trigger it. The result Task is shared across callers
-        # via Fetcher._reset_task.
+        # within request_timeout_ms.
         self._fetcher.reset_offsets_if_needed()
 
-        # If data is available already, e.g. from a previous network client
-        # poll() call to commit, then just return it immediately
-        records, partial = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
-        log.debug('poll: fetched records: %s, %s', records, partial)
-        # Before returning the fetched records, we can send off the
-        # next round of fetches and avoid block waiting for their
-        # responses to enable pipelining while the user is handling the
-        # fetched records.
-        if not partial:
-            log.debug("poll: Sending fetches")
-            futures = self._fetcher.send_fetches()
-            if len(futures):
-                self._client.poll(timeout_ms=0)
-
-        if records:
-            return records
-
+        # Cap the fetch wait by the heartbeat deadline so we don't block past
+        # when the coordinator wants to send the next heartbeat.
         poll_timeout_ms = timer.timeout_ms
         if self.config['group_id'] is not None:
             poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
 
-        self._client.poll(timeout_ms=poll_timeout_ms)
-        records, _ = self._fetcher.fetched_records(max_records, update_offsets=update_offsets)
-        return records
+        return self._fetcher.fetch_records(
+            max_records, update_offsets=update_offsets, timeout_ms=poll_timeout_ms)
 
     def position(self, partition, timeout_ms=None):
         """Get the offset of the next record that will be fetched

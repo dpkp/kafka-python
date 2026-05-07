@@ -142,6 +142,65 @@ class Fetcher:
             return False
         return self.config['enable_incremental_fetch_sessions']
 
+    def fetch_records(self, max_records=None, update_offsets=True, timeout_ms=None):
+        """Drain buffered records, pipeline next fetches, and wait briefly
+        for in-flight responses if no records are immediately available.
+
+        Single-call replacement for the legacy
+        ``fetched_records → send_fetches → client.poll → fetched_records``
+        loop in :meth:`KafkaConsumer._poll_once`. The caller no longer
+        drives the event loop; the wait happens inside this method via a
+        wakeup Future fired by any in-flight fetch's completion callback.
+
+        Arguments:
+            max_records (int, optional): cap on returned records.
+            update_offsets (bool): advance subscription positions for
+                consumed records.
+            timeout_ms (int, optional): wall-clock cap on the wait phase.
+                Only applies when no records are immediately available.
+
+        Returns:
+            dict[TopicPartition, list[ConsumerRecord]]: records grouped by
+            partition; may be empty if no records arrived in the budget.
+        """
+        # Drain whatever's already buffered from prior fetch responses.
+        records, partial = self.fetched_records(
+            max_records, update_offsets=update_offsets)
+        if records and partial:
+            # Same partition has more buffered; hold off on more fetches
+            # so we drain the buffer in order across calls.
+            return records
+
+        # Pipeline next fetches for partitions without an in-flight request.
+        self.send_fetches()
+
+        if records:
+            return records
+
+        # No records yet. Wait for any in-flight fetch to complete (or
+        # timeout). add_both fires synchronously on already-done futures,
+        # closing the race where a response arrives between send_fetches
+        # and the wait setup.
+        in_flight = list(self._fetch_futures)
+        if not in_flight:
+            return records  # nothing in flight; nothing to wait for
+
+        wakeup = Future()
+        def _wake(_):
+            if not wakeup.is_done:
+                wakeup.success(None)
+        for fut in in_flight:
+            fut.add_both(_wake)
+
+        try:
+            self._manager.run(self._manager.wait_for, wakeup, timeout_ms)
+        except Errors.KafkaTimeoutError:
+            pass
+
+        records, _ = self.fetched_records(
+            max_records, update_offsets=update_offsets)
+        return records
+
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have
         an in-flight fetch or pending fetch data.
