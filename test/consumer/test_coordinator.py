@@ -196,19 +196,7 @@ def test_on_join_prepare_async_invokes_sync_listener(mocker, coordinator):
     listener.on_partitions_revoked.assert_called_with(set())
 
 
-def test_on_join_prepare_async_awaits_async_listener(mocker, coordinator):
-    coordinator.config['enable_auto_commit'] = False
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    listener.on_partitions_revoked = mocker.AsyncMock()
-    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
-
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
-
-    assert listener.on_partitions_revoked.call_count == 1
-    listener.on_partitions_revoked.assert_awaited_with(set())
-
-
-def test_on_join_prepare_async_awaits_async_listener_subclass(coordinator):
+def test_on_join_prepare_async_awaits_async_listener(coordinator):
     """An AsyncConsumerRebalanceListener subclass is accepted and awaited."""
     coordinator.config['enable_auto_commit'] = False
     calls = []
@@ -314,10 +302,17 @@ def test_on_join_complete_async_invokes_sync_listener(mocker, coordinator):
         {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
 
 
-def test_on_join_complete_async_awaits_async_listener(mocker, coordinator):
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    listener.on_partitions_assigned = mocker.AsyncMock()
-    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+def test_on_join_complete_async_awaits_async_listener(coordinator):
+    """An AsyncConsumerRebalanceListener subclass is accepted and awaited."""
+    calls = []
+
+    class MyListener(AsyncConsumerRebalanceListener):
+        async def on_partitions_revoked(self, revoked):
+            calls.append(('revoked', revoked))
+        async def on_partitions_assigned(self, assigned):
+            calls.append(('assigned', assigned))
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=MyListener())
     assignor = RoundRobinPartitionAssignor()
     coordinator._assignors = {assignor.name: assignor}
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
@@ -326,9 +321,9 @@ def test_on_join_complete_async_awaits_async_listener(mocker, coordinator):
         coordinator._on_join_complete_async,
         12, 'member-foo', 'roundrobin', assignment.encode())
 
-    assert listener.on_partitions_assigned.call_count == 1
-    listener.on_partitions_assigned.assert_awaited_with(
-        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
+    assert calls == [(
+        'assigned',
+        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})]
 
 
 def test_on_join_complete_async_listener_exception_is_caught(mocker, coordinator):
