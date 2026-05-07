@@ -455,7 +455,9 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         return self.config['api_version'] >= (0, 9)
 
     def ensure_active_group(self, timeout_ms=None):
-        """Ensure that the group is active (i.e. joined and synced)
+        """Ensure that the group is active (i.e. joined and synced).
+
+        Sync facade over :meth:`ensure_active_group_async`.
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Maximum number of milliseconds to
@@ -463,15 +465,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         Returns: True if group initialized before timeout_ms, else False
         """
-        if not self._use_group_apis:
-            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
-        timer = Timer(timeout_ms)
-        if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
-            return False
-        # If either loop or thread died w/ exception we restart them here
-        self._maybe_start_heartbeat_loop()
-        self._maybe_start_heartbeat_thread()
-        return self.join_group(timeout_ms=timer.timeout_ms)
+        with self._client._lock:
+            return self._manager.run(self.ensure_active_group_async, timeout_ms)
 
     async def ensure_active_group_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_active_group`."""
@@ -485,84 +480,9 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         return await self.join_group_async(timeout_ms=timer.timeout_ms)
 
     def join_group(self, timeout_ms=None):
-        if not self._use_group_apis:
-            raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')
-        timer = Timer(timeout_ms)
-        while self.need_rejoin():
-            if not self.ensure_coordinator_ready(timeout_ms=timer.timeout_ms):
-                return False
-
-            # call on_join_prepare if needed. We set a flag
-            # to make sure that we do not call it a second
-            # time if the client is woken up before a pending
-            # rebalance completes. This must be called on each
-            # iteration of the loop because an event requiring
-            # a rebalance (such as a metadata refresh which
-            # changes the matched subscription set) can occur
-            # while another rebalance is still in progress.
-            if not self.rejoining:
-                self._on_join_prepare(self._generation.generation_id,
-                                      self._generation.member_id,
-                                      timeout_ms=timer.timeout_ms)
-                self.rejoining = True
-
-                # fence off the heartbeat thread explicitly so that it cannot
-                # interfere with the join group.  # Note that this must come after
-                # the call to onJoinPrepare since we must be able to continue
-                # sending heartbeats if that callback takes some time.
-                log.debug("Disabling heartbeat during join-group")
-                self._disable_heartbeat()
-
-            # ensure that there are no pending requests to the coordinator.
-            # This is important in particular to avoid resending a pending
-            # JoinGroup request.
-            while not self.coordinator_unknown():
-                if not self._client.in_flight_request_count(self.coordinator_id):
-                    break
-                poll_timeout_ms = 200 if timer.timeout_ms is None or timer.timeout_ms > 200 else timer.timeout_ms
-                self._client.poll(timeout_ms=poll_timeout_ms)
-                if timer.expired:
-                    return False
-            else:
-                continue
-
-            future = self._initiate_join_group()
-            self._client.poll(future=future, timeout_ms=timer.timeout_ms)
-            log.debug("join_group: after poll, future.is_done=%s future.exception=%s future is self.join_future=%s state=%s",
-                      future.is_done, future.exception, future is self.join_future, self.state)
-            if future.is_done:
-                self._reset_join_group_future()
-            else:
-                return False
-
-            log.debug("join_group: checking future.succeeded()=%s (is_done=%s exception=%s)",
-                      future.succeeded(), future.is_done, future.exception)
-            if future.succeeded():
-                self.rejoining = False
-                self.rejoin_needed = False
-                log.debug("join_group: about to call _on_join_complete (generation=%s)", self._generation)
-                self._on_join_complete(self._generation.generation_id,
-                                       self._generation.member_id,
-                                       self._generation.protocol,
-                                       future.value)
-                log.debug("join_group: _on_join_complete returned")
-                return True
-            else:
-                exception = future.exception
-                if isinstance(exception, (Errors.UnknownMemberIdError,
-                                          Errors.RebalanceInProgressError,
-                                          Errors.IllegalGenerationError,
-                                          Errors.MemberIdRequiredError)):
-                    continue
-                elif not future.retriable():
-                    raise exception  # pylint: disable-msg=raising-bad-type
-                elif timer.expired:
-                    return False
-                else:
-                    if timer.timeout_ms is None or timer.timeout_ms > self.config['retry_backoff_ms']:
-                        time.sleep(self.config['retry_backoff_ms'] / 1000)
-                    else:
-                        time.sleep(timer.timeout_ms / 1000)
+        """Sync facade over :meth:`join_group_async`."""
+        with self._client._lock:
+            return self._manager.run(self.join_group_async, timeout_ms)
 
     async def join_group_async(self, timeout_ms=None):
         """Async variant of :meth:`join_group`.

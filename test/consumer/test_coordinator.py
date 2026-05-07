@@ -1170,14 +1170,5 @@ def test_lookup_coordinator_failure(mocker, coordinator):
     assert future.failed()
 
 
-def test_ensure_active_group(mocker, coordinator):
-    coordinator._subscription.subscribe(topics=['foobar'])
-    mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
-    mocker.patch.object(coordinator, '_send_join_group_request', return_value=Future().success(True))
-    mocker.patch.object(coordinator, 'need_rejoin', side_effect=[True, False])
-    mocker.patch.object(coordinator, '_on_join_complete')
-    mocker.patch.object(coordinator, '_heartbeat_thread')
-
-    coordinator.ensure_active_group()
-
-    coordinator._send_join_group_request.assert_called_once_with()
+# test_ensure_active_group: covered by test_ensure_active_group_async_happy_path
+# (which exercises the same path end-to-end via MockBroker round-trip).
