@@ -130,6 +130,11 @@ class Fetcher:
         self._nodes_with_pending_fetch_requests = set()
         self._cached_list_offsets_exception = None
         self._next_in_line_exception_metadata = None
+        # In-flight offset-reset Task, cached across reset_offsets_if_needed
+        # calls so concurrent callers (consumer.poll fire-and-forget,
+        # consumer.position blocking-await) share one fan-out instead of
+        # racing duplicate ListOffsets requests.
+        self._reset_task = None
 
     @property
     def _enable_incremental_fetch_sessions(self):
@@ -171,32 +176,31 @@ class Fetcher:
         return bool(self._fetch_futures)
 
     def reset_offsets_if_needed(self):
-        """Reset offsets for the given partitions using the offset reset strategy.
+        """Schedule pending offset resets and return the in-flight Task.
 
-        Returns:
-            bool: True if any partitions need reset; otherwise False (no reset pending)
+        Returns the cached Future for the in-flight reset task (shared
+        across concurrent callers) or None if no reset is needed. Callers
+        may discard the Future (fire-and-forget, e.g. consumer.poll) or
+        await it via ``manager.wait_for(future, timeout_ms)`` to block
+        until resets complete (e.g. consumer.position).
 
         Raises:
-            NoOffsetForPartitionError: if no offset reset strategy is defined
+            NoOffsetForPartitionError: if a previous reset attempt left a
+                cached non-retriable exception.
         """
         # Raise exception from previous offset fetch if there is one
         exc, self._cached_list_offsets_exception = self._cached_list_offsets_exception, None
         if exc:
             raise exc
 
-        partitions = self._subscriptions.partitions_needing_reset()
-        if not partitions:
-            return False
-        log.debug('Resetting offsets for %s', partitions)
+        if self._reset_task is not None and not self._reset_task.is_done:
+            return self._reset_task
 
-        offset_resets = dict()
-        for tp in partitions:
-            ts = self._subscriptions.assignment[tp].reset_strategy
-            if ts:
-                offset_resets[tp] = ts
+        if not self._subscriptions.partitions_needing_reset():
+            return None
 
-        self._manager.call_soon(self._reset_offsets_async, offset_resets)
-        return True
+        self._reset_task = self._manager.call_soon(self._reset_offsets_async)
+        return self._reset_task
 
     def offsets_by_times(self, timestamps, timeout_ms=None):
         """Fetch offset for each partition passed in ``timestamps`` map.
@@ -478,13 +482,45 @@ class Fetcher:
             log.info("Resetting offset for partition %s to offset %s.", partition, offset)
             self._subscriptions.seek(partition, offset)
 
-    async def _reset_offsets_async(self, timestamps):
-        timestamps_by_node = self._group_list_offset_requests(timestamps)
-        for node_id, timestamps_and_epochs in timestamps_by_node.items():
-            partitions = set(timestamps_and_epochs.keys())
-            expire_at = time.monotonic() + self.config['request_timeout_ms'] / 1000
-            self._subscriptions.set_reset_pending(partitions, expire_at)
-            self._manager.call_soon(self._reset_offsets_for_node, node_id, timestamps_and_epochs, partitions)
+    async def _reset_offsets_async(self):
+        """Drive resets to completion (or to a state where every remaining
+        partition is in retry-backoff). Each iteration fans out per-node
+        ListOffsets requests concurrently and awaits all of them; backoff
+        partitions are filtered out of partitions_needing_reset() so the
+        loop exits when there's no more in-window work to do.
+
+        Per-node failures are caught inside _reset_offsets_for_node and
+        stuffed into self._cached_list_offsets_exception; the next call to
+        reset_offsets_if_needed surfaces them.
+        """
+        while True:
+            partitions = self._subscriptions.partitions_needing_reset()
+            if not partitions:
+                return
+
+            offset_resets = {}
+            for tp in partitions:
+                ts = self._subscriptions.assignment[tp].reset_strategy
+                if ts:
+                    offset_resets[tp] = ts
+            if not offset_resets:
+                return
+
+            timestamps_by_node = self._group_list_offset_requests(offset_resets)
+            if not timestamps_by_node:
+                return
+
+            log.debug('Resetting offsets for %s', set(offset_resets.keys()))
+            # Gather: schedule all per-node tasks concurrently, then await.
+            node_tasks = []
+            for node_id, t_and_e in timestamps_by_node.items():
+                node_partitions = set(t_and_e.keys())
+                expire_at = time.monotonic() + self.config['request_timeout_ms'] / 1000
+                self._subscriptions.set_reset_pending(node_partitions, expire_at)
+                node_tasks.append(self._manager.call_soon(
+                    self._reset_offsets_for_node, node_id, t_and_e, node_partitions))
+            for task in node_tasks:
+                await task
 
     async def _reset_offsets_for_node(self, node_id, timestamps_and_epochs, partitions):
         try:
