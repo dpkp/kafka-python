@@ -382,6 +382,7 @@ class KafkaConsumer:
 
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
         self._manager = self._client._manager
+        self._cluster = self._manager.cluster
 
         # If api_version was not passed explicitly, bootstrap to auto-discover
         # it. bootstrap is passed as a deferred coroutine so that once the IO
@@ -426,7 +427,7 @@ class KafkaConsumer:
 
         if topics:
             self._subscription.subscribe(topics=topics)
-            self._client.cluster.set_topics(topics)
+            self._cluster.set_topics(topics)
 
     def _validate_group_instance_id(self, group_instance_id):
         # See also kafka.util.ensure_valid_topic_name
@@ -475,7 +476,7 @@ class KafkaConsumer:
             # are committed since there will be no following rebalance
             self._coordinator.maybe_auto_commit_offsets_now()
             self._subscription.assign_from_user(partitions)
-            self._client.cluster.set_topics([tp.topic for tp in partitions])
+            self._cluster.set_topics([tp.topic for tp in partitions])
             log.debug("Subscribed to partition(s): %s", partitions)
 
     def assignment(self):
@@ -616,15 +617,14 @@ class KafkaConsumer:
         """A blocking call that fetches topic metadata for all topics in the
         cluster that the user is authorized to view.
         """
-        cluster = self._client.cluster
-        if cluster.metadata_refresh_in_progress:
-            future = cluster.request_update()
+        if self._cluster.metadata_refresh_in_progress:
+            future = self._cluster.request_update()
             self._manager.run(self._manager.wait_for, future, None)
-        stash = cluster.need_all_topic_metadata
-        cluster.need_all_topic_metadata = True
-        future = cluster.request_update()
+        stash = self._cluster.need_all_topic_metadata
+        self._cluster.need_all_topic_metadata = True
+        future = self._cluster.request_update()
         self._manager.run(self._manager.wait_for, future, None)
-        cluster.need_all_topic_metadata = stash
+        self._cluster.need_all_topic_metadata = stash
 
     def topics(self):
         """Get all topics the user is authorized to view.
@@ -635,7 +635,7 @@ class KafkaConsumer:
             set: topics
         """
         self._fetch_all_topic_metadata()
-        return self._client.cluster.topics()
+        return self._cluster.topics()
 
     def partitions_for_topic(self, topic):
         """This method first checks the local metadata cache for information
@@ -650,11 +650,10 @@ class KafkaConsumer:
         Returns:
             set: Partition ids
         """
-        cluster = self._client.cluster
-        partitions = cluster.partitions_for_topic(topic)
+        partitions = self._cluster.partitions_for_topic(topic)
         if partitions is None:
             self._fetch_all_topic_metadata()
-            partitions = cluster.partitions_for_topic(topic)
+            partitions = self._cluster.partitions_for_topic(topic)
         return partitions or set()
 
     def poll(self, timeout_ms=0, max_records=None, update_offsets=True):
@@ -971,13 +970,13 @@ class KafkaConsumer:
 
         # Regex will need all topic metadata
         if pattern is not None:
-            self._client.cluster.need_all_topic_metadata = True
-            self._client.cluster.set_topics([])
-            self._client.cluster.request_update()
+            self._cluster.need_all_topic_metadata = True
+            self._cluster.set_topics([])
+            self._cluster.request_update()
             log.debug("Subscribed to topic pattern: %s", pattern)
         else:
-            self._client.cluster.need_all_topic_metadata = False
-            self._client.cluster.set_topics(self._subscription.group_subscription())
+            self._cluster.need_all_topic_metadata = False
+            self._cluster.set_topics(self._subscription.group_subscription())
             log.debug("Subscribed to topic(s): %s", topics)
 
     def subscription(self):
@@ -998,8 +997,8 @@ class KafkaConsumer:
         self._subscription.unsubscribe()
         if self.config['api_version'] >= (0, 9):
             self._coordinator.maybe_leave_group()
-        self._client.cluster.need_all_topic_metadata = False
-        self._client.cluster.set_topics([])
+        self._cluster.need_all_topic_metadata = False
+        self._cluster.set_topics([])
         log.debug("Unsubscribed all topics or patterns and assigned partitions")
         self._iterator = None
 

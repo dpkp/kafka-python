@@ -97,9 +97,8 @@ class ConsumerCoordinator(BaseCoordinator):
         self._subscription = subscription
         self._is_leader = False
         self._joined_subscription = set()
-        self._metadata_snapshot = self._build_metadata_snapshot(subscription, client.cluster)
+        self._metadata_snapshot = self._build_metadata_snapshot(subscription, self._cluster)
         self._assignment_snapshot = None
-        self._cluster = client.cluster
         self.auto_commit_interval = self.config['auto_commit_interval_ms'] / 1000
         self.next_auto_commit_deadline = None
         self.completed_offset_commits = collections.deque()
@@ -186,7 +185,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
             if set(topics) != self._subscription.subscription:
                 self._subscription.change_subscription(topics)
-                self._client.cluster.set_topics(self._subscription.group_subscription())
+                self._cluster.set_topics(self._subscription.group_subscription())
 
         # check if there are any changes to the metadata which should trigger
         # a rebalance
@@ -326,7 +325,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     # essentially be ignored. See KAFKA-3949 for the complete
                     # description of the problem.
                     if self._subscription.subscribed_pattern:
-                        metadata_update = self._client.cluster.request_update()
+                        metadata_update = self._cluster.request_update()
                         try:
                             self._manager.run(
                                 self._manager.wait_for, metadata_update, timer.timeout_ms)
@@ -371,7 +370,7 @@ class ConsumerCoordinator(BaseCoordinator):
         # Because assignment typically happens within response callbacks,
         # we cannot block on metadata updates here (no recursion into poll())
         self._subscription.group_subscribe(all_subscribed_topics)
-        self._client.cluster.set_topics(self._subscription.group_subscription())
+        self._cluster.set_topics(self._subscription.group_subscription())
 
         # keep track of the metadata used for assignment so that we can check
         # after rebalance completion whether anything has changed
