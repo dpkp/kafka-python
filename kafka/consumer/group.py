@@ -619,11 +619,11 @@ class KafkaConsumer:
         cluster = self._client.cluster
         if cluster.metadata_refresh_in_progress:
             future = cluster.request_update()
-            self._client.poll(future=future)
+            self._manager.run(self._manager.wait_for, future, None)
         stash = cluster.need_all_topic_metadata
         cluster.need_all_topic_metadata = True
         future = cluster.request_update()
-        self._client.poll(future=future)
+        self._manager.run(self._manager.wait_for, future, None)
         cluster.need_all_topic_metadata = stash
 
     def topics(self):
