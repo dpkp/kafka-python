@@ -166,13 +166,9 @@ class Fetcher:
         # Drain whatever's already buffered from prior fetch responses.
         records, partial = self.fetched_records(
             max_records, update_offsets=update_offsets)
-        if records and partial:
-            # Same partition has more buffered; hold off on more fetches
-            # so we drain the buffer in order across calls.
-            return records
-
-        # Pipeline next fetches for partitions without an in-flight request.
-        self.send_fetches()
+        if not partial:
+            # No buffered records remaining; send next batch of fetch requests.
+            self.send_fetches()
 
         if records:
             return records
