@@ -232,6 +232,38 @@ def test_subscribe_rejects_non_listener(coordinator):
             topics=['foobar'], listener=lambda revoked: None)
 
 
+def test_slow_rebalance_listener_logs_warning(mocker, coordinator):
+    """A listener call exceeding the threshold logs a named warning."""
+    coordinator.config['enable_auto_commit'] = False
+
+    class SlowListener(ConsumerRebalanceListener):
+        def on_partitions_revoked(self, revoked):
+            time.sleep(0.01)  # well under the threshold; shouldn't warn
+        def on_partitions_assigned(self, assigned):
+            pass
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=SlowListener())
+    log_warning = mocker.patch('kafka.coordinator.consumer.log.warning')
+
+    # Below threshold: no warning.
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    assert not any(
+        'Rebalance listener' in str(call.args[0])
+        for call in log_warning.call_args_list)
+
+    # Above threshold: drop the threshold to a tiny value and re-run.
+    mocker.patch.object(coordinator, '_REBALANCE_LISTENER_WARN_SECS', 0.001)
+    log_warning.reset_mock()
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    matching = [c for c in log_warning.call_args_list
+                if 'Rebalance listener' in str(c.args[0])]
+    assert len(matching) == 1
+    # log.warning(fmt, listener_class, method, group, elapsed)
+    _fmt, listener_class, method, _group, _elapsed = matching[0].args
+    assert listener_class == 'SlowListener'
+    assert method == 'on_partitions_revoked'
+
+
 def test_on_join_prepare_async_listener_exception_is_caught(mocker, coordinator):
     coordinator.config['enable_auto_commit'] = False
     listener = mocker.MagicMock(spec=ConsumerRebalanceListener)

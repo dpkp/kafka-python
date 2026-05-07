@@ -224,6 +224,36 @@ class ConsumerCoordinator(BaseCoordinator):
     def _lookup_assignor(self, name):
         return self._assignors.get(name, None)
 
+    # Threshold above which a rebalance-listener invocation is logged as a
+    # warning. Sync listeners on the IO loop will block heartbeats while
+    # they run; even async ones delay rebalance progress. 1s is a soft
+    # ceiling: well below default heartbeat_interval_ms (3s) and
+    # session_timeout_ms (10s).
+    _REBALANCE_LISTENER_WARN_SECS = 1.0
+
+    async def _invoke_rebalance_listener_async(self, method_name, arg):
+        """Invoke a rebalance-listener method (sync or async), timing the call.
+
+        Awaits if the method is a coroutine function; otherwise calls inline.
+        Logs a warning if the call exceeds
+        :data:`_REBALANCE_LISTENER_WARN_SECS`. Caller wraps in try/except.
+        """
+        cb = getattr(self._subscription.rebalance_listener, method_name)
+        start = time.monotonic()
+        if inspect.iscoroutinefunction(cb):
+            await cb(arg)
+        else:
+            cb(arg)
+        elapsed = time.monotonic() - start
+        if elapsed > self._REBALANCE_LISTENER_WARN_SECS:
+            log.warning(
+                "Rebalance listener %s.%s for group %s took %.3fs."
+                " Sync listeners block the consumer event loop (including"
+                " heartbeats) -- consider AsyncConsumerRebalanceListener or"
+                " wrap blocking work in a worker thread.",
+                type(self._subscription.rebalance_listener).__name__,
+                method_name, self.group_id, elapsed)
+
     async def _on_join_complete_async(self, generation, member_id, protocol,
                                       member_assignment_bytes):
         # only the leader is responsible for monitoring for metadata changes
@@ -256,11 +286,8 @@ class ConsumerCoordinator(BaseCoordinator):
         # execute the user's callback after rebalance
         if self._subscription.rebalance_listener:
             try:
-                cb = self._subscription.rebalance_listener.on_partitions_assigned
-                if inspect.iscoroutinefunction(cb):
-                    await cb(assigned)
-                else:
-                    cb(assigned)
+                await self._invoke_rebalance_listener_async(
+                    'on_partitions_assigned', assigned)
             except Exception:
                 log.exception("User provided rebalance listener %s for group %s"
                               " failed on partition assignment: %s",
@@ -386,11 +413,8 @@ class ConsumerCoordinator(BaseCoordinator):
         if self._subscription.rebalance_listener:
             try:
                 revoked = set(self._subscription.assigned_partitions())
-                cb = self._subscription.rebalance_listener.on_partitions_revoked
-                if inspect.iscoroutinefunction(cb):
-                    await cb(revoked)
-                else:
-                    cb(revoked)
+                await self._invoke_rebalance_listener_async(
+                    'on_partitions_revoked', revoked)
             except Exception:
                 log.exception("User provided subscription rebalance listener %s"
                               " for group %s failed on_partitions_revoked",
