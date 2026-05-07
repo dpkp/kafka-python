@@ -419,17 +419,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self._maybe_start_heartbeat_thread()
         return await self.join_group_async(timeout_ms=timer.timeout_ms)
 
-    def join_group(self, timeout_ms=None):
-        """Sync facade over :meth:`join_group_async`."""
-        with self._client._lock:
-            return self._manager.run(self.join_group_async, timeout_ms)
-
     async def join_group_async(self, timeout_ms=None):
-        """Async variant of :meth:`join_group`.
+        """Drive JoinGroup -> SyncGroup attempts until joined or aborted.
 
-        Drives JoinGroup -> SyncGroup attempts in a loop until the member is
-        joined (returns True), the timer expires (returns False), or a
-        non-retriable error is raised.
+        Internal: the only entry point is :meth:`ensure_active_group_async`
+        (and its sync facade :meth:`ensure_active_group`).
+
+        Returns True when the member has been (re-)joined, False on timer
+        expiry, or raises on a non-retriable error.
         """
         if not self._use_group_apis:
             raise Errors.UnsupportedVersionError('Group Coordinator APIs require 0.9+ broker')

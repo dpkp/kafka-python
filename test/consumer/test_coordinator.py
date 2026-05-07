@@ -1146,21 +1146,6 @@ def test_ensure_active_group_sync_facade(request, broker, seeded_coord):
     assert seeded_coord.state == MemberState.STABLE
 
 
-def test_join_group_sync_facade(request, broker, seeded_coord):
-    """The sync join_group facade dispatches via manager.run."""
-    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
-    seeded_coord.rejoin_needed = True
-    seeded_coord.state = MemberState.UNJOINED
-    broker.respond(JoinGroupRequest, _join_response_object(
-        leader='leader-x', member_id='member-1', members=[]))
-    broker.respond(SyncGroupRequest, _sync_response_object(
-        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
-
-    result = seeded_coord.join_group(timeout_ms=5000)
-
-    assert result is True
-
-
 def test_heartbeat(mocker, coordinator):
     coordinator.coordinator_id = 0
     coordinator.state = MemberState.STABLE
