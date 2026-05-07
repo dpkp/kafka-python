@@ -1102,6 +1102,72 @@ def test_join_group_async_raises_non_retriable(request, broker, seeded_coord):
         seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
 
 
+def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
+        request, broker, seeded_coord):
+    """Short consumer.poll(timeout_ms=N) should return False instead of
+    hanging when the broker is slow to respond to JoinGroup; the in-flight
+    task is cached so the next poll re-awaits it instead of sending a fresh
+    JoinGroup.
+
+    Regression for the test_group integration hang where 4 consumers tearing
+    down concurrently left one stuck awaiting JoinGroup while the broker
+    waited for the others to rejoin. Both properties are necessary:
+        - timer must fire (else the user thread hangs and never sees stop)
+        - in-flight task must be cached (else next poll sends a duplicate
+          JoinGroup, confusing the broker's rebalance state)
+    """
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+
+    # JoinGroup response future controlled by the test. Hangs until released.
+    join_response_pending = Future()
+    join_request_count = [0]
+
+    async def slow_join_handler(api_key, api_version, correlation_id, request_bytes):
+        join_request_count[0] += 1
+        # Block until the test releases the future, simulating a broker
+        # that's holding JoinGroup waiting for other members to rejoin.
+        await join_response_pending
+        return _join_response_object(
+            leader='leader-x', member_id='member-1', members=[])
+
+    broker.respond_fn(JoinGroupRequest, slow_join_handler)
+
+    # First call: 50ms timer must expire and return False quickly. If the
+    # await on JoinGroup is not timer-aware, this call hangs until the
+    # connection's request_timeout_ms fires (~5s in the fixture).
+    start = time.monotonic()
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    elapsed = time.monotonic() - start
+    assert result is False
+    assert elapsed < 1.0, (
+        'join_group_async did not respect timer.timeout_ms; took %.2fs'
+        % elapsed)
+    assert join_request_count[0] == 1
+
+    # Second call: broker is still hanging. Should reuse the cached
+    # in-flight task instead of sending a duplicate JoinGroup.
+    start = time.monotonic()
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    elapsed = time.monotonic() - start
+    assert result is False
+    assert elapsed < 1.0
+    assert join_request_count[0] == 1, (
+        'duplicate JoinGroup sent; cached task was not reused')
+
+    # Release the broker; next call should complete using the cached task.
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+    join_response_pending.success(None)
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    assert result is True
+    assert join_request_count[0] == 1, (
+        'duplicate JoinGroup sent on the success path')
+    assert seeded_coord.state == MemberState.STABLE
+
+
 @pytest.mark.parametrize("broker", [(0, 8, 0)], indirect=True)
 def test_join_group_async_unsupported_version(broker, coordinator):
     with pytest.raises(Errors.UnsupportedVersionError):

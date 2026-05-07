@@ -152,6 +152,12 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self.state = MemberState.UNJOINED
         self.coordinator_id = None
         self._find_coordinator_future = None
+        # In-flight JoinGroup -> SyncGroup task cached across poll re-entries.
+        # consumer.poll(timeout_ms=N) may give up while a JoinGroup is still
+        # pending on the broker (e.g. broker waiting for other members to
+        # rejoin); the next poll re-awaits this task instead of sending a
+        # duplicate JoinGroup. Cleared on success or non-retriable failure.
+        self._join_task = None
         self._generation = Generation.NO_GENERATION
         if self.config['metrics']:
             self._sensors = GroupCoordinatorMetrics(self.heartbeat, self.config['metrics'],
@@ -435,24 +441,38 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             if not await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms):
                 return False
 
-            # Call _on_join_prepare once per rebalance attempt. The rejoining
-            # flag survives across loop iterations so we don't re-run user
-            # listeners or auto-commit on retry.
-            if not self.rejoining:
-                await self._on_join_prepare_async(
-                    self._generation.generation_id,
-                    self._generation.member_id,
-                    timeout_ms=timer.timeout_ms)
-                self.rejoining = True
+            # Schedule the join attempt as a Task on first entry; subsequent
+            # poll iterations re-await the same Task while the broker is still
+            # processing JoinGroup. Without this cache, a short
+            # consumer.poll(timeout_ms=N) that gives up on the first iteration
+            # would send a fresh JoinGroup on the next iteration, confusing
+            # the broker.
+            if self._join_task is None or self._join_task.is_done:
+                # Call _on_join_prepare once per rebalance attempt. The rejoining
+                # flag survives across loop iterations so we don't re-run user
+                # listeners or auto-commit on retry.
+                if not self.rejoining:
+                    await self._on_join_prepare_async(
+                        self._generation.generation_id,
+                        self._generation.member_id,
+                        timeout_ms=timer.timeout_ms)
+                    self.rejoining = True
 
-                # Disable heartbeat for the wire round-trip. Must come AFTER
-                # _on_join_prepare_async so heartbeats keep flowing while a
-                # potentially-slow rebalance listener runs.
-                log.debug("Disabling heartbeat during join-group")
-                self._disable_heartbeat()
+                    # Disable heartbeat for the wire round-trip. Must come AFTER
+                    # _on_join_prepare_async so heartbeats keep flowing while a
+                    # potentially-slow rebalance listener runs.
+                    log.debug("Disabling heartbeat during join-group")
+                    self._disable_heartbeat()
+
+                self._join_task = self._manager.call_soon(self._do_join_and_sync_async)
 
             try:
-                assignment_bytes = await self._do_join_and_sync_async()
+                assignment_bytes = await self._manager.wait_for(
+                    self._join_task, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                # Timer expired; leave self._join_task in flight so the next
+                # poll re-awaits it instead of sending a duplicate JoinGroup.
+                return False
             except (Errors.UnknownMemberIdError,
                     Errors.RebalanceInProgressError,
                     Errors.IllegalGenerationError,
@@ -460,8 +480,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 # Side effects (reset_generation / coordinator_dead /
                 # request_rejoin) were applied by the response processors;
                 # loop back and retry immediately.
+                self._join_task = None
                 continue
             except Errors.KafkaError as exc:
+                self._join_task = None
                 if not getattr(exc, 'retriable', False):
                     raise
                 if timer.expired:
@@ -472,6 +494,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 if backoff_ms > 0:
                     await self._manager._net.sleep(backoff_ms / 1000)
                 continue
+            self._join_task = None
 
             with self._lock:
                 self.rejoining = False
