@@ -127,7 +127,9 @@ def test_join_complete(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
     generation = 12
-    coordinator._on_join_complete(generation, 'member-foo', 'roundrobin', assignment.encode())
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        generation, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment, generation)
 
@@ -140,43 +142,11 @@ def test_join_complete_with_sticky_assignor(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     generation = 3
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(generation, 'member-foo', 'sticky', assignment.encode())
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        generation, 'member-foo', 'sticky', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment, generation)
-
-
-def test_subscription_listener(mocker, coordinator):
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    coordinator._subscription.subscribe(
-        topics=['foobar'],
-        listener=listener)
-
-    coordinator._on_join_prepare(0, 'member-foo')
-    assert listener.on_partitions_revoked.call_count == 1
-    listener.on_partitions_revoked.assert_called_with(set([]))
-
-    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
-    assert listener.on_partitions_assigned.call_count == 1
-    listener.on_partitions_assigned.assert_called_with({TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
-
-
-def test_subscription_listener_failure(mocker, coordinator):
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    coordinator._subscription.subscribe(
-        topics=['foobar'],
-        listener=listener)
-
-    # exception raised in listener should not be re-raised by coordinator
-    listener.on_partitions_revoked.side_effect = Exception('crash')
-    coordinator._on_join_prepare(0, 'member-foo')
-    assert listener.on_partitions_revoked.call_count == 1
-
-    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
-    assert listener.on_partitions_assigned.call_count == 1
 
 
 def test_perform_assignment(mocker, coordinator):
@@ -209,11 +179,6 @@ def test_perform_assignment(mocker, coordinator):
     RoundRobinPartitionAssignor.assign.assert_called_with(
         coordinator._client.cluster, members)
     assert ret == assignments
-
-
-def test_on_join_prepare(coordinator):
-    coordinator._subscription.subscribe(topics=['foobar'])
-    coordinator._on_join_prepare(0, 'member-foo')
 
 
 def test_on_join_prepare_async_invokes_sync_listener(mocker, coordinator):
@@ -1168,7 +1133,3 @@ def test_lookup_coordinator_failure(mocker, coordinator):
                         return_value=Future().failure(Exception('foobar')))
     future = coordinator.lookup_coordinator()
     assert future.failed()
-
-
-# test_ensure_active_group: covered by test_ensure_active_group_async_happy_path
-# (which exercises the same path end-to-end via MockBroker round-trip).

@@ -150,7 +150,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self.rejoin_needed = True
         self.rejoining = False  # renamed / complement of java needsJoinPrepare
         self.state = MemberState.UNJOINED
-        self.join_future = None
         self.coordinator_id = None
         self._find_coordinator_future = None
         self._generation = Generation.NO_GENERATION
@@ -197,28 +196,19 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
-    def _on_join_prepare(self, generation, member_id, timeout_ms=None):
+    async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
         """Invoked prior to each group join or rejoin.
 
-        This is typically used to perform any cleanup from the previous
-        generation (such as committing offsets for the consumer)
+        Subclasses (e.g. :class:`ConsumerCoordinator`) override with auto-commit
+        + rebalance-listener invocation. Called from the join coroutine on the
+        event loop, so blocking work in subclass overrides will block the loop
+        -- including heartbeats. Async rebalance listeners are awaited; sync
+        listeners run inline.
 
         Arguments:
             generation (int): The previous generation or -1 if there was none
             member_id (str): The identifier of this member in the previous group
                 or '' if there was none
-        """
-        pass
-
-    async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
-        """Async variant of :meth:`_on_join_prepare`.
-
-        Default no-op; subclasses (e.g. :class:`ConsumerCoordinator`) override
-        with auto-commit + rebalance-listener invocation. Called from the join
-        coroutine on the event loop, so blocking work in subclass overrides
-        will block the loop -- including heartbeats. Async rebalance listeners
-        are awaited; sync listeners run inline.
         """
         pass
 
@@ -243,10 +233,11 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
-    def _on_join_complete(self, generation, member_id, protocol,
-                          member_assignment_bytes):
+    async def _on_join_complete_async(self, generation, member_id, protocol,
+                                      member_assignment_bytes):
         """Invoked when a group member has successfully joined a group.
+
+        Subclasses override to apply the assignment and run user listeners.
 
         Arguments:
             generation (int): the generation that was joined
@@ -256,11 +247,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 propagated from the group leader. The Coordinator instance is
                 responsible for decoding based on the chosen protocol.
         """
-        pass
-
-    async def _on_join_complete_async(self, generation, member_id, protocol,
-                                      member_assignment_bytes):
-        """Async variant of :meth:`_on_join_complete`. Default no-op."""
         pass
 
     def coordinator_unknown(self):
@@ -404,52 +390,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 return float('inf')
             return self.heartbeat.time_to_next_heartbeat()
 
-    def _reset_join_group_future(self):
-        with self._lock:
-            self.join_future = None
-
-    def _initiate_join_group(self):
-        with self._lock:
-            # we store the join future in case we are woken up by the user
-            # after beginning the rebalance in the call to poll below.
-            # This ensures that we do not mistakenly attempt to rejoin
-            # before the pending rebalance has completed.
-            if self.join_future is None:
-                log.debug("_initiate_join_group: creating new join_future (state=%s)", self.state)
-                self.state = MemberState.REBALANCING
-                self.join_future = self._send_join_group_request()
-
-                # handle join completion in the callback so that the
-                # callback will be invoked even if the consumer is woken up
-                # before finishing the rebalance
-                self.join_future.add_callback(self._handle_join_success)
-
-                # we handle failures below after the request finishes.
-                # If the join completes after having been woken up, the
-                # exception is ignored and we will rejoin
-                self.join_future.add_errback(self._handle_join_failure)
-            else:
-                log.debug("_initiate_join_group: returning existing join_future (is_done=%s, exception=%s, state=%s)",
-                          self.join_future.is_done, self.join_future.exception, self.state)
-
-        return self.join_future
-
-    def _handle_join_success(self, member_assignment_bytes):
-        # handle join completion in the callback so that the callback
-        # will be invoked even if the consumer is woken up before
-        # finishing the rebalance
-        with self._lock:
-            self.state = MemberState.STABLE
-            self._enable_heartbeat()
-
-    def _handle_join_failure(self, exception):
-        # we handle failures below after the request finishes.
-        # if the join completes after having been woken up,
-        # the exception is ignored and we will rejoin
-        with self._lock:
-            log.info("Failed to join group %s: %s", self.group_id, exception)
-            self.state = MemberState.UNJOINED
-
     @property
     def _use_group_apis(self):
         return self.config['api_version'] >= (0, 9)
@@ -549,46 +489,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             return True
         return True
 
-    def _send_join_group_request(self):
-        """Join the group and return the assignment for the next generation.
-
-        This function handles both JoinGroup and SyncGroup, delegating to
-        :meth:`._perform_assignment` if elected leader by the coordinator.
-
-        Returns:
-            Future: resolves to the encoded-bytes assignment returned from the
-                group leader
-        """
-        if self.coordinator_unknown():
-            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
-            return Future().failure(e)
-
-        elif not self._client.ready(self.coordinator_id, metadata_priority=False):
-            e = Errors.NodeNotReadyError(self.coordinator_id)
-            return Future().failure(e)
-
-        # send a join group request to the coordinator
-        log.info("(Re-)joining group %s", self.group_id)
-        max_version = 6
-        request = JoinGroupRequest(
-            group_id=self.group_id,
-            session_timeout_ms=self.config['session_timeout_ms'],
-            rebalance_timeout_ms=self.config['max_poll_interval_ms'],
-            member_id=self._generation.member_id,
-            group_instance_id=self.group_instance_id,
-            protocol_type=self.protocol_type(),
-            protocols=self.group_protocols(),
-            max_version=max_version)
-
-        # create the request for the coordinator
-        log.debug("Sending JoinGroup (%s) to coordinator %s", request, self.coordinator_id)
-        future = Future()
-        _f = self._manager.send(request, node_id=self.coordinator_id)
-        _f.add_callback(self._handle_join_group_response, future, time.monotonic())
-        _f.add_errback(self._failed_request, self.coordinator_id,
-                       request, future)
-        return future
-
     def _failed_request(self, node_id, request, future, error):
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining or throttling
@@ -607,10 +507,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def _process_join_group_response(self, response, send_time):
         """Classify a JoinGroupResponse: mutate state on success, raise on error.
 
-        Sibling of :meth:`_handle_join_group_response` for the async join path
-        (``_do_join_and_sync_async``). Same error classification, but no
-        Future plumbing and no SyncGroup chaining -- callers route to leader
-        or follower based on the returned response.
+        Used by :meth:`_do_join_and_sync_async`. Callers route to leader or
+        follower based on the returned response.
 
         Returns:
             JoinGroupResponse: the response (caller does leader/follower routing).
@@ -681,150 +579,12 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         log.error("Unexpected error in join group response: %s", error)
         raise error
 
-    def _handle_join_group_response(self, future, send_time, response):
-        log.debug("Received JoinGroup response: %s", response)
-        error_type = Errors.for_code(response.error_code)
-        if error_type is Errors.NoError:
-            if self._sensors:
-                self._sensors.join_latency.record((time.monotonic() - send_time) * 1000)
-            with self._lock:
-                if self.state is not MemberState.REBALANCING:
-                    # if the consumer was woken up before a rebalance completes,
-                    # we may have already left the group. In this case, we do
-                    # not want to continue with the sync group.
-                    future.failure(UnjoinedGroupException())
-                else:
-                    self._generation = Generation(response.generation_id,
-                                                  response.member_id,
-                                                  response.protocol_name)
-
-                log.info("Successfully joined group %s %s", self.group_id, self._generation)
-                if response.leader == response.member_id:
-                    log.info("Elected group leader -- performing partition"
-                             " assignments using %s", self._generation.protocol)
-                    self._on_join_leader(response).chain(future)
-                else:
-                    self._on_join_follower().chain(future)
-
-        elif error_type is Errors.CoordinatorLoadInProgressError:
-            log.info("Attempt to join group %s rejected since coordinator %s"
-                     " is loading the group.", self.group_id, self.coordinator_id)
-            # backoff and retry
-            future.failure(error_type(response))
-        elif error_type is Errors.UnknownMemberIdError:
-            # reset the member id and retry immediately
-            error = error_type(self._generation.member_id)
-            self.reset_generation()
-            log.info("Attempt to join group %s failed due to unknown member id",
-                     self.group_id)
-            future.failure(error)
-        elif error_type in (Errors.CoordinatorNotAvailableError,
-                            Errors.NotCoordinatorError):
-            # re-discover the coordinator and retry with backoff
-            self.coordinator_dead(error_type())
-            log.info("Attempt to join group %s failed due to obsolete "
-                     "coordinator information: %s", self.group_id,
-                     error_type.__name__)
-            future.failure(error_type())
-        elif error_type in (Errors.InconsistentGroupProtocolError,
-                            Errors.InvalidSessionTimeoutError,
-                            Errors.InvalidGroupIdError,
-                            Errors.GroupAuthorizationFailedError,
-                            Errors.GroupMaxSizeReachedError,
-                            Errors.FencedInstanceIdError):
-            # log the error and re-throw the exception
-            log.error("Attempt to join group %s failed due to fatal error: %s",
-                      self.group_id, error_type.__name__)
-            if error_type in (Errors.GroupAuthorizationFailedError, Errors.GroupMaxSizeReachedError):
-                future.failure(error_type(self.group_id))
-            else:
-                future.failure(error_type())
-        elif error_type is Errors.MemberIdRequiredError:
-            # Broker requires a concrete member id to be allowed to join the group. Update member id
-            # and send another join group request in next cycle.
-            log.info("Received member id %s for group %s; will retry join-group",
-                     response.member_id, self.group_id)
-            self.reset_generation(response.member_id)
-            future.failure(error_type())
-        elif error_type is Errors.RebalanceInProgressError:
-            log.info("Attempt to join group %s failed due to RebalanceInProgressError,"
-                     " which could indicate a replication timeout on the broker. Will retry.",
-                     self.group_id)
-            future.failure(error_type())
-        else:
-            # unexpected error, throw the exception
-            error = error_type()
-            log.error("Unexpected error in join group response: %s", error)
-            future.failure(error)
-
-    def _on_join_follower(self):
-        # send follower's sync group with an empty assignment
-        max_version = 4
-        request = SyncGroupRequest(
-            group_id=self.group_id,
-            generation_id=self._generation.generation_id,
-            member_id=self._generation.member_id,
-            group_instance_id=self.group_instance_id,
-            assignments=[],
-            max_version=max_version)
-        log.debug("Sending follower SyncGroup for group %s to coordinator %s: %s",
-                  self.group_id, self.coordinator_id, request)
-        return self._send_sync_group_request(request)
-
-    def _on_join_leader(self, response):
-        """
-        Perform leader synchronization and send back the assignment
-        for the group via SyncGroupRequest
-
-        Arguments:
-            response (JoinResponse): broker response to parse
-
-        Returns:
-            Future: resolves to member assignment encoded-bytes
-        """
-        try:
-            group_assignment = self._perform_assignment(response.leader,
-                                                        response.protocol_name,
-                                                        response.members)
-        except Exception as e:
-            return Future().failure(e)
-
-        max_version = 4
-        request = SyncGroupRequest(
-            group_id=self.group_id,
-            generation_id=self._generation.generation_id,
-            member_id=self._generation.member_id,
-            group_instance_id=self.group_instance_id,
-            assignments=group_assignment.items(),
-            max_version=max_version)
-        log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
-                  self.group_id, self.coordinator_id, request)
-        return self._send_sync_group_request(request)
-
-    def _send_sync_group_request(self, request):
-        if self.coordinator_unknown():
-            e = Errors.CoordinatorNotAvailableError(self.coordinator_id)
-            return Future().failure(e)
-
-        # We assume that coordinator is ready if we're sending SyncGroup
-        # as it typically follows a successful JoinGroup
-        # Also note that if client.ready() enforces a metadata priority policy,
-        # we can get into an infinite loop if the leader assignment process
-        # itself requests a metadata update
-
-        future = Future()
-        _f = self._manager.send(request, node_id=self.coordinator_id)
-        _f.add_callback(self._handle_sync_group_response, future, time.monotonic())
-        _f.add_errback(self._failed_request, self.coordinator_id,
-                       request, future)
-        return future
-
     def _process_sync_group_response(self, response, send_time):
         """Classify a SyncGroupResponse: return assignment bytes or raise.
 
-        Sibling of :meth:`_handle_sync_group_response` for the async join path.
-        Same error classification (and ``request_rejoin()`` side effect) but
-        no Future plumbing.
+        Used by :meth:`_do_join_and_sync_async`. Applies ``request_rejoin()``
+        / ``coordinator_dead()`` / ``reset_generation()`` side effects on
+        the relevant error codes.
 
         Returns:
             bytes: encoded member assignment.
@@ -943,44 +703,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         sync_response = await self._manager.send(
             sync_request, node_id=self.coordinator_id)
         return self._process_sync_group_response(sync_response, sync_send_time)
-
-    def _handle_sync_group_response(self, future, send_time, response):
-        log.debug("Received SyncGroup response: %s", response)
-        error_type = Errors.for_code(response.error_code)
-        if error_type is Errors.NoError:
-            if self._sensors:
-                self._sensors.sync_latency.record((time.monotonic() - send_time) * 1000)
-            future.success(response.assignment)
-            return
-
-        # Always rejoin on error
-        self.request_rejoin()
-        if error_type is Errors.GroupAuthorizationFailedError:
-            future.failure(error_type(self.group_id))
-        elif error_type is Errors.RebalanceInProgressError:
-            log.info("SyncGroup for group %s failed due to coordinator"
-                     " rebalance", self.group_id)
-            future.failure(error_type(self.group_id))
-        elif error_type is Errors.FencedInstanceIdError:
-            log.error("SyncGroup for group %s failed due to fenced id error: %s",
-                      self.group_id, self.group_instance_id)
-            future.failure(error_type((self.group_id, self.group_instance_id)))
-        elif error_type in (Errors.UnknownMemberIdError,
-                            Errors.IllegalGenerationError):
-            error = error_type()
-            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
-            self.reset_generation()
-            future.failure(error)
-        elif error_type in (Errors.CoordinatorNotAvailableError,
-                            Errors.NotCoordinatorError):
-            error = error_type()
-            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
-            self.coordinator_dead(error)
-            future.failure(error)
-        else:
-            error = error_type()
-            log.error("Unexpected error from SyncGroup: %s", error)
-            future.failure(error)
 
     def _send_group_coordinator_request(self):
         """Discover the current coordinator for the group.

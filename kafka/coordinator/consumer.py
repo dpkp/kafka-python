@@ -224,45 +224,6 @@ class ConsumerCoordinator(BaseCoordinator):
     def _lookup_assignor(self, name):
         return self._assignors.get(name, None)
 
-    def _on_join_complete(self, generation, member_id, protocol,
-                          member_assignment_bytes):
-        # only the leader is responsible for monitoring for metadata changes
-        # (i.e. partition changes)
-        if not self._is_leader:
-            self._assignment_snapshot = None
-
-        assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
-
-        assignment = ConsumerProtocolAssignment.decode(member_assignment_bytes)
-
-        try:
-            self._subscription.assign_from_subscribed(assignment.partitions())
-        except ValueError as e:
-            log.warning("%s. Probably due to a deleted topic. Requesting Re-join" % e)
-            self.request_rejoin()
-
-        # give the assignor a chance to update internal state
-        # based on the received assignment
-        assignor.on_assignment(assignment, generation)
-
-        # reschedule the auto commit starting from now
-        self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval
-
-        assigned = set(self._subscription.assigned_partitions())
-        log.info("Setting newly assigned partitions %s for group %s",
-                 assigned, self.group_id)
-
-        # execute the user's callback after rebalance
-        if self._subscription.rebalance_listener:
-            try:
-                self._subscription.rebalance_listener.on_partitions_assigned(assigned)
-            except Exception:
-                log.exception("User provided rebalance listener %s for group %s"
-                              " failed on partition assignment: %s",
-                              self._subscription.rebalance_listener, self.group_id,
-                              assigned)
-
     async def _on_join_complete_async(self, generation, member_id, protocol,
                                       member_assignment_bytes):
         # only the leader is responsible for monitoring for metadata changes
@@ -401,25 +362,6 @@ class ConsumerCoordinator(BaseCoordinator):
         for member_id, assignment in assignments.items():
             group_assignment[member_id] = assignment
         return group_assignment
-
-    def _on_join_prepare(self, generation, member_id, timeout_ms=None):
-        # commit offsets prior to rebalance if auto-commit enabled
-        self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
-
-        # execute the user's callback before rebalance
-        log.info("Revoking previously assigned partitions %s for group %s",
-                 self._subscription.assigned_partitions(), self.group_id)
-        if self._subscription.rebalance_listener:
-            try:
-                revoked = set(self._subscription.assigned_partitions())
-                self._subscription.rebalance_listener.on_partitions_revoked(revoked)
-            except Exception:
-                log.exception("User provided subscription rebalance listener %s"
-                              " for group %s failed on_partitions_revoked",
-                              self._subscription.rebalance_listener, self.group_id)
-
-        self._is_leader = False
-        self._subscription.reset_group_subscription()
 
     async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
         # commit offsets prior to rebalance if auto-commit enabled
