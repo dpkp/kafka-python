@@ -778,8 +778,10 @@ class KafkaConsumer:
         # to the coordinator) and CPU-only marking of remaining partitions
         # for reset by the configured policy.
         self._refresh_committed_offsets(timeout_ms=timer.timeout_ms)
-        # Phase 2: ListOffsets reset is async; await its in-flight Task.
-        reset_task = self._fetcher.reset_offsets_if_needed()
+        # Phase 2: ListOffsets reset is async; await its in-flight Task. The
+        # task's own loop is bounded by timer.timeout_ms so it doesn't run
+        # past the user's deadline.
+        reset_task = self._fetcher.reset_offsets_if_needed(timeout_ms=timer.timeout_ms)
         if reset_task is not None and not timer.expired:
             try:
                 self._manager.run(self._manager.wait_for, reset_task, timer.timeout_ms)

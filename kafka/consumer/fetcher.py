@@ -175,7 +175,7 @@ class Fetcher:
         self._clean_done_fetch_futures()
         return bool(self._fetch_futures)
 
-    def reset_offsets_if_needed(self):
+    def reset_offsets_if_needed(self, timeout_ms=None):
         """Schedule pending offset resets and return the in-flight Task.
 
         Returns the cached Future for the in-flight reset task (shared
@@ -183,6 +183,16 @@ class Fetcher:
         may discard the Future (fire-and-forget, e.g. consumer.poll) or
         await it via ``manager.wait_for(future, timeout_ms)`` to block
         until resets complete (e.g. consumer.position).
+
+        Arguments:
+            timeout_ms (int, optional): Maximum wall-clock the reset task
+                should run, including time spent awaiting metadata refresh
+                for unknown leaders. If None, uses ``request_timeout_ms``
+                as a default upper bound so a permanently-unresolvable
+                partition (deleted topic, etc.) doesn't spin forever. The
+                first caller's timeout wins for the cached task; later
+                callers' bounds are enforced via their own ``wait_for`` on
+                the returned Future.
 
         Raises:
             NoOffsetForPartitionError: if a previous reset attempt left a
@@ -199,7 +209,8 @@ class Fetcher:
         if not self._subscriptions.partitions_needing_reset():
             return None
 
-        self._reset_task = self._manager.call_soon(self._reset_offsets_async)
+        self._reset_task = self._manager.call_soon(
+            self._reset_offsets_async, timeout_ms)
         return self._reset_task
 
     def offsets_by_times(self, timestamps, timeout_ms=None):
@@ -482,18 +493,30 @@ class Fetcher:
             log.info("Resetting offset for partition %s to offset %s.", partition, offset)
             self._subscriptions.seek(partition, offset)
 
-    async def _reset_offsets_async(self):
-        """Drive resets to completion (or to a state where every remaining
-        partition is in retry-backoff). Each iteration fans out per-node
-        ListOffsets requests concurrently and awaits all of them; backoff
-        partitions are filtered out of partitions_needing_reset() so the
-        loop exits when there's no more in-window work to do.
+    async def _reset_offsets_async(self, timeout_ms=None):
+        """Drive resets to completion or until the timer expires.
+
+        Each iteration fans out per-node ListOffsets requests concurrently
+        and awaits all of them; backoff partitions are filtered out of
+        partitions_needing_reset() so the loop exits when there's no more
+        in-window work. If all partitions have unknown leaders, awaits a
+        metadata refresh and retries within the remaining budget.
+
+        Arguments:
+            timeout_ms (int, optional): Hard upper bound on the loop's
+                wall-clock. None falls back to ``request_timeout_ms`` so a
+                deleted-topic / permanently-unknown-leader partition can't
+                spin the loop forever. The metadata-refresh wait inside
+                the loop is capped by ``min(remaining_timer, request_timeout_ms)``.
 
         Per-node failures are caught inside _reset_offsets_for_node and
         stuffed into self._cached_list_offsets_exception; the next call to
         reset_offsets_if_needed surfaces them.
         """
-        while True:
+        if timeout_ms is None:
+            timeout_ms = self.config['request_timeout_ms']
+        timer = Timer(timeout_ms)
+        while not timer.expired:
             partitions = self._subscriptions.partitions_needing_reset()
             if not partitions:
                 return
@@ -508,7 +531,19 @@ class Fetcher:
 
             timestamps_by_node = self._group_list_offset_requests(offset_resets)
             if not timestamps_by_node:
-                return
+                # All requested partitions have unknown / unavailable leaders.
+                # _group_list_offset_requests has already requested a metadata
+                # refresh; await it within the remaining budget (capped at
+                # request_timeout_ms for any single broker round-trip).
+                metadata_update = self._manager.cluster.request_update()
+                wait_ms = self.config['request_timeout_ms']
+                if timer.timeout_ms is not None:
+                    wait_ms = min(wait_ms, timer.timeout_ms)
+                try:
+                    await self._manager.wait_for(metadata_update, wait_ms)
+                except Errors.KafkaTimeoutError:
+                    pass
+                continue
 
             log.debug('Resetting offsets for %s', set(offset_resets.keys()))
             # Gather: schedule all per-node tasks concurrently, then await.
