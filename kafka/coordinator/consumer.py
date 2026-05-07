@@ -595,12 +595,12 @@ class ConsumerCoordinator(BaseCoordinator):
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
         self._invoke_completed_offset_commit_callbacks()
-        if not offsets:
-            return
         with self._client._lock:
             return self._manager.run(self._commit_offsets_sync_async, offsets, timeout_ms)
 
     async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
+        if not offsets:
+            return
         timer = Timer(timeout_ms)
         while True:
             await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)
