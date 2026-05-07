@@ -3,7 +3,11 @@ import time
 
 import pytest
 
-from kafka.consumer.subscription_state import SubscriptionState, ConsumerRebalanceListener
+from kafka.consumer.subscription_state import (
+    AsyncConsumerRebalanceListener,
+    ConsumerRebalanceListener,
+    SubscriptionState,
+)
 from kafka.coordinator.assignors.abstract import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
@@ -202,6 +206,30 @@ def test_on_join_prepare_async_awaits_async_listener(mocker, coordinator):
 
     assert listener.on_partitions_revoked.call_count == 1
     listener.on_partitions_revoked.assert_awaited_with(set())
+
+
+def test_on_join_prepare_async_awaits_async_listener_subclass(coordinator):
+    """An AsyncConsumerRebalanceListener subclass is accepted and awaited."""
+    coordinator.config['enable_auto_commit'] = False
+    calls = []
+
+    class MyListener(AsyncConsumerRebalanceListener):
+        async def on_partitions_revoked(self, revoked):
+            calls.append(('revoked', revoked))
+        async def on_partitions_assigned(self, assigned):
+            calls.append(('assigned', assigned))
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=MyListener())
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert calls == [('revoked', set())]
+
+
+def test_subscribe_rejects_non_listener(coordinator):
+    """Anything that isn't a (Async)ConsumerRebalanceListener is rejected."""
+    with pytest.raises(TypeError):
+        coordinator._subscription.subscribe(
+            topics=['foobar'], listener=lambda revoked: None)
 
 
 def test_on_join_prepare_async_listener_exception_is_caught(mocker, coordinator):

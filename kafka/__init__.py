@@ -12,7 +12,9 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 from kafka.admin import KafkaAdminClient
 from kafka.consumer import KafkaConsumer
-from kafka.consumer.subscription_state import ConsumerRebalanceListener
+from kafka.consumer.subscription_state import (
+    AsyncConsumerRebalanceListener, ConsumerRebalanceListener,
+)
 from kafka.producer import KafkaProducer
 from kafka.serializer import Serializer, Deserializer
 from kafka.structs import TopicPartition, TopicPartitionReplica, OffsetAndMetadata
@@ -21,7 +23,8 @@ from kafka.protocol.consumer import IsolationLevel, OffsetSpec
 
 __all__ = [
     'KafkaAdminClient', 'KafkaConsumer', 'KafkaProducer',
-    'ConsumerRebalanceListener', 'Serializer', 'Deserializer',
+    'AsyncConsumerRebalanceListener', 'ConsumerRebalanceListener',
+    'Serializer', 'Deserializer',
     'TopicPartition', 'TopicPartitionReplica', 'OffsetAndMetadata',
     'IsolationLevel', 'OffsetSpec',
 ]
