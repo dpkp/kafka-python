@@ -140,6 +140,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         self._client = client
         self._manager = client._manager
+        self._cluster = self._manager.cluster
         self.heartbeat = Heartbeat(**self.config)
         self._heartbeat_wakeup = WakeupNotifier(self._manager._net)
         self._heartbeat_loop_future = None
@@ -323,7 +324,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                     raise
                 if exc.invalid_metadata:
                     log.debug('Requesting metadata for group coordinator request: %s', exc)
-                    metadata_update = self._client.cluster.request_update()
+                    metadata_update = self._cluster.request_update()
                     try:
                         await self._manager.wait_for(metadata_update, timer.timeout_ms)
                     except Errors.KafkaTimeoutError:
@@ -756,7 +757,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                coordinator_id = self._client.cluster.add_coordinator(response, 'group', self.group_id)
+                coordinator_id = self._cluster.add_coordinator(response, 'group', self.group_id)
                 if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
