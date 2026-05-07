@@ -327,8 +327,10 @@ class ConsumerCoordinator(BaseCoordinator):
                     # description of the problem.
                     if self._subscription.subscribed_pattern:
                         metadata_update = self._client.cluster.request_update()
-                        self._client.poll(future=metadata_update, timeout_ms=timer.timeout_ms)
-                        if not metadata_update.is_done:
+                        try:
+                            self._manager.run(
+                                self._manager.wait_for, metadata_update, timer.timeout_ms)
+                        except Errors.KafkaTimeoutError:
                             log.debug('coordinator.poll: timeout updating metadata; returning early')
                             return False
 
