@@ -5,6 +5,7 @@ import selectors
 import socket
 import time
 
+import kafka.errors as Errors
 from kafka.errors import KafkaConfigurationError, UnsupportedVersionError
 
 from kafka.consumer.fetcher import Fetcher
@@ -717,7 +718,11 @@ class KafkaConsumer:
             log.debug('poll: timeout during coordinator.poll(); returning early')
             return {}
 
-        has_all_fetch_positions = self._update_fetch_positions(timeout_ms=timer.timeout_ms)
+        has_all_fetch_positions = self._refresh_committed_offsets(timeout_ms=timer.timeout_ms)
+        # Fire-and-forget: kicks ListOffsets reset for any remaining partitions.
+        # The result Task is shared across callers via Fetcher._reset_task; we
+        # don't await it here -- the main fetch wait below drives the loop.
+        self._fetcher.reset_offsets_if_needed()
 
         # If data is available already, e.g. from a previous network client
         # poll() call to commit, then just return it immediately
@@ -769,12 +774,20 @@ class KafkaConsumer:
         assert self._subscription.is_assigned(partition), 'Partition is not assigned'
 
         timer = Timer(timeout_ms)
+        # Phase 1: blocking refresh of committed offsets (network round-trip
+        # to the coordinator) and CPU-only marking of remaining partitions
+        # for reset by the configured policy.
+        self._refresh_committed_offsets(timeout_ms=timer.timeout_ms)
+        # Phase 2: ListOffsets reset is async; await its in-flight Task. The
+        # task's own loop is bounded by timer.timeout_ms so it doesn't run
+        # past the user's deadline.
+        reset_task = self._fetcher.reset_offsets_if_needed(timeout_ms=timer.timeout_ms)
+        if reset_task is not None and not timer.expired:
+            try:
+                self._manager.run(self._manager.wait_for, reset_task, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                pass
         position = self._subscription.assignment[partition].position
-        while position is None and not timer.expired:
-            # batch update fetch positions for any partitions without a valid position
-            self._update_fetch_positions(timeout_ms=timer.timeout_ms)
-            self._client.poll(timeout_ms=timer.timeout_ms)
-            position = self._subscription.assignment[partition].position
         if position is not None:
             return position.offset
 
@@ -1124,15 +1137,28 @@ class KafkaConsumer:
         offsets = self._fetcher.end_offsets(partitions, timeout_ms)
         return offsets
 
-    def _update_fetch_positions(self, timeout_ms=None):
-        """Set the fetch position to the committed position (if there is one)
-        or reset it using the offset reset policy the user has configured.
+    def _refresh_committed_offsets(self, timeout_ms=None):
+        """Refresh committed offsets for partitions still needing a position
+        and mark any remaining partitions for reset by the configured policy.
+
+        This is the synchronous half of position resolution: a network
+        round-trip to the coordinator (timer-bounded), followed by
+        ``reset_missing_positions`` which is CPU-only. Partitions whose
+        position can be filled from a committed offset are filled here;
+        partitions without a committed offset are flagged for reset.
+
+        Callers that also want the reset to complete should follow up with
+        ``self._fetcher.reset_offsets_if_needed()`` and either await the
+        returned Task (e.g. via ``manager.wait_for``) or fire-and-forget.
 
         Arguments:
-            timeout_ms (int, optional): Milliseconds to block refreshing committed
-                offsets.
+            timeout_ms (int, optional): Milliseconds to block refreshing
+                committed offsets.
 
-        Returns True if fetch positions updated, False if timeout or async reset is pending
+        Returns:
+            bool: True if all assigned partitions now have a fetch position
+                (no further reset needed); False if a reset is still
+                pending or the committed-offset refresh timed out.
 
         Raises:
             NoOffsetForPartitionError: If no offset is stored for a given
@@ -1152,13 +1178,10 @@ class KafkaConsumer:
                 return False
 
         # If there are partitions still needing a position and a reset policy is defined,
-        # request reset using the default policy. If no reset strategy is defined and there
-        # are partitions with a missing position, then we will raise an exception.
+        # mark them for reset using the default policy. If no reset strategy is defined and
+        # there are partitions with a missing position, then we will raise an exception.
         self._subscription.reset_missing_positions()
-
-        # Finally send an asynchronous request to lookup and update the positions of any
-        # partitions which are awaiting reset.
-        return not self._fetcher.reset_offsets_if_needed()
+        return self._subscription.has_all_fetch_positions()
 
     def _message_generator_v2(self):
         timeout_ms = 1000 * max(0, self._consumer_timeout - time.monotonic())

@@ -138,30 +138,108 @@ def test_create_fetch_requests(fetcher, mocker, assignment):
 
 
 def test_reset_offsets_if_needed(fetcher, topic, mocker):
-    call_soon = mocker.patch.object(fetcher._client._manager, 'call_soon')
+    # Stub call_soon so we can count invocations without actually scheduling.
+    # Return a not-yet-done Future so reset_offsets_if_needed's cached-task
+    # check (`is_done`) sees it as in-flight.
+    call_soon = mocker.patch.object(
+        fetcher._client._manager, 'call_soon', side_effect=lambda *a, **kw: Future())
     partition = TopicPartition(topic, 0)
 
-    # fetchable partition (has offset, not paused)
-    fetcher.reset_offsets_if_needed()
+    # fetchable partition (has offset, not paused) -> no reset needed, returns None
+    assert fetcher.reset_offsets_if_needed() is None
     assert call_soon.call_count == 0
 
-    # partition needs reset, no valid position
+    # partition needs reset, no valid position -> schedules reset task
     fetcher._subscriptions.request_offset_reset(partition)
     fetcher.reset_offsets_if_needed()
-    call_soon.assert_called_with(fetcher._reset_offsets_async, {partition: OffsetResetStrategy.EARLIEST})
+    call_soon.assert_called_with(fetcher._reset_offsets_async, None)
     assert fetcher._subscriptions.assignment[partition].awaiting_reset is True
+
+    # Second call with task still in-flight: returns the cached task; no new schedule.
+    call_soon.reset_mock()
     fetcher.reset_offsets_if_needed()
-    call_soon.assert_called_with(fetcher._reset_offsets_async, {partition: OffsetResetStrategy.EARLIEST})
+    assert call_soon.call_count == 0
 
     # partition needs reset, has valid position
-    call_soon.reset_mock()
     fetcher._subscriptions.request_offset_reset(partition)
     fetcher._subscriptions.seek(partition, 123)
-    fetcher.reset_offsets_if_needed()
+    # Clear the cache to test the has-valid-position fast-path (otherwise
+    # the cached in-flight task would short-circuit the check).
+    fetcher._reset_task = None
+    call_soon.reset_mock()
+    assert fetcher.reset_offsets_if_needed() is None
     assert call_soon.call_count == 0
 
 
-def test__reset_offsets_async(fetcher, manager, net, mocker):
+def test__reset_offsets_async_waits_for_metadata_when_leader_unknown(
+        fetcher, manager, mocker):
+    """If the leader is unknown, _reset_offsets_async should wait for a
+    metadata refresh and retry within the timer budget. Regression for the
+    test_kafka_consumer_position_after_seek_to_end integration test where
+    a manually-assigned partition + seek_to_end + position() call hits
+    _reset_offsets_async before metadata has resolved the leader.
+    """
+    tp = TopicPartition("topic", 0)
+    fetcher._subscriptions.subscribe(topics=["topic"])
+    fetcher._subscriptions.assign_from_subscribed([tp])
+    fetcher._subscriptions.request_offset_reset(tp, OffsetResetStrategy.LATEST)
+
+    # leader_for_partition returns None on first call (leader unknown), then
+    # node 0 on subsequent calls (metadata refresh "completed" between).
+    leader_call_count = [0]
+    def fake_leader(tp_arg):
+        leader_call_count[0] += 1
+        return None if leader_call_count[0] == 1 else 0
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition",
+                        side_effect=fake_leader)
+
+    # request_update returns a future that's already-done (simulates a quick
+    # metadata refresh).
+    metadata_future = Future().success(fetcher._client.cluster)
+    mocker.patch.object(fetcher._client.cluster, "request_update",
+                        return_value=metadata_future)
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+
+    async def fake_send(node_id, timestamps_and_epochs):
+        return ({tp: OffsetAndTimestamp(42, None, -1)}, set())
+    mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
+
+    manager.run(fetcher._reset_offsets_async, 1000)
+
+    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
+    assert fetcher._subscriptions.assignment[tp].position.offset == 42
+    # First call returned None (unknown), second returned 0 (known).
+    assert leader_call_count[0] == 2
+
+
+def test__reset_offsets_async_bails_when_leader_permanently_unknown(
+        fetcher, manager, mocker):
+    """If metadata refresh doesn't resolve the leader within the timer
+    budget, _reset_offsets_async should bail rather than spin forever.
+    """
+    tp = TopicPartition("topic", 0)
+    fetcher._subscriptions.subscribe(topics=["topic"])
+    fetcher._subscriptions.assign_from_subscribed([tp])
+    fetcher._subscriptions.request_offset_reset(tp, OffsetResetStrategy.LATEST)
+
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition",
+                        return_value=None)
+    metadata_future = Future().success(fetcher._client.cluster)
+    mocker.patch.object(fetcher._client.cluster, "request_update",
+                        return_value=metadata_future)
+
+    # 50ms timer caps the spin even though leader stays unknown forever.
+    start = time.monotonic()
+    manager.run(fetcher._reset_offsets_async, 50)
+    elapsed = time.monotonic() - start
+    assert elapsed < 1.0, (
+        '_reset_offsets_async did not respect timer budget; took %.2fs' % elapsed)
+
+    # Partition still awaiting reset (we couldn't resolve the leader).
+    assert fetcher._subscriptions.assignment[tp].awaiting_reset
+
+
+def test__reset_offsets_async(fetcher, manager, mocker):
     tp0 = TopicPartition("topic", 0)
     tp1 = TopicPartition("topic", 1)
     fetcher._subscriptions.subscribe(topics=["topic"])
@@ -176,19 +254,13 @@ def test__reset_offsets_async(fetcher, manager, net, mocker):
         0: ({tp0: OffsetAndTimestamp(1001, None, -1)}, set()),
         1: ({tp1: OffsetAndTimestamp(1002, None, -1)}, set()),
     }
-    pending = []
     async def fake_send(node_id, timestamps_and_epochs):
-        pending.append(node_id)
         return results[node_id]
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
 
-    manager.run(fetcher._reset_offsets_async, {
-        tp0: OffsetResetStrategy.EARLIEST,
-        tp1: OffsetResetStrategy.EARLIEST,
-    })
-    # _reset_offsets_async is fire-and-forget; drain the spawned per-node tasks
-    while len(pending) < 2 or fetcher._subscriptions.assignment[tp0].awaiting_reset or fetcher._subscriptions.assignment[tp1].awaiting_reset:
-        net.poll(timeout_ms=10)
+    # _reset_offsets_async loops until partitions_needing_reset is empty;
+    # manager.run waits for the whole driver to complete.
+    manager.run(fetcher._reset_offsets_async, 1000)
 
     assert not fetcher._subscriptions.assignment[tp0].awaiting_reset
     assert not fetcher._subscriptions.assignment[tp1].awaiting_reset
@@ -666,9 +738,7 @@ def test_reset_offsets_paused(subscription_state, client, manager, net, mocker):
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.LATEST})
-    while subscription_state.is_offset_reset_needed(tp):
-        net.poll(timeout_ms=10)
+    manager.run(fetcher._reset_offsets_async, 1000)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
@@ -689,9 +759,7 @@ def test_reset_offsets_paused_without_valid(subscription_state, client, manager,
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager.run(fetcher._reset_offsets_async, {tp: OffsetResetStrategy.EARLIEST})
-    while subscription_state.is_offset_reset_needed(tp):
-        net.poll(timeout_ms=10)
+    manager.run(fetcher._reset_offsets_async, 1000)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
