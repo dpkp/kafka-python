@@ -3,7 +3,11 @@ import time
 
 import pytest
 
-from kafka.consumer.subscription_state import SubscriptionState, ConsumerRebalanceListener
+from kafka.consumer.subscription_state import (
+    AsyncConsumerRebalanceListener,
+    ConsumerRebalanceListener,
+    SubscriptionState,
+)
 from kafka.coordinator.assignors.abstract import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
@@ -14,10 +18,12 @@ from kafka.coordinator.base import Generation, MemberState
 from kafka.coordinator.consumer import ConsumerCoordinator
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.coordinator.base import UnjoinedGroupException
 from kafka.protocol.consumer import (
     OffsetCommitRequest, OffsetCommitResponse,
     OffsetFetchRequest, OffsetFetchResponse,
-    JoinGroupResponse,
+    JoinGroupRequest, JoinGroupResponse,
+    SyncGroupRequest, SyncGroupResponse,
 )
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import OffsetAndMetadata, TopicPartition
@@ -125,7 +131,9 @@ def test_join_complete(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
     generation = 12
-    coordinator._on_join_complete(generation, 'member-foo', 'roundrobin', assignment.encode())
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        generation, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment, generation)
 
@@ -138,43 +146,11 @@ def test_join_complete_with_sticky_assignor(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     generation = 3
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(generation, 'member-foo', 'sticky', assignment.encode())
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        generation, 'member-foo', 'sticky', assignment.encode())
     assert assignor.on_assignment.call_count == 1
     assignor.on_assignment.assert_called_with(assignment, generation)
-
-
-def test_subscription_listener(mocker, coordinator):
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    coordinator._subscription.subscribe(
-        topics=['foobar'],
-        listener=listener)
-
-    coordinator._on_join_prepare(0, 'member-foo')
-    assert listener.on_partitions_revoked.call_count == 1
-    listener.on_partitions_revoked.assert_called_with(set([]))
-
-    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
-    assert listener.on_partitions_assigned.call_count == 1
-    listener.on_partitions_assigned.assert_called_with({TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
-
-
-def test_subscription_listener_failure(mocker, coordinator):
-    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    coordinator._subscription.subscribe(
-        topics=['foobar'],
-        listener=listener)
-
-    # exception raised in listener should not be re-raised by coordinator
-    listener.on_partitions_revoked.side_effect = Exception('crash')
-    coordinator._on_join_prepare(0, 'member-foo')
-    assert listener.on_partitions_revoked.call_count == 1
-
-    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._on_join_complete(
-        0, 'member-foo', 'roundrobin', assignment.encode())
-    assert listener.on_partitions_assigned.call_count == 1
 
 
 def test_perform_assignment(mocker, coordinator):
@@ -209,9 +185,159 @@ def test_perform_assignment(mocker, coordinator):
     assert ret == assignments
 
 
-def test_on_join_prepare(coordinator):
+def test_on_join_prepare_async_invokes_sync_listener(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert listener.on_partitions_revoked.call_count == 1
+    listener.on_partitions_revoked.assert_called_with(set())
+
+
+def test_on_join_prepare_async_awaits_async_listener(coordinator):
+    """An AsyncConsumerRebalanceListener subclass is accepted and awaited."""
+    coordinator.config['enable_auto_commit'] = False
+    calls = []
+
+    class MyListener(AsyncConsumerRebalanceListener):
+        async def on_partitions_revoked(self, revoked):
+            calls.append(('revoked', revoked))
+        async def on_partitions_assigned(self, assigned):
+            calls.append(('assigned', assigned))
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=MyListener())
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert calls == [('revoked', set())]
+
+
+def test_subscribe_rejects_non_listener(coordinator):
+    """Anything that isn't a (Async)ConsumerRebalanceListener is rejected."""
+    with pytest.raises(TypeError):
+        coordinator._subscription.subscribe(
+            topics=['foobar'], listener=lambda revoked: None)
+
+
+def test_slow_rebalance_listener_logs_warning(mocker, coordinator):
+    """A listener call exceeding the threshold logs a named warning."""
+    coordinator.config['enable_auto_commit'] = False
+
+    class SlowListener(ConsumerRebalanceListener):
+        def on_partitions_revoked(self, revoked):
+            time.sleep(0.01)  # well under the threshold; shouldn't warn
+        def on_partitions_assigned(self, assigned):
+            pass
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=SlowListener())
+    log_warning = mocker.patch('kafka.coordinator.consumer.log.warning')
+
+    # Below threshold: no warning.
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    assert not any(
+        'Rebalance listener' in str(call.args[0])
+        for call in log_warning.call_args_list)
+
+    # Above threshold: drop the threshold to a tiny value and re-run.
+    mocker.patch.object(coordinator, '_REBALANCE_LISTENER_WARN_SECS', 0.001)
+    log_warning.reset_mock()
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    matching = [c for c in log_warning.call_args_list
+                if 'Rebalance listener' in str(c.args[0])]
+    assert len(matching) == 1
+    # log.warning(fmt, listener_class, method, group, elapsed)
+    _fmt, listener_class, method, _group, _elapsed = matching[0].args
+    assert listener_class == 'SlowListener'
+    assert method == 'on_partitions_revoked'
+
+
+def test_on_join_prepare_async_listener_exception_is_caught(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_revoked.side_effect = RuntimeError('listener crash')
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+
+    # Should not raise; should still complete the post-listener cleanup.
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    assert coordinator._is_leader is False
+
+
+def test_on_join_prepare_async_skips_auto_commit_when_disabled(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = False
+    spy = mocker.spy(coordinator, '_commit_offsets_sync_async')
     coordinator._subscription.subscribe(topics=['foobar'])
-    coordinator._on_join_prepare(0, 'member-foo')
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert spy.call_count == 0
+
+
+def test_on_join_prepare_async_runs_auto_commit_when_enabled(mocker, coordinator):
+    coordinator.config['enable_auto_commit'] = True
+    async def _noop(*args, **kwargs):
+        return None
+    spy = mocker.patch.object(coordinator, '_commit_offsets_sync_async',
+                              side_effect=_noop)
+    coordinator._subscription.subscribe(topics=['foobar'])
+
+    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+
+    assert spy.call_count == 1
+
+
+def test_on_join_complete_async_invokes_sync_listener(mocker, coordinator):
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
+
+    assert listener.on_partitions_assigned.call_count == 1
+    listener.on_partitions_assigned.assert_called_with(
+        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
+
+
+def test_on_join_complete_async_awaits_async_listener(coordinator):
+    """An AsyncConsumerRebalanceListener subclass is accepted and awaited."""
+    calls = []
+
+    class MyListener(AsyncConsumerRebalanceListener):
+        async def on_partitions_revoked(self, revoked):
+            calls.append(('revoked', revoked))
+        async def on_partitions_assigned(self, assigned):
+            calls.append(('assigned', assigned))
+
+    coordinator._subscription.subscribe(topics=['foobar'], listener=MyListener())
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
+
+    assert calls == [(
+        'assigned',
+        {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})]
+
+
+def test_on_join_complete_async_listener_exception_is_caught(mocker, coordinator):
+    listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+    listener.on_partitions_assigned.side_effect = RuntimeError('listener crash')
+    coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+    assignor = RoundRobinPartitionAssignor()
+    coordinator._assignors = {assignor.name: assignor}
+    assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
+
+    # Should not raise.
+    coordinator._manager.run(
+        coordinator._on_join_complete_async,
+        12, 'member-foo', 'roundrobin', assignment.encode())
 
 
 def test_need_rejoin(coordinator):
@@ -669,6 +795,418 @@ def test_handle_offset_fetch_response(coordinator, offsets, response, error, dea
     assert coordinator.coordinator_id is (None if dead else 0)
 
 
+def _join_response(error_code=0, generation_id=1, member_id='member-1',
+                   leader='member-1', protocol_name='range', members=None):
+    return JoinGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        generation_id=generation_id,
+        protocol_name=protocol_name,
+        leader=leader,
+        member_id=member_id,
+        members=members or [])
+
+
+@pytest.mark.parametrize('error_code,error_type,coordinator_dead,resets_member_id,resets_generation', [
+    (0, None, False, False, False),
+    (Errors.CoordinatorLoadInProgressError.errno, Errors.CoordinatorLoadInProgressError, False, False, False),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True),
+    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, False),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, False),
+    (Errors.InconsistentGroupProtocolError.errno, Errors.InconsistentGroupProtocolError, False, False, False),
+    (Errors.InvalidSessionTimeoutError.errno, Errors.InvalidSessionTimeoutError, False, False, False),
+    (Errors.InvalidGroupIdError.errno, Errors.InvalidGroupIdError, False, False, False),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, False),
+    (Errors.GroupMaxSizeReachedError.errno, Errors.GroupMaxSizeReachedError, False, False, False),
+    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, False),
+    (Errors.MemberIdRequiredError.errno, Errors.MemberIdRequiredError, False, True, True),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, False),
+    # Unmapped error code: should raise the corresponding generic error.
+    (Errors.UnknownError.errno, Errors.UnknownError, False, False, False),
+])
+def test_process_join_group_response(request, coordinator, error_code, error_type,
+                                     coordinator_dead, resets_member_id,
+                                     resets_generation):
+    # Avoid LeaveGroup attempt during teardown (close() only sends LeaveGroup
+    # when state is not UNJOINED).
+    request.addfinalizer(lambda: setattr(coordinator, 'state', MemberState.UNJOINED))
+    coordinator.coordinator_id = 0
+    coordinator.state = MemberState.REBALANCING
+    coordinator._generation = Generation(7, 'old-member', 'range')
+
+    response = _join_response(
+        error_code=error_code,
+        generation_id=42,
+        member_id='broker-assigned' if error_code == Errors.MemberIdRequiredError.errno else 'member-1')
+
+    if error_type is None:
+        ret = coordinator._process_join_group_response(response, send_time=time.monotonic())
+        assert ret is response
+        # State mutation: generation updated from response.
+        assert coordinator._generation.generation_id == 42
+        assert coordinator._generation.member_id == 'member-1'
+        assert coordinator._generation.protocol == 'range'
+        assert coordinator.coordinator_id == 0
+    else:
+        with pytest.raises(error_type):
+            coordinator._process_join_group_response(response, send_time=time.monotonic())
+        if coordinator_dead:
+            assert coordinator.coordinator_id is None
+        else:
+            assert coordinator.coordinator_id == 0
+        if resets_member_id:
+            # MemberIdRequired captures the broker-assigned id; UnknownMemberId
+            # clears it back to UNKNOWN_MEMBER_ID.
+            if error_code == Errors.MemberIdRequiredError.errno:
+                assert coordinator._generation.member_id == 'broker-assigned'
+            else:
+                assert coordinator._generation.member_id == ''
+        if resets_generation:
+            assert coordinator._generation.generation_id == -1
+
+
+def test_process_join_group_response_state_not_rebalancing(coordinator):
+    """Defensive: if state changed underneath us, raise UnjoinedGroupException."""
+    coordinator.coordinator_id = 0
+    coordinator.state = MemberState.UNJOINED
+    response = _join_response(error_code=0)
+    with pytest.raises(UnjoinedGroupException):
+        coordinator._process_join_group_response(response, send_time=time.monotonic())
+
+
+@pytest.mark.parametrize('error_code,error_type,coordinator_dead,resets_generation,requests_rejoin', [
+    (0, None, False, False, False),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, True),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, True),
+    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, True),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True),
+    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError, False, True, True),
+    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, True),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, True),
+    (Errors.UnknownError.errno, Errors.UnknownError, False, False, True),
+])
+def test_process_sync_group_response(request, coordinator, error_code, error_type,
+                                     coordinator_dead, resets_generation,
+                                     requests_rejoin):
+    request.addfinalizer(lambda: setattr(coordinator, 'state', MemberState.UNJOINED))
+    coordinator.coordinator_id = 0
+    coordinator._generation = Generation(7, 'member-1', 'range')
+    coordinator.rejoin_needed = False
+
+    assignment_bytes = b'\x00\x01\x02'
+    response = SyncGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        assignment=assignment_bytes)
+
+    if error_type is None:
+        ret = coordinator._process_sync_group_response(response, send_time=time.monotonic())
+        assert ret == assignment_bytes
+        assert coordinator.rejoin_needed is False
+        assert coordinator.coordinator_id == 0
+    else:
+        with pytest.raises(error_type):
+            coordinator._process_sync_group_response(response, send_time=time.monotonic())
+        if requests_rejoin:
+            assert coordinator.rejoin_needed is True
+        if coordinator_dead:
+            assert coordinator.coordinator_id is None
+        if resets_generation:
+            assert coordinator._generation.generation_id == -1
+            assert coordinator._generation.member_id == ''
+
+
+def _join_response_object(error_code=0, generation_id=42,
+                           member_id='member-1', leader='member-1',
+                           protocol_name='range', members=None):
+    return JoinGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        generation_id=generation_id,
+        protocol_type='consumer',
+        protocol_name=protocol_name,
+        leader=leader,
+        member_id=member_id,
+        members=members or [])
+
+
+def _sync_response_object(error_code=0, assignment=b''):
+    return SyncGroupResponse(
+        throttle_time_ms=0,
+        error_code=error_code,
+        protocol_type='consumer',
+        protocol_name='range',
+        assignment=assignment)
+
+
+def test_do_join_and_sync_async_follower(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # Default broker.broker_version=(4,2) → JoinGroup v9, SyncGroup v5.
+    # Follower: leader != our member_id.
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    expected_assignment = ConsumerProtocolAssignment(
+        0, [('foobar', [0, 1])], b'').encode()
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=expected_assignment))
+
+    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+    assert result == expected_assignment
+    assert seeded_coord._generation.generation_id == 42
+    assert seeded_coord._generation.member_id == 'member-1'
+    assert seeded_coord._generation.protocol == 'range'
+    assert seeded_coord.state == MemberState.REBALANCING
+
+
+def test_do_join_and_sync_async_leader(request, mocker, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # Leader: response.leader == response.member_id. Members include the leader.
+    member_metadata = ConsumerProtocolSubscription(0, ['foobar'], b'').encode()
+    member = JoinGroupResponse.JoinGroupResponseMember(
+        member_id='member-1',
+        group_instance_id=None,
+        metadata=member_metadata)
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='member-1', member_id='member-1', members=[member]))
+
+    # Capture the SyncGroup request to verify the leader sent assignments.
+    captured = {}
+
+    def sync_handler(api_key, api_version, correlation_id, request_bytes):
+        captured['request'] = SyncGroupRequest.decode(
+            request_bytes, version=api_version, header=True)
+        return _sync_response_object(
+            assignment=ConsumerProtocolAssignment(
+                0, [('foobar', [0, 1])], b'').encode())
+
+    broker.respond_fn(SyncGroupRequest, sync_handler)
+
+    # Spy on _perform_assignment to confirm the leader path ran the assignor.
+    spy = mocker.spy(seeded_coord, '_perform_assignment')
+
+    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+    assert spy.call_count == 1
+    leader_id, protocol_name, members_arg = spy.call_args[0]
+    assert leader_id == 'member-1'
+    assert protocol_name == 'range'
+    assert len(members_arg) == 1
+    assert members_arg[0].member_id == 'member-1'
+    # SyncGroup carried a non-empty assignment list.
+    assert len(captured['request'].assignments) >= 1
+    # Returned the assignment bytes the broker sent back.
+    assert result == ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()
+
+
+def test_do_join_and_sync_async_coordinator_unknown(request, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.coordinator_id = None  # force coordinator_unknown
+    with pytest.raises(Errors.CoordinatorNotAvailableError):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+@pytest.mark.parametrize('error_code,error_type', [
+    (Errors.CoordinatorLoadInProgressError.errno, Errors.CoordinatorLoadInProgressError),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError),
+    (Errors.MemberIdRequiredError.errno, Errors.MemberIdRequiredError),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError),
+])
+def test_do_join_and_sync_async_join_error(request, broker, seeded_coord,
+                                            error_code, error_type):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.respond(JoinGroupRequest, _join_response_object(error_code=error_code))
+    with pytest.raises(error_type):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+@pytest.mark.parametrize('error_code,error_type', [
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError),
+    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError),
+])
+def test_do_join_and_sync_async_sync_error(request, broker, seeded_coord,
+                                            error_code, error_type):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    # JoinGroup succeeds (follower) so we get to SyncGroup.
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1'))
+    broker.respond(SyncGroupRequest, _sync_response_object(error_code=error_code))
+    with pytest.raises(error_type):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+    # All sync errors flip rejoin_needed via request_rejoin().
+    assert seeded_coord.rejoin_needed is True
+
+
+def test_join_group_async_no_rejoin_returns_true(request, mocker, broker, seeded_coord):
+    """need_rejoin() False -> short-circuits to True without any requests."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    mocker.patch.object(seeded_coord, 'need_rejoin', return_value=False)
+    seeded_coord.state = MemberState.STABLE
+
+    before = broker.requests_received
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert broker.requests_received == before
+
+
+def test_join_group_async_happy_path_follower(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+    assert seeded_coord.rejoin_needed is False
+    assert seeded_coord.rejoining is False
+    assert seeded_coord._heartbeat_enabled is True
+
+
+def test_join_group_async_retries_on_retriable_error(request, broker, seeded_coord):
+    """First JoinGroup fails with RebalanceInProgress; loop retries and succeeds."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        error_code=Errors.RebalanceInProgressError.errno))
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+
+
+def test_join_group_async_raises_non_retriable(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        error_code=Errors.GroupAuthorizationFailedError.errno))
+
+    with pytest.raises(Errors.GroupAuthorizationFailedError):
+        seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+
+def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
+        request, broker, seeded_coord):
+    """Short consumer.poll(timeout_ms=N) should return False instead of
+    hanging when the broker is slow to respond to JoinGroup; the in-flight
+    task is cached so the next poll re-awaits it instead of sending a fresh
+    JoinGroup.
+
+    Regression for the test_group integration hang where 4 consumers tearing
+    down concurrently left one stuck awaiting JoinGroup while the broker
+    waited for the others to rejoin. Both properties are necessary:
+        - timer must fire (else the user thread hangs and never sees stop)
+        - in-flight task must be cached (else next poll sends a duplicate
+          JoinGroup, confusing the broker's rebalance state)
+    """
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+
+    # JoinGroup response future controlled by the test. Hangs until released.
+    join_response_pending = Future()
+    join_request_count = [0]
+
+    async def slow_join_handler(api_key, api_version, correlation_id, request_bytes):
+        join_request_count[0] += 1
+        # Block until the test releases the future, simulating a broker
+        # that's holding JoinGroup waiting for other members to rejoin.
+        await join_response_pending
+        return _join_response_object(
+            leader='leader-x', member_id='member-1', members=[])
+
+    broker.respond_fn(JoinGroupRequest, slow_join_handler)
+
+    # First call: 50ms timer must expire and return False quickly. If the
+    # await on JoinGroup is not timer-aware, this call hangs until the
+    # connection's request_timeout_ms fires (~5s in the fixture).
+    start = time.monotonic()
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    elapsed = time.monotonic() - start
+    assert result is False
+    assert elapsed < 1.0, (
+        'join_group_async did not respect timer.timeout_ms; took %.2fs'
+        % elapsed)
+    assert join_request_count[0] == 1
+
+    # Second call: broker is still hanging. Should reuse the cached
+    # in-flight task instead of sending a duplicate JoinGroup.
+    start = time.monotonic()
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    elapsed = time.monotonic() - start
+    assert result is False
+    assert elapsed < 1.0
+    assert join_request_count[0] == 1, (
+        'duplicate JoinGroup sent; cached task was not reused')
+
+    # Release the broker; next call should complete using the cached task.
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+    join_response_pending.success(None)
+
+    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    assert result is True
+    assert join_request_count[0] == 1, (
+        'duplicate JoinGroup sent on the success path')
+    assert seeded_coord.state == MemberState.STABLE
+
+
+@pytest.mark.parametrize("broker", [(0, 8, 0)], indirect=True)
+def test_join_group_async_unsupported_version(broker, coordinator):
+    with pytest.raises(Errors.UnsupportedVersionError):
+        coordinator._manager.run(coordinator.join_group_async, None)
+
+
+def test_ensure_active_group_async_happy_path(request, broker, seeded_coord):
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord._manager.run(seeded_coord.ensure_active_group_async, 5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+    # Heartbeat loop coroutine was scheduled.
+    assert seeded_coord._heartbeat_loop_future is not None
+
+
+def test_ensure_active_group_sync_facade(request, broker, seeded_coord):
+    """The sync ensure_active_group facade dispatches via manager.run."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    result = seeded_coord.ensure_active_group(timeout_ms=5000)
+
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+
+
 def test_heartbeat(mocker, coordinator):
     coordinator.coordinator_id = 0
     coordinator.state = MemberState.STABLE
@@ -732,16 +1270,3 @@ def test_lookup_coordinator_failure(mocker, coordinator):
                         return_value=Future().failure(Exception('foobar')))
     future = coordinator.lookup_coordinator()
     assert future.failed()
-
-
-def test_ensure_active_group(mocker, coordinator):
-    coordinator._subscription.subscribe(topics=['foobar'])
-    mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
-    mocker.patch.object(coordinator, '_send_join_group_request', return_value=Future().success(True))
-    mocker.patch.object(coordinator, 'need_rejoin', side_effect=[True, False])
-    mocker.patch.object(coordinator, '_on_join_complete')
-    mocker.patch.object(coordinator, '_heartbeat_thread')
-
-    coordinator.ensure_active_group()
-
-    coordinator._send_join_group_request.assert_called_once_with()
