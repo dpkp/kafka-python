@@ -195,8 +195,12 @@ class Fetcher:
         for fut in waited_on:
             fut.add_both(_wake)
 
+        # Hold _client._lock so we serialize with HeartbeatThread, which
+        # also drives _net.poll under this lock. Drops once Phase D
+        # retires HeartbeatThread.
         try:
-            self._manager.run(self._manager.wait_for, wakeup, timeout_ms)
+            with self._client._lock:
+                self._manager.run(self._manager.wait_for, wakeup, timeout_ms)
         except Errors.KafkaTimeoutError:
             pass
 
