@@ -730,6 +730,9 @@ class KafkaConsumer:
         if self.config['group_id'] is not None:
             poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
 
+        # turn the IO crank here until we have permanent io thread
+        self._client.poll(timeout_ms=0)
+
         return self._fetcher.fetch_records(
             max_records, update_offsets=update_offsets, timeout_ms=poll_timeout_ms)
 
