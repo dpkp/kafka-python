@@ -40,6 +40,7 @@ def test_admin(request, sasl_kafka):
     admin = KafkaAdminClient(**client_params(sasl_kafka, 'admin'))
     admin.create_topics([NewTopic(topic_name, 1, 1)])
     assert topic_name in sasl_kafka.get_topic_names()
+    admin.close()
 
 
 def test_produce_and_consume(request, sasl_kafka):
@@ -53,6 +54,7 @@ def test_produce_and_consume(request, sasl_kafka):
         future = producer.send(topic_name, value=encoded_msg, partition=i % 2)
         messages_and_futures.append((encoded_msg, future))
     producer.flush()
+    producer.close()
 
     for (msg, f) in messages_and_futures:
         assert f.succeeded()
@@ -67,6 +69,7 @@ def test_produce_and_consume(request, sasl_kafka):
 
     assert_message_count(messages[0], 50)
     assert_message_count(messages[1], 50)
+    consumer.close()
 
 
 def test_client(request, sasl_kafka):
@@ -85,3 +88,4 @@ def test_client(request, sasl_kafka):
         raise future.exception
     result = future.value
     assert topic_name in [t[1] for t in result.topics]
+    client.close()
