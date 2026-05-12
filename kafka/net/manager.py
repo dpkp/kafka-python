@@ -4,7 +4,6 @@ import inspect
 import random
 import socket
 import ssl
-import threading
 import time
 
 from .inet import create_connection
@@ -78,9 +77,6 @@ class KafkaConnectionManager:
         self.broker_version_data = None
         self._bootstrap_future = None
         self._bootstrap_wakeup = WakeupNotifier(self._net)
-        self._io_thread = None
-        self._pending_waiters = {}  # event -> state dict, for pending run() waiters
-        self._pending_waiters_lock = threading.Lock()
         if self.config['metrics']:
             self._sensors = KafkaManagerMetrics(
                 self.config['metrics'], self.config['metric_group_prefix'], self._conns)
@@ -348,34 +344,6 @@ class KafkaConnectionManager:
             for conn in list(self._conns.values()):
                 conn.close()
             self.cluster.close()
-            self.stop(timeout_ms)
-
-    def start(self):
-        """Spawn a daemon IO thread that owns the event loop. Idempotent."""
-        if self._io_thread is not None:
-            return
-        t = threading.Thread(target=self._net.run_forever,
-                             name='kafka-io-%s' % self.config['client_id'],
-                             daemon=True)
-        self._io_thread = t
-        t.start()
-
-    def stop(self, timeout_ms=None):
-        """Signal the IO thread to exit and join it. Fails any pending run()
-        waiters with KafkaConnectionError. Idempotent."""
-        t = self._io_thread
-        if t is None:
-            self._net.drain()
-            return
-        self._io_thread = None
-        self._net.stop()
-        t.join(timeout_ms / 1000 if timeout_ms is not None else None)
-        with self._pending_waiters_lock:
-            waiters = list(self._pending_waiters.items())
-            self._pending_waiters.clear()
-        for event, state in waiters:
-            state['exception'] = Errors.KafkaConnectionError('Manager stopped')
-            event.set()
 
     async def wait_for(self, future, timeout_ms):
         """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
@@ -409,24 +377,6 @@ class KafkaConnectionManager:
                 except ValueError:
                     pass
 
-    async def _invoke(self, coro, args):
-        """Invoke coro/awaitable/function and fully resolve the result.
-
-        If the result is itself a Future (e.g. send() returning an unresolved
-        Future), it is awaited so callers receive the resolved value.
-        """
-        if inspect.iscoroutinefunction(coro):
-            result = await coro(*args)
-        elif hasattr(coro, '__await__'):
-            result = await coro
-        else:
-            result = coro(*args)
-        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
-            result = await result
-        while isinstance(result, Future):
-            result = await result
-        return result
-
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.
 
@@ -434,16 +384,7 @@ class KafkaConnectionManager:
 
         Returns: Future
         """
-        if hasattr(coro, '__await__'):
-            assert not args, 'initiated coroutine does not accept args'
-        future = Future()
-        async def wrapper():
-            try:
-                future.success(await self._invoke(coro, args))
-            except BaseException as exc:
-                future.failure(exc)
-        self._net.call_soon_threadsafe(wrapper)
-        return future
+        return self._net.call_soon_with_future(coro, *args)
 
     def run(self, coro, *args):
         """Schedules coro on the event loop, blocks until complete, returns value or raises.
@@ -455,28 +396,4 @@ class KafkaConnectionManager:
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
         """
-        if self._io_thread is None:
-            future = self.call_soon(coro, *args)
-            self._net.poll(future=future)
-            if future.exception is not None:
-                raise future.exception
-            return future.value
-
-        event = threading.Event()
-        state = {'value': None, 'exception': None}
-        async def waiter():
-            try:
-                state['value'] = await self._invoke(coro, args)
-            except BaseException as exc:
-                state['exception'] = exc
-            finally:
-                with self._pending_waiters_lock:
-                    self._pending_waiters.pop(event, None)
-                event.set()
-        with self._pending_waiters_lock:
-            self._pending_waiters[event] = state
-        self._net.call_soon_threadsafe(waiter)
-        event.wait()
-        if state['exception'] is not None:
-            raise state['exception']
-        return state['value']
+        return self._net.run(coro, *args)

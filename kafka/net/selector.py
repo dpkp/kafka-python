@@ -8,7 +8,9 @@ import socket
 import threading
 import time
 
+import kafka.errors as Errors
 from kafka.future import Future
+from kafka.version import __version__
 
 
 log = logging.getLogger(__name__)
@@ -117,6 +119,7 @@ class Task:
 
 class NetworkSelector:
     DEFAULT_CONFIG = {
+        'client_id': 'kafka-python-' + __version__,
         'selector': selectors.DefaultSelector,
         # Warn (or, in debug mode, raise) when a single ready-task step takes
         # longer than this many seconds. A coroutine that hits this threshold
@@ -163,13 +166,12 @@ class NetworkSelector:
         self._wakeup_r.setblocking(False)
         self._wakeup_w.setblocking(False)
         self._selector.register(self._wakeup_r, selectors.EVENT_READ, (None, None))
+        self._io_thread = None
+        self._pending_waiters = {}  # event -> state dict, for pending run() waiters
+        self._pending_waiters_lock = threading.Lock()
 
     def __str__(self):
         return '<NetworkSelector ready=%d scheduled=%d waiting=%d>' % (len(self._ready), len(self._scheduled), len(self._selector.get_map()))
-
-    def run(self):
-        while self._scheduled or self._ready:
-            self._poll_once()
 
     def run_forever(self):
         """Run the event loop until stop() is called. Intended to be driven by
@@ -178,23 +180,71 @@ class NetworkSelector:
         self._stop = False
         while not self._stop:
             self._poll_once()
+        self.drain()
 
-    def stop(self):
+    def start(self):
+        """Spawn a daemon IO thread that owns the event loop. Idempotent."""
+        if self._io_thread is not None:
+            return
+        t = threading.Thread(target=self.run_forever,
+                             name='kafka-io-%s' % self.config['client_id'],
+                             daemon=True)
+        self._io_thread = t
+        t.start()
+
+    def stop(self, timeout_ms=None):
         """Signal run_forever() to exit. Safe to call from any thread."""
+        if self._stop or self._io_thread is None:
+            return
         self._stop = True
         self.wakeup()
+        self._io_thread.join(timeout_ms / 1000 if timeout_ms is not None else None)
+        self._io_thread = None
+        with self._pending_waiters_lock:
+            waiters = list(self._pending_waiters.items())
+            self._pending_waiters.clear()
+        for event, state in waiters:
+            state['exception'] = Errors.KafkaConnectionError('Manager stopped')
+            event.set()
 
-    def run_until_done(self, task_or_future):
-        if not isinstance(task_or_future, (Future, Task)):
-            task_or_future = Task(task_or_future)
-        if isinstance(task_or_future, Task):
-            self.call_soon(task_or_future)
-        while not task_or_future.is_done:
-            self._poll_once()
-        return task_or_future
+    def run(self, coro, *args):
+        """Schedules coro on the event loop, blocks until complete, returns value or raises.
 
-    def drain(self):
-        while self._ready:
+        If an IO thread is running (via start()), the caller thread blocks on
+        a cross-thread Event while the coroutine runs on the IO thread. Safe
+        to call concurrently from multiple caller threads.
+
+        If no IO thread is running, falls back to driving the loop on the
+        caller thread (legacy behavior).
+        """
+        if self._io_thread is None:
+            future = self.call_soon_with_future(coro, *args)
+            self.poll(future=future)
+            if future.exception is not None:
+                raise future.exception
+            return future.value
+
+        event = threading.Event()
+        state = {'value': None, 'exception': None}
+        async def waiter():
+            try:
+                state['value'] = await self._invoke(coro, *args)
+            except BaseException as exc:
+                state['exception'] = exc
+            finally:
+                with self._pending_waiters_lock:
+                    self._pending_waiters.pop(event, None)
+                event.set()
+        with self._pending_waiters_lock:
+            self._pending_waiters[event] = state
+        self.call_soon_threadsafe(waiter)
+        event.wait()
+        if state['exception'] is not None:
+            raise state['exception']
+        return state['value']
+
+    def drain(self, scheduled=False):
+        while self._ready or (scheduled and self._scheduled):
             self._poll_once()
 
     def call_at(self, when, task):
@@ -217,6 +267,41 @@ class NetworkSelector:
         self._ready.append(task)
         self._pending_tasks.add(task)
         return task
+
+    def call_soon_threadsafe(self, callback):
+        task = self.call_soon(callback)
+        self.wakeup()
+        return task
+
+    def call_soon_with_future(self, coro, *args):
+        if hasattr(coro, '__await__'):
+            assert not args, 'initiated coroutine does not accept args'
+        future = Future()
+        async def wrapper():
+            try:
+                future.success(await self._invoke(coro, *args))
+            except BaseException as exc:
+                future.failure(exc)
+        self.call_soon_threadsafe(wrapper)
+        return future
+
+    async def _invoke(self, coro, *args):
+        """Invoke coro/awaitable/function and fully resolve the result.
+
+        If the result is itself a Future (e.g. send() returning an unresolved
+        Future), it is awaited so callers receive the resolved value.
+        """
+        if inspect.iscoroutinefunction(coro):
+            result = await coro(*args)
+        elif hasattr(coro, '__await__'):
+            result = await coro
+        else:
+            result = coro(*args)
+        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
+            result = await result
+        while isinstance(result, Future):
+            result = await result
+        return result
 
     def unschedule(self, task):
         if task.scheduled_at is not None:
@@ -402,11 +487,6 @@ class NetworkSelector:
         except (BlockingIOError, OSError):
             pass
 
-    def call_soon_threadsafe(self, callback):
-        task = self.call_soon(callback)
-        self.wakeup()
-        return task
-
     def _rebuild_wakeup_socketpair(self):
         for s in (self._wakeup_r, self._wakeup_w):
             try:
@@ -423,7 +503,12 @@ class NetworkSelector:
         self._selector.register(self._wakeup_r, selectors.EVENT_READ, (None, None))
 
     def close(self):
+        if self._closed:
+            return
         self._closed = True
+        if self._io_thread is not None:
+            self.stop()
+        self.drain()
         for s in (self._wakeup_r, self._wakeup_w):
             try:
                 self._selector.unregister(s)

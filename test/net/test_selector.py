@@ -161,16 +161,16 @@ class TestNetworkSelector:
         net.call_soon(task)
         assert len(net._ready) == 1
 
-    def test_run_simple(self):
+    def test_drain_simple(self):
         net = NetworkSelector()
         results = []
         async def task():
             results.append('ran')
         net.call_soon(task)
-        net.run()
+        net.drain()
         assert results == ['ran']
 
-    def test_run_multiple_tasks(self):
+    def test_drain_multiple_tasks(self):
         net = NetworkSelector()
         results = []
         async def task(n):
@@ -178,7 +178,7 @@ class TestNetworkSelector:
         net.call_soon(task(1))
         net.call_soon(task(2))
         net.call_soon(task(3))
-        net.run()
+        net.drain()
         assert results == [1, 2, 3]
 
     def test_call_later(self):
@@ -188,7 +188,7 @@ class TestNetworkSelector:
             results.append('delayed')
         net.call_later(0.01, task)
         assert len(net._scheduled) == 1
-        net.run()
+        net.drain(scheduled=True)
         assert results == ['delayed']
 
     def test_call_at(self):
@@ -198,25 +198,15 @@ class TestNetworkSelector:
             results.append('at')
         when = time.monotonic() + 0.01
         net.call_at(when, task)
-        net.run()
+        net.drain(scheduled=True)
         assert results == ['at']
 
-    def test_run_until_done_with_task(self):
+    def test_run_with_task(self):
         net = NetworkSelector()
         async def task():
             return 42
-        result = net.run_until_done(task)
-        assert result.is_done
-        assert result.result == 42
-
-    def test_run_until_done_with_future(self):
-        net = NetworkSelector()
-        f = Future()
-        async def resolve():
-            f.success('hello')
-        net.call_soon(resolve)
-        net.run_until_done(f)
-        assert f.value == 'hello'
+        result = net.run(task)
+        assert result == 42
 
     def test_sleep(self):
         net = NetworkSelector()
@@ -243,7 +233,7 @@ class TestNetworkSelector:
         async def task():
             await net.sleep(0.01)
             results.append('after_sleep')
-        net.run_until_done(task)
+        net.run(task)
         assert results == ['after_sleep']
 
     def test_poll_with_future(self):
@@ -371,7 +361,7 @@ class TestNetworkSelector:
             val = await f
             results.append(val)
 
-        net.run_until_done(waiter)
+        net.run(waiter)
         assert results == [99]
 
     def test_await_future_already_failed(self):
@@ -386,7 +376,7 @@ class TestNetworkSelector:
             except ValueError as e:
                 errors.append(str(e))
 
-        net.run_until_done(waiter)
+        net.run(waiter)
         assert errors == ['oops']
 
     def test_wakeup(self):
@@ -448,7 +438,7 @@ class TestNetworkSelector:
             val = await f
             results.append(val)
 
-        net.run_until_done(task)
+        net.run(task)
         assert results == [42]
 
     def test_await_future_pending(self):

@@ -219,10 +219,11 @@ class KafkaAdminClient(
         )
         # Goal: migrate all self._client calls -> self._manager (skipping compat layer)
         self._manager = self._client._manager
+        self._net = self._manager._net
 
         # Run all IO on a dedicated background thread; public admin methods
         # block on cross-thread Events via self._manager.run(...).
-        self._manager.start()
+        self._net.start()
 
         # Bootstrap on __init__
         self._manager.bootstrap(self.config['bootstrap_timeout_ms'])
@@ -237,9 +238,10 @@ class KafkaAdminClient(
             log.info("KafkaAdminClient already closed.")
             return
 
+        self._closed = True
         self._metrics.close()
         self._client.close()
-        self._closed = True
+        self._net.stop()
         log.debug("KafkaAdminClient is now closed.")
 
     def _validate_timeout(self, timeout_ms):
@@ -261,7 +263,7 @@ class KafkaAdminClient(
             controller_id = response.controller_id
             if controller_id == -1:
                 log.warning("Controller ID not available, got -1")
-                await self._manager._net.sleep(1)
+                await self._net.sleep(1)
                 continue
             return controller_id
         else:
