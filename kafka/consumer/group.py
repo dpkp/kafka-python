@@ -384,6 +384,7 @@ class KafkaConsumer:
         self._client = self.config['kafka_client'](metrics=self._metrics, **self.config)
         self._manager = self._client._manager
         self._cluster = self._manager.cluster
+        self._net = self._manager._net
 
         # If api_version was not passed explicitly, bootstrap to auto-discover
         # it. bootstrap is passed as a deferred coroutine so that once the IO
@@ -620,11 +621,11 @@ class KafkaConsumer:
         """
         if self._cluster.metadata_refresh_in_progress:
             future = self._cluster.request_update()
-            self._manager.run(self._manager.wait_for, future, None)
+            self._net.run(self._manager.wait_for, future, None)
         stash = self._cluster.need_all_topic_metadata
         self._cluster.need_all_topic_metadata = True
         future = self._cluster.request_update()
-        self._manager.run(self._manager.wait_for, future, None)
+        self._net.run(self._manager.wait_for, future, None)
         self._cluster.need_all_topic_metadata = stash
 
     def topics(self):
@@ -760,7 +761,7 @@ class KafkaConsumer:
         reset_task = self._fetcher.reset_offsets_if_needed(timeout_ms=timer.timeout_ms)
         if reset_task is not None and not timer.expired:
             try:
-                self._manager.run(self._manager.wait_for, reset_task, timer.timeout_ms)
+                self._net.run(self._manager.wait_for, reset_task, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 pass
         position = self._subscription.assignment[partition].position

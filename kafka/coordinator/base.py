@@ -141,6 +141,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self._client = client
         self._manager = client._manager
         self._cluster = self._manager.cluster
+        self._net = self._manager._net
         self.heartbeat = Heartbeat(**self.config)
         self._heartbeat_wakeup = WakeupNotifier(self._manager._net)
         self._heartbeat_loop_future = None
@@ -292,7 +293,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         Returns: True is coordinator found before timeout_ms, else False
         """
         with self._client._lock:
-            return self._manager.run(self.ensure_coordinator_ready_async, timeout_ms)
+            return self._net.run(self.ensure_coordinator_ready_async, timeout_ms)
 
     async def ensure_coordinator_ready_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_coordinator_ready`.
@@ -413,7 +414,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         Returns: True if group initialized before timeout_ms, else False
         """
         with self._client._lock:
-            return self._manager.run(self.ensure_active_group_async, timeout_ms)
+            return self._net.run(self.ensure_active_group_async, timeout_ms)
 
     async def ensure_active_group_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_active_group`."""
@@ -949,7 +950,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def maybe_leave_group(self, reason=None, timeout_ms=None):
         """Leave the current group and reset local generation/member_id."""
         with self._client._lock:
-            return self._manager.run(self.maybe_leave_group_async, reason, timeout_ms)
+            return self._net.run(self.maybe_leave_group_async, reason, timeout_ms)
 
     async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
         if not self._use_group_apis:
