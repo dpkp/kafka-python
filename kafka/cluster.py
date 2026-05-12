@@ -200,14 +200,12 @@ class ClusterMetadata:
         """
         for topic in topics:
             ensure_valid_topic_name(topic)
-        if set(topics).difference(self._topics):
-            # TODO: handle future when old metadata request is currently in-flight
-            # TODO: handle future when set_topics called multiple times before new request
-            future = self.request_update()
-        else:
-            future = Future().success(self)
+        if not set(topics).difference(self._topics):
+            return Future().success(self)
+        # TODO: handle future when old metadata request is currently in-flight
+        # TODO: handle future when set_topics called multiple times before new request
         self._topics = set(topics)
-        return future
+        return self.request_update()
 
     def add_topic(self, topic):
         """Add a topic to the list of topics tracked via metadata.
@@ -224,8 +222,8 @@ class ClusterMetadata:
         """
         ensure_valid_topic_name(topic)
         if topic in self._topics:
-            # TODO: handle future when old metadata request is currently in-flight
             return Future().success(self)
+        # TODO: handle future when old metadata request is currently in-flight
         self._topics.add(topic)
         return self.request_update()
 
