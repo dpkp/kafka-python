@@ -26,6 +26,7 @@ def test_subscription_copy():
     assert sub == set(['foo'])
     sub.add('fizz')
     assert consumer.subscription() == set(['foo'])
+    consumer.close()
 
 
 def test_assign():
@@ -37,6 +38,7 @@ def test_assign():
         consumer.assign([TopicPartition('foo', 0)])
 
     assert 'foo' in consumer._client.cluster._topics
+    consumer.close()
 
     consumer = KafkaConsumer(api_version=(0, 10, 0))
     assert consumer.assignment() == set()
@@ -48,3 +50,4 @@ def test_assign():
         consumer.subscribe(topics=['foo'])
     consumer.assign([])
     assert consumer.assignment() == set()
+    consumer.close()

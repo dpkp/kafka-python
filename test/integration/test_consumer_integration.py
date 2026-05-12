@@ -187,6 +187,8 @@ def test_kafka_consumer_max_bytes_simple(kafka_consumer_factory, topic, send_mes
         for partition, msgs in poll_res.items():
             for msg in msgs:
                 seen_partitions.add(partition)
+        if seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}:
+            break
 
     # Check that we fetched at least 1 message from both partitions
     assert seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}
