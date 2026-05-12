@@ -174,15 +174,12 @@ class Fetcher:
         if records:
             return records
 
-        # No records yet. Wait for any signal that more work might be
-        # ready: an in-flight fetch completing OR a pending offset-reset
-        # task completing (positions become available, enabling future
-        # fetches). The wait drives the manager's event loop — the
-        # consumer has no background IO thread, so call_soon-scheduled
-        # tasks (resets, sent fetches) only run inside manager.run.
-        # add_both fires synchronously on already-done futures, closing
-        # the race where a response arrives between scheduling and the
-        # wait setup.
+        # No records yet. Block until either an in-flight fetch
+        # completes (records may have arrived) or a pending offset-reset
+        # task completes (positions become available, enabling a fetch
+        # on the next caller iteration). add_both fires synchronously on
+        # already-done futures, closing the race where a future resolves
+        # between scheduling and the wait setup.
         waited_on = list(self._fetch_futures)
         if self._reset_task is not None and not self._reset_task.is_done:
             waited_on.append(self._reset_task)
