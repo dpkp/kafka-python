@@ -1,10 +1,9 @@
-from contextlib import contextmanager
 import platform
 import time
 
 import pytest
 
-from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer, TopicPartition, OffsetAndMetadata
+from kafka import TopicPartition, OffsetAndMetadata
 from test.testutil import env_kafka_version, random_string, maybe_skip_unsupported_compression
 
 
