@@ -89,7 +89,7 @@ class TestKafkaConnectionCheckVersion:
             return f
 
         conn._send_request = mock_send_request
-        net.run_until_done(conn._check_version())
+        net.run(conn._check_version())
         return requests_sent
 
     def test_first_request_is_max_version(self, net):
@@ -367,7 +367,7 @@ class TestKafkaConnectionSasl:
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
-        net.run_until_done(conn._sasl_authenticate())
+        net.run(conn._sasl_authenticate())
         transport.abort.assert_called_once()
 
     def test_sasl_authenticate_mechanism_not_supported(self, net):
@@ -392,7 +392,7 @@ class TestKafkaConnectionSasl:
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
-        net.run_until_done(conn._sasl_authenticate())
+        net.run(conn._sasl_authenticate())
         transport.abort.assert_called_once()
 
     def test_sasl_authenticate_success(self, net):
@@ -428,7 +428,7 @@ class TestKafkaConnectionSasl:
             return f
         conn._send_request = mock_send_request
 
-        net.run_until_done(conn._sasl_authenticate())
+        net.run(conn._sasl_authenticate())
         # Should not have closed -- auth succeeded
         assert conn.initializing  # still initializing, _init_complete not called by _sasl_authenticate
 
@@ -465,5 +465,5 @@ class TestKafkaConnectionSasl:
             return f
         conn._send_request = mock_send_request
 
-        net.run_until_done(conn._sasl_authenticate())
+        net.run(conn._sasl_authenticate())
         transport.abort.assert_called_once()
