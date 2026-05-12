@@ -196,12 +196,8 @@ class Fetcher:
         for fut in waited_on:
             fut.add_both(_wake)
 
-        # Hold _client._lock so we serialize with HeartbeatThread, which
-        # also drives _net.poll under this lock. Drops once Phase D
-        # retires HeartbeatThread.
         try:
-            with self._client._lock:
-                self._net.run(self._manager.wait_for, wakeup, timeout_ms)
+            self._net.run(self._manager.wait_for, wakeup, timeout_ms)
         except Errors.KafkaTimeoutError:
             pass
 
@@ -301,8 +297,7 @@ class Fetcher:
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        with self._client._lock:
-            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -427,8 +422,7 @@ class Fetcher:
             KafkaTimeoutError if timeout_ms provided.
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        with self._client._lock:
-            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets
