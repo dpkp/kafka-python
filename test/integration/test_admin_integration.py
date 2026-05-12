@@ -354,6 +354,7 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     consumer1.assign(partitions)
     for _ in range(600):
         next(consumer1)
+    consumer1.close()
 
     result = kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
     assert result[t0p0] == {"low_watermark": 100, "error_code": 0, "partition_index": t0p0.partition}
@@ -366,6 +367,7 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     all_messages = consumer2.poll(max_records=600, timeout_ms=2000)
     assert sum(len(x) for x in all_messages.values()) == 600 - 100 - 50 - 40 - 30
     assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure there are no delayed messages
+    consumer2.close()
 
     assert not all_messages.get(t0p0, [])
     assert [r.offset for r in all_messages[t0p1]] == list(range(50, 100))
