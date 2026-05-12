@@ -813,6 +813,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self.rejoin_needed = True
 
     def _maybe_start_heartbeat_loop(self):
+        if self._heartbeat_closed:
+            return
         if self._heartbeat_loop_future is None or self._heartbeat_loop_future.is_done:
             heartbeat_log.debug('Starting heartbeat loop')
             self._heartbeat_loop_future = self._manager.call_soon(self._heartbeat_loop)
