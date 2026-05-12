@@ -736,10 +736,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         if node_id is None:
             return Future().failure(Errors.NodeNotReadyError('coordinator'))
 
-        elif not self._client.ready(node_id, metadata_priority=False):
-            e = Errors.NodeNotReadyError(node_id)
-            return Future().failure(e)
-
         max_version = 3
         request = FindCoordinatorRequest(
             key=self.group_id,
