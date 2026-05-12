@@ -204,14 +204,20 @@ class NetworkSelector:
         t.start()
 
     def stop(self, timeout_ms=None):
-        """Signal run_forever() to exit. Safe to call from any thread."""
+        """Signal run_forever() to exit and join the IO thread.
+
+        Blocks the caller until the IO thread terminates (or ``timeout_ms``
+        elapses). Pending cross-thread ``run()`` waiters are failed with
+        KafkaConnectionError. Idempotent; safe to call from any thread
+        other than the IO thread itself.
+        """
         if self._stop or self._io_thread is None:
             return
         self._stop = True
         self.wakeup()
         self._io_thread.join(timeout_ms / 1000 if timeout_ms is not None else None)
         self._io_thread = None
-        self._fail_pending_waiters(Errors.KafkaConnectionError('Manager stopped'))
+        self._fail_pending_waiters(Errors.KafkaConnectionError('Event loop stopped'))
 
     def _fail_pending_waiters(self, exc):
         with self._pending_waiters_lock:
