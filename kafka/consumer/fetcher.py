@@ -117,6 +117,7 @@ class Fetcher:
 
         self._client = client
         self._manager = client._manager
+        self._net = self._manager._net
         self._subscriptions = subscriptions
         self._completed_fetches = collections.deque()  # Unparsed responses
         self._next_partition_records = None  # Holds a single PartitionRecords until fully consumed
@@ -200,7 +201,7 @@ class Fetcher:
         # retires HeartbeatThread.
         try:
             with self._client._lock:
-                self._manager.run(self._manager.wait_for, wakeup, timeout_ms)
+                self._net.run(self._manager.wait_for, wakeup, timeout_ms)
         except Errors.KafkaTimeoutError:
             pass
 
@@ -301,7 +302,7 @@ class Fetcher:
             KafkaTimeoutError if timeout_ms provided
         """
         with self._client._lock:
-            offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -427,7 +428,7 @@ class Fetcher:
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
         with self._client._lock:
-            offsets = self._manager.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets

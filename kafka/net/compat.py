@@ -106,7 +106,7 @@ class KafkaNetClient:
         async def _check_version(broker_id, timeout_ms):
             conn = await self._manager.get_connection(broker_id, timeout_ms=timeout_ms)
             return conn.broker_version
-        return self._manager.run(_check_version, node_id, timeout_ms)
+        return self._net.run(_check_version, node_id, timeout_ms)
 
     # Request sending
 

@@ -327,7 +327,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     if self._subscription.subscribed_pattern:
                         metadata_update = self._cluster.request_update()
                         try:
-                            self._manager.run(
+                            self._net.run(
                                 self._manager.wait_for, metadata_update, timer.timeout_ms)
                         except Errors.KafkaTimeoutError:
                             log.debug('coordinator.poll: timeout updating metadata; returning early')
@@ -460,7 +460,7 @@ class ConsumerCoordinator(BaseCoordinator):
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
         with self._client._lock:
-            return self._manager.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
+            return self._net.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
 
     async def refresh_committed_offsets_if_needed_async(self, timeout_ms=None):
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
@@ -488,7 +488,7 @@ class ConsumerCoordinator(BaseCoordinator):
         if not partitions:
             return {}
         with self._client._lock:
-            return self._manager.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
+            return self._net.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
 
     async def fetch_committed_offsets_async(self, partitions, timeout_ms=None):
         """Async variant of :meth:`fetch_committed_offsets`."""
@@ -531,7 +531,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if timer.timeout_ms is not None:
                 delay_ms = min(delay_ms, timer.timeout_ms)
             if delay_ms > 0:
-                await self._manager._net.sleep(delay_ms / 1000)
+                await self._net.sleep(delay_ms / 1000)
             timer.maybe_raise()
 
     def close(self, autocommit=True, timeout_ms=None):
@@ -621,7 +621,7 @@ class ConsumerCoordinator(BaseCoordinator):
                        offsets.values()))
         self._invoke_completed_offset_commit_callbacks()
         with self._client._lock:
-            return self._manager.run(self._commit_offsets_sync_async, offsets, timeout_ms)
+            return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms)
 
     async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
         if not offsets:
@@ -651,7 +651,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if timer.timeout_ms is not None:
                 delay_ms = min(delay_ms, timer.timeout_ms)
             if delay_ms > 0:
-                await self._manager._net.sleep(delay_ms / 1000)
+                await self._net.sleep(delay_ms / 1000)
             timer.maybe_raise()
 
     def _maybe_auto_commit_offsets_sync(self, timeout_ms=None):
