@@ -386,6 +386,11 @@ class KafkaConsumer:
         self._cluster = self._manager.cluster
         self._net = self._manager._net
 
+        # Drive the IO loop on a background thread so coroutines (heartbeat,
+        # metadata refresh) make progress without depending on user-thread
+        # poll() timing.
+        self._net.start()
+
         # If api_version was not passed explicitly, bootstrap to auto-discover
         # it. bootstrap is passed as a deferred coroutine so that once the IO
         # thread is introduced in a later phase it runs on the IO thread.
@@ -730,9 +735,6 @@ class KafkaConsumer:
         poll_timeout_ms = timer.timeout_ms
         if self.config['group_id'] is not None:
             poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
-
-        # turn the IO crank here until we have permanent io thread
-        self._client.poll(timeout_ms=0)
 
         return self._fetcher.fetch_records(
             max_records, update_offsets=update_offsets, timeout_ms=poll_timeout_ms)
