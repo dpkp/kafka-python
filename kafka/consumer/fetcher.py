@@ -174,15 +174,12 @@ class Fetcher:
         if records:
             return records
 
-        # No records yet. Wait for any signal that more work might be
-        # ready: an in-flight fetch completing OR a pending offset-reset
-        # task completing (positions become available, enabling future
-        # fetches). The wait drives the manager's event loop — the
-        # consumer has no background IO thread, so call_soon-scheduled
-        # tasks (resets, sent fetches) only run inside manager.run.
-        # add_both fires synchronously on already-done futures, closing
-        # the race where a response arrives between scheduling and the
-        # wait setup.
+        # No records yet. Block until either an in-flight fetch
+        # completes (records may have arrived) or a pending offset-reset
+        # task completes (positions become available, enabling a fetch
+        # on the next caller iteration). add_both fires synchronously on
+        # already-done futures, closing the race where a future resolves
+        # between scheduling and the wait setup.
         waited_on = list(self._fetch_futures)
         if self._reset_task is not None and not self._reset_task.is_done:
             waited_on.append(self._reset_task)
@@ -196,12 +193,8 @@ class Fetcher:
         for fut in waited_on:
             fut.add_both(_wake)
 
-        # Hold _client._lock so we serialize with HeartbeatThread, which
-        # also drives _net.poll under this lock. Drops once Phase D
-        # retires HeartbeatThread.
         try:
-            with self._client._lock:
-                self._net.run(self._manager.wait_for, wakeup, timeout_ms)
+            self._net.run(self._manager.wait_for, wakeup, timeout_ms)
         except Errors.KafkaTimeoutError:
             pass
 
@@ -301,8 +294,7 @@ class Fetcher:
         Raises:
             KafkaTimeoutError if timeout_ms provided
         """
-        with self._client._lock:
-            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -427,8 +419,7 @@ class Fetcher:
             KafkaTimeoutError if timeout_ms provided.
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        with self._client._lock:
-            offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets

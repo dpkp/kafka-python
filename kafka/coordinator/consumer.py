@@ -459,8 +459,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
-        with self._client._lock:
-            return self._net.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
+        return self._net.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
 
     async def refresh_committed_offsets_if_needed_async(self, timeout_ms=None):
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
@@ -487,8 +486,7 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         if not partitions:
             return {}
-        with self._client._lock:
-            return self._net.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
+        return self._net.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
 
     async def fetch_committed_offsets_async(self, partitions, timeout_ms=None):
         """Async variant of :meth:`fetch_committed_offsets`."""
@@ -620,8 +618,7 @@ class ConsumerCoordinator(BaseCoordinator):
         assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
                        offsets.values()))
         self._invoke_completed_offset_commit_callbacks()
-        with self._client._lock:
-            return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms)
+        return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms)
 
     async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
         if not offsets:

@@ -4,7 +4,6 @@ import logging
 import threading
 import time
 import warnings
-import weakref
 
 from kafka.coordinator.heartbeat import Heartbeat
 from kafka import errors as Errors
@@ -143,11 +142,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self._cluster = self._manager.cluster
         self._net = self._manager._net
         self.heartbeat = Heartbeat(**self.config)
-        self._heartbeat_wakeup = WakeupNotifier(self._manager._net)
+        self._heartbeat_wakeup = WakeupNotifier(self._net)
         self._heartbeat_loop_future = None
         self._heartbeat_enabled = False
         self._heartbeat_closed = False
-        self._heartbeat_thread = None
         self._lock = threading.RLock()
         self.rejoin_needed = True
         self.rejoining = False  # renamed / complement of java needsJoinPrepare
@@ -292,8 +290,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         Returns: True is coordinator found before timeout_ms, else False
         """
-        with self._client._lock:
-            return self._net.run(self.ensure_coordinator_ready_async, timeout_ms)
+        return self._net.run(self.ensure_coordinator_ready_async, timeout_ms)
 
     async def ensure_coordinator_ready_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_coordinator_ready`.
@@ -343,7 +340,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         self._find_coordinator_future = None
 
     def lookup_coordinator(self):
-        with self._client._lock, self._lock:
+        with self._lock:
             if self._find_coordinator_future is not None:
                 return self._find_coordinator_future
 
@@ -366,26 +363,26 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
     def poll_heartbeat(self):
         """
-        Check the status of the heartbeat thread (if it is active) and indicate
-        the liveness of the client. This must be called periodically after
-        joining with :meth:`.ensure_active_group` to ensure that the member stays
-        in the group. If an interval of time longer than the provided rebalance
-        timeout (max_poll_interval_ms) expires without calling this method, then
-        the client will proactively leave the group.
+        Check the status of the heartbeat coroutine and indicate the liveness
+        of the client. This must be called periodically after joining with
+        :meth:`.ensure_active_group` to ensure that the member stays in the
+        group. If an interval of time longer than the provided rebalance
+        timeout (max_poll_interval_ms) expires without calling this method,
+        then the client will proactively leave the group.
 
-        Raises: RuntimeError for unexpected errors raised from the heartbeat thread
+        Raises: the underlying exception if the heartbeat coroutine has
+        terminated with an error. The next call to ensure_active_group will
+        respawn the loop.
         """
         with self._lock:
-            if self._heartbeat_thread is not None:
-                if self._heartbeat_thread.failed:
-                    # set the heartbeat thread to None and raise an exception.
-                    # If the user catches it, the next call to ensure_active_group()
-                    # will spawn a new heartbeat thread.
-                    cause = self._heartbeat_thread.failed
-                    self._heartbeat_thread = None
-                    raise cause  # pylint: disable-msg=raising-bad-type
-
-                self.heartbeat.poll()
+            fut = self._heartbeat_loop_future
+            if fut is not None and fut.is_done and fut.failed():
+                # Forget the dead future so the next ensure_active_group()
+                # respawns the heartbeat loop.
+                cause = fut.exception
+                self._heartbeat_loop_future = None
+                raise cause  # pylint: disable-msg=raising-bad-type
+            self.heartbeat.poll()
 
     def time_to_next_heartbeat(self):
         """Returns seconds (float) remaining before next heartbeat should be sent
@@ -413,8 +410,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         Returns: True if group initialized before timeout_ms, else False
         """
-        with self._client._lock:
-            return self._net.run(self.ensure_active_group_async, timeout_ms)
+        return self._net.run(self.ensure_active_group_async, timeout_ms)
 
     async def ensure_active_group_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_active_group`."""
@@ -424,7 +420,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         if not await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms):
             return False
         self._maybe_start_heartbeat_loop()
-        self._maybe_start_heartbeat_thread()
         return await self.join_group_async(timeout_ms=timer.timeout_ms)
 
     async def join_group_async(self, timeout_ms=None):
@@ -817,15 +812,9 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def request_rejoin(self):
         self.rejoin_needed = True
 
-    def _maybe_start_heartbeat_thread(self):
-        if self._heartbeat_thread is None:
-            heartbeat_log.info('Starting new heartbeat thread')
-            self._heartbeat_thread = HeartbeatThread(self)
-            self._heartbeat_thread.daemon = True
-            self._heartbeat_thread.start()
-            heartbeat_log.debug("Started heartbeat thread %s", self._heartbeat_thread.ident)
-
     def _maybe_start_heartbeat_loop(self):
+        if self._heartbeat_closed:
+            return
         if self._heartbeat_loop_future is None or self._heartbeat_loop_future.is_done:
             heartbeat_log.debug('Starting heartbeat loop')
             self._heartbeat_loop_future = self._manager.call_soon(self._heartbeat_loop)
@@ -844,11 +833,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def _close_heartbeat(self):
         self._heartbeat_closed = True
         self._heartbeat_wakeup.notify()
-
-    def _close_heartbeat_thread(self, timeout_ms=None):
-        if self._heartbeat_thread is not None:
-            self._heartbeat_thread.close(timeout_ms=timeout_ms)
-            self._heartbeat_thread = None
 
     async def _heartbeat_loop(self):
         heartbeat_log.debug('Heartbeat loop started.')
@@ -937,7 +921,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         and reset local generation / member_id"""
         if self._use_group_apis:
             self._close_heartbeat()
-            self._close_heartbeat_thread(timeout_ms=timeout_ms)
             self.maybe_leave_group(timeout_ms=timeout_ms)
 
     def is_dynamic_member(self):
@@ -945,8 +928,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
     def maybe_leave_group(self, reason=None, timeout_ms=None):
         """Leave the current group and reset local generation/member_id."""
-        with self._client._lock:
-            return self._net.run(self.maybe_leave_group_async, reason, timeout_ms)
+        return self._net.run(self.maybe_leave_group_async, reason, timeout_ms)
 
     async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
         if not self._use_group_apis:
@@ -1110,52 +1092,3 @@ class GroupCoordinatorMetrics:
             'The number of seconds since the last controller heartbeat was sent',
             tags), AnonMeasurable(
                 lambda _, now: (now / 1000) - self.heartbeat.last_send))
-
-
-class HeartbeatThread(threading.Thread):
-    def __init__(self, coordinator):
-        super().__init__()
-        self.name = coordinator.group_id + '-heartbeat'
-        self.coordinator = weakref.proxy(coordinator)
-        self.closed = False
-        self.failed = None
-
-    def close(self, timeout_ms=None):
-        if self.closed:
-            return
-
-        heartbeat_log.info('Stopping heartbeat thread')
-        self.closed = True
-
-        # Generally this should not happen - close() is triggered
-        # by the coordinator. But in some cases GC may close the coordinator
-        # from within the heartbeat thread.
-        if threading.current_thread() == self:
-            return
-
-        if self.is_alive():
-            if timeout_ms is None:
-                timeout_ms = self.coordinator.config['heartbeat_interval_ms']
-            self.join(timeout_ms / 1000)
-        if self.is_alive():
-            heartbeat_log.warning("Heartbeat thread did not fully terminate during close")
-
-    def run(self):
-        try:
-            heartbeat_log.debug('Heartbeat thread started')
-            # Run 4x heartbeat_interval
-            freq = (self.coordinator.config['heartbeat_interval_ms'] / 1000) / 4
-            while not self.closed:
-                with self.coordinator._client._lock, self.coordinator._lock:
-                    self.coordinator._client.poll(timeout_ms=100)
-                time.sleep(freq)
-
-        except ReferenceError:
-            heartbeat_log.debug('Heartbeat thread closed due to coordinator gc')
-
-        except BaseException as exc:
-            heartbeat_log.exception("Heartbeat thread failed due to unexpected error: %s", exc)
-            self.failed = exc
-
-        finally:
-            heartbeat_log.debug('Heartbeat thread closed')
