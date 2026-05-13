@@ -1,3 +1,5 @@
+import faulthandler
+
 import pytest
 
 from .mock_broker import MockBroker
@@ -6,6 +8,11 @@ from kafka.net.compat import KafkaNetClient
 from kafka.net.manager import KafkaConnectionManager
 from kafka.net.selector import NetworkSelector
 from kafka.protocol.metadata import MetadataResponse
+
+
+# Independent watchdog at slightly under pytest-timeout's deadline (see pytest.ini)
+faulthandler.enable()
+faulthandler.dump_traceback_later(280, exit=False, repeat=False)
 
 
 @pytest.fixture
