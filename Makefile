@@ -22,7 +22,7 @@ lint:
 	pylint --recursive=y --errors-only kafka test
 
 test: build-integration
-	pytest $(PYTESTS)
+	pytest -v $(PYTESTS)
 
 fixture: build-integration
 	python -m test.integration.fixtures kafka
