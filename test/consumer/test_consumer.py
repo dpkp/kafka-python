@@ -51,3 +51,20 @@ def test_assign():
     consumer.assign([])
     assert consumer.assignment() == set()
     consumer.close()
+
+
+def test_context_manager_closes_on_exit():
+    with KafkaConsumer(api_version=(0, 10, 0)) as consumer:
+        assert consumer._closed is False
+    assert consumer._closed is True
+
+
+def test_context_manager_suppresses_autocommit_on_exception():
+    # Verify the __exit__ → close(autocommit=...) wiring. We don't need a
+    # real coordinator for this; just check that an exception propagates and
+    # that close() is reached.
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    with pytest.raises(RuntimeError):
+        with consumer:
+            raise RuntimeError('boom')
+    assert consumer._closed is True

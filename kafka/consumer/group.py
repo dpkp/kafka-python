@@ -502,6 +502,16 @@ class KafkaConsumer:
         """
         return self._subscription.assigned_partitions()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Skip autocommit when the `with` block exited via exception: we
+        # can't know whether the in-flight record was successfully
+        # processed, so committing its offset would risk silently dropping
+        # an unprocessed message on next start. Clean exits commit normally.
+        self.close(autocommit=exc_type is None)
+
     def close(self, autocommit=True, timeout_ms=None):
         """Close the consumer, waiting indefinitely for any needed cleanup.
 

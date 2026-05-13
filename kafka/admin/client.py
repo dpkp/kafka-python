@@ -232,6 +232,12 @@ class KafkaAdminClient(
         self._coordinator_cache = {}  # {group_id: node_id}
         log.debug("KafkaAdminClient started.")
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def close(self):
         """Close the KafkaAdminClient connection to the Kafka broker."""
         if not hasattr(self, '_closed') or self._closed:

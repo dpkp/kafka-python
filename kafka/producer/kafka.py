@@ -593,6 +593,12 @@ class KafkaProducer:
     def __del__(self):
         self.close(timeout=1, null_logger=True)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def close(self, timeout=None, null_logger=False):
         """Close this producer.
 

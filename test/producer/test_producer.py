@@ -16,6 +16,15 @@ def test_kafka_producer_thread_close():
     assert threading.active_count() == threads
 
 
+def test_kafka_producer_context_manager_closes_on_exit():
+    threads = threading.active_count()
+    with KafkaProducer(api_version=(2, 1)) as producer:
+        assert threading.active_count() == threads + 1
+        assert producer._closed is False
+    assert producer._closed is True
+    assert threading.active_count() == threads
+
+
 def test_idempotent_producer_reset_producer_id(cluster):
     transaction_manager = TransactionManager(
         transactional_id=None,
