@@ -72,6 +72,10 @@ class KafkaConnection:
             return None
         return self.broker_version_data.broker_version
 
+    @property
+    def closed(self):
+        return not self.connected and not self.initializing
+
     def __str__(self):
         if self.initializing:
             state = 'initializing'
@@ -126,6 +130,8 @@ class KafkaConnection:
     def _send_request(self, request, future=None, timeout_at=None):
         if future is None:
             future = Future()
+        if self.closed:
+            return future.failure(Errors.KafkaConnectionError('closed'))
         if request.API_VERSION is None:
             try:
                 request.API_VERSION = self.broker_version_data.api_version(request)
@@ -175,6 +181,9 @@ class KafkaConnection:
 
     def data_received(self, data):
         """ Called when some data is received."""
+        if self.closed:
+            log.debug('%s: Ignoring %d bytes received by closed connection', self, len(data))
+            return
         responses = self.parser.receive_bytes(data)
 
         # augment responses w/ correlation_id, future, and timestamp
@@ -231,13 +240,15 @@ class KafkaConnection:
                 self._close_future.failure(exc)
 
     def fail_in_flight_requests(self, error):
+        if not self.closed:
+            raise RuntimeError('Connection must be closed to fail in flight requests')
         error = error or Errors.Cancelled()
-        for _, future, _ in self._request_buffer:
+        while self._request_buffer:
+            _, future, _ = self._request_buffer.popleft()
             future.failure(error)
-        self._request_buffer.clear()
-        for _, future, _, _ in self.in_flight_requests:
+        while self.in_flight_requests:
+            _, future, _, _ = self.in_flight_requests.popleft()
             future.failure(error)
-        self.in_flight_requests.clear()
 
     def connection_made(self, transport):
         """ Called when a connection is made.
