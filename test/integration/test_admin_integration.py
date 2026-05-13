@@ -184,10 +184,10 @@ def test_describe_group_exists(kafka_admin_client, kafka_consumer_factory, topic
         assert i not in consumers
         assert i not in stop
         stop[i] = Event()
-        consumers[i] = kafka_consumer_factory(group_id=group_id)
-        while not stop[i].is_set():
-            consumers[i].poll(timeout_ms=200)
-        consumers[i].close()
+        with kafka_consumer_factory(group_id=group_id) as c:
+            consumers[i] = c
+            while not stop[i].is_set():
+                consumers[i].poll(timeout_ms=200)
         consumers[i] = None
         stop[i] = None
 
@@ -269,17 +269,14 @@ def test_delete_groups(kafka_admin_client, kafka_consumer_factory, send_messages
     group3 = random_group_id + "_3"
 
     send_messages(range(0, 100), partition=0)
-    consumer1 = kafka_consumer_factory(group_id=group1)
-    next(consumer1)
-    consumer1.close()
+    with kafka_consumer_factory(group_id=group1) as consumer1:
+        next(consumer1)
 
-    consumer2 = kafka_consumer_factory(group_id=group2)
-    next(consumer2)
-    consumer2.close()
+    with kafka_consumer_factory(group_id=group2) as consumer2:
+        next(consumer2)
 
-    consumer3 = kafka_consumer_factory(group_id=group3)
-    next(consumer3)
-    consumer3.close()
+    with kafka_consumer_factory(group_id=group3) as consumer3:
+        next(consumer3)
 
     groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 in groups
@@ -305,22 +302,21 @@ def test_delete_groups_with_errors(kafka_admin_client, kafka_consumer_factory, s
     group3 = random_group_id + "_3"
 
     send_messages(range(0, 100), partition=0)
-    consumer1 = kafka_consumer_factory(group_id=group1)
-    next(consumer1)
-    consumer1.close()
+    with kafka_consumer_factory(group_id=group1) as consumer1:
+        next(consumer1)
 
-    consumer2 = kafka_consumer_factory(group_id=group2)
-    next(consumer2)
+    with kafka_consumer_factory(group_id=group2) as consumer2:
+        next(consumer2)
 
-    groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
-    assert group1 in groups
-    assert group2 in groups
-    assert group3 not in groups
+        groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
+        assert group1 in groups
+        assert group2 in groups
+        assert group3 not in groups
 
-    delete_results = kafka_admin_client.delete_groups([group1, group2, group3])
-    assert delete_results[group1] == 'OK'
-    assert delete_results[group2] == 'NonEmptyGroupError'
-    assert delete_results[group3] == 'GroupIdNotFoundError'
+        delete_results = kafka_admin_client.delete_groups([group1, group2, group3])
+        assert delete_results[group1] == 'OK'
+        assert delete_results[group2] == 'NonEmptyGroupError'
+        assert delete_results[group3] == 'GroupIdNotFoundError'
 
     groups = {group['group_id'] for group in kafka_admin_client.list_groups()}
     assert group1 not in groups
@@ -350,11 +346,10 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     for p in partitions:
         send_messages(range(0, 100), partition=p.partition, topic=p.topic)
 
-    consumer1 = kafka_consumer_factory(group_id=None, topics=())
-    consumer1.assign(partitions)
-    for _ in range(600):
-        next(consumer1)
-    consumer1.close()
+    with kafka_consumer_factory(group_id=None, topics=()) as consumer1:
+        consumer1.assign(partitions)
+        for _ in range(600):
+            next(consumer1)
 
     result = kafka_admin_client.delete_records({t0p0: -1, t0p1: 50, t1p0: 40, t1p2: 30}, timeout_ms=1000)
     assert result[t0p0] == {"low_watermark": 100, "error_code": 0, "partition_index": t0p0.partition}
@@ -362,12 +357,11 @@ def test_delete_records(kafka_admin_client, kafka_consumer_factory, send_message
     assert result[t1p0] == {"low_watermark": 40, "error_code": 0, "partition_index": t1p0.partition}
     assert result[t1p2] == {"low_watermark": 30, "error_code": 0, "partition_index": t1p2.partition}
 
-    consumer2 = kafka_consumer_factory(group_id=None, topics=())
-    consumer2.assign(partitions)
-    all_messages = consumer2.poll(max_records=600, timeout_ms=2000)
-    assert sum(len(x) for x in all_messages.values()) == 600 - 100 - 50 - 40 - 30
-    assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure there are no delayed messages
-    consumer2.close()
+    with kafka_consumer_factory(group_id=None, topics=()) as consumer2:
+        consumer2.assign(partitions)
+        all_messages = consumer2.poll(max_records=600, timeout_ms=2000)
+        assert sum(len(x) for x in all_messages.values()) == 600 - 100 - 50 - 40 - 30
+        assert not consumer2.poll(max_records=1, timeout_ms=1000) # ensure there are no delayed messages
 
     assert not all_messages.get(t0p0, [])
     assert [r.offset for r in all_messages[t0p1]] == list(range(50, 100))
