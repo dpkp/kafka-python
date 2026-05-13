@@ -253,13 +253,19 @@ class KafkaTCPTransport:
             self._close(error)
 
     def _close(self, error=None):
-        if self._sock:
-            self._net.unregister_event(self._sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
-            self._sock.close()
-            self._sock = None
-        if self._protocol:
-            self._protocol.connection_lost(error)
-            self._protocol = None
+        # idempotent; no lock
+        sock = self._sock
+        self._sock = None
+        if sock is not None:
+            try:
+                self._net.unregister_event(sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
+            except (KeyError, ValueError):
+                pass
+            sock.close()
+        proto = self._protocol
+        self._protocol = None
+        if proto is not None:
+            proto.connection_lost(error)
 
   # Twisted
     def abortConnection(self):
