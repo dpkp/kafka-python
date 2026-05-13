@@ -178,13 +178,18 @@ class NetworkSelector:
         a dedicated IO thread. Wake-ups from other threads must go through
         call_soon_threadsafe() so the select() loop returns promptly."""
         self._stop = False
+        log.info('IO loop starting (client_id=%s)', self.config['client_id'])
         try:
             while not self._stop:
                 self._poll_once()
             self.drain()
         except BaseException as exc:
+            log.exception('IO loop crashed (client_id=%s)', self.config['client_id'])
             self._fail_pending_waiters(exc)
             raise
+        else:
+            log.info('IO loop exited cleanly (client_id=%s, stop=%s)',
+                     self.config['client_id'], self._stop)
 
     def start(self):
         """Spawn a daemon IO thread that owns the event loop. Idempotent."""
