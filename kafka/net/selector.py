@@ -223,6 +223,13 @@ class NetworkSelector:
             if future.exception is not None:
                 raise future.exception
             return future.value
+        elif threading.current_thread() is self._io_thread:
+          raise RuntimeError(
+              "Cannot block on net.run() from the IO thread itself. "
+              "This typically happens when a synchronous rebalance listener "
+              "(or another IO-thread callback) calls a blocking consumer/admin API. "
+              "Use AsyncConsumerRebalanceListener and await the async variant, "
+              "or move the blocking work to a worker thread.")
 
         event = threading.Event()
         state = {'value': None, 'exception': None}
