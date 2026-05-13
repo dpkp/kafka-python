@@ -93,13 +93,13 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     lock when sending a request that affects the state of the group
     (e.g. JoinGroup, LeaveGroup).
     """
-
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
         'group_instance_id': None,
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
+        'request_timeout_ms': 30000,
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'metrics': None,
