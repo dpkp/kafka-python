@@ -1,3 +1,4 @@
+import contextlib
 import os
 from urllib.parse import urlparse
 import uuid
@@ -76,17 +77,29 @@ def kafka_client(kafka_broker, request):
 
 @pytest.fixture
 def consumer(kafka_consumer_factory):
-    """Return a KafkaConsumer fixture"""
-    return kafka_consumer_factory()
+    """Return a KafkaConsumer fixture; closed at fixture teardown."""
+    with kafka_consumer_factory() as c:
+        yield c
 
 
 @pytest.fixture
 def kafka_consumer_factory(kafka_broker, topic, request):
-    """Return a KafkaConsumer factory fixture"""
-    consumer = None
+    """Return a KafkaConsumer factory fixture.
 
+    Each call returns a context manager that yields a fresh KafkaConsumer
+    and closes it when the ``with`` block exits::
+
+        with kafka_consumer_factory(group_id='foo') as consumer:
+            consumer.subscribe([topic])
+            ...
+
+    As a defensive safety net, any consumers still open at fixture
+    teardown (e.g. if a test forgot ``with``) are also closed.
+    """
+    consumers = []
+
+    @contextlib.contextmanager
     def factory(topics=(topic,), **override_params):
-        nonlocal consumer
         params = {
             'client_id': f'{request.node.name}_{random_string(4)}',
             'api_version': env_kafka_version(),
@@ -95,69 +108,112 @@ def kafka_consumer_factory(kafka_broker, topic, request):
         }
         params.update(override_params)
         params = client_params(kafka_broker, **params)
-        consumer = KafkaConsumer(*topics, **params)
-        return consumer
+        c = KafkaConsumer(*topics, **params)
+        consumers.append(c)
+        try:
+            yield c
+        finally:
+            c.close()
 
     yield factory
 
-    if consumer:
-        consumer.close()
+    for c in consumers:
+        try:
+            c.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture
 def producer(kafka_producer_factory):
-    """Return a KafkaProducer fixture"""
-    yield kafka_producer_factory()
+    """Return a KafkaProducer fixture; closed at fixture teardown."""
+    with kafka_producer_factory() as p:
+        yield p
 
 
 @pytest.fixture
 def kafka_producer_factory(kafka_broker, request):
-    """Return a KafkaProducer factory fixture"""
-    producer = None
+    """Return a KafkaProducer factory fixture.
 
+    Each call returns a context manager that yields a fresh KafkaProducer
+    and closes it when the ``with`` block exits::
+
+        with kafka_producer_factory(compression_type='gzip') as producer:
+            producer.send(...)
+
+    As a defensive safety net, any producers still open at fixture
+    teardown are also closed.
+    """
+    producers = []
+
+    @contextlib.contextmanager
     def factory(**override_params):
-        nonlocal producer
         params = {
             'client_id': f'{request.node.name}_{random_string(4)}',
             'api_version': env_kafka_version(),
         }
         params.update(override_params)
         params = client_params(kafka_broker, **params)
-        producer = KafkaProducer(**params)
-        return producer
+        p = KafkaProducer(**params)
+        producers.append(p)
+        try:
+            yield p
+        finally:
+            p.close()
 
     yield factory
 
-    if producer:
-        producer.close()
+    for p in producers:
+        try:
+            p.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture
 def kafka_admin_client(kafka_admin_client_factory):
-    """Return a KafkaAdminClient fixture"""
-    yield kafka_admin_client_factory()
+    """Return a KafkaAdminClient fixture; closed at fixture teardown."""
+    with kafka_admin_client_factory() as c:
+        yield c
 
 
 @pytest.fixture
 def kafka_admin_client_factory(kafka_broker):
-    """Return a KafkaAdminClient factory fixture"""
-    admin_client = None
+    """Return a KafkaAdminClient factory fixture.
 
+    Each call returns a context manager that yields a fresh
+    KafkaAdminClient and closes it when the ``with`` block exits::
+
+        with kafka_admin_client_factory() as admin:
+            admin.create_topics(...)
+
+    As a defensive safety net, any admin clients still open at fixture
+    teardown are also closed.
+    """
+    admin_clients = []
+
+    @contextlib.contextmanager
     def factory(**override_params):
-        nonlocal admin_client
         params = {
             'client_id': f'admin_{random_string(4)}',
             'api_version': env_kafka_version(),
         }
         params.update(override_params)
         params = client_params(kafka_broker, **params)
-        admin_client = KafkaAdminClient(**params)
-        return admin_client
+        c = KafkaAdminClient(**params)
+        admin_clients.append(c)
+        try:
+            yield c
+        finally:
+            c.close()
 
     yield factory
 
-    if admin_client:
-        admin_client.close()
+    for c in admin_clients:
+        try:
+            c.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture

@@ -29,104 +29,103 @@ def test_consumer_topics(consumer, topic):
 
 
 def test_paused(kafka_consumer_factory, topic):
-    consumer = kafka_consumer_factory(topics=())
-    topics = [TopicPartition(topic, 1)]
-    consumer.assign(topics)
-    assert set(topics) == consumer.assignment()
-    assert set() == consumer.paused()
+    with kafka_consumer_factory(topics=()) as consumer:
+        topics = [TopicPartition(topic, 1)]
+        consumer.assign(topics)
+        assert set(topics) == consumer.assignment()
+        assert set() == consumer.paused()
 
-    consumer.pause(topics[0])
-    assert set([topics[0]]) == consumer.paused()
+        consumer.pause(topics[0])
+        assert set([topics[0]]) == consumer.paused()
 
-    consumer.resume(topics[0])
-    assert set() == consumer.paused()
+        consumer.resume(topics[0])
+        assert set() == consumer.paused()
 
-    consumer.unsubscribe()
-    assert set() == consumer.paused()
+        consumer.unsubscribe()
+        assert set() == consumer.paused()
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10), reason="Requires KAFKA_VERSION >= 0.10")
 def test_kafka_version_infer(kafka_consumer_factory):
-    consumer = kafka_consumer_factory(api_version=None)
-    actual = BrokerVersionData(env_kafka_version())
-    expected = min((4, 2), actual.broker_version)
-    assert consumer.config['api_version'] == expected, \
-        "Was expecting inferred broker version to be %s but was %s" % (expected, consumer.config['api_version'])
+    with kafka_consumer_factory(api_version=None) as consumer:
+        actual = BrokerVersionData(env_kafka_version())
+        expected = min((4, 2), actual.broker_version)
+        assert consumer.config['api_version'] == expected, \
+            "Was expecting inferred broker version to be %s but was %s" % (expected, consumer.config['api_version'])
 
 
 def test_kafka_consumer(kafka_consumer_factory, send_messages):
     """Test KafkaConsumer"""
     # consumer_timeout_ms must exceed worst-case broker+CI latency for 200
     # records; 30s gives plenty of margin without masking real hangs.
-    consumer = kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=30000)
-    send_messages(range(0, 100), partition=0)
-    send_messages(range(0, 100), partition=1)
-    cnt = 0
-    messages = {0: [], 1: []}
-    for message in consumer:
-        logging.debug("Consumed message %s", repr(message))
-        cnt += 1
-        messages[message.partition].append(message)
-        if cnt >= 200:
-            break
+    with kafka_consumer_factory(auto_offset_reset='earliest', consumer_timeout_ms=30000) as consumer:
+        send_messages(range(0, 100), partition=0)
+        send_messages(range(0, 100), partition=1)
+        cnt = 0
+        messages = {0: [], 1: []}
+        for message in consumer:
+            logging.debug("Consumed message %s", repr(message))
+            cnt += 1
+            messages[message.partition].append(message)
+            if cnt >= 200:
+                break
 
-    assert_message_count(messages[0], 100)
-    assert_message_count(messages[1], 100)
+        assert_message_count(messages[0], 100)
+        assert_message_count(messages[1], 100)
 
 
 def test_kafka_consumer_unsupported_encoding(
         topic, kafka_producer_factory, kafka_consumer_factory):
     # Send a compressed message
-    producer = kafka_producer_factory(compression_type="gzip")
-    fut = producer.send(topic, b"simple message" * 200)
-    fut.get(timeout=5)
-    producer.close()
+    with kafka_producer_factory(compression_type="gzip") as producer:
+        fut = producer.send(topic, b"simple message" * 200)
+        fut.get(timeout=5)
 
     # Consume, but with the related compression codec not available
     with patch.object(kafka.codec, "has_gzip") as mocked:
         mocked.return_value = False
-        consumer = kafka_consumer_factory(auto_offset_reset='earliest')
-        error_msg = "Libraries for gzip compression codec not found"
-        with pytest.raises(UnsupportedCodecError, match=error_msg):
-            consumer.poll(timeout_ms=2000)
+        with kafka_consumer_factory(auto_offset_reset='earliest') as consumer:
+            error_msg = "Libraries for gzip compression codec not found"
+            with pytest.raises(UnsupportedCodecError, match=error_msg):
+                consumer.poll(timeout_ms=2000)
 
 
 def test_kafka_consumer__blocking(kafka_consumer_factory, topic, send_messages):
     TIMEOUT_MS = 500
-    consumer = kafka_consumer_factory(auto_offset_reset='earliest',
-                                      enable_auto_commit=False,
-                                      consumer_timeout_ms=TIMEOUT_MS)
+    with kafka_consumer_factory(auto_offset_reset='earliest',
+                                enable_auto_commit=False,
+                                consumer_timeout_ms=TIMEOUT_MS) as consumer:
 
-    # Manual assignment avoids overhead of consumer group mgmt
-    consumer.unsubscribe()
-    consumer.assign([TopicPartition(topic, 0)])
+        # Manual assignment avoids overhead of consumer group mgmt
+        consumer.unsubscribe()
+        consumer.assign([TopicPartition(topic, 0)])
 
-    # Ask for 5 messages, nothing in queue, block 500ms
-    with Timer() as t:
-        with pytest.raises(StopIteration):
-            msg = next(consumer)
-    assert t.interval >= (TIMEOUT_MS / 1000.0)
+        # Ask for 5 messages, nothing in queue, block 500ms
+        with Timer() as t:
+            with pytest.raises(StopIteration):
+                msg = next(consumer)
+        assert t.interval >= (TIMEOUT_MS / 1000.0)
 
-    send_messages(range(0, 10))
+        send_messages(range(0, 10))
 
-    # Ask for 5 messages, 10 in queue. Get 5 back, no blocking
-    messages = []
-    with Timer() as t:
-        for i in range(5):
-            msg = next(consumer)
-            messages.append(msg)
-    assert_message_count(messages, 5)
-    assert t.interval < (TIMEOUT_MS / 1000.0)
-
-    # Ask for 10 messages, get 5 back, block 500ms
-    messages = []
-    with Timer() as t:
-        with pytest.raises(StopIteration):
-            for i in range(10):
+        # Ask for 5 messages, 10 in queue. Get 5 back, no blocking
+        messages = []
+        with Timer() as t:
+            for i in range(5):
                 msg = next(consumer)
                 messages.append(msg)
-    assert_message_count(messages, 5)
-    assert t.interval >= (TIMEOUT_MS / 1000.0)
+        assert_message_count(messages, 5)
+        assert t.interval < (TIMEOUT_MS / 1000.0)
+
+        # Ask for 10 messages, get 5 back, block 500ms
+        messages = []
+        with Timer() as t:
+            with pytest.raises(StopIteration):
+                for i in range(10):
+                    msg = next(consumer)
+                    messages.append(msg)
+        assert_message_count(messages, 5)
+        assert t.interval >= (TIMEOUT_MS / 1000.0)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 8, 1), reason="Requires KAFKA_VERSION >= 0.8.1")
@@ -136,37 +135,32 @@ def test_kafka_consumer__offset_commit_resume(kafka_consumer_factory, send_messa
     send_messages(range(0, 100), partition=0)
     send_messages(range(100, 200), partition=1)
 
-    # Start a consumer and grab the first 180 messages
-    consumer1 = kafka_consumer_factory(
+    # Start a consumer and grab the first 180 messages. Use `with` so that
+    # close() (and the implicit auto-commit) runs before consumer2 starts.
+    with kafka_consumer_factory(
         group_id=GROUP_ID,
         enable_auto_commit=True,
         auto_commit_interval_ms=100,
         auto_offset_reset='earliest',
-    )
-    output_msgs1 = []
-    for _ in range(180):
-        m = next(consumer1)
-        output_msgs1.append(m)
-    assert_message_count(output_msgs1, 180)
-
-    # Normally we let the pytest fixture `kafka_consumer_factory` handle
-    # closing as part of its teardown. Here we manually call close() to force
-    # auto-commit to occur before the second consumer starts. That way the
-    # second consumer only consumes previously unconsumed messages.
-    consumer1.close()
+    ) as consumer1:
+        output_msgs1 = []
+        for _ in range(180):
+            m = next(consumer1)
+            output_msgs1.append(m)
+        assert_message_count(output_msgs1, 180)
 
     # Start a second consumer to grab 181-200
-    consumer2 = kafka_consumer_factory(
+    with kafka_consumer_factory(
         group_id=GROUP_ID,
         enable_auto_commit=True,
         auto_commit_interval_ms=100,
         auto_offset_reset='earliest',
-    )
-    output_msgs2 = []
-    for _ in range(20):
-        m = next(consumer2)
-        output_msgs2.append(m)
-    assert_message_count(output_msgs2, 20)
+    ) as consumer2:
+        output_msgs2 = []
+        for _ in range(20):
+            m = next(consumer2)
+            output_msgs2.append(m)
+        assert_message_count(output_msgs2, 20)
 
     # Verify the second consumer wasn't reconsuming messages that the first
     # consumer already saw
@@ -179,19 +173,19 @@ def test_kafka_consumer_max_bytes_simple(kafka_consumer_factory, topic, send_mes
     send_messages(range(200, 300), partition=1)
 
     # Start a consumer
-    consumer = kafka_consumer_factory(
-        auto_offset_reset='earliest', fetch_max_bytes=300)
-    seen_partitions = set()
-    for i in range(90):
-        poll_res = consumer.poll(timeout_ms=100)
-        for partition, msgs in poll_res.items():
-            for msg in msgs:
-                seen_partitions.add(partition)
-        if seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}:
-            break
+    with kafka_consumer_factory(
+        auto_offset_reset='earliest', fetch_max_bytes=300) as consumer:
+        seen_partitions = set()
+        for i in range(90):
+            poll_res = consumer.poll(timeout_ms=100)
+            for partition, msgs in poll_res.items():
+                for msg in msgs:
+                    seen_partitions.add(partition)
+            if seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}:
+                break
 
-    # Check that we fetched at least 1 message from both partitions
-    assert seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}
+        # Check that we fetched at least 1 message from both partitions
+        assert seen_partitions == {TopicPartition(topic, 0), TopicPartition(topic, 1)}
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
@@ -210,14 +204,14 @@ def test_kafka_consumer_max_bytes_one_msg(kafka_consumer_factory, send_messages)
     # non-zero. I would not mind if we deleted this test. It caused
     # a minor headache when testing 0.11.0.0.
     group = 'test-kafka-consumer-max-bytes-one-msg-' + random_string(5)
-    consumer = kafka_consumer_factory(
+    with kafka_consumer_factory(
         group_id=group,
         auto_offset_reset='earliest',
         consumer_timeout_ms=5000,
-        fetch_max_bytes=1)
+        fetch_max_bytes=1) as consumer:
 
-    fetched_msgs = [next(consumer) for i in range(10)]
-    assert_message_count(fetched_msgs, 10)
+        fetched_msgs = [next(consumer) for i in range(10)]
+        assert_message_count(fetched_msgs, 10)
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
@@ -316,37 +310,37 @@ def test_kafka_consumer_offsets_for_time_old(consumer, topic):
 
 @pytest.mark.skipif(env_kafka_version() < (0, 10, 1), reason="Requires KAFKA_VERSION >= 0.10.1")
 def test_kafka_consumer_offsets_for_times_errors(kafka_consumer_factory, topic):
-    consumer = kafka_consumer_factory(fetch_max_wait_ms=200,
-                                      request_timeout_ms=500)
-    tp = TopicPartition(topic, 0)
-    bad_tp = TopicPartition(topic, 100)
+    with kafka_consumer_factory(fetch_max_wait_ms=200,
+                                request_timeout_ms=500) as consumer:
+        tp = TopicPartition(topic, 0)
+        bad_tp = TopicPartition(topic, 100)
 
-    with pytest.raises(ValueError):
-        consumer.offsets_for_times({tp: -1})
+        with pytest.raises(ValueError):
+            consumer.offsets_for_times({tp: -1})
 
-    with pytest.raises(KafkaTimeoutError):
-        consumer.offsets_for_times({bad_tp: 0})
+        with pytest.raises(KafkaTimeoutError):
+            consumer.offsets_for_times({bad_tp: 0})
 
 
 def test_kafka_consumer_position_after_seek_to_end(kafka_consumer_factory, topic, send_messages):
     send_messages(range(0, 10), partition=0)
 
     # Start a consumer with manual partition assignment.
-    consumer = kafka_consumer_factory(
+    with kafka_consumer_factory(
         topics=(),
         group_id=None,
         enable_auto_commit=False,
-    )
-    tp = TopicPartition(topic, 0)
-    consumer.assign([tp])
+    ) as consumer:
+        tp = TopicPartition(topic, 0)
+        consumer.assign([tp])
 
-    # Seek to the end of the partition, and call position() to synchronize the
-    # partition's offset without calling poll().
-    consumer.seek_to_end(tp)
-    position = consumer.position(tp, timeout_ms=1000)
+        # Seek to the end of the partition, and call position() to synchronize
+        # the partition's offset without calling poll().
+        consumer.seek_to_end(tp)
+        position = consumer.position(tp, timeout_ms=1000)
 
-    # Verify we got the expected position
-    assert position == 10, "Expected position 10, got {}".format(position)
+        # Verify we got the expected position
+        assert position == 10, "Expected position 10, got {}".format(position)
 
 
 # Consumer group tests (use group_id, exercise the coordinator/join path)
@@ -364,13 +358,13 @@ def test_group(kafka_consumer_factory, topic):
         assert i not in consumers
         assert i not in stop
         stop[i] = threading.Event()
-        consumers[i] = kafka_consumer_factory(group_id=group_id,
-                                              client_id="consumer_thread-%s" % i,
-                                              api_version_auto_timeout_ms=5000)
-        while not stop[i].is_set():
-            for tp, records in consumers[i].poll(timeout_ms=200).items():
-                messages[i][tp].extend(records)
-        consumers[i].close(timeout_ms=500)
+        with kafka_consumer_factory(group_id=group_id,
+                                    client_id="consumer_thread-%s" % i,
+                                    api_version_auto_timeout_ms=5000) as c:
+            consumers[i] = c
+            while not stop[i].is_set():
+                for tp, records in consumers[i].poll(timeout_ms=200).items():
+                    messages[i][tp].extend(records)
         consumers[i] = None
         stop[i] = None
 
@@ -460,35 +454,34 @@ def test_group(kafka_consumer_factory, topic):
 @pytest.mark.skipif(env_kafka_version() < (0, 9), reason='Unsupported Kafka Version')
 def test_heartbeat_thread(kafka_consumer_factory):
     group_id = 'test-group-' + random_string(6)
-    consumer = kafka_consumer_factory(group_id=group_id)
+    with kafka_consumer_factory(group_id=group_id) as consumer:
 
-    # poll until we have joined group / have assignment
-    start = time.monotonic()
-    while not consumer.assignment():
+        # poll until we have joined group / have assignment
+        start = time.monotonic()
+        while not consumer.assignment():
+            consumer.poll(timeout_ms=100)
+
+        assert consumer._coordinator.state is MemberState.STABLE
+        last_poll = consumer._coordinator.heartbeat.last_poll
+
+        # wait until we receive first heartbeat
+        while consumer._coordinator.heartbeat.last_receive < start:
+            time.sleep(0.1)
+
+        last_send = consumer._coordinator.heartbeat.last_send
+        last_recv = consumer._coordinator.heartbeat.last_receive
+        assert last_poll > start
+        assert last_send > start
+        assert last_recv > start
+
+        timeout = time.monotonic() + 30
+        while True:
+            if time.monotonic() > timeout:
+                raise RuntimeError('timeout waiting for heartbeat')
+            if consumer._coordinator.heartbeat.last_receive > last_recv:
+                break
+            time.sleep(0.5)
+
+        assert consumer._coordinator.heartbeat.last_poll == last_poll
         consumer.poll(timeout_ms=100)
-
-    assert consumer._coordinator.state is MemberState.STABLE
-    last_poll = consumer._coordinator.heartbeat.last_poll
-
-    # wait until we receive first heartbeat
-    while consumer._coordinator.heartbeat.last_receive < start:
-        time.sleep(0.1)
-
-    last_send = consumer._coordinator.heartbeat.last_send
-    last_recv = consumer._coordinator.heartbeat.last_receive
-    assert last_poll > start
-    assert last_send > start
-    assert last_recv > start
-
-    timeout = time.monotonic() + 30
-    while True:
-        if time.monotonic() > timeout:
-            raise RuntimeError('timeout waiting for heartbeat')
-        if consumer._coordinator.heartbeat.last_receive > last_recv:
-            break
-        time.sleep(0.5)
-
-    assert consumer._coordinator.heartbeat.last_poll == last_poll
-    consumer.poll(timeout_ms=100)
-    assert consumer._coordinator.heartbeat.last_poll > last_poll
-    consumer.close(timeout_ms=100)
+        assert consumer._coordinator.heartbeat.last_poll > last_poll
