@@ -298,7 +298,9 @@ class TestKafkaConnectionFailInFlight:
             f = connection.send_request(MagicMock())
             futures.append(f)
 
-        connection.fail_in_flight_requests(Errors.KafkaConnectionError('down'))
+        # fail_in_flight_requests is only valid after the connection has
+        # transitioned to closed; close() drives the full path.
+        connection.close(Errors.KafkaConnectionError('down'))
         for f in futures:
             assert f.failed()
         assert len(connection._request_buffer) == 0
@@ -309,7 +311,7 @@ class TestKafkaConnectionFailInFlight:
         connection.in_flight_requests.append((1, f1, time.monotonic(), time.monotonic() + 30))
         connection.in_flight_requests.append((2, f2, time.monotonic(), time.monotonic() + 30))
 
-        connection.fail_in_flight_requests(Errors.Cancelled())
+        connection.close(Errors.Cancelled())
         assert f1.failed()
         assert f2.failed()
         assert len(connection.in_flight_requests) == 0
