@@ -231,6 +231,8 @@ class NetworkSelector:
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
         """
+        if self._closed:
+            raise RuntimeError('NetworkSelector closed!')
         if self._io_thread is None:
             future = self.call_soon_with_future(coro, *args)
             self.poll(future=future)
@@ -271,6 +273,8 @@ class NetworkSelector:
             self._poll_once()
 
     def call_at(self, when, task):
+        if self._closed:
+            raise RuntimeError('NetworkSelector closed!')
         if not isinstance(task, Task):
             task = Task(task)
         task.scheduled_at = when
@@ -294,6 +298,8 @@ class NetworkSelector:
     def call_soon_threadsafe(self, callback):
         if self._exception:
             raise self._exception from None
+        elif self._closed:
+            raise RuntimeError('NetworkSelector closed!')
         task = self.call_soon(callback)
         self.wakeup()
         return task
