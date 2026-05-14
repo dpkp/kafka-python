@@ -339,11 +339,11 @@ class KafkaTCPTransport:
     def host_port(self):
         try:
             host, port = self._sock.getpeername()[0:2]
-        except OSError, ValueError:
+        except (OSError, ValueError):
             return 'none'
         try:
             local_port = self._sock.getsockname()[1]
-        except OSError, ValueError:
+        except (OSError, ValueError):
             return f'{host}:{port}'
         return f'{host}:{port}<-{local_port}'
 
