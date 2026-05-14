@@ -148,6 +148,7 @@ class NetworkSelector:
         self._poll_lock = threading.Lock()
         self._poll_owner = None
         self._closed = False
+        self._exception = None
         self._stop = False
         self._selector = self.config['selector']()
         self._scheduled = [] # managed by heapq
@@ -178,9 +179,19 @@ class NetworkSelector:
         a dedicated IO thread. Wake-ups from other threads must go through
         call_soon_threadsafe() so the select() loop returns promptly."""
         self._stop = False
-        while not self._stop:
-            self._poll_once()
-        self.drain()
+        log.info('IO loop starting (client_id=%s)', self.config['client_id'])
+        try:
+            while not self._stop:
+                self._poll_once()
+            self.drain()
+        except BaseException as exc:
+            log.exception('IO loop crashed (client_id=%s)', self.config['client_id'])
+            self._exception = exc
+            self._fail_pending_waiters(exc)
+            raise
+        else:
+            log.info('IO loop exited cleanly (client_id=%s, stop=%s)',
+                     self.config['client_id'], self._stop)
 
     def start(self):
         """Spawn a daemon IO thread that owns the event loop. Idempotent."""
@@ -200,11 +211,14 @@ class NetworkSelector:
         self.wakeup()
         self._io_thread.join(timeout_ms / 1000 if timeout_ms is not None else None)
         self._io_thread = None
+        self._fail_pending_waiters(Errors.KafkaConnectionError('Manager stopped'))
+
+    def _fail_pending_waiters(self, exc):
         with self._pending_waiters_lock:
             waiters = list(self._pending_waiters.items())
             self._pending_waiters.clear()
         for event, state in waiters:
-            state['exception'] = Errors.KafkaConnectionError('Manager stopped')
+            state['exception'] = exc
             event.set()
 
     def run(self, coro, *args):
@@ -230,6 +244,8 @@ class NetworkSelector:
               "(or another IO-thread callback) calls a blocking consumer/admin API. "
               "Use AsyncConsumerRebalanceListener and await the async variant, "
               "or move the blocking work to a worker thread.")
+        elif self._exception:
+            raise self._exception from None
 
         event = threading.Event()
         state = {'value': None, 'exception': None}
@@ -276,6 +292,8 @@ class NetworkSelector:
         return task
 
     def call_soon_threadsafe(self, callback):
+        if self._exception:
+            raise self._exception from None
         task = self.call_soon(callback)
         self.wakeup()
         return task
