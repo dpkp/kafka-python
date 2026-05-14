@@ -17,6 +17,7 @@ class KafkaTCPTransport:
         self._sock = sock
         self._closed = False
         self._write_buffer = deque()
+        self._writing = False
         self._protocol = None
         self._read = False
         self._write = True
@@ -170,26 +171,31 @@ class KafkaTCPTransport:
             raise RuntimeError('Transport closed for writes')
         if not data:
             raise ValueError('Cant write empty data')
-        if not self._write_buffer:
-            self._net.call_soon(self._write_to_sock)
         self._write_buffer.append(data)
+        if not self._writing:
+            self._writing = True
+            self._net.call_soon(self._write_to_sock)
 
     def writelines(self, list_of_data):
         """Write a list (or any iterable) of data bytes to the transport."""
         if not self._write or self._closed:
             raise RuntimeError('Transport closed for writes')
-        if not self._write_buffer:
-            self._net.call_soon(self._write_to_sock)
         self._write_buffer.extend(list_of_data)
+        if not self._writing:
+            self._writing = True
+            self._net.call_soon(self._write_to_sock)
 
     async def _write_to_sock(self):
-        while self._write and not self._closed and self._write_buffer:
-            await self._net.wait_write(self._sock)
-            total_bytes, err = self._sock_send()
-            log.debug('%s: sent %d bytes', self, total_bytes)
-            self.last_write = time.monotonic()
-            if self._protocol and self._protocol._sensors:
-                self._protocol._sensors.bytes_sent.record(total_bytes)
+        try:
+            while self._write and not self._closed and self._write_buffer:
+                await self._net.wait_write(self._sock)
+                total_bytes, err = self._sock_send()
+                log.debug('%s: sent %d bytes', self, total_bytes)
+                self.last_write = time.monotonic()
+                if self._protocol and self._protocol._sensors:
+                    self._protocol._sensors.bytes_sent.record(total_bytes)
+        finally:
+            self._writing = False
         if self._closed:
             self._close()
         elif not self._write:
