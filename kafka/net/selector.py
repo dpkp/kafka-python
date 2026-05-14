@@ -148,6 +148,7 @@ class NetworkSelector:
         self._poll_lock = threading.Lock()
         self._poll_owner = None
         self._closed = False
+        self._exception = None
         self._stop = False
         self._selector = self.config['selector']()
         self._scheduled = [] # managed by heapq
@@ -185,6 +186,7 @@ class NetworkSelector:
             self.drain()
         except BaseException as exc:
             log.exception('IO loop crashed (client_id=%s)', self.config['client_id'])
+            self._exception = exc
             self._fail_pending_waiters(exc)
             raise
         else:
@@ -242,6 +244,8 @@ class NetworkSelector:
               "(or another IO-thread callback) calls a blocking consumer/admin API. "
               "Use AsyncConsumerRebalanceListener and await the async variant, "
               "or move the blocking work to a worker thread.")
+        elif self._exception:
+            raise self._exception from None
 
         event = threading.Event()
         state = {'value': None, 'exception': None}
@@ -288,6 +292,8 @@ class NetworkSelector:
         return task
 
     def call_soon_threadsafe(self, callback):
+        if self._exception:
+            raise self._exception from None
         task = self.call_soon(callback)
         self.wakeup()
         return task
