@@ -31,6 +31,17 @@ def test_config_resource():
     assert good_resource.configs == {'frob': 'nob'}
 
 
+def test_admin_client_context_manager_closes_on_exit(broker):
+    from kafka.admin import KafkaAdminClient
+    with KafkaAdminClient(
+        kafka_client=broker.client_factory(),
+        bootstrap_servers='%s:%d' % (broker.host, broker.port),
+        request_timeout_ms=5000,
+    ) as admin:
+        assert admin._closed is False
+    assert admin._closed is True
+
+
 # ---------------------------------------------------------------------------
 # MockBroker helpers
 # ---------------------------------------------------------------------------
