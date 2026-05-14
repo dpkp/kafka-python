@@ -196,14 +196,13 @@ class KafkaTCPTransport:
                     self._protocol._sensors.bytes_sent.record(total_bytes)
         finally:
             self._writing = False
-        if self._closed:
-            self._close()
+        if self._closed or err is not None:
+            self._close(error=err)
         elif not self._write:
             self._sock.shutdown(socket.SHUT_WR)
 
     def _sock_send(self):
         total_bytes = 0
-        err = None
         while self._write_buffer:
             next_chunk = self._write_buffer.popleft()
             # Wrap in memoryview so partial-send slicing is O(1) instead of
@@ -217,12 +216,11 @@ class KafkaTCPTransport:
                     next_chunk = next_chunk[sent_bytes:]
                 except (BlockingIOError, InterruptedError):
                     self._write_buffer.appendleft(next_chunk)
-                    return total_bytes, err
+                    return total_bytes, None
                 except BaseException as e:
                     log.exception("%s: Error sending request data: %s", self, e)
-                    err = Errors.KafkaConnectionError(e)
-                    return total_bytes, err
-        return total_bytes, err
+                    return total_bytes, Errors.KafkaConnectionError(e)
+        return total_bytes, None
 
     def write_eof(self):
         """Close the write end after flushing buffered data.
@@ -335,11 +333,11 @@ class KafkaTCPTransport:
     def host_port(self):
         try:
             host, port = self._sock.getpeername()[0:2]
-        except OSError:
+        except OSError, ValueError:
             return 'none'
         try:
             local_port = self._sock.getsockname()[1]
-        except OSError:
+        except OSError, ValueError:
             return f'{host}:{port}'
         return f'{host}:{port}<-{local_port}'
 
