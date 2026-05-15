@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.net.selector import NetworkSelector
 from kafka.net.transport import KafkaTCPTransport
@@ -137,6 +138,40 @@ class TestKafkaTCPTransport:
         t.abort()
         t.abort()
         proto.connection_lost.assert_called_once()
+
+    def test_sock_send_error_closes_transport(self, net, socketpair):
+        """If _sock_send returns an error, _write_to_sock must close the
+        transport and propagate the error via protocol.connection_lost.
+
+        Regression for an earlier bug where the err return value from
+        _sock_send was discarded and the loop kept retrying on a broken
+        socket forever.
+        """
+        _, wsock = socketpair
+        t = KafkaTCPTransport(net, wsock)
+        proto = MagicMock()
+        done = Future()
+        proto.connection_lost.side_effect = lambda err: done.success(err)
+        t.set_protocol(proto)
+
+        err = Errors.KafkaConnectionError('write failed')
+
+        # Stub _sock_send: drain one chunk (real _sock_send drops the chunk
+        # that errored — no appendleft on BaseException) and return the
+        # error so the while-loop's buffer check terminates.
+        def fake_sock_send():
+            if t._write_buffer:
+                t._write_buffer.popleft()
+            return 0, err
+        t._sock_send = fake_sock_send
+
+        t.write(b'data')
+        net.poll(timeout_ms=1000, future=done)
+
+        assert done.is_done
+        assert not t._writing
+        assert t._sock is None
+        proto.connection_lost.assert_called_once_with(err)
 
     def test_can_write_eof(self, net):
         sock = _make_mock_sock()

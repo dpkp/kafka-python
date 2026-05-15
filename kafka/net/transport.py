@@ -196,14 +196,13 @@ class KafkaTCPTransport:
                     self._protocol._sensors.bytes_sent.record(total_bytes)
         finally:
             self._writing = False
-        if self._closed:
-            self._close()
+        if self._closed or err is not None:
+            self._close(error=err)
         elif not self._write:
             self._sock.shutdown(socket.SHUT_WR)
 
     def _sock_send(self):
         total_bytes = 0
-        err = None
         while self._write_buffer:
             next_chunk = self._write_buffer.popleft()
             # Wrap in memoryview so partial-send slicing is O(1) instead of
@@ -217,12 +216,11 @@ class KafkaTCPTransport:
                     next_chunk = next_chunk[sent_bytes:]
                 except (BlockingIOError, InterruptedError):
                     self._write_buffer.appendleft(next_chunk)
-                    return total_bytes, err
+                    return total_bytes, None
                 except BaseException as e:
                     log.exception("%s: Error sending request data: %s", self, e)
-                    err = Errors.KafkaConnectionError(e)
-                    return total_bytes, err
-        return total_bytes, err
+                    return total_bytes, Errors.KafkaConnectionError(e)
+        return total_bytes, None
 
     def write_eof(self):
         """Close the write end after flushing buffered data.
@@ -255,13 +253,19 @@ class KafkaTCPTransport:
             self._close(error)
 
     def _close(self, error=None):
-        if self._sock:
-            self._net.unregister_event(self._sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
-            self._sock.close()
-            self._sock = None
-        if self._protocol:
-            self._protocol.connection_lost(error)
-            self._protocol = None
+        # idempotent; no lock
+        sock = self._sock
+        self._sock = None
+        if sock is not None:
+            try:
+                self._net.unregister_event(sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
+            except (KeyError, ValueError):
+                pass
+            sock.close()
+        proto = self._protocol
+        self._protocol = None
+        if proto is not None:
+            proto.connection_lost(error)
 
   # Twisted
     def abortConnection(self):
@@ -335,11 +339,11 @@ class KafkaTCPTransport:
     def host_port(self):
         try:
             host, port = self._sock.getpeername()[0:2]
-        except OSError:
+        except (OSError, ValueError):
             return 'none'
         try:
             local_port = self._sock.getsockname()[1]
-        except OSError:
+        except (OSError, ValueError):
             return f'{host}:{port}'
         return f'{host}:{port}<-{local_port}'
 
