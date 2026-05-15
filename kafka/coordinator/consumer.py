@@ -36,6 +36,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'session_timeout_ms': 10000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
+        'request_timeout_ms': 30000,
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'exclude_internal_topics': True,
@@ -623,6 +624,9 @@ class ConsumerCoordinator(BaseCoordinator):
     async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
         if not offsets:
             return
+        # Default to request_timeout_ms, matching offsets_by_times / _reset_offsets_async
+        if timeout_ms is None:
+            timeout_ms = self.config['request_timeout_ms']
         timer = Timer(timeout_ms)
         while True:
             await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)

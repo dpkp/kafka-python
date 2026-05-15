@@ -513,19 +513,28 @@ class KafkaConsumer:
         self.close(autocommit=exc_type is None)
 
     def close(self, autocommit=True, timeout_ms=None):
-        """Close the consumer, waiting indefinitely for any needed cleanup.
+        """Close the consumer, attempting any needed cleanup within a bounded
+        wall-clock budget.
 
         Keyword Arguments:
             autocommit (bool): If auto-commit is configured for this consumer,
                 this optional flag causes the consumer to attempt to commit any
                 pending consumed offsets prior to close. Default: True
-            timeout_ms (num, optional): Milliseconds to wait for auto-commit.
-                Default: None
+            timeout_ms (num, optional): Milliseconds to wait for auto-commit
+                and other in-flight close work. ``None`` falls back to
+                ``request_timeout_ms`` so close() can never hang indefinitely
+                even if the coordinator is unreachable. Default: None
         """
         if self._closed:
             return
         log.debug("Closing the KafkaConsumer.")
         self._closed = True
+        # Cap the auto-commit retry loop -- ``_commit_offsets_sync_async``
+        # retries forever when given ``None`` (Timer(None).expired is always
+        # False), so a coordinator that's down or stuck would otherwise hang
+        # close() until process exit.
+        if timeout_ms is None:
+            timeout_ms = self.config['request_timeout_ms']
         self._coordinator.close(autocommit=autocommit, timeout_ms=timeout_ms)
         if self._metrics:
             self._metrics.close()
