@@ -451,6 +451,11 @@ class KafkaConsumer:
         """Return True if the bootstrap is connected."""
         return self._client.bootstrap_connected()
 
+    def bootstrap(self, timeout_ms=None):
+        future = self._manager._bootstrap_future
+        if not self._manager.bootstrapped:
+            self._net.run(self._manager.wait_for, future, timeout_ms)
+
     def assign(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
 
