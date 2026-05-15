@@ -15,9 +15,10 @@ from kafka.structs import TopicPartition, OffsetAndTimestamp
 from test.testutil import Timer, assert_message_count, env_kafka_version, random_string
 
 
-def test_consumer(consumer):
-    consumer.poll(timeout_ms=500)
-    assert consumer._client.cluster.brokers()
+def test_consumer(kafka_consumer_factory):
+    with kafka_consumer_factory(api_version=None) as consumer:
+        consumer.poll(timeout_ms=500)
+        assert consumer._client.cluster.brokers()
 
 
 def test_consumer_topics(consumer, topic):
