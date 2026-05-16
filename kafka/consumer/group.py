@@ -1219,7 +1219,8 @@ class KafkaConsumer:
                     log.debug("Not returning fetched records for partition %s"
                               " since it is no longer fetchable", tp)
                     break
-                self._subscription.assignment[tp].position = OffsetAndMetadata(record.offset + 1, '', -1)
+                self._subscription.assignment[tp].position = OffsetAndMetadata(
+                    record.offset + 1, '', record.leader_epoch)
                 yield record
 
     def __iter__(self):  # pylint: disable=non-iterator-returned

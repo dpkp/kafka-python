@@ -522,10 +522,10 @@ class Fetcher:
                 if highwater is not None and self._sensors:
                     self._sensors.records_fetch_lag.record(highwater - part.next_fetch_offset)
                 if update_offsets or not part_records:
-                    # TODO: save leader_epoch
                     log.debug("Updating fetch position for assigned partition %s to %s (leader epoch %s)",
                               tp, part.next_fetch_offset, part.leader_epoch)
-                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(part.next_fetch_offset, '', -1)
+                    self._subscriptions.assignment[tp].position = OffsetAndMetadata(
+                        part.next_fetch_offset, '', part.leader_epoch)
                 return len(part_records)
 
             else:
