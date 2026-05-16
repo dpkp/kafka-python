@@ -451,8 +451,27 @@ class KafkaConsumer:
         """Return True if the bootstrap is connected."""
         return self._client.bootstrap_connected()
 
-    def bootstrap(self, timeout_ms=None):
-        self._manager.bootstrap(timeout_ms=timeout_ms, refresh=False)
+    def bootstrap(self, timeout_ms=None, refresh=False):
+        """Block until the consumer has bootstrapped cluster metadata.
+
+        Bootstrap is otherwise driven lazily by the IO thread when
+        metadata is first needed (e.g. on the first ``poll()`` or
+        ``topics()`` call). Call this to deterministically wait for
+        ``cluster.brokers()`` to be populated -- useful in tests and at
+        startup when the caller wants metadata available before issuing
+        the first request.
+
+        Arguments:
+            timeout_ms (int, optional): Maximum time to wait, in
+                milliseconds. ``None`` waits indefinitely. Default: None.
+            refresh (bool): If True, force a new bootstrap even when one
+                has already succeeded. Default: False.
+
+        Raises:
+            KafkaTimeoutError: If bootstrap does not complete within
+                ``timeout_ms``.
+        """
+        self._manager.bootstrap(timeout_ms=timeout_ms, refresh=refresh)
 
     def assign(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
