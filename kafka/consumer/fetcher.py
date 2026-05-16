@@ -555,10 +555,12 @@ class Fetcher:
         """Drive resets to completion or until the timer expires.
 
         Each iteration fans out per-node ListOffsets requests concurrently
-        and awaits all of them; backoff partitions are filtered out of
-        partitions_needing_reset() so the loop exits when there's no more
-        in-window work. If all partitions have unknown leaders, awaits a
-        metadata refresh and retries within the remaining budget.
+        and awaits all of them. After a retriable failure (NotLeader, etc.)
+        a partition's next_allowed_retry_time is set ``retry_backoff_ms`` in
+        the future; the loop sleeps until that time and retries rather than
+        relying on an external caller to redrive. If all partitions have
+        unknown leaders, awaits a metadata refresh and retries within the
+        remaining budget.
 
         Arguments:
             timeout_ms (int, optional): Hard upper bound on the loop's
@@ -575,9 +577,19 @@ class Fetcher:
             timeout_ms = self.config['request_timeout_ms']
         timer = Timer(timeout_ms)
         while not timer.expired:
+            if self._cached_list_offsets_exception is not None:
+                return
             partitions = self._subscriptions.partitions_needing_reset()
             if not partitions:
-                return
+                next_retry = self._subscriptions.next_offset_reset_retry_time()
+                if next_retry is None:
+                    return
+                delay = max(0.0, next_retry - time.monotonic())
+                if timer.timeout_ms is not None:
+                    delay = min(delay, timer.timeout_ms / 1000)
+                if delay > 0:
+                    await self._manager._net.sleep(delay)
+                continue
 
             offset_resets = {}
             for tp in partitions:

@@ -400,6 +400,13 @@ class SubscriptionState:
         return partitions
 
     @synchronized
+    def next_offset_reset_retry_time(self):
+        times = [state.next_allowed_retry_time
+                 for state in self.assignment.values()
+                 if state.awaiting_reset and state.next_allowed_retry_time is not None]
+        return min(times) if times else None
+
+    @synchronized
     def is_assigned(self, partition):
         return partition in self.assignment
 
