@@ -142,8 +142,8 @@ class KafkaConnectionManager:
             raise Errors.KafkaTimeoutError(
                 'Unable to bootstrap from %s' % (self.cluster.config['bootstrap_servers'],))
 
-    def bootstrap_async(self, timeout_ms=None):
-        if self._bootstrap_future is not None and not self._bootstrap_future.is_done:
+    def bootstrap_async(self, timeout_ms=None, refresh=True):
+        if self._bootstrap_future is not None and (not refresh or not self._bootstrap_future.is_done):
             return self._bootstrap_future
         deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000
         log.debug('Starting new bootstrap')
@@ -151,8 +151,8 @@ class KafkaConnectionManager:
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
 
-    def bootstrap(self, timeout_ms=None):
-        self._net.run(self.bootstrap_async, timeout_ms)
+    def bootstrap(self, timeout_ms=None, refresh=True):
+        self._net.run(self.bootstrap_async, timeout_ms, refresh)
 
     @property
     def bootstrapped(self):
