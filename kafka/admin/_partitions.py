@@ -24,6 +24,7 @@ from kafka.protocol.consumer import (
     ListOffsetsRequest, IsolationLevel, OffsetSpec, OffsetTimestamp,
 )
 from kafka.structs import TopicPartition, OffsetAndTimestamp
+from kafka.util import Timer
 
 
 if TYPE_CHECKING:
@@ -117,36 +118,59 @@ class PartitionAdminMixin:
 
     async def _async_delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
         timeout_ms = self._validate_timeout(timeout_ms)
-        if partition_leader_id is None:
-            leader2partitions = await self._async_get_leader_for_partitions(set(records_to_delete))
-        else:
-            leader2partitions = {partition_leader_id: set(records_to_delete)}
+        timer = Timer(timeout_ms)
+        backoff_secs = self.config['retry_backoff_ms'] / 1000
 
-        responses = []
-        for leader, partitions in leader2partitions.items():
-            topic2partitions = defaultdict(list)
-            for partition in partitions:
-                topic2partitions[partition.topic].append(partition)
-
-            request = DeleteRecordsRequest(
-                topics=[
-                    (topic, [(tp.partition, records_to_delete[tp]) for tp in partitions])
-                    for topic, partitions in topic2partitions.items()
-                ],
-                timeout_ms=timeout_ms
-            )
-            response = await self._manager.send(request, node_id=leader)
-            responses.append(response.to_dict())
-
+        pending = set(records_to_delete)
         partition2result = {}
         partition2error = {}
-        for response in responses:
-            for topic in response["topics"]:
-                for partition in topic["partitions"]:
-                    tp = TopicPartition(topic["name"], partition["partition_index"])
-                    partition2result[tp] = partition
-                    if partition["error_code"] != 0:
-                        partition2error[tp] = partition["error_code"]
+
+        while pending:
+            if partition_leader_id is None:
+                leader2partitions = await self._async_get_leader_for_partitions(pending)
+            else:
+                leader2partitions = {partition_leader_id: set(pending)}
+
+            responses = []
+            for leader, partitions in leader2partitions.items():
+                topic2partitions = defaultdict(list)
+                for partition in partitions:
+                    topic2partitions[partition.topic].append(partition)
+
+                request = DeleteRecordsRequest(
+                    topics=[
+                        (topic, [(tp.partition, records_to_delete[tp]) for tp in parts])
+                        for topic, parts in topic2partitions.items()
+                    ],
+                    timeout_ms=int(timer.timeout_ms) if timer.timeout_ms is not None else timeout_ms,
+                )
+                response = await self._manager.send(request, node_id=leader)
+                responses.append(response.to_dict())
+
+            retry_partitions = set()
+            for response in responses:
+                for topic in response["topics"]:
+                    for partition in topic["partitions"]:
+                        tp = TopicPartition(topic["name"], partition["partition_index"])
+                        err_code = partition["error_code"]
+                        if (err_code == Errors.NotLeaderForPartitionError.errno
+                                and partition_leader_id is None
+                                and not timer.expired):
+                            retry_partitions.add(tp)
+                            continue
+                        partition2result[tp] = partition
+                        pending.discard(tp)
+                        if err_code != 0:
+                            partition2error[tp] = err_code
+
+            if not retry_partitions:
+                break
+
+            log.debug(
+                'delete_records: NotLeaderForPartitionError on %d partition(s); '
+                'refreshing metadata and retrying', len(retry_partitions))
+            pending = retry_partitions
+            await self._net.sleep(min(backoff_secs, max(0.0, timer.timeout_secs or 0.0)))
 
         if partition2error:
             if len(partition2error) == 1:
@@ -169,12 +193,19 @@ class PartitionAdminMixin:
     def delete_records(self, records_to_delete, timeout_ms=None, partition_leader_id=None):
         """Delete records whose offset is smaller than the given offset of the corresponding partition.
 
+        Partitions whose response is :class:`~kafka.errors.NotLeaderForPartitionError`
+        are retried with refreshed metadata, bounded by ``timeout_ms`` (or the
+        admin client's ``request_timeout_ms`` when ``None``). When
+        ``partition_leader_id`` is supplied no retry is attempted; the caller
+        is asserting routing and any error is reported as-is.
+
         Arguments:
             records_to_delete ({TopicPartition: int}): The earliest available offsets for the
                 given partitions.
 
         Keyword Arguments:
-            timeout_ms (numeric, optional): Timeout in milliseconds.
+            timeout_ms (numeric, optional): Timeout in milliseconds. Also caps
+                the total time spent retrying NotLeaderForPartitionError.
             partition_leader_id (node_id / int, optional): If specified, all deletion requests
                 will be sent to this node.
 
@@ -463,13 +494,14 @@ class PartitionAdminMixin:
                 )
         return results
 
-    async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted'):
+    async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted', timeout_ms=None):
         isolation_level = IsolationLevel.build_from(isolation_level)
+        timer = Timer(self._validate_timeout(timeout_ms))
+        backoff_secs = self.config['retry_backoff_ms'] / 1000
         results = {}
         topic_partitions = set(topic_partition_specs.keys())
         while topic_partitions:
             leader2partitions = await self._async_get_leader_for_partitions(topic_partitions)
-
             for leader, partitions in leader2partitions.items():
                 request = self._list_partition_offsets_request(
                     {tp: spec for tp, spec in topic_partition_specs.items() if tp in partitions},
@@ -480,13 +512,25 @@ class PartitionAdminMixin:
                     topic_partitions -= partitions
                 except Errors.NotLeaderForPartitionError:
                     continue
+            if topic_partitions:
+                if timer.expired:
+                    raise Errors.NotLeaderForPartitionError(
+                        'list_partition_offsets timed out retrying NotLeaderForPartitionError '
+                        'for partitions: %s' % sorted(topic_partitions))
+                log.debug(
+                    'list_partition_offsets: NotLeaderForPartitionError on %d partition(s); '
+                    'refreshing metadata and retrying', len(topic_partitions))
+                await self._net.sleep(min(backoff_secs, max(0.0, timer.timeout_secs or 0.0)))
         return results
 
-    def list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted'):
+    def list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted', timeout_ms=None):
         """Look up offsets for the given partitions by spec.
 
         Partitions are routed to their respective leader brokers via cluster
-        metadata; one ``ListOffsetsRequest`` is sent per leader.
+        metadata; one ``ListOffsetsRequest`` is sent per leader. Partitions
+        that return :class:`~kafka.errors.NotLeaderForPartitionError` are
+        retried with refreshed metadata, bounded by ``timeout_ms`` (or the
+        admin client's ``request_timeout_ms`` when ``None``).
 
         Arguments:
             topic_partition_specs: dict mapping :class:`~kafka.TopicPartition` to
@@ -497,6 +541,8 @@ class PartitionAdminMixin:
             isolation_level (str, optional): One of ``'read_uncommitted'``
                 (default) or ``'read_committed'``. ``read_committed`` requires
                 broker support for ListOffsets v2+.
+            timeout_ms (int, optional): Maximum time to spend retrying
+                NotLeaderForPartitionError. Default: ``request_timeout_ms``.
 
         Returns:
             dict: A dict mapping :class:`~kafka.TopicPartition` to
@@ -504,13 +550,15 @@ class PartitionAdminMixin:
 
         Raises:
             KafkaError: If any partition response carries an error code.
+            NotLeaderForPartitionError: If NotLeaderForPartitionError retries
+                do not converge within ``timeout_ms``.
             UnknownTopicOrPartitionError: If a requested partition is not
                 known to the cluster.
             UnsupportedVersionError: If the broker does not support a version
                 of ListOffsetsRequest compatible with the requested specs.
         """
         return self._manager.run(
-            self._async_list_partition_offsets, topic_partition_specs, isolation_level)
+            self._async_list_partition_offsets, topic_partition_specs, isolation_level, timeout_ms)
 
 
 class NewPartitions:
