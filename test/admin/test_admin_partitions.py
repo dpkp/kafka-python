@@ -2,13 +2,15 @@ import uuid
 
 import pytest
 
-from kafka.admin import OffsetSpec
+from kafka.admin import OffsetSpec, KafkaAdminClient
 from kafka.errors import (
+    NotLeaderForPartitionError,
     UnknownTopicOrPartitionError,
     IncompatibleBrokerVersion,
 )
 from kafka.protocol.admin import (
     AlterPartitionReassignmentsRequest, AlterPartitionReassignmentsResponse,
+    DeleteRecordsRequest, DeleteRecordsResponse,
     ListPartitionReassignmentsRequest, ListPartitionReassignmentsResponse,
     DescribeTopicPartitionsRequest, DescribeTopicPartitionsResponse,
 )
@@ -593,3 +595,171 @@ class TestListPartitionOffsetsMockBroker:
         )
 
         assert captured['request'].isolation_level == 1
+
+
+def _delete_records_response(per_partition):
+    """per_partition: list of (topic, partition, low_watermark, error_code)."""
+    Topic = DeleteRecordsResponse.DeleteRecordsTopicResult
+    Partition = Topic.DeleteRecordsPartitionResult
+    by_topic = {}
+    for topic, partition, lwm, err in per_partition:
+        by_topic.setdefault(topic, []).append(Partition(
+            partition_index=partition, low_watermark=lwm, error_code=err))
+    return DeleteRecordsResponse(
+        throttle_time_ms=0,
+        topics=[Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+    )
+
+
+# ---------------------------------------------------------------------------
+# NotLeaderForPartitionError retry
+# ---------------------------------------------------------------------------
+
+
+class TestListPartitionOffsetsNotLeaderRetry:
+    def test_retries_on_not_leader_then_succeeds(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        # First response: NotLeaderForPartitionError. Second: success.
+        broker.respond(
+            ListOffsetsRequest,
+            _list_offsets_response([
+                ('topic-a', 0, -1, -1, -1, NotLeaderForPartitionError.errno),
+            ]),
+        )
+        broker.respond(
+            ListOffsetsRequest,
+            _list_offsets_response([('topic-a', 0, 42, -1, -1, 0)]),
+        )
+
+        result = admin.list_partition_offsets({
+            TopicPartition('topic-a', 0): OffsetSpec.LATEST,
+        })
+
+        assert result[TopicPartition('topic-a', 0)].offset == 42
+
+    def test_persistent_not_leader_raises_after_timeout(self, broker):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            return _list_offsets_response([
+                ('topic-a', 0, -1, -1, -1, NotLeaderForPartitionError.errno),
+            ])
+        # Always respond with NotLeader.
+        broker.respond_fn(ListOffsetsRequest, handler)
+        # Wide enough to outlive the bounded retry below.
+        for _ in range(20):
+            broker.respond_fn(ListOffsetsRequest, handler)
+
+        admin = KafkaAdminClient(
+            kafka_client=broker.client_factory(),
+            bootstrap_servers='%s:%d' % (broker.host, broker.port),
+            request_timeout_ms=200,
+            retry_backoff_ms=10,
+        )
+        try:
+            with pytest.raises(NotLeaderForPartitionError):
+                admin.list_partition_offsets({
+                    TopicPartition('topic-a', 0): OffsetSpec.LATEST,
+                })
+        finally:
+            admin.close()
+
+
+class TestDeleteRecordsMockBroker:
+    def test_success_returns_partition_results(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([
+                ('topic-a', 0, 100, 0),
+                ('topic-a', 1, 200, 0),
+            ]),
+        )
+
+        result = admin.delete_records({
+            TopicPartition('topic-a', 0): 100,
+            TopicPartition('topic-a', 1): 200,
+        })
+
+        assert result[TopicPartition('topic-a', 0)]['low_watermark'] == 100
+        assert result[TopicPartition('topic-a', 1)]['low_watermark'] == 200
+
+    def test_retries_not_leader_then_succeeds(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        # First request returns NotLeaderForPartitionError. Second succeeds.
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([
+                ('topic-a', 0, -1, NotLeaderForPartitionError.errno),
+            ]),
+        )
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([('topic-a', 0, 50, 0)]),
+        )
+
+        result = admin.delete_records({TopicPartition('topic-a', 0): 50})
+
+        assert result[TopicPartition('topic-a', 0)]['error_code'] == 0
+        assert result[TopicPartition('topic-a', 0)]['low_watermark'] == 50
+
+    def test_mixed_success_and_not_leader_retries_only_failed(self, broker, admin):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=2)
+        # First call: p0 succeeds, p1 is NotLeader. Retry: p1 succeeds.
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([
+                ('topic-a', 0, 10, 0),
+                ('topic-a', 1, -1, NotLeaderForPartitionError.errno),
+            ]),
+        )
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([('topic-a', 1, 20, 0)]),
+        )
+
+        result = admin.delete_records({
+            TopicPartition('topic-a', 0): 10,
+            TopicPartition('topic-a', 1): 20,
+        })
+
+        assert result[TopicPartition('topic-a', 0)]['low_watermark'] == 10
+        assert result[TopicPartition('topic-a', 1)]['low_watermark'] == 20
+
+    def test_partition_leader_id_disables_retry(self, broker, admin):
+        # When the caller pins the leader, NotLeader is surfaced as-is.
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(
+            DeleteRecordsRequest,
+            _delete_records_response([
+                ('topic-a', 0, -1, NotLeaderForPartitionError.errno),
+            ]),
+        )
+
+        with pytest.raises(NotLeaderForPartitionError):
+            admin.delete_records(
+                {TopicPartition('topic-a', 0): 100},
+                partition_leader_id=0,
+            )
+
+    def test_persistent_not_leader_reports_error_after_timeout(self, broker):
+        _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            return _delete_records_response([
+                ('topic-a', 0, -1, NotLeaderForPartitionError.errno),
+            ])
+        for _ in range(20):
+            broker.respond_fn(DeleteRecordsRequest, handler)
+
+        admin = KafkaAdminClient(
+            kafka_client=broker.client_factory(),
+            bootstrap_servers='%s:%d' % (broker.host, broker.port),
+            request_timeout_ms=200,
+            retry_backoff_ms=10,
+        )
+        try:
+            with pytest.raises(NotLeaderForPartitionError):
+                admin.delete_records({TopicPartition('topic-a', 0): 100})
+        finally:
+            admin.close()
