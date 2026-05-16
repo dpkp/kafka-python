@@ -159,7 +159,7 @@ class ClusterMetadata:
     async def _do_refresh_metadata(self, node_id):
         node_id = self._manager.least_loaded_node() if node_id is None else node_id
         if node_id is None:
-            log.warn('No node available for metadata refresh - backoff/retry')
+            log.warning('No node available for metadata refresh - backoff/retry')
             self._manager.update_backoff('metadata')
             raise Errors.NodeNotReadyError('metadata')
         else:

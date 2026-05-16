@@ -53,13 +53,13 @@ class GroupAdminMixin:
                     try:
                         member.member_metadata = ConsumerProtocolSubscription.decode(member.member_metadata)
                     except struct.error:
-                        log.warn(f'Unable to decode member_metadata for {group}/{member.member_id}')
+                        log.warning(f'Unable to decode member_metadata for {group}/{member.member_id}')
                         pass
                 if member.member_assignment:
                     try:
                         member.member_assignment = ConsumerProtocolAssignment.decode(member.member_assignment)
                     except struct.error:
-                        log.warn(f'Unable to decode member_assignment for {group}/{member.member_id}')
+                        log.warning(f'Unable to decode member_assignment for {group}/{member.member_id}')
                         pass
         # Return dict (key, val) tuples
         results = {}
