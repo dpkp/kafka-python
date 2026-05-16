@@ -119,7 +119,8 @@ class SubscriptionState:
                 guaranteed, however, that the partitions revoked/assigned
                 through this interface are from topics subscribed in this call.
         """
-        assert topics or pattern, 'Must provide topics or pattern'
+        if not (topics or pattern):
+            raise ValueError('Must provide topics or pattern')
         if (topics and pattern):
             raise Errors.IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 

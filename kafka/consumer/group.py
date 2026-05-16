@@ -993,7 +993,7 @@ class KafkaConsumer:
         Raises:
             IllegalStateError: If called after previously calling
                 :meth:`~kafka.KafkaConsumer.assign`.
-            AssertionError: If neither topics or pattern is provided.
+            ValueError: If neither topics or pattern is provided.
             TypeError: If listener is not a ConsumerRebalanceListener.
         """
         # SubscriptionState handles error checking
