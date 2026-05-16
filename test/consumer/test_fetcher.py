@@ -268,6 +268,48 @@ def test__reset_offsets_async(fetcher, manager, mocker):
     assert fetcher._subscriptions.assignment[tp1].position.offset == 1002
 
 
+def test__reset_offsets_async_retries_after_retriable_failure(
+        fetcher, manager, mocker):
+    """A retriable per-partition error (NotLeader, etc.) sets the partition
+    into retry_backoff_ms backoff. _reset_offsets_async must sleep for that
+    backoff and retry, rather than exit and rely on an outer caller to
+    redrive.
+    """
+    tp = TopicPartition("topic", 0)
+    fetcher._subscriptions.subscribe(topics=["topic"])
+    fetcher._subscriptions.assign_from_subscribed([tp])
+    fetcher._subscriptions.request_offset_reset(tp)
+    mocker.patch.object(fetcher._client.cluster, "leader_for_partition",
+                        return_value=0)
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+
+    # Use a small backoff to keep the test fast.
+    fetcher.config['retry_backoff_ms'] = 50
+
+    call_count = [0]
+    async def fake_send(node_id, timestamps_and_epochs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # Simulate NotLeader: empty offsets, partition in retry set.
+            return ({}, {tp})
+        return ({tp: OffsetAndTimestamp(42, None, -1)}, set())
+    mocker.patch.object(fetcher, '_send_list_offsets_request',
+                        side_effect=fake_send)
+
+    start = time.monotonic()
+    manager.run(fetcher._reset_offsets_async, 1000)
+    elapsed = time.monotonic() - start
+
+    assert call_count[0] == 2, (
+        'expected two ListOffsets attempts after retriable error, got %d'
+        % call_count[0])
+    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
+    assert fetcher._subscriptions.assignment[tp].position.offset == 42
+    assert elapsed >= 0.05, (
+        '_reset_offsets_async did not sleep for retry_backoff_ms; %.3fs'
+        % elapsed)
+
+
 def test__send_list_offsets_requests(fetcher, manager, net, mocker):
     tp = TopicPartition("topic_send_list_offsets", 1)
 
