@@ -913,7 +913,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     leader_epoch, metadata, error_code = partition_data[2:]
                 else:
                     metadata, error_code = partition_data[2:]
-                    leader_epoch = -1 # noqa: F841
+                    leader_epoch = -1
                 tp = TopicPartition(topic, partition)
                 error_type = Errors.for_code(error_code)
                 if error_type is not Errors.NoError:
@@ -940,8 +940,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 elif offset >= 0:
                     # record the position with the offset
                     # (-1 indicates no committed offset to fetch)
-                    # TODO: save leader_epoch
-                    offsets[tp] = OffsetAndMetadata(offset, metadata, -1)
+                    offsets[tp] = OffsetAndMetadata(offset, metadata, leader_epoch)
                 else:
                     log.debug("Group %s has no committed offset for partition"
                               " %s", self.group_id, tp)

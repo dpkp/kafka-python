@@ -407,6 +407,52 @@ class SubscriptionState:
         return min(times) if times else None
 
     @synchronized
+    def maybe_validate_position_for_current_leader(self, partition, current_leader_epoch):
+        if partition not in self.assignment:
+            return False
+        return self.assignment[partition].maybe_validate_position(current_leader_epoch)
+
+    @synchronized
+    def request_position_validation(self, partition):
+        if partition not in self.assignment:
+            return False
+        return self.assignment[partition].request_position_validation()
+
+    @synchronized
+    def partitions_needing_validation(self):
+        partitions = set()
+        for tp, state in self.assignment.items():
+            if state.awaiting_validation and state.is_validation_allowed():
+                partitions.add(tp)
+        return partitions
+
+    @synchronized
+    def next_offset_validation_retry_time(self):
+        times = [state.next_allowed_retry_time
+                 for state in self.assignment.values()
+                 if state.awaiting_validation and state.next_allowed_retry_time is not None]
+        return min(times) if times else None
+
+    @synchronized
+    def set_validation_pending(self, partitions, next_allowed_retry_time):
+        for partition in partitions:
+            self.assignment[partition].set_validation_pending(next_allowed_retry_time)
+
+    @synchronized
+    def validation_failed(self, partitions, next_allowed_retry_time):
+        for partition in partitions:
+            self.assignment[partition].validation_failed(next_allowed_retry_time)
+
+    @synchronized
+    def complete_validation(self, partition, validated_position=None):
+        if partition in self.assignment:
+            self.assignment[partition].complete_validation(validated_position)
+
+    @synchronized
+    def is_offset_validation_needed(self, partition):
+        return partition in self.assignment and self.assignment[partition].awaiting_validation
+
+    @synchronized
     def is_assigned(self, partition):
         return partition in self.assignment
 
@@ -453,6 +499,10 @@ class TopicPartitionState:
         self.highwater = None
         self.drop_pending_record_batch = False
         self.next_allowed_retry_time = None
+        # KIP-320: offset validation state. _awaiting_validation gates fetches
+        # until OffsetForLeaderEpoch confirms the position is consistent with
+        # the current leader's log; mutually exclusive with awaiting_reset.
+        self._awaiting_validation = False
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -469,6 +519,7 @@ class TopicPartitionState:
         self.reset_strategy = strategy
         self._position = None
         self.next_allowed_retry_time = None
+        self._awaiting_validation = False
 
     def is_reset_allowed(self):
         return self.next_allowed_retry_time is None or self.next_allowed_retry_time < time.monotonic()
@@ -495,6 +546,7 @@ class TopicPartitionState:
         self.reset_strategy = None
         self.drop_pending_record_batch = True
         self.next_allowed_retry_time = None
+        self._awaiting_validation = False
 
     def pause(self):
         self.paused = True
@@ -503,7 +555,55 @@ class TopicPartitionState:
         self.paused = False
 
     def is_fetchable(self):
-        return not self.paused and self.has_valid_position
+        return not self.paused and self.has_valid_position and not self._awaiting_validation
+
+    @property
+    def awaiting_validation(self):
+        return self._awaiting_validation
+
+    def maybe_validate_position(self, current_leader_epoch):
+        """Mark for validation if current leader has advanced beyond our position's epoch.
+
+        Returns True if the partition is now awaiting validation.
+        """
+        if self.reset_strategy is not None:
+            return False
+        if self._position is None:
+            return False
+        if current_leader_epoch is None or current_leader_epoch < 0:
+            return False
+        # Positions without a known epoch (legacy data, post-seek to bare offset)
+        # can't be validated; treat as already-fetchable.
+        if self._position.leader_epoch < 0:
+            return False
+        if self._position.leader_epoch >= current_leader_epoch:
+            return False
+        self._awaiting_validation = True
+        self.next_allowed_retry_time = None
+        return True
+
+    def request_position_validation(self):
+        """Force validation (e.g., after FENCED/UNKNOWN epoch errors from the broker)."""
+        if self._position is None or self._position.leader_epoch < 0:
+            return False
+        self._awaiting_validation = True
+        self.next_allowed_retry_time = None
+        return True
+
+    def is_validation_allowed(self):
+        return self.next_allowed_retry_time is None or self.next_allowed_retry_time < time.monotonic()
+
+    def set_validation_pending(self, next_allowed_retry_time):
+        self.next_allowed_retry_time = next_allowed_retry_time
+
+    def validation_failed(self, next_allowed_retry_time):
+        self.next_allowed_retry_time = next_allowed_retry_time
+
+    def complete_validation(self, validated_position=None):
+        self._awaiting_validation = False
+        self.next_allowed_retry_time = None
+        if validated_position is not None:
+            self._position = validated_position
 
 
 class ConsumerRebalanceListener(metaclass=abc.ABCMeta):

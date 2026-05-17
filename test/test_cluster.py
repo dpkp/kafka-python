@@ -8,6 +8,7 @@ import pytest
 from kafka.cluster import collect_hosts
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse
+from kafka.structs import TopicPartition
 
 Broker = MetadataResponse.MetadataResponseBroker
 Topic = MetadataResponse.MetadataResponseTopic
@@ -95,6 +96,41 @@ class TestClusterMetadataUpdateMetadata:
 
         # topic should be added to unauthorized list
         assert 'unauthorized-topic' in cluster.unauthorized_topics
+
+
+class TestClusterMetadataPartitionLookups:
+    """Cover the per-partition lookups (leader_for_partition,
+    leader_epoch_for_partition) for known and unknown partitions.
+
+    Regression for an issue where ``leader_epoch_for_partition`` raised
+    KeyError on an assigned-but-not-yet-known topic, breaking
+    ``Fetcher.maybe_validate_positions`` during the first poll after
+    ``KafkaConsumer.assign(...)``.
+    """
+
+    def _seed_topic(self, cluster, version=7):
+        response = _make_metadata_response(version)
+        response = MetadataResponse.decode(response.encode(), version=version)
+        cluster.update_metadata(response)
+
+    def test_known_partition_returns_leader_and_epoch(self, cluster):
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 0)
+        assert cluster.leader_for_partition(tp) == 0
+        assert cluster.leader_epoch_for_partition(tp) == 0
+
+    def test_unknown_topic_returns_none(self, cluster):
+        # Cluster has no topics; both lookups should return None, not raise.
+        tp = TopicPartition('not-a-topic', 0)
+        assert cluster.leader_for_partition(tp) is None
+        assert cluster.leader_epoch_for_partition(tp) is None
+
+    def test_unknown_partition_returns_none(self, cluster):
+        # Topic exists with partition 0 only; partition 99 must not raise.
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 99)
+        assert cluster.leader_for_partition(tp) is None
+        assert cluster.leader_epoch_for_partition(tp) is None
 
 
 class TestClusterMetadataTopics:
