@@ -299,6 +299,11 @@ class ClusterMetadata:
         return self._partitions[partition.topic][partition.partition].leader_id
 
     def leader_epoch_for_partition(self, partition):
+        """Return leader_epoch for partition, or None if topic/partition is unknown."""
+        if partition.topic not in self._partitions:
+            return None
+        elif partition.partition not in self._partitions[partition.topic]:
+            return None
         return self._partitions[partition.topic][partition.partition].leader_epoch
 
     def partitions_for_broker(self, broker_id):
