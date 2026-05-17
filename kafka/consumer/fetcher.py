@@ -10,7 +10,8 @@ from kafka.future import Future
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.protocol.consumer import FetchRequest
 from kafka.protocol.consumer import (
-    ListOffsetsRequest, OffsetSpec, UNKNOWN_OFFSET, IsolationLevel
+    ListOffsetsRequest, OffsetForLeaderEpochRequest,
+    OffsetSpec, UNKNOWN_OFFSET, IsolationLevel,
 )
 from kafka.record import MemoryRecords
 from kafka.serializer import Deserializer
@@ -39,6 +40,8 @@ _FetchPartition = _FetchTopic.FetchPartition
 _ForgottenTopic = FetchRequest.ForgottenTopic
 _ListOffsetsTopic = ListOffsetsRequest.ListOffsetsTopic
 _ListOffsetsPartition = _ListOffsetsTopic.ListOffsetsPartition
+_OffsetForLeaderTopic = OffsetForLeaderEpochRequest.OffsetForLeaderTopic
+_OffsetForLeaderPartition = _OffsetForLeaderTopic.OffsetForLeaderPartition
 
 
 class RecordTooLargeError(Errors.KafkaError):
@@ -136,6 +139,11 @@ class Fetcher:
         # consumer.position blocking-await) share one fan-out instead of
         # racing duplicate ListOffsets requests.
         self._reset_task = None
+        # KIP-320 offset validation: same caching pattern, separate from
+        # reset (a partition can be awaiting-reset OR awaiting-validation,
+        # never both - awaiting-validation requires a valid position).
+        self._validation_task = None
+        self._cached_log_truncation = None
 
     @property
     def _enable_incremental_fetch_sessions(self):
@@ -808,6 +816,283 @@ class Fetcher:
             raise Errors.TopicAuthorizationFailedError(unauthorized_topics)
         return fetched_offsets, partitions_to_retry
 
+    # ------------------------------------------------------------------
+    # KIP-320: offset validation via OffsetForLeaderEpoch
+    # ------------------------------------------------------------------
+
+    def maybe_validate_positions(self):
+        """Walk assigned partitions; mark any whose cluster leader epoch has
+        advanced beyond the position's epoch as awaiting validation.
+
+        Cheap fire-and-forget marker; the actual RPC fan-out runs in
+        ``validate_offsets_if_needed`` -> ``_validate_offsets_async``.
+        Idempotent: partitions already awaiting validation, awaiting
+        reset, or with no recorded epoch are skipped inside
+        ``maybe_validate_position``.
+        """
+        for tp in self._subscriptions.assigned_partitions():
+            current_epoch = self._manager.cluster.leader_epoch_for_partition(tp)
+            self._subscriptions.maybe_validate_position_for_current_leader(tp, current_epoch)
+
+    def validate_offsets_if_needed(self, timeout_ms=None):
+        """Schedule any pending position validations and return the in-flight Task.
+
+        Mirrors :meth:`reset_offsets_if_needed`: returns a cached Future
+        shared across callers so concurrent ``consumer.poll`` and
+        ``consumer.position`` callers don't race the same partition into
+        duplicate OffsetForLeaderEpoch requests.
+
+        Raises:
+            LogTruncationError: if a previous validation detected truncation
+                on one or more partitions. The exception is cleared after
+                being raised so subsequent calls will re-attempt validation.
+        """
+        exc, self._cached_log_truncation = self._cached_log_truncation, None
+        if exc:
+            raise exc
+
+        if self._validation_task is not None and not self._validation_task.is_done:
+            return self._validation_task
+
+        if not self._subscriptions.partitions_needing_validation():
+            return None
+
+        self._validation_task = self._manager.call_soon(
+            self._validate_offsets_async, timeout_ms)
+        return self._validation_task
+
+    async def _validate_offsets_async(self, timeout_ms=None):
+        """Drive offset validations to completion or until the timer expires.
+
+        Same overall shape as ``_reset_offsets_async``: per-node fan-out.
+        After a retriable failure (FencedLeaderEpoch, etc.) a partition's
+        next_allowed_retry_time is set ``retry_backoff_ms`` in the future;
+        the loop sleeps until that time and retries rather than relying on
+        an external caller to redrive. Stops on first ``LogTruncationError``
+        accumulation; the next caller surfaces it.
+        """
+        if timeout_ms is None:
+            timeout_ms = self.config['request_timeout_ms']
+        timer = Timer(timeout_ms)
+        while not timer.expired:
+            if self._cached_log_truncation is not None:
+                return
+            partitions = self._subscriptions.partitions_needing_validation()
+            if not partitions:
+                next_retry = self._subscriptions.next_offset_validation_retry_time()
+                if next_retry is None:
+                    return
+                delay = max(0.0, next_retry - time.monotonic())
+                if timer.timeout_ms is not None:
+                    delay = min(delay, timer.timeout_ms / 1000)
+                if delay > 0:
+                    await self._manager._net.sleep(delay)
+                continue
+
+            positions = {}
+            for tp in partitions:
+                state = self._subscriptions.assignment[tp]
+                if state.position is not None and state.position.leader_epoch >= 0:
+                    positions[tp] = state.position
+            if not positions:
+                return
+
+            requests_by_node = self._group_offset_for_leader_epoch_requests(positions)
+            if not requests_by_node:
+                metadata_update = self._manager.cluster.request_update()
+                wait_ms = self.config['request_timeout_ms']
+                if timer.timeout_ms is not None:
+                    wait_ms = min(wait_ms, timer.timeout_ms)
+                try:
+                    await self._manager.wait_for(metadata_update, wait_ms)
+                except Errors.KafkaTimeoutError:
+                    pass
+                continue
+
+            log.debug('Validating offsets for %s', set(positions.keys()))
+            node_tasks = []
+            for node_id, payload in requests_by_node.items():
+                node_partitions = set(payload.keys())
+                expire_at = time.monotonic() + self.config['request_timeout_ms'] / 1000
+                self._subscriptions.set_validation_pending(node_partitions, expire_at)
+                node_tasks.append(self._manager.call_soon(
+                    self._validate_offsets_for_node, node_id, payload))
+            for task in node_tasks:
+                await task
+
+    async def _validate_offsets_for_node(self, node_id, partitions_to_positions):
+        try:
+            truncations = await self._send_offset_for_leader_epoch_request(
+                node_id, partitions_to_positions)
+        except Exception as error:
+            self._subscriptions.validation_failed(
+                set(partitions_to_positions),
+                time.monotonic() + self.config['retry_backoff_ms'] / 1000)
+            self._manager.cluster.request_update()
+            if not getattr(error, 'retriable', False):
+                log.error("Non-retriable error from OffsetForLeaderEpoch on node %s: %s",
+                          node_id, error)
+            return
+
+        if truncations:
+            if self._cached_log_truncation is None:
+                self._cached_log_truncation = Errors.LogTruncationError(truncations)
+            else:
+                self._cached_log_truncation.divergent_offsets.update(truncations)
+
+    def _group_offset_for_leader_epoch_requests(self, positions):
+        """Group {TopicPartition: OffsetAndMetadata} by leader node.
+
+        Partitions whose leader is unknown trigger a metadata refresh and
+        are dropped from this round. Partitions whose position lacks an
+        epoch are also dropped - they can't be validated.
+        """
+        by_node = collections.defaultdict(dict)
+        for tp, position in positions.items():
+            if position.leader_epoch < 0:
+                continue
+            node_id = self._manager.cluster.leader_for_partition(tp)
+            if node_id is None:
+                self._manager.cluster.add_topic(tp.topic)
+                self._manager.cluster.request_update()
+            elif node_id == -1:
+                self._manager.cluster.request_update()
+            else:
+                by_node[node_id][tp] = position
+        return dict(by_node)
+
+    async def _send_offset_for_leader_epoch_request(self, node_id, partitions_to_positions):
+        """Send one OffsetForLeaderEpoch request and return any truncations.
+
+        Returns:
+            dict[TopicPartition, OffsetAndMetadata]: partitions whose log
+            was truncated past their position. Successful validations
+            update :class:`SubscriptionState` directly via
+            ``complete_validation``; retriable per-partition errors leave
+            ``next_allowed_retry_time`` set so the outer loop will retry.
+
+        Raises:
+            TopicAuthorizationFailedError: if any topic returned an auth error.
+        """
+        by_topic = collections.defaultdict(list)
+        for tp, position in partitions_to_positions.items():
+            current_leader_epoch = self._manager.cluster.leader_epoch_for_partition(tp)
+            if current_leader_epoch is None or current_leader_epoch < 0:
+                current_leader_epoch = -1
+            by_topic[tp.topic].append(_OffsetForLeaderPartition(
+                partition=tp.partition,
+                current_leader_epoch=current_leader_epoch,
+                leader_epoch=position.leader_epoch,
+            ))
+
+        request = OffsetForLeaderEpochRequest(
+            replica_id=-1,
+            topics=list(by_topic.items()),
+        )
+
+        log.debug("Sending OffsetForLeaderEpochRequest %s to broker %s", request, node_id)
+        response = await self._manager.send(request, node_id=node_id)
+        return self._handle_offset_for_leader_epoch_response(response, partitions_to_positions)
+
+    def _handle_offset_for_leader_epoch_response(self, response, requested_positions):
+        """Parse an OffsetForLeaderEpoch response.
+
+        Side effects: calls ``complete_validation`` / ``validation_failed``
+        / ``request_position_validation`` on the subscription state as
+        appropriate for each partition's response code.
+
+        Returns:
+            dict[TopicPartition, OffsetAndMetadata]: subset of requested
+            partitions where end_offset < requested position (truncation).
+        """
+        truncations = {}
+        unauthorized_topics = set()
+        retry_at = time.monotonic() + self.config['retry_backoff_ms'] / 1000
+        retry = set()
+
+        for topic_data in response.topics:
+            for partition_info in topic_data.partitions:
+                tp = TopicPartition(topic_data.topic, partition_info.partition)
+                requested = requested_positions.get(tp)
+                if requested is None:
+                    continue
+                error_type = Errors.for_code(partition_info.error_code)
+
+                if error_type is Errors.NoError:
+                    end_offset = partition_info.end_offset
+                    end_epoch = partition_info.leader_epoch
+                    if end_epoch is None:
+                        end_epoch = -1
+                    current = self._subscriptions.assignment[tp].position if \
+                        self._subscriptions.is_assigned(tp) else None
+                    # Position may have changed (seek, rebalance) since request
+                    # was sent; skip stale completions.
+                    if current is None or current != requested:
+                        log.debug("Skipping validation completion for %s: position "
+                                  "changed since request was sent", tp)
+                        continue
+                    if end_offset < 0 or end_epoch < 0:
+                        # Broker has no record of our requested epoch
+                        # (UNDEFINED_EPOCH_OFFSET). Drop the epoch and accept
+                        # the offset as validated; the next fetch will tag
+                        # it with the current epoch.
+                        validated = OffsetAndMetadata(
+                            current.offset, current.metadata, -1)
+                        self._subscriptions.complete_validation(tp, validated)
+                    elif end_offset < current.offset:
+                        # Java behavior: apply auto_offset_reset before
+                        # raising so steady-state consumers recover without
+                        # the user catching LogTruncationError. With policy
+                        # NONE the caller is on the hook.
+                        if self._subscriptions.has_default_offset_reset_policy():
+                            log.warning("Log truncation detected on %s: end offset %d "
+                                        "(epoch %d) < current position %d (epoch %d). "
+                                        "Resetting offset per auto_offset_reset policy.",
+                                        tp, end_offset, end_epoch,
+                                        current.offset, current.leader_epoch)
+                            self._subscriptions.request_offset_reset(tp)
+                        else:
+                            log.warning("Log truncation detected on %s: end offset %d "
+                                        "(epoch %d) < current position %d (epoch %d)",
+                                        tp, end_offset, end_epoch,
+                                        current.offset, current.leader_epoch)
+                            truncations[tp] = OffsetAndMetadata(
+                                end_offset, current.metadata, end_epoch)
+                            # Clear awaiting_validation so caller can act
+                            # (seek, raise, etc.); position remains at the
+                            # diverging offset until the caller acts.
+                            self._subscriptions.complete_validation(tp)
+                    else:
+                        validated = OffsetAndMetadata(
+                            current.offset, current.metadata, end_epoch)
+                        self._subscriptions.complete_validation(tp, validated)
+
+                elif error_type in (Errors.FencedLeaderEpochError,
+                                    Errors.UnknownLeaderEpochError,
+                                    Errors.NotLeaderForPartitionError,
+                                    Errors.ReplicaNotAvailableError,
+                                    Errors.KafkaStorageError,
+                                    Errors.LeaderNotAvailableError):
+                    log.debug("OffsetForLeaderEpoch for %s returned retriable %s; "
+                              "will retry after backoff", tp, error_type.__name__)
+                    self._manager.cluster.request_update()
+                    retry.add(tp)
+                elif error_type is Errors.UnknownTopicOrPartitionError:
+                    log.warning("OffsetForLeaderEpoch for %s: unknown topic/partition", tp)
+                    retry.add(tp)
+                elif error_type is Errors.TopicAuthorizationFailedError:
+                    unauthorized_topics.add(tp.topic)
+                else:
+                    log.warning("OffsetForLeaderEpoch for %s failed with %s",
+                                tp, error_type.__name__)
+                    retry.add(tp)
+
+        if retry:
+            self._subscriptions.validation_failed(retry, retry_at)
+        if unauthorized_topics:
+            raise Errors.TopicAuthorizationFailedError(unauthorized_topics)
+        return truncations
+
     def _fetchable_partitions(self):
         fetchable = self._subscriptions.fetchable_partitions()
         # do not fetch a partition if we have a pending fetch response to process
@@ -1022,6 +1307,15 @@ class Fetcher:
                                 Errors.UnknownTopicOrPartitionError,
                                 Errors.KafkaStorageError):
                 log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
+                self._manager.cluster.request_update()
+            elif error_type in (Errors.FencedLeaderEpochError,
+                                Errors.UnknownLeaderEpochError):
+                # KIP-320: the broker has a different view of the leader epoch
+                # than we do; ask for metadata refresh and queue position
+                # validation so we detect any truncation before continuing.
+                log.debug("Fetch for %s returned %s; marking position for validation",
+                          tp, error_type.__name__)
+                self._subscriptions.request_position_validation(tp)
                 self._manager.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:
                 position = self._subscriptions.assignment[tp].position
