@@ -1031,36 +1031,42 @@ class Fetcher:
                         log.debug("Skipping validation completion for %s: position "
                                   "changed since request was sent", tp)
                         continue
+
+                    has_reset_policy = self._subscriptions.has_default_offset_reset_policy()
+
                     if end_offset < 0 or end_epoch < 0:
-                        # Broker has no record of our requested epoch
-                        # (UNDEFINED_EPOCH_OFFSET). Drop the epoch and accept
-                        # the offset as validated; the next fetch will tag
-                        # it with the current epoch.
-                        validated = OffsetAndMetadata(
-                            current.offset, current.metadata, -1)
-                        self._subscriptions.complete_validation(tp, validated)
-                    elif end_offset < current.offset:
-                        # Java behavior: apply auto_offset_reset before
-                        # raising so steady-state consumers recover without
-                        # the user catching LogTruncationError. With policy
-                        # NONE the caller is on the hook.
-                        if self._subscriptions.has_default_offset_reset_policy():
-                            log.warning("Log truncation detected on %s: end offset %d "
-                                        "(epoch %d) < current position %d (epoch %d). "
-                                        "Resetting offset per auto_offset_reset policy.",
-                                        tp, end_offset, end_epoch,
-                                        current.offset, current.leader_epoch)
+                        # UNDEFINED_EPOCH / UNDEFINED_EPOCH_OFFSET: broker has
+                        # no record of our requested epoch on this partition.
+                        # Mirror Java SubscriptionState.maybeCompleteValidation:
+                        # this is truncation with no known diverging offset.
+                        if has_reset_policy:
+                            log.info("Truncation detected for %s at position %s "
+                                     "(broker returned UNDEFINED end_offset/leader_epoch); "
+                                     "resetting offset per auto_offset_reset policy",
+                                     tp, current.offset)
                             self._subscriptions.request_offset_reset(tp)
                         else:
-                            log.warning("Log truncation detected on %s: end offset %d "
-                                        "(epoch %d) < current position %d (epoch %d)",
-                                        tp, end_offset, end_epoch,
-                                        current.offset, current.leader_epoch)
-                            truncations[tp] = OffsetAndMetadata(
-                                end_offset, current.metadata, end_epoch)
-                            # Clear awaiting_validation so caller can act
-                            # (seek, raise, etc.); position remains at the
-                            # diverging offset until the caller acts.
+                            log.warning("Truncation detected for %s at position %s "
+                                        "(broker returned UNDEFINED end_offset/leader_epoch), "
+                                        "but no reset policy is set", tp, current.offset)
+                            truncations[tp] = None
+                            self._subscriptions.complete_validation(tp)
+                    elif end_offset < current.offset:
+                        # Broker confirms the diverging point. Seek there
+                        # directly instead of resetting via policy, so the
+                        # consumer only re-reads records past the divergence
+                        # (Java: state.seekValidated(newPosition)).
+                        divergent = OffsetAndMetadata(end_offset, '', end_epoch)
+                        if has_reset_policy:
+                            log.info("Truncation detected for %s at position %s; "
+                                     "seeking to first diverging offset %s",
+                                     tp, current.offset, divergent)
+                            self._subscriptions.seek(tp, divergent)
+                        else:
+                            log.warning("Truncation detected for %s at position %s "
+                                        "(first diverging offset is %s), but no reset "
+                                        "policy is set", tp, current.offset, divergent)
+                            truncations[tp] = divergent
                             self._subscriptions.complete_validation(tp)
                     else:
                         validated = OffsetAndMetadata(
