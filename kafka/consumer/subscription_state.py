@@ -566,7 +566,7 @@ class TopicPartitionState:
 
         Returns True if the partition is now awaiting validation.
         """
-        if self.reset_strategy is not None:
+        if self.awaiting_reset:
             return False
         if self._position is None:
             return False
