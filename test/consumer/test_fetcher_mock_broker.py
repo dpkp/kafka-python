@@ -143,11 +143,12 @@ class TestKIP320OffsetValidation:
         assert fetcher._subscriptions.assignment[tp].position.leader_epoch == 5
         assert fetcher._subscriptions.assignment[tp].position.offset == 50
 
-    def test_truncation_triggers_auto_reset_with_policy(
+    def test_diverged_seeks_to_endpoint_with_policy(
             self, broker, manager, fetcher):
-        """end_offset < position.offset on the wire response triggers
-        ``request_offset_reset`` instead of surfacing
-        LogTruncationError (default policy is 'earliest')."""
+        """end_offset < position.offset (valid epoch) on the wire triggers
+        a seek to the broker-reported divergence point - preserves progress
+        and tags position with the confirmed epoch. Mirrors Java's
+        ``state.seekValidated(newPosition)``."""
         tp = TopicPartition(TOPIC, PARTITION)
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(100, '', 3))
         fetcher._subscriptions.maybe_validate_position_for_current_leader(tp, 5)
@@ -157,16 +158,18 @@ class TestKIP320OffsetValidation:
 
         manager.run(fetcher._validate_offsets_async, 1000)
 
-        # Auto-reset path: no cached truncation, partition awaiting reset
         assert fetcher._cached_log_truncation is None
-        assert fetcher._subscriptions.assignment[tp].awaiting_reset
+        assert not fetcher._subscriptions.assignment[tp].awaiting_reset
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+        pos = fetcher._subscriptions.assignment[tp].position
+        assert pos.offset == 80
+        assert pos.leader_epoch == 3
 
-    def test_truncation_raises_when_no_reset_policy(
+    def test_diverged_raises_when_no_reset_policy(
             self, broker, client, manager, metrics):
         """With offset_reset_strategy=NONE, the same wire response
-        produces LogTruncationError carrying the diverging offsets."""
-        # Re-create the fetcher with explicit NONE policy.
+        produces LogTruncationError carrying the divergent offset and
+        leaves the position untouched."""
         _broker_metadata(broker, leader_epoch=3)
         manager.bootstrap(timeout_ms=5000)
         subs = SubscriptionState(offset_reset_strategy='none')
@@ -186,8 +189,55 @@ class TestKIP320OffsetValidation:
             fetcher.validate_offsets_if_needed()
         divergent = exc_info.value.divergent_offsets
         assert tp in divergent
+        assert divergent[tp] is not None
         assert divergent[tp].offset == 80
         assert divergent[tp].leader_epoch == 3
+        # Position untouched.
+        assert subs.assignment[tp].position.offset == 100
+
+    def test_undefined_response_resets_with_policy(
+            self, broker, manager, fetcher):
+        """UNDEFINED end_offset/leader_epoch (broker has no record of our
+        epoch) with a reset policy: no known seek point, so fall back to
+        auto_offset_reset rather than silently dropping the epoch."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(100, '', 3))
+        fetcher._subscriptions.maybe_validate_position_for_current_leader(tp, 5)
+
+        broker.respond(OffsetForLeaderEpochRequest,
+                       _ofle_response(error_code=0, leader_epoch=-1, end_offset=-1))
+
+        manager.run(fetcher._validate_offsets_async, 1000)
+
+        assert fetcher._cached_log_truncation is None
+        assert fetcher._subscriptions.assignment[tp].awaiting_reset
+        assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+
+    def test_undefined_response_raises_when_no_reset_policy(
+            self, broker, client, manager, metrics):
+        """UNDEFINED response with reset policy NONE: LogTruncationError
+        with divergent_offsets[tp] == None (no known recovery point)."""
+        _broker_metadata(broker, leader_epoch=3)
+        manager.bootstrap(timeout_ms=5000)
+        subs = SubscriptionState(offset_reset_strategy='none')
+        subs.subscribe(topics=[TOPIC])
+        tp = TopicPartition(TOPIC, PARTITION)
+        subs.assign_from_subscribed([tp])
+        subs.seek(tp, OffsetAndMetadata(100, '', 3))
+        fetcher = Fetcher(client, subs, metrics=metrics, retry_backoff_ms=50)
+        subs.maybe_validate_position_for_current_leader(tp, 5)
+
+        broker.respond(OffsetForLeaderEpochRequest,
+                       _ofle_response(error_code=0, leader_epoch=-1, end_offset=-1))
+
+        manager.run(fetcher._validate_offsets_async, 1000)
+
+        with pytest.raises(Errors.LogTruncationError) as exc_info:
+            fetcher.validate_offsets_if_needed()
+        assert tp in exc_info.value.divergent_offsets
+        assert exc_info.value.divergent_offsets[tp] is None
+        # Position untouched; caller decides.
+        assert subs.assignment[tp].position.offset == 100
 
     def test_fenced_epoch_on_fetch_marks_validation_then_succeeds(
             self, broker, manager, fetcher):
