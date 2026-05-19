@@ -17,7 +17,8 @@ from kafka.future import Future
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.consumer import (
     FetchRequest, FetchResponse,
-    ListOffsetsResponse, OffsetResetStrategy,
+    ListOffsetsResponse, OffsetForLeaderEpochResponse,
+    OffsetResetStrategy,
 )
 from kafka.errors import (
     StaleMetadata, NotLeaderForPartitionError,
@@ -1049,3 +1050,319 @@ class TestFetchOffsetsByTimes:
 
         result = fetcher.offsets_by_times(timestamps, timeout_ms=None)
         assert result == {tp: expected_offset}
+
+
+# ----------------------------------------------------------------------
+# KIP-320: offset validation via OffsetForLeaderEpoch
+# ----------------------------------------------------------------------
+
+_OffsetForLeaderTopicResult = OffsetForLeaderEpochResponse.OffsetForLeaderTopicResult
+_EpochEndOffset = _OffsetForLeaderTopicResult.EpochEndOffset
+
+
+def _build_offset_for_leader_epoch_response(entries):
+    """entries: list of (topic, partition, error_code, leader_epoch, end_offset)."""
+    by_topic = {}
+    for topic, partition, error_code, leader_epoch, end_offset in entries:
+        by_topic.setdefault(topic, []).append(_EpochEndOffset(
+            error_code=error_code, partition=partition,
+            leader_epoch=leader_epoch, end_offset=end_offset))
+    topics = [_OffsetForLeaderTopicResult(topic=t, partitions=ps)
+              for t, ps in by_topic.items()]
+    return OffsetForLeaderEpochResponse(throttle_time_ms=0, topics=topics)
+
+
+def test_maybe_validate_positions_marks_stale_epoch(fetcher, mocker):
+    """When cluster's leader_epoch advances beyond a position's epoch,
+    maybe_validate_positions should mark the partition for validation."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(100, '', 3))
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=5)
+
+    fetcher.maybe_validate_positions()
+
+    assert fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert not fetcher._subscriptions.is_fetchable(tp)
+
+
+def test_maybe_validate_positions_skips_position_without_epoch(fetcher, mocker):
+    """Positions seeded without a leader_epoch (-1, legacy/post-seek) can't
+    be validated and should be left alone."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(100, '', -1))
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=5)
+
+    fetcher.maybe_validate_positions()
+
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert fetcher._subscriptions.is_fetchable(tp)
+
+
+def test_maybe_validate_positions_no_op_when_epoch_current(fetcher, mocker):
+    """Position's epoch matches cluster's epoch -> no validation needed."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(100, '', 5))
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=5)
+
+    fetcher.maybe_validate_positions()
+
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+
+
+def test_validate_offsets_async_clears_validation_on_matching_epoch(
+        fetcher, manager, mocker):
+    """OffsetForLeaderEpoch response with matching epoch and end_offset >=
+    position.offset clears awaiting_validation."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(50, '', 3))
+    fetcher._subscriptions.assignment[tp].maybe_validate_position(5)
+    assert fetcher._subscriptions.assignment[tp].awaiting_validation
+
+    mocker.patch.object(fetcher._manager.cluster, 'leader_for_partition',
+                        return_value=0)
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=5)
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+
+    async def fake_send(node_id, partitions_to_positions):
+        response = _build_offset_for_leader_epoch_response(
+            [('foobar', 0, 0, 5, 100)])
+        return fetcher._handle_offset_for_leader_epoch_response(
+            response, partitions_to_positions)
+    mocker.patch.object(fetcher, '_send_offset_for_leader_epoch_request',
+                        side_effect=fake_send)
+
+    manager.run(fetcher._validate_offsets_async, 1000)
+
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert fetcher._subscriptions.assignment[tp].position.leader_epoch == 5
+    assert fetcher._subscriptions.assignment[tp].position.offset == 50
+
+
+def _stub_validation_send(fetcher, mocker, response_entries):
+    """Stub _send_offset_for_leader_epoch_request to deliver a fixed
+    OffsetForLeaderEpochResponse and route it through the real handler so
+    SubscriptionState side-effects (seek / request_offset_reset /
+    complete_validation) actually fire."""
+    async def fake_send(node_id, partitions_to_positions):
+        response = _build_offset_for_leader_epoch_response(response_entries)
+        return fetcher._handle_offset_for_leader_epoch_response(
+            response, partitions_to_positions)
+    mocker.patch.object(fetcher, '_send_offset_for_leader_epoch_request',
+                        side_effect=fake_send)
+
+
+def _make_validating_fetcher(client, metrics, topic, position, *,
+                              offset_reset_strategy='earliest',
+                              current_leader_epoch=5):
+    """Build a fetcher with `topic` subscribed, partition 0 assigned, the
+    given position, and `_awaiting_validation=True` against
+    `current_leader_epoch`."""
+    subs = SubscriptionState(offset_reset_strategy=offset_reset_strategy)
+    subs.subscribe(topics=[topic])
+    tp = TopicPartition(topic, 0)
+    subs.assign_from_subscribed([tp])
+    subs.seek(tp, position)
+    fetcher = Fetcher(client, subs, metrics=metrics)
+    subs.assignment[tp].maybe_validate_position(current_leader_epoch)
+    assert subs.assignment[tp].awaiting_validation
+    return fetcher, tp
+
+
+def _patch_leader(fetcher, mocker, node_id=0, leader_epoch=5):
+    mocker.patch.object(fetcher._manager.cluster, 'leader_for_partition',
+                        return_value=node_id)
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=leader_epoch)
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+
+
+# Truncation matrix (mirroring Java SubscriptionState.maybeCompleteValidation):
+#
+# | broker says        | reset policy   | expected outcome                  |
+# |--------------------|----------------|-----------------------------------|
+# | end < position     | earliest/latest| seek to (end_offset, end_epoch)   |
+# | end < position     | none           | LogTruncationError w/ divergent   |
+# | UNDEFINED          | earliest/latest| request_offset_reset              |
+# | UNDEFINED          | none           | LogTruncationError w/ None        |
+
+def test_validate_offsets_async_diverged_seeks_with_policy(
+        client, metrics, mocker, topic):
+    """Diverged endpoint (end_offset < current.offset, valid epoch) with a
+    reset policy: seek directly to (end_offset, end_epoch) - preserves
+    progress up to the divergence and tags the new position with the
+    broker-confirmed epoch."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3))
+    _patch_leader(fetcher, mocker)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, 3, 80)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    assert fetcher._cached_log_truncation is None
+    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    # Position was SEEKED to the diverging endpoint, not reset.
+    pos = fetcher._subscriptions.assignment[tp].position
+    assert pos.offset == 80
+    assert pos.leader_epoch == 3
+    assert fetcher.validate_offsets_if_needed() is None
+
+
+def test_validate_offsets_async_diverged_raises_when_no_reset_policy(
+        client, metrics, mocker, topic):
+    """Diverged endpoint with reset policy NONE: cache LogTruncationError
+    carrying the broker-reported divergent offset; do not move position."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3),
+        offset_reset_strategy='none')
+    _patch_leader(fetcher, mocker)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, 3, 80)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    assert fetcher._cached_log_truncation is not None
+    with pytest.raises(Errors.LogTruncationError) as exc_info:
+        fetcher.validate_offsets_if_needed()
+    divergent = exc_info.value.divergent_offsets[tp]
+    assert divergent is not None
+    assert divergent.offset == 80
+    assert divergent.leader_epoch == 3
+    # Position untouched; caller acts on the exception.
+    assert fetcher._subscriptions.assignment[tp].position.offset == 100
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
+
+
+def test_validate_offsets_async_undefined_resets_with_policy(
+        client, metrics, mocker, topic):
+    """UNDEFINED response (broker has no record of our epoch) with a reset
+    policy: no known seek point, so fall back to auto_offset_reset."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3))
+    _patch_leader(fetcher, mocker)
+    # end_offset=-1 AND leader_epoch=-1 (UNDEFINED_EPOCH_OFFSET / UNDEFINED_EPOCH)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, -1, -1)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    assert fetcher._cached_log_truncation is None
+    assert fetcher._subscriptions.assignment[tp].awaiting_reset
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+
+
+def test_validate_offsets_async_undefined_only_end_offset_resets(
+        client, metrics, mocker, topic):
+    """Just end_offset=UNDEFINED (epoch valid) still treated as truncation."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3))
+    _patch_leader(fetcher, mocker)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, 3, -1)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    assert fetcher._subscriptions.assignment[tp].awaiting_reset
+
+
+def test_validate_offsets_async_undefined_only_leader_epoch_resets(
+        client, metrics, mocker, topic):
+    """Just leader_epoch=UNDEFINED (offset valid) still treated as truncation."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3))
+    _patch_leader(fetcher, mocker)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, -1, 200)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    assert fetcher._subscriptions.assignment[tp].awaiting_reset
+
+
+def test_validate_offsets_async_undefined_raises_when_no_reset_policy(
+        client, metrics, mocker, topic):
+    """UNDEFINED response with reset policy NONE: cache LogTruncationError
+    with divergent_offsets[tp] == None (no known recovery point)."""
+    fetcher, tp = _make_validating_fetcher(
+        client, metrics, topic, OffsetAndMetadata(100, '', 3),
+        offset_reset_strategy='none')
+    _patch_leader(fetcher, mocker)
+    _stub_validation_send(fetcher, mocker, [(topic, 0, 0, -1, -1)])
+
+    fetcher._manager._net.run(fetcher._validate_offsets_async, 1000)
+
+    with pytest.raises(Errors.LogTruncationError) as exc_info:
+        fetcher.validate_offsets_if_needed()
+    assert tp in exc_info.value.divergent_offsets
+    assert exc_info.value.divergent_offsets[tp] is None
+    # Position untouched.
+    assert fetcher._subscriptions.assignment[tp].position.offset == 100
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert not fetcher._subscriptions.assignment[tp].awaiting_reset
+
+
+def test_validate_offsets_async_retries_on_fenced_epoch(
+        fetcher, manager, mocker):
+    """FENCED_LEADER_EPOCH on the validation RPC sleeps retry_backoff_ms
+    and retries within a single _validate_offsets_async invocation."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(50, '', 3))
+    fetcher._subscriptions.assignment[tp].maybe_validate_position(5)
+
+    mocker.patch.object(fetcher._manager.cluster, 'leader_for_partition',
+                        return_value=0)
+    mocker.patch.object(fetcher._manager.cluster, 'leader_epoch_for_partition',
+                        return_value=5)
+    mocker.patch.object(fetcher._client, 'ready', return_value=True)
+    fetcher.config['retry_backoff_ms'] = 50
+
+    call_count = [0]
+    async def fake_send(node_id, partitions_to_positions):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # First response: FENCED_LEADER_EPOCH (errno 74)
+            response = _build_offset_for_leader_epoch_response(
+                [('foobar', 0, 74, -1, -1)])
+        else:
+            response = _build_offset_for_leader_epoch_response(
+                [('foobar', 0, 0, 5, 100)])
+        return fetcher._handle_offset_for_leader_epoch_response(
+            response, partitions_to_positions)
+    mocker.patch.object(fetcher, '_send_offset_for_leader_epoch_request',
+                        side_effect=fake_send)
+
+    start = time.monotonic()
+    manager.run(fetcher._validate_offsets_async, 1000)
+    elapsed = time.monotonic() - start
+
+    assert call_count[0] == 2, (
+        'expected second OffsetForLeaderEpoch attempt after FENCED, got %d'
+        % call_count[0])
+    assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+    assert elapsed >= 0.05, (
+        '_validate_offsets_async did not sleep for retry_backoff_ms; %.3fs'
+        % elapsed)
+
+
+def test_fetch_response_fenced_epoch_marks_validation(fetcher, mocker):
+    """A FENCED_LEADER_EPOCH error in a Fetch response should mark the
+    partition for validation, not silently drop the records."""
+    tp = TopicPartition('foobar', 0)
+    fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(50, '', 3))
+    mocker.patch.object(fetcher._manager.cluster, 'request_update')
+
+    # Build a CompletedFetch with FENCED_LEADER_EPOCH (errno 74)
+    completion = _build_completed_fetch(
+        tp, [], error=Errors.FencedLeaderEpochError, offset=50)
+    fetcher._parse_fetched_data(completion)
+
+    assert fetcher._subscriptions.assignment[tp].awaiting_validation
+    fetcher._manager.cluster.request_update.assert_called()
+
+
+def test_validate_offsets_if_needed_no_op_when_no_partitions(fetcher):
+    """No partitions awaiting validation -> validate_offsets_if_needed
+    returns None without scheduling a task."""
+    assert fetcher.validate_offsets_if_needed() is None
+    assert fetcher._validation_task is None

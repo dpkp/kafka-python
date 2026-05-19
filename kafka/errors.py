@@ -66,6 +66,36 @@ class NoOffsetForPartitionError(KafkaError):
     pass
 
 
+class LogTruncationError(KafkaError):
+    """The broker's log was truncated past the consumer's current position.
+
+    Raised by the offset-validation flow (KIP-320) when an
+    ``OffsetForLeaderEpoch`` response indicates the consumer has read past
+    records that no longer exist under its leader_epoch on the current
+    leader - typically the result of an unclean leader election that
+    promoted a follower with a shorter log, silently rolling back records
+    the consumer thought it had consumed.
+
+    Distinct from :class:`OffsetOutOfRangeError`, which signals that
+    retention/compaction deleted records *below* the consumer's position.
+
+    ``divergent_offsets`` is a ``dict[TopicPartition, Optional[OffsetAndMetadata]]``:
+
+    - When the broker reports a concrete diverging endpoint (its end_offset
+      for our epoch is below our position), the value is an
+      ``OffsetAndMetadata(end_offset, ..., end_epoch)`` - the safe point to
+      seek back to.
+    - When the broker has no record of our epoch at all (response carried
+      ``UNDEFINED_EPOCH`` / ``UNDEFINED_EPOCH_OFFSET``), the value is
+      ``None`` - we know truncation occurred but there is no known
+      recovery point on this broker.
+    """
+
+    def __init__(self, divergent_offsets, *args):
+        self.divergent_offsets = divergent_offsets
+        super().__init__(*args or ('Detected truncated partitions: %s' % (divergent_offsets,),))
+
+
 class NodeNotReadyError(KafkaError):
     retriable = True
 

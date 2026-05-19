@@ -770,6 +770,11 @@ class KafkaConsumer:
         # _reset_offsets_async self-drives metadata refresh + retry-backoff
         # within request_timeout_ms.
         self._fetcher.reset_offsets_if_needed()
+        # KIP-320: mark any positions whose cluster leader epoch has advanced
+        # beyond the position's epoch, then drive OffsetForLeaderEpoch
+        # validation in the background. Truncation surfaces on the next call.
+        self._fetcher.maybe_validate_positions()
+        self._fetcher.validate_offsets_if_needed()
 
         # Cap the fetch wait by the heartbeat deadline so we don't block past
         # when the coordinator wants to send the next heartbeat.
@@ -805,6 +810,18 @@ class KafkaConsumer:
         if reset_task is not None and not timer.expired:
             try:
                 self._net.run(self._manager.wait_for, reset_task, timer.timeout_ms)
+            except Errors.KafkaTimeoutError:
+                pass
+        # Phase 3 (KIP-320): mark any positions whose cluster leader epoch
+        # has advanced beyond the position's epoch and await the validation
+        # RPC. Surfaces LogTruncationError to the caller if truncation is
+        # detected (and auto_offset_reset is NONE).
+        self._fetcher.maybe_validate_positions()
+        validation_task = self._fetcher.validate_offsets_if_needed(
+            timeout_ms=timer.timeout_ms)
+        if validation_task is not None and not timer.expired:
+            try:
+                self._net.run(self._manager.wait_for, validation_task, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 pass
         position = self._subscription.assignment[partition].position
@@ -1219,7 +1236,8 @@ class KafkaConsumer:
                     log.debug("Not returning fetched records for partition %s"
                               " since it is no longer fetchable", tp)
                     break
-                self._subscription.assignment[tp].position = OffsetAndMetadata(record.offset + 1, '', -1)
+                self._subscription.assignment[tp].position = OffsetAndMetadata(
+                    record.offset + 1, '', record.leader_epoch)
                 yield record
 
     def __iter__(self):  # pylint: disable=non-iterator-returned
