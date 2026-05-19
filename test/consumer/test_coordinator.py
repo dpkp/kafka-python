@@ -379,15 +379,21 @@ def test_fetch_committed_offsets(mocker, coordinator):
     async def _ready(*args, **kwargs):
         return True
     mocker.patch.object(coordinator, 'ensure_coordinator_ready_async', side_effect=_ready)
+    # _send_offset_fetch_request is an async coroutine; scheduled via
+    # manager.call_soon so the mock must also be a coroutine function.
+    async def fake_send_success(_partitions):
+        return 'foobar'
     mocker.patch.object(coordinator, '_send_offset_fetch_request',
-                        return_value=Future().success('foobar'))
+                        side_effect=fake_send_success)
     partitions = [TopicPartition('foobar', 0)]
     ret = coordinator.fetch_committed_offsets(partitions)
     assert ret == 'foobar'
     coordinator._send_offset_fetch_request.assert_called_with(partitions)
 
-    # Failed future is raised if not retriable
-    coordinator._send_offset_fetch_request.return_value = Future().failure(AssertionError)
+    # Non-retriable error is raised
+    async def fake_send_assertion_error(_partitions):
+        raise AssertionError
+    coordinator._send_offset_fetch_request.side_effect = fake_send_assertion_error
     try:
         coordinator.fetch_committed_offsets(partitions)
     except AssertionError:
@@ -395,9 +401,13 @@ def test_fetch_committed_offsets(mocker, coordinator):
     else:
         assert False, 'Exception not raised when expected'
 
-    coordinator._send_offset_fetch_request.side_effect = [
-        Future().failure(Errors.RequestTimedOutError),
-        Future().success('fizzbuzz')]
+    # Retriable error then success
+    async def fake_send_retry_then_success(_partitions):
+        if not hasattr(fake_send_retry_then_success, 'called'):
+            fake_send_retry_then_success.called = True
+            raise Errors.RequestTimedOutError
+        return 'fizzbuzz'
+    coordinator._send_offset_fetch_request.side_effect = fake_send_retry_then_success
 
     ret = coordinator.fetch_committed_offsets(partitions)
     assert ret == 'fizzbuzz'
@@ -434,12 +444,16 @@ def offsets():
 
 
 def test_commit_offsets_async(mocker, coordinator, offsets):
-    mocker.patch.object(coordinator._client, 'poll')
     mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
     mocker.patch.object(coordinator, 'ensure_coordinator_ready')
+    # _send_offset_commit_request is an async coroutine; scheduled via
+    # manager.call_soon so we drive the event loop to trigger the mock.
+    async def fake_send(_offsets):
+        return 'fizzbuzz'
     mocker.patch.object(coordinator, '_send_offset_commit_request',
-                        return_value=Future().success('fizzbuzz'))
-    coordinator.commit_offsets_async(offsets)
+                        side_effect=fake_send)
+    future = coordinator.commit_offsets_async(offsets)
+    coordinator._client.poll(future=future, timeout_ms=1000)
     assert coordinator._send_offset_commit_request.call_count == 1
 
 
@@ -447,8 +461,11 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
     async def _ready(*args, **kwargs):
         return True
     mocker.patch.object(coordinator, 'ensure_coordinator_ready_async', side_effect=_ready)
+
+    async def fake_send_success(_offsets):
+        return 'fizzbuzz'
     mocker.patch.object(coordinator, '_send_offset_commit_request',
-                        return_value=Future().success('fizzbuzz'))
+                        side_effect=fake_send_success)
 
     # No offsets, no calls
     assert coordinator.commit_offsets_sync({}) is None
@@ -458,8 +475,10 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
     assert coordinator._send_offset_commit_request.call_count == 1
     assert ret == 'fizzbuzz'
 
-    # Failed future is raised if not retriable
-    coordinator._send_offset_commit_request.return_value = Future().failure(AssertionError)
+    # Non-retriable error is raised
+    async def fake_send_assertion_error(_offsets):
+        raise AssertionError
+    coordinator._send_offset_commit_request.side_effect = fake_send_assertion_error
     try:
         coordinator.commit_offsets_sync(offsets)
     except AssertionError:
@@ -467,9 +486,13 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
     else:
         assert False, 'Exception not raised when expected'
 
-    coordinator._send_offset_commit_request.side_effect = [
-        Future().failure(Errors.RequestTimedOutError),
-        Future().success('fizzbuzz')]
+    # Retriable error is retried, then success
+    async def fake_send_retry_then_success(_offsets):
+        if not hasattr(fake_send_retry_then_success, 'called'):
+            fake_send_retry_then_success.called = True
+            raise Errors.RequestTimedOutError
+        return 'fizzbuzz'
+    coordinator._send_offset_commit_request.side_effect = fake_send_retry_then_success
 
     ret = coordinator.commit_offsets_sync(offsets)
     assert ret == 'fizzbuzz'
@@ -532,18 +555,16 @@ def seeded_coord(broker, coordinator):
 
 
 def test_send_offset_commit_request_fail(coordinator, offsets):
-    # Default coordinator state has coordinator_id=None, so coordinator()
-    # returns None and the early-return paths fire without any patching.
+    # _send_offset_commit_request is an async coroutine; run it via the
+    # selector. Default coordinator state has coordinator_id=None, so
+    # coordinator() returns None and the no-coordinator path fires.
 
-    # No offsets
-    ret = coordinator._send_offset_commit_request({})
-    assert isinstance(ret, Future)
-    assert ret.succeeded()
+    # No offsets — coroutine returns None
+    assert coordinator._net.run(coordinator._send_offset_commit_request, {}) is None
 
-    # No coordinator
-    ret = coordinator._send_offset_commit_request(offsets)
-    assert ret.failed()
-    assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
+    # No coordinator — coroutine raises
+    with pytest.raises(Errors.CoordinatorNotAvailableError):
+        coordinator._net.run(coordinator._send_offset_commit_request, offsets)
 
 
 @pytest.mark.parametrize('broker,version', [
@@ -569,7 +590,8 @@ def test_send_offset_commit_request_versions(broker, seeded_coord, offsets, vers
             ])])
 
     broker.respond_fn(OffsetCommitRequest, handler)
-    future = seeded_coord._send_offset_commit_request(offsets)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_commit_request, offsets)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
     assert future.succeeded()
     assert captured['api_version'] == version
@@ -580,16 +602,21 @@ def test_send_offset_commit_request_failure(mocker, broker, seeded_coord, offset
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetCommitRequest, error=error)
 
-    future = seeded_coord._send_offset_commit_request(offsets)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_commit_request, offsets)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
 
     assert future.failed()
     assert future.exception is error
+    # The async coro raises on send failure, so the call_soon Future
+    # carries the exception. _failed_request still fires for its side
+    # effect (mark coordinator dead); future arg is None since the
+    # coroutine itself surfaces the exception.
     assert spy.call_count == 1
     node_id, request, call_future, call_error = spy.call_args[0]
     assert node_id == 0
     assert isinstance(request, OffsetCommitRequest)
-    assert call_future is future
+    assert call_future is None
     assert call_error is error
 
 
@@ -604,14 +631,14 @@ def test_send_offset_commit_request_success(mocker, broker, seeded_coord, offset
         ])]))
     spy = mocker.spy(seeded_coord, '_handle_offset_commit_response')
 
-    future = seeded_coord._send_offset_commit_request(offsets)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_commit_request, offsets)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
 
     assert future.succeeded()
     assert spy.call_count == 1
-    call_offsets, call_future, _send_time, response = spy.call_args[0]
+    call_offsets, _send_time, response = spy.call_args[0]
     assert call_offsets == offsets
-    assert call_future is future
     assert isinstance(response, OffsetCommitResponse)
 
 
@@ -657,9 +684,11 @@ def test_send_offset_commit_request_success(mocker, broker, seeded_coord, offset
 ])
 def test_handle_offset_commit_response(coordinator, offsets, response, error, dead):
     coordinator.coordinator_id = 0
-    future = Future()
-    coordinator._handle_offset_commit_response(offsets, future, time.monotonic(), response)
-    assert isinstance(future.exception, error) if error else True
+    if error is None:
+        coordinator._handle_offset_commit_response(offsets, time.monotonic(), response)
+    else:
+        with pytest.raises(error):
+            coordinator._handle_offset_commit_response(offsets, time.monotonic(), response)
     assert coordinator.coordinator_id is (None if dead else 0)
 
 
@@ -669,18 +698,15 @@ def partitions():
 
 
 def test_send_offset_fetch_request_fail(coordinator, partitions):
-    # Default coordinator state has coordinator_id=None.
+    # _send_offset_fetch_request is an async coroutine; run it via the
+    # selector. Default coordinator state has coordinator_id=None.
 
-    # No partitions
-    ret = coordinator._send_offset_fetch_request([])
-    assert isinstance(ret, Future)
-    assert ret.succeeded()
-    assert ret.value == {}
+    # No partitions — coroutine returns {}
+    assert coordinator._net.run(coordinator._send_offset_fetch_request, []) == {}
 
-    # No coordinator
-    ret = coordinator._send_offset_fetch_request(partitions)
-    assert ret.failed()
-    assert isinstance(ret.exception, Errors.CoordinatorNotAvailableError)
+    # No coordinator — coroutine raises
+    with pytest.raises(Errors.CoordinatorNotAvailableError):
+        coordinator._net.run(coordinator._send_offset_fetch_request, partitions)
 
 
 @pytest.mark.parametrize('broker,version', [
@@ -710,7 +736,8 @@ def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, ve
             ])])
 
     broker.respond_fn(OffsetFetchRequest, handler)
-    future = seeded_coord._send_offset_fetch_request(partitions)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_fetch_request, partitions)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
     assert future.succeeded()
     assert captured['api_version'] == version
@@ -721,16 +748,20 @@ def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partiti
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetFetchRequest, error=error)
 
-    future = seeded_coord._send_offset_fetch_request(partitions)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_fetch_request, partitions)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
 
     assert future.failed()
     assert future.exception is error
+    # The async coro raises on send failure; the call_soon Future carries
+    # the exception. _failed_request still fires for its side effect
+    # (mark coordinator dead) with future=None.
     assert spy.call_count == 1
     node_id, request, call_future, call_error = spy.call_args[0]
     assert node_id == 0
     assert isinstance(request, OffsetFetchRequest)
-    assert call_future is future
+    assert call_future is None
     assert call_error is error
 
 
@@ -748,14 +779,14 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
         ])]))
     spy = mocker.spy(seeded_coord, '_handle_offset_fetch_response')
 
-    future = seeded_coord._send_offset_fetch_request(partitions)
+    future = seeded_coord._manager.call_soon(
+        seeded_coord._send_offset_fetch_request, partitions)
     seeded_coord._client.poll(future=future, timeout_ms=5000)
 
     assert future.succeeded()
     assert future.value == offsets
     assert spy.call_count == 1
-    call_future, response = spy.call_args[0]
-    assert call_future is future
+    (response,) = spy.call_args[0]
     assert isinstance(response, OffsetFetchResponse)
 
 
@@ -785,13 +816,11 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
 ])
 def test_handle_offset_fetch_response(coordinator, offsets, response, error, dead):
     coordinator.coordinator_id = 0
-    future = Future()
-    coordinator._handle_offset_fetch_response(future, response)
     if error is not None:
-        assert isinstance(future.exception, error)
+        with pytest.raises(error):
+            coordinator._handle_offset_fetch_response(response)
     else:
-        assert future.succeeded()
-        assert future.value == offsets
+        assert coordinator._handle_offset_fetch_response(response) == offsets
     assert coordinator.coordinator_id is (None if dead else 0)
 
 
@@ -1265,8 +1294,13 @@ def test_heartbeat(mocker, coordinator):
 
 
 def test_lookup_coordinator_failure(mocker, coordinator):
-
+    # _send_group_coordinator_request is now an async coroutine scheduled
+    # via manager.call_soon, so we drive the event loop to let the mock
+    # fire before asserting on the returned future.
+    async def fake_send():
+        raise Exception('foobar')
     mocker.patch.object(coordinator, '_send_group_coordinator_request',
-                        return_value=Future().failure(Exception('foobar')))
+                        side_effect=fake_send)
     future = coordinator.lookup_coordinator()
+    coordinator._client.poll(future=future, timeout_ms=1000)
     assert future.failed()

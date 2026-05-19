@@ -217,6 +217,9 @@ class Fetcher:
         Returns:
             List of Futures: each future resolves to a FetchResponse
         """
+        return self._manager.run(self._send_fetches_async)
+
+    async def _send_fetches_async(self):
         futures = []
         for node_id, (request, fetch_offsets) in self._create_fetch_requests().items():
             log.debug("Sending FetchRequest to node %s", node_id)
