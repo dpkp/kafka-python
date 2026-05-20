@@ -39,7 +39,7 @@ from kafka.protocol.producer import (
     TxnOffsetCommitResponse,
 )
 from kafka.record import MemoryRecords
-from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.structs import ConsumerGroupMetadata, OffsetAndMetadata, TopicPartition
 
 from test.mock_broker import MockBroker
 from test.test_mock_broker import _poll_for_future
@@ -836,7 +836,8 @@ class TestAddOffsetsToTxnHandlerMockBroker:
                 TopicPartition('foo', 0):
                     OffsetAndMetadata(offset=10, metadata='', leader_epoch=-1),
             }
-        handler = AddOffsetsToTxnHandler(tm, group_id, offsets)
+        group_metadata = ConsumerGroupMetadata(group_id=group_id)
+        handler = AddOffsetsToTxnHandler(tm, group_metadata, offsets)
         tm._enqueue_request(handler)
         return handler, group_id, offsets
 
@@ -974,7 +975,8 @@ class TestTxnOffsetCommitHandlerMockBroker:
         tm._pending_txn_offset_commits.update(offsets)
         from kafka.producer.transaction_manager import TransactionalRequestResult
         result = TransactionalRequestResult()
-        handler = TxnOffsetCommitHandler(tm, group_id, offsets, result)
+        group_metadata = ConsumerGroupMetadata(group_id=group_id)
+        handler = TxnOffsetCommitHandler(tm, group_metadata, offsets, result)
         tm._enqueue_request(handler)
         return handler, tp
 
@@ -1105,7 +1107,7 @@ class TestTxnOffsetCommitHandlerMockBroker:
         tm._pending_txn_offset_commits.update(offsets)
         from kafka.producer.transaction_manager import TransactionalRequestResult
         result = TransactionalRequestResult()
-        handler = TxnOffsetCommitHandler(tm, 'my-group', offsets, result)
+        handler = TxnOffsetCommitHandler(tm, ConsumerGroupMetadata('my-group'), offsets, result)
         tm._enqueue_request(handler)
 
         broker.respond(
@@ -1124,6 +1126,119 @@ class TestTxnOffsetCommitHandlerMockBroker:
         assert tp_retry in tm._pending_txn_offset_commits
         # Result not yet done--the retry has to complete first.
         assert not result.is_done
+
+
+# ---------------------------------------------------------------------------
+# KIP-447: ConsumerGroupMetadata threading
+# ---------------------------------------------------------------------------
+
+
+class TestKip447ConsumerGroupMetadata:
+    """KIP-447: TxnOffsetCommit v3+ must carry generation_id / member_id /
+    group_instance_id so the broker can fence stale consumer instances.
+
+    The TxnOffsetCommit request uses the modern style (max_version=3 cap
+    + per-connection api_versions negotiation), so we assert the v3 fields
+    are *populated* on the request object — the wire encoding drops them
+    automatically when the negotiated version is v0-v2.
+    """
+
+    def _offsets(self):
+        return {TopicPartition('foo', 0):
+                OffsetAndMetadata(offset=10, metadata='', leader_epoch=-1)}
+
+    def test_v3_request_carries_member_and_generation(self, broker, client):
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        tm._consumer_group_coordinator = 0
+        gm = ConsumerGroupMetadata(group_id='g', generation_id=42,
+                                   member_id='m-1', group_instance_id='inst-A')
+        from kafka.producer.transaction_manager import TransactionalRequestResult
+        result = TransactionalRequestResult()
+        handler = TxnOffsetCommitHandler(tm, gm, self._offsets(), result)
+
+        # max_version caps at 3; connection negotiates the actual version.
+        assert handler.request._max_version == 3
+        assert handler.request.API_VERSION is None
+        assert handler.request.generation_id == 42
+        assert handler.request.member_id == 'm-1'
+        assert handler.request.group_instance_id == 'inst-A'
+        assert handler.request.group_id == 'g'
+
+    def test_request_negotiates_down_to_v2_against_old_broker(self, broker, client):
+        """When the broker only supports v0-v2, the connection negotiates v2
+        and the v3-only fields drop off the wire."""
+        from kafka.protocol.broker_version_data import BrokerVersionData
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        gm = ConsumerGroupMetadata(group_id='g', generation_id=42,
+                                   member_id='m-1', group_instance_id='inst')
+        from kafka.producer.transaction_manager import TransactionalRequestResult
+        handler = TxnOffsetCommitHandler(tm, gm, self._offsets(),
+                                         TransactionalRequestResult())
+
+        # Simulate a 2.1-era broker capped at TxnOffsetCommit v2.
+        broker_data = BrokerVersionData(api_versions={28: (0, 2)})
+        assert broker_data.api_version(handler.request) == 2
+
+        # And a 2.5+ broker negotiates v3.
+        broker_data = BrokerVersionData(api_versions={28: (0, 3)})
+        assert broker_data.api_version(handler.request) == 3
+
+    def test_send_offsets_to_transaction_accepts_bare_string(self, broker, client):
+        """Back-compat: legacy callers pass a group_id str; wrap into metadata
+        with no-generation defaults so broker treats it as a non-fenced
+        commit (which is the v0–v2 behavior on older brokers anyway)."""
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        tm._consumer_group_coordinator = 0
+        result = tm.send_offsets_to_transaction(self._offsets(), 'legacy-group')
+
+        # Find the enqueued AddOffsetsToTxnHandler and inspect its metadata.
+        handlers = [h for h in _pending_handlers(tm)
+                    if isinstance(h, AddOffsetsToTxnHandler)]
+        assert len(handlers) == 1
+        assert handlers[0].consumer_group_id == 'legacy-group'
+        assert handlers[0].group_metadata.generation_id == -1
+        assert handlers[0].group_metadata.member_id == ''
+        assert handlers[0].group_metadata.group_instance_id is None
+        # Cleanup: not driving through to completion in this test.
+        assert not result.is_done
+
+    def test_send_offsets_to_transaction_rejects_garbage(self, broker, client):
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        with pytest.raises(TypeError):
+            tm.send_offsets_to_transaction(self._offsets(), 42)
+
+    def test_group_metadata_propagates_through_add_offsets_to_commit_handler(
+            self, broker, client):
+        """The AddOffsetsToTxn -> TxnOffsetCommit chain must preserve the
+        full metadata; otherwise v3 would silently lose member/generation."""
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        tm._consumer_group_coordinator = 0
+        gm = ConsumerGroupMetadata(group_id='g', generation_id=7,
+                                   member_id='m', group_instance_id='inst')
+        offsets = self._offsets()
+        handler = AddOffsetsToTxnHandler(tm, gm, offsets)
+        tm._enqueue_request(handler)
+
+        # Drive the AddOffsetsToTxn round-trip; success should enqueue a
+        # TxnOffsetCommitHandler initialized from the same metadata.
+        broker.respond(AddOffsetsToTxnResponse,
+                       AddOffsetsToTxnResponse(throttle_time_ms=0, error_code=0))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        commit_handlers = [h for h in _pending_handlers(tm)
+                           if isinstance(h, TxnOffsetCommitHandler)]
+        assert len(commit_handlers) == 1
+        assert commit_handlers[0].group_metadata == gm
+        assert commit_handlers[0].request._max_version == 3
+        assert commit_handlers[0].request.generation_id == 7
+        assert commit_handlers[0].request.member_id == 'm'
+        assert commit_handlers[0].request.group_instance_id == 'inst'
 
 
 # ---------------------------------------------------------------------------

@@ -738,7 +738,7 @@ class KafkaProducer:
             raise Errors.IllegalStateError("Cannot use transactional methods without enabling transactions")
         self._transaction_manager.begin_transaction()
 
-    def send_offsets_to_transaction(self, offsets, consumer_group_id):
+    def send_offsets_to_transaction(self, offsets, group_metadata):
         """
         Sends a list of consumed offsets to the consumer group coordinator, and also marks
         those offsets as part of the current transaction. These offsets will be considered
@@ -750,7 +750,10 @@ class KafkaProducer:
         Arguments:
             offsets ({TopicPartition: OffsetAndMetadata}): map of topic-partition -> offsets to commit
                 as part of current transaction.
-            consumer_group_id (str): Name of consumer group for offsets commit.
+            group_metadata (ConsumerGroupMetadata or str): full group metadata from
+                KafkaConsumer.group_metadata() (preferred — enables broker-side fencing
+                of stale consumer instances per KIP-447 against Kafka 2.5+ brokers), or
+                a bare consumer_group_id str for backwards compatibility.
 
         Raises:
             IllegalStateError: if no transactional_id, or transaction has not been started.
@@ -764,7 +767,7 @@ class KafkaProducer:
         """
         if not self._transaction_manager:
             raise Errors.IllegalStateError("Cannot use transactional methods without enabling transactions")
-        result = self._transaction_manager.send_offsets_to_transaction(offsets, consumer_group_id)
+        result = self._transaction_manager.send_offsets_to_transaction(offsets, group_metadata)
         self._sender.wakeup()
         result.wait()
 

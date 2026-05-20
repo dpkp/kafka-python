@@ -11,7 +11,7 @@ from kafka.protocol.producer import (
     AddOffsetsToTxnRequest, AddPartitionsToTxnRequest,
     EndTxnRequest, InitProducerIdRequest, TxnOffsetCommitRequest,
 )
-from kafka.structs import TopicPartition
+from kafka.structs import ConsumerGroupMetadata, TopicPartition
 
 
 log = logging.getLogger(__name__)
@@ -210,15 +210,35 @@ class TransactionManager:
         self._enqueue_request(handler)
         return handler.result
 
-    def send_offsets_to_transaction(self, offsets, consumer_group_id):
+    def send_offsets_to_transaction(self, offsets, group_metadata):
+        """Send consumer-group offsets as part of the current transaction.
+
+        Arguments:
+            offsets ({TopicPartition: OffsetAndMetadata}): offsets to commit.
+            group_metadata (ConsumerGroupMetadata or str): full group metadata
+                from KafkaConsumer.group_metadata() (preferred — enables
+                broker-side fencing per KIP-447), or a bare group_id string
+                for backwards compatibility (broker treats it as v0–v2).
+
+        Returns:
+            FutureRecordMetadata-style Future that completes once the offsets
+            are durably committed (or fails fatally).
+        """
+        if isinstance(group_metadata, str):
+            group_metadata = ConsumerGroupMetadata(group_id=group_metadata)
+        elif not isinstance(group_metadata, ConsumerGroupMetadata):
+            raise TypeError(
+                "send_offsets_to_transaction expects group_metadata to be a "
+                "ConsumerGroupMetadata or a group_id str, got %r" % (type(group_metadata),))
+
         with self._lock:
             self._ensure_transactional()
             self._maybe_fail_with_error()
             if self._current_state != TransactionState.IN_TRANSACTION:
                 raise Errors.KafkaError("Cannot send offsets to transaction because the producer is not in an active transaction")
 
-            log.debug("Begin adding offsets %s for consumer group %s to transaction", offsets, consumer_group_id)
-            handler = AddOffsetsToTxnHandler(self, consumer_group_id, offsets)
+            log.debug("Begin adding offsets %s for consumer group %s to transaction", offsets, group_metadata.group_id)
+            handler = AddOffsetsToTxnHandler(self, group_metadata, offsets)
             self._enqueue_request(handler)
             return handler.result
 
@@ -1128,11 +1148,14 @@ class EndTxnHandler(TxnRequestHandler):
 
 
 class AddOffsetsToTxnHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, consumer_group_id, offsets):
+    def __init__(self, transaction_manager, group_metadata, offsets):
         super().__init__(transaction_manager)
 
-        self.consumer_group_id = consumer_group_id
+        self.group_metadata = group_metadata
+        self.consumer_group_id = group_metadata.group_id
         self.offsets = offsets
+        # max_version=3 is the highest we know how to drive (v4 is KIP-890).
+        # The connection negotiates the actual wire version against the broker.
         self.request = AddOffsetsToTxnRequest(
             transactional_id=self.transactional_id,
             producer_id=self.producer_id,
@@ -1154,7 +1177,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             # note the result is not completed until the TxnOffsetCommit returns
             for tp, offset in self.offsets.items():
                 self.transaction_manager._pending_txn_offset_commits[tp] = offset
-            handler = TxnOffsetCommitHandler(self.transaction_manager, self.consumer_group_id,
+            handler = TxnOffsetCommitHandler(self.transaction_manager, self.group_metadata,
                                              self.transaction_manager._pending_txn_offset_commits, self._result)
             self.transaction_manager._enqueue_request(handler)
             self.transaction_manager._transaction_started = True
@@ -1177,14 +1200,20 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
 
 
 class TxnOffsetCommitHandler(TxnRequestHandler):
-    def __init__(self, transaction_manager, consumer_group_id, offsets, result):
+    def __init__(self, transaction_manager, group_metadata, offsets, result):
         super().__init__(transaction_manager, result=result)
 
-        self.consumer_group_id = consumer_group_id
+        self.group_metadata = group_metadata
+        self.consumer_group_id = group_metadata.group_id
         self.offsets = offsets
         self.request = self._build_request()
 
     def _build_request(self):
+        # KIP-447: v3+ carries member_id / generation_id / group_instance_id
+        # so the broker can fence stale consumer instances. We always set them
+        # — the protocol drops them when the connection negotiates v0-v2
+        # against an older broker. max_version is the highest version this
+        # client knows how to drive: v4/v5 belong to KIP-890.
         Topic = TxnOffsetCommitRequest.TxnOffsetCommitRequestTopic
         Partition = Topic.TxnOffsetCommitRequestPartition
 
@@ -1201,9 +1230,12 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
             group_id=self.consumer_group_id,
             producer_id=self.producer_id,
             producer_epoch=self.producer_epoch,
+            generation_id=self.group_metadata.generation_id,
+            member_id=self.group_metadata.member_id,
+            group_instance_id=self.group_metadata.group_instance_id,
             topics=[Topic(name=topic, partitions=partitions)
                     for topic, partitions in topic_data.items()],
-            max_version=2,
+            max_version=3,
         )
 
     @property
