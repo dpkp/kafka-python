@@ -877,39 +877,29 @@ class TxnRequestHandler(metaclass=abc.ABCMeta):
 class InitProducerIdHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, transaction_timeout_ms, is_epoch_bump=False):
         super().__init__(transaction_manager)
-
         self._is_epoch_bump = is_epoch_bump
-        api_version = transaction_manager._api_version
-        # KIP-360 / InitProducerIdRequest v3+ (Kafka 2.5+) lets us resume
-        # an existing producer_id by bumping its epoch rather than allocating
-        # a fresh one. v3+ takes producer_id + epoch fields; on broker match,
-        # the broker returns (same producer_id, epoch+1).
-        if api_version >= (2, 5):
-            version = 3
-        elif api_version >= (2, 4):
-            version = 2
-        elif api_version >= (2, 0):
-            version = 1
-        else:
-            version = 0
+        max_version = 4
+        min_version = 0
 
         if is_epoch_bump:
-            assert version >= 3, "KIP-360 epoch bump requires Kafka 2.5+ broker"
+            # KIP-360 / InitProducerIdRequest v3+ (Kafka 2.5+) lets us resume
+            # an existing producer_id by bumping its epoch rather than allocating
+            # a fresh one. v3+ takes producer_id + epoch fields; on broker match,
+            # the broker returns (same producer_id, epoch+1).
+            min_version = 3
             producer_id = transaction_manager.producer_id_and_epoch.producer_id
             producer_epoch = transaction_manager.producer_id_and_epoch.epoch
         else:
             producer_id = NO_PRODUCER_ID
             producer_epoch = NO_PRODUCER_EPOCH
 
-        kwargs = {
-            'version': version,
-            'transactional_id': self.transactional_id,
-            'transaction_timeout_ms': transaction_timeout_ms,
-        }
-        if version >= 3:
-            kwargs['producer_id'] = producer_id
-            kwargs['producer_epoch'] = producer_epoch
-        self.request = InitProducerIdRequest(**kwargs)
+        self.request = InitProducerIdRequest(
+            transactional_id=self.transactional_id,
+            transaction_timeout_ms=transaction_timeout_ms,
+            producer_id=producer_id,
+            producer_epoch=producer_epoch,
+            max_version=max_version,
+            min_version=min_version)
 
     @property
     def priority(self):
@@ -961,20 +951,18 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, topic_partitions):
         super().__init__(transaction_manager)
 
-        if transaction_manager._api_version >= (2, 7):
-            version = 2
-        elif transaction_manager._api_version >= (2, 0):
-            version = 1
-        else:
-            version = 0
         topic_data = collections.defaultdict(list)
         for tp in topic_partitions:
             topic_data[tp.topic].append(tp.partition)
-        self.request = AddPartitionsToTxnRequest[version](
+
+        Topic = AddPartitionsToTxnRequest.AddPartitionsToTxnTopic
+        self.request = AddPartitionsToTxnRequest(
             v3_and_below_transactional_id=self.transactional_id,
             v3_and_below_producer_id=self.producer_id,
             v3_and_below_producer_epoch=self.producer_epoch,
-            v3_and_below_topics=list(topic_data.items()))
+            v3_and_below_topics=[Topic(name=topic, partitions=partitions)
+                                 for topic, partitions in topic_data.items()],
+            max_version=3)
 
     @property
     def priority(self):
@@ -1056,19 +1044,16 @@ class FindCoordinatorHandler(TxnRequestHandler):
 
         self._coord_type = coord_type
         self._coord_key = coord_key
-        if transaction_manager._api_version >= (2, 0):
-            version = 2
-        else:
-            version = 1
         if coord_type == 'group':
             coord_type_int8 = 0
         elif coord_type == 'transaction':
             coord_type_int8 = 1
         else:
             raise ValueError("Unrecognized coordinator type: %s" % (coord_type,))
-        self.request = FindCoordinatorRequest[version](
+        self.request = FindCoordinatorRequest(
             key=coord_key,
             key_type=coord_type_int8,
+            max_version=3,
         )
 
     @property
@@ -1109,18 +1094,12 @@ class FindCoordinatorHandler(TxnRequestHandler):
 class EndTxnHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, committed):
         super().__init__(transaction_manager)
-
-        if self.transaction_manager._api_version >= (2, 7):
-            version = 2
-        elif self.transaction_manager._api_version >= (2, 0):
-            version = 1
-        else:
-            version = 0
-        self.request = EndTxnRequest[version](
+        self.request = EndTxnRequest(
             transactional_id=self.transactional_id,
             producer_id=self.producer_id,
             producer_epoch=self.producer_epoch,
-            committed=committed)
+            committed=committed,
+            max_version=3)
 
     @property
     def priority(self):
@@ -1154,17 +1133,13 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
 
         self.consumer_group_id = consumer_group_id
         self.offsets = offsets
-        if self.transaction_manager._api_version >= (2, 7):
-            version = 2
-        elif self.transaction_manager._api_version >= (2, 0):
-            version = 1
-        else:
-            version = 0
-        self.request = AddOffsetsToTxnRequest[version](
+        self.request = AddOffsetsToTxnRequest(
             transactional_id=self.transactional_id,
             producer_id=self.producer_id,
             producer_epoch=self.producer_epoch,
-            group_id=consumer_group_id)
+            group_id=self.consumer_group_id,
+            max_version=3,
+        )
 
     @property
     def priority(self):
@@ -1210,27 +1185,26 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
         self.request = self._build_request()
 
     def _build_request(self):
-        if self.transaction_manager._api_version >= (2, 1):
-            version = 2
-        elif self.transaction_manager._api_version >= (2, 0):
-            version = 1
-        else:
-            version = 0
+        Topic = TxnOffsetCommitRequest.TxnOffsetCommitRequestTopic
+        Partition = Topic.TxnOffsetCommitRequestPartition
 
         topic_data = collections.defaultdict(list)
         for tp, offset in self.offsets.items():
-            if version >= 2:
-                partition_data = (tp.partition, offset.offset, offset.leader_epoch, offset.metadata)
-            else:
-                partition_data = (tp.partition, offset.offset, offset.metadata)
-            topic_data[tp.topic].append(partition_data)
+            topic_data[tp.topic].append(Partition(
+                partition_index=tp.partition,
+                committed_offset=offset.offset,
+                committed_leader_epoch=offset.leader_epoch,
+                committed_metadata=offset.metadata))
 
-        return TxnOffsetCommitRequest[version](
+        return TxnOffsetCommitRequest(
             transactional_id=self.transactional_id,
             group_id=self.consumer_group_id,
             producer_id=self.producer_id,
             producer_epoch=self.producer_epoch,
-            topics=list(topic_data.items()))
+            topics=[Topic(name=topic, partitions=partitions)
+                    for topic, partitions in topic_data.items()],
+            max_version=2,
+        )
 
     @property
     def priority(self):

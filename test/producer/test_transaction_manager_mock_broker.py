@@ -32,6 +32,7 @@ from kafka.protocol.producer import (
     AddOffsetsToTxnResponse,
     AddPartitionsToTxnResponse,
     EndTxnResponse,
+    InitProducerIdRequest,
     InitProducerIdResponse,
     ProduceRequest,
     ProduceResponse,
@@ -123,8 +124,12 @@ def _pending_handlers(tm):
 
 
 @pytest.fixture
-def broker():
-    return MockBroker()
+def broker(request):
+    """Parametrizable broker version: ``@pytest.mark.parametrize("broker",
+    [(2, 4)], indirect=True)`` simulates an older broker so a handler's
+    request negotiates a lower wire version."""
+    broker_version = getattr(request, 'param', (4, 2))
+    return MockBroker(broker_version=broker_version)
 
 
 @pytest.fixture
@@ -349,6 +354,88 @@ class TestInitProducerIdHandlerMockBroker:
         assert tm._current_state == TransactionState.READY
         assert tm.producer_id_and_epoch.producer_id == _PRODUCER_ID
         assert tm.producer_id_and_epoch.epoch == _PRODUCER_EPOCH + 1
+
+
+# ---------------------------------------------------------------------------
+# Wire-version negotiation for InitProducerIdRequest
+# ---------------------------------------------------------------------------
+
+
+class TestInitProducerIdHandlerWireVersion:
+    """InitProducerIdHandler uses the modern construction style with
+    ``min_version`` / ``max_version``; the wire version is picked by
+    the per-connection ``broker_version_data`` at send time, not by an
+    explicit version selector in the handler. These tests drive the request
+    over MockBroker and assert the captured ``api_version`` matches what we
+    expect for each broker generation."""
+
+    def _capture(self, captured, response):
+        """Build a respond_fn callable that records the negotiated version."""
+        def fn(api_key, api_version, correlation_id, request_bytes):
+            captured['api_version'] = api_version
+            return response
+        return fn
+
+    @pytest.mark.parametrize("broker, expected_version", [
+        ((0, 11), 0),
+        ((2, 0), 1),
+        ((2, 4), 2),
+        ((2, 5), 3),
+        ((4, 2), 4),
+    ], indirect=['broker'])
+    def test_non_bump_negotiates_to_broker_max(self, broker, client,
+                                               expected_version):
+        from kafka.producer.transaction_manager import InitProducerIdHandler
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.INITIALIZING
+        tm.set_producer_id_and_epoch(ProducerIdAndEpoch(-1, -1))
+        handler = InitProducerIdHandler(tm, transaction_timeout_ms=1000)
+        tm._enqueue_request(handler)
+
+        captured = {}
+        broker.respond_fn(InitProducerIdResponse, self._capture(
+            captured,
+            InitProducerIdResponse(throttle_time_ms=0, error_code=0,
+                                   producer_id=42, producer_epoch=0),
+        ))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert captured['api_version'] == expected_version
+
+    @pytest.mark.parametrize("broker, expected_version", [
+        ((2, 5), 3),
+        ((2, 7), 4),
+        ((4, 2), 4),
+    ], indirect=['broker'])
+    def test_epoch_bump_negotiates_to_v3_or_higher(self, broker, client,
+                                                   expected_version):
+        """KIP-360 epoch-bump path sets ``min_version=3``; older brokers
+        (<2.5) lack v3 of InitProducerId and the request fails before reach-
+        ing the wire — covered separately in
+        ``TestBumpProducerIdAndEpoch._supports_epoch_bump`` in
+        test_transaction_manager.py."""
+        from kafka.producer.transaction_manager import InitProducerIdHandler
+        tm = _make_manager(client)
+        # Seed the manager with a producer_id/epoch for the bump to capture.
+        tm._current_state = TransactionState.READY
+        tm.set_producer_id_and_epoch(ProducerIdAndEpoch(42, 7))
+        handler = InitProducerIdHandler(
+            tm, transaction_timeout_ms=1000, is_epoch_bump=True)
+        tm._enqueue_request(handler)
+
+        captured = {}
+        broker.respond_fn(InitProducerIdResponse, self._capture(
+            captured,
+            InitProducerIdResponse(throttle_time_ms=0, error_code=0,
+                                   producer_id=42, producer_epoch=8),
+        ))
+
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert captured['api_version'] == expected_version
 
 
 # ---------------------------------------------------------------------------
