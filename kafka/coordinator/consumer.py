@@ -504,7 +504,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if future_key in self._offset_fetch_futures:
                 future = self._offset_fetch_futures[future_key]
             else:
-                future = self._send_offset_fetch_request(partitions)
+                future = self._manager.call_soon(self._send_offset_fetch_request, partitions)
                 self._offset_fetch_futures[future_key] = future
 
             try:
@@ -594,7 +594,7 @@ class ConsumerCoordinator(BaseCoordinator):
                        offsets.values()))
         if callback is None:
             callback = self.config['default_offset_commit_callback']
-        future = self._send_offset_commit_request(offsets)
+        future = self._manager.call_soon(self._send_offset_commit_request, offsets)
         future.add_both(lambda res: self.completed_offset_commits.appendleft((callback, offsets, res)))
         def _maybe_set_async_commit_fenced(exc):
             if isinstance(exc, Errors.FencedInstanceIdError):
@@ -631,7 +631,7 @@ class ConsumerCoordinator(BaseCoordinator):
         while True:
             await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)
 
-            future = self._send_offset_commit_request(offsets)
+            future = self._manager.call_soon(self._send_offset_commit_request, offsets)
             try:
                 await self._manager.wait_for(future, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
@@ -672,19 +672,21 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.exception("Offset commit failed: This is likely to cause"
                               " duplicate message delivery")
 
-    def _send_offset_commit_request(self, offsets):
+    async def _send_offset_commit_request(self, offsets):
         """Commit offsets for the specified list of topics and partitions.
-
-        This is a non-blocking call which returns a request future that can be
-        polled in the case of a synchronous commit or ignored in the
-        asynchronous case.
 
         Arguments:
             offsets (dict of {TopicPartition: OffsetAndMetadata}): what should
-                be committed
+                be committed.
 
-        Returns:
-            Future: indicating whether the commit was successful or not
+        Returns: None on success.
+        Raises:
+            UnsupportedVersionError if broker is too old.
+            CoordinatorNotAvailableError if the coordinator is unknown.
+            RebalanceInProgressError / CommitFailedError if generation is
+                not stable.
+            Other broker-side OffsetCommit errors propagated via
+                _handle_offset_commit_response.
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
@@ -693,11 +695,11 @@ class ConsumerCoordinator(BaseCoordinator):
                        offsets.values()))
         if not offsets:
             log.debug('No offsets to commit')
-            return Future().success(None)
+            return None
 
         node_id = self.coordinator()
         if node_id is None:
-            return Future().failure(Errors.CoordinatorNotAvailableError)
+            raise Errors.CoordinatorNotAvailableError()
 
         # create the offset commit request
         offset_data = collections.defaultdict(dict)
@@ -717,15 +719,15 @@ class ConsumerCoordinator(BaseCoordinator):
             if self.rebalance_in_progress():
                 # if the client knows it is already rebalancing, we can use RebalanceInProgressError instead of
                 # CommitFailedError to indicate this is not a fatal error
-                return Future().failure(Errors.RebalanceInProgressError(
+                raise Errors.RebalanceInProgressError(
                     "Offset commit cannot be completed since the"
                     " consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance"
-                    " by calling poll() and then retry the operation."))
+                    " by calling poll() and then retry the operation.")
             else:
-                return Future().failure(Errors.CommitFailedError(
+                raise Errors.CommitFailedError(
                     "Offset commit cannot be completed since the"
                     " consumer is not part of an active group for auto partition assignment; it is likely that the consumer"
-                    " was kicked out of the group."))
+                    " was kicked out of the group.")
 
         _Topic = OffsetCommitRequest.OffsetCommitRequestTopic
         _Partition = _Topic.OffsetCommitRequestPartition
@@ -747,13 +749,15 @@ class ConsumerCoordinator(BaseCoordinator):
         log.debug("Sending offset-commit request with %s for group %s to %s",
                   offsets, self.group_id, node_id)
 
-        future = Future()
-        _f = self._manager.send(request, node_id=node_id)
-        _f.add_callback(self._handle_offset_commit_response, offsets, future, time.monotonic())
-        _f.add_errback(self._failed_request, node_id, request, future)
-        return future
+        send_time = time.monotonic()
+        try:
+            response = await self._manager.send(request, node_id=node_id)
+        except Exception as exc:
+            self._failed_request(node_id, request, None, exc)
+            raise
+        self._handle_offset_commit_response(offsets, send_time, response)
 
-    def _handle_offset_commit_response(self, offsets, future, send_time, response):
+    def _handle_offset_commit_response(self, offsets, send_time, response):
         log.debug("Received OffsetCommitResponse: %s", response)
         # TODO look at adding request_latency_ms to response (like java kafka)
         if self._consumer_sensors:
@@ -772,8 +776,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 elif error_type is Errors.GroupAuthorizationFailedError:
                     log.error("Not authorized to commit offsets for group %s",
                               self.group_id)
-                    future.failure(error_type(self.group_id))
-                    return
+                    raise error_type(self.group_id)
                 elif error_type is Errors.TopicAuthorizationFailedError:
                     unauthorized_topics.add(topic)
                 elif error_type in (Errors.OffsetMetadataTooLargeError,
@@ -781,22 +784,19 @@ class ConsumerCoordinator(BaseCoordinator):
                     # raise the error to the user
                     log.debug("OffsetCommit for group %s failed on partition %s"
                               " %s", self.group_id, tp, error_type.__name__)
-                    future.failure(error_type())
-                    return
+                    raise error_type()
                 elif error_type is Errors.CoordinatorLoadInProgressError:
                     # just retry
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error_type.__name__)
-                    future.failure(error_type(self.group_id))
-                    return
+                    raise error_type(self.group_id)
                 elif error_type in (Errors.CoordinatorNotAvailableError,
                                     Errors.NotCoordinatorError,
                                     Errors.RequestTimedOutError):
                     log.debug("OffsetCommit for group %s failed: %s",
                               self.group_id, error_type.__name__)
                     self.coordinator_dead(error_type())
-                    future.failure(error_type(self.group_id))
-                    return
+                    raise error_type(self.group_id)
                 elif error_type is Errors.RebalanceInProgressError:
                     # Consumer never tries to commit offset in between join-group and sync-group,
                     # and hence on broker-side it is not expected to see a commit offset request
@@ -805,13 +805,11 @@ class ConsumerCoordinator(BaseCoordinator):
                     # However, we do not need to reset generations and just request re-join, such that
                     # if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
                     self.request_rejoin()
-                    future.failure(Errors.CommitFailedError(error_type()))
-                    return
+                    raise Errors.CommitFailedError(error_type())
                 elif error_type is Errors.FencedInstanceIdError:
                     log.error("OffsetCommit for group %s failed due to fenced id error: %s",
                               self.group_id, self.group_instance_id)
-                    future.failure(error_type())
-                    return
+                    raise error_type()
                 elif error_type in (Errors.UnknownMemberIdError,
                                     Errors.IllegalGenerationError):
                     # need reset generation and re-join group
@@ -819,43 +817,42 @@ class ConsumerCoordinator(BaseCoordinator):
                     log.warning("OffsetCommit for group %s failed: %s",
                                 self.group_id, error)
                     self.reset_generation()
-                    future.failure(Errors.CommitFailedError(error_type()))
-                    return
+                    raise Errors.CommitFailedError(error_type())
                 else:
                     log.error("Group %s failed to commit partition %s at offset"
                               " %s: %s", self.group_id, tp, offset,
                               error_type.__name__)
-                    future.failure(error_type())
-                    return
+                    raise error_type()
 
         if unauthorized_topics:
             log.error("Not authorized to commit to topics %s for group %s",
                       unauthorized_topics, self.group_id)
-            future.failure(Errors.TopicAuthorizationFailedError(unauthorized_topics))
-        else:
-            future.success(None)
+            raise Errors.TopicAuthorizationFailedError(unauthorized_topics)
 
-    def _send_offset_fetch_request(self, partitions):
+    async def _send_offset_fetch_request(self, partitions):
         """Fetch the committed offsets for a set of partitions.
 
-        This is a non-blocking call. The returned future can be polled to get
-        the actual offsets returned from the broker.
-
         Arguments:
-            partitions (list of TopicPartition): the partitions to fetch
+            partitions (list of TopicPartition): the partitions to fetch.
 
         Returns:
-            Future: resolves to dict of offsets: {TopicPartition: OffsetAndMetadata}
+            dict {TopicPartition: OffsetAndMetadata} on success.
+
+        Raises:
+            UnsupportedVersionError if broker is too old.
+            CoordinatorNotAvailableError if the coordinator is unknown.
+            Other broker-side OffsetFetch errors propagated via
+                _handle_offset_fetch_response.
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
         assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
         if not partitions and partitions is not None:
-            return Future().success({})
+            return {}
 
         node_id = self.coordinator()
         if node_id is None:
-            return Future().failure(Errors.CoordinatorNotAvailableError)
+            raise Errors.CoordinatorNotAvailableError()
 
         log.debug("Group %s fetching committed offsets for partitions: %s",
                   self.group_id, '(all)' if partitions is None else partitions)
@@ -878,32 +875,29 @@ class ConsumerCoordinator(BaseCoordinator):
             max_version=max_version,
         )
 
-        # send the request with a callback
-        future = Future()
-        _f = self._manager.send(request, node_id=node_id)
-        _f.add_callback(self._handle_offset_fetch_response, future)
-        _f.add_errback(self._failed_request, node_id, request, future)
-        return future
+        try:
+            response = await self._manager.send(request, node_id=node_id)
+        except Exception as exc:
+            self._failed_request(node_id, request, None, exc)
+            raise
+        return self._handle_offset_fetch_response(response)
 
-    def _handle_offset_fetch_response(self, future, response):
+    def _handle_offset_fetch_response(self, response):
         log.debug("Received OffsetFetchResponse: %s", response)
         if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
             error_type = Errors.for_code(response.error_code)
             log.debug("Offset fetch failed: %s", error_type.__name__)
             error = error_type()
-            if error_type is Errors.CoordinatorLoadInProgressError:
-                # Retry
-                future.failure(error)
-            elif error_type is Errors.NotCoordinatorError:
+            if error_type is Errors.NotCoordinatorError:
                 # re-discover the coordinator and retry
                 self.coordinator_dead(error)
-                future.failure(error)
-            elif error_type is Errors.GroupAuthorizationFailedError:
-                future.failure(error)
+                raise error
+            elif error_type in (Errors.CoordinatorLoadInProgressError,
+                                Errors.GroupAuthorizationFailedError):
+                raise error
             else:
                 log.error("Unknown error fetching offsets: %s", error)
-                future.failure(error)
-            return
+                raise error
 
         offsets = {}
         for topic, partitions in response.topics:
@@ -920,13 +914,12 @@ class ConsumerCoordinator(BaseCoordinator):
                     error = error_type()
                     log.debug("Group %s failed to fetch offset for partition"
                               " %s: %s", self.group_id, tp, error)
-                    if error_type is Errors.CoordinatorLoadInProgressError:
-                        # just retry
-                        future.failure(error)
-                    elif error_type is Errors.NotCoordinatorError:
+                    if error_type is Errors.NotCoordinatorError:
                         # re-discover the coordinator and retry
                         self.coordinator_dead(error)
-                        future.failure(error)
+                        raise error
+                    elif error_type is Errors.CoordinatorLoadInProgressError:
+                        raise error
                     elif error_type is Errors.UnknownTopicOrPartitionError:
                         log.warning("OffsetFetchRequest -- unknown topic %s"
                                     " (have you committed any offsets yet?)",
@@ -935,8 +928,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     else:
                         log.error("Unknown error fetching offsets for %s: %s",
                                   tp, error)
-                        future.failure(error)
-                    return
+                        raise error
                 elif offset >= 0:
                     # record the position with the offset
                     # (-1 indicates no committed offset to fetch)
@@ -944,7 +936,7 @@ class ConsumerCoordinator(BaseCoordinator):
                 else:
                     log.debug("Group %s has no committed offset for partition"
                               " %s", self.group_id, tp)
-        future.success(offsets)
+        return offsets
 
     def _default_offset_commit_callback(self, offsets, res_or_exc):
         if isinstance(res_or_exc, Exception):
