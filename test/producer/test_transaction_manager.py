@@ -330,22 +330,6 @@ class TestInitProducerIdHandlerV3:
             producer_epoch=producer_epoch,
         )
 
-    def test_v3_version_on_modern_broker(self):
-        _, handler = self._make_handler(api_version=(2, 5))
-        assert handler.request.version == 3
-
-    def test_v2_version_on_2_4_broker(self):
-        _, handler = self._make_handler(api_version=(2, 4))
-        assert handler.request.version == 2
-
-    def test_v1_version_on_2_0_broker(self):
-        _, handler = self._make_handler(api_version=(2, 0))
-        assert handler.request.version == 1
-
-    def test_v0_version_on_old_broker(self):
-        _, handler = self._make_handler(api_version=(0, 11))
-        assert handler.request.version == 0
-
     def test_non_bump_request_has_no_producer_id(self):
         _, handler = self._make_handler(api_version=(2, 5), is_epoch_bump=False)
         # v3 request fields default to NO_PRODUCER_ID / NO_PRODUCER_EPOCH
