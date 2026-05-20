@@ -1,6 +1,7 @@
 from kafka.partitioner.default import DefaultPartitioner, murmur2
+from kafka.partitioner.sticky import StickyPartitioner
 
 
 __all__ = [
-    'DefaultPartitioner', 'murmur2'
+    'DefaultPartitioner', 'StickyPartitioner', 'murmur2'
 ]
