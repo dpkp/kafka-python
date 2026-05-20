@@ -226,8 +226,7 @@ class TestMockBrokerWithClient:
             client.await_ready(node_id, timeout_ms=5000)
 
             # Send a MetadataRequest directly via client.send
-            version = client.api_version(MetadataRequest, max_version=8)
-            request = MetadataRequest[version]()
+            request = MetadataRequest(max_version=9)
             future = client.send(node_id, request)
             _poll_for_future(client, future)
 
@@ -251,8 +250,7 @@ class TestMockBrokerWithClient:
             error = Errors.KafkaConnectionError('simulated')
             broker.fail_next(MetadataRequest, error=error)
 
-            version = client.api_version(MetadataRequest, max_version=8)
-            future = client.send(node_id, MetadataRequest[version]())
+            future = client.send(node_id, MetadataRequest(max_version=9))
             _poll_for_future(client, future)
 
             assert future.failed()
