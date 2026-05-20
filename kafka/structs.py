@@ -49,3 +49,21 @@ Keyword Arguments:
     timestamp (int): The timestamp associated to the offset
     leader_epoch (int): The last known epoch from the leader / broker
 """
+
+
+ConsumerGroupMetadata = namedtuple("ConsumerGroupMetadata",
+    ["group_id", "generation_id", "member_id", "group_instance_id"],
+    defaults=[-1, '', None])
+ConsumerGroupMetadata.__doc__ = """A snapshot of a consumer's group membership (KIP-447).
+
+Passed to KafkaProducer.send_offsets_to_transaction() so the broker can fence
+stale consumer instances when committing offsets inside a transaction. The
+broker uses member_id + generation_id + group_instance_id to verify the
+producer is acting on behalf of the current group generation.
+
+Keyword Arguments:
+    group_id (str): The consumer group id.
+    generation_id (int): The current generation id (-1 if unjoined).
+    member_id (str): The current member id ('' if unjoined).
+    group_instance_id (str): The static membership instance id, or None.
+"""

@@ -1,6 +1,6 @@
 import pytest
 
-from kafka import KafkaConsumer, TopicPartition
+from kafka import ConsumerGroupMetadata, KafkaConsumer, TopicPartition
 from kafka.errors import KafkaConfigurationError, IllegalStateError
 
 
@@ -68,3 +68,27 @@ def test_context_manager_suppresses_autocommit_on_exception():
         with consumer:
             raise RuntimeError('boom')
     assert consumer._closed is True
+
+
+def test_group_metadata_without_group_id_returns_empty_snapshot():
+    """Manual-assignment consumers have no group_id; group_metadata() must
+    still return a valid snapshot so users can pass it through to
+    producer.send_offsets_to_transaction without first checking."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    gm = consumer.group_metadata()
+    assert isinstance(gm, ConsumerGroupMetadata)
+    assert gm.group_id is None
+    assert gm.generation_id == -1
+    assert gm.member_id == ''
+    consumer.close()
+
+
+def test_group_metadata_with_group_id_delegates_to_coordinator():
+    """When configured with a group_id, group_metadata() returns the live
+    coordinator snapshot (unjoined defaults until poll() drives a join)."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0), group_id='grp')
+    gm = consumer.group_metadata()
+    assert gm.group_id == 'grp'
+    assert gm.generation_id == -1
+    assert gm.member_id == ''
+    consumer.close()
