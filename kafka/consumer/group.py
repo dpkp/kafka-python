@@ -16,7 +16,7 @@ from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.metrics import MetricConfig, Metrics
 from kafka.net.compat import KafkaNetClient
 from kafka.protocol.consumer import OffsetResetStrategy
-from kafka.structs import OffsetAndMetadata, TopicPartition
+from kafka.structs import ConsumerGroupMetadata, OffsetAndMetadata, TopicPartition
 from kafka.util import Timer
 from kafka.version import __version__
 
@@ -630,6 +630,22 @@ class KafkaConsumer:
         if offsets is None:
             offsets = self._subscription.all_consumed_offsets()
         self._coordinator.commit_offsets_sync(offsets, timeout_ms=timeout_ms)
+
+    def group_metadata(self):
+        """Return a snapshot of this consumer's group membership (KIP-447).
+
+        Pass the result to KafkaProducer.send_offsets_to_transaction() so the
+        broker can fence stale instances of this consumer when committing
+        offsets inside a transaction. The snapshot is always safe to call:
+        if no group_id is configured (manual assignment) the returned
+        ConsumerGroupMetadata has group_id=None.
+
+        Returns:
+            ConsumerGroupMetadata
+        """
+        if self.config['group_id'] is None:
+            return ConsumerGroupMetadata(group_id=None)
+        return self._coordinator.group_metadata()
 
     def committed(self, partition, metadata=False, timeout_ms=None):
         """Get the last committed offset for the given partition.

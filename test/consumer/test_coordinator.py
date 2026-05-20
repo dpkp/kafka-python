@@ -61,6 +61,36 @@ def test_protocol_type(coordinator):
     assert coordinator.protocol_type() == 'consumer'
 
 
+def test_group_metadata_unjoined(coordinator):
+    """Before any join, group_metadata() returns the unjoined defaults so
+    KafkaProducer can still send v3 TxnOffsetCommit (broker will treat the
+    -1 generation as unfenced) without raising."""
+    gm = coordinator.group_metadata()
+    assert gm.group_id == coordinator.group_id
+    # NO_GENERATION constants from coordinator.base
+    assert gm.member_id == ''  # UNKNOWN_MEMBER_ID is ''
+    assert gm.generation_id == -1  # DEFAULT_GENERATION_ID
+    assert gm.group_instance_id is None
+
+
+def test_group_metadata_after_join(coordinator):
+    """After joining, group_metadata() reflects the live generation."""
+    coordinator._generation = Generation(generation_id=42,
+                                         member_id='mbr-1',
+                                         protocol='range')
+    coordinator.state = MemberState.STABLE
+    gm = coordinator.group_metadata()
+    assert gm.generation_id == 42
+    assert gm.member_id == 'mbr-1'
+    # group_instance_id comes from config (None by default for this fixture).
+    assert gm.group_instance_id is None
+
+    # Still returns the snapshot even while rebalancing — the producer needs
+    # *something* to send and the broker handles fencing.
+    coordinator.state = MemberState.REBALANCING
+    assert coordinator.group_metadata().generation_id == 42
+
+
 def test_group_protocols(coordinator):
     # Requires a subscription
     try:

@@ -16,6 +16,7 @@ from kafka.protocol.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
     DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
 )
+from kafka.structs import ConsumerGroupMetadata
 from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
@@ -796,6 +797,23 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             if self.state is not MemberState.STABLE:
                 return None
             return self._generation
+
+    def group_metadata(self):
+        """Return a snapshot of this member's group identity (KIP-447).
+
+        Returns the current generation_id / member_id / group_instance_id even
+        when the group is not stable; the caller (typically
+        KafkaProducer.send_offsets_to_transaction) needs whatever is current
+        so the broker can fence stale instances. If the consumer has never
+        joined, the snapshot has the no-generation defaults.
+        """
+        with self._lock:
+            return ConsumerGroupMetadata(
+                group_id=self.group_id,
+                generation_id=self._generation.generation_id,
+                member_id=self._generation.member_id,
+                group_instance_id=self.group_instance_id,
+            )
 
     # deprecated
     def generation(self):
