@@ -657,6 +657,118 @@ def test__parse_fetched_data__paused(fetcher, topic, mocker):
     assert partition_record is None
 
 
+# KAFKA-7548: paused partitions should retain their prefetched data so
+# resume() doesn't have to refetch from the broker.
+
+
+def _paused_msgs(n):
+    return [(None, b'msg-%d' % i, None) for i in range(n)]
+
+
+def test_fetched_records_parks_raw_completion_for_paused_partition(fetcher, topic):
+    """A CompletedFetch for a paused partition is parked, not parsed/drained,
+    and is restored on the next fetched_records() once resumed."""
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+
+    fetcher._subscriptions.pause(tp)
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, _paused_msgs(5)))
+
+    records, partial = fetcher.fetched_records()
+    assert records == {}
+    assert partial is False, 'paused parked data must not block other fetches'
+    assert tp in fetcher._paused_completed_fetches
+    assert not fetcher._completed_fetches
+
+    # Resume and pull again: parked completion gets restored, parsed, drained.
+    fetcher._subscriptions.resume(tp)
+    records, _ = fetcher.fetched_records()
+    assert tp in records
+    assert len(records[tp]) == 5
+    assert tp not in fetcher._paused_completed_fetches
+
+
+def test_fetched_records_parks_parsed_records_on_pause_between_calls(fetcher, topic):
+    """If a partition is paused between two fetched_records() calls while
+    parsed records still sit in _next_partition_records, the parsed records
+    are parked (not dropped) and returned on the next call after resume."""
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, _paused_msgs(10)))
+    # First call: pull 4 records, leave the rest in _next_partition_records.
+    records, _ = fetcher.fetched_records(max_records=4)
+    assert len(records[tp]) == 4
+    assert fetcher._next_partition_records is not None
+
+    # Pause between calls. Next call must park (not drain) the remainder.
+    fetcher._subscriptions.pause(tp)
+    records, partial = fetcher.fetched_records()
+    assert records == {}
+    assert partial is False
+    assert fetcher._next_partition_records is None
+    assert tp in fetcher._paused_partition_records
+
+    # Resume — remainder comes back on the next call.
+    fetcher._subscriptions.resume(tp)
+    records, _ = fetcher.fetched_records()
+    assert tp in records
+    assert len(records[tp]) == 6
+    assert tp not in fetcher._paused_partition_records
+
+
+def test_fetched_records_other_partitions_progress_while_one_paused(fetcher, topic):
+    """A paused partition with parked data must not block other partitions'
+    records from being returned in the same fetched_records() call."""
+    fetcher.config['check_crcs'] = False
+    tp_paused = TopicPartition(topic, 0)
+    tp_active = TopicPartition(topic, 1)
+
+    fetcher._subscriptions.pause(tp_paused)
+    fetcher._completed_fetches.append(_build_completed_fetch(tp_paused, _paused_msgs(5)))
+    fetcher._completed_fetches.append(_build_completed_fetch(tp_active, _paused_msgs(3)))
+
+    records, partial = fetcher.fetched_records()
+    assert tp_paused not in records
+    assert tp_active in records
+    assert len(records[tp_active]) == 3
+    assert tp_paused in fetcher._paused_completed_fetches
+    assert partial is False
+
+
+def test_fetchable_partitions_excludes_parked_pause_data(fetcher, topic, mocker):
+    """A partition with parked (paused) data must not be picked up by the
+    fetch-request side after resume() but before the next fetched_records()
+    drains the parked entry — otherwise we'd issue a redundant fetch."""
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+
+    fetcher._subscriptions.pause(tp)
+    fetcher._paused_completed_fetches[tp] = _build_completed_fetch(tp, _paused_msgs(5))
+    fetcher._subscriptions.resume(tp)
+
+    # Even though the partition is now resumed, parked data is pending —
+    # exclude from the fetchable set so we don't refetch.
+    assert tp not in fetcher._fetchable_partitions()
+
+
+def test_close_drains_parked_paused_records(fetcher, topic):
+    """close() must release any parked records so the test fixture doesn't
+    leak memory and the metric aggregators see their per-tp record."""
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, _paused_msgs(5)))
+    fetcher.fetched_records(max_records=2)  # populates _next_partition_records
+    fetcher._subscriptions.pause(tp)
+    fetcher.fetched_records()  # parks _next_partition_records
+    assert tp in fetcher._paused_partition_records
+
+    fetcher.close()
+    assert not fetcher._paused_partition_records
+    assert not fetcher._paused_completed_fetches
+
+
 def test__parse_fetched_data__stale_offset(fetcher, topic, mocker):
     fetcher.config['check_crcs'] = False
     tp = TopicPartition(topic, 0)

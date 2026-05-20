@@ -124,6 +124,8 @@ class Fetcher:
         self._subscriptions = subscriptions
         self._completed_fetches = collections.deque()  # Unparsed responses
         self._next_partition_records = None  # Holds a single PartitionRecords until fully consumed
+        self._paused_completed_fetches = {}  # tp -> CompletedFetch (raw)
+        self._paused_partition_records = {}  # tp -> PartitionRecords (parsed)
         self._iterator = None
         self._fetch_futures = collections.deque()
         if self.config['metrics']:
@@ -474,17 +476,38 @@ class Fetcher:
         fetched_partition = None
         fetched_offset = -1
 
+        # KAFKA-7548: restore parked data for any partition that the user
+        # has since resumed. Raw completions go back into the fetch queue;
+        # parsed records take the in-line slot when free, otherwise stay
+        # parked and get picked up on a subsequent call.
+        for tp in list(self._paused_completed_fetches):
+            if not self._subscriptions.is_paused(tp):
+                self._completed_fetches.append(self._paused_completed_fetches.pop(tp))
+        if self._next_partition_records is None:
+            for tp in list(self._paused_partition_records):
+                if not self._subscriptions.is_paused(tp):
+                    self._next_partition_records = self._paused_partition_records.pop(tp)
+                    break
+
         try:
             while records_remaining > 0:
                 if not self._next_partition_records:
                     if not self._completed_fetches:
                         break
                     completion = self._completed_fetches.popleft()
+                    if self._subscriptions.is_paused(completion.topic_partition):
+                        self._paused_completed_fetches[completion.topic_partition] = completion
+                        continue
                     fetched_partition = completion.topic_partition
                     fetched_offset = completion.fetched_offset
                     self._next_partition_records = self._parse_fetched_data(completion)
                 else:
-                    fetched_partition = self._next_partition_records.topic_partition
+                    tp = self._next_partition_records.topic_partition
+                    if self._subscriptions.is_paused(tp):
+                        self._paused_partition_records[tp] = self._next_partition_records
+                        self._next_partition_records = None
+                        continue
+                    fetched_partition = tp
                     fetched_offset = self._next_partition_records.next_fetch_offset
                     records_remaining -= self._append(drained,
                                                       self._next_partition_records,
@@ -1110,6 +1133,8 @@ class Fetcher:
         current = self._next_partition_records
         if current:
             discard.add(current.topic_partition)
+        discard.update(self._paused_completed_fetches)
+        discard.update(self._paused_partition_records)
         return [tp for tp in fetchable if tp not in discard]
 
     def _create_fetch_requests(self):
@@ -1368,6 +1393,10 @@ class Fetcher:
     def close(self):
         if self._next_partition_records is not None:
             self._next_partition_records.drain()
+        for parked in self._paused_partition_records.values():
+            parked.drain()
+        self._paused_partition_records.clear()
+        self._paused_completed_fetches.clear()
         self._next_in_line_exception_metadata = None
 
     class PartitionRecords:
