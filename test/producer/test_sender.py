@@ -10,7 +10,6 @@ import pytest
 
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
-from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.producer.kafka import KafkaProducer
 from kafka.protocol.producer import ProduceRequest
 from kafka.producer.future import FutureRecordMetadata
@@ -95,37 +94,89 @@ def transaction_manager(cluster):
         metadata=cluster)
 
 
-@pytest.mark.parametrize(("api_version", "produce_version"), [
+def _capture(captured):
+    """Build a respond_fn that records the negotiated wire api_version."""
+    def fn(api_key, api_version, correlation_id, request_bytes):
+        captured['api_version'] = api_version
+        # acks=1 expects a response; an empty topic list is valid at every version.
+        return ProduceResponse(throttle_time_ms=0, responses=[])
+    return fn
+
+
+@pytest.mark.parametrize("broker, produce_version", [
     ((2, 1), 7),
     ((0, 10, 0), 2),
     ((0, 9), 1),
-    ((0, 8, 0), 0)
-])
-def test_produce_request(sender, api_version, produce_version):
-    sender._client._manager.broker_version_data = BrokerVersionData(api_version)
-    magic = KafkaProducer.max_usable_produce_magic(api_version)
+    ((0, 8, 0), 0),
+], indirect=['broker'])
+def test_produce_request_negotiates_wire_version(sender, broker, manager, produce_version):
+    """``Sender._produce_request`` returns a ProduceRequest with no fixed
+    version; the connection negotiates the wire version against the broker's
+    api_versions table at send time. We verify by capturing the api_version
+    that arrives at the broker."""
+    # Bootstrap so cluster metadata knows about the MockBroker node.
+    manager.bootstrap(timeout_ms=5000)
+
+    magic = KafkaProducer.max_usable_produce_magic(broker.broker_version)
     batch = producer_batch(magic=magic)
-    produce_request = sender._produce_request(0, 0, 0, [batch])
+    produce_request = sender._produce_request(0, 1, 0, [batch])  # acks=1
     assert isinstance(produce_request, ProduceRequest)
-    assert produce_request.version == produce_version
+    # Version is not pinned at construction — that's the whole point.
+    assert produce_request.API_VERSION is None
+
+    captured = {}
+    broker.respond_fn(ProduceResponse, _capture(captured))
+
+    future = manager.send(produce_request, node_id=0)
+    manager.run(manager.wait_for, future, 5000)
+
+    assert captured['api_version'] == produce_version
 
 
-@pytest.mark.parametrize(("api_version", "produce_version"), [
+@pytest.mark.parametrize("broker, produce_version", [
     ((2, 1), 7),
-])
-def test_create_produce_requests(sender, api_version, produce_version):
-    sender._client._manager.broker_version_data = BrokerVersionData(api_version)
-    tp = TopicPartition('foo', 0)
-    magic = KafkaProducer.max_usable_produce_magic(api_version)
+    ((0, 10, 0), 2),
+    ((0, 9), 1),
+    ((0, 8, 0), 0),
+], indirect=['broker'])
+def test_create_produce_requests_negotiates_wire_version(
+        sender, broker, manager, produce_version):
+    """``_create_produce_requests`` builds one ProduceRequest per node;
+    each one negotiates independently against its broker's api_versions
+    table. We send each through the MockBroker (all routed to the single
+    MockBroker node via shared metadata) and assert each arrived at the
+    expected wire version."""
+    # Advertise three broker entries (all pointing at this single MockBroker)
+    # so ``manager.send(..., node_id=n)`` resolves for nodes 1 and 2 as well.
+    # Must happen *before* bootstrap so the metadata response carries them.
+    from kafka.protocol.metadata import MetadataResponse
+    Broker = MetadataResponse.MetadataResponseBroker
+    broker.set_metadata(brokers=[
+        Broker(node_id=n, host=broker.host, port=broker.port, rack=None)
+        for n in range(3)
+    ])
+    manager.bootstrap(timeout_ms=5000)
+
+    magic = KafkaProducer.max_usable_produce_magic(broker.broker_version)
     batches_by_node = collections.defaultdict(list)
     for node in range(3):
         for _ in range(5):
             batches_by_node[node].append(producer_batch(magic=magic))
     produce_requests_by_node = sender._create_produce_requests(batches_by_node)
     assert len(produce_requests_by_node) == 3
+
     for node in range(3):
-        assert isinstance(produce_requests_by_node[node], ProduceRequest)
-        assert produce_requests_by_node[node].version == produce_version
+        request = produce_requests_by_node[node]
+        assert isinstance(request, ProduceRequest)
+        assert request.API_VERSION is None
+
+        captured = {}
+        broker.respond_fn(ProduceResponse, _capture(captured))
+        future = manager.send(request, node_id=node)
+        manager.run(manager.wait_for, future, 5000)
+        assert captured['api_version'] == produce_version, (
+            'node %d: expected v%d got v%s'
+            % (node, produce_version, captured.get('api_version')))
 
 
 def test_complete_batch_success(sender):

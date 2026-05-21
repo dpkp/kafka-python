@@ -394,8 +394,9 @@ class KafkaConnection:
 
     async def _sasl_authenticate(self):
         # Step 1: SaslHandshake to negotiate mechanism
-        version = self.broker_version_data.api_version(SaslHandshakeRequest, max_version=1)
-        request = SaslHandshakeRequest[version](self.config['sasl_mechanism'])
+        request = SaslHandshakeRequest(
+            mechanism=self.config['sasl_mechanism'],
+            max_version=1)
         try:
             response = await self._send_request(request)
         except Exception as exc:
@@ -415,6 +416,7 @@ class KafkaConnection:
             return
 
         # Step 2: SASL authentication exchange
+        version = response.API_VERSION
         try:
             mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
                 host=self.transport.getPeer()[0], **self.config)
@@ -425,7 +427,7 @@ class KafkaConnection:
         while not mechanism.is_done():
             token = mechanism.auth_bytes()
             if version == 1:
-                auth_request = SaslAuthenticateRequest[0](token)
+                auth_request = SaslAuthenticateRequest(token, version=0)
             else:
                 auth_request = SaslBytesRequest(token)
 
