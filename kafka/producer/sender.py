@@ -668,34 +668,32 @@ class Sender(threading.Thread):
         Returns:
             ProduceRequest (version depends on client api_versions)
         """
-        produce_records_by_partition = collections.defaultdict(dict)
+        max_version = 9
+        min_version = 0
+        Topic = ProduceRequest.TopicProduceData
+        Partition = Topic.PartitionProduceData
+        topic_data = collections.defaultdict(list)
         for batch in batches:
             topic = batch.topic_partition.topic
-            partition = batch.topic_partition.partition
+            partition = Partition(
+                index=batch.topic_partition.partition,
+                records=batch.records.buffer(),
+            )
+            topic_data[topic].append(partition)
 
-            buf = batch.records.buffer()
-            produce_records_by_partition[topic][partition] = buf
-
-        version = self._client.api_version(ProduceRequest, max_version=8)
-        topic_partition_data = [
-            (topic, list(partition_info.items()))
-            for topic, partition_info in produce_records_by_partition.items()]
         transactional_id = self._transaction_manager.transactional_id if self._transaction_manager else None
-        if version >= 3:
-            return ProduceRequest[version](
-                transactional_id=transactional_id,
-                acks=acks,
-                timeout_ms=timeout,
-                topic_data=topic_partition_data,
-            )
-        else:
-            if transactional_id is not None:
-                log.warning('%s: Broker does not support ProduceRequest v3+, required for transactional_id', str(self))
-            return ProduceRequest[version](
-                acks=acks,
-                timeout_ms=timeout,
-                topic_data=topic_partition_data,
-            )
+        if transactional_id is not None:
+            min_version = 3
+
+        return ProduceRequest(
+            transactional_id=transactional_id,
+            acks=acks,
+            timeout_ms=timeout,
+            topic_data=[Topic(name=topic, partition_data=partitions)
+                        for topic, partitions in topic_data.items()],
+            min_version=min_version,
+            max_version=max_version,
+        )
 
     def wakeup(self):
         """Wake up the selector associated with this send thread."""
