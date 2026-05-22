@@ -402,7 +402,7 @@ def test_joingroup_request_with_subscription_object_metadata():
         protocols=[('consumer', sub)],
     )
 
-    # This should work — the Bytes codec should call sub.encode() automatically
+    # This should work - the Bytes codec should call sub.encode() automatically
     encoded = req.encode()
 
     # Now create the same request but with pre-encoded bytes

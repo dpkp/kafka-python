@@ -432,7 +432,7 @@ class Sender(threading.Thread):
                 # arrive after the broker already committed the original.
                 # DUPLICATE_SEQUENCE_NUMBER means the records were already
                 # written successfully; treat as success.
-                log.debug("%s: Received DUPLICATE_SEQUENCE_NUMBER for %s — records already committed, treating as success",
+                log.debug("%s: Received DUPLICATE_SEQUENCE_NUMBER for %s - records already committed, treating as success",
                           str(self), batch.topic_partition)
                 error_code = 0
 
@@ -585,8 +585,8 @@ class Sender(threading.Thread):
     def _can_retry(self, batch, error_cls):
         """
         We can retry a send if the error is transient, the number of
-        attempts taken is fewer than the maximum allowed, and — for the
-        idempotent producer — the batch's producer id/epoch still matches
+        attempts taken is fewer than the maximum allowed, and - for the
+        idempotent producer - the batch's producer id/epoch still matches
         ours. A mismatched producer id/epoch (e.g. after a reset or future
         KIP-360 epoch bump) means retrying would violate idempotence.
         """
@@ -614,7 +614,7 @@ class Sender(threading.Thread):
         state was legitimately removed by retention, or because of actual
         data loss. If the broker's log_start_offset is strictly greater than
         the last offset we acknowledged for this partition, then the records
-        we previously wrote have been aged out — the producer can safely
+        we previously wrote have been aged out - the producer can safely
         reset its sequence to 0 and resume.
         """
         if error_cls is not Errors.UnknownProducerIdError:

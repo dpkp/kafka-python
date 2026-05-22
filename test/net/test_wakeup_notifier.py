@@ -63,7 +63,7 @@ class TestWakeupNotifier:
         latched so the next __call__ returns immediately. This is the
         scenario that the WakeupNotifier docstring describes."""
         async def task():
-            # notify() before any awaiter — simulates the race in
+            # notify() before any awaiter - simulates the race in
             # cluster._refresh_loop where request_update() lands between
             # ttl() and await self._wakeup(...).
             notifier.notify()

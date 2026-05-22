@@ -85,7 +85,7 @@ def test_group_metadata_after_join(coordinator):
     # group_instance_id comes from config (None by default for this fixture).
     assert gm.group_instance_id is None
 
-    # Still returns the snapshot even while rebalancing — the producer needs
+    # Still returns the snapshot even while rebalancing - the producer needs
     # *something* to send and the broker handles fencing.
     coordinator.state = MemberState.REBALANCING
     assert coordinator.group_metadata().generation_id == 42
@@ -589,10 +589,10 @@ def test_send_offset_commit_request_fail(coordinator, offsets):
     # selector. Default coordinator state has coordinator_id=None, so
     # coordinator() returns None and the no-coordinator path fires.
 
-    # No offsets — coroutine returns None
+    # No offsets - coroutine returns None
     assert coordinator._net.run(coordinator._send_offset_commit_request, {}) is None
 
-    # No coordinator — coroutine raises
+    # No coordinator - coroutine raises
     with pytest.raises(Errors.CoordinatorNotAvailableError):
         coordinator._net.run(coordinator._send_offset_commit_request, offsets)
 
@@ -731,10 +731,10 @@ def test_send_offset_fetch_request_fail(coordinator, partitions):
     # _send_offset_fetch_request is an async coroutine; run it via the
     # selector. Default coordinator state has coordinator_id=None.
 
-    # No partitions — coroutine returns {}
+    # No partitions - coroutine returns {}
     assert coordinator._net.run(coordinator._send_offset_fetch_request, []) == {}
 
-    # No coordinator — coroutine raises
+    # No coordinator - coroutine raises
     with pytest.raises(Errors.CoordinatorNotAvailableError):
         coordinator._net.run(coordinator._send_offset_fetch_request, partitions)
 
@@ -1000,7 +1000,7 @@ def _sync_response_object(error_code=0, assignment=b''):
 
 def test_do_join_and_sync_async_follower(request, broker, seeded_coord):
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
-    # Default broker.broker_version=(4,2) → JoinGroup v9, SyncGroup v5.
+    # Default broker.broker_version=(4,2) -> JoinGroup v9, SyncGroup v5.
     # Follower: leader != our member_id.
     broker.respond(JoinGroupRequest, _join_response_object(
         leader='leader-x', member_id='member-1', members=[]))

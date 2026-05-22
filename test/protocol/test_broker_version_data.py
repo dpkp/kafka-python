@@ -1,4 +1,4 @@
-"""Tests for BrokerVersionData — version resolution, construction, and edge cases."""
+"""Tests for BrokerVersionData - version resolution, construction, and edge cases."""
 
 import pytest
 

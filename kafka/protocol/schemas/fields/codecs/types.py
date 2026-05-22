@@ -11,8 +11,8 @@ class FixedCodec:
     types. This prefix is applied here so subclasses only specify the type
     format character (e.g., 'i' for 32-bit signed int).
     """
-    fmt = None  # e.g., 'i' — set by subclass
-    size = None # e.g., 4 — set by subclass
+    fmt = None  # e.g., 'i' - set by subclass
+    size = None # e.g., 4 - set by subclass
     batchable = True  # Can be batched with adjacent FixedCodec fields
 
     def __init_subclass__(cls, **kw):

@@ -51,7 +51,7 @@ class TestStickyPartitioner:
 
     def test_null_key_sticks_until_second_on_new_batch(self):
         """The *first* on_new_batch event is absorbed (it's the first
-        batch being opened on the newly-picked sticky — exactly what we
+        batch being opened on the newly-picked sticky - exactly what we
         want). Rotation only happens on the *second* event, which
         signals that the previous batch filled up. Without this, the
         partitioner would rotate on every record whose partition had
@@ -62,11 +62,11 @@ class TestStickyPartitioner:
         for _ in range(50):
             assert sticky.partition('t', None, all_partitions, available) == p1
 
-        # First on_new_batch: opens the first batch on p1 — no rotation.
+        # First on_new_batch: opens the first batch on p1 - no rotation.
         sticky.on_new_batch('t', all_partitions, p1)
         assert sticky.partition('t', None, all_partitions, available) == p1
 
-        # Second on_new_batch: previous batch filled — rotate.
+        # Second on_new_batch: previous batch filled - rotate.
         sticky.on_new_batch('t', all_partitions, p1)
         p2 = sticky.partition('t', None, all_partitions, available)
         assert p2 != p1, 'second on_new_batch should rotate'
@@ -99,7 +99,7 @@ class TestStickyPartitioner:
 
     def test_single_partition_topic_cannot_rotate(self):
         """on_new_batch on a single-partition topic just keeps the same
-        partition — there's nothing else to rotate to."""
+        partition - there's nothing else to rotate to."""
         sticky = StickyPartitioner()
         all_partitions = available = [0]
         assert sticky.partition('t', None, all_partitions, available) == 0

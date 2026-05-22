@@ -521,7 +521,7 @@ class TestSlowTaskMonitor:
         done = Future()
 
         async def hog():
-            time.sleep(0.05)  # synchronous sleep — does not yield to loop
+            time.sleep(0.05)  # synchronous sleep - does not yield to loop
             done.success(True)
 
         net.call_soon(hog)

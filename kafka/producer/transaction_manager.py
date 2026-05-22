@@ -120,7 +120,7 @@ class TransactionManager:
         self._sequence_numbers = collections.defaultdict(lambda: 0)
         # The offset of the last ack'd record for each partition. Used to
         # distinguish retention-based UnknownProducerIdError (broker's
-        # log_start_offset > last_acked_offset → safe to reset and retry)
+        # log_start_offset > last_acked_offset -> safe to reset and retry)
         # from actual data loss. See KAFKA-5793.
         self._last_acked_offset = {}
 
@@ -216,9 +216,9 @@ class TransactionManager:
         Arguments:
             offsets ({TopicPartition: OffsetAndMetadata}): offsets to commit.
             group_metadata (ConsumerGroupMetadata or str): full group metadata
-                from KafkaConsumer.group_metadata() (preferred — enables
+                from KafkaConsumer.group_metadata() (preferred - enables
                 broker-side fencing per KIP-447), or a bare group_id string
-                for backwards compatibility (broker treats it as v0–v2).
+                for backwards compatibility (broker treats it as v0-v2).
 
         Returns:
             FutureRecordMetadata-style Future that completes once the offsets
@@ -350,7 +350,7 @@ class TransactionManager:
         """Categorize a batch-completion error into a recovery outcome.
 
         Used by the Sender to decide what to do with a failed batch. This
-        method does not mutate any state — it is a pure classification
+        method does not mutate any state - it is a pure classification
         helper. The caller is responsible for dispatching to the
         appropriate recovery path.
 
@@ -362,15 +362,15 @@ class TransactionManager:
                 failure. Used for KAFKA-5793 retention detection.
 
         Returns one of:
-            ERROR_CLASS_RETRIABLE          — caller should retry the batch
-            ERROR_CLASS_ABORTABLE          — transactional producer only;
+            ERROR_CLASS_RETRIABLE          - caller should retry the batch
+            ERROR_CLASS_ABORTABLE          - transactional producer only;
                                               abort the transaction
-            ERROR_CLASS_FATAL              — unrecoverable; transition to
+            ERROR_CLASS_FATAL              - unrecoverable; transition to
                                               fatal error and fail the batch
-            ERROR_CLASS_NEEDS_EPOCH_BUMP   — recoverable via KIP-360 epoch
+            ERROR_CLASS_NEEDS_EPOCH_BUMP   - recoverable via KIP-360 epoch
                                               bump (only when broker supports
                                               InitProducerIdRequest v3+)
-            ERROR_CLASS_NEEDS_PRODUCER_ID_RESET — non-transactional pre-KIP-360
+            ERROR_CLASS_NEEDS_PRODUCER_ID_RESET - non-transactional pre-KIP-360
                                                    fallback: reset the
                                                    producer id entirely
 
@@ -1211,7 +1211,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
     def _build_request(self):
         # KIP-447: v3+ carries member_id / generation_id / group_instance_id
         # so the broker can fence stale consumer instances. We always set them
-        # — the protocol drops them when the connection negotiates v0-v2
+        # - the protocol drops them when the connection negotiates v0-v2
         # against an older broker. max_version is the highest version this
         # client knows how to drive: v4/v5 belong to KIP-890.
         Topic = TxnOffsetCommitRequest.TxnOffsetCommitRequestTopic

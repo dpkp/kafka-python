@@ -124,7 +124,7 @@ class TestAlterConfigsMockBroker:
                 ('bar', 'barval', _SRC_DYNAMIC_TOPIC, False),
                 ('baz', None,     _SRC_DEFAULT,      False),
             ]))
-        # add_missing describe (modified filter) — same wire response, Python filters
+        # add_missing describe (modified filter) - same wire response, Python filters
         broker.respond(DescribeConfigsRequest, _describe_configs_response(
             _TOPIC, 'topic-a', [
                 ('foo', 'old',    _SRC_DYNAMIC_TOPIC, False),

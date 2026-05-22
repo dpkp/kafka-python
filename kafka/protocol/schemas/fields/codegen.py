@@ -1,7 +1,7 @@
 """Generate flat encode/decode functions for a StructField + version.
 
 Given a StructField and a protocol version, generates Python functions
-that encode/decode directly with zero dispatch overhead — no intermediate
+that encode/decode directly with zero dispatch overhead - no intermediate
 SimpleField/ArrayField/StructField method calls.
 
 Usage:

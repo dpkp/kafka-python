@@ -160,7 +160,7 @@ class Fetcher:
         for in-flight responses if no records are immediately available.
 
         Single-call replacement for the legacy
-        ``fetched_records → send_fetches → client.poll → fetched_records``
+        ``fetched_records -> send_fetches -> client.poll -> fetched_records``
         loop in :meth:`KafkaConsumer._poll_once`. The caller no longer
         drives the event loop; the wait happens inside this method via a
         wakeup Future fired by any in-flight fetch's completion callback.
