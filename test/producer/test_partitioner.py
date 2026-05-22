@@ -49,27 +49,21 @@ class TestStickyPartitioner:
         assert (sticky.partition('t', b'bar', all_partitions, available)
                 == default(b'bar', all_partitions, available))
 
-    def test_null_key_sticks_until_second_on_new_batch(self):
-        """The *first* on_new_batch event is absorbed (it's the first
-        batch being opened on the newly-picked sticky - exactly what we
-        want). Rotation only happens on the *second* event, which
-        signals that the previous batch filled up. Without this, the
-        partitioner would rotate on every record whose partition had
-        no existing batch."""
+    def test_null_key_sticks_until_on_new_batch(self):
+        """A stream of null-key records pins to the chosen partition;
+        ``on_new_batch`` rotates immediately (no "absorb first event"
+        hack - KafkaProducer.send invokes the hook only on the
+        abort-for-new-batch retry path, matching Java)."""
         sticky = StickyPartitioner()
         all_partitions = available = list(range(10))
         p1 = sticky.partition('t', None, all_partitions, available)
         for _ in range(50):
             assert sticky.partition('t', None, all_partitions, available) == p1
 
-        # First on_new_batch: opens the first batch on p1 - no rotation.
-        sticky.on_new_batch('t', all_partitions, p1)
-        assert sticky.partition('t', None, all_partitions, available) == p1
-
-        # Second on_new_batch: previous batch filled - rotate.
+        # on_new_batch rotates immediately.
         sticky.on_new_batch('t', all_partitions, p1)
         p2 = sticky.partition('t', None, all_partitions, available)
-        assert p2 != p1, 'second on_new_batch should rotate'
+        assert p2 != p1, 'on_new_batch should rotate'
         for _ in range(50):
             assert sticky.partition('t', None, all_partitions, available) == p2
 
@@ -79,8 +73,7 @@ class TestStickyPartitioner:
         all_partitions = available = list(range(10))
         p_a = sticky.partition('a', None, all_partitions, available)
         p_b = sticky.partition('b', None, all_partitions, available)
-        # Two on_new_batch events on 'a' to actually rotate it.
-        sticky.on_new_batch('a', all_partitions, p_a)
+        # Rotate 'a' once.
         sticky.on_new_batch('a', all_partitions, p_a)
         # 'b' is untouched.
         assert sticky.partition('b', None, all_partitions, available) == p_b
@@ -129,3 +122,63 @@ class TestStickyPartitioner:
         # a valid partition for both keyed and null-key inputs.
         assert sticky(b'foo', all_partitions, available) in all_partitions
         assert sticky(None, all_partitions, available) in all_partitions
+
+    def test_no_available_picks_without_avoid(self):
+        """When ``available`` is empty, Java picks random %
+        partitions.size() without enforcing ``!= avoid`` — make sure we
+        don't try to filter the avoided partition out of an already-stale
+        fallback set."""
+        sticky = StickyPartitioner()
+        sticky.partition('t', None, [0, 1, 2], [0, 1, 2])
+        # Force a state where avoid is set and available is empty; verify
+        # the fallback can pick any partition (including ``avoid``).
+        observed = set()
+        for _ in range(200):
+            partition = sticky._pick_sticky_locked(
+                't', [0, 1, 2], available=[], avoid=1)
+            observed.add(partition)
+        # All three should appear over many iterations — proves we're not
+        # filtering ``avoid`` out of the all-partitions fallback.
+        assert observed == {0, 1, 2}, (
+            'avoid should not filter when available is empty; got %s' % observed)
+
+    def test_single_available_partition_repeats_even_if_avoided(self):
+        """Single-element ``available`` must always return that one,
+        even if it equals ``avoid`` (Java's nextPartition does the same)."""
+        sticky = StickyPartitioner()
+        for _ in range(50):
+            partition = sticky._pick_sticky_locked(
+                't', [0, 1, 2], available=[1], avoid=1)
+            assert partition == 1
+
+    def test_thread_safety_under_contention(self):
+        """Concurrent ``partition`` + ``on_new_batch`` calls from many
+        threads should never raise (no torn read-modify-write) and the
+        final ``_sticky[topic]`` value must be one of the valid
+        partitions."""
+        import threading
+        sticky = StickyPartitioner()
+        topic = 't'
+        partitions = list(range(20))
+        errors = []
+        stop = threading.Event()
+
+        def hammer():
+            try:
+                while not stop.is_set():
+                    p = sticky.partition(topic, None, partitions, partitions)
+                    sticky.on_new_batch(topic, partitions, p)
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=hammer) for _ in range(8)]
+        for t in threads:
+            t.start()
+        # Let them race for a moment.
+        import time as _time
+        _time.sleep(0.2)
+        stop.set()
+        for t in threads:
+            t.join(timeout=2)
+        assert not errors, 'concurrent ops raised: %r' % errors
+        assert sticky._sticky[topic] in partitions
