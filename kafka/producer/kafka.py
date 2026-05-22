@@ -1049,4 +1049,4 @@ class KafkaProducer:
         return metrics
 
     def __str__(self):
-        return "<KafkaProducer client_id=%s transactional_id=%s>" % (self.config['client_id'], self.config['transactional_id'])
+        return "<KafkaProducer client_id=%s transactional_id=%s>" % (self.config.get('client_id', None), self.config.get('transactional_id', None))
