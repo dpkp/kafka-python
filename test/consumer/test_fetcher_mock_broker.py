@@ -292,3 +292,114 @@ class TestKIP320OffsetValidation:
         assert elapsed >= 0.05, (
             '_validate_offsets_async did not sleep for retry_backoff_ms; %.3fs'
             % elapsed)
+
+
+# --------------------------------------------------------------------------- #
+# KIP-392: rack-aware fetching                                                #
+# --------------------------------------------------------------------------- #
+
+
+def _fetch_response_with_preferred_replica(preferred_read_replica):
+    """Empty-records FetchResponse advertising a preferred read replica."""
+    return FetchResponse(
+        throttle_time_ms=0, error_code=0, session_id=0,
+        responses=[_FetchTopic(topic=TOPIC, partitions=[_FetchPartition(
+            partition_index=PARTITION, error_code=0, high_watermark=100,
+            last_stable_offset=-1, log_start_offset=-1,
+            aborted_transactions=[],
+            preferred_read_replica=preferred_read_replica,
+            records=b'')])])
+
+
+class TestKIP392RackAwareFetching:
+    """End-to-end: client_rack arrives on the wire and the broker's
+    preferred_read_replica is honored on the next fetch."""
+
+    def test_rack_id_sent_on_fetch_request(self, broker, manager, fetcher):
+        """FetchRequest carries ``rack_id`` when client_rack is configured,
+        and negotiates to v11+ against a modern broker."""
+        fetcher.config['client_rack'] = 'us-east-1a'
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
+
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['api_version'] = api_version
+            decoded = FetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['rack_id'] = decoded.rack_id
+            return _fetch_response_with_preferred_replica(-1)
+        broker.respond_fn(FetchRequest, handler)
+
+        # Build the FetchRequest via the Fetcher (so client_rack is wired in)
+        # and send it directly via manager - sidesteps the IO-thread driving
+        # complexity of fetcher.send_fetches() in a synchronous test.
+        requests = fetcher._create_fetch_requests()
+        assert 0 in requests, 'expected one fetch routed to the leader (node 0)'
+        request, _ = requests[0]
+        future = manager.send(request, node_id=0)
+        manager.run(manager.wait_for, future, 2000)
+
+        assert captured['api_version'] >= 11, (
+            'KIP-392 requires FetchRequest v11+; got v%s' % captured.get('api_version'))
+        assert captured['rack_id'] == 'us-east-1a'
+
+    def test_preferred_replica_cached_and_used_on_next_fetch(
+            self, broker, manager, fetcher):
+        """First fetch goes to the leader; broker returns
+        ``preferred_read_replica=N``; second fetch routes to node N."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        # Make node 5 reachable via metadata (still pointing at the same
+        # MockBroker socket so the request actually completes).
+        broker.set_metadata(
+            brokers=[
+                _MetaBroker(node_id=0, host=broker.host, port=broker.port, rack=None),
+                _MetaBroker(node_id=5, host=broker.host, port=broker.port, rack=None),
+            ],
+            topics=[_MetaTopic(
+                error_code=0, name=TOPIC, is_internal=False,
+                partitions=[_MetaPartition(
+                    error_code=0, partition_index=PARTITION,
+                    leader_id=0, leader_epoch=3,
+                    replica_nodes=[0, 5], isr_nodes=[0, 5],
+                    offline_replicas=[])],
+            )])
+        # Re-pull metadata so the cluster cache knows about node 5.
+        manager._net.run(manager.wait_for, manager.cluster.request_update(), 2000)
+
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
+
+        # Without a cached preferred replica, the first fetch must go to
+        # the leader (node 0).
+        assert fetcher._select_read_replica(tp) == 0
+
+        # Synthesize a fetch response advertising node 5 as preferred.
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+        completed = CompletedFetch(
+            tp, 0, 11,
+            _fetch_response_with_preferred_replica(5).responses[0].partitions[0],
+            MagicMock())
+        fetcher._parse_fetched_data(completed)
+
+        # Next fetch should route to node 5.
+        assert fetcher._select_read_replica(tp) == 5
+
+    def test_preferred_replica_negative_one_means_leader(
+            self, broker, manager, fetcher):
+        """``preferred_read_replica == -1`` is the broker explicitly telling
+        the client to stop using a cached follower."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            5, time.monotonic() + 60)
+
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+        completed = CompletedFetch(
+            tp, 0, 11,
+            _fetch_response_with_preferred_replica(-1).responses[0].partitions[0],
+            MagicMock())
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
+        fetcher._parse_fetched_data(completed)
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None

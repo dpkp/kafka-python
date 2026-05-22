@@ -1478,3 +1478,209 @@ def test_validate_offsets_if_needed_no_op_when_no_partitions(fetcher):
     returns None without scheduling a task."""
     assert fetcher.validate_offsets_if_needed() is None
     assert fetcher._validation_task is None
+
+
+# ---------------------------------------------------------------------------
+# KIP-392: rack-aware fetching / preferred read replica
+# ---------------------------------------------------------------------------
+
+
+def _build_completed_fetch_with_replica(tp, offset=0, preferred_read_replica=-1):
+    """Like _build_completed_fetch but lets the test set preferred_read_replica."""
+    partition_data = _ResponsePartition(
+        error_code=0,
+        high_watermark=100,
+        records=_build_record_batch([], offset=offset),
+        preferred_read_replica=preferred_read_replica,
+    )
+    return CompletedFetch(tp, offset, 11, partition_data, MagicMock())
+
+
+class TestKip392PreferredReadReplica:
+    """Unit tests for the per-partition preferred-replica cache and routing."""
+
+    def test_create_fetch_requests_sends_rack_id(self, fetcher, mocker, assignment):
+        """``client_rack`` config flows through to the FetchRequest's rack_id."""
+        fetcher.config['client_rack'] = 'rack-a'
+        mocker.patch.object(fetcher._manager.cluster, "leader_for_partition", return_value=0)
+        mocker.patch.object(fetcher._manager.cluster, "leader_epoch_for_partition", return_value=0)
+        by_node = fetcher._create_fetch_requests()
+        request, _ = by_node[0]
+        assert request.rack_id == 'rack-a'
+
+    def test_select_read_replica_falls_back_to_leader_without_cache(
+            self, fetcher, topic, mocker):
+        """No preferred replica cached -> always pick the leader."""
+        tp = TopicPartition(topic, 0)
+        mocker.patch.object(
+            fetcher._manager.cluster, 'leader_for_partition', return_value=7)
+        assert fetcher._select_read_replica(tp) == 7
+
+    def test_select_read_replica_uses_cache_when_valid(
+            self, fetcher, topic, mocker):
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            3, time.monotonic() + 60)
+        mocker.patch.object(
+            fetcher._manager.cluster, 'leader_for_partition', return_value=7)
+        # broker_metadata returns something truthy so we don't fall back.
+        mocker.patch.object(
+            fetcher._manager.cluster, 'broker_metadata', return_value=MagicMock())
+        assert fetcher._select_read_replica(tp) == 3
+
+    def test_select_read_replica_falls_back_when_replica_unknown(
+            self, fetcher, topic, mocker):
+        """Cached preferred replica not in cluster metadata -> fall back to
+        leader AND clear the cache so we re-learn next time."""
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            3, time.monotonic() + 60)
+        mocker.patch.object(
+            fetcher._manager.cluster, 'leader_for_partition', return_value=7)
+        mocker.patch.object(
+            fetcher._manager.cluster, 'broker_metadata', return_value=None)
+        assert fetcher._select_read_replica(tp) == 7
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+
+    def test_select_read_replica_expires_cache(self, fetcher, topic, mocker):
+        """Past the TTL -> cache is silently cleared on next read."""
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            3, time.monotonic() - 1)  # already expired
+        mocker.patch.object(
+            fetcher._manager.cluster, 'leader_for_partition', return_value=7)
+        assert fetcher._select_read_replica(tp) == 7
+        assert fetcher._subscriptions.assignment[tp]._preferred_read_replica is None
+
+    def test_parse_fetched_data_caches_preferred_replica(
+            self, fetcher, topic, mocker):
+        """Success response with preferred_read_replica >= 0 -> cache it."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        completed = _build_completed_fetch_with_replica(tp, preferred_read_replica=5)
+        fetcher._parse_fetched_data(completed)
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() == 5
+
+    def test_parse_fetched_data_negative_preferred_clears_cache(
+            self, fetcher, topic, mocker):
+        """preferred_read_replica == -1 -> broker is telling us to go back to
+        the leader; the cache must be cleared even if we had one."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            5, time.monotonic() + 60)
+        completed = _build_completed_fetch_with_replica(tp, preferred_read_replica=-1)
+        fetcher._parse_fetched_data(completed)
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+
+    def test_not_leader_error_preserves_preferred_replica(
+            self, fetcher, topic, mocker):
+        """NOT_LEADER_OR_FOLLOWER on a follower fetch only triggers a metadata
+        refresh; the cache survives this transient error (matches Java) and
+        will be cleared by maybe_validate_position if the leader actually
+        changed."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            5, time.monotonic() + 60)
+        mocker.patch.object(fetcher._manager.cluster, 'request_update')
+        completed = _build_completed_fetch(tp, [], error=NotLeaderForPartitionError)
+        fetcher._parse_fetched_data(completed)
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() == 5
+        fetcher._manager.cluster.request_update.assert_called()
+
+    def test_fenced_epoch_preserves_preferred_replica(self, fetcher, topic, mocker):
+        """FENCED_LEADER_EPOCH triggers position validation and metadata
+        refresh; clearing the preferred replica is deferred to
+        maybe_validate_position once the cluster cache catches up."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        # Seed a position with a valid (non-sentinel) leader_epoch so
+        # request_position_validation actually marks the partition.
+        fetcher._subscriptions.assignment[tp].seek(OffsetAndMetadata(0, '', 3))
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            5, time.monotonic() + 60)
+        mocker.patch.object(fetcher._manager.cluster, 'request_update')
+        completed = _build_completed_fetch(
+            tp, [], error=Errors.FencedLeaderEpochError)
+        fetcher._parse_fetched_data(completed)
+        # Cache survives the fetch handler; awaiting_validation is set.
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() == 5
+        assert fetcher._subscriptions.assignment[tp].awaiting_validation is True
+
+    def test_offset_out_of_range_with_follower_retries_against_leader(
+            self, fetcher, topic, mocker):
+        """A follower may lag behind the leader's HW; OFFSET_OUT_OF_RANGE
+        on a follower fetch must clear the cache and retry against the
+        leader rather than trigger auto_offset_reset (matches Java)."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            5, time.monotonic() + 60)
+        completed = _build_completed_fetch(tp, [], error=OffsetOutOfRangeError)
+        fetcher._parse_fetched_data(completed)
+        # Cache cleared so next fetch goes to leader.
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+        # No reset requested — we want to re-confirm against the leader first.
+        assert fetcher._subscriptions.assignment[tp].awaiting_reset is False
+
+    def test_offset_out_of_range_without_follower_resets(
+            self, fetcher, topic, mocker):
+        """Without a cached preferred replica, OFFSET_OUT_OF_RANGE falls
+        through to the existing reset path."""
+        fetcher.config['check_crcs'] = False
+        tp = TopicPartition(topic, 0)
+        # No preferred replica set.
+        completed = _build_completed_fetch(tp, [], error=OffsetOutOfRangeError)
+        fetcher._parse_fetched_data(completed)
+        assert fetcher._subscriptions.assignment[tp].awaiting_reset is True
+
+    def test_leader_epoch_advance_clears_preferred_replica(self, topic):
+        """maybe_validate_position must drop the cache when the cluster
+        epoch advances past our position's epoch — same partition's leader
+        almost certainly changed."""
+        from kafka.consumer.subscription_state import TopicPartitionState
+        state = TopicPartitionState()
+        state.seek(OffsetAndMetadata(50, '', 3))
+        state.update_preferred_read_replica(7, time.monotonic() + 60)
+        assert state.preferred_read_replica() == 7
+        # Cluster reports a newer leader_epoch.
+        triggered = state.maybe_validate_position(current_leader_epoch=5)
+        assert triggered is True
+        assert state.preferred_read_replica() is None
+
+    def test_update_does_not_refresh_ttl_on_same_replica(self, topic):
+        """A steady stream of fetches from the same follower must NOT keep
+        refreshing the lease — the TTL counts down regardless. Matches Java."""
+        from kafka.consumer.subscription_state import TopicPartitionState
+        state = TopicPartitionState()
+        expiration = time.monotonic() + 60
+        changed = state.update_preferred_read_replica(5, expiration)
+        assert changed is True
+        original_expiration = state._preferred_read_replica_expiration
+        # Repeat updates with the same replica id should be no-ops.
+        changed = state.update_preferred_read_replica(5, expiration + 9999)
+        assert changed is False
+        assert state._preferred_read_replica_expiration == original_expiration
+        # Changing to a different replica resets the lease.
+        changed = state.update_preferred_read_replica(6, expiration + 9999)
+        assert changed is True
+        assert state._preferred_read_replica_expiration == expiration + 9999
+
+    def test_seek_clears_preferred_replica(self, topic):
+        """seek() invalidates the cache - the user may have jumped to an
+        offset the follower doesn't yet have."""
+        from kafka.consumer.subscription_state import TopicPartitionState
+        state = TopicPartitionState()
+        state.seek(OffsetAndMetadata(0, '', -1))
+        state.update_preferred_read_replica(3, time.monotonic() + 60)
+        state.seek(OffsetAndMetadata(100, '', -1))
+        assert state.preferred_read_replica() is None
+
+    def test_reset_clears_preferred_replica(self, topic):
+        from kafka.consumer.subscription_state import TopicPartitionState
+        state = TopicPartitionState()
+        state.seek(OffsetAndMetadata(0, '', -1))
+        state.update_preferred_read_replica(3, time.monotonic() + 60)
+        state.reset(OffsetResetStrategy.LATEST)
+        assert state.preferred_read_replica() is None
