@@ -503,6 +503,12 @@ class TopicPartitionState:
         # until OffsetForLeaderEpoch confirms the position is consistent with
         # the current leader's log; mutually exclusive with awaiting_reset.
         self._awaiting_validation = False
+        # KIP-392: preferred read replica chosen by the broker (rack-aware).
+        # ``_preferred_read_replica_expiration`` is a monotonic deadline; after
+        # it passes we fall back to the leader and re-learn. Cleared on
+        # replica-related errors so the next fetch goes to the leader.
+        self._preferred_read_replica = None
+        self._preferred_read_replica_expiration = None
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -520,6 +526,7 @@ class TopicPartitionState:
         self._position = None
         self.next_allowed_retry_time = None
         self._awaiting_validation = False
+        self.clear_preferred_read_replica()
 
     def is_reset_allowed(self):
         return self.next_allowed_retry_time is None or self.next_allowed_retry_time < time.monotonic()
@@ -547,6 +554,7 @@ class TopicPartitionState:
         self.drop_pending_record_batch = True
         self.next_allowed_retry_time = None
         self._awaiting_validation = False
+        self.clear_preferred_read_replica()
 
     def pause(self):
         self.paused = True
@@ -556,6 +564,41 @@ class TopicPartitionState:
 
     def is_fetchable(self):
         return not self.paused and self.has_valid_position and not self._awaiting_validation
+
+    def preferred_read_replica(self):
+        """Return the currently-cached preferred read replica (KIP-392),
+        or None if unset/expired. Lazily clears the cache on expiry."""
+        if self._preferred_read_replica is None:
+            return None
+        if (self._preferred_read_replica_expiration is not None
+                and time.monotonic() >= self._preferred_read_replica_expiration):
+            self.clear_preferred_read_replica()
+            return None
+        return self._preferred_read_replica
+
+    def update_preferred_read_replica(self, node_id, expiration_time):
+        """Cache the broker's chosen preferred read replica until ``expiration_time``
+        (monotonic). ``node_id == -1`` (or None) clears the cache.
+
+        Returns True if the cached replica actually changed (caller can log).
+        """
+        if node_id is None or node_id < 0:
+            changed = self._preferred_read_replica is not None
+            self.clear_preferred_read_replica()
+            return changed
+        if node_id == self._preferred_read_replica:
+            return False
+        self._preferred_read_replica = node_id
+        self._preferred_read_replica_expiration = expiration_time
+        return True
+
+    def clear_preferred_read_replica(self):
+        """Clear the cached preferred read replica. Returns the previously-
+        cached node_id (or None) so the caller can log the eviction."""
+        previous = self._preferred_read_replica
+        self._preferred_read_replica = None
+        self._preferred_read_replica_expiration = None
+        return previous
 
     @property
     def awaiting_validation(self):
@@ -578,6 +621,7 @@ class TopicPartitionState:
             return False
         if self._position.leader_epoch >= current_leader_epoch:
             return False
+        self.clear_preferred_read_replica()
         self._awaiting_validation = True
         self.next_allowed_retry_time = None
         return True

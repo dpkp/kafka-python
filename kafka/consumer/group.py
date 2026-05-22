@@ -51,6 +51,12 @@ class KafkaConsumer:
             server-side log entries that correspond to this client. Also
             submitted to GroupCoordinator for logging with respect to
             consumer group administration. Default: 'kafka-python-{version}'
+        client_rack (str): A rack identifier for this client. Sent to brokers
+            on FetchRequest v11+ (KIP-392, requires Kafka 2.4+ brokers with
+            ``replica.selector.class`` configured server-side). When set, the
+            broker may route fetches to a follower replica in the same rack
+            instead of the leader, reducing cross-rack traffic. Leave as ''
+            (default) to always fetch from the leader.
         group_id (str or None): The name of the consumer group to join for dynamic
             partition assignment (if enabled), and to use for fetching and
             committing offsets. If None, auto-partition assignment (via
@@ -281,6 +287,7 @@ class KafkaConsumer:
     DEFAULT_CONFIG = {
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
+        'client_rack': '',
         'group_id': None,
         'group_instance_id': None,
         'key_deserializer': None,

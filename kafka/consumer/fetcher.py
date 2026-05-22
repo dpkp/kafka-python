@@ -64,6 +64,8 @@ class Fetcher:
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
         'isolation_level': 'read_uncommitted',
+        'client_rack': '',
+        'metadata_max_age_ms': 5 * 60 * 1000,
     }
 
     def __init__(self, client, subscriptions, **configs):
@@ -1137,6 +1139,29 @@ class Fetcher:
         discard.update(self._paused_partition_records)
         return [tp for tp in fetchable if tp not in discard]
 
+    def _select_read_replica(self, tp):
+        """Pick the node to fetch from for ``tp``: a cached preferred read
+        replica (KIP-392) when valid and known to the cluster, otherwise the
+        partition leader. An unknown / unreachable preferred replica is
+        cleared so the next fetch goes to the leader."""
+        preferred = self._subscriptions.assignment[tp].preferred_read_replica()
+        if preferred is None:
+            leader = self._manager.cluster.leader_for_partition(tp)
+            log.debug("Selecting leader %s as read replica for partition %s",
+                      leader, tp)
+            return leader
+        # If the preferred node fell out of cluster metadata, fall back to leader.
+        if self._manager.cluster.broker_metadata(preferred) is None:
+            self._subscriptions.assignment[tp].clear_preferred_read_replica()
+            leader = self._manager.cluster.leader_for_partition(tp)
+            log.debug("Preferred read replica %s for partition %s no longer in"
+                      " cluster metadata; falling back to leader %s",
+                      preferred, tp, leader)
+            return leader
+        log.debug("Selecting preferred read replica %s for partition %s",
+                  preferred, tp)
+        return preferred
+
     def _create_fetch_requests(self):
         """Create fetch requests for all assigned partitions, grouped by node.
 
@@ -1152,10 +1177,10 @@ class Fetcher:
         # v15 replica state (KIP-903)
         # v16 node endpoints (KIP-951)
         # v17 directory id (KIP-853)
-        max_version = 10
+        max_version = 11
         fetchable = collections.defaultdict(collections.OrderedDict)
         for tp in self._fetchable_partitions():
-            node_id = self._manager.cluster.leader_for_partition(tp)
+            node_id = self._select_read_replica(tp)
 
             position = self._subscriptions.assignment[tp].position
 
@@ -1214,6 +1239,7 @@ class Fetcher:
                 session_epoch=session.epoch,
                 topics=session.to_send,
                 forgotten_topics_data=session.to_forget,
+                rack_id=self.config['client_rack'],
                 min_version=min_version,
                 max_version=max_version,
             )
@@ -1336,6 +1362,16 @@ class Fetcher:
                 if highwater >= 0:
                     self._subscriptions.assignment[tp].highwater = highwater
 
+                preferred_read_replica = completed_fetch.partition_data.preferred_read_replica
+                if self._subscriptions.assignment[tp].update_preferred_read_replica(
+                        preferred_read_replica,
+                        time.monotonic() + self.config['metadata_max_age_ms'] / 1000.0):
+                    if preferred_read_replica is None or preferred_read_replica < 0:
+                        log.debug("Cleared preferred read replica for partition %s", tp)
+                    else:
+                        log.debug("Updating preferred read replica for partition %s to %s",
+                                  tp, preferred_read_replica)
+
             elif error_type in (Errors.NotLeaderForPartitionError,
                                 Errors.ReplicaNotAvailableError,
                                 Errors.UnknownTopicOrPartitionError,
@@ -1347,6 +1383,8 @@ class Fetcher:
                 # KIP-320: the broker has a different view of the leader epoch
                 # than we do; ask for metadata refresh and queue position
                 # validation so we detect any truncation before continuing.
+                # The cache is cleared by maybe_validate_position once the
+                # cluster cache catches up with the new epoch.
                 log.debug("Fetch for %s returned %s; marking position for validation",
                           tp, error_type.__name__)
                 self._subscriptions.request_position_validation(tp)
@@ -1357,11 +1395,24 @@ class Fetcher:
                     log.debug("Discarding stale fetch response for partition %s"
                               " since the fetched offset %d does not match the"
                               " current offset %d", tp, fetch_offset, position.offset)
-                elif self._subscriptions.has_default_offset_reset_policy():
-                    log.info("Fetch offset %s is out of range for topic-partition %s", fetch_offset, tp)
-                    self._subscriptions.request_offset_reset(tp)
                 else:
-                    raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
+                    # KIP-392: a follower may be lagging behind the leader's
+                    # high watermark such that our leader-side position is
+                    # legitimately out of *its* range. If we'd been fetching
+                    # from a follower, drop the cache and retry against the
+                    # leader BEFORE concluding the offset is really out of
+                    # range. Only when there was no cached follower do we
+                    # proceed to reset / raise. Matches Java's behavior.
+                    cleared = self._subscriptions.assignment[tp].clear_preferred_read_replica()
+                    if cleared is not None:
+                        log.debug("Fetch offset %s out of range for %s on follower %s;"
+                                  " retrying from leader", fetch_offset, tp, cleared)
+                    elif self._subscriptions.has_default_offset_reset_policy():
+                        log.info("Fetch offset %s is out of range for topic-partition %s",
+                                 fetch_offset, tp)
+                        self._subscriptions.request_offset_reset(tp)
+                    else:
+                        raise Errors.OffsetOutOfRangeError({tp: fetch_offset})
 
             elif error_type is Errors.TopicAuthorizationFailedError:
                 log.warning("Not authorized to read from topic %s.", tp.topic)
