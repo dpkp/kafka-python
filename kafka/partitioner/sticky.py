@@ -18,10 +18,10 @@ improvements while predominantly CPU-bound on per-record overhead.
 import random
 import threading
 
-from kafka.partitioner.default import murmur2
+from kafka.partitioner.default import DefaultPartitioner
 
 
-class StickyPartitioner:
+class StickyPartitioner(DefaultPartitioner):
     """Partitioner that sticks null-key records to one partition per
     topic until ``on_new_batch`` rotates it.
 
@@ -33,38 +33,40 @@ class StickyPartitioner:
         self._sticky = {}  # topic -> partition_id
         self._lock = threading.Lock()
 
-    def partition(self, topic, key, all_partitions, available):
+    def partition(self, topic, key, cluster):
         """Choose a partition for the next record.
 
         Arguments:
             topic (str): topic to partition on.
             key (bytes or None): partitioning key.
-            all_partitions (list[int]): every partition ID for the topic,
-                sorted ascending.
-            available (list[int]): partitions whose leader is currently
-                known (may be empty when metadata is stale).
+            cluster (ClusterMetadata): metadata for cluster; provides
+                all and available partitions for topic.
+
+        Raises:
+            ValueError: if topic is not in ClusterMetadata
 
         Returns:
             int: chosen partition ID.
         """
+        if topic not in cluster.topics():
+            raise ValueError("Topic %s not found in ClusterMetadata" % (topic,))
         if key is not None:
-            idx = murmur2(key)
-            idx &= 0x7fffffff
-            idx %= len(all_partitions)
-            return all_partitions[idx]
+            return super().partition(topic, key, cluster)
         # Null key: reuse the sticky partition if still valid.
         with self._lock:
             partition = self._sticky.get(topic)
             if partition is not None:
+                all_partitions = sorted(cluster.partitions_for_topic(topic))
+                available = list(cluster.available_partitions_for_topic(topic))
                 if available:
                     if partition in available:
                         return partition
                 elif partition in all_partitions:
                     return partition
                 # Stale (leader unavailable, topic shrunk); fall through to re-pick.
-            return self._pick_sticky_locked(topic, all_partitions, available)
+            return self._pick_sticky_locked(topic, cluster)
 
-    def on_new_batch(self, topic, all_partitions, prev_partition):
+    def on_new_batch(self, topic, cluster, prev_partition):
         """Hook called by ``KafkaProducer`` on the abort-for-new-batch
         retry path: rotate the sticky for ``topic`` so the next
         null-key record lands on a different partition.
@@ -76,12 +78,17 @@ class StickyPartitioner:
             if self._sticky.get(topic) != prev_partition:
                 # Another caller already rotated us; don't override.
                 return
-            self._pick_sticky_locked(topic, all_partitions, None,
-                                     avoid=prev_partition)
+            self._pick_sticky_locked(topic, cluster, avoid=prev_partition)
 
-    def _pick_sticky_locked(self, topic, all_partitions, available, avoid=None):
+    def _pick_sticky_locked(self, topic, cluster, avoid=None):
         """Pick a new sticky partition for ``topic``. Must be called with
-        ``self._lock`` held."""
+        ``self._lock`` held. Returns None when the topic is no longer in
+        cluster metadata (caller is expected to no-op in that case)."""
+        all_partitions = cluster.partitions_for_topic(topic)
+        if not all_partitions:
+            return None
+        all_partitions = sorted(all_partitions)
+        available = list(cluster.available_partitions_for_topic(topic) or ())
         if available:
             if len(available) == 1:
                 partition = available[0]
@@ -97,15 +104,3 @@ class StickyPartitioner:
             partition = random.choice(all_partitions)
         self._sticky[topic] = partition
         return partition
-
-    # Compatibility shim: legacy code paths that treat partitioners as
-    # bare callables (key, all_partitions, available) still work, though
-    # they lose the per-topic stickiness.
-    def __call__(self, key, all_partitions, available):
-        if key is not None:
-            idx = murmur2(key)
-            idx &= 0x7fffffff
-            idx %= len(all_partitions)
-            return all_partitions[idx]
-        pool = available if available else all_partitions
-        return random.choice(pool)

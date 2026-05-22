@@ -27,11 +27,13 @@ def test_kafka_producer_context_manager_closes_on_exit():
     assert threading.active_count() == threads
 
 
-def test_partition_uses_topic_aware_api_when_available():
-    """_partition routes through partitioner.partition(topic, ...) when
-    the configured partitioner exposes it (KIP-480 sticky path)."""
+def test_partition_calls_partitioner_partition_with_cluster():
+    """_partition routes through partitioner.partition(topic, key, cluster)
+    — the new signature passes the ClusterMetadata directly so the
+    partitioner can call available_partitions_for_topic / topics() itself."""
     producer = KafkaProducer.__new__(KafkaProducer)
     producer._metadata = MagicMock()
+    producer._metadata.topics.return_value = {'t'}
     producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
     producer._metadata.available_partitions_for_topic.return_value = {0, 1, 2}
 
@@ -41,27 +43,31 @@ def test_partition_uses_topic_aware_api_when_available():
 
     result = producer._partition('t', None, None, None, b'key-bytes', b'val')
     assert result == 1
-    partitioner.partition.assert_called_once_with('t', b'key-bytes', [0, 1, 2], [0, 1, 2])
+    partitioner.partition.assert_called_once_with('t', b'key-bytes', producer._metadata)
 
 
-def test_partition_falls_back_to_legacy_callable():
-    """Custom partitioners written against the legacy callable signature
-    (no .partition method) keep working unchanged."""
+def test_partition_explicit_partition_skips_partitioner():
+    """Explicit partition= argument bypasses the partitioner entirely.
+    The partition must still be in the topic's known set."""
     producer = KafkaProducer.__new__(KafkaProducer)
     producer._metadata = MagicMock()
+    producer._metadata.topics.return_value = {'t'}
     producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
-    producer._metadata.available_partitions_for_topic.return_value = {0, 1, 2}
+    partitioner = MagicMock()
+    producer.config = {'partitioner': partitioner}
 
-    # A plain function - no .partition attribute - must still work.
-    calls = []
-    def legacy_partitioner(key, all_partitions, available):
-        calls.append((key, all_partitions, available))
-        return 2
-    producer.config = {'partitioner': legacy_partitioner}
+    assert producer._partition('t', 1, None, None, b'k', b'v') == 1
+    partitioner.partition.assert_not_called()
 
-    result = producer._partition('t', None, None, None, b'k', b'v')
-    assert result == 2
-    assert calls == [(b'k', [0, 1, 2], [0, 1, 2])]
+
+def test_partition_explicit_partition_rejects_unknown_partition():
+    producer = KafkaProducer.__new__(KafkaProducer)
+    producer._metadata = MagicMock()
+    producer._metadata.topics.return_value = {'t'}
+    producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
+    producer.config = {'partitioner': MagicMock()}
+    with pytest.raises(AssertionError):
+        producer._partition('t', 99, None, None, b'k', b'v')
 
 
 def _producer_for_send_test(partitioner):
@@ -71,6 +77,7 @@ def _producer_for_send_test(partitioner):
     producer._accumulator = MagicMock()
     producer._sender = MagicMock()
     producer._metadata = MagicMock()
+    producer._metadata.topics.return_value = {'t'}
     producer._metadata.partitions_for_topic.return_value = set(range(20))
     producer._metadata.available_partitions_for_topic.return_value = set(range(20))
     return producer
@@ -100,8 +107,10 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
         producer.send('t', value=b'msg')
         # Initial pick + post-rotate re-pick.
         assert partitioner.partition.call_count == 2
-        # on_new_batch fired exactly once, with the *initial* sticky.
-        partitioner.on_new_batch.assert_called_once_with('t', sorted(range(20)), 3)
+        # on_new_batch fired exactly once, with the cluster metadata and
+        # the *initial* sticky.
+        partitioner.on_new_batch.assert_called_once_with(
+            't', producer._metadata, 3)
         # Two appends: first aborted, second landed the record on partition 7.
         assert producer._accumulator.append.call_count == 2
         second_call = producer._accumulator.append.call_args_list[1]
