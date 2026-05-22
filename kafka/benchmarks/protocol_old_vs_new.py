@@ -204,7 +204,7 @@ NEW_PRODUCE_REQ_V9 = NewProduceReq(
 
 
 # ---------------------------------------------------------------------------
-# Decode objects (Responses) — pre-encode bytes from old system
+# Decode objects (Responses) - pre-encode bytes from old system
 # ---------------------------------------------------------------------------
 
 OLD_APIVER_RESP_V0 = OldApiVersionsResp_v0(

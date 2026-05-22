@@ -22,7 +22,7 @@ class EncodeBuffer:
 
     def result(self):
         # Return a bytearray slice (one copy) rather than bytes(self.buf[:pos])
-        # (two copies — the slice creates a bytearray, then bytes() copies
+        # (two copies - the slice creates a bytearray, then bytes() copies
         # again). Downstream consumers (protocol codec slice assignment,
         # socket.send) accept bytearray transparently.
         return self.buf[:self.pos]
@@ -32,7 +32,7 @@ class EncodeBufferPool:
     """Thread-local pool of reusable EncodeBuffer objects.
 
     Each thread gets its own buffer that grows to match the largest message
-    encoded on that thread and stays that size — avoiding repeated allocation
+    encoded on that thread and stays that size - avoiding repeated allocation
     of large bytearrays.
 
     Usage:
@@ -58,7 +58,7 @@ class EncodeBufferPool:
 
     @classmethod
     def _release(cls, buf):
-        # Nothing to do — the buffer stays on the thread-local.
+        # Nothing to do - the buffer stays on the thread-local.
         # Future: could cap max size to prevent memory leaks from
         # one-off large messages.
         pass

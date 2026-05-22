@@ -241,7 +241,7 @@ class StructField(BaseField):
                         break
 
                 if len(batch_fields) == 1:
-                    # Single field — no batching benefit
+                    # Single field - no batching benefit
                     f = batch_fields[0]
                     v = ctx.next_var('val')
                     f.emit_decode_from(ctx, v, indent, version=version,
@@ -278,7 +278,7 @@ class StructField(BaseField):
             ctx.emit(indent, 'pos += 1  # empty tagged fields')
 
     def _emit_tagged_decode(self, ctx, var_name, indent, version):
-        """Emit tagged fields decode — falls back to method-based decode."""
+        """Emit tagged fields decode - falls back to method-based decode."""
         tf_var = ctx.next_var('tf')
         ctx.globs[tf_var] = self.tagged_fields(version)
         ctx.globs['_BytesIO'] = __import__('io').BytesIO

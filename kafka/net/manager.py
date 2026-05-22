@@ -349,7 +349,7 @@ class KafkaConnectionManager:
         """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
 
         Must be awaited from a coroutine running on this loop. The underlying
-        future is not cancelled on timeout — it continues to run; the timeout
+        future is not cancelled on timeout - it continues to run; the timeout
         only unblocks the awaiter.
         """
         if timeout_ms is None:

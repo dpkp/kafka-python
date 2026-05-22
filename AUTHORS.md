@@ -14,7 +14,7 @@
 * Enrico Canzonieri, [@ecanzonieri](https://github.com/ecanzonieri)
 * haosdent, [@haosdent](https://github.com/haosdent)
 * Arturo Filastò, [@hellais](https://github.com/hellais)
-* Job Evers‐Meltzer, [@jobevers](https://github.com/jobevers)
+* Job Evers-Meltzer, [@jobevers](https://github.com/jobevers)
 * Martin Olveyra, [@kalessin](https://github.com/kalessin)
 * Kubilay Kocak, [@koobs](https://github.com/koobs)
 * Matthew L Daniel <mdaniel@gmail.com>

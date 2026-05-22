@@ -709,7 +709,7 @@ def test_fetched_records_parks_parsed_records_on_pause_between_calls(fetcher, to
     assert fetcher._next_partition_records is None
     assert tp in fetcher._paused_partition_records
 
-    # Resume — remainder comes back on the next call.
+    # Resume - remainder comes back on the next call.
     fetcher._subscriptions.resume(tp)
     records, _ = fetcher.fetched_records()
     assert tp in records
@@ -739,7 +739,7 @@ def test_fetched_records_other_partitions_progress_while_one_paused(fetcher, top
 def test_fetchable_partitions_excludes_parked_pause_data(fetcher, topic, mocker):
     """A partition with parked (paused) data must not be picked up by the
     fetch-request side after resume() but before the next fetched_records()
-    drains the parked entry — otherwise we'd issue a redundant fetch."""
+    drains the parked entry - otherwise we'd issue a redundant fetch."""
     fetcher.config['check_crcs'] = False
     tp = TopicPartition(topic, 0)
 
@@ -747,7 +747,7 @@ def test_fetchable_partitions_excludes_parked_pause_data(fetcher, topic, mocker)
     fetcher._paused_completed_fetches[tp] = _build_completed_fetch(tp, _paused_msgs(5))
     fetcher._subscriptions.resume(tp)
 
-    # Even though the partition is now resumed, parked data is pending —
+    # Even though the partition is now resumed, parked data is pending -
     # exclude from the fetchable set so we don't refetch.
     assert tp not in fetcher._fetchable_partitions()
 
@@ -1621,7 +1621,7 @@ class TestKip392PreferredReadReplica:
         fetcher._parse_fetched_data(completed)
         # Cache cleared so next fetch goes to leader.
         assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
-        # No reset requested — we want to re-confirm against the leader first.
+        # No reset requested - we want to re-confirm against the leader first.
         assert fetcher._subscriptions.assignment[tp].awaiting_reset is False
 
     def test_offset_out_of_range_without_follower_resets(
@@ -1637,7 +1637,7 @@ class TestKip392PreferredReadReplica:
 
     def test_leader_epoch_advance_clears_preferred_replica(self, topic):
         """maybe_validate_position must drop the cache when the cluster
-        epoch advances past our position's epoch — same partition's leader
+        epoch advances past our position's epoch - same partition's leader
         almost certainly changed."""
         from kafka.consumer.subscription_state import TopicPartitionState
         state = TopicPartitionState()
@@ -1651,7 +1651,7 @@ class TestKip392PreferredReadReplica:
 
     def test_update_does_not_refresh_ttl_on_same_replica(self, topic):
         """A steady stream of fetches from the same follower must NOT keep
-        refreshing the lease — the TTL counts down regardless. Matches Java."""
+        refreshing the lease - the TTL counts down regardless. Matches Java."""
         from kafka.consumer.subscription_state import TopicPartitionState
         state = TopicPartitionState()
         expiration = time.monotonic() + 60

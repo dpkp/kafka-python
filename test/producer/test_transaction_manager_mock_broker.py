@@ -413,7 +413,7 @@ class TestInitProducerIdHandlerWireVersion:
                                                    expected_version):
         """KIP-360 epoch-bump path sets ``min_version=3``; older brokers
         (<2.5) lack v3 of InitProducerId and the request fails before reach-
-        ing the wire — covered separately in
+        ing the wire - covered separately in
         ``TestBumpProducerIdAndEpoch._supports_epoch_bump`` in
         test_transaction_manager.py."""
         from kafka.producer.transaction_manager import InitProducerIdHandler
@@ -1139,7 +1139,7 @@ class TestKip447ConsumerGroupMetadata:
 
     The TxnOffsetCommit request uses the modern style (max_version=3 cap
     + per-connection api_versions negotiation), so we assert the v3 fields
-    are *populated* on the request object — the wire encoding drops them
+    are *populated* on the request object - the wire encoding drops them
     automatically when the negotiated version is v0-v2.
     """
 
@@ -1188,7 +1188,7 @@ class TestKip447ConsumerGroupMetadata:
     def test_send_offsets_to_transaction_accepts_bare_string(self, broker, client):
         """Back-compat: legacy callers pass a group_id str; wrap into metadata
         with no-generation defaults so broker treats it as a non-fenced
-        commit (which is the v0–v2 behavior on older brokers anyway)."""
+        commit (which is the v0-v2 behavior on older brokers anyway)."""
         tm = _make_manager(client)
         tm._current_state = TransactionState.IN_TRANSACTION
         tm._consumer_group_coordinator = 0
@@ -1320,7 +1320,7 @@ class TestIdempotentProducerOrderingMockBroker:
         # in-flight window contains multiple batches; then return NotLeader
         # (transient retryable). All subsequent calls: success.
         #
-        # The hold is what surfaces the bug — without partition muting, the
+        # The hold is what surfaces the bug - without partition muting, the
         # sender drains additional batches while the first is still in flight,
         # and the first batch's retry (reenqueued via appendleft) is
         # sequenced *after* them.
@@ -1397,7 +1397,7 @@ class TestIdempotentProducerOrderingMockBroker:
         # The first ProduceRequest had base_sequence 0 and was rejected with
         # NotLeader. With partition muting (the fix), the second
         # ProduceRequest the broker sees must be the *retry* of that batch
-        # — same base_sequence. Without muting, a later batch with a higher
+        # - same base_sequence. Without muting, a later batch with a higher
         # base_sequence would have drained while the first was in flight,
         # arriving here ahead of the retry.
         assert len(received_sequences) >= 2, (
@@ -1407,5 +1407,5 @@ class TestIdempotentProducerOrderingMockBroker:
             % received_sequences)
         assert received_sequences[1] == 0, (
             'second ProduceRequest must be the retry of base_sequence 0; '
-            'got %r — partition was not muted, later batch drained ahead of '
+            'got %r - partition was not muted, later batch drained ahead of '
             'retry' % received_sequences)

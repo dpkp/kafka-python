@@ -13,7 +13,7 @@ python -m kafka.consumer
 
 .. code:: bash
 
-    ❯ python -m kafka.consumer --help
+    > python -m kafka.consumer --help
     usage: python -m kafka.consumer [-h] -b BOOTSTRAP_SERVERS -t TOPICS -g GROUP [-c EXTRA_CONFIG] [-l LOG_LEVEL] [-f FORMAT] [--encoding ENCODING]
 
     Kafka console consumer
@@ -40,7 +40,7 @@ python -m kafka.producer
 
 .. code:: bash
 
-    ❯ python -m kafka.producer --help
+    > python -m kafka.producer --help
     usage: python -m kafka.producer [-h] -b BOOTSTRAP_SERVERS -t TOPIC [-c EXTRA_CONFIG] [-l LOG_LEVEL] [--encoding ENCODING]
 
     Kafka console producer
@@ -63,7 +63,7 @@ python -m kafka.admin
 
 .. code:: bash
 
-    ❯ python -m kafka.admin --help
+    > python -m kafka.admin --help
     usage: python -m kafka.admin [-h] -b BOOTSTRAP_SERVERS [-c EXTRA_CONFIG] [-l LOG_LEVEL] [-f FORMAT] {cluster,configs,log-dirs,topics,consumer-groups} ...
 
     Kafka admin client

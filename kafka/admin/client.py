@@ -1,4 +1,4 @@
-"""KafkaAdminClient — high-level Kafka cluster administration."""
+"""KafkaAdminClient - high-level Kafka cluster administration."""
 
 import copy
 import logging

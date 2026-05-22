@@ -121,7 +121,7 @@ def test_produce_request_negotiates_wire_version(sender, broker, manager, produc
     batch = producer_batch(magic=magic)
     produce_request = sender._produce_request(0, 1, 0, [batch])  # acks=1
     assert isinstance(produce_request, ProduceRequest)
-    # Version is not pinned at construction — that's the whole point.
+    # Version is not pinned at construction - that's the whole point.
     assert produce_request.API_VERSION is None
 
     captured = {}

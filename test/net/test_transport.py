@@ -157,7 +157,7 @@ class TestKafkaTCPTransport:
         err = Errors.KafkaConnectionError('write failed')
 
         # Stub _sock_send: drain one chunk (real _sock_send drops the chunk
-        # that errored — no appendleft on BaseException) and return the
+        # that errored - no appendleft on BaseException) and return the
         # error so the while-loop's buffer check terminates.
         def fake_sock_send():
             if t._write_buffer:

@@ -575,7 +575,7 @@ def test_describe_topic_partitions_pagination(kafka_admin_client, topic):
     result = kafka_admin_client.describe_topic_partitions(
         [topic], response_partition_limit=1)
     # Small clusters may still satisfy the request without a cursor if the
-    # broker ignores the partition limit — tolerate either outcome but verify
+    # broker ignores the partition limit - tolerate either outcome but verify
     # the cursor round-trips when present.
     if result['next_cursor'] is not None:
         cursor = result['next_cursor']

@@ -134,7 +134,7 @@ class TestCompleteness:
         for mod_file, (mod, exports) in modules.items():
             pyi_path = mod_file.replace('.py', '.pyi')
             if not os.path.exists(pyi_path):
-                pytest.skip('Stubs not generated yet — run: python -m kafka.protocol.generate_stubs')
+                pytest.skip('Stubs not generated yet - run: python -m kafka.protocol.generate_stubs')
             with open(pyi_path, 'r') as f:
                 existing = f.read()
             # Stubs are version-dependent; skip freshness check if generated on a different Python

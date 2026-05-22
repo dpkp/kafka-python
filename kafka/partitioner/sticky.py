@@ -2,7 +2,7 @@
 
 Records with a non-None key are hashed to a partition just like
 :class:`~kafka.partitioner.default.DefaultPartitioner`. Records with a
-None key go to a *sticky* partition — i.e. the same partition is reused
+None key go to a *sticky* partition - i.e. the same partition is reused
 for every null-key record on a topic until KafkaProducer signals that a
 batch has been completed (via :meth:`StickyPartitioner.on_new_batch`),
 at which point a different partition is picked.
@@ -77,7 +77,7 @@ class StickyPartitioner:
 
         The *first* event per sticky is absorbed silently: it
         corresponds to the first batch ever being created on the
-        partition we just picked, which is expected — we want
+        partition we just picked, which is expected - we want
         subsequent records to keep landing there. The *second* event
         means the previous batch filled up and a new one was opened;
         that's the signal to rotate to a different partition so the
@@ -100,7 +100,7 @@ class StickyPartitioner:
         candidates = [p for p in pool if p != avoid] if avoid is not None else pool
         if not candidates:
             # Single-partition topic, or only the avoid-partition is
-            # available — no rotation possible.
+            # available - no rotation possible.
             candidates = pool
         partition = random.choice(candidates)
         self._sticky[topic] = partition

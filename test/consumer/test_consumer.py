@@ -60,7 +60,7 @@ def test_context_manager_closes_on_exit():
 
 
 def test_context_manager_suppresses_autocommit_on_exception():
-    # Verify the __exit__ → close(autocommit=...) wiring. We don't need a
+    # Verify the __exit__ -> close(autocommit=...) wiring. We don't need a
     # real coordinator for this; just check that an exception propagates and
     # that close() is reached.
     consumer = KafkaConsumer(api_version=(0, 10, 0))

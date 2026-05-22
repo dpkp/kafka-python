@@ -751,7 +751,7 @@ class KafkaProducer:
             offsets ({TopicPartition: OffsetAndMetadata}): map of topic-partition -> offsets to commit
                 as part of current transaction.
             group_metadata (ConsumerGroupMetadata or str): full group metadata from
-                KafkaConsumer.group_metadata() (preferred — enables broker-side fencing
+                KafkaConsumer.group_metadata() (preferred - enables broker-side fencing
                 of stale consumer instances per KIP-447 against Kafka 2.5+ brokers), or
                 a bare consumer_group_id str for backwards compatibility.
 

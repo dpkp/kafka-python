@@ -4,7 +4,7 @@
 # to maximize the chance of catching timing-sensitive flakes. Uploads the
 # pytest log from any shard that catches a failure.
 #
-# Trigger from the Actions UI via "Run workflow" (workflow_dispatch only) —
+# Trigger from the Actions UI via "Run workflow" (workflow_dispatch only) -
 # does NOT run on PRs or pushes, to avoid burning runner minutes on every
 # commit. Defaults target the test_heartbeat_thread rejoin hang, but any
 # pytest node id can be supplied.

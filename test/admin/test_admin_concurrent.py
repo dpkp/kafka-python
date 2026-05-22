@@ -74,7 +74,7 @@ def test_close_unblocks_pending_callers(broker):
 
     async def blocker():
         blocked.set()
-        # Wait forever — only unblocks via manager.stop()
+        # Wait forever - only unblocks via manager.stop()
         await manager._net.sleep(3600)
 
     result = {}

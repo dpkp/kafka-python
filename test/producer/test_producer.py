@@ -52,7 +52,7 @@ def test_partition_falls_back_to_legacy_callable():
     producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
     producer._metadata.available_partitions_for_topic.return_value = {0, 1, 2}
 
-    # A plain function — no .partition attribute — must still work.
+    # A plain function - no .partition attribute - must still work.
     calls = []
     def legacy_partitioner(key, all_partitions, available):
         calls.append((key, all_partitions, available))

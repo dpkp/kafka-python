@@ -2,7 +2,7 @@
 """Benchmarks for the producer encode hot path.
 
 Measures the cost of finalizing a record batch and encoding it into a
-ProduceRequest — the pipeline that runs on every send to the broker.
+ProduceRequest - the pipeline that runs on every send to the broker.
 
 To compare two implementations (e.g. before/after a change) run this
 script twice and diff the output:
@@ -34,7 +34,7 @@ from kafka.protocol.producer import ProduceRequest
 
 DEFAULT_RECORDS_PER_BATCH = 100
 DEFAULT_VALUE_SIZE = 128
-DEFAULT_BATCH_SIZE = 1 << 20  # 1 MiB — big enough to hold the largest case
+DEFAULT_BATCH_SIZE = 1 << 20  # 1 MiB - big enough to hold the largest case
 
 
 def _build_unclosed_batch(num_records, value_size):
@@ -56,7 +56,7 @@ def _build_closed_batch(num_records, value_size):
 
 
 def bench_build_and_close(loops, num_records, value_size):
-    """Time build + close — isolates the batch-finalization path.
+    """Time build + close - isolates the batch-finalization path.
 
     close() is fast enough that pyperf would need many thousands of loops
     to measure it directly, so we include the build cost and rely on the
@@ -139,7 +139,7 @@ def report_allocations(num_records, value_size):
     )
     req.with_header(correlation_id=1, client_id='bench')
 
-    # Warmup — populate the compiled-encoder cache so we don't count its
+    # Warmup - populate the compiled-encoder cache so we don't count its
     # one-time allocations.
     req.encode(framed=True, header=True)
 
