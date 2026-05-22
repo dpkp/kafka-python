@@ -231,6 +231,11 @@ class TransactionManager:
                 "send_offsets_to_transaction expects group_metadata to be a "
                 "ConsumerGroupMetadata or a group_id str, got %r" % (type(group_metadata),))
 
+        if group_metadata.generation_id > 0 and not group_metadata.member_id:
+            raise ValueError(
+                "Invalid ConsumerGroupMetadata: generation_id=%s implies a"
+                " joined group but member_id is empty" % (group_metadata.generation_id,))
+
         with self._lock:
             self._ensure_transactional()
             self._maybe_fail_with_error()
@@ -1191,6 +1196,11 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
             # on the txn-coordinator RPC paths (KIP-360).
             self.fatal_error(Errors.ProducerFencedError())
+        elif error_type in (Errors.UnknownProducerIdError, Errors.InvalidProducerIdMappingError):
+            if self.transaction_manager._supports_epoch_bump():
+                self.abortable_error(error_type())
+            else:
+                self.fatal_error(error_type())
         elif error_type is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error_type())
         elif error_type is Errors.GroupAuthorizationFailedError:
@@ -1274,6 +1284,24 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                 # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
                 # on the txn-coordinator RPC paths (KIP-360).
                 self.fatal_error(Errors.ProducerFencedError())
+                return
+            elif error_type is Errors.FencedInstanceIdError:
+                # KIP-447: static-membership fencing - another consumer
+                # instance with this group_instance_id displaced ours. The
+                # transaction must be aborted, but the producer can be
+                # reused for a fresh transaction.
+                self.abortable_error(error_type())
+                return
+            elif error_type in (Errors.IllegalGenerationError,
+                                Errors.UnknownMemberIdError):
+                # KIP-447: the consumer generation / member_id we passed
+                # in are stale (the consumer rebalanced between when we
+                # snapshotted group_metadata and when the broker checked
+                # it). Abort the txn so the application can re-snapshot
+                # and retry.
+                self.abortable_error(Errors.CommitFailedError(
+                    "Transaction offset commit failed due to consumer group"
+                    " metadata mismatch: %s" % (error_type.__name__,)))
                 return
             elif error_type in (Errors.TransactionalIdAuthorizationFailedError,
                                 Errors.UnsupportedForMessageFormatError):
