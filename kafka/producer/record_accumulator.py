@@ -110,7 +110,8 @@ class RecordAccumulator:
                     self._tp_locks[tp] = threading.Lock()
         return self._tp_locks[tp]
 
-    def append(self, tp, timestamp_ms, key, value, headers, now=None):
+    def append(self, tp, timestamp_ms, key, value, headers, now=None,
+               abort_on_new_batch=False):
         """Add a record to the accumulator, return the append result.
 
         The append result will contain the future metadata, and flag for
@@ -123,9 +124,14 @@ class RecordAccumulator:
             key (bytes): The key for the record
             value (bytes): The value for the record
             headers (List[Tuple[str, bytes]]): The header fields for the record
+            abort_on_new_batch (bool): KIP-480. When True, return early with
+                ``abort_for_new_batch=True`` instead of allocating a new
+                batch when no in-progress batch has room. Caller is expected
+                to consult the partitioner's ``on_new_batch`` hook, re-pick
+                the partition, and retry with ``abort_on_new_batch=False``.
 
         Returns:
-            tuple: (future, batch_is_full, new_batch_created)
+            tuple: (future, batch_is_full, new_batch_created, abort_for_new_batch)
         """
         assert isinstance(tp, TopicPartition), 'not TopicPartition'
         assert not self._closed, 'RecordAccumulator is closed'
@@ -142,7 +148,12 @@ class RecordAccumulator:
                     future = last.try_append(timestamp_ms, key, value, headers, now=now)
                     if future is not None:
                         batch_is_full = len(dq) > 1 or last.records.is_full()
-                        return future, batch_is_full, False
+                        return future, batch_is_full, False, False
+
+            if abort_on_new_batch:
+                # KIP-480: don't allocate a new batch yet. Caller will
+                # rotate the sticky partition and retry.
+                return None, False, False, True
 
             with self._tp_lock(tp):
                 # Need to check if producer is closed again after grabbing the
@@ -156,7 +167,7 @@ class RecordAccumulator:
                         # Somebody else found us a batch, return the one we
                         # waited for! Hopefully this doesn't happen often...
                         batch_is_full = len(dq) > 1 or last.records.is_full()
-                        return future, batch_is_full, False
+                        return future, batch_is_full, False, False
 
                 if self._transaction_manager and self.config['message_version'] < 2:
                     raise Errors.UnsupportedVersionError("Attempting to use idempotence with a broker which"
@@ -176,7 +187,7 @@ class RecordAccumulator:
                 dq.append(batch)
                 self._incomplete.add(batch)
                 batch_is_full = len(dq) > 1 or batch.records.is_full()
-                return future, batch_is_full, True
+                return future, batch_is_full, True, False
         finally:
             self._appends_in_progress.decrement()
 

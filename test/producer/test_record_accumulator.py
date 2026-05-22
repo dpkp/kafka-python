@@ -163,3 +163,36 @@ def test_expired_batches(cluster, tp):
     accum.muted.add(tp)
     expired_batches = accum.expired_batches(now=now)
     assert len(expired_batches) == 1, "The batch should not be expired when the partition is muted"
+
+
+def test_abort_on_new_batch_returns_sentinel(tp):
+    """KIP-480 plumbing: with abort_on_new_batch=True and no in-progress
+    batch, append must return (None, False, False, True) instead of
+    allocating a fresh batch."""
+    accum = RecordAccumulator()
+    future, batch_full, new_batch, abort = accum.append(
+        tp, 0, b'k', b'v', [], now=0, abort_on_new_batch=True)
+    assert future is None
+    assert batch_full is False
+    assert new_batch is False
+    assert abort is True
+    # And no batch was actually allocated.
+    assert tp not in accum._batches or not accum._batches[tp]
+
+
+def test_abort_on_new_batch_appends_to_existing(tp):
+    """If a batch already exists with room, abort_on_new_batch=True still
+    succeeds — only the new-batch-allocation path is gated."""
+    accum = RecordAccumulator()
+    # First append (with abort_on_new_batch=False) creates the batch.
+    future1, _, new1, abort1 = accum.append(
+        tp, 0, b'k1', b'v1', [], now=0, abort_on_new_batch=False)
+    assert future1 is not None
+    assert new1 is True
+    assert abort1 is False
+    # Second append with abort_on_new_batch=True lands in the existing batch.
+    future2, _, new2, abort2 = accum.append(
+        tp, 0, b'k2', b'v2', [], now=0, abort_on_new_batch=True)
+    assert future2 is not None
+    assert new2 is False
+    assert abort2 is False

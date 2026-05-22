@@ -859,6 +859,8 @@ class KafkaProducer:
                     sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
                 ).failure(e)
 
+        # Track if the user passed an explicit partition b/c sticky logic does not apply
+        explicit_partition = partition is not None
         partition = self._partition(topic, partition, key, value, key_bytes, value_bytes)
         assert partition is not None, f'Partitioner did not assign a partition for topic {topic}!'
 
@@ -876,24 +878,37 @@ class KafkaProducer:
         if self._transaction_manager and self._transaction_manager.is_transactional():
             self._transaction_manager.maybe_add_partition_to_transaction(tp)
 
-        result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers)
-        future, batch_is_full, new_batch_created = result
-        if batch_is_full or new_batch_created:
-            log.debug("%s: Waking up the sender since %s is either full or"
-                      " getting a new batch", str(self), tp)
-            self._sender.wakeup()
-        # KIP-480: notify a sticky-aware partitioner that this null-key
-        # record opened a new batch on `partition`, so the next null-key
-        # send for `topic` rotates to a different partition. Keyed
-        # records hash deterministically and don't participate in sticky
-        # rotation, so skip the hook for them.
-        if new_batch_created and key_bytes is None:
+        # KIP-480: when sticky-aware partitioning is in play (no explicit
+        # partition, no key), try once with abort_on_new_batch=True. If the
+        # accumulator would have to allocate a fresh batch for this partition,
+        # rotate the sticky partition first and re-pick. The record that
+        # *triggers* the new batch then lands on the rotated partition, not
+        # the next one.
+        sticky_eligible = not explicit_partition and key_bytes is None
+        result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers,
+                                          abort_on_new_batch=sticky_eligible)
+        future, batch_is_full, new_batch_created, abort_for_new_batch = result
+        if abort_for_new_batch:
+            prev_partition = partition
             partitioner = self.config['partitioner']
             on_new_batch = getattr(partitioner, 'on_new_batch', None)
             if on_new_batch is not None:
                 all_partitions = self._metadata.partitions_for_topic(topic)
                 if all_partitions is not None:
-                    on_new_batch(topic, sorted(all_partitions), partition)
+                    on_new_batch(topic, sorted(all_partitions), prev_partition)
+            # Re-pick - sticky cache may now point at a different partition.
+            partition = self._partition(topic, None, key, value, key_bytes, value_bytes)
+            tp = TopicPartition(topic, partition)
+            if self._transaction_manager and self._transaction_manager.is_transactional():
+                self._transaction_manager.maybe_add_partition_to_transaction(tp)
+            result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers,
+                                              abort_on_new_batch=False)
+            future, batch_is_full, new_batch_created, _ = result
+
+        if batch_is_full or new_batch_created:
+            log.debug("%s: Waking up the sender since %s is either full or"
+                      " getting a new batch", str(self), tp)
+            self._sender.wakeup()
         return future
 
     def flush(self, timeout=None):
