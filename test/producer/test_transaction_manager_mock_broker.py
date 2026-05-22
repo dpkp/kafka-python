@@ -931,6 +931,48 @@ class TestAddOffsetsToTxnHandlerMockBroker:
         assert isinstance(tm.last_error, Errors.GroupAuthorizationFailedError)
         assert handler._result.failed
 
+    @pytest.mark.parametrize("error", [
+        Errors.UnknownProducerIdError,
+        Errors.InvalidProducerIdMappingError,
+    ])
+    def test_unknown_producer_id_abortable_on_modern_broker(
+            self, broker, client, error):
+        """KIP-360: UNKNOWN_PRODUCER_ID / INVALID_PRODUCER_ID_MAPPING on a
+        broker that supports epoch bumping (>= 2.5) is abortable - the
+        application aborts the txn and retries; the producer epoch is
+        bumped under the hood. Matches Java's abortableErrorIfPossible."""
+        tm = _make_manager(client, api_version=(2, 5))
+        handler, _, _ = self._enqueue_add_offsets(tm)
+
+        broker.respond(AddOffsetsToTxnResponse,
+                       self._response(error_code=error.errno))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+
+    @pytest.mark.parametrize("error", [
+        Errors.UnknownProducerIdError,
+        Errors.InvalidProducerIdMappingError,
+    ])
+    def test_unknown_producer_id_fatal_on_old_broker(
+            self, broker, client, error):
+        """On a broker < 2.5 there's no epoch-bump path, so these errors
+        remain fatal."""
+        tm = _make_manager(client, api_version=(2, 4))
+        handler, _, _ = self._enqueue_add_offsets(tm)
+
+        broker.respond(AddOffsetsToTxnResponse,
+                       self._response(error_code=error.errno))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+
+        assert tm._current_state == TransactionState.FATAL_ERROR
+        assert isinstance(tm.last_error, error)
+        assert handler._result.failed
+
     def test_unknown_error_is_fatal(self, broker, client):
         tm = _make_manager(client)
         handler, _, _ = self._enqueue_add_offsets(tm)
@@ -1077,6 +1119,44 @@ class TestTxnOffsetCommitHandlerMockBroker:
         assert isinstance(tm.last_error, Errors.GroupAuthorizationFailedError)
         assert handler._result.failed
 
+    def test_fenced_instance_id_is_abortable(self, broker, client):
+        """KIP-447: FENCED_INSTANCE_ID means another static-membership
+        instance displaced us - the transaction must abort, but the producer
+        can be reused (matches Java)."""
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_offset_commit(tm)
+        broker.respond(
+            TxnOffsetCommitResponse,
+            self._response({(tp.topic, tp.partition):
+                            Errors.FencedInstanceIdError.errno}))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, Errors.FencedInstanceIdError)
+        assert handler._result.failed
+
+    @pytest.mark.parametrize("error", [
+        Errors.IllegalGenerationError,
+        Errors.UnknownMemberIdError,
+    ])
+    def test_consumer_group_metadata_mismatch_is_abortable(
+            self, broker, client, error):
+        """KIP-447: ILLEGAL_GENERATION / UNKNOWN_MEMBER_ID indicate the
+        consumer rebalanced between snapshot and commit. Abort the txn so
+        the app can re-snapshot and retry (matches Java's
+        CommitFailedException)."""
+        tm = _make_manager(client)
+        handler, tp = self._enqueue_offset_commit(tm)
+        broker.respond(
+            TxnOffsetCommitResponse,
+            self._response({(tp.topic, tp.partition): error.errno}))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+        assert tm._current_state == TransactionState.ABORTABLE_ERROR
+        assert isinstance(tm.last_error, Errors.CommitFailedError)
+        assert error.__name__ in str(tm.last_error)
+        assert handler._result.failed
+
     def test_unknown_partition_error_is_fatal(self, broker, client):
         tm = _make_manager(client)
         handler, tp = self._enqueue_offset_commit(tm)
@@ -1210,6 +1290,18 @@ class TestKip447ConsumerGroupMetadata:
         tm._current_state = TransactionState.IN_TRANSACTION
         with pytest.raises(TypeError):
             tm.send_offsets_to_transaction(self._offsets(), 42)
+
+    def test_send_offsets_to_transaction_rejects_incoherent_metadata(
+            self, broker, client):
+        """Mirror Java's throwIfInvalidGroupMetadata: a generation_id > 0
+        with an empty member_id is incoherent and should be rejected at
+        the API boundary rather than sent to the broker."""
+        tm = _make_manager(client)
+        tm._current_state = TransactionState.IN_TRANSACTION
+        bad = ConsumerGroupMetadata(group_id='g', generation_id=5,
+                                    member_id='', group_instance_id=None)
+        with pytest.raises(ValueError, match='generation_id'):
+            tm.send_offsets_to_transaction(self._offsets(), bad)
 
     def test_group_metadata_propagates_through_add_offsets_to_commit_handler(
             self, broker, client):
