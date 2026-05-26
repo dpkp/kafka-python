@@ -486,6 +486,16 @@ class ClusterMetadata:
         _new_internal_topics = set()
         _retry_topics = set()
 
+        # KAFKA-9212: pre-2.4 brokers may emit stale leader_epoch values
+        # during partition reassignment (the controller failed to update
+        # its own cached epoch before sending UpdateMetadata, so the
+        # propagated epoch lags behind the actual leader's). Caching that
+        # stale value would loop us on FENCED_LEADER_EPOCH for every
+        # subsequent ListOffsets / Fetch / OffsetCommit. The Java client's
+        # fix gates on response version >= 9 (Kafka 2.4+, where the
+        # controller bug is fixed); we do the same.
+        epoch_reliable = metadata.API_VERSION >= 9
+
         for t in metadata.topics:
             topic = t.name
             if t.is_internal:
@@ -495,6 +505,8 @@ class ClusterMetadata:
                 _new_partitions[topic] = {}
                 for p_data in t.partitions:
                     partition = p_data.partition_index
+                    if not epoch_reliable:
+                        p_data.leader_epoch = -1
                     _new_partitions[topic][partition] = p_data
                     if p_data.leader_id != -1:
                         _new_broker_partitions[p_data.leader_id].add(

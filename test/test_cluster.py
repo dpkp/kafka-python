@@ -78,10 +78,39 @@ class TestClusterMetadataUpdateMetadata:
             assert cluster._partitions['topic-1'][0].offline_replicas == [12]
         else:
             assert cluster._partitions['topic-1'][0].offline_replicas == []
-        if version >= 7:
+        if version >= 9:
+            # KAFKA-9212: leader_epoch is only trusted from v9+.
             assert cluster._partitions['topic-1'][0].leader_epoch == 0
         else:
+            # Pre-v9 broker may emit stale epochs during reassignment;
+            # we sanitize to -1 (NO_PARTITION_LEADER_EPOCH).
             assert cluster._partitions['topic-1'][0].leader_epoch == -1
+
+    def test_kafka_9212_stale_epoch_sanitized_on_pre_v9_response(self, cluster):
+        """KAFKA-9212: pre-2.4 brokers may propagate stale leader_epoch
+        during partition reassignment due to a controller-side bug.
+        Match Java's client-side workaround: discard the field for
+        MetadataResponse < v9, replace with -1."""
+        for version in (7, 8):
+            response = _make_metadata_response(version)
+            response = MetadataResponse.decode(response.encode(), version=version)
+            # Sanity: the on-wire response carries the (potentially stale) epoch.
+            assert response.topics[0].partitions[0].leader_epoch == 0
+            cluster.update_metadata(response)
+            # But cluster cache must report -1 (NO_PARTITION_LEADER_EPOCH).
+            tp = TopicPartition('topic-1', 0)
+            assert cluster.leader_epoch_for_partition(tp) == -1
+            assert cluster._partitions['topic-1'][0].leader_epoch == -1
+
+    def test_kafka_9212_v9_response_trusted(self, cluster):
+        """Counterpart: v9+ epochs ARE trusted (the controller bug is
+        fixed in 2.4+ brokers)."""
+        version = 9
+        response = _make_metadata_response(version)
+        response = MetadataResponse.decode(response.encode(), version=version)
+        cluster.update_metadata(response)
+        tp = TopicPartition('topic-1', 0)
+        assert cluster.leader_epoch_for_partition(tp) == 0
 
     def test_unauthorized_topic(self, cluster):
         cluster.set_topics(['unauthorized-topic'])
@@ -108,7 +137,10 @@ class TestClusterMetadataPartitionLookups:
     ``KafkaConsumer.assign(...)``.
     """
 
-    def _seed_topic(self, cluster, version=7):
+    def _seed_topic(self, cluster, version=9):
+        # v9 is the first MetadataResponse version with reliable
+        # leader_epoch (KAFKA-9212); earlier responses get sanitized
+        # to -1 by ClusterMetadata.update_metadata.
         response = _make_metadata_response(version)
         response = MetadataResponse.decode(response.encode(), version=version)
         cluster.update_metadata(response)
