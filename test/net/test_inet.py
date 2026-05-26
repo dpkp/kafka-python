@@ -6,7 +6,7 @@ import pytest
 
 from kafka.net.selector import NetworkSelector
 from kafka.net.inet import create_connection, KafkaNetSocket
-from kafka.socks5_wrapper import Socks5Wrapper
+from kafka.net.socks5_wrapper import Socks5Wrapper
 import kafka.errors as Errors
 
 
@@ -130,9 +130,9 @@ class TestCreateConnectionWithProxy:
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
         fake_addr = (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))
-        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
+        with patch('kafka.net.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
              patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[fake_addr]), \
-             patch('kafka.socks5_wrapper.Socks5Wrapper.connect', return_value=mock_sock) as mock_connect:
+             patch('kafka.net.socks5_wrapper.Socks5Wrapper.connect', return_value=mock_sock) as mock_connect:
             result = net.run(
                 create_connection(net, 'broker', 9092, proxy_url='socks5://proxy:1080'))
             mock_connect.assert_called_once_with(net, fake_addr, ())
@@ -142,9 +142,9 @@ class TestCreateConnectionWithProxy:
         net = NetworkSelector()
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
-        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
-             patch('kafka.socks5_wrapper.Socks5Wrapper.socket', return_value=mock_sock), \
-             patch('kafka.socks5_wrapper.Socks5Wrapper.connect_ex', return_value=0), \
+        with patch('kafka.net.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
+             patch('kafka.net.socks5_wrapper.Socks5Wrapper.socket', return_value=mock_sock), \
+             patch('kafka.net.socks5_wrapper.Socks5Wrapper.connect_ex', return_value=0), \
              patch('kafka.net.inet.KafkaNetSocket.dns_lookup') as mock_dns:
             result = net.run(
                 create_connection(net, 'broker', 9092, proxy_url='socks5h://proxy:1080'))
@@ -157,7 +157,7 @@ class TestCreateConnectionWithProxy:
         mock_sock.connect_ex.return_value = 0
         with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[fake_addr]), \
              patch('kafka.net.inet.socket.socket', return_value=mock_sock), \
-             patch('kafka.socks5_wrapper.Socks5Wrapper.connect') as mock_connect:
+             patch('kafka.net.socks5_wrapper.Socks5Wrapper.connect') as mock_connect:
             result = net.run(
                 create_connection(net, 'host', 9092))
             mock_connect.assert_not_called()
@@ -167,13 +167,13 @@ class TestCreateConnectionWithProxy:
 class TestKafkaNetSocketRegistry:
     def test_socks5(self):
         assert 'socks5' in KafkaNetSocket._registry
-        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
+        with patch('kafka.net.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
             factory = KafkaNetSocket('socks5://foo.bar')
         assert isinstance(factory, Socks5Wrapper)
 
     def test_socks5h(self):
         assert 'socks5h' in KafkaNetSocket._registry
-        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
+        with patch('kafka.net.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
             factory = KafkaNetSocket('socks5h://foo.bar')
         assert isinstance(factory, Socks5Wrapper)
 
