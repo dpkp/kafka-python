@@ -1,0 +1,6 @@
+# Files that have known unicode chars; all others should be ascii-only
+.github/workflows/codeql-analysis.yml
+AUTHORS.md
+test/protocol/old/test_compact.py
+test/protocol/old/test_types.py
+test/protocol/schemas/test_codec_types.py
