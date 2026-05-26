@@ -537,6 +537,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         log.debug("Received JoinGroup response: %s", response)
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
+            # KIP-559: starting with v7 the response carries the protocol_type;
+            # validate it matches what this member sent (None on older versions).
+            if response.protocol_type is not None and response.protocol_type != self.protocol_type():
+                log.error("JoinGroup for group %s returned inconsistent protocol_type %s (expected %s)",
+                          self.group_id, response.protocol_type, self.protocol_type())
+                raise Errors.InconsistentGroupProtocolError(
+                    "JoinGroupResponse protocol_type %r does not match group protocol_type %r"
+                    % (response.protocol_type, self.protocol_type()))
             if self._sensors:
                 self._sensors.join_latency.record((time.monotonic() - send_time) * 1000)
             with self._lock:
@@ -612,6 +620,23 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         log.debug("Received SyncGroup response: %s", response)
         error_type = Errors.for_code(response.error_code)
         if error_type is Errors.NoError:
+            # KIP-559: starting with v5 the response carries the protocol_type and
+            # protocol_name; validate they match what this member is using
+            # (both None on older versions).
+            if response.protocol_type is not None and response.protocol_type != self.protocol_type():
+                log.error("SyncGroup for group %s returned inconsistent protocol_type %s (expected %s)",
+                          self.group_id, response.protocol_type, self.protocol_type())
+                raise Errors.InconsistentGroupProtocolError(
+                    "SyncGroupResponse protocol_type %r does not match group protocol_type %r"
+                    % (response.protocol_type, self.protocol_type()))
+            if (response.protocol_name is not None
+                    and self._generation is not Generation.NO_GENERATION
+                    and response.protocol_name != self._generation.protocol):
+                log.error("SyncGroup for group %s returned inconsistent protocol_name %s (expected %s)",
+                          self.group_id, response.protocol_name, self._generation.protocol)
+                raise Errors.InconsistentGroupProtocolError(
+                    "SyncGroupResponse protocol_name %r does not match group protocol_name %r"
+                    % (response.protocol_name, self._generation.protocol))
             if self._sensors:
                 self._sensors.sync_latency.record((time.monotonic() - send_time) * 1000)
             return response.assignment
@@ -681,7 +706,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             group_instance_id=self.group_instance_id,
             protocol_type=self.protocol_type(),
             protocols=self.group_protocols(),
-            max_version=6)
+            max_version=7)
         log.debug("Sending JoinGroup (%s) to coordinator %s",
                   join_request, self.coordinator_id)
         join_send_time = time.monotonic()
@@ -702,8 +727,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 generation_id=self._generation.generation_id,
                 member_id=self._generation.member_id,
                 group_instance_id=self.group_instance_id,
+                protocol_type=self.protocol_type(),
+                protocol_name=self._generation.protocol,
                 assignments=group_assignment.items(),
-                max_version=4)
+                max_version=5)
             log.debug("Sending leader SyncGroup for group %s to coordinator %s: %s",
                       self.group_id, self.coordinator_id, sync_request)
         else:
@@ -712,8 +739,10 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 generation_id=self._generation.generation_id,
                 member_id=self._generation.member_id,
                 group_instance_id=self.group_instance_id,
+                protocol_type=self.protocol_type(),
+                protocol_name=self._generation.protocol,
                 assignments=[],
-                max_version=4)
+                max_version=5)
             log.debug("Sending follower SyncGroup for group %s to coordinator %s: %s",
                       self.group_id, self.coordinator_id, sync_request)
 

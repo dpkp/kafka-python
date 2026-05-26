@@ -977,24 +977,26 @@ def test_process_sync_group_response(request, coordinator, error_code, error_typ
 
 def _join_response_object(error_code=0, generation_id=42,
                            member_id='member-1', leader='member-1',
+                           protocol_type='consumer',
                            protocol_name='range', members=None):
     return JoinGroupResponse(
         throttle_time_ms=0,
         error_code=error_code,
         generation_id=generation_id,
-        protocol_type='consumer',
+        protocol_type=protocol_type,
         protocol_name=protocol_name,
         leader=leader,
         member_id=member_id,
         members=members or [])
 
 
-def _sync_response_object(error_code=0, assignment=b''):
+def _sync_response_object(error_code=0, assignment=b'',
+                          protocol_type='consumer', protocol_name='range'):
     return SyncGroupResponse(
         throttle_time_ms=0,
         error_code=error_code,
-        protocol_type='consumer',
-        protocol_name='range',
+        protocol_type=protocol_type,
+        protocol_name=protocol_name,
         assignment=assignment)
 
 
@@ -1334,3 +1336,40 @@ def test_lookup_coordinator_failure(mocker, coordinator):
     future = coordinator.lookup_coordinator()
     coordinator._client.poll(future=future, timeout_ms=1000)
     assert future.failed()
+
+
+def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, seeded_coord):
+    """KIP-559: JoinGroupResponse with mismatched protocol_type must raise
+    InconsistentGroupProtocolError."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[],
+        protocol_type='not-consumer'))
+
+    with pytest.raises(Errors.InconsistentGroupProtocolError):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, seeded_coord):
+    """KIP-559: SyncGroupResponse with mismatched protocol_type must raise."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        protocol_type='not-consumer'))
+
+    with pytest.raises(Errors.InconsistentGroupProtocolError):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, seeded_coord):
+    """KIP-559: SyncGroupResponse with mismatched protocol_name must raise."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[],
+        protocol_name='range'))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        protocol_name='roundrobin'))
+
+    with pytest.raises(Errors.InconsistentGroupProtocolError):
+        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
