@@ -277,7 +277,8 @@ class KafkaConsumer:
             sasl mechanism handshake. Default: one of bootstrap servers
         sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
-        socks5_proxy (str): Socks5 proxy URL. Default: None
+        proxy_url (str): URL to proxy socket connections through. Supports SOCKS5 only.
+            Requires scheme:// (e.g., socks5://foo.bar/). Default: None
         kafka_client (callable): Custom class / callable for creating KafkaNetClient instances
 
     Note:
@@ -347,7 +348,8 @@ class KafkaConsumer:
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
-        'socks5_proxy': None,
+        'proxy_url': None,
+        'socks5_proxy': None,  # deprecated
         'kafka_client': KafkaNetClient,
     }
     DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000

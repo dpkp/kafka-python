@@ -5,6 +5,10 @@ import socket
 import struct
 from urllib.parse import urlparse
 
+from kafka.errors import KafkaConnectionError
+from kafka.net.inet import KafkaNetSocket
+
+
 log = logging.getLogger(__name__)
 
 
@@ -20,64 +24,52 @@ class ProxyConnectionStates:
     COMPLETE = '<complete>'
 
 
-class Socks5Wrapper:
-    """Socks5 proxy wrapper
+class Socks5Proxy(KafkaNetSocket):
+    """Socks5 proxy
 
     Manages connection through socks5 proxy with support for username/password
     authentication.
     """
+    # socks5h for remote dns
+    SCHEMES = ('socks5', 'socks5h')
 
-    def __init__(self, proxy_url, afi):
+    def __init__(self, proxy_url):
         self._buffer_in = b''
         self._buffer_out = b''
         self._proxy_url = urlparse(proxy_url)
+        if self._proxy_url.scheme not in self.SCHEMES:
+            raise ValueError('Unsupported proxy scheme: %s' % (self._proxy_url.scheme,))
         self._sock = None
         self._state = ProxyConnectionStates.DISCONNECTED
         self._target_afi = socket.AF_UNSPEC
+        self._proxy_addr = self._get_proxy_addr()
 
-        proxy_addrs = self.dns_lookup(self._proxy_url.hostname, self._proxy_url.port, afi)
-        # TODO raise error on lookup failure
-        self._proxy_addr = random.choice(proxy_addrs)
-
-    @classmethod
-    def is_inet_4_or_6(cls, gai):
-        """Given a getaddrinfo struct, return True iff ipv4 or ipv6"""
-        return gai[0] in (socket.AF_INET, socket.AF_INET6)
-
-    @classmethod
-    def dns_lookup(cls, host, port, afi=socket.AF_UNSPEC):
-        """Returns a list of getaddrinfo structs, optionally filtered to an afi (ipv4 / ipv6)"""
-        # XXX: all DNS functions in Python are blocking. If we really
-        # want to be non-blocking here, we need to use a 3rd-party
-        # library like python-adns, or move resolution onto its
-        # own thread. This will be subject to the default libc
-        # name resolution timeout (5s on most Linux boxes)
-        try:
-            return list(filter(cls.is_inet_4_or_6,
-                               socket.getaddrinfo(host, port, afi,
-                                                  socket.SOCK_STREAM)))
-        except socket.gaierror as ex:
-            log.warning("DNS lookup failed for proxy %s:%d, %r", host, port, ex)
-            return []
-
-    @classmethod
-    def use_remote_lookup(cls, proxy_url):
-        if proxy_url is None:
-            return False
-        return urlparse(proxy_url).scheme == 'socks5h'
+    def _get_proxy_addr(self):
+        proxy_addrs = self.dns_lookup(self._proxy_url.hostname, self._proxy_url.port, proxy=True)
+        if not proxy_addrs:
+            raise KafkaConnectionError('Unable to resolve proxy_url via dns')
+        return random.choice(proxy_addrs)
 
     def _use_remote_lookup(self):
         return self._proxy_url.scheme == 'socks5h'
 
-    def socket(self, family, sock_type):
+    def dns_lookup(self, host, port, proxy=False):
+        if proxy:
+            return super().dns_lookup(host, port, raise_error=True)
+        elif self._use_remote_lookup():
+            return [(socket.AF_UNSPEC, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (host, port))]
+        else:
+            return super().dns_lookup(host, port)
+
+    def socket(self, family=socket.AF_UNSPEC, sock_type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP):
         """Open and record a socket.
 
         Returns the actual underlying socket
         object to ensure e.g. selects and ssl wrapping works as expected.
         """
         self._target_afi = family  # Store the address family of the target
-        afi, _, _, _, _ = self._proxy_addr
-        self._sock = socket.socket(afi, sock_type)
+        proxy_family, _, _, _, _ = self._proxy_addr
+        self._sock = socket.socket(proxy_family, sock_type, proto)
         return self._sock
 
     def _flush_buf(self):
@@ -115,7 +107,7 @@ class Socks5Wrapper:
             self._buffer_in = self._buffer_in[len(buf):]
         return buf
 
-    def connect_ex(self, addr):
+    def connect_ex(self, sock, addr):
         """Runs a state machine through connection to authentication to
         proxy connection request.
 
@@ -127,7 +119,7 @@ class Socks5Wrapper:
         specifically avoid handling here. These are handled in main
         BrokerConnection connection loop, which then would retry calls
         to this function."""
-
+        assert sock is self._sock
         if self._state == ProxyConnectionStates.DISCONNECTED:
             self._state = ProxyConnectionStates.CONNECTING
 
