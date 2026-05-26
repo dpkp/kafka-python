@@ -18,8 +18,18 @@ setup:
 	pip install -r requirements-dev.txt
 	pip install -Ue .
 
-lint:
+lint: lint-unicode pylint
+
+pylint:
 	pylint --recursive=y --errors-only kafka test
+
+lint-unicode:
+	@unexpected=$$(grep -vxFf <(grep -v '^#' .unicode_files) <(git grep -lP '[^[:ascii:]]')); \
+	if [ -n "$$unexpected" ]; then \
+		echo 'Found unexpected unicode in:'; \
+		echo "$$unexpected"; \
+		exit 1; \
+	fi
 
 test: build-integration
 	pytest -v $(PYTESTS)
