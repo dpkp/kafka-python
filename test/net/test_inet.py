@@ -5,69 +5,75 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kafka.net.selector import NetworkSelector
-from kafka.net.inet import connect_sock, create_connection, dns_lookup
+from kafka.net.inet import create_connection, KafkaNetSocket
+from kafka.socks5_wrapper import Socks5Wrapper
 import kafka.errors as Errors
 
 
 class TestDnsLookup:
     def test_valid_host(self):
-        results = dns_lookup('localhost', 9092)
+        results = KafkaNetSocket().dns_lookup('localhost', 9092)
         assert len(results) > 0
         for res in results:
             assert len(res) == 5
 
     def test_invalid_host(self):
         with patch('kafka.net.inet.socket.getaddrinfo', side_effect=socket.gaierror):
-            results = dns_lookup('invalid.host', 9092)
+            results = KafkaNetSocket().dns_lookup('invalid.host', 9092)
             assert results == []
 
     def test_numeric_host(self):
-        results = dns_lookup('127.0.0.1', 9092)
+        results = KafkaNetSocket().dns_lookup('127.0.0.1', 9092)
         assert len(results) > 0
         assert results[0][4][0] == '127.0.0.1'
 
 
-class TestConnectSock:
+class TestSockConnect:
     def test_immediate_connect(self):
         net = NetworkSelector()
+        factory = KafkaNetSocket()
         sock = MagicMock()
         sock.connect_ex.return_value = 0
-        result = net.run(connect_sock(net, sock, ('127.0.0.1', 9092)))
+        result = net.run(factory.sock_connect(net, sock, ('127.0.0.1', 9092)))
         assert result is sock
+        sock.connect_ex.assert_called_once_with(('127.0.0.1', 9092))
 
     def test_eisconn(self):
         net = NetworkSelector()
+        factory = KafkaNetSocket()
         sock = MagicMock()
         sock.connect_ex.return_value = errno.EISCONN
-        result = net.run(connect_sock(net, sock, ('127.0.0.1', 9092)))
+        result = net.run(factory.sock_connect(net, sock, ('127.0.0.1', 9092)))
         assert result is sock
 
     def test_connection_refused(self):
         net = NetworkSelector()
+        factory = KafkaNetSocket()
         sock = MagicMock()
         sock.connect_ex.return_value = errno.ECONNREFUSED
         with pytest.raises(Errors.KafkaConnectionError):
-            net.run(connect_sock(net, sock, ('127.0.0.1', 9092)))
+            net.run(factory.sock_connect(net, sock, ('127.0.0.1', 9092)))
 
     def test_socket_error_uses_errno(self):
         net = NetworkSelector()
+        factory = KafkaNetSocket()
         sock = MagicMock()
         sock.connect_ex.side_effect = socket.error(errno.ECONNREFUSED, 'refused')
         with pytest.raises(Errors.KafkaConnectionError):
-            net.run(connect_sock(net, sock, ('127.0.0.1', 9092)))
+            net.run(factory.sock_connect(net, sock, ('127.0.0.1', 9092)))
 
 
 class TestCreateConnection:
     def test_dns_failure(self):
         net = NetworkSelector()
-        with patch('kafka.net.inet.dns_lookup', return_value=[]):
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[]):
             with pytest.raises(Errors.KafkaConnectionError, match='DNS'):
                 net.run(create_connection(net, 'badhost', 9092))
 
     def test_socket_init_failure(self):
         net = NetworkSelector()
         fake_addr = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))]
-        with patch('kafka.net.inet.dns_lookup', return_value=fake_addr), \
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=fake_addr), \
              patch('kafka.net.inet.socket.socket', side_effect=OSError('no socket')):
              with pytest.raises(Errors.KafkaConnectionError):
                 net.run(create_connection(net, 'host', 9092))
@@ -77,7 +83,7 @@ class TestCreateConnection:
         fake_addr = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))]
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
-        with patch('kafka.net.inet.dns_lookup', return_value=fake_addr), \
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=fake_addr), \
              patch('kafka.net.inet.socket.socket', return_value=mock_sock):
             result = net.run(
                 create_connection(net, 'host', 9092))
@@ -93,7 +99,7 @@ class TestCreateConnection:
         mock_sock2 = MagicMock()
         mock_sock2.connect_ex.return_value = 0
         sockets = iter([mock_sock1, mock_sock2])
-        with patch('kafka.net.inet.dns_lookup', return_value=[addr1, addr2]), \
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[addr1, addr2]), \
              patch('kafka.net.inet.socket.socket', side_effect=lambda *a: next(sockets)):
             result = net.run(
                 create_connection(net, 'host', 9092))
@@ -109,7 +115,7 @@ class TestCreateConnection:
         mock_sock.connect_ex.return_value = errno.EINPROGRESS
         mock_sock.getsockopt.return_value = errno.ECONNREFUSED
         mock_sock.fileno.return_value = wsock.fileno()
-        with patch('kafka.net.inet.dns_lookup', return_value=fake_addr), \
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=fake_addr), \
              patch('kafka.net.inet.socket.socket', return_value=mock_sock):
             # We need wait_write to return, so register the sock as writable
             # Simplest: just test connect_sock directly with a real socketpair
@@ -118,81 +124,59 @@ class TestCreateConnection:
         wsock.close()
 
 
-class TestConnectSockWithProxy:
-    def test_proxy_connect_ex_called(self):
-        net = NetworkSelector()
-        sock = MagicMock()
-        proxy = MagicMock()
-        proxy.connect_ex.return_value = 0
-        result = net.run(connect_sock(net, sock, ('127.0.0.1', 9092), proxy=proxy))
-        assert result is sock
-        proxy.connect_ex.assert_called_once_with(('127.0.0.1', 9092))
-        sock.connect_ex.assert_not_called()
-
-    def test_proxy_blocking_io_retries(self):
-        net = NetworkSelector()
-        rsock, wsock = socket.socketpair()
-        rsock.setblocking(False)
-        wsock.setblocking(False)
-        proxy = MagicMock()
-        proxy.connect_ex.side_effect = [BlockingIOError, 0]
-        # Use real socket fd so wait_write works
-        mock_sock = MagicMock()
-        mock_sock.fileno.return_value = wsock.fileno()
-        result = net.run(connect_sock(net, mock_sock, ('127.0.0.1', 9092), proxy=proxy))
-        assert result is mock_sock
-        assert proxy.connect_ex.call_count == 2
-        rsock.close()
-        wsock.close()
-
-    def test_proxy_connection_refused(self):
-        net = NetworkSelector()
-        sock = MagicMock()
-        proxy = MagicMock()
-        proxy.connect_ex.return_value = errno.ECONNREFUSED
-        with pytest.raises(Errors.KafkaConnectionError):
-            net.run(connect_sock(net, sock, ('127.0.0.1', 9092), proxy=proxy))
-
-
 class TestCreateConnectionWithProxy:
     def test_proxy_creates_socket_via_wrapper(self):
         net = NetworkSelector()
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
-        mock_proxy = MagicMock()
-        mock_proxy.socket.return_value = mock_sock
-        mock_proxy.connect_ex.return_value = 0
-        with patch('kafka.net.inet.Socks5Wrapper', return_value=mock_proxy) as mock_cls:
+        fake_addr = (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))
+        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
+             patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[fake_addr]), \
+             patch('kafka.socks5_wrapper.Socks5Wrapper.connect', return_value=mock_sock) as mock_connect:
             result = net.run(
-                create_connection(net, 'broker', 9092, socks5_proxy='socks5://proxy:1080'))
-            mock_cls.assert_called_once_with('socks5://proxy:1080', socket.AF_UNSPEC)
-            mock_proxy.socket.assert_called_once()
+                create_connection(net, 'broker', 9092, proxy_url='socks5://proxy:1080'))
+            mock_connect.assert_called_once_with(net, fake_addr, ())
             assert result is mock_sock
 
     def test_proxy_remote_dns_skips_local_lookup(self):
         net = NetworkSelector()
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
-        mock_proxy = MagicMock()
-        mock_proxy.socket.return_value = mock_sock
-        mock_proxy.connect_ex.return_value = 0
-        with patch('kafka.net.inet.Socks5Wrapper') as mock_cls, \
-             patch('kafka.net.inet.dns_lookup') as mock_dns:
-            mock_cls.return_value = mock_proxy
-            mock_cls.use_remote_lookup.return_value = True
+        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'), \
+             patch('kafka.socks5_wrapper.Socks5Wrapper.socket', return_value=mock_sock), \
+             patch('kafka.socks5_wrapper.Socks5Wrapper.connect_ex', return_value=0), \
+             patch('kafka.net.inet.KafkaNetSocket.dns_lookup') as mock_dns:
             result = net.run(
-                create_connection(net, 'broker', 9092, socks5_proxy='socks5h://proxy:1080'))
+                create_connection(net, 'broker', 9092, proxy_url='socks5h://proxy:1080'))
             mock_dns.assert_not_called()
 
     def test_no_proxy_uses_direct_socket(self):
         net = NetworkSelector()
-        fake_addr = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))]
+        fake_addr = (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 9092))
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
-        with patch('kafka.net.inet.dns_lookup', return_value=fake_addr), \
+        with patch('kafka.net.inet.KafkaNetSocket.dns_lookup', return_value=[fake_addr]), \
              patch('kafka.net.inet.socket.socket', return_value=mock_sock), \
-             patch('kafka.net.inet.Socks5Wrapper') as mock_cls:
+             patch('kafka.socks5_wrapper.Socks5Wrapper.connect') as mock_connect:
             result = net.run(
                 create_connection(net, 'host', 9092))
-            mock_cls.assert_not_called()
+            mock_connect.assert_not_called()
             assert result is mock_sock
+
+
+class TestKafkaNetSocketRegistry:
+    def test_socks5(self):
+        assert 'socks5' in KafkaNetSocket._registry
+        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
+            factory = KafkaNetSocket('socks5://foo.bar')
+        assert isinstance(factory, Socks5Wrapper)
+
+    def test_socks5h(self):
+        assert 'socks5h' in KafkaNetSocket._registry
+        with patch('kafka.socks5_wrapper.Socks5Wrapper._get_proxy_addr'):
+            factory = KafkaNetSocket('socks5h://foo.bar')
+        assert isinstance(factory, Socks5Wrapper)
+
+    def test_default(self):
+        factory = KafkaNetSocket()
+        assert type(factory) is KafkaNetSocket
