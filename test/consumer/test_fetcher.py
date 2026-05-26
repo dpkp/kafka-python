@@ -1523,22 +1523,23 @@ class TestKip392PreferredReadReplica:
             3, time.monotonic() + 60)
         mocker.patch.object(
             fetcher._manager.cluster, 'leader_for_partition', return_value=7)
-        # broker_metadata returns something truthy so we don't fall back.
+        # is_replica_node returns truthy -> preferred replica is still valid.
         mocker.patch.object(
-            fetcher._manager.cluster, 'broker_metadata', return_value=MagicMock())
+            fetcher._manager.cluster, 'is_replica_node', return_value=MagicMock())
         assert fetcher._select_read_replica(tp) == 3
 
     def test_select_read_replica_falls_back_when_replica_unknown(
             self, fetcher, topic, mocker):
-        """Cached preferred replica not in cluster metadata -> fall back to
-        leader AND clear the cache so we re-learn next time."""
+        """Cached preferred replica no longer in the partition's replica
+        set (per ``is_replica_node``) -> fall back to leader AND clear
+        the cache so we re-learn next time."""
         tp = TopicPartition(topic, 0)
         fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
             3, time.monotonic() + 60)
         mocker.patch.object(
             fetcher._manager.cluster, 'leader_for_partition', return_value=7)
         mocker.patch.object(
-            fetcher._manager.cluster, 'broker_metadata', return_value=None)
+            fetcher._manager.cluster, 'is_replica_node', return_value=None)
         assert fetcher._select_read_replica(tp) == 7
         assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
 
@@ -1684,3 +1685,55 @@ class TestKip392PreferredReadReplica:
         state.update_preferred_read_replica(3, time.monotonic() + 60)
         state.reset(OffsetResetStrategy.LATEST)
         assert state.preferred_read_replica() is None
+
+    def test_is_replica_node(self):
+        """``ClusterMetadata.is_replica_node`` returns None when the broker
+        exists but is no longer listed as a replica of the partition."""
+        from kafka.cluster import ClusterMetadata
+        from kafka.protocol.metadata import MetadataResponse
+
+        cluster = ClusterMetadata()
+        Broker = MetadataResponse.MetadataResponseBroker
+        Topic = MetadataResponse.MetadataResponseTopic
+        Partition = Topic.MetadataResponsePartition
+        v = 7
+        cluster.update_metadata(MetadataResponse(
+            version=v, throttle_time_ms=0,
+            brokers=[Broker(node_id=1, host='h', port=9092, rack=None, version=v),
+                     Broker(node_id=2, host='h', port=9092, rack=None, version=v),
+                     Broker(node_id=3, host='h', port=9092, rack=None, version=v)],
+            cluster_id='c', controller_id=1,
+            topics=[Topic(version=v, error_code=0, name='t', is_internal=False,
+                          partitions=[Partition(
+                              version=v, error_code=0, partition_index=0,
+                              leader_id=1, leader_epoch=0,
+                              replica_nodes=[1, 2], isr_nodes=[1, 2],
+                              offline_replicas=[])])]))
+        tp = TopicPartition('t', 0)
+
+        # Node 1 is the leader and a replica -> online.
+        assert cluster.is_replica_node(tp, 1) is not None
+        # Node 2 is a replica -> online.
+        assert cluster.is_replica_node(tp, 2) is not None
+        # Node 3 is a known broker but NOT a replica of this partition.
+        assert cluster.is_replica_node(tp, 3) is None
+        # Node 99 doesn't exist.
+        assert cluster.is_replica_node(tp, 99) is None
+        # Unknown topic.
+        assert cluster.is_replica_node(TopicPartition('other', 0), 1) is None
+
+    def test_select_read_replica_falls_back_when_node_demoted(
+            self, fetcher, topic, mocker):
+        tp = TopicPartition(topic, 0)
+        fetcher._subscriptions.assignment[tp].update_preferred_read_replica(
+            3, time.monotonic() + 60)
+        mocker.patch.object(
+            fetcher._manager.cluster, 'leader_for_partition', return_value=7)
+        # broker_metadata still returns the node (it's a known broker)...
+        mocker.patch.object(
+            fetcher._manager.cluster, 'broker_metadata', return_value=MagicMock())
+        # ...but is_replica_node sees that it's no longer a replica.
+        mocker.patch.object(
+            fetcher._manager.cluster, 'is_replica_node', return_value=None)
+        assert fetcher._select_read_replica(tp) == 7
+        assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
