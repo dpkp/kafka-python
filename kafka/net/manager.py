@@ -77,6 +77,10 @@ class KafkaConnectionManager:
         self.cluster.attach(self)
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until)
+        # Cache the most recent SASL / SSL / auth failure per node so we can
+        # surface it to the user instead of silently retrying forever.
+        # Cleared on successful connect.
+        self._auth_failures = {} # node_id => AuthenticationError
         self._idle_check_delay = self.config['connections_max_idle_ms'] / 1000
         self.close_idle_connections()
         self.broker_version_data = None
@@ -230,12 +234,16 @@ class KafkaConnectionManager:
             log.error('Connection failed: %s', exc)
             conn.connection_lost(exc)
             self.update_backoff(node.node_id)
+            if isinstance(exc, (Errors.SaslAuthenticationFailedError,
+                                Errors.AuthorizationError)):
+                self._auth_failures[node.node_id] = exc
             return
 
         if self._sensors:
             self._sensors.connection_created.record()
         if reset_backoff_on_connect:
             self.reset_backoff(node.node_id)
+        self._auth_failures.pop(node.node_id, None)
         if conn.broker_version_data is not None:
             if self.cluster.is_bootstrap(node.node_id):
                 self.broker_version_data = conn.broker_version_data
@@ -246,7 +254,8 @@ class KafkaConnectionManager:
                        reset_backoff_on_connect=True):
         if node_id is None:
             raise Errors.NodeNotReadyError('No node_id provided')
-        elif self.connection_delay(node_id) > 0:
+        self.maybe_raise_auth_failure(node_id)
+        if self.connection_delay(node_id) > 0:
             raise Errors.NodeNotReadyError(node_id)
         elif node_id in self._conns:
             return self._conns[node_id]
@@ -337,6 +346,17 @@ class KafkaConnectionManager:
         if node_id not in self._backoff:
             return 0
         return max(0, self._backoff[node_id][1] - time.monotonic())
+
+    def auth_failure(self, node_id):
+        """Return the most recent auth-class failure for ``node_id``,
+        or None if there is no sticky failure on record."""
+        return self._auth_failures.get(node_id)
+
+    def maybe_raise_auth_failure(self, node_id):
+        """Raise the cached auth-class failure for ``node_id`` if any."""
+        exc = self._auth_failures.get(node_id)
+        if exc is not None:
+            raise exc
 
     def close(self, node_id=None, timeout_ms=None):
         if node_id is not None:

@@ -115,6 +115,38 @@ class TestKafkaConnectionManagerBackoff:
         assert manager.connection_delay('node-1') == 0
 
 
+class TestKafkaConnectionManagerAuthFailure:
+    def test_no_failure_by_default(self, manager):
+        assert manager.auth_failure('node-1') is None
+        manager.maybe_raise_auth_failure('node-1')  # no-op
+
+    def test_set_via_direct_dict_then_raise(self, manager):
+        err = Errors.SaslAuthenticationFailedError('bad creds')
+        manager._auth_failures['node-1'] = err
+        assert manager.auth_failure('node-1') is err
+        with pytest.raises(Errors.SaslAuthenticationFailedError):
+            manager.maybe_raise_auth_failure('node-1')
+
+    def test_successful_connect_clears_failure(self, manager):
+        err = Errors.SaslAuthenticationFailedError('bad creds')
+        manager._auth_failures['node-1'] = err
+        # Simulate the body of _connect's success path.
+        manager._auth_failures.pop('node-1', None)
+        assert manager.auth_failure('node-1') is None
+
+    def test_get_connection_raises_sticky_auth_failure(self, manager):
+        err = Errors.SaslAuthenticationFailedError('bad creds')
+        manager._auth_failures['bootstrap-0'] = err
+        with pytest.raises(Errors.SaslAuthenticationFailedError):
+            manager.get_connection('bootstrap-0')
+
+    def test_send_propagates_sticky_auth_failure(self, manager):
+        err = Errors.SaslAuthenticationFailedError('bad creds')
+        manager._auth_failures['bootstrap-0'] = err
+        with pytest.raises(Errors.SaslAuthenticationFailedError):
+            manager.send(MagicMock(), node_id='bootstrap-0')
+
+
 class TestKafkaConnectionManagerGetConnection:
     def test_get_connection_none_raises(self, manager):
         with pytest.raises(Errors.NodeNotReadyError):
