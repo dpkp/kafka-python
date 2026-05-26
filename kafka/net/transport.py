@@ -84,21 +84,19 @@ class KafkaTCPTransport:
         log.debug('%s: Resumed reading', self)
 
     async def _read_from_sock(self):
-        while self._read:
+        while self._read and not self._closed:
             await self._net.wait_read(self._sock)
             recvd_data, err = self._sock_recv()
+            if err:
+                return self.abort(error=err)
             log.debug('%s: received %d bytes', self, len(recvd_data))
             self.last_read = time.monotonic()
             if self._protocol and self._protocol._sensors:
                 self._protocol._sensors.bytes_received.record(len(recvd_data))
-
             try:
                 self._protocol.data_received(recvd_data)
             except Errors.KafkaProtocolError as e:
-                if err is None:
-                    err = e
-            if err:
-                self.abort(error=err)
+                return self.abort(error=e)
 
     def _sock_recv(self):
         recvd = []
@@ -190,15 +188,15 @@ class KafkaTCPTransport:
             while self._write and not self._closed and self._write_buffer:
                 await self._net.wait_write(self._sock)
                 total_bytes, err = self._sock_send()
+                if err:
+                    return self.abort(error=err)
                 log.debug('%s: sent %d bytes', self, total_bytes)
                 self.last_write = time.monotonic()
                 if self._protocol and self._protocol._sensors:
                     self._protocol._sensors.bytes_sent.record(total_bytes)
         finally:
             self._writing = False
-        if self._closed or err is not None:
-            self._close(error=err)
-        elif not self._write:
+        if not self._write:
             self._sock.shutdown(socket.SHUT_WR)
 
     def _sock_send(self):

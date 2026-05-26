@@ -173,6 +173,33 @@ class TestKafkaTCPTransport:
         assert t._sock is None
         proto.connection_lost.assert_called_once_with(err)
 
+    def test_sock_recv_error_closes_transport(self, net, socketpair):
+        """If _sock_recv returns an error, _read_from_sock must close the
+        transport and propagate the error via protocol.connection_lost.
+        """
+        rsock, wsock = socketpair
+        t = KafkaTCPTransport(net, wsock)
+        proto = MagicMock()
+        done = Future()
+        proto.connection_lost.side_effect = lambda err: done.success(err)
+        t.set_protocol(proto)
+
+        err = Errors.KafkaConnectionError('read failed')
+
+        def fake_sock_recv():
+            return 0, err
+        t._sock_recv = fake_sock_recv
+
+        t.resume_reading()
+        # _read_from_sock's loop awaits wait_read(wsock); push a byte from
+        # the peer end so the socket becomes readable and the stub fires.
+        rsock.send(b'x')
+        net.poll(timeout_ms=1000, future=done)
+
+        assert done.is_done
+        assert t._sock is None
+        proto.connection_lost.assert_called_once_with(err)
+
     def test_can_write_eof(self, net):
         sock = _make_mock_sock()
         t = KafkaTCPTransport(net, sock)
