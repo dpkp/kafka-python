@@ -271,7 +271,7 @@ class NetworkSelector:
         self.call_soon_threadsafe(waiter)
         event.wait()
         if state['exception'] is not None:
-            raise state['exception']
+            raise state['exception']  # pylint: disable=E0702
         return state['value']
 
     def drain(self, scheduled=False):
