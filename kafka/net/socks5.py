@@ -5,6 +5,7 @@ import socket
 import struct
 from urllib.parse import urlparse
 
+from kafka.errors import KafkaConnectionError
 from kafka.net.inet import KafkaNetSocket
 
 
@@ -36,15 +37,18 @@ class Socks5Proxy(KafkaNetSocket):
         self._buffer_in = b''
         self._buffer_out = b''
         self._proxy_url = urlparse(proxy_url)
-        assert self._proxy_url.scheme in self.SCHEMES, 'Unsupported proxy scheme!'
+        if self._proxy_url.scheme not in self.SCHEMES:
+            raise ValueError('Unsupported proxy scheme: %s' % (self._proxy_url.scheme,))
         self._sock = None
         self._state = ProxyConnectionStates.DISCONNECTED
         self._target_afi = socket.AF_UNSPEC
-        self._get_proxy_addr()
+        self._proxy_addr = self._get_proxy_addr()
 
     def _get_proxy_addr(self):
         proxy_addrs = self.dns_lookup(self._proxy_url.hostname, self._proxy_url.port, proxy=True)
-        self._proxy_addr = random.choice(proxy_addrs)
+        if not proxy_addrs:
+            raise KafkaConnectionError('Unable to resolve proxy_url via dns')
+        return random.choice(proxy_addrs)
 
     def _use_remote_lookup(self):
         return self._proxy_url.scheme == 'socks5h'

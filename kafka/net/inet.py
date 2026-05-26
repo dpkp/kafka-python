@@ -48,9 +48,9 @@ class KafkaNetSocket:
         try:
             parsed = urlparse(proxy_url)
         except Exception:
-            raise ValueError('Unable to parse proxy url: %s' % (proxy_url,))
+            raise ValueError('Unable to parse proxy_url: %s' % (proxy_url,))
         if not parsed.scheme:
-            raise ValueError('proxy url requires scheme:// (%s)' % (proxy_url,))
+            raise ValueError('proxy_url requires scheme:// (%s)' % (proxy_url,))
         try:
             klass = KafkaNetSocket._registry[parsed.scheme]
         except KeyError:
@@ -70,10 +70,11 @@ class KafkaNetSocket:
         try:
             return socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
         except socket.gaierror as ex:
+            err_str = "DNS lookup failed for %s:%d, %r" % (host, port, ex)
             if not raise_error:
-                log.warning("DNS lookup failed for %s:%d, %r", host, port, ex)
+                log.warning(err_str)
                 return []
-            raise
+            raise Errors.KafkaConnectionError(err_str)
 
     def socket(self, family=socket.AF_UNSPEC, sock_type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP):
         return socket.socket(family, sock_type, proto)
