@@ -879,3 +879,130 @@ def group_partitions_by_topic(partitions):
     for p in partitions:
         result[p.topic].add(p.partition)
     return result
+
+
+# ---------------------------------------------------------------------------
+# KIP-429: CooperativeStickyAssignor
+# ---------------------------------------------------------------------------
+
+
+class TestCooperativeStickyAssignor:
+    """Two-phase incremental cooperative rebalance (KIP-429).
+
+    The leader-side semantic is: compute the final sticky assignment,
+    then for any partition that's moving from owner A to owner B,
+    drop it from B's round-1 assignment. A revokes it (sees its
+    assignment shrink), re-joins, and round 2 lands the partition
+    on B.
+    """
+
+    def _assignor(self):
+        from kafka.coordinator.assignors.cooperative_sticky import (
+            CooperativeStickyAssignor,
+        )
+        return CooperativeStickyAssignor()
+
+    def test_supported_protocols_is_cooperative_only(self):
+        from kafka.coordinator.assignors.abstract import RebalanceProtocol
+        a = self._assignor()
+        assert a.supported_protocols() == [RebalanceProtocol.COOPERATIVE]
+
+    def test_metadata_encodes_owned_partitions(self):
+        """The wire metadata must carry OwnedPartitions (v1+) so the
+        leader can compute the cooperative diff."""
+        a = self._assignor()
+        a.member_assignment = [TopicPartition('t', 0), TopicPartition('t', 2)]
+        meta = a.metadata({'t'})
+        assert meta.version == 1
+        assert len(meta.owned_partitions) == 1
+        assert meta.owned_partitions[0].topic == 't'
+        assert meta.owned_partitions[0].partitions == [0, 2]
+
+    def test_metadata_no_prior_assignment_empty_owned(self):
+        a = self._assignor()
+        meta = a.metadata({'t'})
+        assert meta.owned_partitions == []
+
+    def test_parse_member_metadata_reads_owned_partitions(self):
+        a = self._assignor()
+        # Round-trip a v1 subscription with OwnedPartitions through encode/decode.
+        from kafka.protocol.consumer.metadata import ConsumerProtocolSubscription
+        SubTP = ConsumerProtocolSubscription.TopicPartition
+        sub = ConsumerProtocolSubscription(
+            version=1, topics=['t'], user_data=b'',
+            owned_partitions=[SubTP(topic='t', partitions=[3, 7])])
+        decoded = ConsumerProtocolSubscription.decode(sub.encode(), version=1)
+        parsed = a.parse_member_metadata(decoded)
+        assert parsed.partitions == [TopicPartition('t', 3), TopicPartition('t', 7)]
+        assert parsed.subscription == ['t']
+
+    def test_assign_fresh_cluster_no_movements(self, mocker):
+        """First-ever assignment (no prior ownership): the cooperative
+        path is identical to the eager sticky path - every partition
+        is unowned, so nothing is "moving"."""
+        assignor = self._assignor()
+        members = make_join_group_response_members({
+            'C0': assignor.metadata({'t'}),
+            'C1': assignor.metadata({'t'}),
+        })
+        cluster = create_cluster(mocker, {'t'}, topics_partitions={0, 1, 2, 3})
+        ret = assignor.assign(cluster, members)
+        # All 4 partitions get assigned in round 1; nothing deferred.
+        total = sum(len(a.partitions()) for a in ret.values())
+        assert total == 4
+
+    def test_assign_defers_moved_partitions(self, mocker):
+        """Round 1: C0 owns t/0 and t/1. C1 owns t/2 and t/3. If the
+        sticky algorithm decides to move t/1 from C0 to C1, then in
+        the cooperative round-1 output t/1 must NOT appear in C1's
+        assignment (must wait until C0 revokes it)."""
+        assignor = self._assignor()
+
+        # Build subscriptions with explicit OwnedPartitions.
+        from kafka.protocol.consumer.metadata import ConsumerProtocolSubscription
+        SubTP = ConsumerProtocolSubscription.TopicPartition
+
+        def _sub(owned):
+            return ConsumerProtocolSubscription(
+                version=1, topics=['t'], user_data=b'',
+                owned_partitions=[
+                    SubTP(topic=t, partitions=sorted(parts))
+                    for t, parts in owned.items()])
+
+        # C0 currently owns the first 3; C1 owns the last. The ideal
+        # balanced assignment is 2/2, so one of C0's partitions must
+        # move to C1.
+        members = make_join_group_response_members({
+            'C0': _sub({'t': [0, 1, 2]}),
+            'C1': _sub({'t': [3]}),
+        })
+        cluster = create_cluster(mocker, {'t'}, topics_partitions={0, 1, 2, 3})
+        ret = assignor.assign(cluster, members)
+
+        c0_owned_round1 = set(ret['C0'].partitions())
+        c1_owned_round1 = set(ret['C1'].partitions())
+
+        # No partition should appear in both members' round-1 output.
+        assert not (c0_owned_round1 & c1_owned_round1)
+        # The total number of partitions assigned in round 1 must be
+        # strictly less than the cluster total - at least one
+        # partition is deferred because it's moving.
+        cluster_total = {TopicPartition('t', p) for p in range(4)}
+        round1_total = c0_owned_round1 | c1_owned_round1
+        assert round1_total < cluster_total
+        # The deferred partition is one that was owned by C0 but is
+        # being moved to C1 - round 1 dropped it from C1.
+        deferred = cluster_total - round1_total
+        assert len(deferred) == 1
+
+    def test_assign_returns_assignments_for_all_members(self, mocker):
+        """Even when partitions are deferred, every member must
+        receive an assignment entry (possibly with shrunken set)."""
+        assignor = self._assignor()
+        members = make_join_group_response_members({
+            'C0': assignor.metadata({'t'}),
+            'C1': assignor.metadata({'t'}),
+        })
+        cluster = create_cluster(mocker, {'t'}, topics_partitions={0, 1})
+        ret = assignor.assign(cluster, members)
+        assert set(ret) == {'C0', 'C1'}

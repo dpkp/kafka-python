@@ -1,8 +1,28 @@
 import abc
+from enum import IntEnum
 
 from kafka.protocol.consumer.metadata import (
     ConsumerProtocolSubscription, ConsumerProtocolAssignment,
 )
+
+
+class RebalanceProtocol(IntEnum):
+    """KIP-429: rebalance protocol mode for a partition assignor.
+
+    EAGER - pre-KIP-429 behaviour: every member revokes its full
+    assignment before JoinGroup, then receives a fresh assignment in
+    SyncGroup. Simple but causes a "stop the world" pause on every
+    rebalance.
+
+    COOPERATIVE - KIP-429 incremental rebalance: members keep their
+    existing assignment across JoinGroup; the leader's assignment
+    indicates the partitions that need to move; only revoked
+    partitions are released, and only newly-assigned partitions
+    invoke the listener. A second rebalance round picks up partitions
+    that were revoked in round 1.
+    """
+    EAGER = 0
+    COOPERATIVE = 1
 
 
 class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
@@ -15,6 +35,18 @@ class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
     def name(self):
         """.name should be a string identifying the assignor"""
         pass
+
+    def supported_protocols(self):
+        """Return the list of :class:`RebalanceProtocol` modes this
+        assignor supports, in order of preference.
+
+        Default is ``[EAGER]`` - every legacy assignor (Range,
+        RoundRobin, the original Sticky from KIP-54) behaves this
+        way. Override in subclasses that participate in KIP-429
+        incremental cooperative rebalancing (e.g.
+        ``CooperativeStickyAssignor``).
+        """
+        return [RebalanceProtocol.EAGER]
 
     @abc.abstractmethod
     def assign(self, cluster, members):
