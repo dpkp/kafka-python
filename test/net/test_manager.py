@@ -43,6 +43,47 @@ class TestKafkaConnectionManagerConfig:
         assert m.broker_version_data == BrokerVersionData((1, 0))
 
 
+class TestKafkaConnectionManagerProxyConfig:
+    def test_proxy_url_default_none(self, net):
+        m = KafkaConnectionManager(net)
+        assert m.config['proxy_url'] is None
+
+    def test_proxy_url_passthrough(self, net):
+        m = KafkaConnectionManager(net, proxy_url='socks5://proxy:1080')
+        assert m.config['proxy_url'] == 'socks5://proxy:1080'
+
+    def test_socks5_proxy_legacy_alias(self, net):
+        m = KafkaConnectionManager(net, socks5_proxy='socks5://proxy:1080')
+        assert m.config['proxy_url'] == 'socks5://proxy:1080'
+
+    def test_proxy_url_takes_precedence_over_legacy(self, net):
+        m = KafkaConnectionManager(
+            net,
+            socks5_proxy='socks5://legacy:1080',
+            proxy_url='socks5://new:1080',
+        )
+        assert m.config['proxy_url'] == 'socks5://new:1080'
+
+    def test_build_transport_passes_proxy_url(self, net):
+        """_build_transport must forward the configured proxy_url to
+        create_connection. Regression guard against the kwarg name drifting
+        from the create_connection signature."""
+        import asyncio
+        m = KafkaConnectionManager(net, proxy_url='socks5://proxy:1080')
+        node = MagicMock(host='broker', port=9092)
+        async def fake_create_connection(*args, **kwargs):
+            return MagicMock()
+        with patch('kafka.net.manager.create_connection',
+                   side_effect=fake_create_connection) as mc, \
+             patch('kafka.net.manager.KafkaTCPTransport') as mock_transport_cls:
+            mock_transport = MagicMock()
+            mock_transport.handshake = MagicMock(
+                side_effect=lambda: asyncio.sleep(0))
+            mock_transport_cls.return_value = mock_transport
+            net.run(m._build_transport(node))
+        assert mc.call_args.kwargs.get('proxy_url') == 'socks5://proxy:1080'
+
+
 class TestKafkaConnectionManagerBackoff:
     def test_connection_delay_no_backoff(self, manager):
         assert manager.connection_delay('node-1') == 0
