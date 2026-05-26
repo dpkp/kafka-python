@@ -51,7 +51,7 @@ class KafkaConnectionManager:
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
-        'socks5_proxy': None,
+        'proxy_url': None,
         'api_version': None,
         'api_version_auto_timeout_ms': 2000,
         'metrics': None,
@@ -63,6 +63,11 @@ class KafkaConnectionManager:
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        if 'socks5_proxy' in configs:
+            if self.config['proxy_url'] is None:
+                log.warning('socks5_proxy is deprecated, use proxy_url instead')
+                self.config['proxy_url'] = configs['socks5_proxy']
 
         self._net = net
         self.cluster = ClusterMetadata(
@@ -202,7 +207,7 @@ class KafkaConnectionManager:
     async def _build_transport(self, node):
         sock = await create_connection(self._net, node.host, node.port,
                                        self.config['socket_options'],
-                                       socks5_proxy=self.config['socks5_proxy'])
+                                       proxy_url=self.config['proxy_url'])
         if self.ssl_enabled:
             hostname = node.host if self.config['ssl_check_hostname'] else None
             transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(), hostname)

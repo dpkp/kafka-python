@@ -2,7 +2,6 @@ import errno
 import logging
 import socket
 from urllib.parse import urlparse
-import weakref
 
 import kafka.errors as Errors
 
@@ -32,7 +31,7 @@ async def create_connection(net, host, port, socket_options=(), proxy_url=None):
 
 class KafkaNetSocket:
     # scheme => handling class
-    _registry = weakref.WeakValueDictionary()
+    _registry = {}
 
     @classmethod
     def register_class(cls, klass):
