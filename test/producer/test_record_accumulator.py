@@ -182,7 +182,7 @@ def test_abort_on_new_batch_returns_sentinel(tp):
 
 def test_abort_on_new_batch_appends_to_existing(tp):
     """If a batch already exists with room, abort_on_new_batch=True still
-    succeeds — only the new-batch-allocation path is gated."""
+    succeeds - only the new-batch-allocation path is gated."""
     accum = RecordAccumulator()
     # First append (with abort_on_new_batch=False) creates the batch.
     future1, _, new1, abort1 = accum.append(

@@ -181,7 +181,7 @@ class TestStickyPartitioner:
     def test_no_available_picks_without_avoid(self):
         """When ``available_partitions_for_topic`` returns empty, Java
         picks random % partitions.size() without enforcing ``!= avoid``
-        — ensure we mirror that and don't filter the avoided partition
+        - ensure we mirror that and don't filter the avoided partition
         out of an already-degraded fallback set."""
         sticky = StickyPartitioner()
         cluster = _cluster('t', [0, 1, 2], available=[])

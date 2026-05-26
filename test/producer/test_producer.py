@@ -29,7 +29,7 @@ def test_kafka_producer_context_manager_closes_on_exit():
 
 def test_partition_calls_partitioner_partition_with_cluster():
     """_partition routes through partitioner.partition(topic, key, cluster)
-    — the new signature passes the ClusterMetadata directly so the
+    - the new signature passes the ClusterMetadata directly so the
     partitioner can call available_partitions_for_topic / topics() itself."""
     producer = KafkaProducer.__new__(KafkaProducer)
     producer._metadata = MagicMock()
@@ -121,7 +121,7 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
 
 
 def test_send_keyed_skips_on_new_batch():
-    """Keyed records bypass the sticky abort-retry path — on_new_batch
+    """Keyed records bypass the sticky abort-retry path - on_new_batch
     must not fire."""
     partitioner = MagicMock(spec=['partition', 'on_new_batch'])
     partitioner.partition.return_value = 0
@@ -131,7 +131,7 @@ def test_send_keyed_skips_on_new_batch():
     try:
         producer.send('t', key=b'k', value=b'v')
         partitioner.on_new_batch.assert_not_called()
-        # Keyed records pass abort_on_new_batch=False directly — one append.
+        # Keyed records pass abort_on_new_batch=False directly - one append.
         assert producer._accumulator.append.call_count == 1
         kwargs = producer._accumulator.append.call_args.kwargs
         assert kwargs.get('abort_on_new_batch') is False
@@ -140,7 +140,7 @@ def test_send_keyed_skips_on_new_batch():
 
 
 def test_send_with_explicit_partition_skips_on_new_batch():
-    """Explicit partition overrides the partitioner entirely — no
+    """Explicit partition overrides the partitioner entirely - no
     rotation hook should fire."""
     partitioner = MagicMock(spec=['partition', 'on_new_batch'])
     producer = _producer_for_send_test(partitioner)
