@@ -23,8 +23,8 @@ class ProxyConnectionStates:
     COMPLETE = '<complete>'
 
 
-class Socks5Wrapper(KafkaNetSocket):
-    """Socks5 proxy wrapper
+class Socks5Proxy(KafkaNetSocket):
+    """Socks5 proxy
 
     Manages connection through socks5 proxy with support for username/password
     authentication.
