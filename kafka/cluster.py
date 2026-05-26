@@ -298,6 +298,35 @@ class ClusterMetadata:
             return None
         return self._partitions[partition.topic][partition.partition].leader_id
 
+    def is_replica_node(self, partition, node_id):
+        """Return MetadataResponseBroker for ``node_id`` only when it is
+        known AND still listed as a replica of ``partition`` (KIP-392).
+
+        Used by the consumer's preferred-read-replica routing to avoid
+        sending fetches to a broker that has been demoted out of the
+        partition's replica set even though it still exists as a node.
+
+        Arguments:
+            partition (TopicPartition): topic / partition to look up.
+            node_id (int): broker id to validate.
+
+        Returns:
+            MetadataResponseBroker if the node exists in cluster metadata
+            and is currently listed as a replica of ``partition``;
+            otherwise None.
+        """
+        broker = self.broker_metadata(node_id)
+        if broker is None:
+            return None
+        if partition.topic not in self._partitions:
+            return None
+        partition_data = self._partitions[partition.topic].get(partition.partition)
+        if partition_data is None:
+            return None
+        if node_id not in partition_data.replica_nodes:
+            return None
+        return broker
+
     def leader_epoch_for_partition(self, partition):
         """Return leader_epoch for partition, or None if topic/partition is unknown."""
         if partition.topic not in self._partitions:

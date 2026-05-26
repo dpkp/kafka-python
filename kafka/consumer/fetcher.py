@@ -1141,25 +1141,22 @@ class Fetcher:
 
     def _select_read_replica(self, tp):
         """Pick the node to fetch from for ``tp``: a cached preferred read
-        replica (KIP-392) when valid and known to the cluster, otherwise the
-        partition leader. An unknown / unreachable preferred replica is
-        cleared so the next fetch goes to the leader."""
+        replica (KIP-392) when valid and *still listed as a replica of
+        ``tp``*, otherwise the partition leader. A preferred replica that
+        has been demoted out of the partition's replica set (or fell out
+        of cluster metadata entirely) is cleared so the next fetch goes
+        to the leader.
+        """
         preferred = self._subscriptions.assignment[tp].preferred_read_replica()
         if preferred is None:
-            leader = self._manager.cluster.leader_for_partition(tp)
-            log.debug("Selecting leader %s as read replica for partition %s",
-                      leader, tp)
-            return leader
-        # If the preferred node fell out of cluster metadata, fall back to leader.
-        if self._manager.cluster.broker_metadata(preferred) is None:
+            return self._manager.cluster.leader_for_partition(tp)
+        if not self._manager.cluster.is_replica_node(tp, preferred):
             self._subscriptions.assignment[tp].clear_preferred_read_replica()
             leader = self._manager.cluster.leader_for_partition(tp)
-            log.debug("Preferred read replica %s for partition %s no longer in"
-                      " cluster metadata; falling back to leader %s",
+            log.debug("Preferred read replica %s for partition %s no longer"
+                      " online or no longer a replica; falling back to leader %s",
                       preferred, tp, leader)
             return leader
-        log.debug("Selecting preferred read replica %s for partition %s",
-                  preferred, tp)
         return preferred
 
     def _create_fetch_requests(self):
