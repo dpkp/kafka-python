@@ -234,9 +234,9 @@ class KafkaProducer:
             would have the effect of reducing the number of requests sent but
             would add up to 5ms of latency to records sent in the absence of
             load. Default: 0.
-        partitioner (callable): Callable used to determine which partition
+        partitioner (Partitioner): Used to determine which partition
             each message is assigned to. Called (after key serialization):
-            partitioner(key_bytes, all_partitions, available_partitions).
+            partitioner.partition(topic, key_bytes, cluster_metadata).
             The default partitioner implementation hashes each non-None key
             using the same murmur2 algorithm as the java client so that
             messages with the same key are assigned to the same partition.
@@ -392,7 +392,7 @@ class KafkaProducer:
         'retries': float('inf'),
         'batch_size': 16384,
         'linger_ms': 0,
-        'partitioner': StickyPartitioner(),
+        'partitioner': DefaultPartitioner(),
         'connections_max_idle_ms': 9 * 60 * 1000,
         'max_block_ms': 60000,
         'max_request_size': 1048576,
@@ -859,6 +859,8 @@ class KafkaProducer:
                     sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
                 ).failure(e)
 
+        # Track if the user passed an explicit partition b/c sticky logic does not apply
+        explicit_partition = partition is not None
         partition = self._partition(topic, partition, key, value, key_bytes, value_bytes)
         assert partition is not None, f'Partitioner did not assign a partition for topic {topic}!'
 
@@ -876,24 +878,34 @@ class KafkaProducer:
         if self._transaction_manager and self._transaction_manager.is_transactional():
             self._transaction_manager.maybe_add_partition_to_transaction(tp)
 
-        result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers)
-        future, batch_is_full, new_batch_created = result
+        # KIP-480: when sticky-aware partitioning is in play (no explicit
+        # partition, no key), try once with abort_on_new_batch=True. If the
+        # accumulator would have to allocate a fresh batch for this partition,
+        # rotate the sticky partition first and re-pick. The record that
+        # *triggers* the new batch then lands on the rotated partition, not
+        # the next one.
+        sticky_eligible = not explicit_partition and key_bytes is None
+        result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers,
+                                          abort_on_new_batch=sticky_eligible)
+        future, batch_is_full, new_batch_created, abort_for_new_batch = result
+        if abort_for_new_batch:
+            prev_partition = partition
+            on_new_batch = getattr(self.config['partitioner'], 'on_new_batch', None)
+            if on_new_batch is not None:
+                on_new_batch(topic, self._metadata, prev_partition)
+            # Re-pick - sticky cache may now point at a different partition.
+            partition = self._partition(topic, None, key, value, key_bytes, value_bytes)
+            tp = TopicPartition(topic, partition)
+            if self._transaction_manager and self._transaction_manager.is_transactional():
+                self._transaction_manager.maybe_add_partition_to_transaction(tp)
+            result = self._accumulator.append(tp, timestamp_ms, key_bytes, value_bytes, headers,
+                                              abort_on_new_batch=False)
+            future, batch_is_full, new_batch_created, _ = result
+
         if batch_is_full or new_batch_created:
             log.debug("%s: Waking up the sender since %s is either full or"
                       " getting a new batch", str(self), tp)
             self._sender.wakeup()
-        # KIP-480: notify a sticky-aware partitioner that this null-key
-        # record opened a new batch on `partition`, so the next null-key
-        # send for `topic` rotates to a different partition. Keyed
-        # records hash deterministically and don't participate in sticky
-        # rotation, so skip the hook for them.
-        if new_batch_created and key_bytes is None:
-            partitioner = self.config['partitioner']
-            on_new_batch = getattr(partitioner, 'on_new_batch', None)
-            if on_new_batch is not None:
-                all_partitions = self._metadata.partitions_for_topic(topic)
-                if all_partitions is not None:
-                    on_new_batch(topic, sorted(all_partitions), partition)
         return future
 
     def flush(self, timeout=None):
@@ -986,28 +998,17 @@ class KafkaProducer:
 
     def _partition(self, topic, partition, key, value,
                    serialized_key, serialized_value):
-        all_partitions = self._metadata.partitions_for_topic(topic)
-        available = self._metadata.available_partitions_for_topic(topic)
-        if all_partitions is None or available is None:
+        if topic not in self._metadata.topics():
             return None
         if partition is not None:
             assert partition >= 0
-            assert partition in all_partitions, 'Unrecognized partition'
+            all_partitions = self._metadata.partitions_for_topic(topic)
+            assert all_partitions is not None and partition in all_partitions, (
+                'Unrecognized partition %s for topic %s' % (partition, topic))
             return partition
 
-        # Prefer the topic-aware partition() method (KIP-480 sticky
-        # partitioner needs the topic for its per-topic stickiness).
-        # Fall back to the legacy callable interface so user-supplied
-        # custom partitioners written against pre-KIP-480 kafka-python
-        # continue to work unchanged.
-        partitioner = self.config['partitioner']
-        if hasattr(partitioner, 'partition'):
-            return partitioner.partition(topic, serialized_key,
-                                         sorted(all_partitions),
-                                         list(available))
-        return partitioner(serialized_key,
-                           sorted(all_partitions),
-                           list(available))
+        return self.config['partitioner'].partition(
+            topic, serialized_key, self._metadata)
 
     def metrics(self, raw=False):
         """Get metrics on producer performance.
@@ -1034,4 +1035,4 @@ class KafkaProducer:
         return metrics
 
     def __str__(self):
-        return "<KafkaProducer client_id=%s transactional_id=%s>" % (self.config['client_id'], self.config['transactional_id'])
+        return "<KafkaProducer client_id=%s transactional_id=%s>" % (self.config.get('client_id', None), self.config.get('transactional_id', None))

@@ -16,106 +16,91 @@ improvements while predominantly CPU-bound on per-record overhead.
 """
 
 import random
+import threading
 
-from kafka.partitioner.default import murmur2
+from kafka.partitioner.default import DefaultPartitioner
 
 
-class StickyPartitioner:
+class StickyPartitioner(DefaultPartitioner):
     """Partitioner that sticks null-key records to one partition per
     topic until ``on_new_batch`` rotates it.
 
-    Thread-safety: the underlying ``_sticky`` dict is mutated only by
-    individually-atomic Python ops (get / setitem / contains). Two
-    concurrent partitioners may pick different sticky partitions; the
-    last write wins and both choices are valid, so no lock is needed.
+    Thread-safety: ``_sticky`` mutations are protected by ``_lock`` so
+    concurrent ``send()`` callers can't observe a torn read-modify-write.
     """
 
     def __init__(self):
         self._sticky = {}  # topic -> partition_id
-        # Java's accumulator distinguishes "first batch created on a
-        # partition" (no rotation) from "existing batch filled, new one
-        # being created" (rotate). Our accumulator collapses both into
-        # ``new_batch_created=True``, so the partitioner absorbs the
-        # *first* on_new_batch event per sticky and only rotates on the
-        # subsequent one. Without this, we'd rotate on every record
-        # whose partition has no existing batch, defeating stickiness.
-        self._sticky_seen_batch = set()  # topics whose current sticky has had >=1 batch event
+        self._lock = threading.Lock()
 
-    def partition(self, topic, key, all_partitions, available):
+    def partition(self, topic, key, cluster):
         """Choose a partition for the next record.
 
         Arguments:
             topic (str): topic to partition on.
             key (bytes or None): partitioning key.
-            all_partitions (list[int]): every partition ID for the topic,
-                sorted ascending.
-            available (list[int]): partitions whose leader is currently
-                known (may be empty when metadata is stale).
+            cluster (ClusterMetadata): metadata for cluster; provides
+                all and available partitions for topic.
+
+        Raises:
+            ValueError: if topic is not in ClusterMetadata
 
         Returns:
             int: chosen partition ID.
         """
+        if topic not in cluster.topics():
+            raise ValueError("Topic %s not found in ClusterMetadata" % (topic,))
         if key is not None:
-            idx = murmur2(key)
-            idx &= 0x7fffffff
-            idx %= len(all_partitions)
-            return all_partitions[idx]
+            return super().partition(topic, key, cluster)
         # Null key: reuse the sticky partition if still valid.
-        partition = self._sticky.get(topic)
-        if partition is not None:
-            if available:
-                if partition in available:
+        with self._lock:
+            partition = self._sticky.get(topic)
+            if partition is not None:
+                all_partitions = sorted(cluster.partitions_for_topic(topic))
+                available = list(cluster.available_partitions_for_topic(topic))
+                if available:
+                    if partition in available:
+                        return partition
+                elif partition in all_partitions:
                     return partition
-            elif partition in all_partitions:
-                return partition
-            # Stale (leader unavailable, topic shrunk); fall through to re-pick.
-        return self._pick_sticky(topic, all_partitions, available)
+                # Stale (leader unavailable, topic shrunk); fall through to re-pick.
+            return self._pick_sticky_locked(topic, cluster)
 
-    def on_new_batch(self, topic, all_partitions, prev_partition):
-        """Hook called by ``KafkaProducer`` when the accumulator just
-        opened a new batch for ``topic`` on ``prev_partition``.
+    def on_new_batch(self, topic, cluster, prev_partition):
+        """Hook called by ``KafkaProducer`` on the abort-for-new-batch
+        retry path: rotate the sticky for ``topic`` so the next
+        null-key record lands on a different partition.
 
-        The *first* event per sticky is absorbed silently: it
-        corresponds to the first batch ever being created on the
-        partition we just picked, which is expected - we want
-        subsequent records to keep landing there. The *second* event
-        means the previous batch filled up and a new one was opened;
-        that's the signal to rotate to a different partition so the
-        next records build up a fresh dense batch elsewhere.
+        Stale events (where another thread already rotated us off
+        ``prev_partition``) are no-ops.
         """
-        if self._sticky.get(topic) != prev_partition:
-            # Someone else (or a key-routed send) already moved us off
-            # this partition; don't override their choice.
-            return
-        if topic not in self._sticky_seen_batch:
-            self._sticky_seen_batch.add(topic)
-            return
-        # Existing batch filled; rotate.
-        self._sticky_seen_batch.discard(topic)
-        self._pick_sticky(topic, all_partitions, None,
-                          avoid=prev_partition)
+        with self._lock:
+            if self._sticky.get(topic) != prev_partition:
+                # Another caller already rotated us; don't override.
+                return
+            self._pick_sticky_locked(topic, cluster, avoid=prev_partition)
 
-    def _pick_sticky(self, topic, all_partitions, available, avoid=None):
-        pool = available if available else all_partitions
-        candidates = [p for p in pool if p != avoid] if avoid is not None else pool
-        if not candidates:
-            # Single-partition topic, or only the avoid-partition is
-            # available - no rotation possible.
-            candidates = pool
-        partition = random.choice(candidates)
+    def _pick_sticky_locked(self, topic, cluster, avoid=None):
+        """Pick a new sticky partition for ``topic``. Must be called with
+        ``self._lock`` held. Returns None when the topic is no longer in
+        cluster metadata (caller is expected to no-op in that case)."""
+        all_partitions = cluster.partitions_for_topic(topic)
+        if not all_partitions:
+            return None
+        all_partitions = sorted(all_partitions)
+        available = list(cluster.available_partitions_for_topic(topic) or ())
+        if available:
+            if len(available) == 1:
+                partition = available[0]
+            else:
+                # >= 2 available: pick uniformly, avoiding ``avoid`` if set.
+                candidates = [p for p in available if p != avoid] if avoid is not None else available
+                if not candidates:
+                    candidates = available
+                partition = random.choice(candidates)
+        else:
+            # No partitions are currently available - pick from the full
+            # set without enforcing ``!= avoid``
+            partition = random.choice(all_partitions)
         self._sticky[topic] = partition
-        # Reset the seen-batch flag; the new sticky has had no batches yet.
-        self._sticky_seen_batch.discard(topic)
         return partition
-
-    # Compatibility shim: legacy code paths that treat partitioners as
-    # bare callables (key, all_partitions, available) still work, though
-    # they lose the per-topic stickiness.
-    def __call__(self, key, all_partitions, available):
-        if key is not None:
-            idx = murmur2(key)
-            idx &= 0x7fffffff
-            idx %= len(all_partitions)
-            return all_partitions[idx]
-        pool = available if available else all_partitions
-        return random.choice(pool)
