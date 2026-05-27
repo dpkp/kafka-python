@@ -1373,3 +1373,261 @@ def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, see
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
         seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+
+
+# ---------------------------------------------------------------------------
+# KIP-429: Incremental Cooperative Rebalancing
+# ---------------------------------------------------------------------------
+
+
+def _cooperative_coordinator(client, metrics):
+    """Build a ConsumerCoordinator configured for cooperative rebalance."""
+    from kafka.coordinator.assignors.cooperative_sticky import (
+        CooperativeStickyAssignor,
+    )
+    return ConsumerCoordinator(
+        client, SubscriptionState(),
+        metrics=metrics,
+        api_version=(2, 4),
+        max_poll_interval_ms=300000,
+        session_timeout_ms=10000,
+        assignors=(CooperativeStickyAssignor,))
+
+
+class TestKip429RebalanceProtocolValidation:
+    """All configured assignors must agree on a single RebalanceProtocol."""
+
+    def test_default_is_eager(self, coordinator):
+        """Range / RoundRobin / KIP-54 Sticky all support EAGER only."""
+        from kafka.coordinator.assignors.abstract import RebalanceProtocol
+        assert coordinator._rebalance_protocol == RebalanceProtocol.EAGER
+
+    def test_cooperative_when_only_cooperative_sticky(self, client, metrics):
+        from kafka.coordinator.assignors.abstract import RebalanceProtocol
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            assert coord._rebalance_protocol == RebalanceProtocol.COOPERATIVE
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_rejects_mixed_protocols(self, client, metrics):
+        """A consumer configured with both EAGER and COOPERATIVE
+        assignors must reject the configuration at init - at JoinGroup
+        the broker picks one assignor and the consumer has no way to
+        know which protocol mode to use until that decision happens."""
+        from kafka.coordinator.assignors.cooperative_sticky import (
+            CooperativeStickyAssignor,
+        )
+        with pytest.raises(Errors.KafkaConfigurationError, match='RebalanceProtocol'):
+            ConsumerCoordinator(
+                client, SubscriptionState(),
+                metrics=metrics,
+                api_version=(2, 4),
+                max_poll_interval_ms=300000,
+                session_timeout_ms=10000,
+                assignors=(RangePartitionAssignor, CooperativeStickyAssignor))
+
+
+class TestKip429OnJoinPrepare:
+    """Under COOPERATIVE, _on_join_prepare must NOT globally revoke
+    the assignment - that's the whole point of incremental rebalance."""
+
+    def test_eager_revokes_everything(self, mocker, coordinator):
+        coordinator.config['enable_auto_commit'] = False
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
+        coordinator._subscription.assign_from_subscribed(
+            [TopicPartition('foobar', 0), TopicPartition('foobar', 1)])
+        coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+        listener.on_partitions_revoked.assert_called_once_with(
+            {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
+
+    def test_cooperative_skips_global_revoke(self, mocker, client, metrics):
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            coord._subscription.subscribe(topics=['foobar'], listener=listener)
+            coord._subscription.assign_from_subscribed(
+                [TopicPartition('foobar', 0), TopicPartition('foobar', 1)])
+            coord._manager.run(coord._on_join_prepare_async, 0, 'member-foo')
+            # KIP-429: no global on_partitions_revoked in the prepare
+            # phase - individual partitions are revoked later in
+            # _on_join_complete based on the diff.
+            listener.on_partitions_revoked.assert_not_called()
+        finally:
+            coord.close(timeout_ms=0)
+
+
+class TestKip429OnJoinComplete:
+    """Under COOPERATIVE, _on_join_complete computes the owned-vs-
+    assigned diff: revoke removed, add new, no churn on stable."""
+
+    def _make_assignment_bytes(self, topic, partitions):
+        from kafka.protocol.consumer.metadata import ConsumerProtocolAssignment
+        a = ConsumerProtocolAssignment(
+            version=1,
+            assigned_partitions=[(topic, sorted(partitions))],
+            user_data=b'')
+        return a.encode()
+
+    def test_cooperative_revoke_then_assign_diff(self, mocker, client, metrics):
+        """Member currently owns [0, 1, 2]; new assignment is [1, 2, 3].
+        Listener must see revoked=[0] and assigned=[3], not the full sets."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1),
+                TopicPartition('t', 2)])
+
+            assignment_bytes = self._make_assignment_bytes('t', [1, 2, 3])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            listener.on_partitions_revoked.assert_called_once_with({TopicPartition('t', 0)})
+            listener.on_partitions_assigned.assert_called_once_with({TopicPartition('t', 3)})
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_stable_assignment_no_listener_calls(
+            self, mocker, client, metrics):
+        """Owned == assigned -> neither listener method fires."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1)])
+
+            assignment_bytes = self._make_assignment_bytes('t', [0, 1])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            listener.on_partitions_revoked.assert_not_called()
+            listener.on_partitions_assigned.assert_not_called()
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_revoke_triggers_request_rejoin(
+            self, mocker, client, metrics):
+        """When any partitions are revoked, request a follow-up
+        rebalance so the partition lands on its new owner in round 2."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            coord._subscription.subscribe(topics=['t'])
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1)])
+            spy = mocker.spy(coord, 'request_rejoin')
+
+            # New assignment drops partition 1.
+            assignment_bytes = self._make_assignment_bytes('t', [0])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            spy.assert_called()
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_no_revoke_no_extra_rejoin(
+            self, mocker, client, metrics):
+        """If nothing is revoked (assignment only grew or stayed same),
+        no follow-up rebalance is needed."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            coord._subscription.subscribe(topics=['t'])
+            coord._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+            spy = mocker.spy(coord, 'request_rejoin')
+
+            assignment_bytes = self._make_assignment_bytes('t', [0, 1])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            spy.assert_not_called()
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_assignment_for_unsubscribed_topic_bails(
+            self, mocker, client, metrics):
+        """If the leader hands us a partition for a topic we're not
+        subscribed to (e.g. the topic was deleted under us),
+        ``assign_from_subscribed`` raises ValueError. We must bail
+        cleanly: request re-join and skip the listener invocation,
+        the assignor state update, and the auto-commit deadline reset
+        - otherwise the user's listener acts on partitions that aren't
+        actually in our SubscriptionState."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+            assignor_spy = mocker.spy(coord._assignors['cooperative-sticky'], 'on_assignment')
+            rejoin_spy = mocker.spy(coord, 'request_rejoin')
+            old_deadline = coord.next_auto_commit_deadline
+
+            # Assignment names a topic the consumer isn't subscribed to.
+            bad_assignment = self._make_assignment_bytes('other-topic', [0])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', bad_assignment)
+
+            # Re-join requested, but no side effects from the rest of
+            # the cooperative happy path.
+            rejoin_spy.assert_called_once()
+            listener.on_partitions_revoked.assert_not_called()
+            listener.on_partitions_assigned.assert_not_called()
+            assignor_spy.assert_not_called()
+            assert coord.next_auto_commit_deadline == old_deadline
+            # Original assignment is preserved.
+            assert set(coord._subscription.assigned_partitions()) == {TopicPartition('t', 0)}
+        finally:
+            coord.close(timeout_ms=0)
+
+
+class TestOnJoinCompleteBailOnInvalidAssignment:
+    """The EAGER branch has the same bail-on-ValueError behaviour as
+    COOPERATIVE - if the leader hands us a topic we don't subscribe
+    to, we must request re-join without firing the listener or
+    updating assignor state."""
+
+    def _make_assignment_bytes(self, topic, partitions):
+        from kafka.protocol.consumer.metadata import ConsumerProtocolAssignment
+        a = ConsumerProtocolAssignment(
+            version=0,
+            assigned_partitions=[(topic, sorted(partitions))],
+            user_data=b'')
+        return a.encode()
+
+    def test_eager_assignment_for_unsubscribed_topic_bails(
+            self, mocker, coordinator):
+        coordinator.config['enable_auto_commit'] = False
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        # Pick whichever assignor name is in the default fixture
+        # (RangePartitionAssignor).
+        assignor_name = next(iter(coordinator._assignors))
+        assignor_spy = mocker.spy(
+            coordinator._assignors[assignor_name], 'on_assignment')
+        rejoin_spy = mocker.spy(coordinator, 'request_rejoin')
+        old_deadline = coordinator.next_auto_commit_deadline
+
+        bad_assignment = self._make_assignment_bytes('other-topic', [0])
+        coordinator._manager.run(
+            coordinator._on_join_complete_async,
+            42, 'member-1', assignor_name, bad_assignment)
+
+        rejoin_spy.assert_called_once()
+        listener.on_partitions_assigned.assert_not_called()
+        assignor_spy.assert_not_called()
+        assert coordinator.next_auto_commit_deadline == old_deadline

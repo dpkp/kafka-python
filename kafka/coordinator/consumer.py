@@ -6,6 +6,7 @@ import logging
 import time
 
 from kafka.coordinator.base import BaseCoordinator, Generation
+from kafka.coordinator.assignors.abstract import RebalanceProtocol
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
 from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
@@ -97,6 +98,7 @@ class ConsumerCoordinator(BaseCoordinator):
 
         self._subscription = subscription
         self._is_leader = False
+        self._rebalance_protocol = None
         self._joined_subscription = set()
         self._metadata_snapshot = self._build_metadata_snapshot(subscription, self._cluster)
         self._assignment_snapshot = None
@@ -141,8 +143,36 @@ class ConsumerCoordinator(BaseCoordinator):
         for klass in self.config['assignors']:
             assignor = klass()
             self._assignors[assignor.name] = assignor
+        # KIP-429: all configured assignors must agree on a single
+        # RebalanceProtocol mode. Mixing EAGER and COOPERATIVE
+        # assignors in the same consumer is unsafe - at JoinGroup time
+        # the broker picks one assignor, and the consumer needs to
+        # know up front whether to do eager (full) or cooperative
+        # (incremental) revocation.
+        self._rebalance_protocol = self._validate_rebalance_protocol()
         self._cluster.request_update()
         self._cluster.add_listener(WeakMethod(self._handle_metadata_update))
+
+    def _validate_rebalance_protocol(self):
+        """Return the single :class:`RebalanceProtocol` mode that all
+        configured assignors support; raise
+        :class:`KafkaConfigurationError` if they don't agree.
+        """
+        if not self._assignors:
+            return RebalanceProtocol.EAGER
+        common = None
+        for assignor in self._assignors.values():
+            supported = set(assignor.supported_protocols())
+            common = supported if common is None else common & supported
+        if not common:
+            names = [a.name for a in self._assignors.values()]
+            raise Errors.KafkaConfigurationError(
+                "Specified partition_assignment_strategy assignors %s do not"
+                " support a common RebalanceProtocol. Mixing EAGER and"
+                " COOPERATIVE assignors in a single consumer is not"
+                " supported." % (names,))
+        # Pick the highest mode they all agree on (EAGER < COOPERATIVE).
+        return max(common)
 
     @property
     def _use_offset_apis(self):
@@ -265,12 +295,77 @@ class ConsumerCoordinator(BaseCoordinator):
         assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
 
         assignment = ConsumerProtocolAssignment.decode(member_assignment_bytes)
+        new_assigned = set(assignment.partitions())
 
+        # KIP-429: under COOPERATIVE, compute the diff between what we
+        # currently own and what the leader just assigned. Revoke the
+        # partitions we lost; only invoke on_partitions_assigned for
+        # the newly-added ones. If we lost any partitions, request a
+        # follow-up rebalance so the revoked partitions can land on
+        # their intended new owner.
+        if self._rebalance_protocol == RebalanceProtocol.COOPERATIVE:
+            currently_owned = set(self._subscription.assigned_partitions())
+            revoked = currently_owned - new_assigned
+            added = new_assigned - currently_owned
+
+            try:
+                self._subscription.assign_from_subscribed(sorted(new_assigned))
+            except ValueError as e:
+                log.warning("Cooperative assignment rejected: %s."
+                            " Probably due to a deleted topic."
+                            " Requesting re-join.", e)
+                self.request_rejoin()
+                return
+
+            assignor.on_assignment(assignment, generation)
+            self.next_auto_commit_deadline = time.monotonic() + self.auto_commit_interval
+
+            log.info("Cooperative rebalance complete for group %s:"
+                     " owned=%s, assigned=%s, revoked=%s, added=%s",
+                     self.group_id, currently_owned, new_assigned, revoked, added)
+
+            if self._subscription.rebalance_listener:
+                if revoked:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_revoked', revoked)
+                    except Exception:
+                        log.exception(
+                            "User provided rebalance listener %s for group %s"
+                            " failed on_partitions_revoked: %s",
+                            self._subscription.rebalance_listener,
+                            self.group_id, revoked)
+                if added:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_assigned', added)
+                    except Exception:
+                        log.exception(
+                            "User provided rebalance listener %s for group %s"
+                            " failed on_partitions_assigned: %s",
+                            self._subscription.rebalance_listener,
+                            self.group_id, added)
+
+            if revoked:
+                # Round 2: the partitions we just revoked should now
+                # be unowned cluster-wide and can be assigned to
+                # their intended new owners. Trigger a follow-up
+                # rebalance to surface those assignments.
+                log.info("Triggering follow-up rebalance for group %s to"
+                         " complete cooperative move of %d partition(s)",
+                         self.group_id, len(revoked))
+                self.request_rejoin()
+            return
+
+        # EAGER mode (legacy): replace the full assignment and invoke
+        # on_partitions_assigned with the entire new set.
         try:
             self._subscription.assign_from_subscribed(assignment.partitions())
         except ValueError as e:
-            log.warning("%s. Probably due to a deleted topic. Requesting Re-join" % e)
+            log.warning("Assignment rejected: %s. Probably due to a"
+                        " deleted topic. Requesting re-join.", e)
             self.request_rejoin()
+            return
 
         # give the assignor a chance to update internal state
         # based on the received assignment
@@ -409,18 +504,30 @@ class ConsumerCoordinator(BaseCoordinator):
                 log.exception("Pre-rebalance offset commit failed: This is likely"
                               " to cause duplicate message delivery")
 
-        # execute the user's callback before rebalance
-        log.info("Revoking previously assigned partitions %s for group %s",
-                 self._subscription.assigned_partitions(), self.group_id)
-        if self._subscription.rebalance_listener:
-            try:
-                revoked = set(self._subscription.assigned_partitions())
-                await self._invoke_rebalance_listener_async(
-                    'on_partitions_revoked', revoked)
-            except Exception:
-                log.exception("User provided subscription rebalance listener %s"
-                              " for group %s failed on_partitions_revoked",
-                              self._subscription.rebalance_listener, self.group_id)
+        # Under EAGER, notify the user that the full current
+        # assignment is about to be revoked so they can flush state /
+        # commit offsets before the rebalance. The partitions remain
+        # in self._subscription.assignment until _on_join_complete
+        # replaces it via assign_from_subscribed - this listener call
+        # is a *notification*, not the actual state mutation.
+        #
+        # Under COOPERATIVE we skip the notification entirely: members
+        # keep their assignment across JoinGroup and only the
+        # individual partitions that actually moved are revoked in
+        # _on_join_complete_async (computed from the owned-vs-assigned
+        # diff).
+        if self._rebalance_protocol == RebalanceProtocol.EAGER:
+            log.info("Revoking previously assigned partitions %s for group %s",
+                     self._subscription.assigned_partitions(), self.group_id)
+            if self._subscription.rebalance_listener:
+                try:
+                    revoked = set(self._subscription.assigned_partitions())
+                    await self._invoke_rebalance_listener_async(
+                        'on_partitions_revoked', revoked)
+                except Exception:
+                    log.exception("User provided subscription rebalance listener %s"
+                                  " for group %s failed on_partitions_revoked",
+                                  self._subscription.rebalance_listener, self.group_id)
 
         self._is_leader = False
         self._subscription.reset_group_subscription()
