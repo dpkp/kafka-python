@@ -16,9 +16,6 @@ class AlterPartitionReassignments:
         parser.add_argument(
             '--timeout-ms', type=int, default=None,
             help='Request timeout in milliseconds')
-        parser.add_argument(
-            '--no-raise-errors', dest='raise_errors', action='store_false',
-            help='Do not raise on partition-level errors; return the response instead')
 
     @classmethod
     def command(cls, client, args):
@@ -31,7 +28,10 @@ class AlterPartitionReassignments:
                 reassignments[tp] = None
             else:
                 reassignments[tp] = [int(b) for b in replicas_str.split(',') if b]
-        return client.alter_partition_reassignments(
+        results = client.alter_partition_reassignments(
             reassignments,
-            timeout_ms=args.timeout_ms,
-            raise_errors=args.raise_errors)
+            timeout_ms=args.timeout_ms)
+        return {
+            '%s:%d' % (tp.topic, tp.partition): (err.__name__ if err else None)
+            for tp, err in results.items()
+        }

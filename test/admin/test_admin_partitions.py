@@ -4,6 +4,7 @@ import pytest
 
 from kafka.admin import OffsetSpec, KafkaAdminClient
 from kafka.errors import (
+    InvalidPartitionsError,
     NotLeaderForPartitionError,
     UnknownTopicOrPartitionError,
     IncompatibleBrokerVersion,
@@ -25,7 +26,7 @@ from kafka.structs import TopicPartition, OffsetAndTimestamp
 
 
 class TestAlterPartitionReassignmentsMockBroker:
-    def test_success_returns_dict(self, broker, admin):
+    def test_success_returns_per_partition_none(self, broker, admin):
         Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
         Partition = Topic.ReassignablePartitionResponse
         broker.respond(
@@ -39,6 +40,7 @@ class TestAlterPartitionReassignmentsMockBroker:
                         name='topic-a',
                         partitions=[
                             Partition(partition_index=0, error_code=0, error_message=None),
+                            Partition(partition_index=1, error_code=0, error_message=None),
                         ],
                     ),
                 ],
@@ -47,11 +49,13 @@ class TestAlterPartitionReassignmentsMockBroker:
 
         result = admin.alter_partition_reassignments({
             TopicPartition('topic-a', 0): [1, 2, 3],
+            TopicPartition('topic-a', 1): [4, 5, 6],
         })
 
-        assert result['error_code'] == 0
-        assert result['responses'][0]['name'] == 'topic-a'
-        assert result['responses'][0]['partitions'][0]['error_code'] == 0
+        assert result == {
+            TopicPartition('topic-a', 0): None,
+            TopicPartition('topic-a', 1): None,
+        }
 
     def test_cancel_reassignment_sends_null_replicas(self, broker, admin):
         captured = {}
@@ -66,7 +70,7 @@ class TestAlterPartitionReassignmentsMockBroker:
         broker.respond_fn(AlterPartitionReassignmentsRequest, handler)
 
         admin.alter_partition_reassignments({
-            TopicPartition('topic-a', 0): None,  # cancel
+            TopicPartition('topic-a', 0): None,
             TopicPartition('topic-a', 1): [4, 5],
         })
 
@@ -77,7 +81,7 @@ class TestAlterPartitionReassignmentsMockBroker:
         assert by_index[0].replicas is None
         assert list(by_index[1].replicas) == [4, 5]
 
-    def test_partition_level_error_raises(self, broker, admin):
+    def test_partition_level_error_returned_in_dict(self, broker, admin):
         Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
         Partition = Topic.ReassignablePartitionResponse
         broker.respond(
@@ -90,11 +94,33 @@ class TestAlterPartitionReassignmentsMockBroker:
                     Topic(
                         name='topic-a',
                         partitions=[
-                            Partition(partition_index=0, error_code=37,  # InvalidPartitionsError
+                            Partition(partition_index=0, error_code=0, error_message=None),
+                            Partition(partition_index=1, error_code=37,
                                       error_message='bad partition'),
                         ],
                     ),
                 ],
+            ),
+        )
+
+        result = admin.alter_partition_reassignments({
+            TopicPartition('topic-a', 0): [1, 2, 3],
+            TopicPartition('topic-a', 1): [4, 5, 6],
+        })
+
+        assert result == {
+            TopicPartition('topic-a', 0): None,
+            TopicPartition('topic-a', 1): InvalidPartitionsError,
+        }
+
+    def test_top_level_error_raises(self, broker, admin):
+        broker.respond(
+            AlterPartitionReassignmentsRequest,
+            AlterPartitionReassignmentsResponse(
+                throttle_time_ms=0,
+                error_code=38,  # ClusterAuthorizationFailedError
+                error_message='not authorized',
+                responses=[],
             ),
         )
 
@@ -103,32 +129,22 @@ class TestAlterPartitionReassignmentsMockBroker:
                 TopicPartition('topic-a', 0): [1, 2, 3],
             })
 
-    def test_partition_error_suppressed_with_raise_errors_false(self, broker, admin):
-        Topic = AlterPartitionReassignmentsResponse.ReassignableTopicResponse
-        Partition = Topic.ReassignablePartitionResponse
+    def test_missing_partition_response_is_absent(self, broker, admin):
         broker.respond(
             AlterPartitionReassignmentsRequest,
             AlterPartitionReassignmentsResponse(
                 throttle_time_ms=0,
                 error_code=0,
                 error_message=None,
-                responses=[
-                    Topic(
-                        name='topic-a',
-                        partitions=[
-                            Partition(partition_index=0, error_code=37, error_message='bad'),
-                        ],
-                    ),
-                ],
+                responses=[],
             ),
         )
 
-        result = admin.alter_partition_reassignments(
-            {TopicPartition('topic-a', 0): [1, 2, 3]},
-            raise_errors=False,
-        )
+        result = admin.alter_partition_reassignments({
+            TopicPartition('topic-a', 0): [1, 2, 3],
+        })
 
-        assert result['responses'][0]['partitions'][0]['error_code'] == 37
+        assert result == {}
 
 
 # ---------------------------------------------------------------------------
