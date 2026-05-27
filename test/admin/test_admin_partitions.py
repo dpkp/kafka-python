@@ -129,6 +129,12 @@ class TestAlterPartitionReassignmentsMockBroker:
                 TopicPartition('topic-a', 0): [1, 2, 3],
             })
 
+    def test_empty_replica_list_rejected(self, broker, admin):
+        with pytest.raises(ValueError, match='non-empty'):
+            admin.alter_partition_reassignments({
+                TopicPartition('topic-a', 0): [],
+            })
+
     def test_missing_partition_response_is_absent(self, broker, admin):
         broker.respond(
             AlterPartitionReassignmentsRequest,

@@ -268,9 +268,15 @@ class PartitionAdminMixin:
         _Partition = _Topic.ReassignablePartition
         topic2partitions = defaultdict(list)
         for tp, replicas in reassignments.items():
+            if replicas is not None:
+                replicas = list(replicas)
+                if not replicas:
+                    raise ValueError(
+                        "Replica list for %s must be non-empty; "
+                        "use None to cancel a reassignment." % (tp,))
             topic2partitions[tp.topic].append(_Partition(
                 partition_index=tp.partition,
-                replicas=list(replicas) if replicas is not None else None,
+                replicas=replicas,
             ))
         return [_Topic(name=topic, partitions=parts) for topic, parts in topic2partitions.items()]
 
