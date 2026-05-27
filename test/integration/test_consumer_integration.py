@@ -358,8 +358,14 @@ def test_group(kafka_consumer_factory, topic):
         assert i not in consumers
         assert i not in stop
         stop[i] = threading.Event()
+        # Tight session/request timeouts so close() can't outlast the
+        # join(timeout=5) below. request_timeout_ms must exceed
+        # session_timeout_ms, and both must exceed heartbeat_interval_ms
+        # (default 500 in the consumer_factory fixture).
         with kafka_consumer_factory(group_id=group_id,
                                     client_id="consumer_thread-%s" % i,
+                                    session_timeout_ms=3000,
+                                    request_timeout_ms=4000,
                                     api_version_auto_timeout_ms=5000) as c:
             consumers[i] = c
             while not stop[i].is_set():
