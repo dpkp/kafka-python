@@ -270,15 +270,59 @@ class TestListPartitionReassignmentsMockBroker:
             ListPartitionReassignmentsRequest,
             ListPartitionReassignmentsResponse(
                 throttle_time_ms=0,
-                error_code=41,  # NotControllerError
-                error_message='not controller',
+                error_code=29,  # TopicAuthorizationFailedError
+                error_message='not authorized',
                 topics=[],
             ),
         )
 
         with pytest.raises(Exception) as exc_info:
             admin.list_partition_reassignments()
-        assert 'not controller' in str(exc_info.value)
+        assert 'not authorized' in str(exc_info.value)
+
+    def test_not_controller_retries(self, broker, admin):
+        Topic = ListPartitionReassignmentsResponse.OngoingTopicReassignment
+        Partition = Topic.OngoingPartitionReassignment
+        # First response: NotControllerError. After controller refresh, success.
+        broker.respond(
+            ListPartitionReassignmentsRequest,
+            ListPartitionReassignmentsResponse(
+                throttle_time_ms=0,
+                error_code=41,  # NotControllerError
+                error_message='not controller',
+                topics=[],
+            ),
+        )
+        broker.respond(
+            ListPartitionReassignmentsRequest,
+            ListPartitionReassignmentsResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                topics=[
+                    Topic(
+                        name='topic-a',
+                        partitions=[
+                            Partition(
+                                partition_index=0,
+                                replicas=[1, 2, 3],
+                                adding_replicas=[4],
+                                removing_replicas=[1],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+        result = admin.list_partition_reassignments()
+        assert result == {
+            TopicPartition('topic-a', 0): {
+                'replicas': [1, 2, 3],
+                'adding_replicas': [4],
+                'removing_replicas': [1],
+            },
+        }
 
 
 # ---------------------------------------------------------------------------

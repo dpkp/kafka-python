@@ -351,12 +351,10 @@ class PartitionAdminMixin:
             timeout_ms=timeout_ms,
             topics=topics_field,
         )
-        response = await self._manager.send(request)
 
-        top_level_error = Errors.for_code(response.error_code)
-        if top_level_error is not Errors.NoError:
-            raise top_level_error(
-                "ListPartitionReassignmentsRequest failed: %s" % response.error_message)
+        def top_level_error(r):
+            yield Errors.for_code(r.error_code)
+        response = await self._send_request_to_controller(request, top_level_error)
 
         ret = {}
         for topic in response.topics:
