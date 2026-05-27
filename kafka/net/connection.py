@@ -417,9 +417,13 @@ class KafkaConnection:
 
         # Step 2: SASL authentication exchange
         version = response.API_VERSION
+        # Prefer the configured hostname (stored on the transport) so that
+        # mechanisms like GSSAPI construct service principals against the
+        # user-supplied name, not whichever IP getaddrinfo handed us.
+        sasl_host = self.transport.host if self.transport.host else self.transport.getPeer()[0]
         try:
             mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
-                host=self.transport.getPeer()[0], **self.config)
+                host=sasl_host, **self.config)
         except Exception as exc:
             self.close(exc)
             return

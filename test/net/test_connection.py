@@ -469,3 +469,63 @@ class TestKafkaConnectionSasl:
 
         net.run(conn._sasl_authenticate())
         transport.abort.assert_called_once()
+
+    def _drive_handshake_with_recording_mechanism(self, net, conn):
+        from kafka.protocol.sasl import SaslHandshakeRequest
+        api_versions = {SaslHandshakeRequest[0].API_KEY: (0, 1)}
+        conn.broker_version_data = BrokerVersionData(api_versions=api_versions)
+        handshake_response = MagicMock()
+        handshake_response.error_code = 0
+        handshake_response.mechanisms = ['PLAIN']
+        auth_response = MagicMock()
+        auth_response.error_code = 0
+        auth_response.auth_bytes = b''
+        responses = iter([handshake_response, auth_response])
+        def mock_send_request(_):
+            f = Future()
+            f.success(next(responses))
+            return f
+        conn._send_request = mock_send_request
+
+        captured = {}
+        from kafka.sasl import register_sasl_mechanism
+        from kafka.sasl.plain import SaslMechanismPlain
+
+        class RecordingPlain(SaslMechanismPlain):
+            def __init__(self, **config):
+                captured['host'] = config.get('host')
+                super().__init__(**config)
+        register_sasl_mechanism('PLAIN', RecordingPlain, overwrite=True)
+        try:
+            net.run(conn._sasl_authenticate())
+        finally:
+            register_sasl_mechanism('PLAIN', SaslMechanismPlain, overwrite=True)
+        return captured
+
+    def test_sasl_uses_transport_host_for_mechanism(self, net):
+        conn = KafkaConnection(
+            net, node_id='test',
+            security_protocol='SASL_PLAINTEXT', sasl_mechanism='PLAIN',
+            sasl_plain_username='user', sasl_plain_password='pass')
+        transport = MagicMock()
+        transport.host = 'kafka.example.com'
+        transport.getPeer.return_value = ('10.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        captured = self._drive_handshake_with_recording_mechanism(net, conn)
+        assert captured['host'] == 'kafka.example.com'
+
+    def test_sasl_falls_back_to_peer_ip_when_transport_host_unset(self, net):
+        conn = KafkaConnection(
+            net, node_id='test',
+            security_protocol='SASL_PLAINTEXT', sasl_mechanism='PLAIN',
+            sasl_plain_username='user', sasl_plain_password='pass')
+        transport = MagicMock()
+        transport.host = None
+        transport.getPeer.return_value = ('10.0.0.1', 9092)
+        conn.transport = transport
+        conn.initializing = True
+
+        captured = self._drive_handshake_with_recording_mechanism(net, conn)
+        assert captured['host'] == '10.0.0.1'
