@@ -7,6 +7,7 @@ import pytest
 from kafka.net.selector import NetworkSelector
 from kafka.net.inet import create_connection, KafkaNetSocket
 from kafka.net.socks5 import Socks5Proxy
+from kafka.net.http_connect import HttpConnectProxy
 import kafka.errors as Errors
 
 
@@ -239,13 +240,19 @@ class TestKafkaNetSocketRegistry:
             factory = KafkaNetSocket('socks5h://foo.bar')
         assert isinstance(factory, Socks5Proxy)
 
+    def test_http(self):
+        assert 'http' in KafkaNetSocket._registry
+        with patch('kafka.net.http_connect.HttpConnectProxy._get_proxy_addr'):
+            factory = KafkaNetSocket('http://proxy:8080')
+        assert isinstance(factory, HttpConnectProxy)
+
     def test_default(self):
         factory = KafkaNetSocket()
         assert type(factory) is KafkaNetSocket
 
     def test_unknown_scheme_raises(self):
         with pytest.raises(ValueError, match='Unsupported proxy url scheme'):
-            KafkaNetSocket('http://proxy:8080')
+            KafkaNetSocket('ftp://proxy:8080')
 
     def test_no_scheme_raises(self):
         with pytest.raises(ValueError, match='scheme'):
