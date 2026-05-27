@@ -336,6 +336,8 @@ class KafkaTCPTransport:
         pass
 
     def host_port(self):
+        if self._sock is None:
+            return 'none'
         try:
             host, port = self._sock.getpeername()[0:2]
         except (OSError, ValueError):
