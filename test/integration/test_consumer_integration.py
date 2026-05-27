@@ -443,9 +443,14 @@ def test_group(kafka_consumer_factory, topic):
 
     finally:
         logging.info('Shutting down %s consumers', num_consumers)
+        # Signal all stops first, then join. Serial stop-then-join causes the
+        # broker to process N back-to-back rebalances (one per LeaveGroup);
+        # parallel teardown lets all consumers close concurrently against a
+        # single rebalance pass and keeps each join() within budget.
         for c in range(num_consumers):
             logging.info('Stopping consumer %s', c)
             stop[c].set()
+        for c in range(num_consumers):
             threads[c].join(timeout=5)
             assert not threads[c].is_alive()
             threads[c] = None
