@@ -525,15 +525,12 @@ def test_describe_metadata_quorum(kafka_admin_client):
 
 @pytest.mark.skipif(env_kafka_version() < (2, 4), reason="AlterPartitionReassignments requires broker >=2.4")
 def test_alter_partition_reassignments(kafka_admin_client, topic):
-    topic_metadata = kafka_admin_client.describe_topics([topic])[0]
     brokers = [b.node_id for b in kafka_admin_client._manager.cluster.brokers()]
     # Single-broker cluster: only valid reassignment target is [broker]
     tp = TopicPartition(topic, 0)
 
     result = kafka_admin_client.alter_partition_reassignments({tp: brokers})
-    assert result['error_code'] == 0
-    assert len(result['responses']) == 1
-    assert result['responses'][0]['name'] == topic
+    assert result == {tp: None}
 
 
 @pytest.mark.skipif(env_kafka_version() < (2, 4), reason="ListPartitionReassignments requires broker >=2.4")

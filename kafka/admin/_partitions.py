@@ -268,45 +268,63 @@ class PartitionAdminMixin:
         _Partition = _Topic.ReassignablePartition
         topic2partitions = defaultdict(list)
         for tp, replicas in reassignments.items():
+            if replicas is not None:
+                replicas = list(replicas)
+                if not replicas:
+                    raise ValueError(
+                        "Replica list for %s must be non-empty; "
+                        "use None to cancel a reassignment." % (tp,))
+                elif not all(isinstance(item, int) for item in replicas):
+                    raise ValueError(
+                        "Replica list for %s must be int broker_ids." % (tp,))
             topic2partitions[tp.topic].append(_Partition(
                 partition_index=tp.partition,
-                replicas=list(replicas) if replicas is not None else None,
+                replicas=replicas,
             ))
         return [_Topic(name=topic, partitions=parts) for topic, parts in topic2partitions.items()]
 
-    def alter_partition_reassignments(self, reassignments, timeout_ms=None, raise_errors=True):
+    def alter_partition_reassignments(self, reassignments, timeout_ms=None):
         """Alter the replica sets for the given partitions.
 
         Arguments:
             reassignments (dict): A dict mapping
-                :class:`~kafka.TopicPartition` to a list of broker IDs for
-                the new replica set, or ``None`` to cancel a pending
-                reassignment for that partition.
+                :class:`~kafka.TopicPartition` to a list of broker IDs
+                for the new replica set, or ``None`` to cancel a
+                pending reassignment for that partition.
 
         Keyword Arguments:
-            timeout_ms (numeric, optional): The time in ms to wait for the
-                request to complete.
-            raise_errors (bool, optional): Whether to raise errors as
-                exceptions. Default True.
+            timeout_ms (numeric, optional): The time in ms to wait for
+                the request to complete.
+
+        Raises: top-level failures that prevents processing request.
+            Does not raise partition-specific errors.
 
         Returns:
-            Decoded AlterPartitionReassignmentsResponse (as a dict).
+            dict: A dict mapping each :class:`~kafka.TopicPartition`
+            that the broker acknowledged to the error class for that
+            partition, or ``None`` if the reassignment was accepted.
+            Partitions the broker did not report on are absent from the
+            dict.
         """
         timeout_ms = self._validate_timeout(timeout_ms)
-
-        def response_errors(r):
-            yield Errors.for_code(r.error_code)
-            for topic in r.responses:
-                for partition in topic.partitions:
-                    yield Errors.for_code(partition.error_code)
 
         request = AlterPartitionReassignmentsRequest(
             timeout_ms=timeout_ms,
             topics=self._process_alter_partition_reassignments_input(reassignments),
         )
+
+        def top_level_error(r):
+            yield Errors.for_code(r.error_code)
         response = self._manager.run(
-            self._send_request_to_controller, request, response_errors, raise_errors)
-        return response.to_dict()
+            self._send_request_to_controller, request, top_level_error)
+
+        results = {}
+        for topic in response.responses:
+            for partition in topic.partitions:
+                tp = TopicPartition(topic.name, partition.partition_index)
+                err = Errors.for_code(partition.error_code)
+                results[tp] = err if err is not Errors.NoError else None
+        return results
 
     async def _async_list_partition_reassignments(self, topic_partitions=None, timeout_ms=None):
         timeout_ms = self._validate_timeout(timeout_ms)
@@ -333,12 +351,10 @@ class PartitionAdminMixin:
             timeout_ms=timeout_ms,
             topics=topics_field,
         )
-        response = await self._manager.send(request)
 
-        top_level_error = Errors.for_code(response.error_code)
-        if top_level_error is not Errors.NoError:
-            raise top_level_error(
-                "ListPartitionReassignmentsRequest failed: %s" % response.error_message)
+        def top_level_error(r):
+            yield Errors.for_code(r.error_code)
+        response = await self._send_request_to_controller(request, top_level_error)
 
         ret = {}
         for topic in response.topics:
