@@ -213,10 +213,10 @@ class KafkaConnectionManager:
                                        self.config['socket_options'],
                                        proxy_url=self.config['proxy_url'])
         if self.ssl_enabled:
-            hostname = node.host if self.config['ssl_check_hostname'] else None
-            transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(), hostname)
+            transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(),
+                                          host=node.host, ssl_check_hostname=self.config['ssl_check_hostname'])
         else:
-            transport = KafkaTCPTransport(self._net, sock)
+            transport = KafkaTCPTransport(self._net, sock, host=node.host)
 
         try:
             await transport.handshake()

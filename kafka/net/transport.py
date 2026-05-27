@@ -12,9 +12,10 @@ log = logging.getLogger(__name__)
 
 
 class KafkaTCPTransport:
-    def __init__(self, net, sock):
+    def __init__(self, net, sock, host=None):
         self._net = net
         self._sock = sock
+        self.host = host
         self._closed = False
         self._write_buffer = deque()
         self._writing = False
@@ -351,11 +352,12 @@ class KafkaTCPTransport:
 
 
 class KafkaSSLTransport(KafkaTCPTransport):
-    def __init__(self, net, sock, ssl_context, server_hostname=None):
+    def __init__(self, net, sock, ssl_context, host=None, ssl_check_hostname=False):
         self._ssl_context = ssl_context
+        server_hostname = host if ssl_check_hostname else None
         sock = ssl_context.wrap_socket(
             sock, server_hostname=server_hostname, do_handshake_on_connect=False)
-        super().__init__(net, sock)
+        super().__init__(net, sock, host=host)
 
     async def handshake(self):
         while True:
