@@ -198,13 +198,14 @@ class SubscriptionState:
     def assign_from_user(self, partitions):
         """Manually assign a list of TopicPartitions to this consumer.
 
-        This interface does not allow for incremental assignment and will
-        replace the previous assignment (if there was one).
-
-        Manual topic assignment through this method does not use the consumer's
-        group management functionality. As such, there will be no rebalance
-        operation triggered when group membership or cluster and topic metadata
-        change. Note that it is not possible to use both manual partition
+        The new assignment replaces the previous one (this is not an
+        incremental-add API), but ``TopicPartitionState`` is preserved
+        for any partition that's present in both the old and new
+        assignment. Manual topic assignment through this method does
+        not use the consumer's group management functionality. As
+        such, there will be no rebalance operation triggered when
+        group membership or cluster and topic metadata change. Note
+        that it is not possible to use both manual partition
         assignment with assign() and group assignment with subscribe().
 
         Arguments:
@@ -214,23 +215,33 @@ class SubscriptionState:
             IllegalStateError: if consumer has already called subscribe()
         """
         self._set_subscription_type(SubscriptionType.USER_ASSIGNED)
-        if self._user_assignment != set(partitions):
-            self._user_assignment = set(partitions)
-            self._set_assignment({partition: self.assignment.get(partition, TopicPartitionState())
-                                  for partition in partitions})
+        if self._user_assignment == set(partitions):
+            return
+        self._user_assignment = set(partitions)
+        self._apply_assignment(partitions)
 
     @synchronized
     def assign_from_subscribed(self, assignments):
-        """Update the assignment to the specified partitions
+        """Update the assignment to the specified partitions.
 
         This method is called by the coordinator to dynamically assign
-        partitions based on the consumer's topic subscription. This is different
-        from assign_from_user() which directly sets the assignment from a
-        user-supplied TopicPartition list.
+        partitions based on the consumer's topic subscription. Differs
+        from :meth:`assign_from_user` which directly sets the assignment
+        from a user-supplied TopicPartition list.
+
+        Preserves ``TopicPartitionState`` (position, paused flag,
+        preferred read replica, fetch buffers tied to the partition)
+        for any partition present in both the prior and new assignments.
+
+        Validation raises ``ValueError`` BEFORE any mutation if a
+        partition's topic isn't subscribed.
 
         Arguments:
-            assignments (list of TopicPartition): partitions to assign to this
-                consumer instance.
+            assignments (list of TopicPartition): the *full* new
+                assignment (not a diff). Partitions present in both
+                the old and new assignment retain their state;
+                revoked partitions are dropped; new partitions get
+                fresh state.
         """
         if not self.partitions_auto_assigned():
             raise Errors.IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
@@ -239,22 +250,46 @@ class SubscriptionState:
             if tp.topic not in self.subscription:
                 raise ValueError("Assigned partition %s for non-subscribed topic." % (tp,))
 
-        # randomized ordering should improve balance for short-lived consumers
-        self._set_assignment({partition: TopicPartitionState() for partition in assignments}, randomize=True)
+        # randomize new-partition insertion order so short-lived
+        # consumers (CLI tools, one-shot jobs) that re-run from scratch
+        # don't keep starting on the same partition. The Fetcher
+        # iterates fetchable_partitions() in self.assignment insertion
+        # order; without the shuffle, partition 0 of the
+        # alphabetically-first topic always wins the first fetch and
+        # short-lived runs that bail before exhausting it never see
+        # later partitions.
+        self._apply_assignment(assignments, randomize=True)
         log.info("Updated partition assignment: %s", assignments)
 
-    def _set_assignment(self, partition_states, randomize=False):
-        """Batch partition assignment by topic (self.assignment is OrderedDict)"""
-        self.assignment.clear()
-        topics = [tp.topic for tp in partition_states]
+    def _apply_assignment(self, partitions, randomize=False):
+        """Mutate ``self.assignment`` in place to contain exactly
+        ``partitions``, preserving the existing ``TopicPartitionState``
+        for any partition present in both the old and new sets.
+
+        Shared between :meth:`assign_from_user` and
+        :meth:`assign_from_subscribed` - the algorithm is identical;
+        only the validation around it differs.
+
+        When ``randomize=True``, the *newly-added* partitions are
+        inserted in random order. Kept partitions retain their
+        existing position regardless. This is intended for the
+        coordinator-driven path (assign_from_subscribed) - see the
+        comment at that call site for rationale.
+        """
+        new_set = set(partitions)
+        # Drop revoked partitions (we mutate self.assignment, so list()
+        # the keys first to avoid "dict changed size during iteration").
+        for tp in list(self.assignment.keys()):
+            if tp not in new_set:
+                del self.assignment[tp]
+        # Add new partitions; kept partitions retain their existing
+        # TopicPartitionState (positions, paused flag, KIP-392 cache,
+        # etc.).
+        new_partitions = [tp for tp in partitions if tp not in self.assignment]
         if randomize:
-            random.shuffle(topics)
-        topic_partitions = OrderedDict({topic: [] for topic in topics})
-        for tp in partition_states:
-            topic_partitions[tp.topic].append(tp)
-        for topic in topic_partitions:
-            for tp in topic_partitions[topic]:
-                self.assignment[tp] = partition_states[tp]
+            random.shuffle(new_partitions)
+        for tp in new_partitions:
+            self.assignment[tp] = TopicPartitionState()
 
     @synchronized
     def unsubscribe(self):
