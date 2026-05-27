@@ -1426,15 +1426,23 @@ class Fetcher:
                 completed_fetch.metric_aggregator.record(tp, 0, 0)
 
             if error_type is not Errors.NoError:
-                # we move the partition to the end if there was an error. This way, it's more likely that partitions for
-                # the same topic can remain together (allowing for more efficient serialization).
+                # Rotate this partition to the back of the iteration
+                # order so we don't keep slamming the broken partition
+                # first on the next poll - healthier partitions get
+                # processed while this one's backoff / metadata
+                # refresh runs. Cheap LRU-style fairness across the
+                # assignment.
                 self._subscriptions.move_partition_to_end(tp)
 
         return parsed_records
 
     def _on_partition_records_drain(self, partition_records):
-        # we move the partition to the end if we received some bytes. This way, it's more likely that partitions
-        # for the same topic can remain together (allowing for more efficient serialization).
+        # Rotate this partition to the back of the iteration order so
+        # the next poll prioritizes partitions we haven't drained from
+        # recently. (Topic-grouping in the outgoing FetchRequest is
+        # done unconditionally by FetchRequestData.to_send via
+        # defaultdict, so this is purely round-robin fairness across
+        # partitions, not a serialization-efficiency thing.)
         if partition_records.bytes_read > 0:
             self._subscriptions.move_partition_to_end(partition_records.topic_partition)
 
