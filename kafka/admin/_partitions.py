@@ -274,6 +274,9 @@ class PartitionAdminMixin:
                     raise ValueError(
                         "Replica list for %s must be non-empty; "
                         "use None to cancel a reassignment." % (tp,))
+                elif not all(isinstance(item, int) for item in replicas):
+                    raise ValueError(
+                        "Replica list for %s must be int broker_ids." % (tp,))
             topic2partitions[tp.topic].append(_Partition(
                 partition_index=tp.partition,
                 replicas=replicas,

@@ -135,6 +135,12 @@ class TestAlterPartitionReassignmentsMockBroker:
                 TopicPartition('topic-a', 0): [],
             })
 
+    def test_non_int_replica_rejected(self, broker, admin):
+        with pytest.raises(ValueError, match='int broker_ids'):
+            admin.alter_partition_reassignments({
+                TopicPartition('topic-a', 0): ['1', '2', '3'],
+            })
+
     def test_missing_partition_response_is_absent(self, broker, admin):
         broker.respond(
             AlterPartitionReassignmentsRequest,
