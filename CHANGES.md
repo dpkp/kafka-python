@@ -22,6 +22,7 @@ Networking
 * kafka.net: SSL transport support (#2813)
 * kafka.net: SASL authentication support (#2814)
 * kafka.net: SOCKS5 proxy support (#2815)
+* kafka.net: HTTP CONNECT proxy support (RFC 7231 s4.3.6) (#2990)
 * kafka.net: Metrics tracking (#2834)
 * KafkaNetClient: drop-in replacement for KafkaClient using kafka.net (#2816)
 * Future.__await__ support (#2811)
