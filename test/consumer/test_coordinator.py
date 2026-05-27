@@ -1556,6 +1556,47 @@ class TestKip429OnJoinComplete:
         finally:
             coord.close(timeout_ms=0)
 
+    def test_cooperative_preserves_state_on_kept_partition(
+            self, mocker, client, metrics):
+        """KIP-429: a partition the consumer retains across a
+        cooperative rebalance must keep its TopicPartitionState
+        (position, paused flag, KIP-392 preferred-replica cache).
+        Otherwise the rebalance would force a committed-offset
+        re-fetch for partitions that didn't move - defeating the
+        point of incremental cooperative."""
+        from kafka.structs import OffsetAndMetadata
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            coord._subscription.subscribe(topics=['t'])
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1)])
+            # Seed state on partition 0 that must survive the rebalance.
+            tp0 = TopicPartition('t', 0)
+            coord._subscription.assignment[tp0].seek(
+                OffsetAndMetadata(offset=500, metadata='', leader_epoch=-1))
+            coord._subscription.assignment[tp0].update_preferred_read_replica(
+                3, time.monotonic() + 60)
+            original_state = coord._subscription.assignment[tp0]
+
+            # Rebalance: keep partition 0, drop 1, add 2.
+            assignment_bytes = self._make_assignment_bytes('t', [0, 2])
+            coord._manager.run(
+                coord._on_join_complete_async,
+                42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            # The TopicPartitionState object is the SAME instance - not
+            # a fresh one with the same fields. Identity matters because
+            # the Fetcher and other components hold references.
+            assert coord._subscription.assignment[tp0] is original_state
+            assert coord._subscription.assignment[tp0].position.offset == 500
+            assert coord._subscription.assignment[tp0].preferred_read_replica() == 3
+            # New partition got fresh state.
+            assert not coord._subscription.assignment[
+                TopicPartition('t', 2)].has_valid_position
+        finally:
+            coord.close(timeout_ms=0)
+
     def test_cooperative_assignment_for_unsubscribed_topic_bails(
             self, mocker, client, metrics):
         """If the leader hands us a partition for a topic we're not

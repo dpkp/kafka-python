@@ -750,8 +750,8 @@ class KafkaConsumer:
                 Default: Inherit value from max_poll_records.
 
         Returns:
-            dict: Topic to list of records since the last fetch for the
-                subscribed list of topics and partitions.
+            dict[TopicPartition, list[ConsumerRecord]]: records since the last
+                fetch for the subscribed list of topics and partitions.
         """
         # Note: update_offsets is an internal-use only argument. It is used to
         # support the python iterator interface, and which wraps consumer.poll()
