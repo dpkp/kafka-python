@@ -55,6 +55,12 @@ class Task:
         self._exc = None
         self.scheduled_at = None
 
+    def __lt__(self, other):
+        # heapq requires the heap entries to be orderable. When two tasks
+        # share the same scheduled_at, we don't care which fires first --
+        # id() gives us a stable, unique-per-live-object tiebreaker.
+        return id(self) < id(other)
+
     def __call__(self, arg=None):
         ret, exc = (None, arg) if isinstance(arg, Exception) else (arg, None)
         while True:
@@ -151,7 +157,7 @@ class NetworkSelector:
         self._exception = None
         self._stop = False
         self._selector = self.config['selector']()
-        self._scheduled = [] # managed by heapq
+        self._scheduled = [] # managed by heapq; Task.__lt__ tiebreaks ties on scheduled_at
         self._ready = collections.deque()
         # Strong refs to every Task that hasn't completed yet. Without this,
         # a Task suspended on an externally-unreachable awaitable (e.g. a
