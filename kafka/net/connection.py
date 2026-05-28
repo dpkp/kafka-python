@@ -147,11 +147,15 @@ class KafkaConnection:
         correlation_id = self.parser.send_request(request)
         log.debug('%s Request %d: %s', self, correlation_id, request)
         if request.expect_response():
-            if not self.in_flight_requests:
-                self._timeout_task = self.net.call_at(timeout_at, self._maybe_timeout_ifrs)
-            elif timeout_at < self.in_flight_requests[-1][-1]:
-                raise ValueError('New request timeout cannot be lower than in-flight request!')
-            self.in_flight_requests.append((correlation_id, future, sent_time, timeout_at))
+            # Each in-flight request owns its own timer so heterogeneous
+            # per-request timeouts (e.g. JoinGroup with a rebalance-sized
+            # deadline interleaved with default-timeout MetadataRequests)
+            # don't require monotonic-deadline FIFO ordering.
+            timeout_task = self.net.call_at(
+                timeout_at,
+                lambda: self._request_timed_out(future, sent_time, timeout_at))
+            self.in_flight_requests.append(
+                (correlation_id, future, sent_time, timeout_at, timeout_task))
         else:
             future.success(None)
 
@@ -170,14 +174,15 @@ class KafkaConnection:
             request, future, timeout_at = self._request_buffer.popleft()
             self._send_request(request, future=future, timeout_at=timeout_at)
 
-    def _maybe_timeout_ifrs(self):
-        if not self.in_flight_requests:
+    def _request_timed_out(self, future, sent_at, timeout_at):
+        # Defensive: a response and its timer can both be dispatched within a
+        # single _poll_once iteration; if data_received resolved the future
+        # first, skip the connection-close.
+        if self.closed or future.is_done:
             return
-        _, _, sent_at, timeout_at = self.in_flight_requests[0]
-        if time.monotonic() > timeout_at:
-            timeout_ms = (timeout_at - sent_at) * 1000
-            log.warning('%s: Request timed out after %d ms. Closing connection.', self, timeout_ms)
-            self.close(Errors.RequestTimedOutError('Request timed out after %d ms' % timeout_ms))
+        timeout_ms = (timeout_at - sent_at) * 1000
+        log.warning('%s: Request timed out after %d ms. Closing connection.', self, timeout_ms)
+        self.close(Errors.RequestTimedOutError('Request timed out after %d ms' % timeout_ms))
 
     def data_received(self, data):
         """ Called when some data is received."""
@@ -189,13 +194,14 @@ class KafkaConnection:
         # augment responses w/ correlation_id, future, and timestamp
         for i, (resp_correlation_id, response) in enumerate(responses):
             try:
-                (req_correlation_id, future, sent_time, _timeout_at) = self.in_flight_requests.popleft()
+                (req_correlation_id, future, sent_time, _timeout_at, timeout_task) = self.in_flight_requests.popleft()
             except IndexError:
                 return self.close(Errors.KafkaConnectionError('Received response with no in-flight-requests!'))
 
             if req_correlation_id != resp_correlation_id:
                 return self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
 
+            self.net.unschedule(timeout_task)
             latency_ms = (time.monotonic() - sent_time) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
@@ -205,12 +211,6 @@ class KafkaConnection:
             future.success(response)
         if 'max_in_flight' in self.paused and len(self.in_flight_requests) < self.config['max_in_flight_requests_per_connection']:
             self.unpause('max_in_flight')
-        if self.in_flight_requests:
-            next_timeout_at = self.in_flight_requests[0][3]
-            self.net.reschedule(next_timeout_at, self._timeout_task)
-        else:
-            self.net.unschedule(self._timeout_task)
-            self._timeout_task = None
 
     def eof_received(self):
         """ Called when the other end calls write_eof() or equivalent.
@@ -247,7 +247,8 @@ class KafkaConnection:
             _, future, _ = self._request_buffer.popleft()
             future.failure(error)
         while self.in_flight_requests:
-            _, future, _, _ = self.in_flight_requests.popleft()
+            _, future, _, _, timeout_task = self.in_flight_requests.popleft()
+            self.net.unschedule(timeout_task)
             future.failure(error)
 
     def connection_made(self, transport):

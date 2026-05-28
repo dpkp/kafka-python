@@ -203,6 +203,51 @@ class TestKafkaConnectionSendRequest:
             connection.send_request(MagicMock())
         assert len(connection._request_buffer) == 3
 
+    def _make_send_ready(self, connection):
+        connection.initializing = False
+        connection.connected = True
+        transport = MagicMock()
+        transport.getPeer.return_value = ('127.0.0.1', 9092, 0, 0)
+        connection.transport = transport
+        connection.parser = MagicMock()
+        cid = [0]
+        def alloc_cid(_req):
+            cid[0] += 1
+            return cid[0]
+        connection.parser.send_request.side_effect = alloc_cid
+        connection.parser.send_bytes.return_value = b'data'
+
+    def test_send_request_heterogeneous_timeouts_no_longer_raise(self, connection):
+        """Per-request timers: a longer-timeout request followed by a
+        shorter-timeout one must not raise ValueError. Each request owns
+        its own timer.
+        """
+        self._make_send_ready(connection)
+        long_req = MagicMock()
+        long_req.expect_response.return_value = True
+        long_req.API_VERSION = 1
+        short_req = MagicMock()
+        short_req.expect_response.return_value = True
+        short_req.API_VERSION = 1
+
+        # JoinGroup-style: 305s timeout
+        connection.send_request(long_req, request_timeout_ms=305000)
+        # Metadata-style: 30s timeout - would have raised under the old
+        # monotonic-deadline constraint.
+        connection.send_request(short_req, request_timeout_ms=30000)
+
+        assert len(connection.in_flight_requests) == 2
+
+    def test_send_request_uses_per_request_timeout(self, connection):
+        self._make_send_ready(connection)
+        request = MagicMock()
+        request.expect_response.return_value = True
+        request.API_VERSION = 1
+        now = time.monotonic()
+        connection.send_request(request, request_timeout_ms=305000)
+        (_, _, sent_time, timeout_at, _task) = connection.in_flight_requests[0]
+        assert (timeout_at - sent_time) == pytest.approx(305.0, abs=0.05)
+
 
 class TestKafkaConnectionConnectionLifecycle:
     def test_connection_made(self, connection):
@@ -308,8 +353,11 @@ class TestKafkaConnectionFailInFlight:
     def test_fail_in_flight_requests(self, connection):
         f1 = Future()
         f2 = Future()
-        connection.in_flight_requests.append((1, f1, time.monotonic(), time.monotonic() + 30))
-        connection.in_flight_requests.append((2, f2, time.monotonic(), time.monotonic() + 30))
+        now = time.monotonic()
+        t1 = connection.net.call_at(now + 30, lambda: None)
+        t2 = connection.net.call_at(now + 30, lambda: None)
+        connection.in_flight_requests.append((1, f1, now, now + 30, t1))
+        connection.in_flight_requests.append((2, f2, now, now + 30, t2))
 
         connection.close(Errors.Cancelled())
         assert f1.failed()
