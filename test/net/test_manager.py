@@ -213,6 +213,20 @@ class TestKafkaConnectionManagerSend:
         assert f.failed()
         assert isinstance(f.exception, Errors.NodeNotReadyError)
 
+    def test_send_forwards_request_timeout_ms_to_connection(self, manager):
+        request = MagicMock()
+        request.expect_response.return_value = True
+        request.API_VERSION = 1
+        captured = {}
+        with patch.object(KafkaConnection, 'send_request', autospec=True) as mock:
+            def capture(self_, req, request_timeout_ms=None):
+                captured['request_timeout_ms'] = request_timeout_ms
+                return Future()
+            mock.side_effect = capture
+            # Ensure node exists so get_connection returns a KafkaConnection.
+            manager.send(request, node_id='bootstrap-0', request_timeout_ms=305000)
+        assert captured['request_timeout_ms'] == 305000
+
 
 class TestKafkaConnectionManagerBootstrap:
     def test_bootstrap_async_returns_future(self, manager):
