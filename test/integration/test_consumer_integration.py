@@ -358,8 +358,14 @@ def test_group(kafka_consumer_factory, topic):
         assert i not in consumers
         assert i not in stop
         stop[i] = threading.Event()
+        # Tight session/request timeouts so close() can't outlast the
+        # join(timeout=5) below. request_timeout_ms must exceed
+        # session_timeout_ms, and both must exceed heartbeat_interval_ms
+        # (default 500 in the consumer_factory fixture).
         with kafka_consumer_factory(group_id=group_id,
                                     client_id="consumer_thread-%s" % i,
+                                    session_timeout_ms=3000,
+                                    request_timeout_ms=4000,
                                     api_version_auto_timeout_ms=5000) as c:
             consumers[i] = c
             while not stop[i].is_set():
@@ -443,9 +449,14 @@ def test_group(kafka_consumer_factory, topic):
 
     finally:
         logging.info('Shutting down %s consumers', num_consumers)
+        # Signal all stops first, then join. Serial stop-then-join causes the
+        # broker to process N back-to-back rebalances (one per LeaveGroup);
+        # parallel teardown lets all consumers close concurrently against a
+        # single rebalance pass and keeps each join() within budget.
         for c in range(num_consumers):
             logging.info('Stopping consumer %s', c)
             stop[c].set()
+        for c in range(num_consumers):
             threads[c].join(timeout=5)
             assert not threads[c].is_alive()
             threads[c] = None
