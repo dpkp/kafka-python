@@ -818,7 +818,7 @@ class TestIdempotentProducerMaxInFlight:
 
     def test_idempotent_config_rejects_max_in_flight_above_5(self):
         """Idempotent producer rejects max_in_flight > 5."""
-        with pytest.raises(Errors.KafkaConfigurationError, match="at most 5"):
+        with pytest.raises(Errors.KafkaConfigurationError, match="max_in_flight_requests_per_connection=6"):
             KafkaProducer(
                 enable_idempotence=True,
                 max_in_flight_requests_per_connection=6,

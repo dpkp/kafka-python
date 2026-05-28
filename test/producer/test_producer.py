@@ -12,7 +12,7 @@ from kafka.producer.transaction_manager import TransactionManager, ProducerIdAnd
 
 def test_kafka_producer_thread_close():
     threads = threading.active_count()
-    producer = KafkaProducer(api_version=(2, 1)) # set api_version explicitly to avoid auto-detection
+    producer = KafkaProducer(api_version=(2, 1), enable_idempotence=False)
     assert threading.active_count() == threads + 1
     producer.close()
     assert threading.active_count() == threads
@@ -20,7 +20,7 @@ def test_kafka_producer_thread_close():
 
 def test_kafka_producer_context_manager_closes_on_exit():
     threads = threading.active_count()
-    with KafkaProducer(api_version=(2, 1)) as producer:
+    with KafkaProducer(api_version=(2, 1), enable_idempotence=False) as producer:
         assert threading.active_count() == threads + 1
         assert producer._closed is False
     assert producer._closed is True
@@ -73,7 +73,7 @@ def test_partition_explicit_partition_rejects_unknown_partition():
 def _producer_for_send_test(partitioner):
     """Build a real KafkaProducer but replace the accumulator + sender
     with mocks so ``send()`` doesn't try to actually push data."""
-    producer = KafkaProducer(api_version=(2, 1), partitioner=partitioner)
+    producer = KafkaProducer(api_version=(2, 1), partitioner=partitioner, enable_idempotence=False)
     producer._accumulator = MagicMock()
     producer._sender = MagicMock()
     producer._metadata = MagicMock()
