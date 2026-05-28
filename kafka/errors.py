@@ -126,7 +126,10 @@ class UnsupportedCodecError(KafkaError):
 
 
 class TransactionAbortedError(KafkaError):
-    pass
+    """Raised on undrained batches when a transaction is aborted with no
+    underlying cause -- the user chose to abort (KIP-654). Non-fatal: the
+    producer remains usable for the next transaction."""
+    message = 'Failing batch since transaction was aborted'
 
 
 class BrokerResponseError(KafkaError):

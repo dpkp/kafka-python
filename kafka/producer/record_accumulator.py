@@ -565,23 +565,31 @@ class RecordAccumulator:
         # This is a tight loop but should be able to get through very quickly.
         error = Errors.IllegalStateError("Producer is closed forcefully.")
         while True:
-            self._abort_batches(error)
+            self.abort_batches(error)
             if not self._appends_in_progress.get():
                 break
         # After this point, no thread will append any messages because they will see the close
         # flag set. We need to do the last abort after no thread was appending in case the there was a new
         # batch appended by the last appending thread.
-        self._abort_batches(error)
+        self.abort_batches(error)
         self._batches.clear()
 
-    def _abort_batches(self, error):
-        """Go through incomplete batches and abort them."""
+    def abort_batches(self, error):
+        """Abort every incomplete batch, including in-flight (drained but
+        not-yet-acked) ones. Use for fatal-error / force-close paths where
+        the user's pending futures must resolve immediately rather than
+        hang waiting for broker responses that aren't coming."""
         for batch in self._incomplete.all():
             tp = batch.topic_partition
-            # Close the batch before aborting
             with self._tp_lock(tp):
                 batch.records.close()
-                self._batches[tp].remove(batch)
+                # Drained batches were popleft()'d out of _batches[tp] -- only
+                # remove if still present (matches Java's LinkedList.remove,
+                # which returns false rather than raising).
+                try:
+                    self._batches[tp].remove(batch)
+                except ValueError:
+                    pass
             batch.abort(error)
             self.deallocate(batch)
 
@@ -590,7 +598,11 @@ class RecordAccumulator:
             tp = batch.topic_partition
             with self._tp_lock(tp):
                 aborted = False
-                if not batch.is_done:
+                # Skip in-flight batches (already drained, awaiting broker
+                # response): drain() popped them from _batches[tp], so
+                # .remove() would ValueError; and we want their futures to
+                # resolve via the broker response, not be cancelled locally.
+                if not batch.is_done and batch.drained is None:
                     aborted = True
                     batch.records.close()
                     self._batches[tp].remove(batch)
