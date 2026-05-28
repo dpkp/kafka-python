@@ -590,7 +590,11 @@ class RecordAccumulator:
             tp = batch.topic_partition
             with self._tp_lock(tp):
                 aborted = False
-                if not batch.is_done:
+                # Skip in-flight batches (already drained, awaiting broker
+                # response): drain() popped them from _batches[tp], so
+                # .remove() would ValueError; and we want their futures to
+                # resolve via the broker response, not be cancelled locally.
+                if not batch.is_done and batch.drained is None:
                     aborted = True
                     batch.records.close()
                     self._batches[tp].remove(batch)

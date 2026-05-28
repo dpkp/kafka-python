@@ -2,6 +2,7 @@
 
 import pytest
 
+import kafka.errors as Errors
 from kafka.cluster import ClusterMetadata
 from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.record.default_records import DefaultRecordBatchBuilder
@@ -178,6 +179,36 @@ def test_abort_on_new_batch_returns_sentinel(tp):
     assert abort is True
     # And no batch was actually allocated.
     assert tp not in accum._batches or not accum._batches[tp]
+
+
+def test_abort_undrained_batches_skips_in_flight(tp, cluster):
+    """abort_undrained_batches must not touch batches that have already been
+    drained -- drain() popleft()s them out of _batches[tp], so attempting to
+    .remove() them raises ValueError; and we want their futures to resolve
+    via the broker response, not be cancelled locally."""
+    accum = RecordAccumulator(linger_ms=0, batch_size=64)
+
+    # First batch: append, drain (now in-flight), still in _incomplete.
+    inflight_future, *_ = accum.append(tp, 0, b'k1', b'v1', [], now=0)
+    ready, _, _ = accum.ready(cluster, now=0)
+    assert ready == {0}
+    drained = accum.drain(cluster, ready, 2147483647, now=0)[0]
+    assert len(drained) == 1
+    inflight_batch = drained[0]
+    assert inflight_batch.drained is not None
+    assert tp not in accum._batches or inflight_batch not in accum._batches[tp]
+
+    # Second batch: append, leave undrained.
+    undrained_future, *_ = accum.append(tp, 0, b'k2', b'v2', [], now=0)
+    assert accum.has_incomplete
+
+    # Must not ValueError on the in-flight batch's missing _batches[tp] entry.
+    accum.abort_undrained_batches(Errors.TransactionAbortedError())
+
+    assert undrained_future.failed()
+    assert isinstance(undrained_future.exception, Errors.TransactionAbortedError)
+    # In-flight batch's future is left alone for the broker response to resolve.
+    assert not inflight_future.is_done
 
 
 def test_abort_on_new_batch_appends_to_existing(tp):
