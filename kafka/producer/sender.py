@@ -292,7 +292,12 @@ class Sender(threading.Thread):
     def _maybe_send_pending_request(self):
         if self._transaction_manager.is_completing() and self._accumulator.has_incomplete:
             if self._transaction_manager.is_aborting():
-                self._accumulator.abort_undrained_batches(Errors.KafkaError("Failing batch since transaction was aborted"))
+                # KIP-654: prefer the last error that triggered the abort;
+                # otherwise the user chose to abort with no underlying cause --
+                # surface a non-fatal TransactionAbortedError on the
+                # in-accumulator batches.
+                exception = self._transaction_manager.last_error or Errors.TransactionAbortedError()
+                self._accumulator.abort_undrained_batches(exception)
             # There may still be requests left which are being retried. Since we do not know whether they had
             # been successfully appended to the broker log, we must resend them until their final status is clear.
             # If they had been appended and we did not receive the error, then our sequence number would no longer
@@ -346,6 +351,9 @@ class Sender(threading.Thread):
     def _maybe_abort_batches(self, exc):
         if self._accumulator.has_incomplete:
             log.error("%s: Aborting producer batches due to fatal error: %s", str(self), exc)
+            # Fatal: fail everything including in-flight batches; their broker
+            # responses won't recover us, and the user's pending futures need
+            # to resolve so close() can return.
             self._accumulator.abort_batches(exc)
 
     def initiate_close(self):

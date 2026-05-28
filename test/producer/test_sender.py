@@ -324,6 +324,45 @@ def test_out_of_order_sequence_number_reset_producer_id(sender, accumulator, tra
     batch.done.assert_called_with(top_level_exception=error(None), record_exceptions_fn=mocker.ANY)
 
 
+def test_transaction_aborted_error_on_user_abort_with_undrained_batches(client, mocker):
+    """KIP-654: when the user calls abort_transaction() while records are
+    still un-flushed in the accumulator, those per-record futures should
+    resolve with the non-fatal TransactionAbortedError -- not a generic
+    KafkaError that callers have to treat as fatal."""
+    cluster = client.cluster
+    tm = TransactionManager(
+        transactional_id='txn-id',
+        transaction_timeout_ms=60000,
+        retry_backoff_ms=100,
+        api_version=(2, 1),
+        metadata=cluster)
+    tm.set_producer_id_and_epoch(ProducerIdAndEpoch(1000, 0))
+    # Move to READY without going through InitProducerIdHandler
+    from kafka.producer.transaction_manager import TransactionState
+    tm._transition_to(TransactionState.INITIALIZING)
+    tm._transition_to(TransactionState.READY)
+    tm.begin_transaction()
+
+    acc = RecordAccumulator(transaction_manager=tm)
+    sender = Sender(client, cluster, acc, transaction_manager=tm)
+
+    tp = TopicPartition('foo', 0)
+    tm.maybe_add_partition_to_transaction(tp)
+    future, _, _, _ = acc.append(tp, 0, None, b'value', [])
+
+    tm.begin_abort()
+    assert tm.is_aborting()
+    assert tm.last_error is None
+
+    # Short-circuit the EndTxnHandler dispatch so we don't need a live
+    # coordinator -- the abort happens before next_request_handler is consulted.
+    mocker.patch.object(tm, 'next_request_handler', return_value=None)
+    sender._maybe_send_pending_request()
+
+    assert future.failed()
+    assert isinstance(future.exception, Errors.TransactionAbortedError)
+
+
 def test_handle_produce_response():
     pass
 
