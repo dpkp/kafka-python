@@ -181,6 +181,33 @@ def test_abort_on_new_batch_returns_sentinel(tp):
     assert tp not in accum._batches or not accum._batches[tp]
 
 
+def test_abort_batches_handles_in_flight(tp, cluster):
+    """abort_batches must fail in-flight (drained but not-yet-acked) batches
+    too -- used on fatal-error / force-close paths where the user's pending
+    futures must resolve immediately. Drained batches were popleft()'d out
+    of _batches[tp]; the .remove() call must not ValueError."""
+    accum = RecordAccumulator(linger_ms=0, batch_size=64)
+
+    # In-flight batch.
+    inflight_future, *_ = accum.append(tp, 0, b'k1', b'v1', [], now=0)
+    ready, _, _ = accum.ready(cluster, now=0)
+    drained = accum.drain(cluster, ready, 2147483647, now=0)[0]
+    assert len(drained) == 1
+    assert drained[0].drained is not None
+
+    # Undrained batch.
+    undrained_future, *_ = accum.append(tp, 0, b'k2', b'v2', [], now=0)
+
+    err = Errors.KafkaError('fatal')
+    accum.abort_batches(err)
+
+    assert inflight_future.failed()
+    assert undrained_future.failed()
+    assert isinstance(inflight_future.exception, Errors.KafkaError)
+    assert isinstance(undrained_future.exception, Errors.KafkaError)
+    assert not accum.has_incomplete
+
+
 def test_abort_undrained_batches_skips_in_flight(tp, cluster):
     """abort_undrained_batches must not touch batches that have already been
     drained -- drain() popleft()s them out of _batches[tp], so attempting to
