@@ -518,15 +518,51 @@ class KafkaProducer:
         self._metadata = client.cluster
         self._transaction_manager = None
         self._init_transactions_result = None
-        if 'enable_idempotence' in user_provided_configs and not self.config['enable_idempotence'] and self.config['transactional_id']:
+
+        user_set_idempotence = 'enable_idempotence' in user_provided_configs
+        user_set_acks = 'acks' in user_provided_configs
+        user_set_retries = 'retries' in user_provided_configs
+        user_set_inflight = 'max_in_flight_requests_per_connection' in user_provided_configs
+
+        if user_set_idempotence and not self.config['enable_idempotence'] and self.config['transactional_id']:
             raise Errors.KafkaConfigurationError("Cannot set transactional_id without enable_idempotence.")
 
         if self.config['transactional_id']:
             self.config['enable_idempotence'] = True
+            # Transactional path is strict: any conflicting user-provided config must raise.
+            user_set_idempotence = True
 
         if self.config['enable_idempotence']:
-            assert self.config['api_version'] >= (0, 11), "Transactional/Idempotent producer requires >= Kafka 0.11 Brokers"
+            conflicts = []
+            if user_set_acks and self.config['acks'] != -1:
+                conflicts.append(('acks', self.config['acks']))
+            if user_set_retries and self.config['retries'] == 0:
+                conflicts.append(('retries', 0))
+            if user_set_inflight and self.config['max_in_flight_requests_per_connection'] > 5:
+                conflicts.append(('max_in_flight_requests_per_connection',
+                                  self.config['max_in_flight_requests_per_connection']))
 
+            if conflicts:
+                conflict_str = ', '.join('%s=%r' % kv for kv in conflicts)
+                if user_set_idempotence:
+                    raise Errors.KafkaConfigurationError(
+                        "enable_idempotence=True is incompatible with user-provided %s" % (conflict_str,))
+                log.warning(
+                    "%s: Idempotence will be disabled because user-provided config conflicts with"
+                    " idempotent defaults: %s", str(self), conflict_str)
+                self.config['enable_idempotence'] = False
+
+        if self.config['enable_idempotence'] and self.config['api_version'] < (0, 11):
+            if user_set_idempotence:
+                raise Errors.KafkaConfigurationError(
+                    "Idempotent/Transactional producer requires broker >= 0.11 (got api_version=%s)"
+                    % (self.config['api_version'],))
+            log.warning(
+                "%s: Idempotence will be disabled because broker api_version %s < (0, 11)",
+                str(self), self.config['api_version'])
+            self.config['enable_idempotence'] = False
+
+        if self.config['enable_idempotence']:
             self._transaction_manager = TransactionManager(
                 transactional_id=self.config['transactional_id'],
                 transaction_timeout_ms=self.config['transaction_timeout_ms'],
@@ -539,19 +575,8 @@ class KafkaProducer:
             else:
                 log.info("%s: Instantiated an idempotent producer.", str(self))
 
-            if self.config['retries'] == 0:
-                raise Errors.KafkaConfigurationError("Must set 'retries' to non-zero when using the idempotent producer.")
-
-            if self.config['max_in_flight_requests_per_connection'] > 5:
-                raise Errors.KafkaConfigurationError("Must set 'max_in_flight_requests_per_connection' to at most 5"
-                                                     " to use the idempotent producer.")
-
-            if 'acks' not in user_provided_configs:
-                log.info("%s: Overriding the default 'acks' config to 'all' since idempotence is enabled", str(self))
+            if not user_set_acks:
                 self.config['acks'] = -1
-            elif self.config['acks'] != -1:
-                raise Errors.KafkaConfigurationError("Must set 'acks' config to 'all' in order to use the idempotent"
-                                                     " producer. Otherwise we cannot guarantee idempotence")
 
         message_version = self.max_usable_produce_magic(self.config['api_version'])
         self._accumulator = RecordAccumulator(
