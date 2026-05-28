@@ -563,7 +563,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         if error_type is Errors.UnknownMemberIdError:
             error = error_type(self._generation.member_id)
-            self.reset_generation()
+            self.reset_generation(lost_partitions=True)
             log.info("Attempt to join group %s failed due to unknown member id",
                      self.group_id)
             raise error
@@ -656,7 +656,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         if error_type in (Errors.UnknownMemberIdError, Errors.IllegalGenerationError):
             error = error_type()
             log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
-            self.reset_generation()
+            self.reset_generation(lost_partitions=True)
             raise error
         if error_type in (Errors.CoordinatorNotAvailableError,
                           Errors.NotCoordinatorError):
@@ -863,12 +863,37 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def rebalance_in_progress(self):
         return self.state is MemberState.REBALANCING
 
-    def reset_generation(self, member_id=UNKNOWN_MEMBER_ID):
-        """Reset the generation and member_id because we have fallen out of the group."""
+    def reset_generation(self, member_id=UNKNOWN_MEMBER_ID, *, lost_partitions=False):
+        """Reset the generation and member_id because we have fallen out of the group.
+
+        Arguments:
+            member_id (str): new local member id to record. Defaults to
+                ``UNKNOWN_MEMBER_ID``. The broker hands back a real member id
+                on a ``MemberIdRequiredError`` retry; that path passes the
+                broker-returned id through here.
+            lost_partitions (bool): KIP-429. ``True`` when the generation is
+                being reset because the broker has forcibly removed us
+                (heartbeat / commit / sync ``UnknownMemberIdError``,
+                ``IllegalGenerationError``, ``FencedInstanceIdError``).
+                Subclasses observe this via
+                :meth:`_on_partitions_lost_pending` and surface it as
+                ``on_partitions_lost`` to the user. ``False`` for clean
+                leaves and for the initial-join ``MemberIdRequiredError``
+                path where no partitions were owned yet.
+        """
         with self._lock:
+            if lost_partitions:
+                self._on_partitions_lost_pending()
             self._generation = Generation(DEFAULT_GENERATION_ID, member_id, None)
             self.rejoin_needed = True
             self.state = MemberState.UNJOINED
+
+    def _on_partitions_lost_pending(self):
+        """Hook called from :meth:`reset_generation` when the generation is
+        reset due to forced eviction (KIP-429). Subclasses override to
+        snapshot the current assignment before it is cleared so the next
+        rebalance can fire ``on_partitions_lost`` for the user."""
+        pass
 
     def request_rejoin(self):
         self.rejoin_needed = True
@@ -1086,7 +1111,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         elif error_type is Errors.IllegalGenerationError:
             heartbeat_log.warning("Heartbeat failed for group %s: generation id is not "
                                   " current.", self.group_id)
-            self.reset_generation()
+            self.reset_generation(lost_partitions=True)
         elif error_type is Errors.FencedInstanceIdError:
             heartbeat_log.error("Heartbeat failed for group %s due to fenced id error: %s",
                                 self.group_id, self.group_instance_id)
@@ -1094,7 +1119,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         elif error_type is Errors.UnknownMemberIdError:
             heartbeat_log.warning("Heartbeat: local member_id was not recognized;"
                                   " this consumer needs to re-join")
-            self.reset_generation()
+            self.reset_generation(lost_partitions=True)
         elif error_type is Errors.GroupAuthorizationFailedError:
             error = error_type(self.group_id)
             heartbeat_log.error("Heartbeat failed: authorization error: %s", error)
