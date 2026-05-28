@@ -1134,6 +1134,45 @@ def test_join_group_async_happy_path_follower(request, broker, seeded_coord):
     assert seeded_coord._heartbeat_enabled is True
 
 
+def test_join_group_uses_extended_per_request_timeout(request, mocker, broker, seeded_coord):
+    """JoinGroup must be sent with request_timeout_ms = max(request_timeout_ms,
+    max_poll_interval_ms + 5000) so the client doesn't time out a healthy
+    rebalance that the broker is legitimately holding open. Matches Java's
+    joinGroupTimeoutMs override.
+    """
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+
+    seeded_coord.config['request_timeout_ms'] = 30000
+    seeded_coord.config['max_poll_interval_ms'] = 300000
+    sends = []
+    original_send = seeded_coord._manager.send
+
+    def capturing_send(req, node_id=None, request_timeout_ms=None):
+        sends.append((type(req).__name__, request_timeout_ms))
+        return original_send(req, node_id=node_id, request_timeout_ms=request_timeout_ms)
+
+    mocker.patch.object(seeded_coord._manager, 'send', side_effect=capturing_send)
+
+    seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+
+    join_sends = [t for name, t in sends if 'JoinGroup' in name]
+    assert join_sends, "expected at least one JoinGroupRequest send"
+    # max(30000, 300000 + 5000) = 305000
+    assert all(t == 305000 for t in join_sends), \
+        "JoinGroup sends used %r, expected 305000" % (join_sends,)
+    sync_sends = [t for name, t in sends if 'SyncGroup' in name]
+    assert sync_sends, "expected SyncGroupRequest"
+    # SyncGroup should NOT get the override - it uses default (None).
+    assert all(t is None for t in sync_sends), \
+        "SyncGroup sends should pass request_timeout_ms=None, got %r" % (sync_sends,)
+
+
 def test_join_group_async_retries_on_retriable_error(request, broker, seeded_coord):
     """First JoinGroup fails with RebalanceInProgress; loop retries and succeeds."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))

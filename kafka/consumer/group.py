@@ -298,7 +298,7 @@ class KafkaConsumer:
         'fetch_min_bytes': 1,
         'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
-        'request_timeout_ms': 305000, # chosen to be higher than the default of max_poll_interval_ms
+        'request_timeout_ms': 30000,
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
@@ -353,7 +353,11 @@ class KafkaConsumer:
         'socks5_proxy': None,  # deprecated
         'kafka_client': KafkaNetClient,
     }
-    DEFAULT_SESSION_TIMEOUT_MS_0_9 = 30000
+    # Pre-0.10.1 brokers don't separate session_timeout_ms from
+    # max_poll_interval_ms; both default to this value when neither is
+    # user-supplied. Kept under request_timeout_ms (30s) so the strict
+    # request > session check below doesn't fire on the default path.
+    DEFAULT_SESSION_TIMEOUT_MS_0_9 = 25000
 
     def __init__(self, *topics, **configs):
         # Only check for extra config keys in top-level class

@@ -710,8 +710,18 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         log.debug("Sending JoinGroup (%s) to coordinator %s",
                   join_request, self.coordinator_id)
         join_send_time = time.monotonic()
+        # The broker holds JoinGroup open up to rebalance_timeout_ms
+        # (== max_poll_interval_ms) waiting for every member to join.
+        # Default request_timeout_ms (30s) would time out a healthy
+        # rebalance, so override per-request. Matches Java's
+        # joinGroupTimeoutMs = max(request_timeout_ms, rebalance_timeout_ms + 5s).
+        join_timeout_ms = max(
+            self.config['request_timeout_ms'],
+            self.config['max_poll_interval_ms'] + 5000,
+        )
         join_response = await self._manager.send(
-            join_request, node_id=self.coordinator_id)
+            join_request, node_id=self.coordinator_id,
+            request_timeout_ms=join_timeout_ms)
         # raises on error; mutates self._generation on success
         self._process_join_group_response(join_response, join_send_time)
 
