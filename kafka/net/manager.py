@@ -287,14 +287,14 @@ class KafkaConnectionManager:
                                      if not conn.init_future.is_done else None)
         return conn
 
-    def send(self, request, node_id=None):
+    def send(self, request, node_id=None, request_timeout_ms=None):
         node_id = node_id if node_id is not None else self.least_loaded_node()
         try:
             conn = self.get_connection(node_id)
         except Errors.NodeNotReadyError as e:
             return Future().failure(e)
         else:
-            return conn.send_request(request)
+            return conn.send_request(request, request_timeout_ms=request_timeout_ms)
 
     def least_loaded_node(self):
         """Choose the node with fewest outstanding requests, with fallbacks.
