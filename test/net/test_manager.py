@@ -42,6 +42,21 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net, api_version=(1, 0))
         assert m.broker_version_data == BrokerVersionData((1, 0))
 
+    def test_client_dns_lookup_default(self, net):
+        m = KafkaConnectionManager(net)
+        assert m.config['client_dns_lookup'] == 'use_all_dns_ips'
+        assert m.cluster.config['client_dns_lookup'] == 'use_all_dns_ips'
+
+    def test_client_dns_lookup_canonical_passthrough(self, net):
+        m = KafkaConnectionManager(net, client_dns_lookup='resolve_canonical_bootstrap_servers_only')
+        assert m.cluster.config['client_dns_lookup'] == 'resolve_canonical_bootstrap_servers_only'
+
+    def test_client_dns_lookup_invalid_rejected(self, net):
+        with pytest.raises(ValueError, match='client_dns_lookup'):
+            KafkaConnectionManager(net, client_dns_lookup='default')
+        with pytest.raises(ValueError, match='client_dns_lookup'):
+            KafkaConnectionManager(net, client_dns_lookup='garbage')
+
 
 class TestKafkaConnectionManagerProxyConfig:
     def test_proxy_url_default_none(self, net):

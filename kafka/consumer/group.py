@@ -311,6 +311,7 @@ class KafkaConsumer:
         'isolation_level': 'read_uncommitted',
         'allow_auto_create_topics': True,
         'metadata_max_age_ms': 5 * 60 * 1000,
+        'client_dns_lookup': 'use_all_dns_ips',
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'max_poll_records': 500,
         'max_poll_interval_ms': 300000,

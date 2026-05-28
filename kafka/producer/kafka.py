@@ -398,6 +398,7 @@ class KafkaProducer:
         'max_request_size': 1048576,
         'allow_auto_create_topics': True,
         'metadata_max_age_ms': 300000,
+        'client_dns_lookup': 'use_all_dns_ips',
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
         'receive_buffer_bytes': None,

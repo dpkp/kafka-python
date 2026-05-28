@@ -44,6 +44,7 @@ class ClusterMetadata:
         'metadata_max_age_ms': 300000,
         'bootstrap_servers': [],
         'allow_auto_create_topics': True,
+        'client_dns_lookup': 'use_all_dns_ips',
     }
 
     def __init__(self, **configs):
@@ -179,6 +180,9 @@ class ClusterMetadata:
     def _generate_bootstrap_brokers(self):
         # collect_hosts does not perform DNS, so we should be fine to re-use
         bootstrap_hosts = collect_hosts(self.config['bootstrap_servers'])
+
+        if self.config['client_dns_lookup'] == 'resolve_canonical_bootstrap_servers_only':
+            bootstrap_hosts = expand_to_canonical_bootstrap_hosts(bootstrap_hosts)
 
         brokers = {}
         for i, (host, port, _) in enumerate(bootstrap_hosts):
@@ -615,8 +619,9 @@ class ClusterMetadata:
 
 def collect_hosts(hosts, randomize=True):
     """
-    Collects a comma-separated set of hosts (host:port) and optionally
-    randomize the returned list.
+    Processes a list (or comma-separated string) of hosts strings (host:port)
+    and returns a list of (host, port, family) tuples.
+    Optionally randomizes the returned list.
     """
 
     if isinstance(hosts, str):
@@ -632,6 +637,38 @@ def collect_hosts(hosts, randomize=True):
     if randomize:
         random.shuffle(result)
     return result
+
+
+def expand_to_canonical_bootstrap_hosts(hosts):
+    """Expand each bootstrap entry to one entry per canonical FQDN.
+
+    Mirrors Java's ``client.dns.lookup=resolve_canonical_bootstrap_servers_only``:
+    forward-resolve each host, take the ``canonname`` reported by the resolver,
+    and emit one bootstrap entry per unique canonical name. Useful for
+    Kerberos round-robin DNS deployments where the principal must match each
+    individual broker FQDN.
+
+    If a host fails to resolve, the original entry is preserved verbatim --
+    matching Java's best-effort behaviour so bootstrap doesn't fail outright.
+    """
+    expanded = []
+    for host, port, afi in hosts:
+        try:
+            addrinfos = socket.getaddrinfo(
+                host, port, afi, socket.SOCK_STREAM, 0, socket.AI_CANONNAME)
+        except socket.gaierror as exc:
+            log.warning('Canonical bootstrap resolution failed for %s:%s: %s; '
+                        'keeping original entry', host, port, exc)
+            expanded.append((host, port, afi))
+            continue
+        seen = set()
+        for family, _socktype, _proto, canonname, _sockaddr in addrinfos:
+            name = canonname or host
+            if name in seen:
+                continue
+            seen.add(name)
+            expanded.append((name, port, family))
+    return expanded
 
 
 def _address_family(address):

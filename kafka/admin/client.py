@@ -169,6 +169,7 @@ class KafkaAdminClient(
         'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
+        'client_dns_lookup': 'use_all_dns_ips',
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,
         'ssl_check_hostname': True,

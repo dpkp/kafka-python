@@ -57,12 +57,20 @@ class KafkaConnectionManager:
         'metrics': None,
         'metric_group_prefix': '',
         'metadata_max_age_ms': 300000,
+        'client_dns_lookup': 'use_all_dns_ips',
     }
+    _VALID_DNS_LOOKUP_MODES = ('use_all_dns_ips', 'resolve_canonical_bootstrap_servers_only')
+
     def __init__(self, net, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        if self.config['client_dns_lookup'] not in self._VALID_DNS_LOOKUP_MODES:
+            raise ValueError(
+                "client_dns_lookup must be one of %s; got %r"
+                % (self._VALID_DNS_LOOKUP_MODES, self.config['client_dns_lookup']))
 
         if 'socks5_proxy' in configs:
             if self.config['proxy_url'] is None:
@@ -73,6 +81,7 @@ class KafkaConnectionManager:
         self.cluster = ClusterMetadata(
             bootstrap_servers=self.config['bootstrap_servers'],
             metadata_max_age_ms=self.config['metadata_max_age_ms'],
+            client_dns_lookup=self.config['client_dns_lookup'],
         )
         self.cluster.attach(self)
         self._conns = {}

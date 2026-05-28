@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kafka.cluster import collect_hosts
+from kafka.cluster import ClusterMetadata, collect_hosts, expand_to_canonical_bootstrap_hosts
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataResponse
 from kafka.structs import TopicPartition
@@ -239,6 +239,64 @@ class TestClusterMetadataCollectHosts:
             ('foo.bar', 1234, socket.AF_UNSPEC),
             ('fizz.buzz', 5678, socket.AF_UNSPEC),
         ])
+
+
+class TestExpandToCanonicalBootstrapHosts:
+    def test_expands_multi_ip_host_to_canonical_names(self):
+        addrinfos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-1.kafka.example.com', ('10.0.0.1', 9092)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-2.kafka.example.com', ('10.0.0.2', 9092)),
+        ]
+        with patch('socket.getaddrinfo', return_value=addrinfos):
+            expanded = expand_to_canonical_bootstrap_hosts([('kafka.example.com', 9092, socket.AF_UNSPEC)])
+        assert expanded == [
+            ('broker-1.kafka.example.com', 9092, socket.AF_INET),
+            ('broker-2.kafka.example.com', 9092, socket.AF_INET),
+        ]
+
+    def test_deduplicates_canonical_names(self):
+        addrinfos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-1.kafka.example.com', ('10.0.0.1', 9092)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-1.kafka.example.com', ('10.0.0.5', 9092)),
+        ]
+        with patch('socket.getaddrinfo', return_value=addrinfos):
+            expanded = expand_to_canonical_bootstrap_hosts([('kafka.example.com', 9092, socket.AF_UNSPEC)])
+        assert expanded == [('broker-1.kafka.example.com', 9092, socket.AF_INET)]
+
+    def test_falls_back_to_original_on_resolution_failure(self):
+        with patch('socket.getaddrinfo', side_effect=socket.gaierror('no such host')):
+            expanded = expand_to_canonical_bootstrap_hosts([('kafka.example.com', 9092, socket.AF_UNSPEC)])
+        assert expanded == [('kafka.example.com', 9092, socket.AF_UNSPEC)]
+
+    def test_missing_canonname_falls_back_to_input_host(self):
+        addrinfos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, '', ('10.0.0.1', 9092)),
+        ]
+        with patch('socket.getaddrinfo', return_value=addrinfos):
+            expanded = expand_to_canonical_bootstrap_hosts([('kafka.example.com', 9092, socket.AF_UNSPEC)])
+        assert expanded == [('kafka.example.com', 9092, socket.AF_INET)]
+
+
+class TestClusterMetadataClientDnsLookup:
+    def test_default_does_not_expand_bootstrap(self):
+        with patch('socket.getaddrinfo') as mock_gai:
+            cluster = ClusterMetadata(bootstrap_servers='kafka.example.com:9092')
+            assert mock_gai.call_count == 0
+        nodes = cluster.bootstrap_brokers()
+        assert [n.host for n in nodes] == ['kafka.example.com']
+
+    def test_canonical_mode_expands_bootstrap(self):
+        addrinfos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-1.kafka.example.com', ('10.0.0.1', 9092)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, 'broker-2.kafka.example.com', ('10.0.0.2', 9092)),
+        ]
+        with patch('socket.getaddrinfo', return_value=addrinfos):
+            cluster = ClusterMetadata(
+                bootstrap_servers='kafka.example.com:9092',
+                client_dns_lookup='resolve_canonical_bootstrap_servers_only')
+        nodes = cluster.bootstrap_brokers()
+        assert sorted(n.host for n in nodes) == [
+            'broker-1.kafka.example.com', 'broker-2.kafka.example.com']
 
 
 class TestClusterMetadataRefresh:
