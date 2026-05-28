@@ -747,13 +747,6 @@ class Fetcher:
         Raises:
             TopicAuthorizationFailedError: if any topic returned an auth error
         """
-        # TODO:
-        # v6 flexible
-        # v7 MAX_TIMESTAMP (KIP-734)
-        # v8 EARLIEST_LOCAL (KIP-405)
-        # v9 LATEST_TIERED (KIP-1005)
-        # v10 async remote (KIP-1075)
-        max_version = 5
         min_version = 1 if any(res[0] >= 0 for res in timestamps_and_epochs.values()) else 0
         min_version = max(min_version, ListOffsetsRequest.min_version_for_isolation_level(self._isolation_level))
         by_topic = collections.defaultdict(list)
@@ -768,7 +761,6 @@ class Fetcher:
             isolation_level=self._isolation_level,
             topics=list(by_topic.items()),
             min_version=min_version,
-            max_version=max_version,
         )
 
         log.debug("Sending ListOffsetRequest %s to broker %s", request, node_id)
