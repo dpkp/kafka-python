@@ -1522,6 +1522,95 @@ class TestKip429OnJoinPrepare:
         finally:
             coord.close(timeout_ms=0)
 
+    def test_cooperative_revokes_unsubscribed_topic_partitions_early(
+            self, mocker, client, metrics):
+        """Java parity: under COOPERATIVE, _on_join_prepare revokes
+        partitions whose topic is no longer in the subscription
+        *before* the JoinGroup, so the listener can commit those
+        offsets while we're still the recognised owner. Partitions
+        for still-subscribed topics stay in the assignment."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            # Member previously owned partitions for two topics; then
+            # the user changed the subscription to drop 'old'.
+            coord._subscription.subscribe(topics=['t', 'old'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1),
+                TopicPartition('old', 0), TopicPartition('old', 1)])
+            coord._subscription.change_subscription(['t'])
+            coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
+
+            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+
+            # Only the unsubscribed-topic partitions should be revoked,
+            # and only those should be dropped from the assignment.
+            listener.on_partitions_revoked.assert_called_once_with(
+                {TopicPartition('old', 0), TopicPartition('old', 1)})
+            assert coord._subscription.assigned_partitions() == {
+                TopicPartition('t', 0), TopicPartition('t', 1)}
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_pre_revoke_marks_pending_revocation(
+            self, mocker, client, metrics):
+        """KIP-429: the cooperative pre-revoke must mark the
+        about-to-be-revoked partitions as pending revocation BEFORE
+        invoking the listener so the fetcher won't pull records from
+        them while the listener is running. Verified by checking the
+        flag at listener-call time."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+
+            class Capturing(ConsumerRebalanceListener):
+                def __init__(self, sub):
+                    self.sub = sub
+                    self.fetchable_at_revoke = None
+                def on_partitions_revoked(self, revoked):
+                    self.fetchable_at_revoke = {
+                        tp: self.sub.is_fetchable(tp) for tp in revoked}
+                def on_partitions_assigned(self, assigned):
+                    pass
+
+            listener = Capturing(coord._subscription)
+            coord._subscription.subscribe(topics=['t', 'old'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0),
+                TopicPartition('old', 0)])
+            coord._subscription.change_subscription(['t'])
+            coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
+
+            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+
+            assert listener.fetchable_at_revoke == {
+                TopicPartition('old', 0): False}
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_no_unsubscribed_topics_skips_listener(
+            self, mocker, client, metrics):
+        """If every owned partition is still in the subscription,
+        nothing is revoked in the prepare phase and the listener is
+        not called - the diff is left for _on_join_complete_async."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1)])
+            coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
+
+            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+
+            listener.on_partitions_revoked.assert_not_called()
+            assert coord._subscription.assigned_partitions() == {
+                TopicPartition('t', 0), TopicPartition('t', 1)}
+        finally:
+            coord.close(timeout_ms=0)
+
 
 class TestKip429OnJoinComplete:
     """Under COOPERATIVE, _on_join_complete computes the owned-vs-

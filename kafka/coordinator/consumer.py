@@ -517,6 +517,7 @@ class ConsumerCoordinator(BaseCoordinator):
             if lost:
                 log.info("Group %s lost membership; forcibly revoking %s",
                          self.group_id, lost)
+                self._subscription.mark_pending_revocation(lost)
                 if self._subscription.rebalance_listener:
                     try:
                         await self._invoke_rebalance_listener_async(
@@ -560,17 +561,19 @@ class ConsumerCoordinator(BaseCoordinator):
         # replaces it via assign_from_subscribed - this listener call
         # is a *notification*, not the actual state mutation.
         #
-        # Under COOPERATIVE we skip the notification entirely: members
-        # keep their assignment across JoinGroup and only the
-        # individual partitions that actually moved are revoked in
-        # _on_join_complete_async (computed from the owned-vs-assigned
-        # diff).
+        # Under COOPERATIVE we keep most of the assignment across
+        # JoinGroup, but partitions whose topic is no longer in the
+        # subscription (e.g. the user just unsubscribed from a topic)
+        # are revoked here, before the JoinGroup, so the listener
+        # gets to commit those offsets while we're still the
+        # recognised owner.
         if self._rebalance_protocol == RebalanceProtocol.EAGER:
             log.info("Revoking previously assigned partitions %s for group %s",
                      self._subscription.assigned_partitions(), self.group_id)
             if self._subscription.rebalance_listener:
                 try:
                     revoked = set(self._subscription.assigned_partitions())
+                    self._subscription.mark_pending_revocation(revoked)
                     await self._invoke_rebalance_listener_async(
                         'on_partitions_revoked', revoked)
                 except Exception as exc:
@@ -578,6 +581,25 @@ class ConsumerCoordinator(BaseCoordinator):
                                   " for group %s failed on_partitions_revoked",
                                   self._subscription.rebalance_listener, self.group_id)
                     listener_exc = exc
+
+        elif self._rebalance_protocol == RebalanceProtocol.COOPERATIVE:
+            owned = set(self._subscription.assigned_partitions())
+            subscribed_topics = self._subscription.subscription or set()
+            revoked = {tp for tp in owned if tp.topic not in subscribed_topics}
+            if revoked:
+                log.info("Cooperative pre-rebalance for group %s: revoking %s"
+                         " (no longer in subscription)", self.group_id, revoked)
+                self._subscription.mark_pending_revocation(revoked)
+                if self._subscription.rebalance_listener:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_revoked', revoked)
+                    except Exception as exc:
+                        log.exception("User provided subscription rebalance listener %s"
+                                      " for group %s failed on_partitions_revoked",
+                                      self._subscription.rebalance_listener, self.group_id)
+                        listener_exc = exc
+                self._subscription.assign_from_subscribed(sorted(owned - revoked))
 
         self._is_leader = False
         self._subscription.reset_group_subscription()

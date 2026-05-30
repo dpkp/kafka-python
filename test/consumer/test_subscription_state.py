@@ -107,6 +107,40 @@ class TestAssignFromSubscribed:
         # New partition isn't paused by default.
         assert not s.is_paused(TopicPartition('foo', 1))
 
+    def test_mark_pending_revocation_blocks_fetches(self):
+        """KIP-429: a partition flagged for pending revocation must
+        report not-fetchable so the fetcher skips it while a revoke
+        listener is running."""
+        s = self._subscribed()
+        s.assign_from_subscribed([TopicPartition('foo', 0)])
+        # Give it a valid position so is_fetchable would otherwise be True.
+        s.assignment[TopicPartition('foo', 0)].seek(
+            OffsetAndMetadata(offset=0, metadata='', leader_epoch=-1))
+        assert s.is_fetchable(TopicPartition('foo', 0))
+
+        s.mark_pending_revocation({TopicPartition('foo', 0)})
+        assert not s.is_fetchable(TopicPartition('foo', 0))
+        # The pending-revocation flag is dropped along with the state
+        # object on the next assign_from_subscribed that excludes the
+        # partition (single-shot).
+        s.assign_from_subscribed([TopicPartition('foo', 1)])
+        s.assign_from_subscribed([
+            TopicPartition('foo', 0), TopicPartition('foo', 1)])
+        s.assignment[TopicPartition('foo', 0)].seek(
+            OffsetAndMetadata(offset=0, metadata='', leader_epoch=-1))
+        assert s.is_fetchable(TopicPartition('foo', 0))
+
+    def test_mark_pending_revocation_ignores_unknown_partition(self):
+        """mark_pending_revocation must not raise if a partition isn't
+        currently assigned - the assignment may have shifted between
+        the caller's snapshot and the call."""
+        s = self._subscribed()
+        s.assign_from_subscribed([TopicPartition('foo', 0)])
+        s.mark_pending_revocation({
+            TopicPartition('foo', 0), TopicPartition('foo', 99)})
+        # Still gates the assigned one.
+        assert s.assignment[TopicPartition('foo', 0)]._pending_revocation is True
+
     def test_preserves_preferred_read_replica_on_kept_partition(self):
         s = self._subscribed()
         s.assign_from_subscribed([TopicPartition('foo', 0)])
