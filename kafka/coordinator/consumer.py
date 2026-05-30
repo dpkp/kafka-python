@@ -303,6 +303,14 @@ class ConsumerCoordinator(BaseCoordinator):
         # the newly-added ones. If we lost any partitions, request a
         # follow-up rebalance so the revoked partitions can land on
         # their intended new owner.
+        # Listener hook exceptions are captured, cleanup completes,
+        # and we re-raise at the end as a KafkaError.
+        # In the cooperative branch both listeners (revoked + assigned)
+        # are invoked even if the first throws - matches Java's
+        # invokePartitionsRevoked / invokePartitionsAssigned pattern
+        # where the later call overwrites the captured exception.
+        listener_exc = None
+
         if self._rebalance_protocol == RebalanceProtocol.COOPERATIVE:
             currently_owned = set(self._subscription.assigned_partitions())
             revoked = currently_owned - new_assigned
@@ -329,22 +337,24 @@ class ConsumerCoordinator(BaseCoordinator):
                     try:
                         await self._invoke_rebalance_listener_async(
                             'on_partitions_revoked', revoked)
-                    except Exception:
+                    except Exception as exc:
                         log.exception(
                             "User provided rebalance listener %s for group %s"
                             " failed on_partitions_revoked: %s",
                             self._subscription.rebalance_listener,
                             self.group_id, revoked)
+                        listener_exc = exc
                 if added:
                     try:
                         await self._invoke_rebalance_listener_async(
                             'on_partitions_assigned', added)
-                    except Exception:
+                    except Exception as exc:
                         log.exception(
                             "User provided rebalance listener %s for group %s"
                             " failed on_partitions_assigned: %s",
                             self._subscription.rebalance_listener,
                             self.group_id, added)
+                        listener_exc = exc
 
             if revoked:
                 # Round 2: the partitions we just revoked should now
@@ -355,6 +365,10 @@ class ConsumerCoordinator(BaseCoordinator):
                          " complete cooperative move of %d partition(s)",
                          self.group_id, len(revoked))
                 self.request_rejoin()
+
+            if listener_exc is not None:
+                raise Errors.KafkaError(
+                    "User rebalance callback throws an error") from listener_exc
             return
 
         # EAGER mode (legacy): replace the full assignment and invoke
@@ -383,11 +397,16 @@ class ConsumerCoordinator(BaseCoordinator):
             try:
                 await self._invoke_rebalance_listener_async(
                     'on_partitions_assigned', assigned)
-            except Exception:
+            except Exception as exc:
                 log.exception("User provided rebalance listener %s for group %s"
                               " failed on partition assignment: %s",
                               self._subscription.rebalance_listener, self.group_id,
                               assigned)
+                listener_exc = exc
+
+        if listener_exc is not None:
+            raise Errors.KafkaError(
+                "User rebalance callback throws an error") from listener_exc
 
     def poll(self, timeout_ms=None):
         """
@@ -488,22 +507,32 @@ class ConsumerCoordinator(BaseCoordinator):
         return group_assignment
 
     async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
+        # Exceptions raised by user rebalance-listener callbacks are captured
+        # here, do not abort the cleanup, and are re-raised at the end as a
+        # KafkaError so the caller (consumer.poll()) sees them. Matches Java.
+        listener_exc = None
+
         if self._generation.is_lost():
             lost = set(self._subscription.assigned_partitions())
             if lost:
                 log.info("Group %s lost membership; forcibly revoking %s",
                          self.group_id, lost)
+                self._subscription.mark_pending_revocation(lost)
                 if self._subscription.rebalance_listener:
                     try:
                         await self._invoke_rebalance_listener_async(
                             'on_partitions_lost', lost)
-                    except Exception:
+                    except Exception as exc:
                         log.exception("User provided subscription rebalance listener %s"
                                       " for group %s failed on_partitions_lost",
                                       self._subscription.rebalance_listener, self.group_id)
+                        listener_exc = exc
                 self._subscription.assign_from_subscribed([])
                 self._is_leader = False
                 self._subscription.reset_group_subscription()
+                if listener_exc is not None:
+                    raise Errors.KafkaError(
+                        "User rebalance callback throws an error") from listener_exc
                 return
             # else: generation is lost but we have no partitions to
             # lose - this is the initial-join case. Fall through to the
@@ -532,26 +561,52 @@ class ConsumerCoordinator(BaseCoordinator):
         # replaces it via assign_from_subscribed - this listener call
         # is a *notification*, not the actual state mutation.
         #
-        # Under COOPERATIVE we skip the notification entirely: members
-        # keep their assignment across JoinGroup and only the
-        # individual partitions that actually moved are revoked in
-        # _on_join_complete_async (computed from the owned-vs-assigned
-        # diff).
+        # Under COOPERATIVE we keep most of the assignment across
+        # JoinGroup, but partitions whose topic is no longer in the
+        # subscription (e.g. the user just unsubscribed from a topic)
+        # are revoked here, before the JoinGroup, so the listener
+        # gets to commit those offsets while we're still the
+        # recognised owner.
         if self._rebalance_protocol == RebalanceProtocol.EAGER:
             log.info("Revoking previously assigned partitions %s for group %s",
                      self._subscription.assigned_partitions(), self.group_id)
             if self._subscription.rebalance_listener:
                 try:
                     revoked = set(self._subscription.assigned_partitions())
+                    self._subscription.mark_pending_revocation(revoked)
                     await self._invoke_rebalance_listener_async(
                         'on_partitions_revoked', revoked)
-                except Exception:
+                except Exception as exc:
                     log.exception("User provided subscription rebalance listener %s"
                                   " for group %s failed on_partitions_revoked",
                                   self._subscription.rebalance_listener, self.group_id)
+                    listener_exc = exc
+
+        elif self._rebalance_protocol == RebalanceProtocol.COOPERATIVE:
+            owned = set(self._subscription.assigned_partitions())
+            subscribed_topics = self._subscription.subscription or set()
+            revoked = {tp for tp in owned if tp.topic not in subscribed_topics}
+            if revoked:
+                log.info("Cooperative pre-rebalance for group %s: revoking %s"
+                         " (no longer in subscription)", self.group_id, revoked)
+                self._subscription.mark_pending_revocation(revoked)
+                if self._subscription.rebalance_listener:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_revoked', revoked)
+                    except Exception as exc:
+                        log.exception("User provided subscription rebalance listener %s"
+                                      " for group %s failed on_partitions_revoked",
+                                      self._subscription.rebalance_listener, self.group_id)
+                        listener_exc = exc
+                self._subscription.assign_from_subscribed(sorted(owned - revoked))
 
         self._is_leader = False
         self._subscription.reset_group_subscription()
+
+        if listener_exc is not None:
+            raise Errors.KafkaError(
+                "User rebalance callback throws an error") from listener_exc
 
     def need_rejoin(self):
         """Check whether the group should be rejoined

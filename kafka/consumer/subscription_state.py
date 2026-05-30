@@ -508,6 +508,24 @@ class SubscriptionState:
         self.assignment[partition].resume()
 
     @synchronized
+    def mark_pending_revocation(self, partitions):
+        """KIP-429: gate ``is_fetchable()`` for each partition's state
+        so the fetcher would skip them while an on_partitions_revoked /
+        on_partitions_lost listener runs. Called immediately before
+        invoking the listener. The flag is single-shot - the
+        surrounding ``assign_from_subscribed`` drops the
+        ``TopicPartitionState`` for revoked partitions when the
+        listener returns.
+
+        Currently a no-op while the user thread is blocked in ``_net.run``
+        during rebalance and so the only path that calls ``send_fetches``
+        cannot fire. Kept as a defensive gate in case this changes in
+        the future."""
+        for tp in partitions:
+            if tp in self.assignment:
+                self.assignment[tp].mark_pending_revocation()
+
+    @synchronized
     def reset_failed(self, partitions, next_retry_time):
         for partition in partitions:
             self.assignment[partition].reset_failed(next_retry_time)
@@ -544,6 +562,13 @@ class TopicPartitionState:
         # replica-related errors so the next fetch goes to the leader.
         self._preferred_read_replica = None
         self._preferred_read_replica_expiration = None
+        # KIP-429 (Java parity): set while an on_partitions_revoked /
+        # on_partitions_lost listener is running for this partition.
+        # Gates fetches so records aren't pulled for a partition the
+        # user is in the middle of releasing. The TopicPartitionState
+        # is dropped from the assignment when the listener returns,
+        # so the flag only matters for the listener-call window.
+        self._pending_revocation = False
 
     def _set_position(self, offset):
         assert self.has_valid_position, 'Valid position required'
@@ -597,8 +622,18 @@ class TopicPartitionState:
     def resume(self):
         self.paused = False
 
+    def mark_pending_revocation(self):
+        """KIP-429: gate fetches while an on_partitions_revoked /
+        on_partitions_lost listener is in progress for this partition.
+        Single-shot: the surrounding ``assign_from_subscribed`` drops
+        the state object once the listener returns."""
+        self._pending_revocation = True
+
     def is_fetchable(self):
-        return not self.paused and self.has_valid_position and not self._awaiting_validation
+        return (not self.paused
+                and not self._pending_revocation
+                and self.has_valid_position
+                and not self._awaiting_validation)
 
     def preferred_read_replica(self):
         """Return the currently-cached preferred read replica (KIP-392),
