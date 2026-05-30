@@ -85,6 +85,9 @@ class KafkaAdminClient(
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
+        receive_message_max_bytes (int): Maximum allowed network frame size.
+            Used to avoid OOM when decoding malformed network message header.
+            Default: 1000000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). Java client defaults to 32768.
@@ -162,11 +165,10 @@ class KafkaAdminClient(
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'max_in_flight_requests_per_connection': 5,
+        'receive_message_max_bytes': 1000000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
-        'sock_chunk_bytes': 4096,  # undocumented experimental option
-        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'retry_backoff_ms': 100,
         'metadata_max_age_ms': 300000,
         'client_dns_lookup': 'use_all_dns_ips',

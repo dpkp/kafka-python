@@ -1,3 +1,5 @@
+import socket
+import struct
 import time
 from unittest.mock import MagicMock, patch
 
@@ -6,6 +8,7 @@ import pytest
 from kafka.future import Future
 from kafka.net.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
+from kafka.net.transport import KafkaTCPTransport
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.parser import KafkaProtocol
@@ -20,6 +23,19 @@ def net():
 @pytest.fixture
 def connection(net):
     return KafkaConnection(net, node_id='test-0')
+
+
+@pytest.fixture
+def socketpair():
+    rsock, wsock = socket.socketpair()
+    rsock.setblocking(False)
+    wsock.setblocking(False)
+    yield rsock, wsock
+    for sock in (rsock, wsock):
+        try:
+            sock.close()
+        except OSError:
+            pass
 
 
 class TestKafkaConnectionInit:
@@ -253,6 +269,7 @@ class TestKafkaConnectionConnectionLifecycle:
     def test_connection_made(self, connection):
         transport = MagicMock()
         transport.get_protocol.return_value = None
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
         connection.connection_made(transport)
         assert connection.transport is transport
         assert connection.initializing is True
@@ -577,3 +594,52 @@ class TestKafkaConnectionSasl:
 
         captured = self._drive_handshake_with_recording_mechanism(net, conn)
         assert captured['host'] == '10.0.0.1'
+
+
+class TestKafkaConnectionInvalidReceive:
+    """An over-large/negative frame size makes the parser raise
+    InvalidReceiveError from inside data_received. On a connected
+    connection that must tear the connection down (the transport catches
+    the KafkaProtocolError and aborts), rather than leaving a wedged,
+    half-read connection in place."""
+
+    def _make_connected(self, net, transport, max_frame_bytes=1000):
+        conn = KafkaConnection(net, node_id='test-0')
+        conn.transport = transport
+        conn.connected = True
+        conn.initializing = False
+        conn._init_future.success(True)
+        conn.parser = KafkaProtocol(
+            client_id='test', receive_message_max_bytes=max_frame_bytes)
+        transport.set_protocol(conn)
+        return conn
+
+    def test_oversized_frame_closes_connection(self, net, socketpair):
+        rsock, wsock = socketpair
+        transport = KafkaTCPTransport(net, wsock)
+        conn = self._make_connected(net, transport, max_frame_bytes=1000)
+        assert not conn.closed
+
+        transport.resume_reading()
+        # 4-byte length prefix declaring a 2000-byte frame, over the 1000
+        # byte limit -> parser raises InvalidReceiveError on the header.
+        rsock.send(struct.pack('>i', 2000))
+        net.poll(timeout_ms=1000, future=conn.close_future)
+
+        assert conn.closed
+        assert conn.close_future.failed()
+        assert isinstance(conn.close_future.exception, Errors.InvalidReceiveError)
+
+    def test_negative_frame_closes_connection(self, net, socketpair):
+        rsock, wsock = socketpair
+        transport = KafkaTCPTransport(net, wsock)
+        conn = self._make_connected(net, transport)
+        assert not conn.closed
+
+        transport.resume_reading()
+        rsock.send(struct.pack('>i', -1))
+        net.poll(timeout_ms=1000, future=conn.close_future)
+
+        assert conn.closed
+        assert conn.close_future.failed()
+        assert isinstance(conn.close_future.exception, Errors.InvalidReceiveError)

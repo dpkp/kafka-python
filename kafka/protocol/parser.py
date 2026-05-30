@@ -19,16 +19,14 @@ class KafkaProtocol:
 
     Arguments:
         client_id (str): identifier string to be included in each request
-        api_version (tuple): Optional tuple to specify api_version to use.
-            Currently only used to check for 0.8.2 protocol quirks, but
-            may be used for more in the future.
+        ident (str): Optional log-prefix identifier.
+        receive_message_max_bytes (int): Maximum allowed message frame size.
+            Default: 100000000 (100MB).
     """
-    def __init__(self, client_id=None, api_version=None, ident=''):
-        self._ident = ident
-        if client_id is None:
-            client_id = self._gen_client_id()
-        self._client_id = client_id
-        self._api_version = api_version
+    def __init__(self, **config):
+        self._ident = config.get('ident', '')
+        self._client_id = config.get('client_id', self._gen_client_id())
+        self._max_frame_size = config.get('receive_message_max_bytes', 100000000)
         self._correlation_id = 0
         self._header = KafkaBytes(4)
         self._rbuffer = None
@@ -114,6 +112,7 @@ class KafkaProtocol:
                 if self._header.tell() == 4:
                     self._header.seek(0)
                     nbytes = Int32.decode(self._header)
+                    self._validate_frame_size(nbytes)
                     # reset buffer and switch state to receiving payload bytes
                     self._rbuffer = KafkaBytes(nbytes)
                     self._receiving = True
@@ -141,6 +140,10 @@ class KafkaProtocol:
                 self._reset_buffer()
         return responses
 
+    def _validate_frame_size(self, nbytes):
+        if nbytes < 0 or nbytes > self._max_frame_size:
+            raise Errors.InvalidReceiveError('Invalid frame length: %d' % nbytes)
+
     def _process_response(self, read_buffer):
         if not self.in_flight_requests:
             raise Errors.CorrelationIdError('No in-flight-request found for server response')
@@ -153,12 +156,10 @@ class KafkaProtocol:
             raise Errors.KafkaProtocolError('Unable to find response type for api %d v%d' % (header.api_key, header.api_version))
         response_header = response_type.parse_header(read_buffer)
         recv_correlation_id = response_header.correlation_id
-        # 0.8.2 quirk
-        if (recv_correlation_id == 0 and
-            correlation_id != 0 and
-            response_type is FindCoordinatorResponse[0] and
-            (self._api_version == (0, 8, 2) or self._api_version is None)):
-            log.warning('Kafka 0.8.2 quirk -- GroupCoordinatorResponse'
+        # ignore correlation id mismatch for 0.8.2 quirk
+        if (recv_correlation_id == 0 and correlation_id != 0 and
+            response_type is FindCoordinatorResponse and header.api_version == 0):
+            log.warning('Kafka 0.8.2 quirk -- FindCoordinatorResponse'
                         ' Correlation ID does not match request. This'
                         ' should go away once at least one topic has been'
                         ' initialized on the broker.')

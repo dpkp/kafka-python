@@ -23,8 +23,9 @@ class KafkaConnection:
         'client_id': 'kafka-python-' + __version__,
         'client_software_name': 'kafka-python',
         'client_software_version': __version__,
-        'request_timeout_ms': 30000,
         'max_in_flight_requests_per_connection': 5,
+        'receive_message_max_bytes': 1000000,
+        'request_timeout_ms': 30000,
         'security_protocol': 'PLAINTEXT',
         'sasl_mechanism': None,
         'sasl_plain_username': None,
@@ -263,7 +264,11 @@ class KafkaConnection:
             self.transport.set_protocol(self)
         self.initializing = True
         self.transport.resume_reading()
-        self.parser = KafkaProtocol(client_id=self.config['client_id'])
+        log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.getPeer())
+        self.parser = KafkaProtocol(
+            client_id=self.config['client_id'],
+            receive_message_max_bytes=self.config['receive_message_max_bytes'],
+            ident=log_prefix)
         self.net.call_soon(self._check_version)
 
     def pause(self, v):
