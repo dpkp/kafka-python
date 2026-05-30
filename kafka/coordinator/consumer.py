@@ -944,7 +944,10 @@ class ConsumerCoordinator(BaseCoordinator):
                     error = error_type(self.group_id)
                     log.warning("OffsetCommit for group %s failed: %s",
                                 self.group_id, error)
-                    self.reset_generation()
+                    if error_type is Errors.IllegalGenerationError:
+                        self.reset_generation(member_id=self._generation.member_id)
+                    else:
+                        self.reset_generation()
                     raise Errors.CommitFailedError(error_type())
                 else:
                     log.error("Group %s failed to commit partition %s at offset"
