@@ -1,6 +1,8 @@
+import struct
+
 import pytest
 
-from kafka.errors import KafkaProtocolError, CorrelationIdError
+from kafka.errors import KafkaProtocolError, CorrelationIdError, InvalidReceiveError
 from kafka.protocol.parser import KafkaProtocol
 from kafka.protocol.metadata import (
     ApiVersionsRequest, ApiVersionsResponse,
@@ -265,3 +267,40 @@ def test_parser_error():
     bad_bytes = b''.join([resp_bytes[0:3], b'\x0a', resp_bytes[4:]])
     with pytest.raises(KafkaProtocolError):
         responses = parser.receive_bytes(bad_bytes)
+
+
+def test_oversized_frame_raises_invalid_receive():
+    parser = KafkaProtocol(client_id='test-parser-error', receive_message_max_bytes=1000)
+    # 4-byte length prefix declaring a frame larger than the configured max.
+    with pytest.raises(InvalidReceiveError):
+        parser.receive_bytes(struct.pack('>i', 1001))
+
+
+def test_negative_frame_size_raises_invalid_receive():
+    parser = KafkaProtocol(client_id='test-parser-error', receive_message_max_bytes=1000)
+    # A negative length prefix can only come from a malformed/hostile frame.
+    with pytest.raises(InvalidReceiveError):
+        parser.receive_bytes(struct.pack('>i', -1))
+
+
+def test_frame_at_max_size_is_accepted():
+    parser = KafkaProtocol(client_id='test-parser-error', receive_message_max_bytes=1000)
+    # The bound is inclusive: a frame exactly at the max passes validation
+    # and the parser transitions to receiving the payload (no exception).
+    parser.receive_bytes(struct.pack('>i', 1000))
+    assert parser._receiving
+
+
+@pytest.mark.parametrize('nbytes,valid', [
+    (-1, False),
+    (0, True),
+    (1000, True),
+    (1001, False),
+])
+def test_validate_frame_size_bounds(nbytes, valid):
+    parser = KafkaProtocol(client_id='test-parser-error', receive_message_max_bytes=1000)
+    if valid:
+        parser._validate_frame_size(nbytes)
+    else:
+        with pytest.raises(InvalidReceiveError):
+            parser._validate_frame_size(nbytes)
