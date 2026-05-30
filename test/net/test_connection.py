@@ -269,6 +269,7 @@ class TestKafkaConnectionConnectionLifecycle:
     def test_connection_made(self, connection):
         transport = MagicMock()
         transport.get_protocol.return_value = None
+        transport.getPeer.return_value = ('127.0.0.1', 9092)
         connection.connection_made(transport)
         assert connection.transport is transport
         assert connection.initializing is True
