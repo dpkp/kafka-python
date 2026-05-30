@@ -770,6 +770,26 @@ class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
         """
         pass
 
+    def on_partitions_lost(self, lost):
+        """KIP-429: called when the consumer has been forcibly removed
+        from the group (heartbeat session expiry, ``UnknownMemberIdError``,
+        ``IllegalGenerationError``, ``FencedInstanceIdError``) and the
+        partitions cannot be cleanly committed. ``on_partitions_revoked``
+        implies the user *can* still commit; ``on_partitions_lost`` makes
+        explicit that the member has been booted and any in-flight state
+        for these partitions should be discarded.
+
+        Default behaviour is to delegate to ``on_partitions_revoked`` so
+        listeners written before KIP-429 keep working unchanged. Override
+        for cleanup that is specific to the forced-eviction case (e.g.
+        skipping a commit attempt that will fail anyway).
+
+        Arguments:
+            lost (set of TopicPartition): the partitions that were
+                assigned but have been lost due to forced eviction.
+        """
+        return self.on_partitions_revoked(lost)
+
 
 class AsyncConsumerRebalanceListener(metaclass=abc.ABCMeta):
     """
@@ -814,3 +834,15 @@ class AsyncConsumerRebalanceListener(metaclass=abc.ABCMeta):
                 assigned).
         """
         pass
+
+    async def on_partitions_lost(self, lost):
+        """Async variant of
+        :meth:`ConsumerRebalanceListener.on_partitions_lost`. Default
+        implementation awaits ``on_partitions_revoked`` for backward
+        compatibility with listeners written before KIP-429.
+
+        Arguments:
+            lost (set of TopicPartition): the partitions that were
+                assigned but have been lost due to forced eviction.
+        """
+        await self.on_partitions_revoked(lost)

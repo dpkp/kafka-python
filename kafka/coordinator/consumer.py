@@ -488,6 +488,27 @@ class ConsumerCoordinator(BaseCoordinator):
         return group_assignment
 
     async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
+        if self._generation.is_lost():
+            lost = set(self._subscription.assigned_partitions())
+            if lost:
+                log.info("Group %s lost membership; forcibly revoking %s",
+                         self.group_id, lost)
+                if self._subscription.rebalance_listener:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_lost', lost)
+                    except Exception:
+                        log.exception("User provided subscription rebalance listener %s"
+                                      " for group %s failed on_partitions_lost",
+                                      self._subscription.rebalance_listener, self.group_id)
+                self._subscription.assign_from_subscribed([])
+                self._is_leader = False
+                self._subscription.reset_group_subscription()
+                return
+            # else: generation is lost but we have no partitions to
+            # lose - this is the initial-join case. Fall through to the
+            # normal auto-commit + EAGER/COOPERATIVE path.
+
         # commit offsets prior to rebalance if auto-commit enabled
         if self.config['enable_auto_commit']:
             try:

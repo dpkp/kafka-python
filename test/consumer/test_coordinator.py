@@ -1477,7 +1477,10 @@ class TestKip429OnJoinPrepare:
         coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
         coordinator._subscription.assign_from_subscribed(
             [TopicPartition('foobar', 0), TopicPartition('foobar', 1)])
-        coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+        # Real generation - otherwise is_lost() trips and the lost
+        # branch fires on_partitions_lost instead.
+        coordinator._generation = Generation(42, 'member-foo', 'range')
+        coordinator._manager.run(coordinator._on_join_prepare_async, 42, 'member-foo')
         listener.on_partitions_revoked.assert_called_once_with(
             {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
 
@@ -1489,7 +1492,10 @@ class TestKip429OnJoinPrepare:
             coord._subscription.subscribe(topics=['foobar'], listener=listener)
             coord._subscription.assign_from_subscribed(
                 [TopicPartition('foobar', 0), TopicPartition('foobar', 1)])
-            coord._manager.run(coord._on_join_prepare_async, 0, 'member-foo')
+            # Real generation - otherwise is_lost() trips and the lost
+            # branch fires on_partitions_lost instead.
+            coord._generation = Generation(42, 'member-foo', 'cooperative-sticky')
+            coord._manager.run(coord._on_join_prepare_async, 42, 'member-foo')
             # KIP-429: no global on_partitions_revoked in the prepare
             # phase - individual partitions are revoked later in
             # _on_join_complete based on the diff.
@@ -1672,6 +1678,233 @@ class TestKip429OnJoinComplete:
             assert set(coord._subscription.assigned_partitions()) == {TopicPartition('t', 0)}
         finally:
             coord.close(timeout_ms=0)
+
+
+class TestKip429OnPartitionsLost:
+    """When the broker forcibly removes the member (heartbeat /
+    commit / sync UnknownMemberId, IllegalGeneration, or fenced
+    instance) the next rebalance must surface on_partitions_lost
+    instead of on_partitions_revoked - the prior commit attempts
+    have already failed, so the user can't safely commit on the
+    way out."""
+
+    def test_default_listener_falls_through_to_revoked(self):
+        """ConsumerRebalanceListener.on_partitions_lost defaults to
+        on_partitions_revoked so listeners written before KIP-429
+        keep working."""
+        calls = []
+
+        class OldListener(ConsumerRebalanceListener):
+            def on_partitions_revoked(self, revoked):
+                calls.append(('revoked', revoked))
+            def on_partitions_assigned(self, assigned):
+                calls.append(('assigned', assigned))
+
+        lost = {TopicPartition('t', 0)}
+        OldListener().on_partitions_lost(lost)
+        assert calls == [('revoked', lost)]
+
+    def test_async_default_listener_falls_through_to_revoked(self, coordinator):
+        """Same default for the async listener: on_partitions_lost
+        awaits on_partitions_revoked."""
+        calls = []
+
+        class OldAsync(AsyncConsumerRebalanceListener):
+            async def on_partitions_revoked(self, revoked):
+                calls.append(('revoked', revoked))
+            async def on_partitions_assigned(self, assigned):
+                calls.append(('assigned', assigned))
+
+        lost = {TopicPartition('t', 0)}
+        coordinator._manager.run(OldAsync().on_partitions_lost, lost)
+        assert calls == [('revoked', lost)]
+
+    def test_generation_is_lost(self):
+        """Generation.is_lost() mirrors Java's NO_GENERATION-or-empty-memberId
+        check used by ConsumerCoordinator.onJoinPrepare for KIP-429."""
+        from kafka.coordinator.base import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
+        # The sentinel itself is lost by construction.
+        assert Generation.NO_GENERATION.is_lost() is True
+        # A real generation is not lost.
+        assert Generation(42, 'mbr-1', 'range').is_lost() is False
+        # MemberIdRequiredError retry shape: real member id but generation
+        # not yet assigned. Java's OR-check trips this; lost branch is a
+        # no-op because assigned_partitions is empty at this point.
+        assert Generation(DEFAULT_GENERATION_ID, 'mbr-1', None).is_lost() is True
+        # Defensive: a real generation_id with a cleared member_id - shouldn't
+        # happen in practice but the check should still trip.
+        assert Generation(42, UNKNOWN_MEMBER_ID, 'range').is_lost() is True
+
+    def test_reset_generation_marks_generation_lost(self, coordinator):
+        """reset_generation() always leaves the live Generation in a
+        lost state; ConsumerCoordinator reads that in
+        _on_join_prepare_async to fire on_partitions_lost."""
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        assert coordinator._generation.is_lost() is False
+        coordinator.reset_generation()
+        assert coordinator._generation.is_lost() is True
+
+    def test_on_join_prepare_fires_lost_and_clears_assignment(
+            self, mocker, coordinator):
+        """After a forced eviction, _on_join_prepare_async invokes
+        on_partitions_lost with the prior assignment, clears local
+        assignment, and skips the eager on_partitions_revoked path."""
+        coordinator.config['enable_auto_commit'] = False
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([
+            TopicPartition('t', 0), TopicPartition('t', 1)])
+        # Simulate the broker booting us.
+        coordinator.reset_generation()
+        assert coordinator._generation.is_lost() is True
+
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 0, 'member-foo')
+
+        listener.on_partitions_lost.assert_called_once_with(
+            {TopicPartition('t', 0), TopicPartition('t', 1)})
+        listener.on_partitions_revoked.assert_not_called()
+        # Local assignment is cleared so subsequent code doesn't keep
+        # treating the lost partitions as owned.
+        assert coordinator._subscription.assigned_partitions() == set()
+
+    def test_on_join_prepare_skips_auto_commit_when_lost(
+            self, mocker, coordinator):
+        """A forced eviction means the pre-rebalance commit would fail
+        with the same error; skip it instead of logging the spurious
+        'likely duplicate delivery' warning."""
+        coordinator.config['enable_auto_commit'] = True
+        coordinator._subscription.subscribe(topics=['t'])
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        commit_spy = mocker.patch.object(
+            coordinator, '_commit_offsets_sync_async')
+        coordinator.reset_generation()
+
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 0, 'member-foo')
+
+        commit_spy.assert_not_called()
+
+    def test_on_join_prepare_after_lost_then_normal(
+            self, mocker, coordinator):
+        """A subsequent rebalance against a real (non-lost) generation
+        runs the normal prepare path. In production the rejoin that
+        follows the lost path lands a real generation in
+        _process_join_group_response; here we install one directly."""
+        coordinator.config['enable_auto_commit'] = False
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator.reset_generation()
+
+        # First call: lost path.
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 0, 'member-foo')
+        # Re-assign and install a real generation; the next prepare
+        # should fire revoked, not lost.
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        listener.reset_mock()
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 42, 'mbr-1')
+        listener.on_partitions_lost.assert_not_called()
+        listener.on_partitions_revoked.assert_called_once_with(
+            {TopicPartition('t', 0)})
+
+    def test_heartbeat_illegal_generation_marks_generation_lost(self, coordinator):
+        """Heartbeat IllegalGenerationError forces reset_generation; the
+        live generation must trip is_lost() so the next rebalance fires
+        on_partitions_lost."""
+        from kafka.protocol.consumer import HeartbeatResponse
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        # Build a HeartbeatResponse with IllegalGenerationError code.
+        response = HeartbeatResponse[0](Errors.IllegalGenerationError.errno)
+        with pytest.raises(Errors.IllegalGenerationError):
+            coordinator._handle_heartbeat_response(response, time.monotonic())
+        assert coordinator._generation.is_lost() is True
+        assert coordinator.state == MemberState.UNJOINED
+
+    def test_heartbeat_unknown_member_id_marks_generation_lost(self, coordinator):
+        from kafka.protocol.consumer import HeartbeatResponse
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = HeartbeatResponse[0](Errors.UnknownMemberIdError.errno)
+        with pytest.raises(Errors.UnknownMemberIdError):
+            coordinator._handle_heartbeat_response(response, time.monotonic())
+        assert coordinator._generation.is_lost() is True
+
+    def test_heartbeat_rebalance_in_progress_keeps_generation(self, coordinator):
+        """RebalanceInProgress is a normal rebalance signal, not a forced
+        eviction - the live generation must stay valid."""
+        from kafka.protocol.consumer import HeartbeatResponse
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = HeartbeatResponse[0](Errors.RebalanceInProgressError.errno)
+        with pytest.raises(Errors.RebalanceInProgressError):
+            coordinator._handle_heartbeat_response(response, time.monotonic())
+        assert coordinator._generation.is_lost() is False
+
+    def test_commit_response_illegal_generation_marks_generation_lost(
+            self, coordinator, offsets):
+        """OffsetCommit IllegalGeneration forces reset_generation; the
+        next rebalance must fire on_partitions_lost."""
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = OffsetCommitResponse[0]([('foobar', [(0, 22), (1, 22)])])
+        with pytest.raises(Errors.CommitFailedError):
+            coordinator._handle_offset_commit_response(
+                offsets, time.monotonic(), response)
+        assert coordinator._generation.is_lost() is True
+
+    def test_sync_group_illegal_generation_marks_generation_lost(self, coordinator):
+        """SyncGroup IllegalGeneration forces reset_generation; the next
+        rebalance must fire on_partitions_lost."""
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        # SyncGroupResponse[0]: (error_code, assignment_bytes)
+        response = SyncGroupResponse[0](Errors.IllegalGenerationError.errno, b'')
+        with pytest.raises(Errors.IllegalGenerationError):
+            coordinator._process_sync_group_response(response, time.monotonic())
+        assert coordinator._generation.is_lost() is True
+
+    def test_lost_async_listener_is_awaited(self, coordinator):
+        """An AsyncConsumerRebalanceListener with on_partitions_lost
+        override is awaited from the prepare path."""
+        coordinator.config['enable_auto_commit'] = False
+        calls = []
+
+        class AsyncListener(AsyncConsumerRebalanceListener):
+            async def on_partitions_revoked(self, revoked):
+                calls.append(('revoked', revoked))
+            async def on_partitions_assigned(self, assigned):
+                calls.append(('assigned', assigned))
+            async def on_partitions_lost(self, lost):
+                calls.append(('lost', lost))
+
+        coordinator._subscription.subscribe(topics=['t'], listener=AsyncListener())
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator.reset_generation()
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 0, 'member-foo')
+
+        assert calls == [('lost', {TopicPartition('t', 0)})]
+
+    def test_lost_listener_exception_is_caught(self, mocker, coordinator):
+        """A throwing on_partitions_lost must not abort the prepare path."""
+        coordinator.config['enable_auto_commit'] = False
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        listener.on_partitions_lost.side_effect = RuntimeError('listener crash')
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator.reset_generation()
+
+        # Must not raise; assignment still cleared.
+        coordinator._manager.run(
+            coordinator._on_join_prepare_async, 0, 'member-foo')
+
+        listener.on_partitions_lost.assert_called_once()
+        assert coordinator._subscription.assigned_partitions() == set()
 
 
 class TestOnJoinCompleteBailOnInvalidAssignment:

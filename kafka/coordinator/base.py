@@ -42,6 +42,18 @@ class Generation:
         """
         return self.member_id != UNKNOWN_MEMBER_ID
 
+    def is_lost(self):
+        """True if this generation is effectively the no-generation
+        sentinel - either the generation_id has been cleared
+        (DEFAULT_GENERATION_ID) or the member_id has been cleared
+        (UNKNOWN_MEMBER_ID). Mirrors Java's NO_GENERATION-or-empty-memberId
+        check in ConsumerCoordinator.onJoinPrepare; used to fire
+        on_partitions_lost (KIP-429) instead of on_partitions_revoked
+        when the broker has forcibly removed us from the group.
+        """
+        return (self.generation_id == DEFAULT_GENERATION_ID
+                or not self.has_member_id())
+
     def __eq__(self, other):
         return (self.generation_id == other.generation_id and
                 self.member_id == other.member_id and
@@ -864,7 +876,14 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         return self.state is MemberState.REBALANCING
 
     def reset_generation(self, member_id=UNKNOWN_MEMBER_ID):
-        """Reset the generation and member_id because we have fallen out of the group."""
+        """Reset the generation and member_id because we have fallen out of the group.
+
+        Arguments:
+            member_id (str): new local member id to record. Defaults to
+                ``UNKNOWN_MEMBER_ID``. The broker hands back a real member id
+                on a ``MemberIdRequiredError`` retry; that path passes the
+                broker-returned id through here.
+        """
         with self._lock:
             self._generation = Generation(DEFAULT_GENERATION_ID, member_id, None)
             self.rejoin_needed = True
