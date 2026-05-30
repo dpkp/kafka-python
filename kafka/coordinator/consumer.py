@@ -107,11 +107,6 @@ class ConsumerCoordinator(BaseCoordinator):
         self.completed_offset_commits = collections.deque()
         self._offset_fetch_futures = dict()
         self._async_commit_fenced = False
-        # KIP-429: set by reset_generation(lost_partitions=True) when the
-        # broker forcibly evicts us. _on_join_prepare_async observes this
-        # and fires on_partitions_lost instead of the normal
-        # on_partitions_revoked / auto-commit prepare path.
-        self._partitions_lost_pending = False
 
         if self.config['default_offset_commit_callback'] is None:
             self.config['default_offset_commit_callback'] = self._default_offset_commit_callback
@@ -492,41 +487,27 @@ class ConsumerCoordinator(BaseCoordinator):
             group_assignment[member_id] = assignment
         return group_assignment
 
-    def _on_partitions_lost_pending(self):
-        """KIP-429 hook: ``BaseCoordinator.reset_generation`` calls this
-        when the broker has forcibly removed us from the group. Defers the
-        listener call to :meth:`_on_join_prepare_async` (this runs under
-        ``self._lock`` and from the heartbeat / response-callback IO-thread
-        path, where awaiting a user listener would be awkward and would
-        mix with the generation-reset side effects)."""
-        self._partitions_lost_pending = True
-
     async def _on_join_prepare_async(self, generation, member_id, timeout_ms=None):
-        # KIP-429: forced eviction supersedes the normal prepare path.
-        # Skip the pre-rebalance auto-commit (it would fail with the same
-        # UnknownMemberId / IllegalGeneration / FencedInstance error that
-        # got us here) and the eager on_partitions_revoked notification:
-        # those imply the user can still commit, which isn't true any
-        # more. Surface the loss via on_partitions_lost instead, clear
-        # local assignment, and bail.
-        if self._partitions_lost_pending:
-            self._partitions_lost_pending = False
+        if self._generation.is_lost():
             lost = set(self._subscription.assigned_partitions())
-            log.info("Group %s lost membership; forcibly revoking %s",
-                     self.group_id, lost)
-            if lost and self._subscription.rebalance_listener:
-                try:
-                    await self._invoke_rebalance_listener_async(
-                        'on_partitions_lost', lost)
-                except Exception:
-                    log.exception("User provided subscription rebalance listener %s"
-                                  " for group %s failed on_partitions_lost",
-                                  self._subscription.rebalance_listener, self.group_id)
             if lost:
+                log.info("Group %s lost membership; forcibly revoking %s",
+                         self.group_id, lost)
+                if self._subscription.rebalance_listener:
+                    try:
+                        await self._invoke_rebalance_listener_async(
+                            'on_partitions_lost', lost)
+                    except Exception:
+                        log.exception("User provided subscription rebalance listener %s"
+                                      " for group %s failed on_partitions_lost",
+                                      self._subscription.rebalance_listener, self.group_id)
                 self._subscription.assign_from_subscribed([])
-            self._is_leader = False
-            self._subscription.reset_group_subscription()
-            return
+                self._is_leader = False
+                self._subscription.reset_group_subscription()
+                return
+            # else: generation is lost but we have no partitions to
+            # lose - this is the initial-join case. Fall through to the
+            # normal auto-commit + EAGER/COOPERATIVE path.
 
         # commit offsets prior to rebalance if auto-commit enabled
         if self.config['enable_auto_commit']:
@@ -963,7 +944,7 @@ class ConsumerCoordinator(BaseCoordinator):
                     error = error_type(self.group_id)
                     log.warning("OffsetCommit for group %s failed: %s",
                                 self.group_id, error)
-                    self.reset_generation(lost_partitions=True)
+                    self.reset_generation()
                     raise Errors.CommitFailedError(error_type())
                 else:
                     log.error("Group %s failed to commit partition %s at offset"
