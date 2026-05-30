@@ -778,8 +778,11 @@ class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
         should be committed in this callback to either Kafka or a custom offset
         store to prevent duplicate data.
 
-        NOTE: This method is only called before rebalances. It is not called
-        prior to KafkaConsumer.close()
+        NOTE: This method is called before each rebalance and also when the
+        consumer is closing (KafkaConsumer.close()), so that offsets / state
+        can be committed before the partitions are given up. If the group
+        membership has already been lost (forced eviction),
+        on_partitions_lost() is called instead.
 
         Arguments:
             revoked (list of TopicPartition): the partitions that were assigned

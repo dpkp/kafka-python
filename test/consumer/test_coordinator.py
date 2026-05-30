@@ -2190,3 +2190,143 @@ class TestOnJoinCompleteBailOnInvalidAssignment:
         listener.on_partitions_assigned.assert_not_called()
         assignor_spy.assert_not_called()
         assert coordinator.next_auto_commit_deadline == old_deadline
+
+
+class TestOnCloseRevokesPartitions:
+    """KIP-429 / Java onLeavePrepare parity: closing the consumer
+    notifies the rebalance listener that the owned partitions are being
+    given up (on_partitions_revoked, or on_partitions_lost if the group
+    membership was already lost), then clears the local assignment.
+
+    Changed in kafka-python 3.0: previously the listener was *not*
+    invoked on close.
+    """
+
+    def _stub_leave_group(self, mocker, coordinator):
+        """Mock everything close() touches except the listener path."""
+        mocker.patch.object(coordinator, '_maybe_auto_commit_offsets_sync')
+        mocker.patch.object(coordinator, '_handle_leave_group_response')
+        mocker.patch.object(coordinator, 'coordinator_unknown',
+                            return_value=False)
+        coordinator.coordinator_id = 0
+        cli = coordinator._client
+        mocker.patch.object(cli._manager, 'send',
+                            return_value=Future().success('foobar'))
+        mocker.patch.object(cli, 'poll')
+
+    def test_close_revokes_for_live_group(self, mocker, coordinator):
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed(
+            [TopicPartition('t', 0), TopicPartition('t', 1)])
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        coordinator.state = MemberState.STABLE
+
+        coordinator.close()
+
+        listener.on_partitions_revoked.assert_called_once_with(
+            {TopicPartition('t', 0), TopicPartition('t', 1)})
+        listener.on_partitions_lost.assert_not_called()
+        # Local assignment is cleared once we've given up the partitions.
+        assert coordinator._subscription.assigned_partitions() == set()
+
+    def test_close_fires_lost_when_generation_lost(self, mocker, coordinator):
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        # The broker already booted us before close() was called.
+        coordinator.reset_generation()
+        assert coordinator._generation.is_lost() is True
+
+        coordinator.close()
+
+        listener.on_partitions_lost.assert_called_once_with(
+            {TopicPartition('t', 0)})
+        listener.on_partitions_revoked.assert_not_called()
+        assert coordinator._subscription.assigned_partitions() == set()
+
+    def test_close_manual_assignment_fires_nothing(self, mocker, coordinator):
+        """USER_ASSIGNED partitions are never auto-managed, so close()
+        must not invoke the listener for them."""
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        # Manual assign() and subscribe() are mutually exclusive, so attach
+        # the listener directly rather than via subscribe().
+        coordinator._subscription.assign_from_user([TopicPartition('t', 0)])
+        coordinator._subscription.rebalance_listener = listener
+
+        coordinator.close()
+
+        listener.on_partitions_revoked.assert_not_called()
+        listener.on_partitions_lost.assert_not_called()
+
+    def test_close_empty_assignment_fires_nothing(self, mocker, coordinator):
+        """Subscribed but never assigned any partitions -- nothing to
+        revoke, so the listener is not called."""
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+
+        coordinator.close()
+
+        listener.on_partitions_revoked.assert_not_called()
+        listener.on_partitions_lost.assert_not_called()
+
+    def test_close_async_listener_is_awaited(self, mocker, coordinator):
+        self._stub_leave_group(mocker, coordinator)
+        calls = []
+
+        class AsyncListener(AsyncConsumerRebalanceListener):
+            async def on_partitions_revoked(self, revoked):
+                calls.append(('revoked', revoked))
+            async def on_partitions_assigned(self, assigned):
+                calls.append(('assigned', assigned))
+            async def on_partitions_lost(self, lost):
+                calls.append(('lost', lost))
+
+        coordinator._subscription.subscribe(topics=['t'], listener=AsyncListener())
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        coordinator.state = MemberState.STABLE
+
+        coordinator.close()
+
+        assert calls == [('revoked', {TopicPartition('t', 0)})]
+
+    def test_close_listener_exception_still_leaves_group(self, mocker, coordinator):
+        """A throwing listener must not prevent the consumer from leaving
+        the group; the exception surfaces after cleanup as a KafkaError."""
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        crash = RuntimeError('listener crash')
+        listener.on_partitions_revoked.side_effect = crash
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        coordinator.state = MemberState.STABLE
+
+        with pytest.raises(Errors.KafkaError) as exc_info:
+            coordinator.close()
+        assert exc_info.value.__cause__ is crash
+
+        # Cleanup still ran: assignment cleared and the group was left.
+        assert coordinator._subscription.assigned_partitions() == set()
+        coordinator._handle_leave_group_response.assert_called_with('foobar')
+
+    def test_close_no_autocommit_still_revokes(self, mocker, coordinator):
+        """autocommit=False skips the commit but must still fire the
+        revoke listener on close."""
+        self._stub_leave_group(mocker, coordinator)
+        listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+        coordinator._subscription.subscribe(topics=['t'], listener=listener)
+        coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        coordinator.state = MemberState.STABLE
+
+        coordinator.close(autocommit=False)
+
+        coordinator._maybe_auto_commit_offsets_sync.assert_not_called()
+        listener.on_partitions_revoked.assert_called_once_with(
+            {TopicPartition('t', 0)})
