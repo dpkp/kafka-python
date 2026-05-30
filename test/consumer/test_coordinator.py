@@ -282,14 +282,22 @@ def test_slow_rebalance_listener_logs_warning(mocker, coordinator):
     assert method == 'on_partitions_revoked'
 
 
-def test_on_join_prepare_async_listener_exception_is_caught(mocker, coordinator):
+def test_on_join_prepare_async_listener_exception_propagates(mocker, coordinator):
+    """Java parity: a throwing rebalance listener fails the prepare phase
+    with a KafkaError that chains the user exception as __cause__. The
+    cleanup (is_leader, reset_group_subscription) still runs before the
+    exception is raised."""
     coordinator.config['enable_auto_commit'] = False
+    coordinator._generation = Generation(42, 'member-foo', 'range')
     listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    listener.on_partitions_revoked.side_effect = RuntimeError('listener crash')
+    crash = RuntimeError('listener crash')
+    listener.on_partitions_revoked.side_effect = crash
     coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
 
-    # Should not raise; should still complete the post-listener cleanup.
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    with pytest.raises(Errors.KafkaError) as exc_info:
+        coordinator._manager.run(coordinator._on_join_prepare_async, 42, 'member-foo')
+    assert exc_info.value.__cause__ is crash
+    # Cleanup still ran before the exception bubbled out.
     assert coordinator._is_leader is False
 
 
@@ -356,18 +364,22 @@ def test_on_join_complete_async_awaits_async_listener(coordinator):
         {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})]
 
 
-def test_on_join_complete_async_listener_exception_is_caught(mocker, coordinator):
+def test_on_join_complete_async_listener_exception_propagates(mocker, coordinator):
+    """Java parity: a throwing on_partitions_assigned fails the complete
+    phase with a KafkaError that chains the user exception."""
     listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-    listener.on_partitions_assigned.side_effect = RuntimeError('listener crash')
+    crash = RuntimeError('listener crash')
+    listener.on_partitions_assigned.side_effect = crash
     coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
     assignor = RoundRobinPartitionAssignor()
     coordinator._assignors = {assignor.name: assignor}
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
 
-    # Should not raise.
-    coordinator._manager.run(
-        coordinator._on_join_complete_async,
-        12, 'member-foo', 'roundrobin', assignment.encode())
+    with pytest.raises(Errors.KafkaError) as exc_info:
+        coordinator._manager.run(
+            coordinator._on_join_complete_async,
+            12, 'member-foo', 'roundrobin', assignment.encode())
+    assert exc_info.value.__cause__ is crash
 
 
 def test_need_rejoin(coordinator):
@@ -1897,20 +1909,25 @@ class TestKip429OnPartitionsLost:
 
         assert calls == [('lost', {TopicPartition('t', 0)})]
 
-    def test_lost_listener_exception_is_caught(self, mocker, coordinator):
-        """A throwing on_partitions_lost must not abort the prepare path."""
+    def test_lost_listener_exception_propagates(self, mocker, coordinator):
+        """Java parity: a throwing on_partitions_lost still runs the
+        cleanup (clear assignment, reset_group_subscription) but then
+        raises a KafkaError chaining the user exception."""
         coordinator.config['enable_auto_commit'] = False
         listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
-        listener.on_partitions_lost.side_effect = RuntimeError('listener crash')
+        crash = RuntimeError('listener crash')
+        listener.on_partitions_lost.side_effect = crash
         coordinator._subscription.subscribe(topics=['t'], listener=listener)
         coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
         coordinator.reset_generation()
 
-        # Must not raise; assignment still cleared.
-        coordinator._manager.run(
-            coordinator._on_join_prepare_async, 0, 'member-foo')
+        with pytest.raises(Errors.KafkaError) as exc_info:
+            coordinator._manager.run(
+                coordinator._on_join_prepare_async, 0, 'member-foo')
+        assert exc_info.value.__cause__ is crash
 
         listener.on_partitions_lost.assert_called_once()
+        # Cleanup still ran before the exception bubbled out.
         assert coordinator._subscription.assigned_partitions() == set()
 
 
@@ -1979,6 +1996,72 @@ class TestKip429MemberIdPreservation:
             coordinator._handle_offset_commit_response(
                 offsets, time.monotonic(), response)
         assert coordinator._generation.has_member_id() is False
+
+
+class TestListenerExceptionPropagation:
+    """Java parity (Diff 3): listener exceptions are captured during
+    cleanup and re-raised at the end of the rebalance phase as a
+    KafkaError chaining the user exception."""
+
+    def _make_assignment_bytes(self, topic, partitions):
+        from kafka.protocol.consumer.metadata import ConsumerProtocolAssignment
+        a = ConsumerProtocolAssignment(
+            version=1,
+            assigned_partitions=[(topic, sorted(partitions))],
+            user_data=b'')
+        return a.encode()
+
+    def test_cooperative_both_listeners_called_even_if_revoked_throws(
+            self, mocker, client, metrics):
+        """Java's invokePartitionsRevoked / invokePartitionsAssigned
+        pattern: even if on_partitions_revoked throws, on_partitions_assigned
+        still runs (so the user gets a chance to react to the new
+        assignment). The final raised exception is the last one captured."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            revoked_crash = RuntimeError('revoked crash')
+            listener.on_partitions_revoked.side_effect = revoked_crash
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([
+                TopicPartition('t', 0), TopicPartition('t', 1)])
+
+            assignment_bytes = self._make_assignment_bytes('t', [1, 2])
+            with pytest.raises(Errors.KafkaError):
+                coord._manager.run(
+                    coord._on_join_complete_async,
+                    42, 'member-1', 'cooperative-sticky', assignment_bytes)
+
+            # Both listeners were called - revoked even though it threw.
+            listener.on_partitions_revoked.assert_called_once_with(
+                {TopicPartition('t', 0)})
+            listener.on_partitions_assigned.assert_called_once_with(
+                {TopicPartition('t', 2)})
+        finally:
+            coord.close(timeout_ms=0)
+
+    def test_cooperative_assigned_throw_propagates(
+            self, mocker, client, metrics):
+        """If only on_partitions_assigned throws, that's the captured
+        exception."""
+        coord = _cooperative_coordinator(client, metrics)
+        try:
+            coord.config['enable_auto_commit'] = False
+            listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
+            assigned_crash = RuntimeError('assigned crash')
+            listener.on_partitions_assigned.side_effect = assigned_crash
+            coord._subscription.subscribe(topics=['t'], listener=listener)
+            coord._subscription.assign_from_subscribed([TopicPartition('t', 0)])
+
+            assignment_bytes = self._make_assignment_bytes('t', [0, 1])
+            with pytest.raises(Errors.KafkaError) as exc_info:
+                coord._manager.run(
+                    coord._on_join_complete_async,
+                    42, 'member-1', 'cooperative-sticky', assignment_bytes)
+            assert exc_info.value.__cause__ is assigned_crash
+        finally:
+            coord.close(timeout_ms=0)
 
 
 class TestOnJoinCompleteBailOnInvalidAssignment:
