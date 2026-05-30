@@ -163,6 +163,9 @@ class KafkaConsumer(six.Iterator):
             should be set no higher than 1/3 of that value. It can be
             adjusted even lower to control the expected time for normal
             rebalances. Default: 3000
+        receive_message_max_bytes (int): Maximum allowed network frame size.
+            Used to avoid OOM when decoding malformed network message header.
+            Default: 1000000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). The java client defaults to 32768.
@@ -303,9 +306,8 @@ class KafkaConsumer(six.Iterator):
         'heartbeat_interval_ms': 3000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
+        'receive_message_max_bytes': 1000000,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
-        'sock_chunk_bytes': 4096,  # undocumented experimental option
-        'sock_chunk_buffer_count': 1000,  # undocumented experimental option
         'consumer_timeout_ms': float('inf'),
         'security_protocol': 'PLAINTEXT',
         'ssl_context': None,

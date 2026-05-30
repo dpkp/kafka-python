@@ -122,6 +122,9 @@ class BrokerConnection(object):
         max_in_flight_requests_per_connection (int): Requests are pipelined
             to kafka brokers up to this number of maximum requests per
             broker connection. Default: 5.
+        receive_message_max_bytes (int): Maximum allowed network frame size.
+            Used to avoid OOM when decoding malformed network message header.
+            Default: 1000000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). Java client defaults to 32768.
@@ -202,6 +205,7 @@ class BrokerConnection(object):
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'max_in_flight_requests_per_connection': 5,
+        'receive_message_max_bytes': 1000000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
@@ -292,7 +296,8 @@ class BrokerConnection(object):
 
         self._protocol = KafkaProtocol(
             client_id=self.config['client_id'],
-            api_version=self.config['api_version'])
+            api_version=self.config['api_version'],
+            max_frame_size=self.config['receive_message_max_bytes'])
         self.state = ConnectionStates.DISCONNECTED
         self._reset_reconnect_backoff()
         self._sock = None

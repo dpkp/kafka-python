@@ -57,6 +57,10 @@ class CorrelationIdError(KafkaProtocolError):
     retriable = True
 
 
+class InvalidReceiveError(KafkaProtocolError):
+    pass
+
+
 class KafkaTimeoutError(KafkaError):
     retriable = True
 
