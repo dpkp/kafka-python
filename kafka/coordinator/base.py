@@ -667,13 +667,16 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             raise error_type((self.group_id, self.group_instance_id))
         if error_type in (Errors.UnknownMemberIdError, Errors.IllegalGenerationError):
             error = error_type()
-            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
-            self.reset_generation()
+            log.info("SyncGroup for group %s failed due to %s; reseting generation.", self.group_id, error)
+            if error_type is Errors.IllegalGenerationError:
+                self.reset_generation(member_id=self._generation.member_id)
+            else:
+                self.reset_generation()
             raise error
         if error_type in (Errors.CoordinatorNotAvailableError,
                           Errors.NotCoordinatorError):
             error = error_type()
-            log.info("SyncGroup for group %s failed due to %s", self.group_id, error)
+            log.info("SyncGroup for group %s failed due to %s; marking coordinator dead.", self.group_id, error)
             self.coordinator_dead(error)
             raise error
         error = error_type()
@@ -1105,7 +1108,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         elif error_type is Errors.IllegalGenerationError:
             heartbeat_log.warning("Heartbeat failed for group %s: generation id is not "
                                   " current.", self.group_id)
-            self.reset_generation()
+            self.reset_generation(member_id=self._generation.member_id)
         elif error_type is Errors.FencedInstanceIdError:
             heartbeat_log.error("Heartbeat failed for group %s due to fenced id error: %s",
                                 self.group_id, self.group_instance_id)

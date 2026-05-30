@@ -933,20 +933,23 @@ def test_process_join_group_response_state_not_rebalancing(coordinator):
         coordinator._process_join_group_response(response, send_time=time.monotonic())
 
 
-@pytest.mark.parametrize('error_code,error_type,coordinator_dead,resets_generation,requests_rejoin', [
-    (0, None, False, False, False),
-    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, True),
-    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, True),
-    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, True),
-    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True),
-    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError, False, True, True),
-    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, True),
-    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, True),
-    (Errors.UnknownError.errno, Errors.UnknownError, False, False, True),
+@pytest.mark.parametrize(
+    'error_code,error_type,coordinator_dead,resets_generation_id,resets_member_id,requests_rejoin', [
+    (0, None, False, False, False, False),
+    (Errors.GroupAuthorizationFailedError.errno, Errors.GroupAuthorizationFailedError, False, False, False, True),
+    (Errors.RebalanceInProgressError.errno, Errors.RebalanceInProgressError, False, False, False, True),
+    (Errors.FencedInstanceIdError.errno, Errors.FencedInstanceIdError, False, False, False, True),
+    (Errors.UnknownMemberIdError.errno, Errors.UnknownMemberIdError, False, True, True, True),
+    # KIP-429 / Java parity: IllegalGeneration resets generation_id but
+    # preserves member_id so the next JoinGroup can re-use it.
+    (Errors.IllegalGenerationError.errno, Errors.IllegalGenerationError, False, True, False, True),
+    (Errors.CoordinatorNotAvailableError.errno, Errors.CoordinatorNotAvailableError, True, False, False, True),
+    (Errors.NotCoordinatorError.errno, Errors.NotCoordinatorError, True, False, False, True),
+    (Errors.UnknownError.errno, Errors.UnknownError, False, False, False, True),
 ])
 def test_process_sync_group_response(request, coordinator, error_code, error_type,
-                                     coordinator_dead, resets_generation,
-                                     requests_rejoin):
+                                     coordinator_dead, resets_generation_id,
+                                     resets_member_id, requests_rejoin):
     request.addfinalizer(lambda: setattr(coordinator, 'state', MemberState.UNJOINED))
     coordinator.coordinator_id = 0
     coordinator._generation = Generation(7, 'member-1', 'range')
@@ -970,9 +973,13 @@ def test_process_sync_group_response(request, coordinator, error_code, error_typ
             assert coordinator.rejoin_needed is True
         if coordinator_dead:
             assert coordinator.coordinator_id is None
-        if resets_generation:
+        if resets_generation_id:
             assert coordinator._generation.generation_id == -1
+        if resets_member_id:
             assert coordinator._generation.member_id == ''
+        elif resets_generation_id:
+            # IllegalGeneration path: generation cleared but member_id kept.
+            assert coordinator._generation.member_id == 'member-1'
 
 
 def _join_response_object(error_code=0, generation_id=42,
@@ -1905,6 +1912,73 @@ class TestKip429OnPartitionsLost:
 
         listener.on_partitions_lost.assert_called_once()
         assert coordinator._subscription.assigned_partitions() == set()
+
+
+class TestKip429MemberIdPreservation:
+    """Java parity: IllegalGeneration on heartbeat / commit / sync
+    preserves the member_id (only the generation_id is reset);
+    UnknownMemberId clears both. Reduces a MemberIdRequired round-trip
+    on the subsequent JoinGroup."""
+
+    def test_heartbeat_illegal_generation_preserves_member_id(self, coordinator):
+        from kafka.protocol.consumer import HeartbeatResponse
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = HeartbeatResponse[0](Errors.IllegalGenerationError.errno)
+        with pytest.raises(Errors.IllegalGenerationError):
+            coordinator._handle_heartbeat_response(response, time.monotonic())
+        assert coordinator._generation.member_id == 'mbr-1'
+        # generation_id still cleared (lost detection still trips).
+        assert coordinator._generation.is_lost() is True
+
+    def test_heartbeat_unknown_member_id_resets_member_id(self, coordinator):
+        from kafka.protocol.consumer import HeartbeatResponse
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = HeartbeatResponse[0](Errors.UnknownMemberIdError.errno)
+        with pytest.raises(Errors.UnknownMemberIdError):
+            coordinator._handle_heartbeat_response(response, time.monotonic())
+        # Broker has forgotten us; clear member_id entirely.
+        assert coordinator._generation.has_member_id() is False
+
+    def test_sync_group_illegal_generation_preserves_member_id(self, coordinator):
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = SyncGroupResponse[0](Errors.IllegalGenerationError.errno, b'')
+        with pytest.raises(Errors.IllegalGenerationError):
+            coordinator._process_sync_group_response(response, time.monotonic())
+        assert coordinator._generation.member_id == 'mbr-1'
+        assert coordinator._generation.is_lost() is True
+
+    def test_sync_group_unknown_member_id_resets_member_id(self, coordinator):
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = SyncGroupResponse[0](Errors.UnknownMemberIdError.errno, b'')
+        with pytest.raises(Errors.UnknownMemberIdError):
+            coordinator._process_sync_group_response(response, time.monotonic())
+        assert coordinator._generation.has_member_id() is False
+
+    def test_commit_response_illegal_generation_preserves_member_id(
+            self, coordinator, offsets):
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        response = OffsetCommitResponse[0]([('foobar', [(0, 22), (1, 22)])])
+        with pytest.raises(Errors.CommitFailedError):
+            coordinator._handle_offset_commit_response(
+                offsets, time.monotonic(), response)
+        assert coordinator._generation.member_id == 'mbr-1'
+        assert coordinator._generation.is_lost() is True
+
+    def test_commit_response_unknown_member_id_resets_member_id(
+            self, coordinator, offsets):
+        coordinator.coordinator_id = 0
+        coordinator._generation = Generation(42, 'mbr-1', 'range')
+        # OffsetCommit UnknownMemberId error code = 25
+        response = OffsetCommitResponse[0]([('foobar', [(0, 25), (1, 25)])])
+        with pytest.raises(Errors.CommitFailedError):
+            coordinator._handle_offset_commit_response(
+                offsets, time.monotonic(), response)
+        assert coordinator._generation.has_member_id() is False
 
 
 class TestOnJoinCompleteBailOnInvalidAssignment:
