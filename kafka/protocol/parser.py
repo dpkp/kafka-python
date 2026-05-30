@@ -142,7 +142,7 @@ class KafkaProtocol:
 
     def _validate_frame_size(self, nbytes):
         if nbytes < 0 or nbytes > self._max_frame_size:
-            raise Errors.InvalidReceiveError('Invalid frame length: %d', nbytes)
+            raise Errors.InvalidReceiveError('Invalid frame length: %d' % nbytes)
 
     def _process_response(self, read_buffer):
         if not self.in_flight_requests:
