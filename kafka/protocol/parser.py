@@ -22,6 +22,7 @@ class KafkaProtocol:
         api_version (tuple): Optional tuple to specify api_version to use.
             Currently only used to check for 0.8.2 protocol quirks, but
             may be used for more in the future.
+        ident (str): Optional log-prefix identifier.
         receive_message_max_bytes (int): Maximum allowed message frame size.
             Default: 100000000 (100MB).
     """

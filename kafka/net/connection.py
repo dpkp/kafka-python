@@ -264,9 +264,11 @@ class KafkaConnection:
             self.transport.set_protocol(self)
         self.initializing = True
         self.transport.resume_reading()
+        log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.getPeer())
         self.parser = KafkaProtocol(
             client_id=self.config['client_id'],
-            receive_message_max_bytes=self.config['receive_message_max_bytes'])
+            receive_message_max_bytes=self.config['receive_message_max_bytes'],
+            ident=log_prefix)
         self.net.call_soon(self._check_version)
 
     def pause(self, v):
