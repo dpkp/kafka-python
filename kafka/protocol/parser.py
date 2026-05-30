@@ -22,13 +22,14 @@ class KafkaProtocol:
         api_version (tuple): Optional tuple to specify api_version to use.
             Currently only used to check for 0.8.2 protocol quirks, but
             may be used for more in the future.
+        receive_message_max_bytes (int): Maximum allowed message frame size.
+            Default: 100000000 (100MB).
     """
-    def __init__(self, client_id=None, api_version=None, ident=''):
-        self._ident = ident
-        if client_id is None:
-            client_id = self._gen_client_id()
-        self._client_id = client_id
-        self._api_version = api_version
+    def __init__(self, **config):
+        self._ident = config.get('ident', '')
+        self._client_id = config.get('client_id', self._gen_client_id())
+        self._api_version = config.get('api_version')
+        self._max_frame_size = config.get('receive_message_max_bytes', 100000000)
         self._correlation_id = 0
         self._header = KafkaBytes(4)
         self._rbuffer = None
@@ -114,6 +115,7 @@ class KafkaProtocol:
                 if self._header.tell() == 4:
                     self._header.seek(0)
                     nbytes = Int32.decode(self._header)
+                    self._validate_frame_size(nbytes)
                     # reset buffer and switch state to receiving payload bytes
                     self._rbuffer = KafkaBytes(nbytes)
                     self._receiving = True
@@ -140,6 +142,10 @@ class KafkaProtocol:
                 responses.append(resp)
                 self._reset_buffer()
         return responses
+
+    def _validate_frame_size(self, nbytes):
+        if nbytes < 0 or nbytes > self._max_frame_size:
+            raise Errors.InvalidReceiveError('Invalid frame length: %d', nbytes)
 
     def _process_response(self, read_buffer):
         if not self.in_flight_requests:

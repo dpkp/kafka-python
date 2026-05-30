@@ -26,6 +26,7 @@ class KafkaConnectionManager:
         'client_id': 'kafka-python-' + __version__,
         'client_software_name': 'kafka-python',
         'client_software_version': __version__,
+        'receive_message_max_bytes': 1000000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,
