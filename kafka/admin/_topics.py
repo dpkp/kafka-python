@@ -94,12 +94,14 @@ class TopicAdminMixin:
         """Create new topics in the cluster.
 
         Arguments:
-            new_topics: A list of topic names,
-                or a dict of {topic_name: {num_partitions: int (default -1),
-                                           replication_factor: int (default -1),
-                                           assignments: {partition: [broker_ids]},
-                                           configs: {key: value}}}
-                    All keys are optional.
+            new_topics: A list of topic names, or a dict mapping each topic
+                name to a dict of options (all keys optional)::
+
+                    {topic_name: {num_partitions: int (default -1),
+                                  replication_factor: int (default -1),
+                                  assignments: {partition: [broker_ids]},
+                                  configs: {key: value}}}
+
                 List of NewTopic objects is deprecated.
                 Note: for brokers < 2.4, num_partitions and replication_factor
                 are required and must be provided via dict or [NewTopic].

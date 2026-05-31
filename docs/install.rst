@@ -37,7 +37,7 @@ support https://pypi.python.org/pypi/crc32c package if it's installed.
 
 
 Optional ZSTD install
-********************
+*********************
 
 To enable ZSTD compression/decompression, install python-zstandard:
 
