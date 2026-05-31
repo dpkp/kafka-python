@@ -716,6 +716,53 @@ class ConsumerCoordinator(BaseCoordinator):
                 await self._net.sleep(delay_ms / 1000)
             timer.maybe_raise()
 
+    async def _on_close_prepare_async(self):
+        """Notify the rebalance listener that our partitions are being
+        revoked because the consumer is closing. Mirrors Java's
+        ConsumerCoordinator.onLeavePrepare.
+
+        Only fires for auto-assigned (group) subscriptions that currently
+        own partitions. If the group membership has already been lost
+        (forced eviction), on_partitions_lost is invoked instead of
+        on_partitions_revoked, since the user cannot commit offsets for
+        partitions the broker has already reassigned.
+
+        Runs before we leave the group so a sync listener can still commit
+        offsets while we are the recognised owner. Listener exceptions are
+        captured, the local assignment is cleared regardless, and the
+        exception is re-raised as a KafkaError after cleanup.
+        """
+        if not self._subscription.partitions_auto_assigned():
+            return
+        revoked = set(self._subscription.assigned_partitions())
+        if not revoked:
+            return
+
+        if self._generation.is_lost():
+            method = 'on_partitions_lost'
+        else:
+            method = 'on_partitions_revoked'
+
+        log.info("Revoking previously assigned partitions %s for group %s"
+                 " on close", revoked, self.group_id)
+        self._subscription.mark_pending_revocation(revoked)
+        listener_exc = None
+        if self._subscription.rebalance_listener:
+            try:
+                await self._invoke_rebalance_listener_async(method, revoked)
+            except Exception as exc:
+                log.exception("User provided subscription rebalance listener %s"
+                              " for group %s failed %s on close",
+                              self._subscription.rebalance_listener,
+                              self.group_id, method)
+                listener_exc = exc
+        self._subscription.assign_from_subscribed([])
+        self._is_leader = False
+        self._subscription.reset_group_subscription()
+        if listener_exc is not None:
+            raise Errors.KafkaError(
+                "User rebalance callback throws an error") from listener_exc
+
     def close(self, autocommit=True, timeout_ms=None):
         """Close the coordinator, leave the current group,
         and reset local generation / member_id.
@@ -728,8 +775,9 @@ class ConsumerCoordinator(BaseCoordinator):
         try:
             if autocommit:
                 self._maybe_auto_commit_offsets_sync(timeout_ms=timeout_ms)
-            self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
+            self._net.run(self._on_close_prepare_async)
         finally:
+            self._cluster.remove_listener(WeakMethod(self._handle_metadata_update))
             super().close(timeout_ms=timeout_ms)
 
     def _invoke_completed_offset_commit_callbacks(self):
