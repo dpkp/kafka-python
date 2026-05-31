@@ -1,0 +1,7 @@
+/* The sphinx_rtd_theme forces `white-space: nowrap` on every data-table cell.
+   For the Supported KIPs table (class `kip-table`) we want every column
+   except the KIP number/link (column 1) to wrap onto multiple lines. */
+.wy-table-responsive table.kip-table td:not(:first-child),
+.wy-table-responsive table.kip-table th:not(:first-child) {
+    white-space: normal;
+}

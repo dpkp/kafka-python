@@ -261,6 +261,7 @@ See https://docs.python.org/3/howto/logging.html for overview / howto.
    install
    tests
    compatibility
+   Supported KIPs <kips>
    support
    license
    changelog
