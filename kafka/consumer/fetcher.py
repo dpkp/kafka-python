@@ -1160,13 +1160,12 @@ class Fetcher:
             dict: {node_id: (FetchRequest, {TopicPartition: fetch_offset}), ...}
         """
         # TODO:
-        # v12 epoch detection / validation
         # v13 topic ids (KIP-516)
         # v14 tiered storage (KIP-405)
         # v15 replica state (KIP-903)
         # v16 node endpoints (KIP-951)
         # v17 directory id (KIP-853)
-        max_version = 11
+        max_version = 12
         fetchable = collections.defaultdict(collections.OrderedDict)
         for tp in self._fetchable_partitions():
             node_id = self._select_read_replica(tp)
@@ -1197,11 +1196,19 @@ class Fetcher:
                           tp, node_id)
 
             else:
-                # Leader is connected and does not have a pending fetch request
+                # Leader is connected and does not have a pending fetch request.
+                # current_leader_epoch (v9+) = metadata view (broker fencing);
+                # last_fetched_epoch (v12+) = record view (broker divergence
+                # detection). They differ once leadership advances past the
+                # record at the fetch offset.
+                current_leader_epoch = self._manager.cluster.leader_epoch_for_partition(tp)
+                if current_leader_epoch is None:
+                    current_leader_epoch = -1
                 partition_info = _FetchPartition(
                     partition=tp.partition,
-                    current_leader_epoch=position.leader_epoch,
+                    current_leader_epoch=current_leader_epoch,
                     fetch_offset=position.offset,
+                    last_fetched_epoch=position.leader_epoch,
                     partition_max_bytes=self.config['max_partition_fetch_bytes']
                 )
                 fetchable[node_id][tp] = partition_info
@@ -1289,6 +1296,24 @@ class Fetcher:
         except KeyError:
             pass
 
+    def _maybe_update_current_leader(self, tp, partition_data):
+        """Apply a KIP-951 ``current_leader`` hint from a Fetch v12+ response.
+
+        Updates the cluster's cached leader id/epoch when the broker advertises
+        a newer leader. If the new leader id is not yet a known broker (v12 has
+        no ``node_endpoints``), requests a metadata refresh so the consumer
+        learns its address.
+        """
+        leader = partition_data.current_leader
+        if leader is None or leader.leader_epoch < 0:
+            return
+        if self._manager.cluster.update_partition_leader(
+                tp, leader.leader_id, leader.leader_epoch):
+            log.debug("Fetch response advertised new leader for %s: node %s epoch %s",
+                      tp, leader.leader_id, leader.leader_epoch)
+            if self._manager.cluster.broker_metadata(leader.leader_id) is None:
+                self._manager.cluster.request_update()
+
     def _parse_fetched_data(self, completed_fetch):
         tp = completed_fetch.topic_partition
         fetch_offset = completed_fetch.fetched_offset
@@ -1315,6 +1340,19 @@ class Fetcher:
                               " since its offset %d does not match the"
                               " expected offset %d", tp, fetch_offset,
                               position.offset)
+                    return None
+
+                # KIP-320 / Fetch v12+: the broker can tell us our last_fetched_epoch
+                # diverges from its log. Route into the existing OffsetForLeaderEpoch
+                # validation flow rather than truncating directly here; the
+                # validation path surfaces LogTruncationError uniformly.
+                diverging_epoch = completed_fetch.partition_data.diverging_epoch
+                if diverging_epoch is not None and diverging_epoch.end_offset >= 0:
+                    log.info("Fetch for %s diverged at epoch %s offset %s;"
+                             " marking position for validation",
+                             tp, diverging_epoch.epoch, diverging_epoch.end_offset)
+                    self._subscriptions.request_position_validation(tp)
+                    self._manager.cluster.request_update()
                     return None
 
                 records = MemoryRecords(completed_fetch.partition_data.records)
@@ -1366,6 +1404,7 @@ class Fetcher:
                                 Errors.UnknownTopicOrPartitionError,
                                 Errors.KafkaStorageError):
                 log.debug("Error fetching partition %s: %s", tp, error_type.__name__)
+                self._maybe_update_current_leader(tp, completed_fetch.partition_data)
                 self._manager.cluster.request_update()
             elif error_type in (Errors.FencedLeaderEpochError,
                                 Errors.UnknownLeaderEpochError):
@@ -1376,6 +1415,7 @@ class Fetcher:
                 # cluster cache catches up with the new epoch.
                 log.debug("Fetch for %s returned %s; marking position for validation",
                           tp, error_type.__name__)
+                self._maybe_update_current_leader(tp, completed_fetch.partition_data)
                 self._subscriptions.request_position_validation(tp)
                 self._manager.cluster.request_update()
             elif error_type is Errors.OffsetOutOfRangeError:

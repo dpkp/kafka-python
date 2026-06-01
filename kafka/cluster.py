@@ -339,6 +339,38 @@ class ClusterMetadata:
             return None
         return self._partitions[partition.topic][partition.partition].leader_epoch
 
+    def update_partition_leader(self, partition, leader_id, leader_epoch):
+        """Apply a KIP-951 current-leader hint from a Fetch/Produce response.
+
+        The cached leader id and epoch for ``partition`` are replaced only when
+        ``leader_epoch`` is strictly newer than the cached value (and
+        non-negative). When the leader id moves, ``_broker_partitions`` is
+        rewired so leader-based routing follows immediately.
+
+        Arguments:
+            partition (TopicPartition): topic / partition the hint is about.
+            leader_id (int): broker id named as the new leader.
+            leader_epoch (int): epoch of that new leader.
+
+        Returns:
+            bool: True iff cached state was changed.
+        """
+        with self._lock:
+            p_data = self._partitions.get(partition.topic, {}).get(partition.partition)
+            if p_data is None:
+                return False
+            if leader_epoch < 0 or leader_epoch <= p_data.leader_epoch:
+                return False
+            old_leader = p_data.leader_id
+            p_data.leader_id = leader_id
+            p_data.leader_epoch = leader_epoch
+            if old_leader != leader_id:
+                if old_leader in self._broker_partitions:
+                    self._broker_partitions[old_leader].discard(partition)
+                if leader_id != -1:
+                    self._broker_partitions[leader_id].add(partition)
+            return True
+
     def partitions_for_broker(self, broker_id):
         """Return TopicPartitions for which the broker is a leader.
 
