@@ -165,6 +165,60 @@ class TestClusterMetadataPartitionLookups:
         assert cluster.leader_epoch_for_partition(tp) is None
 
 
+class TestClusterMetadataUpdatePartitionLeader:
+    """Cover update_partition_leader, the KIP-951 current-leader hint applied
+    out-of-band from a Fetch/Produce response (no MetadataResponse needed)."""
+
+    def _seed_topic(self, cluster, version=9):
+        response = _make_metadata_response(version)
+        response = MetadataResponse.decode(response.encode(), version=version)
+        cluster.update_metadata(response)
+
+    def test_updates_when_epoch_is_strictly_newer(self, cluster):
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 0)
+        assert cluster.leader_for_partition(tp) == 0
+        assert cluster.leader_epoch_for_partition(tp) == 0
+
+        assert cluster.update_partition_leader(tp, leader_id=1, leader_epoch=5) is True
+        assert cluster.leader_for_partition(tp) == 1
+        assert cluster.leader_epoch_for_partition(tp) == 5
+
+    def test_noop_when_epoch_is_stale_or_equal(self, cluster):
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 0)
+        # cached epoch is 0; equal and lower must no-op
+        assert cluster.update_partition_leader(tp, leader_id=1, leader_epoch=0) is False
+        assert cluster.update_partition_leader(tp, leader_id=1, leader_epoch=-1) is False
+        assert cluster.leader_for_partition(tp) == 0
+        assert cluster.leader_epoch_for_partition(tp) == 0
+
+    def test_unknown_topic_or_partition_returns_false(self, cluster):
+        # Empty cluster
+        assert cluster.update_partition_leader(
+            TopicPartition('nope', 0), leader_id=1, leader_epoch=5) is False
+        self._seed_topic(cluster)
+        assert cluster.update_partition_leader(
+            TopicPartition('topic-1', 99), leader_id=1, leader_epoch=5) is False
+
+    def test_rewires_broker_partitions(self, cluster):
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 0)
+        assert tp in cluster.partitions_for_broker(0)
+        assert cluster.update_partition_leader(tp, leader_id=1, leader_epoch=5) is True
+        assert tp not in cluster.partitions_for_broker(0)
+        assert tp in cluster.partitions_for_broker(1)
+
+    def test_unknown_leader_id_minus_one_skips_broker_partitions_add(self, cluster):
+        """leader_id=-1 means 'no leader'; rewire must drop the old mapping
+        without inserting a -1 entry."""
+        self._seed_topic(cluster)
+        tp = TopicPartition('topic-1', 0)
+        assert cluster.update_partition_leader(tp, leader_id=-1, leader_epoch=5) is True
+        assert tp not in cluster.partitions_for_broker(0)
+        assert cluster.partitions_for_broker(-1) in (None, set())
+
+
 class TestClusterMetadataTopics:
     def test_set_topics(self, cluster):
         cluster._need_update = False

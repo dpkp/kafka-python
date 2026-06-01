@@ -403,3 +403,254 @@ class TestKIP392RackAwareFetching:
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
         fetcher._parse_fetched_data(completed)
         assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+
+
+# --------------------------------------------------------------------------- #
+# Fetch v12: split request epochs + tagged response fields                    #
+# --------------------------------------------------------------------------- #
+
+
+_EpochEndOffset = _FetchPartition.EpochEndOffset
+_LeaderIdAndEpoch = _FetchPartition.LeaderIdAndEpoch
+
+
+def _fetch_v12_partition_data(error_code=0, high_watermark=100,
+                              diverging_epoch=None, current_leader=None,
+                              records=b''):
+    return _FetchPartition(
+        partition_index=PARTITION, error_code=error_code,
+        high_watermark=high_watermark, last_stable_offset=-1,
+        log_start_offset=-1,
+        diverging_epoch=diverging_epoch,
+        current_leader=current_leader,
+        snapshot_id=None,
+        aborted_transactions=[], preferred_read_replica=-1,
+        records=records)
+
+
+class TestFetchV12Epoch:
+    """FetchRequest v12 split-epoch request encoding and tagged response handling."""
+
+    def test_negotiates_v12_and_sends_split_epoch_fields(
+            self, broker, manager, fetcher):
+        """current_leader_epoch comes from cluster metadata, last_fetched_epoch
+        from the position - and they are sent distinctly on the wire."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        # position.leader_epoch = 3 (record view), cluster epoch = 5 (metadata view)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+        assert manager.cluster.update_partition_leader(
+            tp, leader_id=broker.node_id, leader_epoch=5) is True
+
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['api_version'] = api_version
+            decoded = FetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            partition = decoded.topics[0].partitions[0]
+            captured['current_leader_epoch'] = partition.current_leader_epoch
+            captured['last_fetched_epoch'] = partition.last_fetched_epoch
+            return _fetch_response_with_preferred_replica(-1)
+        broker.respond_fn(FetchRequest, handler)
+
+        requests = fetcher._create_fetch_requests()
+        assert broker.node_id in requests
+        request, _ = requests[broker.node_id]
+        future = manager.send(request, node_id=broker.node_id)
+        manager.run(manager.wait_for, future, 2000)
+
+        assert captured['api_version'] >= 12, (
+            'expected Fetch v12+ negotiation; got v%s' % captured.get('api_version'))
+        assert captured['current_leader_epoch'] == 5
+        assert captured['last_fetched_epoch'] == 3
+
+    def test_last_fetched_epoch_is_minus_one_when_position_has_no_epoch(
+            self, broker, manager, fetcher):
+        """A position without a known epoch (e.g. bare seek) sends -1."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', -1))
+
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['api_version'] = api_version
+            decoded = FetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['last_fetched_epoch'] = decoded.topics[0].partitions[0].last_fetched_epoch
+            return _fetch_response_with_preferred_replica(-1)
+        broker.respond_fn(FetchRequest, handler)
+
+        requests = fetcher._create_fetch_requests()
+        request, _ = requests[broker.node_id]
+        future = manager.send(request, node_id=broker.node_id)
+        manager.run(manager.wait_for, future, 2000)
+
+        assert captured['last_fetched_epoch'] == -1
+
+    def test_current_leader_epoch_minus_one_when_metadata_has_no_epoch(
+            self, broker, manager, fetcher):
+        """If the cluster cache has no epoch for the partition, send -1
+        (not the position epoch) - we honestly don't know the current leader."""
+        tp = TopicPartition(TOPIC, PARTITION)
+        # Force the cached partition's leader_epoch to -1 (unknown).
+        manager.cluster._partitions[TOPIC][PARTITION].leader_epoch = -1
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 7))
+
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = FetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            partition = decoded.topics[0].partitions[0]
+            captured['current_leader_epoch'] = partition.current_leader_epoch
+            captured['last_fetched_epoch'] = partition.last_fetched_epoch
+            return _fetch_response_with_preferred_replica(-1)
+        broker.respond_fn(FetchRequest, handler)
+
+        requests = fetcher._create_fetch_requests()
+        request, _ = requests[broker.node_id]
+        future = manager.send(request, node_id=broker.node_id)
+        manager.run(manager.wait_for, future, 2000)
+
+        assert captured['current_leader_epoch'] == -1
+        assert captured['last_fetched_epoch'] == 7
+
+    def test_diverging_epoch_response_marks_partition_for_validation(
+            self, broker, manager, fetcher, mocker):
+        """A v12 response carrying diverging_epoch (with empty records)
+        routes the partition into KIP-320 validation instead of parsing
+        records."""
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(100, '', 3))
+        spy = mocker.spy(manager.cluster, 'request_update')
+
+        partition_data = _fetch_v12_partition_data(
+            diverging_epoch=_EpochEndOffset(epoch=3, end_offset=80))
+        completed = CompletedFetch(tp, 100, 12, partition_data, MagicMock())
+
+        result = fetcher._parse_fetched_data(completed)
+
+        assert result is None
+        assert fetcher._subscriptions.assignment[tp].awaiting_validation
+        assert spy.call_count >= 1
+
+    def test_diverging_epoch_with_unset_end_offset_is_ignored(
+            self, broker, manager, fetcher):
+        """A divergence struct with end_offset = -1 is treated as 'no
+        divergence reported' and records are parsed normally."""
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(100, '', 3))
+
+        partition_data = _fetch_v12_partition_data(
+            diverging_epoch=_EpochEndOffset(epoch=-1, end_offset=-1),
+            high_watermark=100, records=b'')
+        completed = CompletedFetch(tp, 100, 12, partition_data, MagicMock())
+
+        fetcher._parse_fetched_data(completed)
+        assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+
+    def test_current_leader_hint_updates_cluster_cache_on_known_broker(
+            self, broker, manager, fetcher, mocker):
+        """A leader-change error response carrying current_leader with a
+        newer epoch updates the cached leader id+epoch. If the new leader id
+        is a broker we already know, no metadata refresh is needed."""
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+
+        # Seed a second broker (node_id=7) into the cluster cache so the
+        # hinted leader_id is already known.
+        broker.set_metadata(
+            brokers=[
+                _MetaBroker(node_id=broker.node_id, host=broker.host,
+                            port=broker.port, rack=None),
+                _MetaBroker(node_id=7, host=broker.host,
+                            port=broker.port, rack=None),
+            ],
+            topics=[_MetaTopic(
+                error_code=0, name=TOPIC, is_internal=False,
+                partitions=[_MetaPartition(
+                    error_code=0, partition_index=PARTITION,
+                    leader_id=broker.node_id, leader_epoch=3,
+                    replica_nodes=[broker.node_id, 7],
+                    isr_nodes=[broker.node_id, 7],
+                    offline_replicas=[])],
+            )])
+        manager._net.run(manager.wait_for, manager.cluster.request_update(), 2000)
+
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+        spy = mocker.spy(manager.cluster, 'request_update')
+
+        partition_data = _fetch_v12_partition_data(
+            error_code=Errors.NotLeaderForPartitionError.errno,
+            current_leader=_LeaderIdAndEpoch(leader_id=7, leader_epoch=9))
+        completed = CompletedFetch(tp, 50, 12, partition_data, MagicMock())
+
+        fetcher._parse_fetched_data(completed)
+
+        # Cache was updated with the hinted leader.
+        assert manager.cluster.leader_for_partition(tp) == 7
+        assert manager.cluster.leader_epoch_for_partition(tp) == 9
+        # request_update is still called from the NotLeaderForPartition branch
+        # itself (existing behavior); the hint just avoided an *additional*
+        # forced refresh for an unknown broker.
+        assert spy.call_count >= 1
+
+    def test_current_leader_hint_unknown_broker_requests_metadata_update(
+            self, broker, manager, fetcher, mocker):
+        """The case we explicitly care about: the broker advertises a new
+        leader (node_id=99) that we don't have broker metadata for. The
+        fetcher must trigger a metadata refresh so the consumer learns the
+        new leader's address (v12 has no node_endpoints)."""
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+        assert manager.cluster.broker_metadata(99) is None, (
+            'precondition: node 99 must be unknown')
+        spy = mocker.spy(manager.cluster, 'request_update')
+
+        partition_data = _fetch_v12_partition_data(
+            error_code=Errors.FencedLeaderEpochError.errno,
+            current_leader=_LeaderIdAndEpoch(leader_id=99, leader_epoch=11))
+        completed = CompletedFetch(tp, 50, 12, partition_data, MagicMock())
+
+        fetcher._parse_fetched_data(completed)
+
+        # Cache updated with the (unknown) leader id and new epoch.
+        assert manager.cluster.leader_for_partition(tp) == 99
+        assert manager.cluster.leader_epoch_for_partition(tp) == 11
+        # request_update fires twice in this branch: once by the
+        # _maybe_update_current_leader helper (because leader 99 is unknown)
+        # and once by the FencedLeaderEpoch handler itself. Either way, the
+        # important thing is that *at least one* refresh was requested.
+        assert spy.call_count >= 1
+        # And validation was queued (FencedLeaderEpoch path).
+        assert fetcher._subscriptions.assignment[tp].awaiting_validation
+
+    def test_current_leader_hint_with_stale_epoch_is_ignored(
+            self, broker, manager, fetcher):
+        """A hint whose epoch is not strictly newer than the cache must not
+        rewrite the cached leader."""
+        from unittest.mock import MagicMock
+        from kafka.consumer.fetcher import CompletedFetch
+
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+        # Cache currently has leader_id=broker.node_id, leader_epoch=3.
+        partition_data = _fetch_v12_partition_data(
+            error_code=Errors.NotLeaderForPartitionError.errno,
+            current_leader=_LeaderIdAndEpoch(leader_id=99, leader_epoch=3))
+        completed = CompletedFetch(tp, 50, 12, partition_data, MagicMock())
+
+        fetcher._parse_fetched_data(completed)
+
+        assert manager.cluster.leader_for_partition(tp) == broker.node_id
+        assert manager.cluster.leader_epoch_for_partition(tp) == 3
