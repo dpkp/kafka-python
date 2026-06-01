@@ -349,15 +349,22 @@ class Fetcher:
                 offsets, retry = await self._manager.wait_for(future, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 break
-            except Exception as exc:
-                if not getattr(exc, 'retriable', False):
+            except Errors.KafkaError as exc:
+                if not exc.retriable:
                     raise
-                if getattr(exc, 'invalid_metadata', False) or self._manager.cluster.need_update:
+                if exc.invalid_metadata or self._manager.cluster.need_update:
                     refresh_future = self._manager.cluster.request_update()
                     try:
                         await self._manager.wait_for(refresh_future, timer.timeout_ms)
                     except Errors.KafkaTimeoutError:
                         break
+                    except Errors.KafkaError as refresh_exc:
+                        if not refresh_exc.retriable:
+                            raise
+                        delay = self.config['retry_backoff_ms'] / 1000
+                        if timer.timeout_ms is not None:
+                            delay = min(delay, timer.timeout_ms / 1000)
+                        await self._manager._net.sleep(delay)
                 else:
                     delay = self.config['retry_backoff_ms'] / 1000
                     if timer.timeout_ms is not None:
