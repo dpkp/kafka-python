@@ -452,7 +452,7 @@ class GroupAdminMixin:
         if group_coordinator_id is None:
             group_coordinator_id = await self._find_coordinator_id(group_id)
 
-        current = await self._async_list_group_offsets(group_id, group_coordinator_id, all_tps)
+        current = await self._async_list_group_offsets({group_id: all_tps})
         earliest = await self._async_list_partition_offsets({tp: OffsetSpec.EARLIEST for tp in all_tps})
         latest = await self._async_list_partition_offsets({tp: OffsetSpec.LATEST for tp in all_tps})
 
