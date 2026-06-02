@@ -14,7 +14,7 @@ class ListGroupOffsets:
 
     @classmethod
     def command(cls, client, args):
-        offsets = client.list_group_offsets(args.group_id)
+        offsets = client.list_group_offsets(args.group_id)[args.group_id]
         latest = client.list_partition_offsets({tp: OffsetSpec.LATEST for tp in offsets})
         results = defaultdict(dict)
         for tp in latest:
