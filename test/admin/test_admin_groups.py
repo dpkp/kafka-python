@@ -524,18 +524,30 @@ def _set_metadata_for_topic(broker, name, num_partitions, leader_id=0):
     )
 
 
-def _offset_fetch_response(partitions):
+def _offset_fetch_response(partitions, group_id='g1'):
     """partitions: list of (topic, partition, committed_offset, metadata, leader_epoch)."""
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
+    _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+    _GroupTopic = _Group.OffsetFetchResponseTopics
+    _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
     by_topic = {}
     for topic, part, offset, meta, le in partitions:
-        by_topic.setdefault(topic, []).append(_Partition(
-            partition_index=part, committed_offset=offset,
-            committed_leader_epoch=le, metadata=meta, error_code=0))
+        by_topic.setdefault(topic, []).append((part, offset, meta, le))
+    topics = [_Topic(name=t, partitions=[
+        _Partition(partition_index=part, committed_offset=offset,
+                   committed_leader_epoch=le, metadata=meta, error_code=0)
+        for part, offset, meta, le in parts])
+        for t, parts in by_topic.items()]
+    groups = [_Group(group_id=group_id, error_code=0, topics=[
+        _GroupTopic(name=t, partitions=[
+            _GroupPartition(partition_index=part, committed_offset=offset,
+                            committed_leader_epoch=le, metadata=meta, error_code=0)
+            for part, offset, meta, le in parts])
+        for t, parts in by_topic.items()])]
     return OffsetFetchResponse(
         throttle_time_ms=0, error_code=0,
-        topics=[_Topic(name=t, partitions=parts) for t, parts in by_topic.items()],
+        topics=topics, groups=groups,
     )
 
 
@@ -688,3 +700,129 @@ class TestResetGroupOffsetsMockBroker:
         with pytest.raises(TypeError, match='Unsupported reset target'):
             admin.reset_group_offsets(
                 'g1', {tp: 'earliest'}, group_coordinator_id=0)
+
+
+# ---------------------------------------------------------------------------
+# list_group_offsets / list_consumer_group_offsets
+# ---------------------------------------------------------------------------
+
+
+class TestListGroupOffsetsMockBroker:
+    def test_single_group_returns_offsets_at_v8(self, broker, admin):
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['api_version'] = api_version
+            return _offset_fetch_response(
+                [('topic-a', 0, 123, 'm', 4), ('topic-a', 1, 234, '', -1)])
+
+        broker.respond_fn(OffsetFetchRequest, handler)
+        result = admin.list_group_offsets('g1', group_coordinator_id=0)
+
+        # Negotiated version is v8 against the default (4, 2) MockBroker.
+        assert captured['api_version'] == 8
+        assert result == {
+            TopicPartition('topic-a', 0): OffsetAndMetadata(
+                offset=123, metadata='m', leader_epoch=4),
+            TopicPartition('topic-a', 1): OffsetAndMetadata(
+                offset=234, metadata='', leader_epoch=-1),
+        }
+
+    def test_single_group_partition_error_raises(self, broker, admin):
+        _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+        _GroupTopic = _Group.OffsetFetchResponseTopics
+        _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
+        broker.respond(OffsetFetchRequest, OffsetFetchResponse(
+            throttle_time_ms=0, error_code=0, topics=[],
+            groups=[_Group(group_id='g1', error_code=0, topics=[
+                _GroupTopic(name='topic-a', partitions=[
+                    _GroupPartition(partition_index=0, committed_offset=-1,
+                                    committed_leader_epoch=-1, metadata='',
+                                    error_code=Errors.UnstableOffsetCommitError.errno),
+                ])])]))
+        with pytest.raises(Errors.UnstableOffsetCommitError):
+            admin.list_group_offsets('g1', group_coordinator_id=0)
+
+
+class TestListConsumerGroupOffsetsMockBroker:
+    def test_batches_groups_sharing_coordinator(self, broker, admin):
+        # Pre-seed the coordinator cache so we don't need FindCoordinator
+        # support in the mock broker.
+        admin._coordinator_cache['g1'] = 0
+        admin._coordinator_cache['g2'] = 0
+
+        captured = {}
+        _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+        _GroupTopic = _Group.OffsetFetchResponseTopics
+        _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetFetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['api_version'] = api_version
+            captured['request_count'] = captured.get('request_count', 0) + 1
+            captured['group_ids'] = [g.group_id for g in req.groups]
+            return OffsetFetchResponse(
+                throttle_time_ms=0, error_code=0, topics=[],
+                groups=[
+                    _Group(group_id='g1', error_code=0, topics=[
+                        _GroupTopic(name='topic-a', partitions=[
+                            _GroupPartition(partition_index=0, committed_offset=10,
+                                            committed_leader_epoch=-1, metadata='',
+                                            error_code=0)])]),
+                    _Group(group_id='g2', error_code=0, topics=[
+                        _GroupTopic(name='topic-b', partitions=[
+                            _GroupPartition(partition_index=0, committed_offset=20,
+                                            committed_leader_epoch=-1, metadata='',
+                                            error_code=0)])]),
+                ])
+
+        broker.respond_fn(OffsetFetchRequest, handler)
+        result = admin.list_consumer_group_offsets({'g1': None, 'g2': None})
+
+        assert captured['api_version'] == 8
+        assert captured['request_count'] == 1  # single RPC for both groups
+        assert sorted(captured['group_ids']) == ['g1', 'g2']
+        assert result == {
+            'g1': {TopicPartition('topic-a', 0):
+                   OffsetAndMetadata(offset=10, metadata='', leader_epoch=-1)},
+            'g2': {TopicPartition('topic-b', 0):
+                   OffsetAndMetadata(offset=20, metadata='', leader_epoch=-1)},
+        }
+
+    def test_group_level_error_raises(self, broker, admin):
+        admin._coordinator_cache['g1'] = 0
+        _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+        broker.respond(OffsetFetchRequest, OffsetFetchResponse(
+            throttle_time_ms=0, error_code=0, topics=[],
+            groups=[_Group(
+                group_id='g1',
+                error_code=Errors.GroupIdNotFoundError.errno,
+                topics=[])]))
+        with pytest.raises(GroupIdNotFoundError):
+            admin.list_consumer_group_offsets({'g1': None})
+
+    @pytest.mark.parametrize("broker", [(2, 8, 0)], indirect=True)
+    def test_fallback_on_pre_v8_broker_issues_one_rpc_per_group(self, broker, admin):
+        # Kafka 2.8 caps OffsetFetch at v7 (KIP-447 only) -> no batch, fan out.
+        admin._coordinator_cache['g1'] = 0
+        admin._coordinator_cache['g2'] = 0
+        captured = {'count': 0, 'group_ids': []}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetFetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['count'] += 1
+            captured['group_ids'].append(req.group_id)
+            captured['api_version'] = api_version
+            return _offset_fetch_response(
+                [('topic-a', 0, 100, '', -1)], group_id=req.group_id)
+
+        broker.respond_fn(OffsetFetchRequest, handler)
+        broker.respond_fn(OffsetFetchRequest, handler)
+        result = admin.list_consumer_group_offsets({'g1': None, 'g2': None})
+
+        assert captured['count'] == 2
+        assert sorted(captured['group_ids']) == ['g1', 'g2']
+        assert captured['api_version'] == 7  # negotiated to v7 on 2.8
+        assert set(result.keys()) == {'g1', 'g2'}

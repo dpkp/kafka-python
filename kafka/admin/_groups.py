@@ -179,78 +179,120 @@ class GroupAdminMixin:
 
     # -- List group offsets -------------------------------------------
 
-    def _list_group_offsets_request(self, group_id, partitions=None):
+    def _list_group_offsets_request(self, group_specs):
         _Topic = OffsetFetchRequest.OffsetFetchRequestTopic
-        if partitions is None:
-            min_version = 1
-            topics = None
+        _Group = OffsetFetchRequest.OffsetFetchRequestGroup
+        _GroupTopic = _Group.OffsetFetchRequestTopics
+
+        groups = []
+        for group_id, partitions in group_specs.items():
+            if partitions is None:
+                group_topics = None
+            else:
+                topics_partitions = defaultdict(set)
+                for topic, partition in partitions:
+                    topics_partitions[topic].add(partition)
+                group_topics = [
+                    _GroupTopic(name=name, partition_indexes=list(parts))
+                    for name, parts in topics_partitions.items()
+                ]
+            groups.append(_Group(group_id=group_id, topics=group_topics))
+
+        if len(groups) == 0:
+            raise ValueError('Empty group_specs!')
+        elif len(groups) > 1:
+            min_version = 8
+        elif len(groups) == 1 and groups[0].topics is None:
+            min_version = 2
         else:
             min_version = 0
-            topics_partitions_dict = defaultdict(set)
-            for topic, partition in partitions:
-                topics_partitions_dict[topic].add(partition)
-            topics = [
-                _Topic(name=name, partition_indexes=list(partitions))
-                for name, partitions in topics_partitions_dict.items()
-            ]
-        return OffsetFetchRequest(group_id=group_id, topics=topics,
-                                  min_version=min_version, max_version=6)
+        max_version = 8
+        return OffsetFetchRequest(group_id=groups[0].group_id,
+                                  topics=groups[0].topics,
+                                  groups=groups,
+                                  min_version=min_version,
+                                  max_version=max_version)
 
-    def _list_group_offsets_process_response(self, response):
-        """Process an OffsetFetchResponse."""
-        if response.API_VERSION > 1:
-            error_type = Errors.for_code(response.error_code)
-            if error_type is not Errors.NoError:
-                raise error_type(
-                    "OffsetFetchResponse failed with response '{}'."
-                    .format(response))
+    @staticmethod
+    def _parse_group_offsets(group):
+        """Build {TopicPartition: OffsetAndMetadata} from an OffsetFetchResponse or OffsetFetchResponseGroup."""
+        error_type = Errors.for_code(group.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "OffsetFetchResponse failed for group '{}'.".format(group.group_id))
         results = {}
-        for topic in response.topics:
+        for topic in group.topics:
             for partition in topic.partitions:
                 tp = TopicPartition(topic.name, partition.partition_index)
-                error_type = Errors.for_code(partition.error_code)
-                if error_type is not Errors.NoError:
-                    raise error_type(
+                partition_error = Errors.for_code(partition.error_code)
+                if partition_error is not Errors.NoError:
+                    raise partition_error(
                         f"OffsetFetchResponse failed for partition {tp.partition}")
                 results[tp] = OffsetAndMetadata(
                     offset=partition.committed_offset,
                     metadata=partition.metadata,
-                    leader_epoch=partition.committed_leader_epoch
+                    leader_epoch=partition.committed_leader_epoch,
                 )
         return results
 
-    async def _async_list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
-        if group_coordinator_id is None:
-            group_coordinator_id = await self._find_coordinator_id(group_id)
-        request = self._list_group_offsets_request(group_id, partitions)
-        response = await self._manager.send(request, node_id=group_coordinator_id)
-        return self._list_group_offsets_process_response(response)
+    def _list_group_offsets_process_response(self, response, group_id=None):
+        """Process an OffsetFetchResponse."""
+        error_type = Errors.for_code(response.error_code)
+        if error_type is not Errors.NoError:
+            raise error_type(
+                "OffsetFetchResponse failed with response '{}'."
+                .format(response))
+        if response.API_VERSION >= 8:
+            return {group.group_id: self._parse_group_offsets(group)
+                    for group in response.groups}
+        else:
+            return {group_id: self._parse_group_offsets(response)}
 
-    def list_group_offsets(self, group_id, group_coordinator_id=None, partitions=None):
-        """Fetch committed offsets for a single consumer group.
+    async def _async_list_group_offsets(self, group_specs):
+        # Bucket groups by coordinator. One OffsetFetch per coordinator.
+        coordinators_groups = defaultdict(list)
+        for group_id in group_specs:
+            coordinator_id = await self._find_coordinator_id(group_id)
+            coordinators_groups[coordinator_id].append(group_id)
 
-        Note:
-        This does not verify that the group_id or partitions actually exist
-        in the cluster.
+        results = {}
+        _Group = OffsetFetchRequest.OffsetFetchRequestGroup
+        _GroupTopic = _Group.OffsetFetchRequestTopics
+        for coordinator_id, group_ids in coordinators_groups.items():
+            request = self._list_group_offsets_request({group_id: group_specs[group_id]
+                                                        for group_id in group_ids})
+            response = await self._manager.send(request, node_id=coordinator_id)
+            results.update(self._list_group_offsets_process_response(response, group_id=group_ids[0]))
+        return results
 
-        As soon as any error is encountered, it is immediately raised.
+    def list_consumer_group_offsets(self, group_specs):
+        """Fetch committed offsets for one or more consumer groups.
+
+        On brokers supporting OffsetFetch v8+ (Apache Kafka 3.0+, KIP-709), this
+        issues a single OffsetFetch per coordinator covering all groups
+        hosted by that coordinator. On older brokers it currently only supports
+        one consumer group (per coordinator).
 
         Arguments:
-            group_id (str): The consumer group id name for which to fetch offsets.
-
-        Keyword Arguments:
-            group_coordinator_id (int, optional): The node_id of the group's coordinator
-                broker. If set to None, will query the cluster to find the group
-                coordinator. Default: None.
-            partitions: A list of TopicPartitions for which to fetch
-                offsets. On brokers >= 0.10.2, this can be set to None to fetch all
-                known offsets for the consumer group. Default: None.
+            group_specs (dict): Mapping of group_id (str) to either a list of
+                :class:`~kafka.TopicPartition` to fetch, or None to fetch all
+                committed offsets for that group.
 
         Returns:
-            A dict mapping :class:`~kafka.TopicPartition` to
+            A dict mapping group_id (str) to a dict mapping
+                :class:`~kafka.TopicPartition` to
                 :class:`~kafka.structs.OffsetAndMetadata`.
+
+        Raises:
+            UnsupportedVersionError: if multiple groups are requested against
+                a broker that does not support OffsetFetch v8+; or if group_spec
+                with value None against a broker that does not support
+                OffsetFetch v2+.
+            BrokerResponseError: as soon as any group- or partition-level error
+                is encountered (matches the eager-raise behavior of
+                :meth:`list_group_offsets`).
         """
-        return self._manager.run(self._async_list_group_offsets, group_id, group_coordinator_id, partitions)
+        return self._manager.run(self._async_list_group_offsets, group_specs)
 
     # -- Delete groups ------------------------------------------------
 
