@@ -17,7 +17,7 @@ import kafka.errors as Errors
 from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
-from kafka.protocol.consumer import OffsetCommitRequest, OffsetFetchRequest
+from kafka.protocol.consumer import OffsetCommitRequest, OffsetFetchRequest, IsolationLevel
 from kafka.structs import OffsetAndMetadata, TopicPartition
 from kafka.util import Timer, WeakMethod
 
@@ -41,6 +41,7 @@ class ConsumerCoordinator(BaseCoordinator):
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'exclude_internal_topics': True,
+        'isolation_level': 'read_uncommitted',
         'metrics': None,
         'metric_group_prefix': 'consumer'
     }
@@ -95,6 +96,11 @@ class ConsumerCoordinator(BaseCoordinator):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        try:
+            self._isolation_level = IsolationLevel.build_from(self.config['isolation_level'])
+        except ValueError:
+            raise Errors.KafkaConfigurationError('Unrecognized isolation_level') from None
 
         self._subscription = subscription
         self._is_leader = False
@@ -1102,9 +1108,11 @@ class ConsumerCoordinator(BaseCoordinator):
             topic_partitions = None
             min_version = 2
 
+        require_stable = self._isolation_level == IsolationLevel.READ_COMMITTED
         request = OffsetFetchRequest(
             group_id=self.group_id,
             topics=topic_partitions,
+            require_stable=require_stable,
             min_version=min_version,
             max_version=max_version,
         )

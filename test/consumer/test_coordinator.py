@@ -759,6 +759,8 @@ def test_send_offset_fetch_request_fail(coordinator, partitions):
     ((0, 11), 3),
     ((2, 0), 4),
     ((2, 1), 5),
+    ((2, 4), 6),
+    ((2, 5), 7),
 ], indirect=['broker'])
 def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, version):
     captured = {}
@@ -830,6 +832,63 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
     assert spy.call_count == 1
     (response,) = spy.call_args[0]
     assert isinstance(response, OffsetFetchResponse)
+
+
+@pytest.mark.parametrize('isolation_level,expected', [
+    ('read_uncommitted', False),
+    ('read_committed', True),
+])
+def test_send_offset_fetch_request_sets_require_stable(
+        broker, client, metrics, partitions, isolation_level, expected):
+    coord = ConsumerCoordinator(client, SubscriptionState(),
+                                metrics=metrics,
+                                api_version=broker.broker_version,
+                                isolation_level=isolation_level,
+                                max_poll_interval_ms=300000,
+                                session_timeout_ms=10000)
+    try:
+        client._manager.bootstrap(timeout_ms=5000)
+        coord._subscription.subscribe(topics=['foobar'])
+        coord.coordinator_id = 0
+        coord._generation = Generation(0, 'foobar', b'')
+        coord.state = MemberState.STABLE
+        coord.rejoin_needed = False
+
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            req = OffsetFetchRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['require_stable'] = req.require_stable
+            _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+            _GroupTopic = _Group.OffsetFetchResponseTopics
+            _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
+            return OffsetFetchResponse(
+                throttle_time_ms=0, error_code=0, topics=[
+                    _GroupTopic(name='foobar', partitions=[
+                        _GroupPartition(partition_index=0, committed_offset=1,
+                                        committed_leader_epoch=-1, metadata='',
+                                        error_code=0),
+                        _GroupPartition(partition_index=1, committed_offset=2,
+                                        committed_leader_epoch=-1, metadata='',
+                                        error_code=0),
+                    ])])
+
+        broker.respond_fn(OffsetFetchRequest, handler)
+        future = coord._manager.call_soon(
+            coord._send_offset_fetch_request, partitions)
+        coord._client.poll(future=future, timeout_ms=5000)
+        assert future.succeeded()
+        assert captured['require_stable'] is expected
+    finally:
+        coord.close(timeout_ms=0)
+
+
+def test_consumer_coordinator_rejects_bad_isolation_level(client, metrics):
+    with pytest.raises(Errors.KafkaConfigurationError):
+        ConsumerCoordinator(client, SubscriptionState(),
+                            metrics=metrics,
+                            isolation_level='banana')
 
 
 @pytest.mark.parametrize('response,error,dead', [
