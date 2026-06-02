@@ -179,10 +179,11 @@ class GroupAdminMixin:
 
     # -- List group offsets -------------------------------------------
 
-    def _list_group_offsets_request(self, group_specs):
+    def _list_group_offsets_requests(self, group_specs):
         _Topic = OffsetFetchRequest.OffsetFetchRequestTopic
         _Group = OffsetFetchRequest.OffsetFetchRequestGroup
         _GroupTopic = _Group.OffsetFetchRequestTopics
+        max_version = 8
 
         groups = []
         for group_id, partitions in group_specs.items():
@@ -200,18 +201,18 @@ class GroupAdminMixin:
 
         if len(groups) == 0:
             raise ValueError('Empty group_specs!')
-        elif len(groups) > 1:
-            min_version = 8
-        elif len(groups) == 1 and groups[0].topics is None:
-            min_version = 2
+        # Return multple requests when broker does not support v8+
+        if self._manager.broker_version_data.api_version(OffsetFetchRequest) < 8:
+            for group in groups:
+                min_version = 2 if group.topics is None else 0
+                yield (group.group_id, OffsetFetchRequest(group_id=group.group_id,
+                                                          topics=group.topics,
+                                                          min_version=min_version,
+                                                          max_version=max_version))
         else:
-            min_version = 0
-        max_version = 8
-        return OffsetFetchRequest(group_id=groups[0].group_id,
-                                  topics=groups[0].topics,
-                                  groups=groups,
-                                  min_version=min_version,
-                                  max_version=max_version)
+            yield (None, OffsetFetchRequest(groups=groups,
+                                            min_version=8,
+                                            max_version=max_version))
 
     @staticmethod
     def _parse_group_offsets(group):
@@ -259,13 +260,13 @@ class GroupAdminMixin:
         _Group = OffsetFetchRequest.OffsetFetchRequestGroup
         _GroupTopic = _Group.OffsetFetchRequestTopics
         for coordinator_id, group_ids in coordinators_groups.items():
-            request = self._list_group_offsets_request({group_id: group_specs[group_id]
-                                                        for group_id in group_ids})
-            response = await self._manager.send(request, node_id=coordinator_id)
-            results.update(self._list_group_offsets_process_response(response, group_id=group_ids[0]))
+            for group_id, request in self._list_group_offsets_requests({group_id: group_specs[group_id]
+                                                                        for group_id in group_ids}):
+                response = await self._manager.send(request, node_id=coordinator_id)
+                results.update(self._list_group_offsets_process_response(response, group_id=group_id))
         return results
 
-    def list_consumer_group_offsets(self, group_specs):
+    def list_group_offsets(self, group_specs):
         """Fetch committed offsets for one or more consumer groups.
 
         On brokers supporting OffsetFetch v8+ (Apache Kafka 3.0+, KIP-709), this
@@ -277,6 +278,8 @@ class GroupAdminMixin:
             group_specs (dict): Mapping of group_id (str) to either a list of
                 :class:`~kafka.TopicPartition` to fetch, or None to fetch all
                 committed offsets for that group.
+                Or, one or more group_id (str or list[str]) to fetch all offsets
+                for each group.
 
         Returns:
             A dict mapping group_id (str) to a dict mapping
@@ -289,9 +292,12 @@ class GroupAdminMixin:
                 with value None against a broker that does not support
                 OffsetFetch v2+.
             BrokerResponseError: as soon as any group- or partition-level error
-                is encountered (matches the eager-raise behavior of
-                :meth:`list_group_offsets`).
+                is encountered.
         """
+        if isinstance(group_specs, list):
+            group_specs = {group_id: None for group_id in group_specs}
+        elif isinstance(group_specs, str):
+            group_specs = {group_specs: None}
         return self._manager.run(self._async_list_group_offsets, group_specs)
 
     # -- Delete groups ------------------------------------------------
@@ -452,7 +458,8 @@ class GroupAdminMixin:
         if group_coordinator_id is None:
             group_coordinator_id = await self._find_coordinator_id(group_id)
 
-        current = await self._async_list_group_offsets({group_id: all_tps})
+        #import pdb; pdb.set_trace()
+        current = (await self._async_list_group_offsets({group_id: list(all_tps)}))[group_id]
         earliest = await self._async_list_partition_offsets({tp: OffsetSpec.EARLIEST for tp in all_tps})
         latest = await self._async_list_partition_offsets({tp: OffsetSpec.LATEST for tp in all_tps})
 

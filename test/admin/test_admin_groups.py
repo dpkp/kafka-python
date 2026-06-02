@@ -20,7 +20,10 @@ from kafka.protocol.consumer import (
     OffsetDeleteRequest, OffsetDeleteResponse,
     OffsetFetchRequest, OffsetFetchResponse,
 )
-from kafka.protocol.metadata import MetadataResponse
+from kafka.protocol.metadata import (
+    MetadataResponse,
+    FindCoordinatorRequest, FindCoordinatorResponse,
+)
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.structs import OffsetAndMetadata, TopicPartition
 
@@ -583,6 +586,7 @@ def _offset_commit_response(partitions):
 class TestResetGroupOffsetsMockBroker:
     def test_clamps_explicit_offset_above_latest(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         # Bounds: earliest=10, latest=100
@@ -603,7 +607,7 @@ class TestResetGroupOffsetsMockBroker:
 
         tp = TopicPartition('topic-a', 0)
         result = admin.reset_group_offsets(
-            'g1', {tp: 9999}, group_coordinator_id=0)
+            'g1', {tp: 9999})
 
         assert committed[tp] == 100
         assert result[tp]['offset'] == 100
@@ -611,6 +615,7 @@ class TestResetGroupOffsetsMockBroker:
 
     def test_clamps_explicit_offset_below_earliest(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -630,7 +635,7 @@ class TestResetGroupOffsetsMockBroker:
 
         tp = TopicPartition('topic-a', 0)
         result = admin.reset_group_offsets(
-            'g1', {tp: 5}, group_coordinator_id=0)
+            'g1', {tp: 5})
 
         assert committed[tp] == 10
         assert result[tp]['offset'] == 10
@@ -638,6 +643,7 @@ class TestResetGroupOffsetsMockBroker:
     def test_clamps_unknown_offset_to_latest(self, broker, admin):
         # Simulate a timestamp beyond the last record: ListOffsets returns -1.
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -659,13 +665,14 @@ class TestResetGroupOffsetsMockBroker:
 
         tp = TopicPartition('topic-a', 0)
         result = admin.reset_group_offsets(
-            'g1', {tp: OffsetTimestamp(99999999999)}, group_coordinator_id=0)
+            'g1', {tp: OffsetTimestamp(99999999999)})
 
         assert committed[tp] == 100
         assert result[tp]['offset'] == 100
 
     def test_offset_in_range_not_clamped(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
+        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, 'm', 3)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -686,24 +693,24 @@ class TestResetGroupOffsetsMockBroker:
 
         tp = TopicPartition('topic-a', 0)
         result = admin.reset_group_offsets(
-            'g1', {tp: 42}, group_coordinator_id=0)
+            'g1', {tp: 42})
 
         # Offset not clamped; existing metadata/leader_epoch preserved.
         assert committed[tp] == (42, 'm', 3)
         assert result[tp]['offset'] == 42
 
     def test_empty_input_noop(self, broker, admin):
-        assert admin.reset_group_offsets('g1', {}, group_coordinator_id=0) == {}
+        assert admin.reset_group_offsets('g1', {}) == {}
 
     def test_unsupported_value_type_raises(self, broker, admin):
         tp = TopicPartition('topic-a', 0)
         with pytest.raises(TypeError, match='Unsupported reset target'):
             admin.reset_group_offsets(
-                'g1', {tp: 'earliest'}, group_coordinator_id=0)
+                'g1', {tp: 'earliest'})
 
 
 # ---------------------------------------------------------------------------
-# list_group_offsets / list_consumer_group_offsets
+# list_group_offsets
 # ---------------------------------------------------------------------------
 
 
@@ -717,7 +724,7 @@ class TestListGroupOffsetsMockBroker:
                 [('topic-a', 0, 123, 'm', 4), ('topic-a', 1, 234, '', -1)])
 
         broker.respond_fn(OffsetFetchRequest, handler)
-        result = admin.list_group_offsets('g1', group_coordinator_id=0)
+        result = admin.list_group_offsets('g1')
 
         # Negotiated version is v8 against the default (4, 2) MockBroker.
         assert captured['api_version'] == 8
@@ -741,10 +748,10 @@ class TestListGroupOffsetsMockBroker:
                                     error_code=Errors.UnstableOffsetCommitError.errno),
                 ])])]))
         with pytest.raises(Errors.UnstableOffsetCommitError):
-            admin.list_group_offsets('g1', group_coordinator_id=0)
+            admin.list_group_offsets('g1')
 
 
-class TestListConsumerGroupOffsetsMockBroker:
+class TestListGroupOffsetsMockBroker:
     def test_batches_groups_sharing_coordinator(self, broker, admin):
         # Pre-seed the coordinator cache so we don't need FindCoordinator
         # support in the mock broker.
@@ -778,7 +785,7 @@ class TestListConsumerGroupOffsetsMockBroker:
                 ])
 
         broker.respond_fn(OffsetFetchRequest, handler)
-        result = admin.list_consumer_group_offsets({'g1': None, 'g2': None})
+        result = admin.list_group_offsets(['g1', 'g2'])
 
         assert captured['api_version'] == 8
         assert captured['request_count'] == 1  # single RPC for both groups
@@ -800,7 +807,7 @@ class TestListConsumerGroupOffsetsMockBroker:
                 error_code=Errors.GroupIdNotFoundError.errno,
                 topics=[])]))
         with pytest.raises(GroupIdNotFoundError):
-            admin.list_consumer_group_offsets({'g1': None})
+            admin.list_group_offsets({'g1': None})
 
     @pytest.mark.parametrize("broker", [(2, 8, 0)], indirect=True)
     def test_fallback_on_pre_v8_broker_issues_one_rpc_per_group(self, broker, admin):
@@ -820,7 +827,7 @@ class TestListConsumerGroupOffsetsMockBroker:
 
         broker.respond_fn(OffsetFetchRequest, handler)
         broker.respond_fn(OffsetFetchRequest, handler)
-        result = admin.list_consumer_group_offsets({'g1': None, 'g2': None})
+        result = admin.list_group_offsets({'g1': None, 'g2': None})
 
         assert captured['count'] == 2
         assert sorted(captured['group_ids']) == ['g1', 'g2']
