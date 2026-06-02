@@ -1097,24 +1097,32 @@ class ConsumerCoordinator(BaseCoordinator):
         log.debug("Group %s fetching committed offsets for partitions: %s",
                   self.group_id, '(all)' if partitions is None else partitions)
         # construct the request
-        max_version = 7
+        _Topic = OffsetFetchRequest.OffsetFetchRequestTopic
+        _Group = OffsetFetchRequest.OffsetFetchRequestGroup
+        _GroupTopic = _Group.OffsetFetchRequestTopics
         if partitions is not None:
             topic_partitions = collections.defaultdict(set)
             for tp in partitions:
                 topic_partitions[tp.topic].add(tp.partition)
-            topic_partitions = list(topic_partitions.items())
+            topics = [_Topic(name=t, partition_indexes=list(p))
+                      for t, p in topic_partitions.items()]
+            group_topics = [_GroupTopic(name=t, partition_indexes=list(p))
+                            for t, p in topic_partitions.items()]
             min_version = 0
         else:
-            topic_partitions = None
+            topics = None
+            group_topics = None
             min_version = 2
 
+        groups = [_Group(group_id=self.group_id, topics=group_topics)]
         require_stable = self._isolation_level == IsolationLevel.READ_COMMITTED
         request = OffsetFetchRequest(
             group_id=self.group_id,
-            topics=topic_partitions,
+            topics=topics,
+            groups=groups,
             require_stable=require_stable,
             min_version=min_version,
-            max_version=max_version,
+            max_version=8,
         )
 
         try:
@@ -1126,8 +1134,16 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _handle_offset_fetch_response(self, response):
         log.debug("Received OffsetFetchResponse: %s", response)
-        if response.API_VERSION >= 2 and response.error_code != Errors.NoError.errno:
-            error_type = Errors.for_code(response.error_code)
+        if response.API_VERSION >= 8:
+            group = response.groups[0]
+            top_level_error_code = group.error_code
+            topics = group.topics
+        else:
+            top_level_error_code = response.error_code if response.API_VERSION >= 2 else Errors.NoError.errno
+            topics = response.topics
+
+        if top_level_error_code != Errors.NoError.errno:
+            error_type = Errors.for_code(top_level_error_code)
             log.debug("Offset fetch failed: %s", error_type.__name__)
             error = error_type()
             if error_type is Errors.NotCoordinatorError:
@@ -1142,14 +1158,13 @@ class ConsumerCoordinator(BaseCoordinator):
                 raise error
 
         offsets = {}
-        for topic, partitions in response.topics:
+        for topic, partitions in ((t.name, t.partitions) for t in topics):
             for partition_data in partitions:
-                partition, offset = partition_data[:2]
-                if response.API_VERSION >= 5:
-                    leader_epoch, metadata, error_code = partition_data[2:]
-                else:
-                    metadata, error_code = partition_data[2:]
-                    leader_epoch = -1
+                partition = partition_data.partition_index
+                offset = partition_data.committed_offset
+                leader_epoch = partition_data.committed_leader_epoch
+                metadata = partition_data.metadata
+                error_code = partition_data.error_code
                 tp = TopicPartition(topic, partition)
                 error_type = Errors.for_code(error_code)
                 if error_type is not Errors.NoError:

@@ -761,11 +761,15 @@ def test_send_offset_fetch_request_fail(coordinator, partitions):
     ((2, 1), 5),
     ((2, 4), 6),
     ((2, 5), 7),
+    ((3, 0), 8),
 ], indirect=['broker'])
 def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, version):
     captured = {}
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
+    _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+    _GroupTopic = _Group.OffsetFetchResponseTopics
+    _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
 
     def handler(api_key, api_version, correlation_id, request_bytes):
         captured['api_version'] = api_version
@@ -777,7 +781,14 @@ def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, ve
                            committed_leader_epoch=-1, metadata='', error_code=0),
                 _Partition(partition_index=1, committed_offset=234,
                            committed_leader_epoch=-1, metadata='', error_code=0),
-            ])])
+            ])],
+            groups=[_Group(group_id='foobar', error_code=0, topics=[
+                _GroupTopic(name='foobar', partitions=[
+                    _GroupPartition(partition_index=0, committed_offset=123,
+                                    committed_leader_epoch=-1, metadata='', error_code=0),
+                    _GroupPartition(partition_index=1, committed_offset=234,
+                                    committed_leader_epoch=-1, metadata='', error_code=0),
+                ])])])
 
     broker.respond_fn(OffsetFetchRequest, handler)
     future = seeded_coord._manager.call_soon(
@@ -812,6 +823,9 @@ def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partiti
 def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partitions, offsets):
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
+    _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+    _GroupTopic = _Group.OffsetFetchResponseTopics
+    _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
     broker.respond(OffsetFetchRequest, OffsetFetchResponse(
         throttle_time_ms=0,
         error_code=0,
@@ -820,7 +834,14 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
                        committed_leader_epoch=-1, metadata='', error_code=0),
             _Partition(partition_index=1, committed_offset=234,
                        committed_leader_epoch=-1, metadata='', error_code=0),
-        ])]))
+        ])],
+        groups=[_Group(group_id='foobar', error_code=0, topics=[
+            _GroupTopic(name='foobar', partitions=[
+                _GroupPartition(partition_index=0, committed_offset=123,
+                                committed_leader_epoch=-1, metadata='', error_code=0),
+                _GroupPartition(partition_index=1, committed_offset=234,
+                                committed_leader_epoch=-1, metadata='', error_code=0),
+            ])])]))
     spy = mocker.spy(seeded_coord, '_handle_offset_fetch_response')
 
     future = seeded_coord._manager.call_soon(
@@ -864,7 +885,8 @@ def test_send_offset_fetch_request_sets_require_stable(
             _GroupTopic = _Group.OffsetFetchResponseTopics
             _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
             return OffsetFetchResponse(
-                throttle_time_ms=0, error_code=0, topics=[
+                throttle_time_ms=0, error_code=0, topics=[],
+                groups=[_Group(group_id='foobar', error_code=0, topics=[
                     _GroupTopic(name='foobar', partitions=[
                         _GroupPartition(partition_index=0, committed_offset=1,
                                         committed_leader_epoch=-1, metadata='',
@@ -872,7 +894,7 @@ def test_send_offset_fetch_request_sets_require_stable(
                         _GroupPartition(partition_index=1, committed_offset=2,
                                         committed_leader_epoch=-1, metadata='',
                                         error_code=0),
-                    ])])
+                    ])])])
 
         broker.respond_fn(OffsetFetchRequest, handler)
         future = coord._manager.call_soon(
@@ -891,28 +913,71 @@ def test_consumer_coordinator_rejects_bad_isolation_level(client, metrics):
                             isolation_level='banana')
 
 
+OffsetFetchResponseTopic = OffsetFetchResponse.OffsetFetchResponseTopic
+OffsetFetchResponsePartition = OffsetFetchResponseTopic.OffsetFetchResponsePartition
 @pytest.mark.parametrize('response,error,dead', [
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 14), (1, 234, '', 14)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=14),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=14)])], version=0),
      Errors.CoordinatorLoadInProgressError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 16), (1, 234, '', 16)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=16),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=16)])], version=0),
      Errors.NotCoordinatorError, True),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 25), (1, 234, '', 25)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=25),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=25)])], version=0),
      Errors.UnknownMemberIdError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 22), (1, 234, '', 22)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=22),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=22)])], version=0),
      Errors.IllegalGenerationError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 29), (1, 234, '', 29)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=29),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=29)])], version=0),
      Errors.TopicAuthorizationFailedError, False),
-    (OffsetFetchResponse[0]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=0)])], version=0),
      None, False),
-    (OffsetFetchResponse[1]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])]),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=0)])], version=1),
      None, False),
-    (OffsetFetchResponse[2]([('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+    (OffsetFetchResponse(topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=0)])],
+                         error_code=0,
+                         version=2),
      None, False),
-    (OffsetFetchResponse[3](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+    (OffsetFetchResponse(throttle_time_ms=0, topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=0)])],
+                         error_code=0,
+                         version=3),
      None, False),
-    (OffsetFetchResponse[4](0, [('foobar', [(0, 123, '', 0), (1, 234, '', 0)])], 0),
+    (OffsetFetchResponse(throttle_time_ms=0, topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, metadata='', error_code=0)])],
+                         error_code=0,
+                         version=4),
      None, False),
-    (OffsetFetchResponse[5](0, [('foobar', [(0, 123, -1, '', 0), (1, 234, -1, '', 0)])], 0),
+    (OffsetFetchResponse(throttle_time_ms=0, topics=[
+        OffsetFetchResponseTopic(name='foobar', partitions=[
+            OffsetFetchResponsePartition(partition_index=0, committed_offset=123, committed_leader_epoch=-1, metadata='', error_code=0),
+            OffsetFetchResponsePartition(partition_index=1, committed_offset=234, committed_leader_epoch=-1, metadata='', error_code=0)])],
+                         error_code=0,
+                         version=5),
      None, False),
 ])
 def test_handle_offset_fetch_response(coordinator, offsets, response, error, dead):
