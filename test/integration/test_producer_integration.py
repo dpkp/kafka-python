@@ -237,4 +237,4 @@ def test_transactional_producer_offsets(kafka_producer_factory, kafka_admin_clie
                 leader_epoch=leader_epoch,
             )
         }
-        assert admin.list_group_offsets('txn-test-group') == result
+        assert admin.list_group_offsets('txn-test-group') == {'txn-test-group': result}
