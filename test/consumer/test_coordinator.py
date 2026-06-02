@@ -864,7 +864,7 @@ def test_send_offset_fetch_request_sets_require_stable(
             _GroupTopic = _Group.OffsetFetchResponseTopics
             _GroupPartition = _GroupTopic.OffsetFetchResponsePartitions
             return OffsetFetchResponse(
-                throttle_time_ms=0, error_code=0, group_id='foobar', topics=[
+                throttle_time_ms=0, error_code=0, topics=[
                     _GroupTopic(name='foobar', partitions=[
                         _GroupPartition(partition_index=0, committed_offset=1,
                                         committed_leader_epoch=-1, metadata='',
