@@ -120,7 +120,9 @@ class KafkaConnectionManager:
             bootstrap_broker = random.choice(self.cluster.bootstrap_brokers())
             log.debug('Attempting bootstrap with %s', bootstrap_broker)
             try:
+                timeout_ms = (deadline - time.monotonic()) * 1000 if deadline is not None else None
                 conn = self.get_connection(bootstrap_broker.node_id,
+                                           timeout_ms=timeout_ms,
                                            pop_on_close=False,
                                            refresh_metadata_on_err=False,
                                            reset_backoff_on_connect=False)
