@@ -109,7 +109,7 @@ class KafkaNetSocket:
             # Needs retry
             # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
             elif ret in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
-                await net.wait_write(sock)
+                await net.wait_write(sock, timeout_at=timeout_at)
 
             # Connection failed
             else:

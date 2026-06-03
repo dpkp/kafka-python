@@ -378,19 +378,46 @@ class NetworkSelector:
     def _sleep(self, delay):
         self.call_later(delay, self._current)
 
-    def wait_write(self, fileobj):
-        return KernelEvent('_wait_write', fileobj)
+    def wait_write(self, fileobj, timeout_at=None):
+        return KernelEvent('_wait_write', fileobj, timeout_at)
 
-    def _wait_write(self, fileobj):
-        self.register_event(fileobj, selectors.EVENT_WRITE, self._current)
-        self._current.push_stack(lambda: self.unregister_event(fileobj, selectors.EVENT_WRITE))
+    def _wait_write(self, fileobj, timeout_at=None):
+        self._wait_io(fileobj, selectors.EVENT_WRITE, timeout_at)
 
-    def wait_read(self, fileobj):
-        return KernelEvent('_wait_read', fileobj)
+    def wait_read(self, fileobj, timeout_at=None):
+        return KernelEvent('_wait_read', fileobj, timeout_at)
 
-    def _wait_read(self, fileobj):
-        self.register_event(fileobj, selectors.EVENT_READ, self._current)
-        self._current.push_stack(lambda: self.unregister_event(fileobj, selectors.EVENT_READ))
+    def _wait_read(self, fileobj, timeout_at=None):
+        self._wait_io(fileobj, selectors.EVENT_READ, timeout_at)
+
+    def _wait_io(self, fileobj, event, timeout_at):
+        suspended = self._current
+        self.register_event(fileobj, event, suspended)
+        if timeout_at is None or self._closed:
+            suspended.push_stack(lambda: self.unregister_event(fileobj, event))
+            return
+
+        state = {'fired': False, 'timer': None}
+
+        def on_resume():
+            state['fired'] = True
+            if state['timer'] is not None:
+                try:
+                    self.unschedule(state['timer'])
+                except ValueError:
+                    pass
+            self.unregister_event(fileobj, event)
+
+        def on_timeout():
+            if state['fired']:
+                return
+            state['fired'] = True
+            self.unregister_event(fileobj, event)
+            suspended.inject_exc(Errors.KafkaTimeoutError('I/O wait timed out'))
+            self._ready.append(suspended)
+
+        suspended.push_stack(on_resume)
+        state['timer'] = self.call_at(timeout_at, on_timeout)
 
     def _schedule_tasks(self):
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():
@@ -499,7 +526,12 @@ class NetworkSelector:
                 step_start = time.monotonic() if threshold else None
                 try:
                     log_trace('Calling task %s', self._current)
-                    event = self._current()
+                    inject = self._current._exc
+                    if inject is not None:
+                        self._current._exc = None
+                        event = self._current(inject)
+                    else:
+                        event = self._current()
 
                 except StopIteration:
                     # Task ran to completion. Drop the strong ref so the Task
