@@ -37,16 +37,15 @@ class GroupAdminMixin:
 
     # -- Describe groups ----------------------------------------------
 
-    def _describe_groups_request(self, group_id):
+    def _describe_groups_request(self, group_ids):
         request = DescribeGroupsRequest(
-            groups=[group_id],
+            groups=list(group_ids),
             include_authorized_operations=True
         )
         return request
 
     def _describe_groups_process_response(self, response):
         """Process a DescribeGroupsResponse into a group description."""
-        assert len(response.groups) == 1
         for group in response.groups:
             for member in group.members:
                 if member.member_metadata:
