@@ -1,6 +1,7 @@
 import errno
 import logging
 import socket
+import time
 from urllib.parse import urlparse
 
 import kafka.errors as Errors
@@ -9,7 +10,7 @@ import kafka.errors as Errors
 log = logging.getLogger(__name__)
 
 
-async def create_connection(net, host, port, socket_options=(), proxy_url=None):
+async def create_connection(net, host, port, socket_options=(), proxy_url=None, timeout_at=None):
     """Connect to host:port; raises KafkaConnectionError on failure"""
     socket_factory = KafkaNetSocket(proxy_url)
     addrs = socket_factory.dns_lookup(host, port)
@@ -17,10 +18,12 @@ async def create_connection(net, host, port, socket_options=(), proxy_url=None):
     for res in addrs:
         try:
             log.debug('%s: Attempting to connect to %s (options: %s)', socket_factory, res, socket_options)
-            sock = await socket_factory.connect(net, res, socket_options)
+            sock = await socket_factory.connect(net, res, socket_options, timeout_at=timeout_at)
         except (socket.error, OSError) as e:
             exceptions.append(Errors.KafkaConnectionError('unable to connect: %s' % (e,)))
             continue
+        except Errors.KafkaTimeoutError:
+            raise Errors.KafkaConnectionError('Connection timed out')
         except Errors.KafkaConnectionError as e:
             exceptions.append(e)
             continue
@@ -79,17 +82,17 @@ class KafkaNetSocket:
     def socket(self, family=socket.AF_UNSPEC, sock_type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP):
         return socket.socket(family, sock_type, proto)
 
-    async def connect(self, net, addrinfo, socket_options=()):
+    async def connect(self, net, addrinfo, socket_options=(), timeout_at=None):
         """Create non-blocking socket (with options) and connect to addrinfo tuple"""
         family, sock_type, proto, _canonname, sockaddr = addrinfo
         sock = self.socket(family, sock_type, proto)
         sock.setblocking(False)
         for option in socket_options:
             sock.setsockopt(*option)
-        return await self.sock_connect(net, sock, sockaddr)
+        return await self.sock_connect(net, sock, sockaddr, timeout_at=timeout_at)
 
-    async def sock_connect(self, net, sock, sockaddr):
-        while True:
+    async def sock_connect(self, net, sock, sockaddr, timeout_at=None):
+        while timeout_at is None or time.monotonic() < timeout_at:
             ret = None
             try:
                 ret = self.connect_ex(sock, sockaddr)
@@ -112,6 +115,8 @@ class KafkaNetSocket:
             else:
                 errstr = errno.errorcode.get(ret, 'UNKNOWN')
                 raise Errors.KafkaConnectionError('{} {}'.format(ret, errstr))
+        else:
+            raise Errors.KafkaTimeoutError('Connection timed out')
 
     def connect_ex(self, sock, sockaddr):
         return sock.connect_ex(sockaddr)
