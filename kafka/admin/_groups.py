@@ -72,13 +72,20 @@ class GroupAdminMixin:
         return results
 
     async def _async_describe_groups(self, group_ids, group_coordinator_id=None):
+        # Bucket groups by coordinator. One DescribeGroups per coordinator.
+        coordinators_groups = defaultdict(list)
+        if group_coordinator_id is not None:
+            coordinators_groups[group_coordinator_id] = list(group_ids)
+        else:
+            coordinator_ids = await self._find_coordinator_ids(group_ids)
+            for group_id, coordinator_id in coordinator_ids.items():
+                coordinators_groups[coordinator_id].append(group_id)
+
         results = {}
-        for group_id in group_ids:
-            coordinator_id = group_coordinator_id or await self._find_coordinator_id(group_id)
-            request = self._describe_groups_request(group_id)
+        for coordinator_id, coordinator_group_ids in coordinators_groups.items():
+            request = self._describe_groups_request(coordinator_group_ids)
             response = await self._manager.send(request, node_id=coordinator_id)
             results.update(self._describe_groups_process_response(response))
-        # Combine key/vals from multiple requests into single dict
         return results
 
     def describe_groups(self, group_ids, group_coordinator_id=None, include_authorized_operations=False):
@@ -251,8 +258,8 @@ class GroupAdminMixin:
     async def _async_list_group_offsets(self, group_specs):
         # Bucket groups by coordinator. One OffsetFetch per coordinator.
         coordinators_groups = defaultdict(list)
-        for group_id in group_specs:
-            coordinator_id = await self._find_coordinator_id(group_id)
+        coordinator_ids = await self._find_coordinator_ids(list(group_specs))
+        for group_id, coordinator_id in coordinator_ids.items():
             coordinators_groups[coordinator_id].append(group_id)
 
         results = {}
@@ -317,8 +324,8 @@ class GroupAdminMixin:
         if group_coordinator_id is not None:
             coordinators_groups[group_coordinator_id] = group_ids
         else:
-            for group_id in group_ids:
-                coordinator_id = await self._find_coordinator_id(group_id)
+            coordinator_ids = await self._find_coordinator_ids(group_ids)
+            for group_id, coordinator_id in coordinator_ids.items():
                 coordinators_groups[coordinator_id].append(group_id)
 
         results = []
