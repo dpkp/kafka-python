@@ -106,7 +106,12 @@ class ScramClient:
         self.auth_message += b',c=biws,r=' + self.nonce
 
         salt = base64.b64decode(params['s'].encode('utf-8'))
-        iterations = int(params['i'])
+        try:
+            iterations = int(params['i'])
+            if iterations > 1000000:
+                raise ValueError('too many iterations')
+        except (TypeError, ValueError):
+            raise ValueError('Invalid value (not integer or too large) for Iteration count in server-first-message')
         self.create_salted_password(salt, iterations)
 
         self.client_key = self.hmac(self.salted_password, b'Client Key')
