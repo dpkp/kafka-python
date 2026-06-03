@@ -269,7 +269,6 @@ class KafkaConnection:
             client_id=self.config['client_id'],
             receive_message_max_bytes=self.config['receive_message_max_bytes'],
             ident=log_prefix)
-        self.net.call_soon(self._check_version)
 
     def pause(self, v):
         self.paused.add(v)
@@ -345,18 +344,28 @@ class KafkaConnection:
             self._throttle_time = 0
             self.unpause('throttle')
 
-    async def _check_version(self, timeout_ms=None):
+    async def initialize(self, timeout_at=None):
+        if timeout_at is None:
+            timeout_at = self._timeout_at()
+        try:
+            await self._get_api_versions(timeout_at)
+            if self.sasl_enabled:
+                await self._sasl_authenticate(timeout_at)
+        except Exception as error:
+            self.close(error)
+        else:
+            self._init_complete()
+
+    async def _get_api_versions(self, timeout_at=None):
+        if timeout_at is None:
+            timeout_at = self._timeout_at()
         if self.broker_version_data is not None:
             try:
                 self._api_versions_idx = self.broker_version_data.api_version(ApiVersionsRequest)
             except Errors.IncompatibleBrokerVersion:
                 log.debug('%s: Using pre-configured api_version %s for ApiVersions', self, self.broker_version)
-                self._init_complete()
                 return
 
-        if timeout_ms is not None:
-            timeout_ms = self.config['api_version_auto_timeout_ms']
-        timeout_at = self._timeout_at(timeout_ms=timeout_ms)
         while timeout_at > time.monotonic():
             version = self._api_versions_idx
             request = ApiVersionsRequest(
@@ -364,12 +373,7 @@ class KafkaConnection:
                 client_software_name=self.config['client_software_name'],
                 client_software_version=self.config['client_software_version'],
             )
-            try:
-                response = await self._send_request(request, timeout_at=timeout_at)
-            except Exception as exc:
-                self.close(exc)
-                return
-
+            response = await self._send_request(request, timeout_at=timeout_at)
             error_type = Errors.for_code(response.error_code)
             if error_type is Errors.NoError:
                 break
@@ -382,44 +386,36 @@ class KafkaConnection:
                     self._api_versions_idx = 0
                 continue
             else:
-                self.close(error_type())
-                return
+                raise error_type()
+        else:
+            raise Errors.KafkaTimeoutError('Timeout during ApiVersions check')
 
         api_versions = {api_version.api_key: (api_version.min_version, api_version.max_version)
                         for api_version in response.api_keys}
         self.broker_version_data = BrokerVersionData(api_versions=api_versions)
         log.info('%s: Broker version identified as %s', self, '.'.join(map(str, self.broker_version)))
-        if self.sasl_enabled:
-            await self._sasl_authenticate()
-        if self.initializing:
-            self._init_complete()
 
     @property
     def sasl_enabled(self):
         return self.config['security_protocol'] in ('SASL_PLAINTEXT', 'SASL_SSL')
 
-    async def _sasl_authenticate(self):
+    async def _sasl_authenticate(self, timeout_at=None):
+        if timeout_at is None:
+            timeout_at = self._timeout_at()
         # Step 1: SaslHandshake to negotiate mechanism
         request = SaslHandshakeRequest(
             mechanism=self.config['sasl_mechanism'],
             max_version=1)
-        try:
-            response = await self._send_request(request)
-        except Exception as exc:
-            self.close(Errors.KafkaConnectionError('SaslHandshake failed: %s' % exc))
-            return
-
+        response = await self._send_request(request, timeout_at=timeout_at)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             log.error('%s: SaslHandshake failed: %s', self, error_type.__name__)
-            self.close(error_type())
-            return
+            raise error_type()
 
         if self.config['sasl_mechanism'] not in response.mechanisms:
-            self.close(Errors.UnsupportedSaslMechanismError(
+            raise Errors.UnsupportedSaslMechanismError(
                 'Kafka broker does not support %s sasl mechanism. Enabled mechanisms: %s'
-                % (self.config['sasl_mechanism'], response.mechanisms)))
-            return
+                % (self.config['sasl_mechanism'], response.mechanisms))
 
         # Step 2: SASL authentication exchange
         version = response.API_VERSION
@@ -427,47 +423,37 @@ class KafkaConnection:
         # mechanisms like GSSAPI construct service principals against the
         # user-supplied name, not whichever IP getaddrinfo handed us.
         sasl_host = self.transport.host if self.transport.host else self.transport.getPeer()[0]
-        try:
-            mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
-                host=sasl_host, **self.config)
-        except Exception as exc:
-            self.close(exc)
-            return
+        mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
+            host=sasl_host, **self.config)
 
-        while not mechanism.is_done():
+        while not mechanism.is_done() and timeout_at > time.monotonic():
             token = mechanism.auth_bytes()
             if version == 1:
                 auth_request = SaslAuthenticateRequest(token, version=0)
             else:
                 auth_request = SaslBytesRequest(token)
-
-            try:
-                auth_response = await self._send_request(auth_request)
-            except Exception as exc:
-                self.close(Errors.KafkaConnectionError('SaslAuthenticate failed: %s' % exc))
-                return
-
+            auth_response = await self._send_request(auth_request, timeout_at=timeout_at)
             error_type = Errors.for_code(auth_response.error_code)
             if error_type is not Errors.NoError:
-                self.close(Errors.SaslAuthenticationFailedError(
-                    '%s: %s' % (error_type.__name__, auth_response.error_message)))
-                return
+                raise Errors.SaslAuthenticationFailedError(
+                    '%s: %s' % (error_type.__name__, auth_response.error_message))
 
             # GSSAPI does not get a final recv in v0 unframed mode
             if version == 0 and mechanism.is_done():
                 break
-
             mechanism.receive(auth_response.auth_bytes)
 
-        if not mechanism.is_authenticated():
-            self.close(Errors.SaslAuthenticationFailedError(
-                'Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))
-            return
+        if time.monotonic() > timeout_at:
+            raise Errors.KafkaTimeoutError('SASL Authentication timed out')
+        elif not mechanism.is_authenticated():
+            raise Errors.SaslAuthenticationFailedError(
+                'Failed to authenticate via SASL %s' % self.config['sasl_mechanism'])
 
         log.info('%s: %s', self, mechanism.auth_details())
 
     def _init_complete(self):
-        self.initializing = False
-        self.connected = True
-        self.send_buffered()
-        self._init_future.success(True)
+        if self.initializing:
+            self.initializing = False
+            self.connected = True
+            self.send_buffered()
+            self._init_future.success(True)

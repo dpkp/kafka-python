@@ -243,7 +243,7 @@ class KafkaConnectionManager:
         try:
             transport = await self._build_transport(node, timeout_at=timeout_at)
             conn.connection_made(transport)
-            await conn.init_future
+            await conn.initialize(timeout_at=timeout_at)
         except Exception as exc:
             log.error('Connection failed: %s', exc)
             conn.connection_lost(exc)
