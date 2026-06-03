@@ -218,10 +218,11 @@ class KafkaConnectionManager:
             ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         return ctx
 
-    async def _build_transport(self, node):
+    async def _build_transport(self, node, timeout_at=None):
         sock = await create_connection(self._net, node.host, node.port,
                                        self.config['socket_options'],
-                                       proxy_url=self.config['proxy_url'])
+                                       proxy_url=self.config['proxy_url'],
+                                       timeout_at=timeout_at)
         if self.ssl_enabled:
             transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(),
                                           host=node.host, ssl_check_hostname=self.config['ssl_check_hostname'])
@@ -235,9 +236,9 @@ class KafkaConnectionManager:
         else:
             return transport
 
-    async def _connect(self, node, conn, reset_backoff_on_connect=True):
+    async def _connect(self, node, conn, reset_backoff_on_connect=True, timeout_at=None):
         try:
-            transport = await self._build_transport(node)
+            transport = await self._build_transport(node, timeout_at=timeout_at)
             conn.connection_made(transport)
             await conn.init_future
         except Exception as exc:
@@ -280,12 +281,10 @@ class KafkaConnectionManager:
         if refresh_metadata_on_err:
             conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn
-        self._net.call_soon(lambda: self._connect(node, conn, reset_backoff_on_connect=reset_backoff_on_connect))
         if timeout_ms is None:
             timeout_ms = self.config['socket_connection_timeout_ms']
-        self._net.call_later(timeout_ms / 1000,
-                             lambda: conn.close(Errors.KafkaConnectionError('Connection timed out'))
-                                     if not conn.init_future.is_done else None)
+        timeout_at = time.monotonic() + timeout_ms / 1000
+        self._net.call_soon(lambda: self._connect(node, conn, reset_backoff_on_connect=reset_backoff_on_connect, timeout_at=timeout_at))
         return conn
 
     def send(self, request, node_id=None, request_timeout_ms=None):
