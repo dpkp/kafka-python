@@ -30,7 +30,8 @@ class KafkaConnectionManager:
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,
-        'socket_connection_timeout_ms': 5000,
+        'socket_connection_setup_timeout_ms': 10000,
+        'socket_connection_setup_timeout_max_ms': 30000,
         'socket_options': [
             (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
             (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
@@ -86,7 +87,7 @@ class KafkaConnectionManager:
         )
         self.cluster.attach(self)
         self._conns = {}
-        self._backoff = dict() # node_id => (failures, backoff_until)
+        self._backoff = dict() # node_id => (failures, backoff_until, socket_connect_setup_timeout_ms)
         # Cache the most recent SASL / SSL / auth failure per node so we can
         # surface it to the user instead of silently retrying forever.
         # Cleared on successful connect.
@@ -282,7 +283,7 @@ class KafkaConnectionManager:
             conn.close_future.add_errback(lambda _: self.cluster.request_update())
         self._conns[node_id] = conn
         if timeout_ms is None:
-            timeout_ms = self.config['socket_connection_timeout_ms']
+            timeout_ms = self.socket_connection_setup_timeout_ms(node_id)
         timeout_at = time.monotonic() + timeout_ms / 1000
         self._net.call_soon(lambda: self._connect(node, conn, reset_backoff_on_connect=reset_backoff_on_connect, timeout_at=timeout_at))
         return conn
@@ -334,18 +335,29 @@ class KafkaConnectionManager:
         except KeyError:
             pass
 
-    def reconnect_jitter_pct(self):
+    def jitter_pct(self):
         return random.uniform(0.8, 1.2)
 
+    def _calculate_exp_timeout(self, key, failures):
+        max_keys = {
+            'reconnect_backoff_ms': 'reconnect_backoff_max_ms',
+            'socket_connection_setup_timeout_ms': 'socket_connection_setup_timeout_max_ms',
+        }
+        timeout_ms = self.config[key] * 2 ** (failures - 1)
+        if key in max_keys:
+            max_ms = self.config[max_keys[key]]
+            timeout_ms = min(max_ms, timeout_ms)
+        return timeout_ms * self.jitter_pct()
+
     def update_backoff(self, node_id):
-        failures, _ = self._backoff.get(node_id, (0, 0))
+        failures, _, _ = self._backoff.get(node_id, (0, 0, 0))
         failures += 1
-        backoff_ms = self.config['reconnect_backoff_ms'] * 2 ** (failures - 1)
-        backoff_ms = min(backoff_ms, self.config['reconnect_backoff_max_ms'])
-        backoff_ms *= self.reconnect_jitter_pct()
-        log.debug('%s reconnect backoff %d ms after %s failures', node_id, backoff_ms, failures)
+        backoff_ms = self._calculate_exp_timeout('reconnect_backoff_ms', failures)
+        connect_ms = self._calculate_exp_timeout('socket_connection_setup_timeout_ms', failures)
+        log.debug('%s reconnect backoff %d ms / connect timeout %d ms after %s failures',
+                  node_id, backoff_ms, connect_ms, failures)
         backoff_until_time = time.monotonic() + (backoff_ms / 1000)
-        self._backoff[node_id] = (failures, backoff_until_time)
+        self._backoff[node_id] = (failures, backoff_until_time, connect_ms)
 
     def connection_delay(self, node_id):
         """Connection delay in seconds.
@@ -355,6 +367,11 @@ class KafkaConnectionManager:
         if node_id not in self._backoff:
             return 0
         return max(0, self._backoff[node_id][1] - time.monotonic())
+
+    def socket_connection_setup_timeout_ms(self, node_id):
+        if node_id not in self._backoff:
+            return self.config['socket_connection_setup_timeout_ms']
+        return self._backoff[node_id][2]
 
     def auth_failure(self, node_id):
         """Return the most recent auth-class failure for ``node_id``,

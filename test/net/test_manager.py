@@ -24,7 +24,8 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net)
         assert m.config['reconnect_backoff_ms'] == 50
         assert m.config['reconnect_backoff_max_ms'] == 30000
-        assert m.config['socket_connection_timeout_ms'] == 5000
+        assert m.config['socket_connection_setup_timeout_ms'] == 10000
+        assert m.config['socket_connection_setup_timeout_max_ms'] == 30000
         assert m.config['max_in_flight_requests_per_connection'] == 5
 
     def test_config_override(self, net):
@@ -106,18 +107,20 @@ class TestKafkaConnectionManagerBackoff:
     def test_update_backoff(self, manager):
         manager.update_backoff('node-1')
         assert manager.connection_delay('node-1') > 0
-        failures, _ = manager._backoff['node-1']
+        failures, _, _ = manager._backoff['node-1']
         assert failures == 1
 
     def test_exponential_backoff(self, manager):
         manager.update_backoff('node-1')
-        _, backoff1 = manager._backoff['node-1']
+        _, backoff1, connect1 = manager._backoff['node-1']
         manager.update_backoff('node-1')
-        _, backoff2 = manager._backoff['node-1']
-        failures, _ = manager._backoff['node-1']
+        _, backoff2, connect2 = manager._backoff['node-1']
+        failures, _, _ = manager._backoff['node-1']
         assert failures == 2
         # Second backoff should be later (exponential)
         assert backoff2 > backoff1
+        # Second connect timeout should be greater
+        assert connect2 > connect1
 
     def test_reset_backoff(self, manager):
         manager.update_backoff('node-1')
@@ -242,13 +245,14 @@ class TestKafkaConnectionManagerBootstrap:
     def test_bootstrap_connection_failure(self, net):
         manager = KafkaConnectionManager(net,
                                          bootstrap_servers=['localhost:1'],
-                                         socket_connection_timeout_ms=500,
+                                         socket_connection_setup_timeout_ms=500,
+                                         socket_connection_setup_timeout_max_ms=500,
                                          reconnect_backoff_ms=10,
                                          reconnect_backoff_max_ms=100)
         with pytest.raises(Errors.KafkaTimeoutError):
             manager.bootstrap(timeout_ms=2000)
         assert not manager._conns
-        failures, _ = manager._backoff['bootstrap-0']
+        failures, _, _ = manager._backoff['bootstrap-0']
         assert failures > 1
 
     def test_bootstrapped_property(self, manager):
@@ -319,7 +323,7 @@ class TestKafkaConnectionManagerConnectionTimeout:
         blocker.connect(('127.0.0.1', port))
 
         try:
-            manager = KafkaConnectionManager(net, bootstrap_servers=['127.0.0.1:%d' % port], socket_connection_timeout_ms=100)
+            manager = KafkaConnectionManager(net, bootstrap_servers=['127.0.0.1:%d' % port], socket_connection_setup_timeout_ms=100)
             conn = manager.get_connection('bootstrap-0')
             net.poll(timeout_ms=1000, future=conn.init_future)
             assert conn.init_future.is_done
