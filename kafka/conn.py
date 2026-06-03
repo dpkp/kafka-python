@@ -700,9 +700,12 @@ class BrokerConnection(object):
                     'Kafka broker does not support %s sasl mechanism. Enabled mechanisms are: %s'
                     % (self.config['sasl_mechanism'], response.enabled_mechanisms)))
         else:
-            self._sasl_authenticate(future)
+            try:
+                ret = self._sasl_authenticate()
+                future.success(ret)
+            except Exception as exc:
+                future.failure(exc)
 
-        assert future.is_done, 'SASL future not complete after mechanism processing!'
         if future.failed():
             self.close(error=future.exception)
         else:
@@ -814,24 +817,24 @@ class BrokerConnection(object):
             log.debug('%s: Received %d raw sasl auth bytes from server', self, nbytes)
             return data[4:]
 
-    def _sasl_authenticate(self, future):
+    def _sasl_authenticate(self):
         while not self._sasl_mechanism.is_done():
             send_token = self._sasl_mechanism.auth_bytes()
             self._send_sasl_authenticate(send_token)
             if not self._can_send_recv():
-                return future.failure(Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self))
+                raise Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self)
 
             recv_token = self._recv_sasl_authenticate()
             if recv_token is None:
-                return future.failure(Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self))
+                raise Errors.KafkaConnectionError("%s: Connection failure during Sasl Authenticate" % self)
             else:
                 self._sasl_mechanism.receive(recv_token)
 
         if self._sasl_mechanism.is_authenticated():
             log.info('%s: %s', self, self._sasl_mechanism.auth_details())
-            return future.success(True)
+            return True
         else:
-            return future.failure(Errors.SaslAuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism']))
+            raise Errors.SaslAuthenticationFailedError('Failed to authenticate via SASL %s' % self.config['sasl_mechanism'])
 
     def blacked_out(self):
         """
