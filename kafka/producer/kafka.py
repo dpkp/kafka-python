@@ -336,24 +336,30 @@ class KafkaProducer:
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use. If set to
-            None, the client will attempt to determine the broker version via
+            None, the client will infer the broker version from the results of
             ApiVersionsRequest API or, for brokers earlier than 0.10, probing
-            various known APIs. Dynamic version checking is performed eagerly
-            during __init__ and can raise KafkaTimeoutError if no connection
-            was made before timeout (see api_version_auto_timeout_ms below).
-            Different versions enable different functionality.
+            various known APIs.  Different versions enable different functionality.
 
             Examples:
-                (3, 9) most recent broker release, enable all supported features
+                (4, 2) most recent broker release, enable all supported features
                 (0, 11) enables message format v2 (internal)
                 (0, 10, 0) enables sasl authentication and message format v1
-                (0, 8, 0) enables basic functionality only
+                (0, 9) enables full group coordination features with automatic
+                    partition assignment and rebalancing,
+                (0, 8, 2) enables kafka-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 1) enables zookeeper-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 0) enables basic functionality but requires manual
+                    partition assignment and offset management.
 
             Default: None
-        api_version_auto_timeout_ms (int): number of milliseconds to throw a
-            timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version set to None.
-            Default: 2000
+        bootstrap_timeout_ms (int): number of milliseconds to wait for first
+            successful cluster bootstrap. If provided, an attempt to bootstrap
+            will raise KafkaTimeoutError if it is unable to fetch cluster
+            metadata before the configured timeout. Note that bootstrap will
+            be called eagerly from __init__() if api_version is None.
+            Default: 30000
         metric_reporters (list): A list of classes to use as metrics reporters.
             Implementing the AbstractMetricsReporter interface allows plugging
             in classes that will be notified of new metric creation. Default: []
@@ -429,7 +435,7 @@ class KafkaProducer:
         'ssl_password': None,
         'ssl_ciphers': None,
         'api_version': None,
-        'api_version_auto_timeout_ms': 2000,
+        'bootstrap_timeout_ms': 30000,
         'metric_reporters': [],
         'metrics_enabled': True,
         'metrics_num_samples': 2,
@@ -506,9 +512,14 @@ class KafkaProducer:
             metrics=self._metrics, metric_group_prefix='producer',
             wakeup_timeout_ms=self.config['max_block_ms'],
             **self.config)
+        manager = client._manager
 
-        # Get auto-discovered / normalized version from client
-        self.config['api_version'] = client.get_broker_version(timeout_ms=self.config['api_version_auto_timeout_ms'])
+        # We currently depend on eager-resolution of api_version.
+        # If it wasn't provided as a config option, we need to bootstrap
+        # to get it.
+        if manager.broker_version_data is None:
+            manager.bootstrap(self.config['bootstrap_timeout_ms'])
+        self.config['api_version'] = manager.broker_version
 
         if self.config['compression_type'] == 'lz4':
             assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
@@ -525,7 +536,7 @@ class KafkaProducer:
             assert checker(), "Libraries for {} compression codec not found".format(ct)
             self.config['compression_attrs'] = compression_attrs
 
-        self._metadata = client.cluster
+        self._metadata = manager.cluster
         self._transaction_manager = None
         self._init_transactions_result = None
 

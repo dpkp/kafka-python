@@ -123,13 +123,31 @@ class KafkaAdminClient(
             certificate expiration. By default, no CRL check is done. When
             providing a file, only the leaf certificate will be checked against
             this CRL. Default: None.
-        api_version (tuple): Specify which Kafka API version to use. If set
-            to None, KafkaConnectionManager will attempt to infer the
-            broker version by probing various APIs. Example: (0, 10, 2).
+        api_version (tuple): Specify which Kafka API version to use. If set to
+            None, the client will infer the broker version from the results of
+            ApiVersionsRequest API or, for brokers earlier than 0.10, probing
+            various known APIs.  Different versions enable different functionality.
+
+            Examples:
+                (4, 2) most recent broker release, enable all supported features
+                (0, 11) enables message format v2 (internal)
+                (0, 10, 0) enables sasl authentication and message format v1
+                (0, 9) enables full group coordination features with automatic
+                    partition assignment and rebalancing,
+                (0, 8, 2) enables kafka-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 1) enables zookeeper-storage offset commits with manual
+                    partition assignment only,
+                (0, 8, 0) enables basic functionality but requires manual
+                    partition assignment and offset management.
+
             Default: None
-        bootstrap_timeout_ms (int): number of milliseconds to throw a
-            timeout exception from the constructor when bootstrapping.
-            Default: 2000.
+        bootstrap_timeout_ms (int): number of milliseconds to wait for first
+            successful cluster bootstrap. If provided, an attempt to bootstrap
+            will raise KafkaTimeoutError if it is unable to fetch cluster
+            metadata before the configured timeout. Note that bootstrap is
+            called eagerly from __init__().
+            Default: 30000
         selector (selectors.BaseSelector): Provide a specific selector
             implementation to use for I/O multiplexing.
             Default: selectors.DefaultSelector
@@ -181,7 +199,7 @@ class KafkaAdminClient(
         'ssl_password': None,
         'ssl_crlfile': None,
         'api_version': None,
-        'bootstrap_timeout_ms': 2000,
+        'bootstrap_timeout_ms': 30000,
         'selector': selectors.DefaultSelector,
         'sasl_mechanism': None,
         'sasl_plain_username': None,

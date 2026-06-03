@@ -34,7 +34,6 @@ class KafkaConnection:
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
-        'api_version_auto_timeout_ms': 2000,
         'metrics': None,
         'metric_group_prefix': '',
     }

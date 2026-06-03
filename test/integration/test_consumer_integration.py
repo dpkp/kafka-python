@@ -366,7 +366,7 @@ def test_group(kafka_consumer_factory, topic):
                                     client_id="consumer_thread-%s" % i,
                                     session_timeout_ms=3000,
                                     request_timeout_ms=4000,
-                                    api_version_auto_timeout_ms=5000) as c:
+                                    bootstrap_timeout_ms=5000) as c:
             consumers[i] = c
             while not stop[i].is_set():
                 for tp, records in consumers[i].poll(timeout_ms=200).items():

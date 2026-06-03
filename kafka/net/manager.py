@@ -55,7 +55,6 @@ class KafkaConnectionManager:
         'sasl_oauth_token_provider': None,
         'proxy_url': None,
         'api_version': None,
-        'api_version_auto_timeout_ms': 2000,
         'metrics': None,
         'metric_group_prefix': '',
         'metadata_max_age_ms': 300000,
