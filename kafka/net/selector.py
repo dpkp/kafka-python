@@ -96,7 +96,7 @@ class Task:
                     self._res = final.value
                     raise
                 else:
-                    #ret = final.value
+                    ret = final.value
                     exc = None
 
             except BaseException as e:
